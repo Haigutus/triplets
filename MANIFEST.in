@@ -1,2 +1,2 @@
 include versioneer.py
-include rdf_tools/_version.py
+include triplet_tools/_version.py

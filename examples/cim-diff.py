@@ -3,7 +3,7 @@ import sys
 import argparse
 
 sys.path.append("..")
-from rdf_tools.rdf_parser import print_triplet_diff, load_all_to_dataframe
+from triplet_tools.rdf_parser import print_triplet_diff, load_all_to_dataframe
 
 parser = argparse.ArgumentParser(description="""Create diff in Unified format for XML RDF CIM files. Diff is per object (ID KEY VALUE) not per XML line in file. The input can be xml, zip(xml), zip(zip(xml))""",
                                  epilog="""Copyright (c) Kristjan Vilgo 2021; Licence: GPL 2.0""")

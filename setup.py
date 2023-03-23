@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name='rdf_tools',
+    name='triplet_tools',
     version=versioneer.get_version().split("+")[0],
     cmdclass=versioneer.get_cmdclass(),
-    packages=['rdf_tools'],
+    packages=['triplet_tools'],
     long_description=long_description,
     long_description_content_type="text/markdown",
     url='https://github.com/Haigutus/rdf_tools',

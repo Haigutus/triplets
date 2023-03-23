@@ -1,4 +1,4 @@
-from rdf_tools.rdf_parser import load_all_to_dataframe
+from triplet_tools.rdf_parser import load_all_to_dataframe
 
 import pandas
 import os

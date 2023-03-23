@@ -42,8 +42,8 @@ def get_config():
     cfg.VCS = "git"
     cfg.style = "pep440"
     cfg.tag_prefix = ""
-    cfg.parentdir_prefix = "rdf_tools"
-    cfg.versionfile_source = "rdf_tools/_version.py"
+    cfg.parentdir_prefix = "triplet_tools"
+    cfg.versionfile_source = "triplet_tools/_version.py"
     cfg.verbose = False
     return cfg
 
