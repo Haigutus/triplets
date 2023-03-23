@@ -599,7 +599,7 @@ def export_to_cimrdf(instance_data, rdf_map, namespace_map, class_KEY="Type", ex
 # TEST and examples
 if __name__ == '__main__':
 
-    from triplet_tools.rdf_parser import load_all_to_dataframe
+    from triplets.rdf_parser import load_all_to_dataframe
 
     path_list = ["../test_models/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"]
 
