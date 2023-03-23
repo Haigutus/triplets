@@ -1,3 +1,2 @@
 include versioneer.py
-include OPDM/_version.py
-include rdf_parser/_version.py
+include rdf_tools/_version.py

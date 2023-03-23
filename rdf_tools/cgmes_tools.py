@@ -601,7 +601,7 @@ if __name__ == '__main__':
 
     from rdf_tools.rdf_parser import load_all_to_dataframe
 
-    path_list = ["test_models/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"]
+    path_list = ["../test_models/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"]
 
     data = load_all_to_dataframe(path_list)
 

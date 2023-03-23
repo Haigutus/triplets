@@ -954,7 +954,7 @@ def add_key_and_value(data, type, key, value, id=None):
 
 # TEST AND EXAMPLES
 if __name__ == '__main__':
-    path = "test_models/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"
+    path = "../test_models/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"
 
     data = pandas.read_RDF([path], debug=True)  # Last took 0:00:03.514987
 
