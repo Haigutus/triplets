@@ -238,7 +238,7 @@ fullmodel_conf = { "FullModel": {
 
 if __name__ == '__main__':
 
-    path = r"rdfs\CGMES_2_4_15_09May2019_RDFS\UNIQUE_RDFSAugmented-v2_4_15-09May2019.zip"
+    path = r"..\profiles\ENTSOE\2019-05-09_RDFS_CGMES_2_4_15\EquipmentProfileCoreOperationShortCircuitRDFSAugmented-v2_4_15-09May2019.rdf"
 
     data = load_all_to_dataframe([path])
 
