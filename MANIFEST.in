@@ -1,2 +1,2 @@
 include versioneer.py
-include triplet_tools/_version.py
+include triplets/_version.py
