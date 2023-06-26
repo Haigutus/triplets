@@ -987,7 +987,7 @@ if __name__ == '__main__':
 
     data = pandas.read_RDF([path], debug=True)
     # Last took 0:00:07.919968 on python 3.7  and pandas 1.3.5
-    # Last took                on python 3.11
+    # Last took 0:00:04.312218 on python 3.11 abd pandas 2.0.2
 
     print("Loaded types")
     print(data.query("KEY == 'Type'")["VALUE"].value_counts())
