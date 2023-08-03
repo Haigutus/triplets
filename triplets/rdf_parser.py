@@ -177,7 +177,6 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
 
     if debug:
         start_time = datetime.datetime.now()
-        start_time = datetime.datetime.now()
 
     # Lets generate list for RDF data and store the original filename under rdf:label in dcat:Distribution object
     ID = str(uuid.uuid4())
