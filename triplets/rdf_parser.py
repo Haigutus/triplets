@@ -666,7 +666,7 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
                     id_name = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about"
                     id_value_prefix = "urn:uuid:"
                 else:
-                    logger.debug(f" {class_name} not Exported")
+                    logger.debug(f"{class_name} not Exported")
                     continue
 
             # Create class element
@@ -1025,3 +1025,31 @@ if __name__ == '__main__':
     # NP (tieflow):   {tieflow_data["SvPowerFlow.p"].sum()} MW
     # NP (CA.nI)  :   {data.type_tableview("ControlArea").iloc[0]["ControlArea.netInterchange"]} MW
     # """)
+
+    # namespace_map = dict(cim="http://iec.ch/TC57/2013/CIM-schema-cim16#",
+    #                      entsoe="http://entsoe.eu/CIM/SchemaExtension/3/1#",
+    #                      md="http://iec.ch/TC57/61970-552/ModelDescription/1#",
+    #                      rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+
+    # Export Config
+
+
+    # xml_per_instance, xml_per_instance_zip_per_all, xml_per_instance_zip_per_xml
+
+    # export_type = "xml_per_instance_zip_per_xml"
+    #
+    # # Load export format configuration
+    # import json
+    # import cgmes_tools
+    # with open(r"..\profiles\ENTSOE\CGMES_v2.4.15_2014-08-07.json", "r") as conf_file:
+    #     rdf_map = json.load(conf_file)
+    #
+    # data = cgmes_tools.update_FullModel_from_filename(data)
+    #
+    # # Export triplet to CGMES
+    # data.export_to_cimxml(rdf_map=rdf_map,
+    #                       namespace_map=namespace_map,
+    #                       export_undefined=False,
+    #                       export_type=export_type)
+
+
