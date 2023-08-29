@@ -597,7 +597,8 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
                      export_type="xml_per_instance_zip_per_xml",
                      global_zip_filename="Export.zip",
                      debug=False,
-                     export_to_memory=False):
+                     export_to_memory=False,
+                     export_base_path = ""):
     if debug:
         start_time = datetime.datetime.now()
         init_time = start_time
@@ -744,44 +745,48 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
         if debug:
             _, start_time = print_duration("XML created", start_time)
 
-    # Export XML
+    exported_files = []
+
+    ### Export XML ###
     if export_type == "xml_per_instance":
         for export_file in export_files:
-            # Write to file
-            with open(export_file["filename"], 'w') as file:
-                file.write(export_file["file"].decode())
-                logger.info('Saved {}'.format(export_file["filename"]))
 
-    # Export ZIP containing all xml
+            file_object = BytesIO(export_file["file"])
+            file_object.name = export_file["filename"]
+
+            exported_files.append(file_object)
+
+            logger.info(f"Exported {export_file['filename']} to memeory")
+
+    ### Export ZIP containing all xml ###
     elif export_type == "xml_per_instance_zip_per_all":
-        from zipfile import ZipFile, ZIP_DEFLATED
 
         gloabl_zip_fileobject = BytesIO()
-        with ZipFile(gloabl_zip_fileobject, "a", ZIP_DEFLATED, False) as zip_file:
+        gloabl_zip_fileobject.name = global_zip_filename
+
+        with zipfile.ZipFile(gloabl_zip_fileobject, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
 
             for export_file in export_files:
                 zip_file.writestr(export_file["filename"], export_file["file"])
+                logger.info(f'Added {export_file["filename"]} to ZIP')
 
-        if export_to_memory:
-            gloabl_zip_fileobject.name = global_zip_filename
-            return gloabl_zip_fileobject
+        exported_files.append(gloabl_zip_fileobject)
+        logger.info(f'Exported ZIP named {global_zip_filename} to memory')
 
-        else:
-            with open(global_zip_filename, "wb") as file_oject:
-                gloabl_zip_fileobject.seek(0)
-                file_oject.write(gloabl_zip_fileobject.read())
-                logger.info('Saved {}'.format(global_zip_filename))
 
-    # Export each xml in separate zip
+    ### Export each xml in separate zip ###
     elif export_type == "xml_per_instance_zip_per_xml":
-        from zipfile import ZipFile, ZIP_DEFLATED
 
         for export_file in export_files:
-            zip_filename = export_file["filename"].replace('.xml', '.zip')
-            with ZipFile(zip_filename, mode='w', compression=ZIP_DEFLATED) as zip_file:
+
+            zip_file_object = BytesIO()
+            zip_file_object.name = export_file["filename"].replace('.xml', '.zip')
+
+            with zipfile.ZipFile(zip_file_object, mode='w', compression=zipfile.ZIP_DEFLATED) as zip_file:
                 zip_file.writestr(export_file["filename"], export_file["file"])
 
-                logger.info('Saved {}'.format(zip_filename))
+            exported_files.append(zip_file_object)
+            logger.info(f'Exported {zip_file_object.name} to memory')
 
     else:
         logger.info("Not supported option")
@@ -791,6 +796,25 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
         print_duration("Files saved in", start_time)
         print_duration("Whole Export done in", init_time)
 
+    # Save files to disk
+    if export_to_memory:
+        return exported_files
+
+    else:
+        exported_file_names = []
+
+        for file_object in exported_files:
+            export_path = os.path.join(export_base_path, file_object.name)
+            with open(export_path, 'wb') as export_file_object:
+
+                # Ensure that the read pointer is at the start of the file
+                file_object.seek(0)
+                export_file_object.write(file_object.read())
+
+            exported_file_names.append(file_object.name)
+            logger.info(f'Saved {export_path}')
+
+        return exported_file_names
 
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.export_to_cimxml = export_to_cimxml
