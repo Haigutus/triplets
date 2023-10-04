@@ -541,9 +541,15 @@ def set_VALUE_at_KEY(data, key, value):
     """Set all values of provided key to the given value"""  # TODO add debug, to print key, initial value and new value.
     data.loc[data[data.KEY == key].index, "VALUE"] = value  # TODO add changes to change DataFrame
 
-
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.set_VALUE_at_KEY = set_VALUE_at_KEY
+
+def set_VALUE_at_KEY_and_ID(data, key, value, id):
+    """Set all values of provided key and id to the given value"""
+    data.loc[data.query(f"ID == '{id}' and KEY == '{key}'").index, "VALUE"] = value
+
+# Extend this functionality to pandas DataFrame
+pandas.DataFrame.set_VALUE_at_KEY_and_ID = set_VALUE_at_KEY_and_ID
 
 
 def export_to_excel(data, path=None):
