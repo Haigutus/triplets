@@ -163,8 +163,8 @@ def parse_multiplicity(uri):
 
     multiplicity = str(uri).split("#M:")[1]
 
-    minOccurs = multiplicity[-1].replace("n", "unbounded")
-    maxOccurs = multiplicity[0]
+    minOccurs = multiplicity[0].replace("n", "unbounded")
+    maxOccurs = multiplicity[-1]
 
     return minOccurs, maxOccurs
 
