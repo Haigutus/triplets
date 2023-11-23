@@ -502,6 +502,22 @@ def export_to_cimrdf_depricated(instance_data, rdf_map, namespace_map):
     # print(etree.tostring(RDF, pretty_print=True).decode())
     return etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding='UTF-8')
 
+def get_dangling_references(data, detailed=False):
+    """Find all reference within CGMES data, by using the fact of the CGMES data model convention where references are with .<CapitalLetter>
+    Assumptions:
+    1. Class names are with Capital letters
+    2. Relations are defined <Class_FROM>.<Class_TO>"""
+
+    cgmes_reference_pattern = r"\.[A-Z]"
+    references = data[data.KEY.str.contains(cgmes_reference_pattern)]
+    dangling_references = data.query("KEY == 'Type'").merge(references, left_on="ID", right_on="VALUE", indicator=True, how="right", suffixes=("_TO", "_FROM")).query("_merge != 'both'")
+
+    if detailed:
+        return dangling_references
+    else:
+        return dangling_references.KEY_FROM.value_counts()
+
+
 def export_to_cimrdf(instance_data, rdf_map, namespace_map, class_KEY="Type", export_undefined=True):
 
     # Create xml element builder and the root element
