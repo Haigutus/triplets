@@ -4,7 +4,7 @@
 #
 # Author:      kristjan.vilgo
 #
-# Created:     10.06.2019
+# Created:     2019-06-10
 # Copyright:   (c) kristjan.vilgo 2019
 # Licence:     GPLv2
 #-------------------------------------------------------------------------------
@@ -23,6 +23,14 @@ from lxml import etree
 
 from collections import OrderedDict
 from builtins import str
+
+import math
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 
 dependencies = dict(EQ   = ["EQBD"],
                     SSH  = ["EQ"],
@@ -439,6 +447,44 @@ def draw_relations(data, UUID, notebook=False, levels=2):
     ID_COLUMN = "ID"
 
     return darw_relations_graph(reference_data, ID_COLUMN, notebook)
+
+
+def scale_load(data, load_setpoint, cos_f=None):
+    """
+    Scales the active and reactive power loads in a dataset SSH instance based on a given load setpoint and power factor (cos_f).
+
+    Parameters:
+    - data: The triplet dataset containing SSH load information.
+    - load_setpoint: The target total active power (P) setpoint for scaling.
+    - cos_f: Optional; the cosine of the power factor angle (cos(φ)). If not provided, it's calculated from the ratio of total Q to P.
+
+    The function adjusts the active (P) and reactive (Q) power of conforming loads to meet the specified load setpoint while maintaining or assuming a given power factor (cos_f).
+
+    Returns:
+    - The updated dataset with scaled P and Q values for loads.
+    """
+    # Retrieve load data and calculate total P and Q
+    load_data = data.type_tableview('ConformLoad').reset_index()
+    scalable_load_p = load_data["EnergyConsumer.p"].sum()
+    scalable_load_q = load_data["EnergyConsumer.q"].sum()
+
+    # Calculate cos_f if not provided
+    if cos_f is None:
+        cos_f = math.cos(math.atan(scalable_load_q / scalable_load_p))
+        logger.info(f"cos(f) not given, taking from base case -> cos(f)={cos_f:.3f}")
+
+    # Calculate total P including non-conform loads
+    total_load_p = scalable_load_p + data.type_tableview('NonConformLoad')["EnergyConsumer.p"].sum()
+
+    # Scale Load P across conform loads
+    load_data["EnergyConsumer.p"] *= 1 + (load_setpoint - total_load_p) / scalable_load_p
+
+    # Scale Load Q across conform loads based on the new P and the given or calculated cos_f
+    load_data["EnergyConsumer.q"] = load_data["EnergyConsumer.p"] * math.tan(math.acos(cos_f))
+
+    # Update the dataset with the new scaled P and Q values
+    return data.update_triplet_from_tableview(load_data[['ID', 'EnergyConsumer.p', 'EnergyConsumer.q']], update=True, add=False)
+
 
 
 def export_to_cimrdf_depricated(instance_data, rdf_map, namespace_map):
