@@ -279,12 +279,6 @@ def get_GeneratingUnits(data):
     return data.key_tableview("GeneratingUnit.maxOperatingP")
 
 
-def statistics_ConcreteClasses(data):
-    """Returns statistics on all loaded Concrete Classes"""
-    value_counts = data.query("KEY == 'Type'")["VALUE"].value_counts()
-    return value_counts
-
-
 def get_diff_between_model_parts(UUID_1, UUID_2):
 
     diff = data.query("INSTANCE_ID == '{}' or INSTANCE_ID == '{}'".format(UUID_1, UUID_2)).drop_duplicates(["ID", "KEY", "VALUE"], keep=False)
