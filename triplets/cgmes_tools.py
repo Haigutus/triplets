@@ -264,21 +264,19 @@ def get_loaded_model_parts(data):
 
 
 def statistics_GeneratingUnit_types(data):
-    """Returns statistics of GeneratingUnit types """
+    """Returns statistics of GeneratingUnit types"""
 
-    list_of_generating_units = data.query("KEY == 'GeneratingUnit.initialP'").ID.tolist() # Random compulsory field in all Genrating units
-    value_counts = pandas.DataFrame(data[data.ID.isin(list_of_generating_units)].query("KEY == 'Type'")[["ID", "VALUE"]].drop_duplicates()["VALUE"].value_counts())
-
-    #value_counts= pandas.DataFrame(statistics_ConcreteClasses(data).filter(like="Generating")) # Should be faster, but not might find all
-    value_counts["TOTAL"] = value_counts.sum()["VALUE"]
-    value_counts["%"] = value_counts["VALUE"]/value_counts["TOTAL"]*100
+    value_counts = pandas.DataFrame(get_GeneratingUnits(data).Type.value_counts())
+    value_counts["TOTAL"] = value_counts["count"].sum()
+    value_counts["%"] = value_counts["count"]/value_counts["TOTAL"]*100
 
     return value_counts
 
 
 def get_GeneratingUnits(data):
     """Returns table of GeneratingUnits"""
-    return data.merge(data.query("KEY == 'GeneratingUnit.initialP'").ID).drop_duplicates(["ID", "KEY"]).pivot(index="ID", columns="KEY")["VALUE"]
+    # Compulsory field in all Genrating units
+    return data.key_tableview("GeneratingUnit.maxOperatingP")
 
 
 def statistics_ConcreteClasses(data):
