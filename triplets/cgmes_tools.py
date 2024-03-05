@@ -478,6 +478,44 @@ def scale_load(data, load_setpoint, cos_f=None):
     return data.update_triplet_from_tableview(load_data[['ID', 'EnergyConsumer.p', 'EnergyConsumer.q']], update=True, add=False)
 
 
+def switch_equipment_terminals(data, equipment_id, connected="false"):
+    """
+    Vectorized update of connection statuses ('true' or 'false') for terminals associated with specified equipment.
+
+    Parameters:
+    - data (DataFrame): The triplets dataset containing equipment and terminal information (both EQ and SSH are expected).
+    - equipment_ids (list): A list of identifiers (mRIDs) for the equipment whose terminals' connection statuses are to be updated.
+    - connected (str): The new connection status for the terminals ('true' or 'false'). Default is 'false'.
+
+    Returns:
+    - DataFrame: An updated dataset with the terminals' connection statuses modified according to the given parameters.
+    """
+
+    # Validate the 'connected' parameter
+    if connected not in ["true", "false"]:
+        raise ValueError("The 'connected' parameter must be 'true' or 'false'.")
+
+    # If only single ID is given wrap it into list
+    if type(equipment_id) == str:
+        equipment_id = [equipment_id]
+
+    status_attribute = "ACDCTerminal.connected"
+
+    # Find linked terminals to given equipment_id
+    terminals = data.query("KEY == 'Terminal.ConductingEquipment'").merge(pandas.Series(equipment_id, name="VALUE"), on="VALUE")
+
+    # Find correct instance ID (Status is in SSH, but EQ link in EQ)
+    terminals = terminals[["ID", "KEY", "VALUE"]].merge(data.query("KEY == @status_attribute")[["ID", "INSTANCE_ID"]], on="ID")
+
+    # Set the status attribute name
+    terminals["KEY"] = status_attribute
+
+    # Set the status (true/false)
+    terminals["VALUE"] = connected
+
+    return data.update_triplet_from_triplet(terminals, add=False, update=True).merge(terminals.ID, on="ID")
+
+
 
 def export_to_cimrdf_depricated(instance_data, rdf_map, namespace_map):
 
