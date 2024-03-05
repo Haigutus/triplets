@@ -478,13 +478,13 @@ def scale_load(data, load_setpoint, cos_f=None):
     return data.update_triplet_from_tableview(load_data[['ID', 'EnergyConsumer.p', 'EnergyConsumer.q']], update=True, add=False)
 
 
-def switch_equipment_terminals(data, equipment_id, connected="false"):
+def switch_equipment_terminals(data, equipment_id, connected: str="false"):
     """
     Vectorized update of connection statuses ('true' or 'false') for terminals associated with specified equipment.
 
     Parameters:
     - data (DataFrame): The triplets dataset containing equipment and terminal information (both EQ and SSH are expected).
-    - equipment_ids (list): A list of identifiers (mRIDs) for the equipment whose terminals' connection statuses are to be updated.
+    - equipment_id (str or list): A list of identifiers (mRIDs) for the equipment whose terminals' connection statuses are to be updated.
     - connected (str): The new connection status for the terminals ('true' or 'false'). Default is 'false'.
 
     Returns:
@@ -513,7 +513,7 @@ def switch_equipment_terminals(data, equipment_id, connected="false"):
     # Set the status (true/false)
     terminals["VALUE"] = connected
 
-    return data.update_triplet_from_triplet(terminals, add=False, update=True).merge(terminals.ID, on="ID")
+    return data.update_triplet_from_triplet(terminals, add=False, update=True)
 
 
 
