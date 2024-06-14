@@ -6,7 +6,7 @@
 #
 # Created:     2019-06-10
 # Copyright:   (c) kristjan.vilgo 2019
-# Licence:     GPLv2
+# Licence:     MIT
 #-------------------------------------------------------------------------------
 import pandas
 
