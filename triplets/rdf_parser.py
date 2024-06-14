@@ -6,7 +6,7 @@
 #
 # Created:     13.12.2018
 # Copyright:   (c) kristjan.vilgo 2018
-# Licence:     GPLv2
+# Licence:     MIT
 # -------------------------------------------------------------------------------
 from io import BytesIO
 import os
