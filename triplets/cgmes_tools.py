@@ -365,7 +365,7 @@ def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
         node_data = node_data[["ID", "Type"]]
         node_data["name"] = ""
 
-    # Visulise with pyvis
+    # Visualize with pyvis
 
     graph = Network(directed=True, width="100%", height="1000", notebook=notebook)
     # node_name = urlparse(dataframe[dataframe.KEY == "Model.profile"].VALUE.tolist()[0]).path  # FullModel does not have IdentifiedObject.name
@@ -378,7 +378,9 @@ def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
         #print(object_data)
 
         node_name  = u"{} - {}".format(node.Type, node.name)
-        node_title = object_data[[ID_COLUMN, "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={ID_COLUMN: "ID"}).to_html(index=False) # Add object data table to node hover titel
+        # Add object data table to node hover title
+        node_title = object_data[[ID_COLUMN, "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={ID_COLUMN: "ID"}).to_html(index=False)
+        print(node_title)
         node_level = object_data.level.tolist()[0]
 
         graph.add_node(node.ID, node_name, title=node_title, size=10, level=node_level)

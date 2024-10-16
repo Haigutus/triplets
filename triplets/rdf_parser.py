@@ -88,7 +88,11 @@ def load_RDF_objects_from_XML(path_or_fileobject, debug=False):
 
     # LOAD XML
     parser = etree.XMLParser(remove_comments=True, collect_ids=False, remove_blank_text=True)
-    parsed_xml = etree.parse(path_or_fileobject, parser=parser)  # TODO - add iterparse for Python3
+    parsed_xml = etree.parse(path_or_fileobject, parser=parser).getroot()  # TODO - add iterparse for Python3
+
+    # Get namespace map
+    namesapce_map = parsed_xml.nsmap
+    namesapce_map["xml_base"] = parsed_xml.base
 
     # Get unique ID for loaded instance
     # instance_id = clean_ID(parsed_xml.find("./").attrib.values()[0]) # Lets asume that the first RDF element describes the whole document - TODO replace it with hash of whole XML
@@ -98,12 +102,12 @@ def load_RDF_objects_from_XML(path_or_fileobject, debug=False):
         _, start_time = print_duration("XML loaded to tree object", start_time)
 
     # EXTRACT RDF OBJECTS
-    RDF_objects = parsed_xml.getroot().iterchildren()
+    RDF_objects = parsed_xml.iterchildren()
 
     if debug:
         _, start_time = print_duration("All children put to a generator", start_time)
 
-    return RDF_objects, instance_id
+    return RDF_objects, instance_id, namesapce_map
 
 
 def find_all_xml(list_of_paths_to_zip_globalzip_xml, debug=False):
@@ -173,17 +177,22 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
 
     logger.info("Loading {}".format(file_name))
 
-    RDF_objects, INSTANCE_ID = load_RDF_objects_from_XML(path_or_fileobject, debug)
+    RDF_objects, INSTANCE_ID, namespace_map = load_RDF_objects_from_XML(path_or_fileobject, debug)
 
     if debug:
         start_time = datetime.datetime.now()
 
     # Lets generate list for RDF data and store the original filename under rdf:label in dcat:Distribution object
     ID = str(uuid.uuid4())
+    ID_NSMAP = str(uuid.uuid4())
     data_list = [
                     (ID, "Type", "Distribution", INSTANCE_ID),
-                    (ID, "label", file_name, INSTANCE_ID)
+                    (ID, "label", file_name, INSTANCE_ID),
+                    (ID_NSMAP, "Type", "NamespaceMap", INSTANCE_ID),
                 ]
+
+    for key, value in namespace_map.items():
+        data_list.append((ID_NSMAP, key, value, INSTANCE_ID))
 
     # lets create all variables, so that in loops they are reused, rather than new ones are created, green thinking
     #ID = ""
@@ -244,6 +253,10 @@ def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False):
 
     if debug:
         process_start = datetime.datetime.now()
+
+    # List is expected, but if no list lets assume it is single element list
+    if type(list_of_paths_to_zip_globalzip_xml) != list:
+        list_of_paths_to_zip_globalzip_xml = [list_of_paths_to_zip_globalzip_xml]
 
     list_of_xmls = find_all_xml(list_of_paths_to_zip_globalzip_xml, debug)
 

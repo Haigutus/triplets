@@ -1,7 +1,10 @@
 from triplets.rdf_parser import load_all_to_dataframe
-
 import pandas
 import os
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 pandas.set_option("display.max_rows", 15)
 pandas.set_option("display.max_columns", 8)
@@ -9,6 +12,9 @@ pandas.set_option("display.width", 1000)
 pandas.set_option('display.max_colwidth', None)
 
 
+def get_owl_metadata(data):
+    """Returns metadata about Profile defined in RDFS OWL Ontology"""
+    return data.merge(data.query("KEY == 'type' and VALUE == 'http://www.w3.org/2002/07/owl#Ontology'").ID).set_index("KEY")["VALUE"]
 def list_of_files(root_path, file_extension, go_deep=False):
 
     path_list = [root_path]
@@ -78,7 +84,7 @@ def get_all_class_parameters(data, class_name):
         class_data = get_class_parameters(data, class_name)
 
         # Add parameters to others
-        all_class_parameters = all_class_parameters.append(class_data["parameters"])
+        all_class_parameters = pandas.concat([all_class_parameters, class_data["parameters"]])
 
         # Add classes that this class extends to processing
         class_name_list.extend(class_data["extends"])
