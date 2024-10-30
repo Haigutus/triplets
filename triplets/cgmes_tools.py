@@ -346,41 +346,42 @@ def get_limits(data):
 
 
 def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
-    """Creates an temporary XML file to visualize relations
+    """Creates a temporary XML file to visualize relations
             returns  temp filename"""
 
     # Import needed modules
     from pyvis.network import Network
     import pyvis.options as options
 
-    node_data = reference_data.drop_duplicates([ID_COLUMN, "KEY"]).pivot(index=ID_COLUMN, columns="KEY")["VALUE"]
+    node_data = reference_data.drop_duplicates([ID_COLUMN, "KEY"]).pivot(index=ID_COLUMN, columns="KEY")["VALUE"].reset_index()
 
     columns = node_data.columns
 
     if "IdentifiedObject.name" in columns:
-        node_data = node_data[["Type", "IdentifiedObject.name"]].rename(columns={"IdentifiedObject.name": "name"})
+        node_data = node_data[["ID", "Type", "IdentifiedObject.name"]].rename(columns={"IdentifiedObject.name": "name"})
     elif "Model.profile" in columns:
-        node_data = node_data[["Type", "Model.profile"]].rename(columns={"Model.profile": "name"})
+        node_data = node_data[["ID", "Type", "Model.profile"]].rename(columns={"Model.profile": "name"})
     else:
-        node_data = node_data[["Type"]]
+        node_data = node_data[["ID", "Type"]]
         node_data["name"] = ""
 
     # Visulise with pyvis
 
-    graph = Network(directed=True, width="100%", height=750, notebook=notebook)
+    graph = Network(directed=True, width="100%", height="1000", notebook=notebook)
     # node_name = urlparse(dataframe[dataframe.KEY == "Model.profile"].VALUE.tolist()[0]).path  # FullModel does not have IdentifiedObject.name
 
     # Add nodes/objects
-    for ID, node in node_data.T.iteritems():
+    print(node_data)
+    for node in node_data.itertuples():
         #print(node)
-        object_data = reference_data.query("{} == '{}'".format(ID_COLUMN, ID))
+        object_data = reference_data.query("{} == '{}'".format(ID_COLUMN, node.ID))
         #print(object_data)
 
         node_name  = u"{} - {}".format(node.Type, node.name)
         node_title = object_data[[ID_COLUMN, "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={ID_COLUMN: "ID"}).to_html(index=False) # Add object data table to node hover titel
         node_level = object_data.level.tolist()[0]
 
-        graph.add_node(ID, node_name, title=node_title, size=10, level=node_level)
+        graph.add_node(node.ID, node_name, title=node_title, size=10, level=node_level)
 
 
     # Add connections
@@ -442,7 +443,7 @@ def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
         file_name = r"{}.html".format(from_UUID)
 
         # Show graph
-        graph.show(file_name)
+        graph.show(file_name, notebook=notebook)
 
         # Returns file path
         return os.path.abspath(file_name)
@@ -628,100 +629,6 @@ def get_dangling_references(data, detailed=False):
         return dangling_references.KEY_FROM.value_counts()
 
 
-def export_to_cimrdf(instance_data, rdf_map, namespace_map, class_KEY="Type", export_undefined=True):
-
-    # Create xml element builder and the root element
-    E = ElementMaker(nsmap=namespace_map)
-    RDF = E(QName(namespace_map["rdf"], "RDF"))
-
-    # Store created xml rdf class elements
-    objects = OrderedDict()
-    # TODO ensure that the Header class is serialised first
-
-    # Get objects
-    for _, class_data in instance_data.query("KEY=='{}'".format(class_KEY)).iterrows():
-
-        ID         = class_data["ID"]
-        class_name = class_data["VALUE"]
-
-        # Get class export definition
-        class_def  = rdf_map.get(class_name, None)
-
-        if class_def is not None:
-
-            class_namespace = class_def["namespace"]
-            id_name         = class_def["attrib"]["attribute"]
-            id_value_prefix = class_def["attrib"]["value_prefix"]
-
-        else:
-            print("WARNING - Definition missing for class: " + class_name + " with ID: " + ID)
-            pass
-
-            if export_undefined:
-                class_namespace = None
-                id_name = "about"
-                id_value_prefix = "urn:uuid:"
-
-        # Create class element
-        rdf_object = E(QName(class_namespace, class_name))
-        # Add ID attribute
-        rdf_object.attrib[QName(id_name)] = id_value_prefix + ID
-        # Add object to RDF
-        RDF.append(rdf_object)
-        # Add object with it's ID to dict (later we use it to add attributes to that class)
-        objects[ID] = rdf_object
-
-
-    # Add attribute to objects
-    for _, attribute_data in instance_data.query("KEY!='{}'".format(class_KEY)).iterrows():
-
-        ID      = attribute_data["ID"]
-        KEY     = attribute_data["KEY"]
-        VALUE   = attribute_data["VALUE"]
-
-        _object = objects.get(ID, None)
-
-        if _object is not None:
-
-            if not pandas.isna(VALUE):
-
-                tag_def = rdf_map.get(KEY, None)
-
-                if tag_def:
-                    tag     = E(QName(tag_def["namespace"], KEY))
-                    attrib  = tag_def.get("attrib", None)
-
-                    if attrib:
-                        tag.attrib[QName(attrib["attribute"])] = attrib["value_prefix"] + VALUE
-                    else:
-                        tag.text = str(VALUE)
-
-                    _object.append(tag)
-
-                else:
-                    print("Definition missing for tag: " + KEY)
-
-                    if export_undefined:
-                        tag      = E(KEY)
-                        tag.text = str(VALUE)
-
-                        _object.append(tag)
-
-
-            else:
-                #print("Attribute VALUE is None, thus not exported: ID: {} KEY: {}".format(ID, KEY))
-                pass
-        else:
-            #print("No Object with ID: {}".format(ID))
-            pass
-
-    # etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-    # print(etree.tostring(RDF, pretty_print=True).decode())
-
-    # Convert to XML
-    return etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-
-
 # TEST and examples
 if __name__ == '__main__':
 
@@ -732,9 +639,9 @@ if __name__ == '__main__':
 
     object_UUID = "99722373_VL_TN1"
 
-    #draw_relations_from(data, object_UUID)
-    #draw_relations_to(data, object_UUID)
-    #draw_relations(data, object_UUID)
+    draw_relations_from(data, object_UUID)
+    draw_relations_to(data, object_UUID)
+    draw_relations(data, object_UUID)
 
 
 
