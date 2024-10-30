@@ -24,11 +24,11 @@ def list_of_files(root_path, file_extension, go_deep=False):
 
                 full_path = os.path.join(path, filename)
 
-                if filename.endswith(file_extension):
+                if filename.lower().endswith(file_extension.lower()):
                     matches.append(full_path)
 
                 else:
-                    print ("Not a {} file: {}".format(file_extension, filename))
+                    print("Not a {} file: {}".format(file_extension, filename))
 
                     if go_deep == True:
                         print("Adding path to futher processing -> {}".format(full_path))
@@ -40,7 +40,7 @@ def list_of_files(path, file_extension):
     matches = []
     for filename in os.listdir(path):
 
-        if filename.endswith(file_extension):
+        if filename.lower().endswith(file_extension.lower()):
             matches.append(os.path.join(path, filename))
         else:
             print("Not a {} file: {}".format(file_extension, filename))
