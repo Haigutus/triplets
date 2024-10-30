@@ -236,6 +236,18 @@ fullmodel_conf = { "FullModel": {
                         "namespace": "http://iec.ch/TC57/61970-552/ModelDescription/1#"
                     }}
 
+def get_used_relations(data):
+    relations = data.query("KEY == 'AssociationUsed' and VALUE == 'Yes'").rename(columns={"ID": "RELATION_NAME"})
+    return relations.RELATION_NAME.str.split("#").str[-1]
+
+def dangling_references(data, relation_names):
+    references = data.merge(relation_names, left_on="KEY", right_on="RELATION_NAME")
+    return data.query("KEY == 'Type'").merge(references, left_on="ID", right_on="VALUE", indicator=True, how="right", suffixes=("_TO", "_FROM"))
+
+
+
+
+
 if __name__ == '__main__':
 
     path = r"..\profiles\ENTSOE\2019-05-09_RDFS_CGMES_2_4_15\EquipmentProfileCoreOperationShortCircuitRDFSAugmented-v2_4_15-09May2019.rdf"
