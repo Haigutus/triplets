@@ -28,6 +28,8 @@ import math
 
 import logging
 
+from triplets import rdf_parser
+
 logger = logging.getLogger(__name__)
 
 
@@ -256,6 +258,12 @@ def get_model_data(data, model_instances_dataframe):
 
     return IGM_data
 
+def get_EIC_to_mRID_map(data, type):
+    # TODO - check type?
+    # TODO - default type=None and return all?
+    # TODO - add type to resul?
+    name_map = {"ID": "mRID", "VALUE": "EIC"}
+    return rdf_parser.filter_triplet_by_type(data, type).drop_duplicates().query("KEY == 'IdentifiedObject.energyIdentCodeEic'")[name_map.keys()].rename(columns=name_map)
 
 
 def get_loaded_model_parts(data):
@@ -717,11 +725,9 @@ def export_to_cimrdf(instance_data, rdf_map, namespace_map, class_KEY="Type", ex
 # TEST and examples
 if __name__ == '__main__':
 
-    from triplets.rdf_parser import load_all_to_dataframe
+    path_list = ["../test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"]
 
-    path_list = ["../test_models/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"]
-
-    data = load_all_to_dataframe(path_list)
+    data = rdf_parser.load_all_to_dataframe(path_list)
 
 
     object_UUID = "99722373_VL_TN1"
