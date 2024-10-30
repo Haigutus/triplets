@@ -604,7 +604,8 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
                      global_zip_filename="Export.zip",
                      debug=False,
                      export_to_memory=False,
-                     export_base_path = ""):
+                     export_base_path="",
+                     comment=None):
     if debug:
         start_time = datetime.datetime.now()
         init_time = start_time
@@ -642,6 +643,10 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
 
         # Create xml root element
         RDF = E(QName(namespace_map["rdf"], "RDF"))
+
+        # Add comment
+        if comment:
+            RDF.addprevious(etree.Comment(str(comment)))
 
         # Store created xml rdf class elements
         objects = OrderedDict()
