@@ -310,6 +310,32 @@ def tableview_by_IDs(data, IDs_dataframe, IDs_column_name):
 
     return result
 
+def get_limits(data):
+
+    # Get Limit Sets
+    limits = data.type_tableview('OperationalLimitSet').reset_index()
+
+    # Get OperationalLimits
+    limits = limits.merge(data.key_tableview('OperationalLimit.OperationalLimitSet').reset_index(), left_on='ID', right_on='OperationalLimit.OperationalLimitSet', suffixes=("_OperationalLimitSet", ""))
+
+    # Add link to equipment via Terminals
+    limits = limits.merge(data.type_tableview('Terminal').reset_index(), left_on="OperationalLimitSet.Terminal", right_on="ID", suffixes=("", "_Terminal"))
+
+    limits["ID_Equipment"] = None
+
+    # Get Equipment via terminal -> 'OperationalLimitSet.Terminal' -> 'Terminal.ConductingEquipment'
+    if 'Terminal.ConductingEquipment' in limits.columns:
+        limits["ID_Equipment"] = limits["ID_Equipment"].fillna(limits["Terminal.ConductingEquipment"])
+
+    # Get Equipment directly -> 'OperationalLimitSet.Equipment'
+    if 'OperationalLimitSet.Equipment' in limits.columns:
+        limits["ID_Equipment"] = limits["ID_Equipment"].fillna(limits['OperationalLimitSet.Equipment'])
+
+    limits = limits.merge(data.query("KEY == 'Type'"), left_on="ID_Equipment", right_on="ID")
+
+    return limits
+
+
 
 def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
     """Creates an temporary XML file to visualize relations
