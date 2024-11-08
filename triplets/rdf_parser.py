@@ -625,6 +625,16 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
     # Create element builder
     E = ElementMaker(nsmap=namespace_map)
 
+    #TODO - this needs to be extended and put to a better place
+    #TODO - mayve rdfmap should use direct url, instead of short keys "EQ" etc
+
+    profile_map = {
+        "Equipment": "EQ",
+        "SteadyState": "SSH",
+        "StateVariables": "SV",
+        "Topology": "TP"
+    }
+
     if debug:
         _, start_time = print_duration("All file instance ID-s identified", start_time)
 
@@ -637,6 +647,14 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
         # TODO remove dependace on this header field, wich might not be present
         if len(instance_data.query("KEY == 'Model.messageType'")):
             instance_type = instance_data.query("KEY == 'Model.messageType'").iloc[0].VALUE
+
+        if len(instance_data.query("KEY == 'Model.profile'")):
+            instance_type_url = instance_data.query("KEY == 'Model.profile'").iloc[0].VALUE
+
+            for key, value in profile_map.items():
+                if key in instance_type_url:
+                    instance_type = value
+                    continue
 
         # If there is sub structure available in schema get it, otherwise use root definitions
         instance_rdf_map = rdf_map.get(instance_type, rdf_map)  # TODO - needs revision, add support both for md:FullModel, dcat:DataSet and without profile definiton
@@ -1082,30 +1100,33 @@ if __name__ == '__main__':
     # NP (CA.nI)  :   {data.type_tableview("ControlArea").iloc[0]["ControlArea.netInterchange"]} MW
     # """)
 
-    # namespace_map = dict(cim="http://iec.ch/TC57/2013/CIM-schema-cim16#",
-    #                      entsoe="http://entsoe.eu/CIM/SchemaExtension/3/1#",
-    #                      md="http://iec.ch/TC57/61970-552/ModelDescription/1#",
-    #                      rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+    namespace_map = dict(cim="http://iec.ch/TC57/2013/CIM-schema-cim16#",
+                         entsoe="http://entsoe.eu/CIM/SchemaExtension/3/1#",
+                         md="http://iec.ch/TC57/61970-552/ModelDescription/1#",
+                         rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#")
 
-    # Export Config
+    #Export Config
 
 
-    # xml_per_instance, xml_per_instance_zip_per_all, xml_per_instance_zip_per_xml
+    #xml_per_instance, xml_per_instance_zip_per_all, xml_per_instance_zip_per_xml
 
-    # export_type = "xml_per_instance_zip_per_xml"
-    #
-    # # Load export format configuration
-    # import json
-    # import cgmes_tools
-    # with open(r"..\profiles\ENTSOE\CGMES_v2.4.15_2014-08-07.json", "r") as conf_file:
-    #     rdf_map = json.load(conf_file)
-    #
-    # data = cgmes_tools.update_FullModel_from_filename(data)
-    #
-    # # Export triplet to CGMES
-    # data.export_to_cimxml(rdf_map=rdf_map,
-    #                       namespace_map=namespace_map,
-    #                       export_undefined=False,
-    #                       export_type=export_type)
+    export_type = "xml_per_instance_zip_per_xml"
+
+    # Load export format configuration
+    import json
+    import cgmes_tools
+    with open(r"../profiles/ENTSOE/CGMES_v2_4_15_2014_08_07.json", "r") as conf_file:
+        rdf_map = json.load(conf_file)
+
+    #data = cgmes_tools.update_FullModel_from_filename(data)
+
+    # Export triplet to CGMES
+    data.export_to_cimxml(rdf_map=rdf_map,
+                          namespace_map=namespace_map,
+                          export_undefined=False,
+                          export_type=export_type,
+                          debug=True)
+
+# Last took 0:00:21.367552 on python 3.12 and pandas 2.2.3
 
 
