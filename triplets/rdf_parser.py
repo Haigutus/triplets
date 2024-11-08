@@ -22,6 +22,8 @@ import uuid
 
 from collections import OrderedDict
 
+from concurrent.futures import ThreadPoolExecutor
+
 # from collections import deque
 
 # from multiprocessing import Pool - TODO add parallel loading for import ALL DASK, SPARK, MODIN, VAEX
@@ -223,7 +225,7 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
     return data_list
 
 
-def load_RDF_to_dataframe(path_or_fileobject, debug=False):
+def load_RDF_to_dataframe(path_or_fileobject, debug=False, data_type="string"):
     """Parse single file to Pandas DataFrame"""
 
     data_list = load_RDF_to_list(path_or_fileobject, debug)
@@ -231,7 +233,7 @@ def load_RDF_to_dataframe(path_or_fileobject, debug=False):
     if debug:
         start_time = datetime.datetime.now()
 
-    data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"], dtype=data_type)
 
     if debug:
         _, start_time = print_duration("List of data loaded to DataFrame", start_time)
@@ -239,7 +241,7 @@ def load_RDF_to_dataframe(path_or_fileobject, debug=False):
     return data
 
 
-def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False):
+def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False, data_type="string", max_workers=None):
     """Parse contents of provided list of paths to Pandas DataFrame (zip, global zip or XML)"""
 
     if debug:
@@ -249,17 +251,21 @@ def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False):
 
     data_list = []
 
-    #    TODO - add parallel processing if number inputs is greater than X - to be decided
-    #    process_pool = Pool(5)
-    #    data_list = sum(process_pool.map(load_RDF_to_list, list_of_xml),[])
+    if max_workers:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Map the function to the XML list and accumulate results
+            results = executor.map(lambda xml: load_RDF_to_list(xml, debug), list_of_xmls)
+            # Flatten the results since each call to load_RDF_to_list returns a list
+            data_list = [item for sublist in results for item in sublist]
 
-    for xml in list_of_xmls:
-        data_list.extend(load_RDF_to_list(xml, debug))
+    else:
+        for xml in list_of_xmls:
+            data_list.extend(load_RDF_to_list(xml, debug))
 
     if debug:
         start_time = datetime.datetime.now()
 
-    data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"], dtype=data_type)
 
     if debug:
         print_duration("Data list loaded to DataFrame", start_time)
@@ -1019,9 +1025,24 @@ if __name__ == '__main__':
 
     path = "../test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"
 
+    #pandas.options.mode.dtype_backend = "pyarrow"
+
     data = pandas.read_RDF([path], debug=True)
+    data_arrow = pandas.read_RDF([path], debug=True, data_type='string[pyarrow]', max_workers=4)
+
+    # Performance loading TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip
+    # 1146191 entries
     # Last took 0:00:07.919968 on python 3.7  and pandas 1.3.5
-    # Last took 0:00:04.312218 on python 3.11 abd pandas 2.0.2
+    # Last took 0:00:04.312218 on python 3.11 and pandas 2.0.2
+    # Last took 0:00:01.791312 on python 3.12 and pandas 2.2.3 used 311.6 MB memory and 114.8 MB with arrow backend
+    # Last took 0:00:01.486290 on python 3.12 and pandas 2.2.3 [workers=4] used 311.6 MB memory and 114.8 MB with arrow backend
+
+    #data = data.convert_dtypes(dtype_backend='pyarrow')
+
+    #data_arrow = data.convert_dtypes(dtype_backend='pyarrow')
+    arrow_memory = data_arrow.memory_usage(deep=True).sum() / 1024**2
+    pandas_memory = data.memory_usage(deep=True).sum() / 1024**2
+    print(f"p: {pandas_memory}; a: {arrow_memory}; diff {pandas_memory - arrow_memory}")
 
     print("Loaded types")
     print(data.query("KEY == 'Type'")["VALUE"].value_counts())
