@@ -1174,11 +1174,8 @@ if __name__ == '__main__':
 
     # Load export format configuration
     import json
-    import cgmes_tools
     with open(r"../profiles/ENTSOE/CGMES_v2_4_15_2014_08_07.json", "r") as conf_file:
         rdf_map = json.load(conf_file)
-
-    #data = cgmes_tools.update_FullModel_from_filename(data)
 
     # Export triplet to CGMES
     data.export_to_cimxml(rdf_map=rdf_map,
