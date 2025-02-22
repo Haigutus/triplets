@@ -21,6 +21,9 @@ import zipfile
 import uuid
 
 from collections import OrderedDict
+from functools import lru_cache
+
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 # from collections import deque
 
@@ -232,7 +235,7 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
     return data_list
 
 
-def load_RDF_to_dataframe(path_or_fileobject, debug=False):
+def load_RDF_to_dataframe(path_or_fileobject, debug=False, data_type="string"):
     """Parse single file to Pandas DataFrame"""
 
     data_list = load_RDF_to_list(path_or_fileobject, debug)
@@ -240,7 +243,7 @@ def load_RDF_to_dataframe(path_or_fileobject, debug=False):
     if debug:
         start_time = datetime.datetime.now()
 
-    data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"], dtype=data_type)
 
     if debug:
         _, start_time = print_duration("List of data loaded to DataFrame", start_time)
@@ -248,7 +251,7 @@ def load_RDF_to_dataframe(path_or_fileobject, debug=False):
     return data
 
 
-def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False):
+def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False, data_type="string", max_workers=None):
     """Parse contents of provided list of paths to Pandas DataFrame (zip, global zip or XML)"""
 
     if debug:
@@ -262,17 +265,21 @@ def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False):
 
     data_list = []
 
-    #    TODO - add parallel processing if number inputs is greater than X - to be decided
-    #    process_pool = Pool(5)
-    #    data_list = sum(process_pool.map(load_RDF_to_list, list_of_xml),[])
+    if max_workers:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Map the function to the XML list and accumulate results
+            results = executor.map(lambda xml: load_RDF_to_list(xml, debug), list_of_xmls)
+            # Flatten the results since each call to load_RDF_to_list returns a list
+            data_list = [item for sublist in results for item in sublist]
 
-    for xml in list_of_xmls:
-        data_list.extend(load_RDF_to_list(xml, debug))
+    else:
+        for xml in list_of_xmls:
+            data_list.extend(load_RDF_to_list(xml, debug))
 
     if debug:
         start_time = datetime.datetime.now()
 
-    data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"], dtype=data_type)
 
     if debug:
         print_duration("Data list loaded to DataFrame", start_time)
@@ -610,6 +617,192 @@ def export_to_excel(data, path=None):
 pandas.DataFrame.export_to_excel = export_to_excel
 
 
+@lru_cache(maxsize=250)  # Adjust maxsize based on the number of unique QName combinations
+def get_qname(namespace, tag=None):
+    qname = QName(namespace, tag)
+    #logger.debug(f"Cache info: {get_qname.cache_info()}")
+    return qname
+
+def generate_xml(instance_data,
+                 rdf_map=None,
+                 namespace_map={"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"},
+                 class_KEY="Type",
+                 export_undefined=True,
+                 comment=None,
+                 debug=False):
+
+    if debug:
+        start_time = datetime.datetime.now()
+
+    # Filename is kept under label
+    label_data = instance_data[instance_data["KEY"] == "label"]
+
+    if not label_data.empty:
+        file_name = label_data.at[label_data.index[0], 'VALUE']
+
+    else:
+        file_name = f"{uuid.uuid4()}.xml"
+
+    # Find schema reference to be used for export
+    # TODO remove dependency on this header field, which might not be present
+    # TODO: Refactor this, if schema is provided, the information how to pick it up should be in the schema
+
+    instance_type = None
+
+    message_type_data = instance_data[instance_data["KEY"] == "Model.messageType"]
+    profile_data = instance_data[instance_data["KEY"] == "Model.profile"]
+
+    if not message_type_data.empty:
+        instance_type = message_type_data.at[message_type_data.index[0], 'VALUE']
+
+    if not instance_type and not profile_data.empty:
+        instance_type_url = profile_data.at[profile_data.index[0], 'VALUE']
+
+        # TODO - needs to be extended
+        profile_map = {
+            "Equipment": "EQ",
+            "SteadyState": "SSH",
+            "StateVariables": "SV",
+            "Topology": "TP"
+        }
+
+        for key, value in profile_map.items():
+            if key in instance_type_url:
+                instance_type = value
+                continue
+
+    # If there is sub structure available in schema get it, otherwise use root definitions
+    # TODO - needs revision, add support both for md:FullModel, dcat:DataSet and without profile definiton
+    instance_rdf_map = rdf_map.get(instance_type, rdf_map)
+
+    if instance_rdf_map is None:
+        logger.warning("No rdf mapping available for {}".format(instance_type))
+        if not export_undefined:
+            logger.warning("File not created for {}".format(file_name))
+            return
+
+    # Create element builder
+    E = ElementMaker(nsmap=namespace_map)
+
+    # Create xml root element
+    RDF = E(QName(namespace_map["rdf"], "RDF"))
+
+    # Add comment
+    if comment:
+        RDF.addprevious(etree.Comment(str(comment)))
+
+    # Store created xml rdf class elements
+    objects = {}
+    # TODO ensure that the Header class is serialised first
+
+    if debug:
+        _, start_time = print_duration("File root generated", start_time)
+
+    # Generate objects (Class instance)
+    # TODO: Maybe group by class name: less lookups
+    for class_data in (instance_data[instance_data["KEY"] == class_KEY]).itertuples():
+
+        ID = class_data.ID
+        class_name = class_data.VALUE
+
+        # Get class export definition
+        class_def = instance_rdf_map.get(class_name, None)
+
+        if class_def is not None:
+
+            class_namespace = class_def["namespace"]
+            id_name = class_def["attrib"]["attribute"]
+            id_value_prefix = class_def["attrib"]["value_prefix"]
+
+        else:
+            logger.debug("Definition missing for class: {} with {}: ".format(class_name, ID))
+
+            if export_undefined:
+                class_namespace = None
+                id_name = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about"
+                id_value_prefix = "urn:uuid:"
+            else:
+                logger.debug(f"{class_name} not Exported")
+                continue
+
+        # Create class element
+        # logger.debug(class_namespace, class_name) # DEBUG
+        rdf_object = E(get_qname(class_namespace, class_name))
+        # Add ID attribute
+        rdf_object.attrib[get_qname(id_name)] = f"{id_value_prefix}{ID}"
+        # Add object to RDF
+        RDF.append(rdf_object)
+        # Add object with it's ID to dict (later we use it to add attributes to that class)
+        objects[ID] = rdf_object
+
+    if debug:
+        _, start_time = print_duration("Objects added", start_time)
+
+    # Add attribute to objects
+    # TODO - maybe make work que here, all Objects are generated, we now need to just add attributes to them, but we are going object by object
+    # TODO - maybe group by KEY: avoid all prefix building lookups
+    # TODO - maybe filter out all rows without Type before: avoid checking in the loop
+    for attribute_data in instance_data[instance_data["KEY"] != class_KEY].dropna(subset=["VALUE"]).itertuples():
+    #for attribute_data in instance_data[instance_data["KEY"] != class_KEY].itertuples():
+
+        ID = attribute_data.ID
+        KEY = attribute_data.KEY
+        VALUE = attribute_data.VALUE
+
+        _object = objects.get(ID, None)
+
+        if _object is not None:
+
+        #if not pandas.isna(VALUE):
+
+            tag_def = instance_rdf_map.get(KEY, None)
+
+            if tag_def is not None:
+                tag = E(get_qname(tag_def["namespace"], KEY))
+                attrib = tag_def.get("attrib", None)
+                text_prefix = tag_def.get("text", "")
+
+                if attrib:
+                    tag.attrib[get_qname(attrib["attribute"])] = f"{attrib['value_prefix']}{VALUE}"
+                else:
+                    tag.text = f"{text_prefix}{VALUE}"
+
+                _object.append(tag)
+
+            else:
+                logger.debug("Definition missing for tag: " + KEY)
+
+                if export_undefined:
+                    tag = E(KEY)
+                    tag.text = str(VALUE)
+
+                    _object.append(tag)
+
+
+        #else:
+        #    logger.debug("Attribute VALUE is None, thus not exported: ID: {} KEY: {}".format(ID, KEY))
+        #    pass
+
+        else:
+            logger.debug("No Object with ID: {}".format(ID))
+            pass
+
+    # etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+    # logger.debug(etree.tostring(RDF, pretty_print=True).decode())
+    if debug:
+        _, start_time = print_duration("Attributes added", start_time)
+
+    # Convert to XML
+    xml = etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+    # TODO - clean namespaces
+
+    logger.info("Exporting RDF to {}".format(file_name))
+
+    if debug:
+        _, start_time = print_duration("XML created", start_time)
+
+    return {"filename": file_name, "file": xml}
+
 def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"},
                      class_KEY="Type",
                      export_undefined=True,
@@ -617,165 +810,63 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
                      global_zip_filename="Export.zip",
                      debug=False,
                      export_to_memory=False,
-                     export_base_path = ""):
+                     export_base_path="",
+                     comment=None,
+                     max_workers=None):
+
     if debug:
         start_time = datetime.datetime.now()
         init_time = start_time
 
-    # File names are kept under rdfs:lable
-    labels = data.query("KEY == 'label'").itertuples()
+    instances = data.groupby("INSTANCE_ID")
+
+    #TODO - this needs to be extended and put to a better place
+    #TODO - mayve rdfmap should use direct url, instead of short keys "EQ" etc
 
     # Keep all file names and data to be exported
-    export_files = []
-
-    # Create element builder
-    E = ElementMaker(nsmap=namespace_map)
+    xml_documents = []
 
     if debug:
         _, start_time = print_duration("All file instance ID-s identified", start_time)
 
-    for label in labels:
+    # if max_workers:
+    #     with ProcessPoolExecutor(max_workers=max_workers) as executor:
+    #         # Map the function to the XML list and accumulate results
+    #         xml_documents = executor.map(lambda _, instance: generate_xml(   instance,
+    #                                                                          rdf_map,
+    #                                                                          namespace_map,
+    #                                                                          class_KEY,
+    #                                                                          export_undefined,
+    #                                                                          comment,
+    #                                                                          debug), instances)
+    if max_workers:
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(generate_xml, instance, rdf_map, namespace_map, class_KEY, export_undefined,debug) for _, instance in instances]
+            xml_documents = [future.result() for future in futures if future.result() is not None]
 
-        instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
+    else:
+        for _, instance in instances:
+            xml_documents.append(generate_xml(instance,
+                                             rdf_map,
+                                             namespace_map,
+                                             class_KEY,
+                                             export_undefined,
+                                             comment,
+                                             debug))
 
-        instance_type = None
-
-        # TODO remove dependace on this header field, wich might not be present
-        if len(instance_data.query("KEY == 'Model.messageType'")):
-            instance_type = instance_data.query("KEY == 'Model.messageType'").iloc[0].VALUE
-
-        # If there is sub structure available in schema get it, otherwise use root definitions
-        instance_rdf_map = rdf_map.get(instance_type, rdf_map)  # TODO - needs revision, add support both for md:FullModel, dcat:DataSet and without profile definiton
-
-        if instance_rdf_map is None:
-            logger.warning("No rdf mapping available for {}".format(instance_type))
-            if not export_undefined:
-                logger.warning("File not created for {}".format(label.VALUE))
-                continue
-
-        # Create xml root element
-        RDF = E(QName(namespace_map["rdf"], "RDF"))
-
-        # Store created xml rdf class elements
-        objects = OrderedDict()
-        # TODO ensure that the Header class is serialised first
-
-        if debug:
-            _, start_time = print_duration("File root generated", start_time)
-
-        # Get objects
-        for class_data in instance_data.query("KEY=='{}'".format(class_KEY)).itertuples():
-
-            ID = class_data.ID
-            class_name = class_data.VALUE
-
-            # Get class export definition
-            class_def = instance_rdf_map.get(class_name, None)
-
-            if class_def is not None:
-
-                class_namespace = class_def["namespace"]
-                id_name = class_def["attrib"]["attribute"]
-                id_value_prefix = class_def["attrib"]["value_prefix"]
-
-            else:
-                logger.debug("Definition missing for class: {} with {}: ".format(class_name, ID))
-
-                if export_undefined:
-                    class_namespace = None
-                    id_name = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about"
-                    id_value_prefix = "urn:uuid:"
-                else:
-                    logger.debug(f"{class_name} not Exported")
-                    continue
-
-            # Create class element
-            # logger.debug(class_namespace, class_name) # DEBUG
-            rdf_object = E(QName(class_namespace, class_name))
-            # Add ID attribute
-            rdf_object.attrib[QName(id_name)] = f"{id_value_prefix}{ID}"
-            # Add object to RDF
-            RDF.append(rdf_object)
-            # Add object with it's ID to dict (later we use it to add attributes to that class)
-            objects[ID] = rdf_object
-
-        if debug:
-            _, start_time = print_duration("Objects added", start_time)
-
-        # Add attribute to objects
-        for attribute_data in instance_data.query("KEY!='{}'".format(class_KEY)).itertuples():
-
-            ID = attribute_data.ID
-            KEY = attribute_data.KEY
-            VALUE = attribute_data.VALUE
-
-            _object = objects.get(ID, None)
-
-            if _object is not None:
-
-                if not pandas.isna(VALUE):
-
-                    tag_def = instance_rdf_map.get(KEY, None)
-
-                    if tag_def is not None:
-                        tag = E(QName(tag_def["namespace"], KEY))
-                        attrib = tag_def.get("attrib", None)
-                        text_prefix = tag_def.get("text", "")
-
-                        if attrib:
-                            tag.attrib[QName(attrib["attribute"])] = f"{attrib['value_prefix']}{VALUE}"
-                        else:
-                            tag.text = f"{text_prefix}{VALUE}"
-
-                        _object.append(tag)
-
-                    else:
-                        logger.debug("Definition missing for tag: " + KEY)
-
-                        if export_undefined:
-                            tag = E(KEY)
-                            tag.text = str(VALUE)
-
-                            _object.append(tag)
-
-
-                else:
-                    logger.debug("Attribute VALUE is None, thus not exported: ID: {} KEY: {}".format(ID, KEY))
-                    pass
-
-            else:
-                logger.debug("No Object with ID: {}".format(ID))
-                pass
-
-        if debug:
-            _, start_time = print_duration("Attributes added", start_time)
-
-        # etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-        # logger.debug(etree.tostring(RDF, pretty_print=True).decode())
-
-        # Convert to XML
-        xml = etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding='UTF-8')
-        # TODO - clean namespaces
-
-        logger.info("Exporting RDF to {}".format(label.VALUE))
-
-        export_files.append({"filename": label.VALUE, "file": xml})
-
-        if debug:
-            _, start_time = print_duration("XML created", start_time)
-
+    _, start_time = print_duration("All XML created in memory ", start_time)
+    ### Export XML ###
     exported_files = []
 
-    ### Export XML ###
     if export_type == "xml_per_instance":
-        for export_file in export_files:
+        for document in xml_documents:
 
-            file_object = BytesIO(export_file["file"])
-            file_object.name = export_file["filename"]
+            file_object = BytesIO(document["file"])
+            file_object.name = document["filename"]
 
             exported_files.append(file_object)
 
-            logger.info(f"Exported {export_file['filename']} to memeory")
+            logger.info(f"Exported {document['filename']} to memory")
 
     ### Export ZIP containing all xml ###
     elif export_type == "xml_per_instance_zip_per_all":
@@ -785,9 +876,9 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
 
         with zipfile.ZipFile(gloabl_zip_fileobject, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
 
-            for export_file in export_files:
-                zip_file.writestr(export_file["filename"], export_file["file"])
-                logger.info(f'Added {export_file["filename"]} to ZIP')
+            for document in xml_documents:
+                zip_file.writestr(document["filename"], document["file"])
+                logger.info(f'Added {document["filename"]} to ZIP')
 
         exported_files.append(gloabl_zip_fileobject)
         logger.info(f'Exported ZIP named {global_zip_filename} to memory')
@@ -796,13 +887,13 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
     ### Export each xml in separate zip ###
     elif export_type == "xml_per_instance_zip_per_xml":
 
-        for export_file in export_files:
+        for document in xml_documents:
 
             zip_file_object = BytesIO()
-            zip_file_object.name = export_file["filename"].replace('.xml', '.zip')
+            zip_file_object.name = document["filename"].replace('.xml', '.zip').replace('.XML', '.zip')
 
             with zipfile.ZipFile(zip_file_object, mode='w', compression=zipfile.ZIP_DEFLATED) as zip_file:
-                zip_file.writestr(export_file["filename"], export_file["file"])
+                zip_file.writestr(document["filename"], document["file"])
 
             exported_files.append(zip_file_object)
             logger.info(f'Exported {zip_file_object.name} to memory')
@@ -1028,8 +1119,21 @@ if __name__ == '__main__':
     path = "../test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"
 
     data = pandas.read_RDF([path], debug=True)
+    #data_arrow = pandas.read_RDF([path], debug=True, data_type='string[pyarrow]', max_workers=4)
+
+    # Performance loading TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip
+    # 1146191 entries
     # Last took 0:00:07.919968 on python 3.7  and pandas 1.3.5
-    # Last took 0:00:04.312218 on python 3.11 abd pandas 2.0.2
+    # Last took 0:00:04.312218 on python 3.11 and pandas 2.0.2
+    # Last took 0:00:01.791312 on python 3.12 and pandas 2.2.3 used 311.6 MB memory and 114.8 MB with arrow backend
+    # Last took 0:00:01.486290 on python 3.12 and pandas 2.2.3 [workers=4] used 311.6 MB memory and 114.8 MB with arrow backend
+
+    #data = data.convert_dtypes(dtype_backend='pyarrow')
+
+    #data_arrow = data.convert_dtypes(dtype_backend='pyarrow')
+    #arrow_memory = data_arrow.memory_usage(deep=True).sum() / 1024**2
+    #pandas_memory = data.memory_usage(deep=True).sum() / 1024**2
+    #print(f"p: {pandas_memory}; a: {arrow_memory}; diff {pandas_memory - arrow_memory}")
 
     print("Loaded types")
     print(data.query("KEY == 'Type'")["VALUE"].value_counts())
@@ -1069,30 +1173,35 @@ if __name__ == '__main__':
     # NP (CA.nI)  :   {data.type_tableview("ControlArea").iloc[0]["ControlArea.netInterchange"]} MW
     # """)
 
-    # namespace_map = dict(cim="http://iec.ch/TC57/2013/CIM-schema-cim16#",
-    #                      entsoe="http://entsoe.eu/CIM/SchemaExtension/3/1#",
-    #                      md="http://iec.ch/TC57/61970-552/ModelDescription/1#",
-    #                      rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+    namespace_map = dict(cim="http://iec.ch/TC57/2013/CIM-schema-cim16#",
+                         entsoe="http://entsoe.eu/CIM/SchemaExtension/3/1#",
+                         md="http://iec.ch/TC57/61970-552/ModelDescription/1#",
+                         rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#")
 
-    # Export Config
-
-
-    # xml_per_instance, xml_per_instance_zip_per_all, xml_per_instance_zip_per_xml
-
-    # export_type = "xml_per_instance_zip_per_xml"
-    #
-    # # Load export format configuration
-    # import json
-    # import cgmes_tools
-    # with open(r"..\profiles\ENTSOE\CGMES_v2.4.15_2014-08-07.json", "r") as conf_file:
-    #     rdf_map = json.load(conf_file)
-    #
-    # data = cgmes_tools.update_FullModel_from_filename(data)
-    #
-    # # Export triplet to CGMES
-    # data.export_to_cimxml(rdf_map=rdf_map,
-    #                       namespace_map=namespace_map,
-    #                       export_undefined=False,
-    #                       export_type=export_type)
+    #Export Config
 
 
+    #xml_per_instance, xml_per_instance_zip_per_all, xml_per_instance_zip_per_xml
+
+    export_type = "xml_per_instance_zip_per_xml"
+
+    # Load export format configuration
+    import json
+    with open(r"../profiles/ENTSOE/CGMES_v2_4_15_2014_08_07.json", "r") as conf_file:
+        rdf_map = json.load(conf_file)
+
+    # Export triplet to CGMES
+    data.export_to_cimxml(rdf_map=rdf_map,
+                          namespace_map=namespace_map,
+                          export_undefined=False,
+                          export_type=export_type,
+                          debug=True,
+                          export_to_memory=False,
+                          max_workers=None)
+
+# Last took 0:00:21.367552 on python 3.12 and pandas 2.2.3
+#0:00:18.645366
+#0:00:17.975319 [export_to_memory=True
+#0:00:13.102329
+#0:00:14.070468
+#0:00:10.324683
