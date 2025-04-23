@@ -172,66 +172,60 @@ def find_all_xml(list_of_paths_to_zip_globalzip_xml, debug=False):
 
 def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
     """Parse single file to triplestore list"""
-
-    file_name = path_or_fileobject
-
-    if type(path_or_fileobject) != str:
-        file_name = path_or_fileobject.name
-
-    logger.info("Loading {}".format(file_name))
+    file_name = path_or_fileobject if isinstance(path_or_fileobject, str) else path_or_fileobject.name
+    logger.info(f"Loading {file_name}")
 
     RDF_objects, INSTANCE_ID, namespace_map = load_RDF_objects_from_XML(path_or_fileobject, debug)
 
     if debug:
         start_time = datetime.datetime.now()
 
-    # Lets generate list for RDF data and store the original filename under rdf:label in dcat:Distribution object
+    RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    RDF_ID = f"{{{RDF_NS}}}ID"
+    RDF_ABOUT = f"{{{RDF_NS}}}about"
+    RDF_RESOURCE = f"{{{RDF_NS}}}resource"
+
+    # Generate list for RDF data and store the original filename under rdf:label in dcat:Distribution object
     ID = str(uuid.uuid4())
     ID_NSMAP = str(uuid.uuid4())
     data_list = [
-                    (ID, "Type", "Distribution", INSTANCE_ID),
-                    (ID, "label", file_name, INSTANCE_ID),
-                    (ID_NSMAP, "Type", "NamespaceMap", INSTANCE_ID),
-                ]
+        (ID, "Type", "Distribution", INSTANCE_ID),
+        (ID, "label", file_name, INSTANCE_ID),
+        (ID_NSMAP, "Type", "NamespaceMap", INSTANCE_ID),
+    ]
 
     for key, value in namespace_map.items():
         data_list.append((ID_NSMAP, key, value, INSTANCE_ID))
 
-    # lets create all variables, so that in loops they are reused, rather than new ones are created, green thinking
-    #ID = ""
+    # Reuse variables to avoid creating new ones in loops
     KEY = ""
     VALUE = ""
-    NS = ""
+    KEY_NS = ""
+    VALUE_NS = ""
 
     for RDF_object in RDF_objects:
-
-        ID = clean_ID(RDF_object.attrib.values()[0])
-        # KEY        = '{http://www.w3.org/1999/02/22-rdf-syntax-ns#}type' # If we would like to keep all with correct namespace
-        KEY = 'Type'
-        KEY_NS = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
-        VALUE_NS, VALUE = RDF_object.tag.split("}")  #TODO - case where there is no namespace will fail, but is it realistic for RDF file?
-        # VALUE       = etree.QName(object).localname
-        # ID_TYPE    = object.attrib.keys()[0].split("}")[1] # Adds column to identify "ID" and "about" types of ID
-
-        # data_list.append([ID, ID_TYPE, KEY, VALUE]) # If using ID TYPE, maybe also namespace should be kept?
+        ID = clean_ID(RDF_object.attrib.get(RDF_ID) or RDF_object.attrib.get(RDF_ABOUT))
+        KEY = "Type"
+        KEY_NS = RDF_NS
+        # Use partition instead of split, with fallback for no "}"
+        parts = RDF_object.tag.partition("}")
+        VALUE_NS, VALUE = parts[0], parts[2]
         data_list.append((ID, KEY, VALUE, INSTANCE_ID))
 
         for element in RDF_object.iterchildren():
-
-            KEY_NS, KEY = element.tag.split("}")  #TODO - case where there is no namespace will fail, but is it realistic for RDF file?
-            # KEY = etree.QName(element).localname
+            parts = element.tag.partition("}")
+            KEY_NS, KEY = parts[0], parts[2]
             VALUE = element.text
             VALUE_NS = ""
 
-            if VALUE is None and len(element.attrib.values()) > 0:
-                VALUE = clean_ID(element.attrib.values()[0])
+            if VALUE is None and element.attrib:
+                VALUE = clean_ID(element.attrib[RDF_RESOURCE])
 
-            # data_list.append([ID, ID_TYPE, KEY_NAMESPACE, KEY, VALUE]) # If using ID TYPE
+
             data_list.append((ID, KEY, VALUE, INSTANCE_ID))
 
     if debug:
-        _, start_time = print_duration("All values put to data list", start_time)
-
+        print_duration("All values put to data list", start_time)
     return data_list
 
 
@@ -266,10 +260,12 @@ def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False, data_
     data_list = []
 
     if max_workers:
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Map the function to the XML list and accumulate results
-            results = executor.map(lambda xml: load_RDF_to_list(xml, debug), list_of_xmls)
-            # Flatten the results since each call to load_RDF_to_list returns a list
+            # Submit each task individually
+            futures = [executor.submit(load_RDF_to_list, xml, debug) for xml in list_of_xmls]
+            # Collect results as they complete
+            results = [future.result() for future in futures]
             data_list = [item for sublist in results for item in sublist]
 
     else:
@@ -293,11 +289,11 @@ def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False, data_
 pandas.read_RDF = load_all_to_dataframe
 
 
-def type_tableview(data, type_name, string_to_number=True):
+def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
     """Creates a table view of all objects of same type, with their parameters in columns"""
 
     # Get all ID-s of rows where Type == type_name
-    type_id = data.query("VALUE == '{}' & KEY == 'Type'".format(type_name))
+    type_id = data[(data["VALUE"] == type_name) & (data["KEY"] == type_key)]
 
     if type_id.empty:
         logger.warning('No data available for {}'.format(type_name))
@@ -312,7 +308,11 @@ def type_tableview(data, type_name, string_to_number=True):
 
     if string_to_number:
         # Convert to data type to numeric in columns that contain only numbers (for easier data usage later on)
-        data_view = data_view.apply(pandas.to_numeric, errors='ignore')
+        for column in data_view.columns:
+            try:
+                data_view[column] = pandas.to_numeric(data_view[column], errors="raise")
+            except (ValueError, TypeError):
+                pass
 
     return data_view
 
@@ -323,7 +323,7 @@ def key_tableview(data, key_name, string_to_number=True):
     """Creates a table view of all objects of same type, with their parameters in columns"""
 
     # Get all ID-s of rows where KEY == key_name
-    type_id = data.query("KEY == @key_name")
+    type_id = data[data["KEY"] == key_name]
 
     if type_id.empty:
         logger.warning('No data available for {}'.format(key_name))
@@ -338,7 +338,11 @@ def key_tableview(data, key_name, string_to_number=True):
 
     if string_to_number:
         # Convert to data type to numeric in columns that contain only numbers (for easier data usage later on)
-        data_view = data_view.apply(pandas.to_numeric, errors='ignore')
+        for column in data_view.columns:
+            try:
+                data_view[column] = pandas.to_numeric(data_view[column], errors="raise")
+            except (ValueError, TypeError):
+                pass
 
     return data_view
 
@@ -1194,13 +1198,21 @@ if __name__ == '__main__':
         rdf_map = json.load(conf_file)
 
     # Export triplet to CGMES
-    data.export_to_cimxml(rdf_map=rdf_map,
-                          namespace_map=namespace_map,
-                          export_undefined=False,
-                          export_type=export_type,
-                          debug=True,
-                          export_to_memory=False,
-                          max_workers=None)
+    #data.export_to_cimxml(rdf_map=rdf_map,
+    #                      namespace_map=namespace_map,
+    #                      export_undefined=False,
+    #                      export_type=export_type,
+    #                      debug=True,
+    #                      export_to_memory=False,
+    #                      max_workers=None)
+
+    import cProfile
+
+    profiler = cProfile.Profile()
+    profiler.enable()
+    data = pandas.read_RDF([path], debug=False, max_workers=4)
+    profiler.disable()
+    profiler.print_stats(sort="cumulative")
 
 # Last took 0:00:21.367552 on python 3.12 and pandas 2.2.3
 #0:00:18.645366
