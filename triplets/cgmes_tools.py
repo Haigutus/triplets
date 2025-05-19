@@ -321,13 +321,16 @@ def tableview_by_IDs(data, IDs_dataframe, IDs_column_name):
 def get_limits(data):
 
     # Get Limit Sets
-    limits = data.type_tableview('OperationalLimitSet').reset_index()
+    limits = data.type_tableview('OperationalLimitSet', string_to_number=False).reset_index()
 
-    # Get OperationalLimits
-    limits = limits.merge(data.key_tableview('OperationalLimit.OperationalLimitSet').reset_index(), left_on='ID', right_on='OperationalLimit.OperationalLimitSet', suffixes=("_OperationalLimitSet", ""))
+    # Add OperationalLimits
+    limits = limits.merge(data.key_tableview('OperationalLimit.OperationalLimitSet').reset_index(), left_on='ID', right_on='OperationalLimit.OperationalLimitSet', suffixes=("_OperationalLimitSet", "_OperationalLimit"))
+
+    # Add LimitTypes
+    limits = limits.merge(data.type_tableview("OperationalLimitType", string_to_number=False).reset_index(), right_on="ID", left_on="OperationalLimit.OperationalLimitType")
 
     # Add link to equipment via Terminals
-    limits = limits.merge(data.type_tableview('Terminal').reset_index(), left_on="OperationalLimitSet.Terminal", right_on="ID", suffixes=("", "_Terminal"))
+    limits = limits.merge(data.type_tableview('Terminal', string_to_number=False).reset_index(), left_on="OperationalLimitSet.Terminal", right_on="ID", suffixes=("", "_Terminal"))
 
     limits["ID_Equipment"] = None
 
@@ -339,10 +342,10 @@ def get_limits(data):
     if 'OperationalLimitSet.Equipment' in limits.columns:
         limits["ID_Equipment"] = limits["ID_Equipment"].fillna(limits['OperationalLimitSet.Equipment'])
 
-    limits = limits.merge(data.query("KEY == 'Type'"), left_on="ID_Equipment", right_on="ID")
+    # Add equipment type
+    limits = limits.merge(data.query("KEY == 'Type'")[["ID", "VALUE"]], left_on="ID_Equipment", right_on="ID", suffixes=("", "_Type")).rename(columns={"VALUE":"Equipment_Type"})
 
     return limits
-
 
 
 def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
