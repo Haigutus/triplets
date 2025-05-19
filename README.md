@@ -9,7 +9,7 @@
 
 ```python
 import pandas
-from triplets import rdf_parser
+import triplets
 
 path = "CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"
 data = pandas.read_RDF([path])
