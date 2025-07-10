@@ -857,8 +857,8 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
                                              export_undefined,
                                              comment,
                                              debug))
-
-    _, start_time = print_duration("All XML created in memory ", start_time)
+    if debug:
+        _, start_time = print_duration("All XML created in memory ", start_time)
     ### Export XML ###
     exported_files = []
 
