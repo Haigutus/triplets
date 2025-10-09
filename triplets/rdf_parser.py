@@ -46,10 +46,27 @@ pandas.set_option("display.width", 1000)
 
 
 def print_duration(text, start_time):
-    """Print duration between now and start time
-    Input: text, start_time
-    Output: duration (in seconds), end_time"""
+    """Print duration between now and start time.
 
+    Parameters
+    ----------
+    text : str
+        Description of the timed operation to include in the log message.
+    start_time : datetime.datetime
+        Start time of the operation.
+
+    Returns
+    -------
+    tuple
+        A tuple containing:
+        - duration (timedelta): Time elapsed since start_time.
+        - end_time (datetime.datetime): Current time when the function is called.
+
+    Examples
+    --------
+    >>> start = datetime.datetime.now()
+    >>> duration, end = print_duration("Operation completed", start)
+    """
     end_time = datetime.datetime.now()
     duration = end_time - start_time
     logger.debug(f"{text}  {duration}")
@@ -58,8 +75,27 @@ def print_duration(text, start_time):
 
 
 def remove_prefix(original_string, prefix_string):
-    """Removes prefix from a string"""
+    """Remove a specified prefix from a string.
 
+    Parameters
+    ----------
+    original_string : str
+        The input string to process.
+    prefix_string : str
+        The prefix to remove from the input string.
+
+    Returns
+    -------
+    str
+        The input string with the prefix removed if present; otherwise, the original string.
+
+    Examples
+    --------
+    >>> remove_prefix("urn:uuid:1234", "urn:uuid:")
+    '1234'
+    >>> remove_prefix("abc", "xyz")
+    'abc'
+    """
     prefix_length = len(prefix_string)
 
     if original_string[0:prefix_length] == prefix_string:
@@ -69,8 +105,30 @@ def remove_prefix(original_string, prefix_string):
 
 
 def clean_ID(ID):
-    """Removes ID prefixes used in CIM - first occourance of 'urn:uuid:', '#_', '_' is replaced by empty string"""
+    """Remove common CIM ID prefixes from a string.
 
+    Parameters
+    ----------
+    ID : str
+        The input ID string to clean.
+
+    Returns
+    -------
+    str
+        The ID with prefixes ('urn:uuid:', '#_', '_') removed from the start.
+
+    Notes
+    -----
+    - Sequentially removes 'urn:uuid:', '#_', and '_' prefixes using removeprefix.
+    - TODO: Verify if these characters are absent in UUIDs to ensure safe removal.
+
+    Examples
+    --------
+    >>> clean_ID("urn:uuid:1234")
+    '1234'
+    >>> clean_ID("#_abc")
+    'abc'
+    """
     # TODO - a lot of replacements have been done using replace function, but is it valid that these charecaters are not present in UUID-s? is replace once sufficent?
 
     # replace_count = 1 # Remove only once the ID prefix string, otherwise we risk of removing characters from within ID
@@ -83,8 +141,27 @@ def clean_ID(ID):
 
 
 def load_RDF_objects_from_XML(path_or_fileobject, debug=False):
-    """Parse XML and return iterator of RDF objects and instance ID"""
+    """Parse an XML file and return an iterator of RDF objects with instance ID and namespace map.
 
+    Parameters
+    ----------
+    path_or_fileobject : str or file-like object
+        Path to the XML file or a file-like object containing RDF XML data.
+    debug : bool, optional
+        If True, log timing information for debugging (default is False).
+
+    Returns
+    -------
+    tuple
+        A tuple containing:
+        - RDF_objects (iterator): Iterator over RDF objects in the XML.
+        - instance_id (str): Unique UUID for the loaded instance.
+        - namespace_map (dict): Dictionary of namespace prefixes and URIs.
+
+    Examples
+    --------
+    >>> rdf_objects, instance_id, ns_map = load_RDF_objects_from_XML("file.xml")
+    """
     # START TIMER
     if debug:
         start_time = datetime.datetime.now()
@@ -114,8 +191,29 @@ def load_RDF_objects_from_XML(path_or_fileobject, debug=False):
 
 
 def find_all_xml(list_of_paths_to_zip_globalzip_xml, debug=False):
-    """Returns list of XML file objects and/or paths in ZIP file"""
+    """Extract XML files from a list of paths or ZIP archives.
 
+    Parameters
+    ----------
+    list_of_paths_to_zip_globalzip_xml : list
+        List of paths to XML files, ZIP archives, or file-like objects.
+    debug : bool, optional
+        If True, log file processing details for debugging (default is False).
+
+    Returns
+    -------
+    list
+        List of file-like objects for XML files found in the input paths or ZIPs.
+
+    Notes
+    -----
+    - Supports XML, RDF, and ZIP files; other file types are logged as unsupported.
+    - TODO: Add support for random folders.
+
+    Examples
+    --------
+    >>> xml_files = find_all_xml(["data.zip", "file.xml"])
+    """
     xml_files_list = []
     zip_files_list = []  # TODO - add support random folders as well
 
@@ -171,7 +269,26 @@ def find_all_xml(list_of_paths_to_zip_globalzip_xml, debug=False):
 
 
 def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
-    """Parse single file to triplestore list"""
+    """Parse a single RDF XML file into a triplestore list.
+
+    Parameters
+    ----------
+    path_or_fileobject : str or file-like object
+        Path to the XML file or a file-like object containing RDF XML data.
+    debug : bool, optional
+        If True, log timing information for debugging (default is False).
+    keep_ns : bool, optional
+        If True, retain namespace information in the output (default is False, unused).
+
+    Returns
+    -------
+    list
+        List of tuples in the format (ID, KEY, VALUE, INSTANCE_ID) representing the triplestore.
+
+    Examples
+    --------
+    >>> triples = load_RDF_to_list("file.xml")
+    """
     file_name = path_or_fileobject if isinstance(path_or_fileobject, str) else path_or_fileobject.name
     logger.info(f"Loading {file_name}")
 
@@ -221,7 +338,6 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
             if VALUE is None and element.attrib:
                 VALUE = clean_ID(element.attrib[RDF_RESOURCE])
 
-
             data_list.append((ID, KEY, VALUE, INSTANCE_ID))
 
     if debug:
@@ -230,8 +346,26 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
 
 
 def load_RDF_to_dataframe(path_or_fileobject, debug=False, data_type="string"):
-    """Parse single file to Pandas DataFrame"""
+    """Parse a single RDF XML file into a Pandas DataFrame.
 
+    Parameters
+    ----------
+    path_or_fileobject : str or file-like object
+        Path to the XML file or a file-like object containing RDF XML data.
+    debug : bool, optional
+        If True, log timing information for debugging (default is False).
+    data_type : str, optional
+        Data type for DataFrame columns (default is 'string').
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with columns ['ID', 'KEY', 'VALUE', 'INSTANCE_ID'] representing the triplestore.
+
+    Examples
+    --------
+    >>> df = load_RDF_to_dataframe("file.xml")
+    """
     data_list = load_RDF_to_list(path_or_fileobject, debug)
 
     if debug:
@@ -246,8 +380,28 @@ def load_RDF_to_dataframe(path_or_fileobject, debug=False, data_type="string"):
 
 
 def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False, data_type="string", max_workers=None):
-    """Parse contents of provided list of paths to Pandas DataFrame (zip, global zip or XML)"""
+    """Parse multiple RDF XML files or ZIP archives into a single Pandas DataFrame.
 
+    Parameters
+    ----------
+    list_of_paths_to_zip_globalzip_xml : list or str
+        List of paths to XML files, ZIP archives, or a single path.
+    debug : bool, optional
+        If True, log timing information for debugging (default is False).
+    data_type : str, optional
+        Data type for DataFrame columns (default is 'string').
+    max_workers : int, optional
+        Number of worker threads for parallel processing (default is None).
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with columns ['ID', 'KEY', 'VALUE', 'INSTANCE_ID'] containing all parsed data.
+
+    Examples
+    --------
+    >>> df = load_all_to_dataframe(["data.zip", "file.xml"], max_workers=4)
+    """
     if debug:
         process_start = datetime.datetime.now()
 
@@ -290,8 +444,28 @@ pandas.read_RDF = load_all_to_dataframe
 
 
 def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
-    """Creates a table view of all objects of same type, with their parameters in columns"""
+    """Create a table view of all objects of a specified type.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    type_name : str
+        The type of objects to filter (e.g., 'ACLineSegment').
+    string_to_number : bool, optional
+        If True, convert columns containing numbers to numeric types (default is True).
+    type_key : str, optional
+        Key used to identify object types in the dataset (default is 'Type').
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        Pivoted DataFrame with IDs as index and keys as columns, or None if no data is found.
+
+    Examples
+    --------
+    >>> table = data.type_tableview("ACLineSegment")
+    """
     # Get all ID-s of rows where Type == type_name
     type_id = data[(data["VALUE"] == type_name) & (data["KEY"] == type_key)]
 
@@ -316,12 +490,32 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
 
     return data_view
 
+
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.type_tableview = type_tableview
 
-def key_tableview(data, key_name, string_to_number=True):
-    """Creates a table view of all objects of same type, with their parameters in columns"""
 
+def key_tableview(data, key_name, string_to_number=True):
+    """Create a table view of all objects with a specified key.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    key_name : str
+        The key to filter objects by (e.g., 'GeneratingUnit.maxOperatingP').
+    string_to_number : bool, optional
+        If True, convert columns containing numbers to numeric types (default is True).
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        Pivoted DataFrame with IDs as index and keys as columns, or None if no data is found.
+
+    Examples
+    --------
+    >>> table = data.key_tableview("GeneratingUnit.maxOperatingP")
+    """
     # Get all ID-s of rows where KEY == key_name
     type_id = data[data["KEY"] == key_name]
 
@@ -352,9 +546,26 @@ pandas.DataFrame.key_tableview = key_tableview
 
 
 def references_to_simple(data, reference, columns=["Type"]):
-    """Creates a table view of all elements that specified element refers to,
-    by default returns two columns ID and Type, but this can be extended"""
+    """Create a simplified table view of objects referencing a specified object.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    reference : str
+        ID of the object to find references to.
+    columns : list, optional
+        Columns to include in the output table (default is ['Type']).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Pivoted DataFrame with IDs of referencing objects and specified columns.
+
+    Examples
+    --------
+    >>> table = data.references_to_simple("99722373_VL_TN1")
+    """
     reference_data = data.references_to(reference, levels=1).drop_duplicates(["ID_FROM", "KEY"])
 
     # Convert form triplets to a table view with columns - ID, Type by default
@@ -368,8 +579,30 @@ pandas.DataFrame.references_to_simple = references_to_simple
 
 
 def references_to(data, reference, levels=1):
-    """Return all object pointing towards reference object"""
+    """Retrieve all objects pointing to a specified reference object.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    reference : str
+        ID of the reference object.
+    levels : int, optional
+        Number of reference levels to traverse (default is 1).
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing triplets of objects pointing to the reference, with a 'level' column.
+
+    Notes
+    -----
+    - TODO: Add the key on which the connection was made.
+
+    Examples
+    --------
+    >>> refs = data.references_to("99722373_VL_TN1", levels=2)
+    """
     # TODO - add the key on which connection was made
     level = 0
 
@@ -418,9 +651,26 @@ pandas.DataFrame.references_to = references_to
 
 
 def references_from_simple(data, reference, columns=["Type"]):
-    """Creates a table view of all elements that specified element refers to,
-    by default returns two columns ID and Type, but this can be extended"""
+    """Create a simplified table view of objects a specified object refers to.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    reference : str
+        ID of the object to find references from.
+    columns : list, optional
+        Columns to include in the output table (default is ['Type']).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Pivoted DataFrame with IDs of referenced objects and specified columns.
+
+    Examples
+    --------
+    >>> table = data.references_from_simple("99722373_VL_TN1")
+    """
     reference_data = data.references_from(reference, levels=1).drop_duplicates(["ID_TO", "KEY"])
 
     # Convert form triplets to a table view with columns - ID, Type by default
@@ -434,8 +684,30 @@ pandas.DataFrame.references_from_simple = references_from_simple
 
 
 def references_from(data, reference, levels=1):
-    """Return all triplets that reference object points to"""
+    """Retrieve all objects a specified object points to.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    reference : str
+        ID of the reference object.
+    levels : int, optional
+        Number of reference levels to traverse (default is 1).
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing triplets of objects referenced by the input, with a 'level' column.
+
+    Notes
+    -----
+    - TODO: Add the key on which the connection was made.
+
+    Examples
+    --------
+    >>> refs = data.references_from("99722373_VL_TN1", levels=2)
+    """
     # TODO - add the key on which connection was made
     level = 0
 
@@ -481,23 +753,56 @@ pandas.DataFrame.references_from = references_from
 
 
 def references_all(data):
-    """Finds all unique references (links, edges, etc.)
-    merges data with itself on ID and VALUE
-    INSTANCE ID is not taken into account
+    """Find all unique references (links) in the dataset.
 
-    returns DataFrame["ID_FROM", "KEY", "ID_TO"]"""
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
 
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with columns ['ID_FROM', 'KEY', 'ID_TO'] representing all references.
+
+    Notes
+    -----
+    - Does not consider INSTANCE_ID in reference matching.
+
+    Examples
+    --------
+    >>> refs = data.references_all()
+    """
     return data[["ID", "KEY", "VALUE"]].drop_duplicates().merge(data[["ID"]].drop_duplicates(), left_on="VALUE", right_on="ID", suffixes=("_FROM", "_TO"))[["ID_FROM", "KEY", "ID_TO"]]
 
 
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.references_all = references_all
 
+
 def references_simple(data, reference, columns=None, levels=1):
-    """Creates a table view of all elements that specified element refers to,
-    by default returns two columns ID and Type, but this can be extended"""
+    """Create a simplified table view of all references to and from a specified object.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    reference : str
+        ID of the object to find references for.
+    columns : list, optional
+        Columns to include in the output table (default is ['Type', 'IdentifiedObject.name'] if available).
+    levels : int, optional
+        Number of reference levels to traverse (default is 1).
 
+    Returns
+    -------
+    pandas.DataFrame
+        Pivoted DataFrame with IDs, specified columns, and reference levels.
+
+    Examples
+    --------
+    >>> table = data.references_simple("99722373_VL_TN1", columns=["Type"])
+    """
     reference_data = data.references(reference, levels=levels).drop_duplicates(["ID", "KEY"])
 
     # Convert form triplets to a table view with columns - ID, Type by default
@@ -513,13 +818,39 @@ def references_simple(data, reference, columns=None, levels=1):
             columns.append("IdentifiedObject.name")
 
     return data_view[columns].merge(reference_data[["ID", "level", "ID_FROM", "ID_TO"]], on="ID", how="left").drop_duplicates("ID").sort_values("level")
+
+
 pandas.DataFrame.references_simple = references_simple
 
+
 def references(data, ID, levels=1):
+    """Retrieve all references (to and from) a specified object.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    ID : str
+        ID of the object to find references for.
+    levels : int, optional
+        Number of reference levels to traverse (default is 1).
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing triplets of all references to and from the object.
+
+    Examples
+    --------
+    >>> refs = data.references("99722373_VL_TN1", levels=2)
+    """
     FROM = data.references_from(ID, levels)
     TO = data.references_to(ID, levels)
     return pandas.concat([FROM, TO]).drop_duplicates(["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+
 pandas.DataFrame.references = references
+
 
 # def references(data, ID, levels=1):
 #     all_references = data.references_all()
@@ -550,8 +881,24 @@ pandas.DataFrame.references = references
 
 
 def types_dict(data):
-    """Returns dictionary with all types as keys and number of their occurrences as values"""
+    """Return a dictionary of object types and their occurrence counts.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+
+    Returns
+    -------
+    dict
+        Dictionary with object types as keys and their counts as values.
+
+    Examples
+    --------
+    >>> types = data.types_dict()
+    >>> print(types)
+    {'ACLineSegment': 10, 'PowerTransformer': 5, ...}
+    """
     types_dictionary = data[(data.KEY == "Type")]["VALUE"].value_counts().to_dict()
 
     return types_dictionary
@@ -562,22 +909,78 @@ pandas.DataFrame.types_dict = types_dict
 
 
 def set_VALUE_at_KEY(data, key, value):
-    """Set all values of provided key to the given value"""  # TODO add debug, to print key, initial value and new value.
+    """Set the value for all instances of a specified key.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    key : str
+        The key to update.
+    value : str
+        The new value to set for the specified key.
+
+    Notes
+    -----
+    - TODO: Add debug logging for key, initial value, and new value.
+    - TODO: Store changes in a changes DataFrame.
+
+    Examples
+    --------
+    >>> data.set_VALUE_at_KEY("label", "new_label")
+    """
     data.loc[data[data.KEY == key].index, "VALUE"] = value  # TODO add changes to change DataFrame
+
 
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.set_VALUE_at_KEY = set_VALUE_at_KEY
 
+
 def set_VALUE_at_KEY_and_ID(data, key, value, id):
-    """Set all values of provided key and id to the given value"""
+    """Set the value for a specific key and ID.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    key : str
+        The key to update.
+    value : str
+        The new value to set.
+    id : str
+        The ID of the object to update.
+
+    Examples
+    --------
+    >>> data.set_VALUE_at_KEY_and_ID("label", "new_label", "uuid1")
+    """
     data.loc[data[(data.ID == id) & (data.KEY == key)].index, "VALUE"] = value
+
 
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.set_VALUE_at_KEY_and_ID = set_VALUE_at_KEY_and_ID
 
 
 def export_to_excel(data, path=None):
-    """Exports to excel all data with same INSTACE_ID and if label element exists for it. Each Type is put to a sheet"""
+    """Export triplet data to an Excel file, with each type on a separate sheet.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    path : str, optional
+        Directory path to save the Excel file (default is current working directory).
+
+    Notes
+    -----
+    - Uses 'label' key to determine the filename for each INSTANCE_ID.
+    - Each object type is exported to a separate sheet.
+    - TODO: Add support for XlsxWriter properties for better formatting.
+
+    Examples
+    --------
+    >>> data.export_to_excel("output_dir")
+    """
     # TODO set some nice properties - https://xlsxwriter.readthedocs.io/workbook.html#workbook-set-properties
 
     labels = data.query("KEY == 'label'").iterrows()
@@ -623,9 +1026,28 @@ pandas.DataFrame.export_to_excel = export_to_excel
 
 @lru_cache(maxsize=250)  # Adjust maxsize based on the number of unique QName combinations
 def get_qname(namespace, tag=None):
+    """Generate a QName for a given namespace and tag, with caching.
+
+    Parameters
+    ----------
+    namespace : str
+        The namespace URI.
+    tag : str, optional
+        The tag name (default is None).
+
+    Returns
+    -------
+    lxml.etree.QName
+        The qualified name object for the namespace and tag.
+
+    Examples
+    --------
+    >>> qname = get_qname("http://www.w3.org/1999/02/22-rdf-syntax-ns#", "RDF")
+    """
     qname = QName(namespace, tag)
     #logger.debug(f"Cache info: {get_qname.cache_info()}")
     return qname
+
 
 def generate_xml(instance_data,
                  rdf_map=None,
@@ -634,7 +1056,34 @@ def generate_xml(instance_data,
                  export_undefined=True,
                  comment=None,
                  debug=False):
+    """Generate an RDF XML file from a triplet dataset instance.
 
+    Parameters
+    ----------
+    instance_data : pandas.DataFrame
+        Triplet dataset for a single instance.
+    rdf_map : dict, optional
+        Dictionary mapping classes and keys to RDF namespaces and attributes.
+    namespace_map : dict, optional
+        Dictionary of namespace prefixes and URIs (default includes RDF namespace).
+    class_KEY : str, optional
+        Key used to identify object types (default is 'Type').
+    export_undefined : bool, optional
+        If True, export undefined classes and tags with default settings (default is True).
+    comment : str, optional
+        Comment to include in the XML output (default is None).
+    debug : bool, optional
+        If True, log timing information for debugging (default is False).
+
+    Returns
+    -------
+    dict
+        Dictionary with 'filename' (str) and 'file' (bytes) containing the XML output.
+
+    Examples
+    --------
+    >>> xml_data = generate_xml(instance_data, rdf_map, namespace_map)
+    """
     if debug:
         start_time = datetime.datetime.now()
 
@@ -809,6 +1258,7 @@ def generate_xml(instance_data,
 
     return {"filename": file_name, "file": xml}
 
+
 def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"},
                      class_KEY="Type",
                      export_undefined=True,
@@ -819,7 +1269,45 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
                      export_base_path="",
                      comment=None,
                      max_workers=None):
+    """Export a triplet dataset to CIM RDF XML or ZIP files.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    rdf_map : dict, optional
+        Dictionary mapping classes and keys to RDF namespaces and attributes.
+    namespace_map : dict, optional
+        Dictionary of namespace prefixes and URIs (default includes RDF namespace).
+    class_KEY : str, optional
+        Key used to identify object types (default is 'Type').
+    export_undefined : bool, optional
+        If True, export undefined classes and tags with default settings (default is True).
+    export_type : str, optional
+        Export format: 'xml_per_instance', 'xml_per_instance_zip_per_all', or
+        'xml_per_instance_zip_per_xml' (default is 'xml_per_instance_zip_per_xml').
+    global_zip_filename : str, optional
+        Filename for the global ZIP archive (default is 'Export.zip').
+    debug : bool, optional
+        If True, log timing information for debugging (default is False).
+    export_to_memory : bool, optional
+        If True, return file objects in memory; otherwise, save to disk (default is False).
+    export_base_path : str, optional
+        Directory path to save exported files (default is empty, uses current directory).
+    comment : str, optional
+        Comment to include in the XML output (default is None).
+    max_workers : int, optional
+        Number of worker processes for parallel processing (default is None).
+
+    Returns
+    -------
+    list
+        List of file-like objects (if export_to_memory=True) or filenames (if export_to_memory=False).
+
+    Examples
+    --------
+    >>> files = data.export_to_cimxml(rdf_map, export_type="xml_per_instance")
+    """
     if debug:
         start_time = datetime.datetime.now()
         init_time = start_time
@@ -827,7 +1315,7 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
     instances = data.groupby("INSTANCE_ID")
 
     #TODO - this needs to be extended and put to a better place
-    #TODO - mayve rdfmap should use direct url, instead of short keys "EQ" etc
+    #TODO - maybe rdfmap should use direct url, instead of short keys "EQ" etc
 
     # Keep all file names and data to be exported
     xml_documents = []
@@ -932,11 +1420,30 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
 
         return exported_file_names
 
+
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.export_to_cimxml = export_to_cimxml
 
 
 def get_object_data(data, object_UUID):
+    """Retrieve data for a specific object by its UUID.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    object_UUID : str
+        UUID of the object to retrieve.
+
+    Returns
+    -------
+    pandas.Series
+        Series with keys as index and values for the specified object.
+
+    Examples
+    --------
+    >>> obj_data = data.get_object_data("uuid1")
+    """
     return data.query("ID == '{}'".format(object_UUID)).set_index("KEY")["VALUE"]
 
 
@@ -944,23 +1451,65 @@ pandas.DataFrame.get_object_data = get_object_data
 
 
 def tableview_to_triplet(data):
-    """Makes a triplet of dataview"""
+    """Convert a table view back to a triplet format.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Pivoted DataFrame (table view) to convert.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Triplet DataFrame with columns ['ID', 'KEY', 'VALUE'].
+
+    Notes
+    -----
+    - TODO: Ensure this is only used on valid table views.
+
+    Examples
+    --------
+    >>> triplet = tableview_to_triplet(table_view)
+    """
     # TODO add only when tableveiw is created
     return data.reset_index().melt(id_vars="ID", value_name="VALUE", var_name="KEY").astype(str)
 
 
 pandas.DataFrame.tableview_to_triplet = tableview_to_triplet
 
+
 # Let's add empty dataframe to keep changes
 pandas.DataFrame.changes = pandas.DataFrame()
 
-def update_triplet_from_triplet(data, update_data, update=True, add=True):
-    """Update or add data to current triplet from another one
-    VALUE at ID and KEY is updated and KEY ID pair does not exist it is added together with VALUE
-    you can control if data is added or updated with parameters update and add, by default both are True"""
-    # TODO add changes dataframe, where to keep all changes done by this function
-    # TODO create function to do also ID and KEY changes
 
+def update_triplet_from_triplet(data, update_data, update=True, add=True):
+    """Update or add triplets from another triplet dataset.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Original triplet dataset to update.
+    update_data : pandas.DataFrame
+        Triplet dataset containing updates or new data.
+    update : bool, optional
+        If True, update existing ID-KEY pairs (default is True).
+    add : bool, optional
+        If True, add new ID-KEY pairs (default is True).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Updated triplet dataset.
+
+    Notes
+    -----
+    - TODO: Add a changes DataFrame to track modifications.
+    - TODO: Support updating ID and KEY fields.
+
+    Examples
+    --------
+    >>> updated_data = data.update_triplet_from_triplet(update_data)
+    """
     write_columns = ["ID", "KEY", "VALUE", "INSTANCE_ID"]
 
     # Choose what columns to use for final merge
@@ -991,10 +1540,30 @@ pandas.DataFrame.update_triplet_from_triplet = update_triplet_from_triplet
 
 
 def update_triplet_from_tableview(data, tableview, update=True, add=True, instance_id=None):
-    """Update or add data to current triplet from a tableview
-    VALUE at ID and KEY is updated and KEY ID pair does not exist it is added together with VALUE
-    you can control if data is added or updated with parameters update and add, by default both are True"""
+    """Update or add triplets from a table view.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Original triplet dataset to update.
+    tableview : pandas.DataFrame
+        Table view containing updates or new data.
+    update : bool, optional
+        If True, update existing ID-KEY pairs (default is True).
+    add : bool, optional
+        If True, add new ID-KEY pairs (default is True).
+    instance_id : str, optional
+        Instance ID to assign to new triplets (default is None).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Updated triplet dataset.
+
+    Examples
+    --------
+    >>> updated_data = data.update_triplet_from_tableview(table_view, instance_id="uuid1")
+    """
     update_triplet = tableview.tableview_to_triplet()
 
     if instance_id:
@@ -1007,22 +1576,100 @@ pandas.DataFrame.update_triplet_from_tableview = update_triplet_from_tableview
 
 
 def remove_triplet_from_triplet(from_triplet, what_triplet, columns=["ID", "KEY", "VALUE"]):
-    """Retuns from_triplet - what_triplet"""
+    """Remove triplets from one dataset that match another.
+
+    Parameters
+    ----------
+    from_triplet : pandas.DataFrame
+        Original triplet dataset.
+    what_triplet : pandas.DataFrame
+        Triplet dataset to remove from the original.
+    columns : list, optional
+        Columns to match for removal (default is ['ID', 'KEY', 'VALUE']).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Dataset with matching triplets removed.
+
+    Examples
+    --------
+    >>> result = remove_triplet_from_triplet(data, to_remove)
+    """
     return from_triplet.drop(from_triplet.reset_index().merge(what_triplet[columns], on=columns, how="inner")["index"], axis=0)
 
 
 def filter_triplet_by_type(triplet, type):
-    """Filter out all objects data by rdf:type"""
+    """Filter triplet dataset by objects of a specific type.
+
+    Parameters
+    ----------
+    triplet : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    type : str
+        Object type to filter by (e.g., 'ACLineSegment').
+
+    Returns
+    -------
+    pandas.DataFrame
+        Filtered triplet dataset containing only objects of the specified type.
+
+    Examples
+    --------
+    >>> filtered = filter_triplet_by_type(data, "ACLineSegment")
+    """
     return triplet.merge(triplet.query("KEY == 'Type' and VALUE == @type").ID)
 
 
 def triplet_diff(old_data, new_data):
+    """Compute the difference between two triplet datasets.
 
+    Parameters
+    ----------
+    old_data : pandas.DataFrame
+        Original triplet dataset.
+    new_data : pandas.DataFrame
+        New triplet dataset to compare against.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing triplets unique to old_data or new_data, with an '_merge' column
+        indicating 'left_only' (in old_data) or 'right_only' (in new_data).
+
+    Examples
+    --------
+    >>> diff = triplet_diff(old_data, new_data)
+    """
     return old_data.merge(new_data, on=["ID", "KEY", "VALUE"], how='outer', indicator=True, suffixes=("_OLD", "_NEW"), sort=False).query("_merge != 'both'")
 
 
 def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None):
+    """Print a human-readable diff of two triplet datasets.
 
+    Parameters
+    ----------
+    old_data : pandas.DataFrame
+        Original triplet dataset.
+    new_data : pandas.DataFrame
+        New triplet dataset to compare against.
+    file_id_object : str, optional
+        Object type containing file identifiers (default is 'Distribution').
+    file_id_key : str, optional
+        Key containing file identifiers (default is 'label').
+    exclude_objects : list, optional
+        List of object types to exclude from the diff (default is None).
+
+    Notes
+    -----
+    - Outputs a diff format showing removed, added, and changed objects.
+    - Nice diff viewer https://diffy.org/
+    - TODO: Add name field for better reporting with Type.
+
+    Examples
+    --------
+    >>> print_triplet_diff(old_data, new_data, exclude_objects=["NamespaceMap"])
+    """
     # Get diff between datasets
     diff = triplet_diff(old_data, new_data)
     diff = diff.replace({'_merge': {"left_only": "-", "right_only": "+"}}).sort_values(by=['ID', 'KEY'])
@@ -1092,8 +1739,28 @@ def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_i
 
 # changes = changes.replace({'_merge': {"left_only": "-", "right_only": "+"}})
 
+
 def export_to_networkx(data):
-    """Converts triplet to networkx graph"""
+    """Convert a triplet dataset to a NetworkX graph.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+
+    Returns
+    -------
+    networkx.Graph
+        A NetworkX graph with nodes (IDs with Type attributes) and edges (references).
+
+    Notes
+    -----
+    - TODO: Add all node data and support additional graph export formats.
+
+    Examples
+    --------
+    >>> graph = data.to_networkx()
+    """
     import networkx
 
     #  TODO - Add all node data
@@ -1109,7 +1776,9 @@ def export_to_networkx(data):
 
     return graph
 
+
 pandas.DataFrame.to_networkx = export_to_networkx
+
 
 # END OF FUNCTIONS
 
