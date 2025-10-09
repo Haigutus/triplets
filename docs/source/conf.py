@@ -22,6 +22,7 @@ extensions = [
     'sphinx.ext.autodoc',      # Automatically document modules and functions
     'sphinx.ext.napoleon',     # Support for NumPy-style docstrings
     'sphinx.ext.viewcode',     # Add links to source code
+    'sphinx.ext.githubpages',  # Configures export suitable for github pages
 ]
 
 templates_path = ['_templates']
