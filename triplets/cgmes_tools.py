@@ -42,12 +42,54 @@ dependencies = dict(EQ   = ["EQBD"],
                     EQBD = [])
 
 def generate_instances_ID(dependencies=dependencies):
-    """Generate UUID for each profile defined in dependencies dict"""
+    """Generate UUIDs for each profile defined in the dependencies dictionary.
+
+    Parameters
+    ----------
+    dependencies : dict, optional
+        Dictionary mapping profile names to lists of dependent profile names.
+        Defaults to a predefined CGMES profile dependencies dictionary.
+
+    Returns
+    -------
+    dict
+        Dictionary with profile names as keys and generated UUIDs as values.
+
+    Examples
+    --------
+    >>> generate_instances_ID()
+    {'EQ': '123e4567-e89b-12d3-a456-426614174000', ...}
+    """
     return {profile: str(uuid4()) for profile in dependencies}
 
 
 def get_metadata_from_filename(file_name):
+    """Extract metadata from a CGMES filename following the CGMES naming convention.
 
+    Parameters
+    ----------
+    file_name : str
+        Name of the CGMES file (e.g., '20230101T0000Z_A01_ENTITY_EQ_001.xml').
+
+    Returns
+    -------
+    dict
+        Dictionary containing metadata keys (e.g., 'Model.scenarioTime', 'Model.processType')
+        and their corresponding values extracted from the filename.
+
+    Notes
+    -----
+    - Expects filenames to follow CGMES conventions with underscores separating metadata fields.
+    - Handles cases with 4 or 5 metadata elements, setting 'Model.processType' to empty string
+      for older formats (pre-QoDC 2.1).
+    - Splits 'Model.modelingEntity' into 'Model.mergingEntity', 'Model.domain', and
+      'Model.forEntity' if applicable.
+
+    Examples
+    --------
+    >>> get_metadata_from_filename('20230101T0000Z_A01_ENTITY_EQ_001.xml')
+    {'Model.scenarioTime': '20230101T0000Z', 'Model.processType': 'A01', ...}
+    """
     # Separators
     file_type_separator           = "."
     meta_separator                = "_"
@@ -110,14 +152,40 @@ default_filename_mask = "{scenarioTime:%Y%m%dT%H%MZ}_{processType}_{modelingEnti
 
 
 def get_filename_from_metadata(meta_data, file_type="xml", filename_mask=default_filename_mask):
+    """Generate a CGMES filename from metadata using a specified filename mask.
 
-    """Convert metadata to filename by using filename mask and file type"""
+    Parameters
+    ----------
+    meta_data : dict
+        Dictionary containing metadata keys (e.g., 'scenarioTime', 'processType') and values.
+    file_type : str, optional
+        File extension for the generated filename (default is 'xml').
+    filename_mask : str, optional
+        Format string defining the filename structure (default follows CGMES convention).
+
+    Returns
+    -------
+    str
+        Generated filename adhering to the CGMES naming convention.
+
+    Notes
+    -----
+    - Removes 'Model.' prefix from metadata keys for compatibility with string formatting.
+    - Converts 'scenarioTime' to datetime and 'version' to integer before formatting.
+    - Uses the provided filename_mask to construct the filename.
+
+    Examples
+    --------
+    >>> meta = {'Model.scenarioTime': '20230101T0000Z', 'Model.processType': 'A01', ...}
+    >>> get_filename_from_metadata(meta)
+    '20230101T0000Z_A01_ENTITY_EQ_001.xml'
+    """
     # Separators
     file_type_separator = "."
     meta_separator = "_"
     entity_and_area_separator = "-"
 
-    # Remove Model. form dictionary as python string format can't use . in variable name
+    # Remove Model. from dictionary as python string format can't use . in variable name
     meta_data = {key.split(".")[1]:meta_data[key] for key in meta_data}
 
     # DateTime fields from text to DateTime
@@ -138,7 +206,27 @@ def get_filename_from_metadata(meta_data, file_type="xml", filename_mask=default
 
 
 def get_metadata_from_xml(filepath_or_fileobject):
+    """Extract metadata from the FullModel element of a CGMES XML file.
 
+    Parameters
+    ----------
+    filepath_or_fileobject : str or file-like object
+        Path to the XML file or a file-like object containing CGMES XML data.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with columns ['tag', 'text', 'attrib'] containing metadata from the
+        FullModel element.
+
+    Examples
+    --------
+    >>> df = get_metadata_from_xml('path/to/file.xml')
+    >>> print(df)
+       tag                text  attrib
+    0  Model.scenarioTime  20230101T0000Z  {}
+    ...
+    """
     parsed_xml = etree.parse(filepath_or_fileobject)
 
     header = parsed_xml.find("{*}FullModel")
@@ -154,10 +242,29 @@ def get_metadata_from_xml(filepath_or_fileobject):
 
 
 def get_metadata_from_FullModel(data):
-    """Returns all data defined in model header 'FullModel'
-    Returns  dictionary -> value = meta['meta_key'] """
-    # fileheader metadata keys should be aligned with filename ones
+    """Extract metadata from the FullModel entries in a CGMES triplet dataset.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data with 'KEY', 'VALUE', and 'ID' columns.
+
+    Returns
+    -------
+    dict
+        Dictionary of metadata key-value pairs for the FullModel instance.
+
+    Notes
+    -----
+    - Assumes the dataset contains a 'Type' key with value 'FullModel'.
+    - Removes the 'Type' key from the resulting metadata dictionary.
+
+    Examples
+    --------
+    >>> meta = get_metadata_from_FullModel(data)
+    >>> print(meta)
+    {'Model.scenarioTime': '20230101T0000Z', 'Model.processType': 'A01', ...}
+    """
     UUID = data.query("KEY == 'Type' and VALUE == 'FullModel'").ID.iloc[0]
     metadata = data.get_object_data(UUID).to_dict()
     metadata.pop("Type", None)  # Remove Type form metadata
@@ -166,7 +273,29 @@ def get_metadata_from_FullModel(data):
 
 
 def update_FullModel_from_dict(data, metadata, update=True, add=False):
+    """Update or add metadata to FullModel entries in a CGMES triplet dataset.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    metadata : dict
+        Dictionary of metadata key-value pairs to update or add.
+    update : bool, optional
+        If True, update existing metadata keys (default is True).
+    add : bool, optional
+        If True, add new metadata keys (default is False).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Updated triplet dataset with modified FullModel metadata.
+
+    Examples
+    --------
+    >>> meta = {'Model.scenarioTime': '20230102T0000Z'}
+    >>> updated_data = update_FullModel_from_dict(data, meta)
+    """
     additional_meta_list = []
 
     for row in data.query("KEY == 'Type' and VALUE == 'FullModel'").itertuples():
@@ -178,9 +307,29 @@ def update_FullModel_from_dict(data, metadata, update=True, add=False):
     return data.update_triplet_from_triplet(update_data, update, add)
 
 def update_FullModel_from_filename(data, parser=get_metadata_from_filename, update=False, add=True):
-    """Parses filename from label VALUE and by default adds missing attributes to each FullModel
-    you can provide your own parser, has to return dictionary of attribute names and values"""
+    """Update FullModel metadata in a triplet dataset using metadata parsed from filenames.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data with 'label' keys for filenames.
+    parser : callable, optional
+        Function to parse metadata from filenames, returning a dictionary
+        (default is get_metadata_from_filename).
+    update : bool, optional
+        If True, update existing metadata keys (default is False).
+    add : bool, optional
+        If True, add new metadata keys (default is True).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Updated triplet dataset with FullModel metadata derived from filenames.
+
+    Examples
+    --------
+    >>> updated_data = update_FullModel_from_filename(data)
+    """
     additional_meta_list = []
 
     # For each instance that has label, as label contains the filename
@@ -199,9 +348,26 @@ def update_FullModel_from_filename(data, parser=get_metadata_from_filename, upda
 
 
 def update_filename_from_FullModel(data, filename_mask=default_filename_mask, filename_key="label"):
-    """Updates the file names kept under RDF label tag by default
-     by constructing it from metadata kept in FullModel in each instance"""
+    """Update filenames in a CGMES triplet dataset based on FullModel metadata.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data with FullModel metadata.
+    filename_mask : str, optional
+        Format string defining the filename structure (default follows CGMES convention).
+    filename_key : str, optional
+        Key in the dataset where filenames are stored (default is 'label').
+
+    Returns
+    -------
+    pandas.DataFrame
+        Updated triplet dataset with filenames modified based on FullModel metadata.
+
+    Examples
+    --------
+    >>> updated_data = update_filename_from_FullModel(data)
+    """
     list_of_updates = []
 
     for _, label in data.query("KEY == '{}'".format(filename_key)).iterrows():
@@ -218,8 +384,25 @@ def update_filename_from_FullModel(data, filename_mask=default_filename_mask, fi
 
 
 def get_loaded_models(data):
-    """Retunrs a dicitonary of loaded model parts UUID-s in input DataFrame"""
+    """Retrieve a dictionary of loaded CGMES model parts and their UUIDs.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data with 'Model.profile' and 'Model.DependentOn' keys.
+
+    Returns
+    -------
+    dict
+        Dictionary where keys are StateVariables (SV) UUIDs and values are DataFrames
+        containing model parts (ID, PROFILE, INSTANCE_ID) and their dependencies.
+
+    Examples
+    --------
+    >>> models = get_loaded_models(data)
+    >>> print(models)
+    {'SV_UUID': DataFrame(...), ...}
+    """
     FullModel_data = data.query("KEY == 'Model.profile' or KEY == 'Model.DependentOn'")
 
     SV_iterator = FullModel_data.query("VALUE == 'http://entsoe.eu/CIM/StateVariables/4/1'").itertuples()
@@ -252,28 +435,104 @@ def get_loaded_models(data):
     return dependancies_dict
 
 def get_model_data(data, model_instances_dataframe):
-    """Input is one DataFrame of model instances returned by function get_loaded_models"""
+    """Extract data for specific CGMES model instances.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    model_instances_dataframe : pandas.DataFrame
+        DataFrame containing 'INSTANCE_ID' column with model instance identifiers.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Filtered dataset containing only data for the specified model instances.
+
+    Examples
+    --------
+    >>> model_data = get_model_data(data, models['SV_UUID'])
+    """
     IGM_data = pandas.merge(data, model_instances_dataframe[["INSTANCE_ID"]].drop_duplicates(), right_on="INSTANCE_ID", left_on="INSTANCE_ID")
 
     return IGM_data
 
 def get_EIC_to_mRID_map(data, type):
-    # TODO - check type?
-    # TODO - default type=None and return all?
-    # TODO - add type to resul?
+    """Map Energy Identification Codes (EIC) to mRIDs for a specific object type.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    type : str
+        Object type to filter (e.g., 'PowerTransformer').
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with columns ['mRID', 'EIC'] mapping EICs to mRIDs.
+
+    Notes
+    -----
+    - Filters data for objects of the specified type with 'IdentifiedObject.energyIdentCodeEic' key.
+    - TODO: Add support for type=None to return all types and include type in result.
+
+    Examples
+    --------
+    >>> eic_map = get_EIC_to_mRID_map(data, 'PowerTransformer')
+    >>> print(eic_map)
+       mRID                                  EIC
+    0  uuid1  10X1001A1001A021
+    """
     name_map = {"ID": "mRID", "VALUE": "EIC"}
     return rdf_parser.filter_triplet_by_type(data, type).drop_duplicates().query("KEY == 'IdentifiedObject.energyIdentCodeEic'")[name_map.keys()].rename(columns=name_map)
 
 
 def get_loaded_model_parts(data):
-    """Returns a pandas DataFrame of loaded CGMES instance files or model parts with their header (FullModel) data (does not return correct dependant on)"""
+    """Retrieve a DataFrame of loaded CGMES model parts with their FullModel metadata.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing FullModel data for loaded model parts.
+
+    Notes
+    -----
+    - Does not correctly resolve 'Model.DependentOn' relationships.
+
+    Examples
+    --------
+    >>> model_parts = get_loaded_model_parts(data)
+    """
     return data.type_tableview("FullModel")
 
 
 def statistics_GeneratingUnit_types(data):
-    """Returns statistics of GeneratingUnit types"""
+    """Calculate statistics for GeneratingUnit types in a CGMES dataset.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with counts, total, and percentage of each GeneratingUnit type.
+
+    Examples
+    --------
+    >>> stats = statistics_GeneratingUnit_types(data)
+    >>> print(stats)
+       Type  count  TOTAL    %
+    0  Hydro   10     20  50.0
+    ...
+    """
     value_counts = pandas.DataFrame(get_GeneratingUnits(data).Type.value_counts())
     value_counts["TOTAL"] = value_counts["count"].sum()
     value_counts["%"] = value_counts["count"]/value_counts["TOTAL"]*100
@@ -282,20 +541,71 @@ def statistics_GeneratingUnit_types(data):
 
 
 def get_GeneratingUnits(data):
-    """Returns table of GeneratingUnits"""
-    # Compulsory field in all Genrating units
+    """Retrieve a table of GeneratingUnits from a CGMES dataset.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing GeneratingUnit data, filtered by 'GeneratingUnit.maxOperatingP'.
+
+    Examples
+    --------
+    >>> units = get_GeneratingUnits(data)
+    >>> print(units)
+       ID  GeneratingUnit.maxOperatingP  ...
+    """
     return data.key_tableview("GeneratingUnit.maxOperatingP")
 
 
 def get_diff_between_model_parts(UUID_1, UUID_2):
+    """Identify differences between two CGMES model parts based on their UUIDs.
 
+    Parameters
+    ----------
+    UUID_1 : str
+        UUID of the first model part.
+    UUID_2 : str
+        UUID of the second model part.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing triplets that differ between the two model parts.
+
+    Examples
+    --------
+    >>> diff = get_diff_between_model_parts('uuid1', 'uuid2')
+    """
     diff = data.query("INSTANCE_ID == '{}' or INSTANCE_ID == '{}'".format(UUID_1, UUID_2)).drop_duplicates(["ID", "KEY", "VALUE"], keep=False)
 
     return diff
 
 def filter_dataframe_by_dataframe(data, filter_data, filter_column_name):
-    """Filter triplestore on ID column with another data frame column containing ID-s"""
+    """Filter a CGMES triplet dataset using IDs from another DataFrame.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    filter_data : pandas.DataFrame
+        DataFrame containing IDs to filter by.
+    filter_column_name : str
+        Column name in filter_data containing IDs (e.g., 'PowerTransformer.ID').
+
+    Returns
+    -------
+    pandas.DataFrame
+        Filtered DataFrame with columns ['ID_<class_name>', 'KEY', 'VALUE'].
+
+    Examples
+    --------
+    >>> filtered = filter_dataframe_by_dataframe(data, filter_df, 'PowerTransformer.ID')
+    """
     class_name = filter_column_name.split(".")[1]
     meta_separator = "_"
 
@@ -304,7 +614,26 @@ def filter_dataframe_by_dataframe(data, filter_data, filter_column_name):
     return result
 
 def tableview_by_IDs(data, IDs_dataframe, IDs_column_name):
-    """Filters tripelstore by provided IDs and returns tabular view, IDs- as indexes and KEY-s as columns"""
+    """Create a tabular view of a CGMES triplet dataset filtered by IDs.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    IDs_dataframe : pandas.DataFrame
+        DataFrame containing IDs to filter by.
+    IDs_column_name : str
+        Column name in IDs_dataframe containing IDs (e.g., 'PowerTransformer.ID').
+
+    Returns
+    -------
+    pandas.DataFrame
+        Pivoted DataFrame with IDs as index and KEYs as columns.
+
+    Examples
+    --------
+    >>> table = tableview_by_IDs(data, ids_df, 'PowerTransformer.ID')
+    """
     class_name = IDs_column_name.split(".")[1]
     meta_separator = "_"
     result = pandas.merge(IDs_dataframe, data,
@@ -319,7 +648,27 @@ def tableview_by_IDs(data, IDs_dataframe, IDs_column_name):
     return result
 
 def get_limits(data):
+    """Retrieve operational limits from a CGMES dataset, including equipment types.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing operational limits with associated equipment types.
+
+    Notes
+    -----
+    - Combines OperationalLimitSet, OperationalLimit, OperationalLimitType, and Terminal data.
+    - Links equipment via Terminal.ConductingEquipment or OperationalLimitSet.Equipment.
+
+    Examples
+    --------
+    >>> limits = get_limits(data)
+    """
     # Get Limit Sets
     limits = data.type_tableview('OperationalLimitSet', string_to_number=False).reset_index()
 
@@ -349,10 +698,32 @@ def get_limits(data):
 
 
 def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
-    """Creates a temporary XML file to visualize relations
-            returns  temp filename"""
+    """Create a temporary HTML file to visualize relations in a CGMES dataset.
 
-    # Import needed modules
+    Parameters
+    ----------
+    reference_data : pandas.DataFrame
+        Triplet dataset containing reference data for visualization.
+    ID_COLUMN : str
+        Column name containing IDs (e.g., 'ID').
+    notebook : bool, optional
+        If True, render the graph for Jupyter notebook (default is False).
+
+    Returns
+    -------
+    str or pyvis.network.Network
+        File path to the generated HTML file (if notebook=False) or the Network object
+        (if notebook=True).
+
+    Notes
+    -----
+    - Uses pyvis for visualization with a hierarchical layout.
+    - Nodes include object data in hover tooltips.
+
+    Examples
+    --------
+    >>> file_path = darw_relations_graph(data, 'ID')
+    """
     from pyvis.network import Network
     import pyvis.options as options
 
@@ -383,7 +754,7 @@ def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
         node_name  = u"{} - {}".format(node.Type, node.name)
         # Add object data table to node hover title
         node_title = object_data[[ID_COLUMN, "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={ID_COLUMN: "ID"}).to_html(index=False)
-        print(node_title)
+        #print(node_title)
         node_level = object_data.level.tolist()[0]
 
         graph.add_node(node.ID, node_name, title=node_title, size=10, level=node_level)
@@ -458,6 +829,27 @@ def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
 
 
 def draw_relations_to(data, UUID, notebook=False):
+    """Visualize relations pointing to a specific UUID in a CGMES dataset.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    UUID : str
+        UUID of the object to visualize incoming relations for.
+    notebook : bool, optional
+        If True, render the graph for Jupyter notebook (default is False).
+
+    Returns
+    -------
+    str or pyvis.network.Network
+        File path to the generated HTML file (if notebook=False) or the Network object
+        (if notebook=True).
+
+    Examples
+    --------
+    >>> file_path = draw_relations_to(data, 'uuid1')
+    """
     reference_data = data.references_to(UUID, levels=99)
 
     ID_COLUMN = "ID"
@@ -466,6 +858,27 @@ def draw_relations_to(data, UUID, notebook=False):
 
 
 def draw_relations_from(data, UUID, notebook=False):
+    """Visualize relations originating from a specific UUID in a CGMES dataset.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    UUID : str
+        UUID of the object to visualize outgoing relations for.
+    notebook : bool, optional
+        If True, render the graph for Jupyter notebook (default is False).
+
+    Returns
+    -------
+    str or pyvis.network.Network
+        File path to the generated HTML file (if notebook=False) or the Network object
+        (if notebook=True).
+
+    Examples
+    --------
+    >>> file_path = draw_relations_from(data, 'uuid1')
+    """
     reference_data = data.references_from(UUID, levels=99)
 
     ID_COLUMN = "ID"
@@ -474,6 +887,29 @@ def draw_relations_from(data, UUID, notebook=False):
 
 
 def draw_relations(data, UUID, notebook=False, levels=2):
+    """Visualize all relations (incoming and outgoing) for a specific UUID in a CGMES dataset.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    UUID : str
+        UUID of the object to visualize relations for.
+    notebook : bool, optional
+        If True, render the graph for Jupyter notebook (default is False).
+    levels : int, optional
+        Number of levels to traverse for relations (default is 2).
+
+    Returns
+    -------
+    str or pyvis.network.Network
+        File path to the generated HTML file (if notebook=False) or the Network object
+        (if notebook=True).
+
+    Examples
+    --------
+    >>> file_path = draw_relations(data, 'uuid1', levels=3)
+    """
     reference_data = data.references(UUID, levels=levels)
 
     ID_COLUMN = "ID"
@@ -482,18 +918,31 @@ def draw_relations(data, UUID, notebook=False, levels=2):
 
 
 def scale_load(data, load_setpoint, cos_f=None):
-    """
-    Scales the active and reactive power loads in a dataset SSH instance based on a given load setpoint and power factor (cos_f).
+    """Scale active and reactive power loads in a CGMES SSH instance.
 
-    Parameters:
-    - data: The triplet dataset containing SSH load information.
-    - load_setpoint: The target total active power (P) setpoint for scaling.
-    - cos_f: Optional; the cosine of the power factor angle (cos(φ)). If not provided, it's calculated from the ratio of total Q to P.
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing SSH load information.
+    load_setpoint : float
+        Target total active power (P) setpoint for scaling.
+    cos_f : float, optional
+        Cosine of the power factor angle (cos(φ)). If None, calculated from the
+        ratio of total Q to P.
 
-    The function adjusts the active (P) and reactive (Q) power of conforming loads to meet the specified load setpoint while maintaining or assuming a given power factor (cos_f).
+    Returns
+    -------
+    pandas.DataFrame
+        Updated dataset with scaled P and Q values for ConformLoad instances.
 
-    Returns:
-    - The updated dataset with scaled P and Q values for loads.
+    Notes
+    -----
+    - Scales only ConformLoad instances, preserving NonConformLoad values.
+    - Maintains or computes the power factor using cos_f.
+
+    Examples
+    --------
+    >>> updated_data = scale_load(data, load_setpoint=1000.0, cos_f=0.9)
     """
     # Retrieve load data and calculate total P and Q
     load_data = data.type_tableview('ConformLoad').reset_index()
@@ -519,16 +968,30 @@ def scale_load(data, load_setpoint, cos_f=None):
 
 
 def switch_equipment_terminals(data, equipment_id, connected: str="false"):
-    """
-    Vectorized update of connection statuses ('true' or 'false') for terminals associated with specified equipment.
+    """Update connection statuses of terminals for specified equipment in a CGMES dataset.
 
-    Parameters:
-    - data (DataFrame): The triplets dataset containing equipment and terminal information (both EQ and SSH are expected).
-    - equipment_id (str or list): A list of identifiers (mRIDs) for the equipment whose terminals' connection statuses are to be updated.
-    - connected (str): The new connection status for the terminals ('true' or 'false'). Default is 'false'.
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing EQ and SSH information.
+    equipment_id : str or list
+        Identifier(s) (mRID) of the equipment whose terminals' statuses are to be updated.
+    connected : str, optional
+        New connection status ('true' or 'false', default is 'false').
 
-    Returns:
-    - DataFrame: An updated dataset with the terminals' connection statuses modified according to the given parameters.
+    Returns
+    -------
+    pandas.DataFrame
+        Updated dataset with modified terminal connection statuses.
+
+    Raises
+    ------
+    ValueError
+        If connected is not 'true' or 'false'.
+
+    Examples
+    --------
+    >>> updated_data = switch_equipment_terminals(data, ['uuid1', 'uuid2'], connected='true')
     """
 
     # Validate the 'connected' parameter
@@ -557,73 +1020,33 @@ def switch_equipment_terminals(data, equipment_id, connected: str="false"):
 
 
 
-def export_to_cimrdf_depricated(instance_data, rdf_map, namespace_map):
-
-    types = list(instance_data.types_dict())
-
-    print(types)
-
-    header_type = "FullModel"
-
-    # Set Header to first
-    types.remove(header_type)
-    types.insert(0, header_type)
-
-    # Create xml element builder and the root element
-    E = ElementMaker(nsmap=namespace_map)
-    RDF = E(QName(namespace_map["rdf"], "RDF"))
-
-    for class_type in types:
-        class_data = instance_data.type_tableview(class_type, string_to_number=False).drop(columns="Type")
-        class_def = rdf_map.get(class_type, None)
-
-        if class_def:
-
-            for ID, row in class_data.iterrows():
-
-                rdf_object = E(QName(class_def["namespace"], class_type))
-                rdf_object.attrib[QName(class_def["attrib"]["attribute"])] = class_def["attrib"]["value_prefix"] + ID
-
-                for KEY, VALUE in row.items():
-
-                    if not pandas.isna(VALUE):
-
-                        tag_def = rdf_map.get(KEY, None)
-
-                        if tag_def:
-
-                            tag = E(QName(tag_def["namespace"], KEY))
-
-                            attrib = tag_def.get("attrib", None)
-
-                            if attrib:
-                                tag.attrib[QName(tag_def["attrib"]["attribute"])] = tag_def["attrib"]["value_prefix"] + VALUE
-                            else:
-                                tag.text = str(VALUE)
-
-                            rdf_object.append(tag)
-
-                        else:
-                            print("Definition missing for tag: " + KEY)
-
-                    else:
-                        print(
-                            "WARNING - VALUE is None at ID-> {} and KEY-> {}, will not be exported".format(ID, KEY))
-
-                RDF.append(rdf_object)
-
-        else:
-            print("Definition missing for class: " + class_type)
-
-    # print(etree.tostring(RDF, pretty_print=True).decode())
-    return etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding='UTF-8')
 
 def get_dangling_references(data, detailed=False):
-    """Find all reference within CGMES data, by using the fact of the CGMES data model convention where references are with .<CapitalLetter>
-    Assumptions:
-    1. Class names are with Capital letters
-    2. Relations are defined <Class_FROM>.<Class_TO>"""
+    """Identify dangling references in a CGMES dataset.
 
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    detailed : bool, optional
+        If True, return detailed DataFrame of dangling references; otherwise, return
+        counts of dangling reference types (default is False).
+
+    Returns
+    -------
+    pandas.DataFrame or pandas.Series
+        If detailed=True, a DataFrame with dangling references; otherwise, a Series with
+        counts of dangling reference keys.
+
+    Notes
+    -----
+    - Identifies references using the CGMES convention (e.g., keys with '.<CapitalLetter>').
+    - A dangling reference is one where the referenced ID does not exist in the dataset.
+
+    Examples
+    --------
+    >>> dangling = get_dangling_references(data, detailed=True)
+    """
     cgmes_reference_pattern = r"\.[A-Z]"
     references = data[data.KEY.str.contains(cgmes_reference_pattern)]
     dangling_references = data.query("KEY == 'Type'").merge(references, left_on="ID", right_on="VALUE", indicator=True, how="right", suffixes=("_TO", "_FROM")).query("_merge != 'both'")
