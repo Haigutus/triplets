@@ -10,7 +10,6 @@ Documentation
    :maxdepth: 2
    :caption: Contents:
 
-   triplets
    triplets.cgmes_tools
    triplets.rdf_parser
 
