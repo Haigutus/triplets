@@ -5,6 +5,9 @@
  - Input files can be xml or zip files (containing one or mutiple xml files)
  - All files are parsed into one and same Pandas DataFrame, thus if you want single file or single data model, you need to filter on INSTANCE_ID column
 
+## Documentation:
+https://haigutus.github.io/triplets
+
 ## To get started:
 
 ```python
