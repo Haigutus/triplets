@@ -1,0 +1,1260 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>triplets.cgmes_tools &mdash; triplets 0.0.11 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=0c446633"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            triplets
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../triplets.html">triplets package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../triplets.cgmes_tools.html">triplets.cgmes_tools module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../triplets.rdf_parser.html">triplets.rdf_parser module</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">triplets</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">triplets.cgmes_tools</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for triplets.cgmes_tools</h1><div class="highlight"><pre>
+<span></span><span class="c1">#-------------------------------------------------------------------------------</span>
+<span class="c1"># Name:        CGMEStools</span>
+<span class="c1"># Purpose:     Collection of functions to work with CGMES files</span>
+<span class="c1">#</span>
+<span class="c1"># Author:      kristjan.vilgo</span>
+<span class="c1">#</span>
+<span class="c1"># Created:     2019-06-10</span>
+<span class="c1"># Copyright:   (c) kristjan.vilgo 2019</span>
+<span class="c1"># Licence:     MIT</span>
+<span class="c1">#-------------------------------------------------------------------------------</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">uuid4</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">aniso8601</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">lxml.builder</span><span class="w"> </span><span class="kn">import</span> <span class="n">ElementMaker</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lxml.etree</span><span class="w"> </span><span class="kn">import</span> <span class="n">QName</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lxml</span><span class="w"> </span><span class="kn">import</span> <span class="n">etree</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">OrderedDict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">builtins</span><span class="w"> </span><span class="kn">import</span> <span class="nb">str</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">triplets</span><span class="w"> </span><span class="kn">import</span> <span class="n">rdf_parser</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+
+<span class="n">dependencies</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">EQ</span>   <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;EQBD&quot;</span><span class="p">],</span>
+                    <span class="n">SSH</span>  <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;EQ&quot;</span><span class="p">],</span>
+                    <span class="n">TP</span>   <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;EQ&quot;</span><span class="p">],</span>
+                    <span class="n">SV</span>   <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;TPBD&quot;</span><span class="p">,</span> <span class="s2">&quot;TP&quot;</span><span class="p">,</span> <span class="s2">&quot;SSH&quot;</span><span class="p">],</span>
+                    <span class="n">TPBD</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;EQBD&quot;</span><span class="p">],</span>
+                    <span class="n">EQBD</span> <span class="o">=</span> <span class="p">[])</span>
+
+<div class="viewcode-block" id="generate_instances_ID">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.generate_instances_ID">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">generate_instances_ID</span><span class="p">(</span><span class="n">dependencies</span><span class="o">=</span><span class="n">dependencies</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate UUIDs for each profile defined in the dependencies dictionary.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    dependencies : dict, optional</span>
+<span class="sd">        Dictionary mapping profile names to lists of dependent profile names.</span>
+<span class="sd">        Defaults to a predefined CGMES profile dependencies dictionary.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    dict</span>
+<span class="sd">        Dictionary with profile names as keys and generated UUIDs as values.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; generate_instances_ID()</span>
+<span class="sd">    {&#39;EQ&#39;: &#39;123e4567-e89b-12d3-a456-426614174000&#39;, ...}</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">{</span><span class="n">profile</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid4</span><span class="p">())</span> <span class="k">for</span> <span class="n">profile</span> <span class="ow">in</span> <span class="n">dependencies</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="get_metadata_from_filename">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_metadata_from_filename">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_metadata_from_filename</span><span class="p">(</span><span class="n">file_name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract metadata from a CGMES filename following the CGMES naming convention.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    file_name : str</span>
+<span class="sd">        Name of the CGMES file (e.g., &#39;20230101T0000Z_A01_ENTITY_EQ_001.xml&#39;).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    dict</span>
+<span class="sd">        Dictionary containing metadata keys (e.g., &#39;Model.scenarioTime&#39;, &#39;Model.processType&#39;)</span>
+<span class="sd">        and their corresponding values extracted from the filename.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - Expects filenames to follow CGMES conventions with underscores separating metadata fields.</span>
+<span class="sd">    - Handles cases with 4 or 5 metadata elements, setting &#39;Model.processType&#39; to empty string</span>
+<span class="sd">      for older formats (pre-QoDC 2.1).</span>
+<span class="sd">    - Splits &#39;Model.modelingEntity&#39; into &#39;Model.mergingEntity&#39;, &#39;Model.domain&#39;, and</span>
+<span class="sd">      &#39;Model.forEntity&#39; if applicable.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; get_metadata_from_filename(&#39;20230101T0000Z_A01_ENTITY_EQ_001.xml&#39;)</span>
+<span class="sd">    {&#39;Model.scenarioTime&#39;: &#39;20230101T0000Z&#39;, &#39;Model.processType&#39;: &#39;A01&#39;, ...}</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Separators</span>
+    <span class="n">file_type_separator</span>           <span class="o">=</span> <span class="s2">&quot;.&quot;</span>
+    <span class="n">meta_separator</span>                <span class="o">=</span> <span class="s2">&quot;_&quot;</span>
+    <span class="n">entity_and_domain_separator</span>   <span class="o">=</span> <span class="s2">&quot;-&quot;</span>
+
+    <span class="c1">#print(file_name)</span>
+    <span class="n">file_metadata</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">file_name</span><span class="p">,</span> <span class="n">file_type</span> <span class="o">=</span> <span class="n">file_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">file_type_separator</span><span class="p">)</span>
+
+    <span class="c1"># Parse file metadata</span>
+    <span class="n">file_meta_list</span> <span class="o">=</span> <span class="n">file_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">meta_separator</span><span class="p">)</span>
+
+    <span class="c1"># Naming before QoDC 2.1, where EQ might not have processType</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">file_meta_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+
+        <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.scenarioTime&quot;</span><span class="p">],</span>\
+        <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.modelingEntity&quot;</span><span class="p">],</span>\
+        <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.messageType&quot;</span><span class="p">],</span>\
+        <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.version&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">file_meta_list</span>
+        <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.processType&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Warning - only 4 meta elements found, expecting 5, setting Model.processType to empty string&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Naming after QoDC 2.1, always 5 positions</span>
+    <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">file_meta_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
+
+        <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.scenarioTime&quot;</span><span class="p">],</span>\
+        <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.processType&quot;</span><span class="p">],</span>\
+        <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.modelingEntity&quot;</span><span class="p">],</span>\
+        <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.messageType&quot;</span><span class="p">],</span>\
+        <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.version&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">file_meta_list</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Non CGMES file </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file_name</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">file_metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Model.modelingEntity&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+
+        <span class="n">entity_and_area_list</span> <span class="o">=</span> <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.modelingEntity&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">entity_and_domain_separator</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_and_area_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.mergingEntity&quot;</span><span class="p">],</span>\
+            <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.domain&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span> <span class="c1"># Set empty string for both</span>
+            <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.forEntity&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">entity_and_area_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_and_area_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.mergingEntity&quot;</span><span class="p">],</span>\
+            <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.domain&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">entity_and_area_list</span>
+            <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.forEntity&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">entity_and_area_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.mergingEntity&quot;</span><span class="p">],</span>\
+            <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.domain&quot;</span><span class="p">],</span>\
+            <span class="n">file_metadata</span><span class="p">[</span><span class="s2">&quot;Model.forEntity&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">entity_and_area_list</span>
+
+
+    <span class="k">return</span> <span class="n">file_metadata</span></div>
+
+
+
+<span class="n">default_filename_mask</span> <span class="o">=</span> <span class="s2">&quot;{scenarioTime:%Y%m</span><span class="si">%d</span><span class="s2">T%H%MZ}_</span><span class="si">{processType}</span><span class="s2">_</span><span class="si">{modelingEntity}</span><span class="s2">_</span><span class="si">{messageType}</span><span class="s2">_</span><span class="si">{version:03d}</span><span class="s2">&quot;</span>
+
+
+<div class="viewcode-block" id="get_filename_from_metadata">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_filename_from_metadata">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_filename_from_metadata</span><span class="p">(</span><span class="n">meta_data</span><span class="p">,</span> <span class="n">file_type</span><span class="o">=</span><span class="s2">&quot;xml&quot;</span><span class="p">,</span> <span class="n">filename_mask</span><span class="o">=</span><span class="n">default_filename_mask</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a CGMES filename from metadata using a specified filename mask.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    meta_data : dict</span>
+<span class="sd">        Dictionary containing metadata keys (e.g., &#39;scenarioTime&#39;, &#39;processType&#39;) and values.</span>
+<span class="sd">    file_type : str, optional</span>
+<span class="sd">        File extension for the generated filename (default is &#39;xml&#39;).</span>
+<span class="sd">    filename_mask : str, optional</span>
+<span class="sd">        Format string defining the filename structure (default follows CGMES convention).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    str</span>
+<span class="sd">        Generated filename adhering to the CGMES naming convention.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - Removes &#39;Model.&#39; prefix from metadata keys for compatibility with string formatting.</span>
+<span class="sd">    - Converts &#39;scenarioTime&#39; to datetime and &#39;version&#39; to integer before formatting.</span>
+<span class="sd">    - Uses the provided filename_mask to construct the filename.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; meta = {&#39;Model.scenarioTime&#39;: &#39;20230101T0000Z&#39;, &#39;Model.processType&#39;: &#39;A01&#39;, ...}</span>
+<span class="sd">    &gt;&gt;&gt; get_filename_from_metadata(meta)</span>
+<span class="sd">    &#39;20230101T0000Z_A01_ENTITY_EQ_001.xml&#39;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Separators</span>
+    <span class="n">file_type_separator</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span>
+    <span class="n">meta_separator</span> <span class="o">=</span> <span class="s2">&quot;_&quot;</span>
+    <span class="n">entity_and_area_separator</span> <span class="o">=</span> <span class="s2">&quot;-&quot;</span>
+
+    <span class="c1"># Remove Model. from dictionary as python string format can&#39;t use . in variable name</span>
+    <span class="n">meta_data</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]:</span><span class="n">meta_data</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">meta_data</span><span class="p">}</span>
+
+    <span class="c1"># DateTime fields from text to DateTime</span>
+    <span class="n">DateTime_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;scenarioTime&quot;</span><span class="p">]</span><span class="c1">#, &#39;created&#39;]</span>
+    <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">DateTime_fields</span><span class="p">:</span>
+        <span class="n">meta_data</span><span class="p">[</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="n">aniso8601</span><span class="o">.</span><span class="n">parse_datetime</span><span class="p">(</span><span class="n">meta_data</span><span class="p">[</span><span class="n">field</span><span class="p">])</span>
+
+    <span class="c1"># Integers to integers</span>
+    <span class="n">meta_data</span><span class="p">[</span><span class="s2">&quot;version&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">meta_data</span><span class="p">[</span><span class="s2">&quot;version&quot;</span><span class="p">])</span>
+
+    <span class="c1"># Add metadata to file name string</span>
+    <span class="n">file_name</span> <span class="o">=</span> <span class="n">filename_mask</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">**</span><span class="n">meta_data</span><span class="p">)</span>
+
+    <span class="c1"># Add file type to file name string</span>
+    <span class="n">file_name</span> <span class="o">=</span> <span class="n">file_type_separator</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">file_name</span><span class="p">,</span> <span class="n">file_type</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">file_name</span></div>
+
+
+
+<div class="viewcode-block" id="get_metadata_from_xml">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_metadata_from_xml">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_metadata_from_xml</span><span class="p">(</span><span class="n">filepath_or_fileobject</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract metadata from the FullModel element of a CGMES XML file.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    filepath_or_fileobject : str or file-like object</span>
+<span class="sd">        Path to the XML file or a file-like object containing CGMES XML data.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        DataFrame with columns [&#39;tag&#39;, &#39;text&#39;, &#39;attrib&#39;] containing metadata from the</span>
+<span class="sd">        FullModel element.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; df = get_metadata_from_xml(&#39;path/to/file.xml&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; print(df)</span>
+<span class="sd">       tag                text  attrib</span>
+<span class="sd">    0  Model.scenarioTime  20230101T0000Z  {}</span>
+<span class="sd">    ...</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">parsed_xml</span> <span class="o">=</span> <span class="n">etree</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">filepath_or_fileobject</span><span class="p">)</span>
+
+    <span class="n">header</span> <span class="o">=</span> <span class="n">parsed_xml</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;{*}FullModel&quot;</span><span class="p">)</span>
+    <span class="n">meta_elements</span> <span class="o">=</span> <span class="n">header</span><span class="o">.</span><span class="n">getchildren</span><span class="p">()</span>
+
+    <span class="n">meta_list</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">meta_elements</span><span class="p">:</span>
+         <span class="n">meta_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">element</span><span class="o">.</span><span class="n">tag</span><span class="p">,</span> <span class="n">element</span><span class="o">.</span><span class="n">text</span><span class="p">,</span> <span class="n">element</span><span class="o">.</span><span class="n">attrib</span><span class="p">])</span>
+
+    <span class="n">xml_metadata</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">meta_list</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;tag&quot;</span><span class="p">,</span> <span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;attrib&quot;</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">xml_metadata</span></div>
+
+
+
+<div class="viewcode-block" id="get_metadata_from_FullModel">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_metadata_from_FullModel">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_metadata_from_FullModel</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract metadata from the FullModel entries in a CGMES triplet dataset.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data with &#39;KEY&#39;, &#39;VALUE&#39;, and &#39;ID&#39; columns.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    dict</span>
+<span class="sd">        Dictionary of metadata key-value pairs for the FullModel instance.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - Assumes the dataset contains a &#39;Type&#39; key with value &#39;FullModel&#39;.</span>
+<span class="sd">    - Removes the &#39;Type&#39; key from the resulting metadata dictionary.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; meta = get_metadata_from_FullModel(data)</span>
+<span class="sd">    &gt;&gt;&gt; print(meta)</span>
+<span class="sd">    {&#39;Model.scenarioTime&#39;: &#39;20230101T0000Z&#39;, &#39;Model.processType&#39;: &#39;A01&#39;, ...}</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">UUID</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;Type&#39; and VALUE == &#39;FullModel&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">ID</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">metadata</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get_object_data</span><span class="p">(</span><span class="n">UUID</span><span class="p">)</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+    <span class="n">metadata</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>  <span class="c1"># Remove Type form metadata</span>
+
+    <span class="k">return</span> <span class="n">metadata</span></div>
+
+
+
+<div class="viewcode-block" id="update_FullModel_from_dict">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.update_FullModel_from_dict">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">update_FullModel_from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">metadata</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Update or add metadata to FullModel entries in a CGMES triplet dataset.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+<span class="sd">    metadata : dict</span>
+<span class="sd">        Dictionary of metadata key-value pairs to update or add.</span>
+<span class="sd">    update : bool, optional</span>
+<span class="sd">        If True, update existing metadata keys (default is True).</span>
+<span class="sd">    add : bool, optional</span>
+<span class="sd">        If True, add new metadata keys (default is False).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        Updated triplet dataset with modified FullModel metadata.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; meta = {&#39;Model.scenarioTime&#39;: &#39;20230102T0000Z&#39;}</span>
+<span class="sd">    &gt;&gt;&gt; updated_data = update_FullModel_from_dict(data, meta)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">additional_meta_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;Type&#39; and VALUE == &#39;FullModel&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">itertuples</span><span class="p">():</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">metadata</span><span class="p">:</span>
+            <span class="n">additional_meta_list</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;ID&quot;</span><span class="p">:</span> <span class="n">row</span><span class="o">.</span><span class="n">ID</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">:</span> <span class="n">key</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">:</span> <span class="n">metadata</span><span class="p">[</span><span class="n">key</span><span class="p">],</span> <span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">:</span> <span class="n">row</span><span class="o">.</span><span class="n">INSTANCE_ID</span><span class="p">})</span>
+
+    <span class="n">update_data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">additional_meta_list</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">update_triplet_from_triplet</span><span class="p">(</span><span class="n">update_data</span><span class="p">,</span> <span class="n">update</span><span class="p">,</span> <span class="n">add</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="update_FullModel_from_filename">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.update_FullModel_from_filename">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">update_FullModel_from_filename</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">parser</span><span class="o">=</span><span class="n">get_metadata_from_filename</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Update FullModel metadata in a triplet dataset using metadata parsed from filenames.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data with &#39;label&#39; keys for filenames.</span>
+<span class="sd">    parser : callable, optional</span>
+<span class="sd">        Function to parse metadata from filenames, returning a dictionary</span>
+<span class="sd">        (default is get_metadata_from_filename).</span>
+<span class="sd">    update : bool, optional</span>
+<span class="sd">        If True, update existing metadata keys (default is False).</span>
+<span class="sd">    add : bool, optional</span>
+<span class="sd">        If True, add new metadata keys (default is True).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        Updated triplet dataset with FullModel metadata derived from filenames.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; updated_data = update_FullModel_from_filename(data)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">additional_meta_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># For each instance that has label, as label contains the filename</span>
+    <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;label&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">itertuples</span><span class="p">():</span>
+        <span class="c1"># Parse metadata from filename to dictionary</span>
+        <span class="n">metadata</span> <span class="o">=</span> <span class="n">parser</span><span class="p">(</span><span class="n">label</span><span class="o">.</span><span class="n">VALUE</span><span class="p">)</span>
+
+        <span class="c1"># Create triplets form parsed metadata</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;Type&#39; and VALUE == &#39;FullModel&#39; and INSTANCE_ID == &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">label</span><span class="o">.</span><span class="n">INSTANCE_ID</span><span class="p">))</span><span class="o">.</span><span class="n">itertuples</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">metadata</span><span class="p">:</span>
+                <span class="n">additional_meta_list</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;ID&quot;</span><span class="p">:</span> <span class="n">row</span><span class="o">.</span><span class="n">ID</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">:</span> <span class="n">key</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">:</span> <span class="n">metadata</span><span class="p">[</span><span class="n">key</span><span class="p">],</span> <span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">:</span> <span class="n">row</span><span class="o">.</span><span class="n">INSTANCE_ID</span><span class="p">})</span>
+
+    <span class="n">update_data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">additional_meta_list</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">update_triplet_from_triplet</span><span class="p">(</span><span class="n">update_data</span><span class="p">,</span> <span class="n">update</span><span class="p">,</span> <span class="n">add</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="update_filename_from_FullModel">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.update_filename_from_FullModel">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">update_filename_from_FullModel</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">filename_mask</span><span class="o">=</span><span class="n">default_filename_mask</span><span class="p">,</span> <span class="n">filename_key</span><span class="o">=</span><span class="s2">&quot;label&quot;</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Update filenames in a CGMES triplet dataset based on FullModel metadata.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data with FullModel metadata.</span>
+<span class="sd">    filename_mask : str, optional</span>
+<span class="sd">        Format string defining the filename structure (default follows CGMES convention).</span>
+<span class="sd">    filename_key : str, optional</span>
+<span class="sd">        Key in the dataset where filenames are stored (default is &#39;label&#39;).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        Updated triplet dataset with filenames modified based on FullModel metadata.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; updated_data = update_filename_from_FullModel(data)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">list_of_updates</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">filename_key</span><span class="p">))</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+        <span class="c1"># Get metadata</span>
+        <span class="n">metadata</span> <span class="o">=</span> <span class="n">get_metadata_from_FullModel</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;INSTANCE_ID == &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">label</span><span class="o">.</span><span class="n">INSTANCE_ID</span><span class="p">)))</span>
+        <span class="c1"># Get new filename</span>
+        <span class="n">filename</span> <span class="o">=</span> <span class="n">get_filename_from_metadata</span><span class="p">(</span><span class="n">metadata</span><span class="p">,</span> <span class="n">filename_mask</span><span class="o">=</span><span class="n">filename_mask</span><span class="p">)</span>
+        <span class="c1"># Set new filename</span>
+        <span class="c1"># data.loc[_, &quot;VALUE&quot;] = filename</span>
+        <span class="n">list_of_updates</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;ID&quot;</span><span class="p">:</span> <span class="n">label</span><span class="o">.</span><span class="n">ID</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">:</span> <span class="n">filename_key</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">:</span> <span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">:</span> <span class="n">label</span><span class="o">.</span><span class="n">INSTANCE_ID</span><span class="p">})</span>
+
+    <span class="n">update_data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">list_of_updates</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">update_triplet_from_triplet</span><span class="p">(</span><span class="n">update_data</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_loaded_models">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_loaded_models">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_loaded_models</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Retrieve a dictionary of loaded CGMES model parts and their UUIDs.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data with &#39;Model.profile&#39; and &#39;Model.DependentOn&#39; keys.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    dict</span>
+<span class="sd">        Dictionary where keys are StateVariables (SV) UUIDs and values are DataFrames</span>
+<span class="sd">        containing model parts (ID, PROFILE, INSTANCE_ID) and their dependencies.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; models = get_loaded_models(data)</span>
+<span class="sd">    &gt;&gt;&gt; print(models)</span>
+<span class="sd">    {&#39;SV_UUID&#39;: DataFrame(...), ...}</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">FullModel_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;Model.profile&#39; or KEY == &#39;Model.DependentOn&#39;&quot;</span><span class="p">)</span>
+
+    <span class="n">SV_iterator</span> <span class="o">=</span> <span class="n">FullModel_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;VALUE == &#39;http://entsoe.eu/CIM/StateVariables/4/1&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">itertuples</span><span class="p">()</span>
+
+    <span class="n">dependancies_dict</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">SV</span> <span class="ow">in</span> <span class="n">SV_iterator</span><span class="p">:</span>
+
+        <span class="n">current_dependencies</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">dependancies_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">SV</span><span class="o">.</span><span class="n">ID</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">dependancies_list</span><span class="p">:</span>
+
+            <span class="c1"># Append current instance</span>
+            <span class="n">PROFILES</span> <span class="o">=</span> <span class="n">FullModel_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;ID == @instance &amp; KEY == &#39;Model.profile&#39;&quot;</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">PROFILE</span> <span class="ow">in</span> <span class="n">PROFILES</span><span class="o">.</span><span class="n">itertuples</span><span class="p">():</span>
+                <span class="n">current_dependencies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">ID</span><span class="o">=</span><span class="n">instance</span><span class="p">,</span> <span class="n">PROFILE</span><span class="o">=</span><span class="n">PROFILE</span><span class="o">.</span><span class="n">VALUE</span><span class="p">,</span> <span class="n">INSTANCE_ID</span><span class="o">=</span><span class="n">PROFILE</span><span class="o">.</span><span class="n">INSTANCE_ID</span><span class="p">))</span>
+
+            <span class="c1"># Add newly found dependacies to processing</span>
+            <span class="n">dependancies_list</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">FullModel_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;ID == @instance &amp; KEY == &#39;Model.DependentOn&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+
+
+        <span class="n">dependancies_dict</span><span class="p">[</span><span class="n">SV</span><span class="o">.</span><span class="n">ID</span><span class="p">]</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">current_dependencies</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span>
+
+        <span class="c1">#print dependancies_dict</span>
+
+
+    <span class="k">return</span> <span class="n">dependancies_dict</span></div>
+
+
+<div class="viewcode-block" id="get_model_data">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_model_data">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_model_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">model_instances_dataframe</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract data for specific CGMES model instances.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+<span class="sd">    model_instances_dataframe : pandas.DataFrame</span>
+<span class="sd">        DataFrame containing &#39;INSTANCE_ID&#39; column with model instance identifiers.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        Filtered dataset containing only data for the specified model instances.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; model_data = get_model_data(data, models[&#39;SV_UUID&#39;])</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">IGM_data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">model_instances_dataframe</span><span class="p">[[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">(),</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">IGM_data</span></div>
+
+
+<div class="viewcode-block" id="get_EIC_to_mRID_map">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_EIC_to_mRID_map">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_EIC_to_mRID_map</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Map Energy Identification Codes (EIC) to mRIDs for a specific object type.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+<span class="sd">    type : str</span>
+<span class="sd">        Object type to filter (e.g., &#39;PowerTransformer&#39;).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        DataFrame with columns [&#39;mRID&#39;, &#39;EIC&#39;] mapping EICs to mRIDs.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - Filters data for objects of the specified type with &#39;IdentifiedObject.energyIdentCodeEic&#39; key.</span>
+<span class="sd">    - TODO: Add support for type=None to return all types and include type in result.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; eic_map = get_EIC_to_mRID_map(data, &#39;PowerTransformer&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; print(eic_map)</span>
+<span class="sd">       mRID                                  EIC</span>
+<span class="sd">    0  uuid1  10X1001A1001A021</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">name_map</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;ID&quot;</span><span class="p">:</span> <span class="s2">&quot;mRID&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">:</span> <span class="s2">&quot;EIC&quot;</span><span class="p">}</span>
+    <span class="k">return</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">filter_triplet_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;IdentifiedObject.energyIdentCodeEic&#39;&quot;</span><span class="p">)[</span><span class="n">name_map</span><span class="o">.</span><span class="n">keys</span><span class="p">()]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">name_map</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_loaded_model_parts">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_loaded_model_parts">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_loaded_model_parts</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Retrieve a DataFrame of loaded CGMES model parts with their FullModel metadata.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        DataFrame containing FullModel data for loaded model parts.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - Does not correctly resolve &#39;Model.DependentOn&#39; relationships.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; model_parts = get_loaded_model_parts(data)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;FullModel&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="statistics_GeneratingUnit_types">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.statistics_GeneratingUnit_types">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">statistics_GeneratingUnit_types</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate statistics for GeneratingUnit types in a CGMES dataset.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        DataFrame with counts, total, and percentage of each GeneratingUnit type.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; stats = statistics_GeneratingUnit_types(data)</span>
+<span class="sd">    &gt;&gt;&gt; print(stats)</span>
+<span class="sd">       Type  count  TOTAL    %</span>
+<span class="sd">    0  Hydro   10     20  50.0</span>
+<span class="sd">    ...</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">value_counts</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">get_GeneratingUnits</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">Type</span><span class="o">.</span><span class="n">value_counts</span><span class="p">())</span>
+    <span class="n">value_counts</span><span class="p">[</span><span class="s2">&quot;TOTAL&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value_counts</span><span class="p">[</span><span class="s2">&quot;count&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="n">value_counts</span><span class="p">[</span><span class="s2">&quot;%&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value_counts</span><span class="p">[</span><span class="s2">&quot;count&quot;</span><span class="p">]</span><span class="o">/</span><span class="n">value_counts</span><span class="p">[</span><span class="s2">&quot;TOTAL&quot;</span><span class="p">]</span><span class="o">*</span><span class="mi">100</span>
+
+    <span class="k">return</span> <span class="n">value_counts</span></div>
+
+
+
+<div class="viewcode-block" id="get_GeneratingUnits">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_GeneratingUnits">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_GeneratingUnits</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Retrieve a table of GeneratingUnits from a CGMES dataset.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        DataFrame containing GeneratingUnit data, filtered by &#39;GeneratingUnit.maxOperatingP&#39;.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; units = get_GeneratingUnits(data)</span>
+<span class="sd">    &gt;&gt;&gt; print(units)</span>
+<span class="sd">       ID  GeneratingUnit.maxOperatingP  ...</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">key_tableview</span><span class="p">(</span><span class="s2">&quot;GeneratingUnit.maxOperatingP&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_diff_between_model_parts">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_diff_between_model_parts">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_diff_between_model_parts</span><span class="p">(</span><span class="n">UUID_1</span><span class="p">,</span> <span class="n">UUID_2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Identify differences between two CGMES model parts based on their UUIDs.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    UUID_1 : str</span>
+<span class="sd">        UUID of the first model part.</span>
+<span class="sd">    UUID_2 : str</span>
+<span class="sd">        UUID of the second model part.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        DataFrame containing triplets that differ between the two model parts.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; diff = get_diff_between_model_parts(&#39;uuid1&#39;, &#39;uuid2&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">diff</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;INSTANCE_ID == &#39;</span><span class="si">{}</span><span class="s2">&#39; or INSTANCE_ID == &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">UUID_1</span><span class="p">,</span> <span class="n">UUID_2</span><span class="p">))</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">],</span> <span class="n">keep</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">diff</span></div>
+
+
+<div class="viewcode-block" id="filter_dataframe_by_dataframe">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.filter_dataframe_by_dataframe">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">filter_dataframe_by_dataframe</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">filter_data</span><span class="p">,</span> <span class="n">filter_column_name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Filter a CGMES triplet dataset using IDs from another DataFrame.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+<span class="sd">    filter_data : pandas.DataFrame</span>
+<span class="sd">        DataFrame containing IDs to filter by.</span>
+<span class="sd">    filter_column_name : str</span>
+<span class="sd">        Column name in filter_data containing IDs (e.g., &#39;PowerTransformer.ID&#39;).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        Filtered DataFrame with columns [&#39;ID_&lt;class_name&gt;&#39;, &#39;KEY&#39;, &#39;VALUE&#39;].</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; filtered = filter_dataframe_by_dataframe(data, filter_df, &#39;PowerTransformer.ID&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">class_name</span> <span class="o">=</span> <span class="n">filter_column_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">meta_separator</span> <span class="o">=</span> <span class="s2">&quot;_&quot;</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">filter_column_name</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="n">filter_column_name</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;inner&quot;</span><span class="p">,</span> <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">meta_separator</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">))[[</span><span class="s2">&quot;ID_&quot;</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">]]</span>
+
+    <span class="k">return</span> <span class="n">result</span></div>
+
+
+<div class="viewcode-block" id="tableview_by_IDs">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.tableview_by_IDs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">tableview_by_IDs</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">IDs_dataframe</span><span class="p">,</span> <span class="n">IDs_column_name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a tabular view of a CGMES triplet dataset filtered by IDs.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+<span class="sd">    IDs_dataframe : pandas.DataFrame</span>
+<span class="sd">        DataFrame containing IDs to filter by.</span>
+<span class="sd">    IDs_column_name : str</span>
+<span class="sd">        Column name in IDs_dataframe containing IDs (e.g., &#39;PowerTransformer.ID&#39;).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        Pivoted DataFrame with IDs as index and KEYs as columns.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; table = tableview_by_IDs(data, ids_df, &#39;PowerTransformer.ID&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">class_name</span> <span class="o">=</span> <span class="n">IDs_column_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">meta_separator</span> <span class="o">=</span> <span class="s2">&quot;_&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">IDs_dataframe</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span>
+                          <span class="n">left_on</span>  <span class="o">=</span> <span class="n">IDs_column_name</span><span class="p">,</span>
+                          <span class="n">right_on</span> <span class="o">=</span> <span class="s2">&quot;ID&quot;</span><span class="p">,</span>
+                          <span class="n">how</span>      <span class="o">=</span> <span class="s2">&quot;inner&quot;</span><span class="p">,</span>
+                          <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">meta_separator</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">))</span>\
+                          <span class="p">[[</span><span class="s2">&quot;ID_&quot;</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">]]</span><span class="o">.</span>\
+                          <span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span> <span class="o">+</span> <span class="n">meta_separator</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">])</span><span class="o">.</span>\
+                          <span class="n">pivot</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span> <span class="o">+</span> <span class="n">meta_separator</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">,</span> <span class="n">columns</span> <span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">result</span></div>
+
+
+<div class="viewcode-block" id="get_limits">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_limits">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_limits</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Retrieve operational limits from a CGMES dataset, including equipment types.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        DataFrame containing operational limits with associated equipment types.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - Combines OperationalLimitSet, OperationalLimit, OperationalLimitType, and Terminal data.</span>
+<span class="sd">    - Links equipment via Terminal.ConductingEquipment or OperationalLimitSet.Equipment.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; limits = get_limits(data)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Get Limit Sets</span>
+    <span class="n">limits</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s1">&#39;OperationalLimitSet&#39;</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+
+    <span class="c1"># Add OperationalLimits</span>
+    <span class="n">limits</span> <span class="o">=</span> <span class="n">limits</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">key_tableview</span><span class="p">(</span><span class="s1">&#39;OperationalLimit.OperationalLimitSet&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(),</span> <span class="n">left_on</span><span class="o">=</span><span class="s1">&#39;ID&#39;</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s1">&#39;OperationalLimit.OperationalLimitSet&#39;</span><span class="p">,</span> <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;_OperationalLimitSet&quot;</span><span class="p">,</span> <span class="s2">&quot;_OperationalLimit&quot;</span><span class="p">))</span>
+
+    <span class="c1"># Add LimitTypes</span>
+    <span class="n">limits</span> <span class="o">=</span> <span class="n">limits</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;OperationalLimitType&quot;</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(),</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;OperationalLimit.OperationalLimitType&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Add link to equipment via Terminals</span>
+    <span class="n">limits</span> <span class="o">=</span> <span class="n">limits</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s1">&#39;Terminal&#39;</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(),</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;OperationalLimitSet.Terminal&quot;</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;_Terminal&quot;</span><span class="p">))</span>
+
+    <span class="n">limits</span><span class="p">[</span><span class="s2">&quot;ID_Equipment&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="c1"># Get Equipment via terminal -&gt; &#39;OperationalLimitSet.Terminal&#39; -&gt; &#39;Terminal.ConductingEquipment&#39;</span>
+    <span class="k">if</span> <span class="s1">&#39;Terminal.ConductingEquipment&#39;</span> <span class="ow">in</span> <span class="n">limits</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+        <span class="n">limits</span><span class="p">[</span><span class="s2">&quot;ID_Equipment&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">limits</span><span class="p">[</span><span class="s2">&quot;ID_Equipment&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="n">limits</span><span class="p">[</span><span class="s2">&quot;Terminal.ConductingEquipment&quot;</span><span class="p">])</span>
+
+    <span class="c1"># Get Equipment directly -&gt; &#39;OperationalLimitSet.Equipment&#39;</span>
+    <span class="k">if</span> <span class="s1">&#39;OperationalLimitSet.Equipment&#39;</span> <span class="ow">in</span> <span class="n">limits</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+        <span class="n">limits</span><span class="p">[</span><span class="s2">&quot;ID_Equipment&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">limits</span><span class="p">[</span><span class="s2">&quot;ID_Equipment&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="n">limits</span><span class="p">[</span><span class="s1">&#39;OperationalLimitSet.Equipment&#39;</span><span class="p">])</span>
+
+    <span class="c1"># Add equipment type</span>
+    <span class="n">limits</span> <span class="o">=</span> <span class="n">limits</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;Type&#39;&quot;</span><span class="p">)[[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">]],</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;ID_Equipment&quot;</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;_Type&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;VALUE&quot;</span><span class="p">:</span><span class="s2">&quot;Equipment_Type&quot;</span><span class="p">})</span>
+
+    <span class="k">return</span> <span class="n">limits</span></div>
+
+
+
+<div class="viewcode-block" id="darw_relations_graph">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.darw_relations_graph">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">darw_relations_graph</span><span class="p">(</span><span class="n">reference_data</span><span class="p">,</span> <span class="n">ID_COLUMN</span><span class="p">,</span> <span class="n">notebook</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a temporary HTML file to visualize relations in a CGMES dataset.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    reference_data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing reference data for visualization.</span>
+<span class="sd">    ID_COLUMN : str</span>
+<span class="sd">        Column name containing IDs (e.g., &#39;ID&#39;).</span>
+<span class="sd">    notebook : bool, optional</span>
+<span class="sd">        If True, render the graph for Jupyter notebook (default is False).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    str or pyvis.network.Network</span>
+<span class="sd">        File path to the generated HTML file (if notebook=False) or the Network object</span>
+<span class="sd">        (if notebook=True).</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - Uses pyvis for visualization with a hierarchical layout.</span>
+<span class="sd">    - Nodes include object data in hover tooltips.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; file_path = darw_relations_graph(data, &#39;ID&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pyvis.network</span><span class="w"> </span><span class="kn">import</span> <span class="n">Network</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pyvis.options</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">options</span>
+
+    <span class="n">node_data</span> <span class="o">=</span> <span class="n">reference_data</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">([</span><span class="n">ID_COLUMN</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">pivot</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">ID_COLUMN</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+
+    <span class="n">columns</span> <span class="o">=</span> <span class="n">node_data</span><span class="o">.</span><span class="n">columns</span>
+
+    <span class="k">if</span> <span class="s2">&quot;IdentifiedObject.name&quot;</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
+        <span class="n">node_data</span> <span class="o">=</span> <span class="n">node_data</span><span class="p">[[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="s2">&quot;IdentifiedObject.name&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;IdentifiedObject.name&quot;</span><span class="p">:</span> <span class="s2">&quot;name&quot;</span><span class="p">})</span>
+    <span class="k">elif</span> <span class="s2">&quot;Model.profile&quot;</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
+        <span class="n">node_data</span> <span class="o">=</span> <span class="n">node_data</span><span class="p">[[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="s2">&quot;Model.profile&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Model.profile&quot;</span><span class="p">:</span> <span class="s2">&quot;name&quot;</span><span class="p">})</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">node_data</span> <span class="o">=</span> <span class="n">node_data</span><span class="p">[[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;Type&quot;</span><span class="p">]]</span>
+        <span class="n">node_data</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="c1"># Visualize with pyvis</span>
+
+    <span class="n">graph</span> <span class="o">=</span> <span class="n">Network</span><span class="p">(</span><span class="n">directed</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="s2">&quot;100%&quot;</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="s2">&quot;1000&quot;</span><span class="p">,</span> <span class="n">notebook</span><span class="o">=</span><span class="n">notebook</span><span class="p">)</span>
+    <span class="c1"># node_name = urlparse(dataframe[dataframe.KEY == &quot;Model.profile&quot;].VALUE.tolist()[0]).path  # FullModel does not have IdentifiedObject.name</span>
+
+    <span class="c1"># Add nodes/objects</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">node_data</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">node_data</span><span class="o">.</span><span class="n">itertuples</span><span class="p">():</span>
+        <span class="c1">#print(node)</span>
+        <span class="n">object_data</span> <span class="o">=</span> <span class="n">reference_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> == &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ID_COLUMN</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">ID</span><span class="p">))</span>
+        <span class="c1">#print(object_data)</span>
+
+        <span class="n">node_name</span>  <span class="o">=</span> <span class="sa">u</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> - </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">Type</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+        <span class="c1"># Add object data table to node hover title</span>
+        <span class="n">node_title</span> <span class="o">=</span> <span class="n">object_data</span><span class="p">[[</span><span class="n">ID_COLUMN</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="n">ID_COLUMN</span><span class="p">:</span> <span class="s2">&quot;ID&quot;</span><span class="p">})</span><span class="o">.</span><span class="n">to_html</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="c1">#print(node_title)</span>
+        <span class="n">node_level</span> <span class="o">=</span> <span class="n">object_data</span><span class="o">.</span><span class="n">level</span><span class="o">.</span><span class="n">tolist</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">graph</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ID</span><span class="p">,</span> <span class="n">node_name</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="n">node_title</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">node_level</span><span class="p">)</span>
+
+
+    <span class="c1"># Add connections</span>
+
+    <span class="n">reference_data_columns</span> <span class="o">=</span> <span class="n">reference_data</span><span class="o">.</span><span class="n">columns</span>
+
+    <span class="k">if</span> <span class="s2">&quot;ID_FROM&quot;</span> <span class="ow">in</span> <span class="n">reference_data_columns</span> <span class="ow">and</span> <span class="s2">&quot;ID_TO&quot;</span> <span class="ow">in</span> <span class="n">reference_data_columns</span><span class="p">:</span>
+
+        <span class="n">connections</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">reference_data</span><span class="p">[[</span><span class="s2">&quot;ID_FROM&quot;</span><span class="p">,</span> <span class="s2">&quot;ID_TO&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span><span class="o">.</span><span class="n">to_records</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+        <span class="n">graph</span><span class="o">.</span><span class="n">add_edges</span><span class="p">(</span><span class="n">connections</span><span class="p">)</span>
+
+    <span class="c1"># Set options</span>
+
+    <span class="n">graph</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    var options = {</span>
+<span class="s2">        &quot;nodes&quot;: {</span>
+<span class="s2">            &quot;shape&quot;: &quot;dot&quot;,</span>
+<span class="s2">            &quot;size&quot;: 10</span>
+<span class="s2">        },</span>
+<span class="s2">        &quot;edges&quot;: {</span>
+<span class="s2">            &quot;color&quot;: {</span>
+<span class="s2">                &quot;inherit&quot;: true</span>
+<span class="s2">            },</span>
+<span class="s2">            &quot;smooth&quot;: false</span>
+<span class="s2">        },</span>
+<span class="s2">        &quot;layout&quot;: {</span>
+<span class="s2">            &quot;hierarchical&quot;: {</span>
+<span class="s2">                &quot;enabled&quot;: true,</span>
+<span class="s2">                &quot;direction&quot;: &quot;LR&quot;,</span>
+<span class="s2">                &quot;sortMethod&quot;: &quot;directed&quot;</span>
+<span class="s2">            }</span>
+<span class="s2">        },</span>
+<span class="s2">        &quot;interaction&quot;: {</span>
+<span class="s2">            &quot;navigationButtons&quot;: true</span>
+<span class="s2">        },</span>
+<span class="s2">        &quot;physics&quot;: {</span>
+<span class="s2">            &quot;hierarchicalRepulsion&quot;: {</span>
+<span class="s2">                &quot;centralGravity&quot;: 0,</span>
+<span class="s2">                &quot;springLength&quot;: 75,</span>
+<span class="s2">                &quot;nodeDistance&quot;: 145,</span>
+<span class="s2">                &quot;damping&quot;: 0.2</span>
+<span class="s2">            },</span>
+<span class="s2">            &quot;maxVelocity&quot;: 28,</span>
+<span class="s2">            &quot;minVelocity&quot;: 0.75,</span>
+<span class="s2">            &quot;solver&quot;: &quot;hierarchicalRepulsion&quot;</span>
+<span class="s2">        }</span>
+<span class="s2">    }&quot;&quot;&quot;</span><span class="p">)</span>
+
+    <span class="c1"># graph.show_buttons()</span>
+
+    <span class="n">graph</span><span class="o">.</span><span class="n">set_options</span> <span class="o">=</span> <span class="n">options</span>
+
+    <span class="k">if</span> <span class="n">notebook</span> <span class="o">==</span> <span class="kc">False</span><span class="p">:</span>
+        <span class="c1"># Change directory to temp</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+
+        <span class="c1"># Create unique filename</span>
+        <span class="n">from_UUID</span> <span class="o">=</span> <span class="n">reference_data</span><span class="p">[</span><span class="n">ID_COLUMN</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">file_name</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">.html&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">from_UUID</span><span class="p">)</span>
+
+        <span class="c1"># Show graph</span>
+        <span class="n">graph</span><span class="o">.</span><span class="n">show</span><span class="p">(</span><span class="n">file_name</span><span class="p">,</span> <span class="n">notebook</span><span class="o">=</span><span class="n">notebook</span><span class="p">)</span>
+
+        <span class="c1"># Returns file path</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">file_name</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">graph</span></div>
+
+
+
+
+<div class="viewcode-block" id="draw_relations_to">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.draw_relations_to">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">draw_relations_to</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">UUID</span><span class="p">,</span> <span class="n">notebook</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Visualize relations pointing to a specific UUID in a CGMES dataset.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+<span class="sd">    UUID : str</span>
+<span class="sd">        UUID of the object to visualize incoming relations for.</span>
+<span class="sd">    notebook : bool, optional</span>
+<span class="sd">        If True, render the graph for Jupyter notebook (default is False).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    str or pyvis.network.Network</span>
+<span class="sd">        File path to the generated HTML file (if notebook=False) or the Network object</span>
+<span class="sd">        (if notebook=True).</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; file_path = draw_relations_to(data, &#39;uuid1&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">reference_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_to</span><span class="p">(</span><span class="n">UUID</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">99</span><span class="p">)</span>
+
+    <span class="n">ID_COLUMN</span> <span class="o">=</span> <span class="s2">&quot;ID&quot;</span>
+
+    <span class="k">return</span> <span class="n">darw_relations_graph</span><span class="p">(</span><span class="n">reference_data</span><span class="p">,</span> <span class="n">ID_COLUMN</span><span class="p">,</span> <span class="n">notebook</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="draw_relations_from">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.draw_relations_from">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">draw_relations_from</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">UUID</span><span class="p">,</span> <span class="n">notebook</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Visualize relations originating from a specific UUID in a CGMES dataset.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+<span class="sd">    UUID : str</span>
+<span class="sd">        UUID of the object to visualize outgoing relations for.</span>
+<span class="sd">    notebook : bool, optional</span>
+<span class="sd">        If True, render the graph for Jupyter notebook (default is False).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    str or pyvis.network.Network</span>
+<span class="sd">        File path to the generated HTML file (if notebook=False) or the Network object</span>
+<span class="sd">        (if notebook=True).</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; file_path = draw_relations_from(data, &#39;uuid1&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">reference_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_from</span><span class="p">(</span><span class="n">UUID</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">99</span><span class="p">)</span>
+
+    <span class="n">ID_COLUMN</span> <span class="o">=</span> <span class="s2">&quot;ID&quot;</span>
+
+    <span class="k">return</span> <span class="n">darw_relations_graph</span><span class="p">(</span><span class="n">reference_data</span><span class="p">,</span> <span class="n">ID_COLUMN</span><span class="p">,</span> <span class="n">notebook</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="draw_relations">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.draw_relations">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">draw_relations</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">UUID</span><span class="p">,</span> <span class="n">notebook</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Visualize all relations (incoming and outgoing) for a specific UUID in a CGMES dataset.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+<span class="sd">    UUID : str</span>
+<span class="sd">        UUID of the object to visualize relations for.</span>
+<span class="sd">    notebook : bool, optional</span>
+<span class="sd">        If True, render the graph for Jupyter notebook (default is False).</span>
+<span class="sd">    levels : int, optional</span>
+<span class="sd">        Number of levels to traverse for relations (default is 2).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    str or pyvis.network.Network</span>
+<span class="sd">        File path to the generated HTML file (if notebook=False) or the Network object</span>
+<span class="sd">        (if notebook=True).</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; file_path = draw_relations(data, &#39;uuid1&#39;, levels=3)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">reference_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references</span><span class="p">(</span><span class="n">UUID</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">)</span>
+
+    <span class="n">ID_COLUMN</span> <span class="o">=</span> <span class="s2">&quot;ID&quot;</span>
+
+    <span class="k">return</span> <span class="n">darw_relations_graph</span><span class="p">(</span><span class="n">reference_data</span><span class="p">,</span> <span class="n">ID_COLUMN</span><span class="p">,</span> <span class="n">notebook</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="scale_load">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.scale_load">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">scale_load</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">load_setpoint</span><span class="p">,</span> <span class="n">cos_f</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Scale active and reactive power loads in a CGMES SSH instance.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing SSH load information.</span>
+<span class="sd">    load_setpoint : float</span>
+<span class="sd">        Target total active power (P) setpoint for scaling.</span>
+<span class="sd">    cos_f : float, optional</span>
+<span class="sd">        Cosine of the power factor angle (cos(φ)). If None, calculated from the</span>
+<span class="sd">        ratio of total Q to P.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        Updated dataset with scaled P and Q values for ConformLoad instances.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - Scales only ConformLoad instances, preserving NonConformLoad values.</span>
+<span class="sd">    - Maintains or computes the power factor using cos_f.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; updated_data = scale_load(data, load_setpoint=1000.0, cos_f=0.9)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Retrieve load data and calculate total P and Q</span>
+    <span class="n">load_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s1">&#39;ConformLoad&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+    <span class="n">scalable_load_p</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">[</span><span class="s2">&quot;EnergyConsumer.p&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="n">scalable_load_q</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">[</span><span class="s2">&quot;EnergyConsumer.q&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+    <span class="c1"># Calculate cos_f if not provided</span>
+    <span class="k">if</span> <span class="n">cos_f</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">cos_f</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">atan</span><span class="p">(</span><span class="n">scalable_load_q</span> <span class="o">/</span> <span class="n">scalable_load_p</span><span class="p">))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cos(f) not given, taking from base case -&gt; cos(f)=</span><span class="si">{</span><span class="n">cos_f</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Calculate total P including non-conform loads</span>
+    <span class="n">total_load_p</span> <span class="o">=</span> <span class="n">scalable_load_p</span> <span class="o">+</span> <span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s1">&#39;NonConformLoad&#39;</span><span class="p">)[</span><span class="s2">&quot;EnergyConsumer.p&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+    <span class="c1"># Scale Load P across conform loads</span>
+    <span class="n">load_data</span><span class="p">[</span><span class="s2">&quot;EnergyConsumer.p&quot;</span><span class="p">]</span> <span class="o">*=</span> <span class="mi">1</span> <span class="o">+</span> <span class="p">(</span><span class="n">load_setpoint</span> <span class="o">-</span> <span class="n">total_load_p</span><span class="p">)</span> <span class="o">/</span> <span class="n">scalable_load_p</span>
+
+    <span class="c1"># Scale Load Q across conform loads based on the new P and the given or calculated cos_f</span>
+    <span class="n">load_data</span><span class="p">[</span><span class="s2">&quot;EnergyConsumer.q&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">[</span><span class="s2">&quot;EnergyConsumer.p&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">tan</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">acos</span><span class="p">(</span><span class="n">cos_f</span><span class="p">))</span>
+
+    <span class="c1"># Update the dataset with the new scaled P and Q values</span>
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">update_triplet_from_tableview</span><span class="p">(</span><span class="n">load_data</span><span class="p">[[</span><span class="s1">&#39;ID&#39;</span><span class="p">,</span> <span class="s1">&#39;EnergyConsumer.p&#39;</span><span class="p">,</span> <span class="s1">&#39;EnergyConsumer.q&#39;</span><span class="p">]],</span> <span class="n">update</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="switch_equipment_terminals">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.switch_equipment_terminals">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">switch_equipment_terminals</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">equipment_id</span><span class="p">,</span> <span class="n">connected</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="s2">&quot;false&quot;</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Update connection statuses of terminals for specified equipment in a CGMES dataset.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing EQ and SSH information.</span>
+<span class="sd">    equipment_id : str or list</span>
+<span class="sd">        Identifier(s) (mRID) of the equipment whose terminals&#39; statuses are to be updated.</span>
+<span class="sd">    connected : str, optional</span>
+<span class="sd">        New connection status (&#39;true&#39; or &#39;false&#39;, default is &#39;false&#39;).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        Updated dataset with modified terminal connection statuses.</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError</span>
+<span class="sd">        If connected is not &#39;true&#39; or &#39;false&#39;.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; updated_data = switch_equipment_terminals(data, [&#39;uuid1&#39;, &#39;uuid2&#39;], connected=&#39;true&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Validate the &#39;connected&#39; parameter</span>
+    <span class="k">if</span> <span class="n">connected</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;true&quot;</span><span class="p">,</span> <span class="s2">&quot;false&quot;</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The &#39;connected&#39; parameter must be &#39;true&#39; or &#39;false&#39;.&quot;</span><span class="p">)</span>
+
+    <span class="c1"># If only single ID is given wrap it into list</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">equipment_id</span><span class="p">)</span> <span class="o">==</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">equipment_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">equipment_id</span><span class="p">]</span>
+
+    <span class="n">status_attribute</span> <span class="o">=</span> <span class="s2">&quot;ACDCTerminal.connected&quot;</span>
+
+    <span class="c1"># Find linked terminals to given equipment_id</span>
+    <span class="n">terminals</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;Terminal.ConductingEquipment&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">equipment_id</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;VALUE&quot;</span><span class="p">),</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;VALUE&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Find correct instance ID (Status is in SSH, but EQ link in EQ)</span>
+    <span class="n">terminals</span> <span class="o">=</span> <span class="n">terminals</span><span class="p">[[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == @status_attribute&quot;</span><span class="p">)[[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]],</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Set the status attribute name</span>
+    <span class="n">terminals</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">status_attribute</span>
+
+    <span class="c1"># Set the status (true/false)</span>
+    <span class="n">terminals</span><span class="p">[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">connected</span>
+
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">update_triplet_from_triplet</span><span class="p">(</span><span class="n">terminals</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+
+
+
+<div class="viewcode-block" id="get_dangling_references">
+<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_dangling_references">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_dangling_references</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">detailed</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Identify dangling references in a CGMES dataset.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+<span class="sd">    detailed : bool, optional</span>
+<span class="sd">        If True, return detailed DataFrame of dangling references; otherwise, return</span>
+<span class="sd">        counts of dangling reference types (default is False).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame or pandas.Series</span>
+<span class="sd">        If detailed=True, a DataFrame with dangling references; otherwise, a Series with</span>
+<span class="sd">        counts of dangling reference keys.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - Identifies references using the CGMES convention (e.g., keys with &#39;.&lt;CapitalLetter&gt;&#39;).</span>
+<span class="sd">    - A dangling reference is one where the referenced ID does not exist in the dataset.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; dangling = get_dangling_references(data, detailed=True)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cgmes_reference_pattern</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">&quot;\.[A-Z]&quot;</span>
+    <span class="n">references</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="o">.</span><span class="n">KEY</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="n">cgmes_reference_pattern</span><span class="p">)]</span>
+    <span class="n">dangling_references</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;Type&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">references</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="n">indicator</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;right&quot;</span><span class="p">,</span> <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;_TO&quot;</span><span class="p">,</span> <span class="s2">&quot;_FROM&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;_merge != &#39;both&#39;&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">detailed</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">dangling_references</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">dangling_references</span><span class="o">.</span><span class="n">KEY_FROM</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span></div>
+
+
+
+<span class="c1"># TEST and examples</span>
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">path_list</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;../test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip&quot;</span><span class="p">]</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">load_all_to_dataframe</span><span class="p">(</span><span class="n">path_list</span><span class="p">)</span>
+
+
+    <span class="n">object_UUID</span> <span class="o">=</span> <span class="s2">&quot;99722373_VL_TN1&quot;</span>
+
+    <span class="n">draw_relations_from</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">object_UUID</span><span class="p">)</span>
+    <span class="n">draw_relations_to</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">object_UUID</span><span class="p">)</span>
+    <span class="n">draw_relations</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">object_UUID</span><span class="p">)</span>
+
+
+
+
+
+
+
+
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Kristjan Vilgo.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
