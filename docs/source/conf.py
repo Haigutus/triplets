@@ -25,7 +25,12 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-exclude_patterns = []
+exclude_patterns = [
+    "setup.py",
+    "versioneer.py"
+    "triplets/rdfs_tools*"
+    "triplets/export_schema*"
+]
 
 
 
