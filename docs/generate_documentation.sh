@@ -1,0 +1,1 @@
+sphinx-apidoc -f -M --separate -o source/ ../triplets ../triplets/rdfs_tools ../triplets/export_schema
