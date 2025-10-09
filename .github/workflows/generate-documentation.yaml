@@ -24,6 +24,7 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-napoleon
+          python3 -m pip imstall lxml pandas aniso8601
 
       - name: Build Sphinx docs
         run: |
