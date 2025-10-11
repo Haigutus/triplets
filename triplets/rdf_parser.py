@@ -480,12 +480,12 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
     type_id = data[(data["VALUE"] == type_name) & (data["KEY"] == type_key)]
 
     if type_id.empty:
-        logger.warning('No data available for {}'.format(type_name))
+        logger.warning(f'No data available for {type_name}')
         return None
 
     # Filter original data by found type_id data
     # There can't be duplicate ID and KEY pairs for pivot, but this will lose data on full model DependantOn and other info, solution would be to use pivot table function.
-    type_data = pandas.merge(type_id[["ID"]], data, right_on="ID", left_on="ID").drop_duplicates(["ID", "KEY"])
+    type_data = pandas.merge(type_id[["ID"]], data, on="ID").drop_duplicates(["ID", "KEY"])
 
     # Convert form triplets to a table view all objects of same type
     data_view = type_data.pivot(index="ID", columns="KEY")["VALUE"]
@@ -505,14 +505,14 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
 pandas.DataFrame.type_tableview = type_tableview
 
 
-def key_tableview(data, key_name, string_to_number=True):
+def key_tableview(data, key, string_to_number=True):
     """Create a table view of all objects with a specified key.
 
     Parameters
     ----------
     data : pandas.DataFrame
         Triplet dataset containing RDF data.
-    key_name : str
+    key : str
         The key to filter objects by (e.g., 'GeneratingUnit.maxOperatingP').
     string_to_number : bool, optional
         If True, convert columns containing numbers to numeric types (default is True).
@@ -527,15 +527,15 @@ def key_tableview(data, key_name, string_to_number=True):
     >>> table = data.key_tableview("GeneratingUnit.maxOperatingP")
     """
     # Get all ID-s of rows where KEY == key_name
-    type_id = data[data["KEY"] == key_name]
+    key_id = data[data["KEY"] == key]
 
-    if type_id.empty:
-        logger.warning('No data available for {}'.format(key_name))
+    if key_id.empty:
+        logger.warning(f'No data available for {key}')
         return None
 
-    # Filter original data by found type_id data
+    # Filter original data by found key_id data
     # There can't be duplicate ID and KEY pairs for pivot, but this will lose data on full model DependantOn and other info, solution would be to use pivot table function.
-    type_data = pandas.merge(type_id[["ID"]], data, right_on="ID", left_on="ID").drop_duplicates(["ID", "KEY"])
+    type_data = pandas.merge(key_id[["ID"]], data, on="ID").drop_duplicates(["ID", "KEY"])
 
     # Convert form triplets to a table view all objects of same type
     data_view = type_data.pivot(index="ID", columns="KEY")["VALUE"]
