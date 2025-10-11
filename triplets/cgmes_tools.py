@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Name:        CGMEStools
+# Name:        cgmes_tools
 # Purpose:     Collection of functions to work with CGMES files
 #
 # Author:      kristjan.vilgo
@@ -562,15 +562,17 @@ def get_GeneratingUnits(data):
     return data.key_tableview("GeneratingUnit.maxOperatingP")
 
 
-def get_diff_between_model_parts(UUID_1, UUID_2):
-    """Identify differences between two CGMES model parts based on their UUIDs.
+def get_diff_between_two_INSTANCE(data, INSTANCE_ID_1, INSTANCE_ID_2):
+    """Identify differences between two loaded INSTANCES, by thier INSTACE_ID.
 
     Parameters
     ----------
-    UUID_1 : str
-        UUID of the first model part.
-    UUID_2 : str
-        UUID of the second model part.
+    data : pandas.DataFrame
+        Triplet dataset containing two or more INSTANCE.
+    INSTANCE_ID_1 : str
+        UUID of the first INSTANCE.
+    INSTANCE_ID_2 : str
+        UUID of the second INSTANCE.
 
     Returns
     -------
@@ -579,9 +581,9 @@ def get_diff_between_model_parts(UUID_1, UUID_2):
 
     Examples
     --------
-    >>> diff = get_diff_between_model_parts('uuid1', 'uuid2')
+    >>> diff = get_diff_between_two_INSTANCE('uuid1', 'uuid2')
     """
-    diff = data.query("INSTANCE_ID == '{}' or INSTANCE_ID == '{}'".format(UUID_1, UUID_2)).drop_duplicates(["ID", "KEY", "VALUE"], keep=False)
+    diff = data.query("INSTANCE_ID == '{}' or INSTANCE_ID == '{}'".format(INSTANCE_ID_1, INSTANCE_ID_2)).drop_duplicates(["ID", "KEY", "VALUE"], keep=False)
 
     return diff
 
@@ -697,7 +699,7 @@ def get_limits(data):
     return limits
 
 
-def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
+def darw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False):
     """Create a temporary HTML file to visualize relations in a CGMES dataset.
 
     Parameters
@@ -724,6 +726,9 @@ def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
     --------
     >>> file_path = darw_relations_graph(data, 'ID')
     """
+
+    # Maybe redo the process. Find iteratively all relations by merge ID and VALUE columns, starting with single object ID
+
     from pyvis.network import Network
     import pyvis.options as options
 
@@ -745,7 +750,8 @@ def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
     # node_name = urlparse(dataframe[dataframe.KEY == "Model.profile"].VALUE.tolist()[0]).path  # FullModel does not have IdentifiedObject.name
 
     # Add nodes/objects
-    print(node_data)
+    #print(node_data)
+    # TODO - maybe group by ID and then iterate
     for node in node_data.itertuples():
         #print(node)
         object_data = reference_data.query("{} == '{}'".format(ID_COLUMN, node.ID))
@@ -811,15 +817,13 @@ def darw_relations_graph(reference_data, ID_COLUMN, notebook=False):
     graph.set_options = options
 
     if notebook == False:
-        # Change directory to temp
-        os.chdir(tempfile.mkdtemp())
 
         # Create unique filename
         from_UUID = reference_data[ID_COLUMN].tolist()[0]
-        file_name = r"{}.html".format(from_UUID)
+        file_name = f"{from_UUID}.html"
 
         # Show graph
-        graph.show(file_name, notebook=notebook)
+        graph.show(os.path.join(file_name), local=False)
 
         # Returns file path
         return os.path.abspath(file_name)
