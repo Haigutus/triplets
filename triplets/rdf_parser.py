@@ -1619,8 +1619,8 @@ def filter_triplet_by_type(triplet, type):
     return triplet.merge(triplet.query("KEY == 'Type' and VALUE == @type").ID)
 
 
-def triplet_diff(old_data, new_data):
-    """Compute the difference between two triplet datasets.
+def diff_between_triplet(old_data, new_data):
+    """Compute the difference between two Triplet DataFrames.
 
     Parameters
     ----------
@@ -1637,7 +1637,7 @@ def triplet_diff(old_data, new_data):
 
     Examples
     --------
-    >>> diff = triplet_diff(old_data, new_data)
+    >>> diff = diff_between_triplet(old_data, new_data)
     """
     return old_data.merge(new_data, on=["ID", "KEY", "VALUE"], how='outer', indicator=True, suffixes=("_OLD", "_NEW"), sort=False).query("_merge != 'both'")
 
@@ -1695,7 +1695,7 @@ def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_i
     >>> print_triplet_diff(old_data, new_data, exclude_objects=["NamespaceMap"])
     """
     # Get diff between datasets
-    diff = triplet_diff(old_data, new_data)
+    diff = diff_between_triplet(old_data, new_data)
     diff = diff.replace({'_merge': {"left_only": "-", "right_only": "+"}}).sort_values(by=['ID', 'KEY'])
 
     # Extract internal structures keeping file name information
