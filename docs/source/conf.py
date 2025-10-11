@@ -1,6 +1,9 @@
 import os
 import sys
+
 sys.path.insert(0, os.path.abspath('../..'))  # Points to the project root
+
+import triplets
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -13,7 +16,7 @@ sys.path.insert(0, os.path.abspath('../..'))  # Points to the project root
 project = 'triplets'
 copyright = '2025, Kristjan Vilgo'
 author = 'Kristjan Vilgo'
-release = '0.0.11'
+release = triplets.__version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
