@@ -45,7 +45,7 @@ pandas.set_option("display.width", 1000)
 # FUNCTIONS - go down for sample code
 
 
-def print_duration(text, start_time):
+def _print_duration(text, start_time):
     """Print duration between now and start time.
 
     Parameters
@@ -65,7 +65,7 @@ def print_duration(text, start_time):
     Examples
     --------
     >>> start = datetime.datetime.now()
-    >>> duration, end = print_duration("Operation completed", start)
+    >>> duration, end = _print_duration("Operation completed", start)
     """
     end_time = datetime.datetime.now()
     duration = end_time - start_time
@@ -74,7 +74,7 @@ def print_duration(text, start_time):
     return duration, end_time
 
 
-def remove_prefix(original_string, prefix_string):
+def _remove_prefix(original_string, prefix_string):
     """Remove a specified prefix from a string.
 
     Parameters
@@ -91,9 +91,9 @@ def remove_prefix(original_string, prefix_string):
 
     Examples
     --------
-    >>> remove_prefix("urn:uuid:1234", "urn:uuid:")
+    >>> _remove_prefix("urn:uuid:1234", "urn:uuid:")
     '1234'
-    >>> remove_prefix("abc", "xyz")
+    >>> _remove_prefix("abc", "xyz")
     'abc'
     """
     prefix_length = len(prefix_string)
@@ -129,7 +129,7 @@ def clean_ID(ID):
     >>> clean_ID("#_abc")
     'abc'
     """
-    # TODO - a lot of replacements have been done using replace function, but is it valid that these charecaters are not present in UUID-s? is replace once sufficent?
+    # TODO - a lot of replacements have been done using replace function, but is it valid that these characters are not present in UUID-s? is replace once sufficent?
 
     # replace_count = 1 # Remove only once the ID prefix string, otherwise we risk of removing characters from within ID
     # clean_ID      = ID.replace("urn:uuid:", "", replace_count).replace("#_", "", replace_count).replace("_", "", replace_count)
@@ -179,13 +179,13 @@ def load_RDF_objects_from_XML(path_or_fileobject, debug=False):
     instance_id = str(uuid.uuid4())  # Guarantees unique ID for each loaded instance of data, in erronous data it happens that same UUID is used for multiple files
 
     if debug:
-        _, start_time = print_duration("XML loaded to tree object", start_time)
+        _, start_time = _print_duration("XML loaded to tree object", start_time)
 
     # EXTRACT RDF OBJECTS
     RDF_objects = parsed_xml.iterchildren()
 
     if debug:
-        _, start_time = print_duration("All children put to a generator", start_time)
+        _, start_time = _print_duration("All children put to a generator", start_time)
 
     return RDF_objects, instance_id, namesapce_map
 
@@ -341,7 +341,7 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
             data_list.append((ID, KEY, VALUE, INSTANCE_ID))
 
     if debug:
-        print_duration("All values put to data list", start_time)
+        _print_duration("All values put to data list", start_time)
     return data_list
 
 
@@ -374,7 +374,7 @@ def load_RDF_to_dataframe(path_or_fileobject, debug=False, data_type="string"):
     data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"], dtype=data_type)
 
     if debug:
-        _, start_time = print_duration("List of data loaded to DataFrame", start_time)
+        _, start_time = _print_duration("List of data loaded to DataFrame", start_time)
 
     return data
 
@@ -432,8 +432,8 @@ def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False, data_
     data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"], dtype=data_type)
 
     if debug:
-        print_duration("Data list loaded to DataFrame", start_time)
-        print_duration("All loaded in ", process_start)
+        _print_duration("Data list loaded to DataFrame", start_time)
+        _print_duration("All loaded in ", process_start)
         # logger.debug(data.info())
 
     return data
@@ -960,7 +960,7 @@ def set_VALUE_at_KEY_and_ID(data, key, value, id):
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.set_VALUE_at_KEY_and_ID = set_VALUE_at_KEY_and_ID
 
-
+# TODO - add CSV export
 def export_to_excel(data, path=None):
     """Export triplet data to an Excel file, with each type on a separate sheet.
 
@@ -1025,7 +1025,7 @@ pandas.DataFrame.export_to_excel = export_to_excel
 
 
 @lru_cache(maxsize=250)  # Adjust maxsize based on the number of unique QName combinations
-def get_qname(namespace, tag=None):
+def _get_qname(namespace, tag=None):
     """Generate a QName for a given namespace and tag, with caching.
 
     Parameters
@@ -1042,7 +1042,7 @@ def get_qname(namespace, tag=None):
 
     Examples
     --------
-    >>> qname = get_qname("http://www.w3.org/1999/02/22-rdf-syntax-ns#", "RDF")
+    >>> qname = _get_qname("http://www.w3.org/1999/02/22-rdf-syntax-ns#", "RDF")
     """
     qname = QName(namespace, tag)
     #logger.debug(f"Cache info: {get_qname.cache_info()}")
@@ -1151,7 +1151,7 @@ def generate_xml(instance_data,
     # TODO ensure that the Header class is serialised first
 
     if debug:
-        _, start_time = print_duration("File root generated", start_time)
+        _, start_time = _print_duration("File root generated", start_time)
 
     # Generate objects (Class instance)
     # TODO: Maybe group by class name: less lookups
@@ -1182,16 +1182,16 @@ def generate_xml(instance_data,
 
         # Create class element
         # logger.debug(class_namespace, class_name) # DEBUG
-        rdf_object = E(get_qname(class_namespace, class_name))
+        rdf_object = E(_get_qname(class_namespace, class_name))
         # Add ID attribute
-        rdf_object.attrib[get_qname(id_name)] = f"{id_value_prefix}{ID}"
+        rdf_object.attrib[_get_qname(id_name)] = f"{id_value_prefix}{ID}"
         # Add object to RDF
         RDF.append(rdf_object)
         # Add object with it's ID to dict (later we use it to add attributes to that class)
         objects[ID] = rdf_object
 
     if debug:
-        _, start_time = print_duration("Objects added", start_time)
+        _, start_time = _print_duration("Objects added", start_time)
 
     # Add attribute to objects
     # TODO - maybe make work que here, all Objects are generated, we now need to just add attributes to them, but we are going object by object
@@ -1213,12 +1213,12 @@ def generate_xml(instance_data,
             tag_def = instance_rdf_map.get(KEY, None)
 
             if tag_def is not None:
-                tag = E(get_qname(tag_def["namespace"], KEY))
+                tag = E(_get_qname(tag_def["namespace"], KEY))
                 attrib = tag_def.get("attrib", None)
                 text_prefix = tag_def.get("text", "")
 
                 if attrib:
-                    tag.attrib[get_qname(attrib["attribute"])] = f"{attrib['value_prefix']}{VALUE}"
+                    tag.attrib[_get_qname(attrib["attribute"])] = f"{attrib['value_prefix']}{VALUE}"
                 else:
                     tag.text = f"{text_prefix}{VALUE}"
 
@@ -1245,7 +1245,7 @@ def generate_xml(instance_data,
     # etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding='UTF-8')
     # logger.debug(etree.tostring(RDF, pretty_print=True).decode())
     if debug:
-        _, start_time = print_duration("Attributes added", start_time)
+        _, start_time = _print_duration("Attributes added", start_time)
 
     # Convert to XML
     xml = etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding='UTF-8')
@@ -1254,7 +1254,7 @@ def generate_xml(instance_data,
     logger.info("Exporting RDF to {}".format(file_name))
 
     if debug:
-        _, start_time = print_duration("XML created", start_time)
+        _, start_time = _print_duration("XML created", start_time)
 
     return {"filename": file_name, "file": xml}
 
@@ -1321,7 +1321,7 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
     xml_documents = []
 
     if debug:
-        _, start_time = print_duration("All file instance ID-s identified", start_time)
+        _, start_time = _print_duration("All file instance ID-s identified", start_time)
 
     # if max_workers:
     #     with ProcessPoolExecutor(max_workers=max_workers) as executor:
@@ -1348,7 +1348,7 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
                                              comment,
                                              debug))
     if debug:
-        _, start_time = print_duration("All XML created in memory ", start_time)
+        _, start_time = _print_duration("All XML created in memory ", start_time)
     ### Export XML ###
     exported_files = []
 
@@ -1397,8 +1397,8 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
         logger.info("Supported options are: xml_per_instance, xml_per_instance_zip_per_all, xml_per_instance_zip_per_xml")
 
     if debug:
-        print_duration("Files saved in", start_time)
-        print_duration("Whole Export done in", init_time)
+        _print_duration("Files saved in", start_time)
+        _print_duration("Whole Export done in", init_time)
 
     # Save files to disk
     if export_to_memory:
