@@ -1688,10 +1688,12 @@ def filter_by_type(data, type_name, type_key="Type"):
 
     Parameters
     ----------
-    triplet : pandas.DataFrame
+    data : pandas.DataFrame
         Triplet dataset containing RDF data.
-    type : str
+    type_name : str
         Object type to filter by (e.g., 'ACLineSegment').
+    type_key : str
+        Key used in triplet to indicate type, by default "Type"
 
     Returns
     -------
@@ -1700,9 +1702,11 @@ def filter_by_type(data, type_name, type_key="Type"):
 
     Examples
     --------
-    >>> filtered = filter_triplet_by_type(data, "ACLineSegment")
+    >>> filtered = filter_by_type(data, "ACLineSegment")
     """
-    return triplet.merge(triplet.query("KEY == 'Type' and VALUE == @type").ID)
+    filter_triplet = data[(data.KEY == type_key) & (data.VALUE == type_name)]
+
+    return filter_by_triplet(data, filter_triplet)
 
 
 def diff_between_triplet(old_data, new_data):
@@ -1785,14 +1789,14 @@ def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_i
     diff = diff.replace({'_merge': {"left_only": "-", "right_only": "+"}}).sort_values(by=['ID', 'KEY'])
 
     # Extract internal structures keeping file name information
-    file_id_data = filter_triplet_by_type(diff, file_id_object)
+    file_id_data = filter_by_type(diff, file_id_object)
     diff = remove_triplet_from_triplet(diff, file_id_data)
     logger.info(f"INFO - removed {file_id_object} from diff")
 
     # Exclude defined types form export
     if exclude_objects:
         for object_name in exclude_objects:
-            excluded_data = filter_triplet_by_type(diff, object_name)
+            excluded_data = filter_by_type(diff, object_name)
             diff = remove_triplet_from_triplet(diff, excluded_data)
             print(f"INFO - removed {object_name} from diff")
 
