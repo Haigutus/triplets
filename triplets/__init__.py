@@ -1,7 +1,3 @@
-#from triplets import rdf_parser
-#from triplets import cgmes_tools
-#from triplets import rdfs_tools
-
 # Define public API
 __all__ = ['cgmes_tools', 'rdf_parser']
 
