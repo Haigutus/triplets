@@ -336,7 +336,14 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
             VALUE_NS = ""
 
             if VALUE is None and element.attrib:
+
+                # TODO - NB CIM ID specific, to be skipped for generic parsing
                 VALUE = clean_ID(element.attrib[RDF_RESOURCE])
+
+                # TODO - NB CIM enumeration specific
+                # TODO - Fix export conf, to include the namespace and enum prefix
+                if VALUE.startswith("http"):
+                    VALUE = VALUE.split(".")[-1]
 
             data_list.append((ID, KEY, VALUE, INSTANCE_ID))
 
@@ -402,6 +409,9 @@ def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False, data_
     --------
     >>> df = load_all_to_dataframe(["data.zip", "file.xml"], max_workers=4)
     """
+
+    # TODO - Support folder
+
     if debug:
         process_start = datetime.datetime.now()
 
@@ -1134,6 +1144,7 @@ def generate_xml(instance_data,
     --------
     >>> xml_data = generate_xml(instance_data, rdf_map, namespace_map)
     """
+    # TODO - Use if logger debug
     if debug:
         start_time = datetime.datetime.now()
 
