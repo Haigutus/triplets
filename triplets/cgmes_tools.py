@@ -8,27 +8,18 @@
 # Copyright:   (c) kristjan.vilgo 2019
 # Licence:     MIT
 #-------------------------------------------------------------------------------
-import pandas
 
-from uuid import uuid4
 import os
-
+import pandas
+import math
 import aniso8601
 
-import tempfile
-
-from lxml.builder import ElementMaker
-from lxml.etree import QName
+from uuid import uuid4
 from lxml import etree
-
-from collections import OrderedDict
 from builtins import str
-
-import math
+from triplets import rdf_parser
 
 import logging
-
-from triplets import rdf_parser
 
 logger = logging.getLogger(__name__)
 
