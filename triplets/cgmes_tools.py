@@ -553,30 +553,7 @@ def get_GeneratingUnits(data):
     return data.key_tableview("GeneratingUnit.maxOperatingP")
 
 
-def get_diff_between_two_INSTANCE(data, INSTANCE_ID_1, INSTANCE_ID_2):
-    """Identify differences between two loaded INSTANCES, by thier INSTACE_ID.
 
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        Triplet dataset containing two or more INSTANCE.
-    INSTANCE_ID_1 : str
-        UUID of the first INSTANCE.
-    INSTANCE_ID_2 : str
-        UUID of the second INSTANCE.
-
-    Returns
-    -------
-    pandas.DataFrame
-        DataFrame containing triplets that differ between the two model parts.
-
-    Examples
-    --------
-    >>> diff = get_diff_between_two_INSTANCE('uuid1', 'uuid2')
-    """
-    diff = data.query("INSTANCE_ID == '{}' or INSTANCE_ID == '{}'".format(INSTANCE_ID_1, INSTANCE_ID_2)).drop_duplicates(["ID", "KEY", "VALUE"], keep=False)
-
-    return diff
 
 def filter_dataframe_by_dataframe(data, filter_data, filter_column_name):
     """Filter a CGMES triplet dataset using IDs from another DataFrame.

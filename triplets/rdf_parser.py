@@ -1641,6 +1641,32 @@ def triplet_diff(old_data, new_data):
     """
     return old_data.merge(new_data, on=["ID", "KEY", "VALUE"], how='outer', indicator=True, suffixes=("_OLD", "_NEW"), sort=False).query("_merge != 'both'")
 
+def diff_between_INSTANCE(data, INSTANCE_ID_1, INSTANCE_ID_2):
+    """Identify differences between two loaded INSTANCES, by thier INSTACE_ID in the same Triplet DataFrame.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing two or more INSTANCE.
+    INSTANCE_ID_1 : str
+        UUID of the first INSTANCE.
+    INSTANCE_ID_2 : str
+        UUID of the second INSTANCE.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing triplets that differ between the two model parts.
+
+    Examples
+    --------
+    >>> diff = diff_between_INSTANCE('uuid1', 'uuid2')
+    """
+    diff = data.query("INSTANCE_ID == '{}' or INSTANCE_ID == '{}'".format(INSTANCE_ID_1, INSTANCE_ID_2)).drop_duplicates(["ID", "KEY", "VALUE"], keep=False)
+
+    return diff
+
+pandas.DataFrame.diff_between_INSTANCE = diff_between_INSTANCE
 
 def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None):
     """Print a human-readable diff of two triplet datasets.
