@@ -476,7 +476,7 @@ def get_EIC_to_mRID_map(data, type):
     0  uuid1  10X1001A1001A021
     """
     name_map = {"ID": "mRID", "VALUE": "EIC"}
-    return rdf_parser.filter_triplet_by_type(data, type).drop_duplicates().query("KEY == 'IdentifiedObject.energyIdentCodeEic'")[name_map.keys()].rename(columns=name_map)
+    return rdf_parser.filter_by_type(data, type).drop_duplicates().query("KEY == 'IdentifiedObject.energyIdentCodeEic'")[name_map.keys()].rename(columns=name_map)
 
 
 def get_loaded_model_parts(data):
