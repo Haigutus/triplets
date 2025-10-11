@@ -555,67 +555,7 @@ def get_GeneratingUnits(data):
 
 
 
-def filter_dataframe_by_dataframe(data, filter_data, filter_column_name):
-    """Filter a CGMES triplet dataset using IDs from another DataFrame.
 
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        Triplet dataset containing CGMES data.
-    filter_data : pandas.DataFrame
-        DataFrame containing IDs to filter by.
-    filter_column_name : str
-        Column name in filter_data containing IDs (e.g., 'PowerTransformer.ID').
-
-    Returns
-    -------
-    pandas.DataFrame
-        Filtered DataFrame with columns ['ID_<class_name>', 'KEY', 'VALUE'].
-
-    Examples
-    --------
-    >>> filtered = filter_dataframe_by_dataframe(data, filter_df, 'PowerTransformer.ID')
-    """
-    class_name = filter_column_name.split(".")[1]
-    meta_separator = "_"
-
-    result = pandas.merge(filter_column_name, data, left_on=filter_column_name, right_on="ID", how="inner", suffixes=('', meta_separator + class_name))[["ID_" + class_name, "KEY", "VALUE"]]
-
-    return result
-
-def tableview_by_IDs(data, IDs_dataframe, IDs_column_name):
-    """Create a tabular view of a CGMES triplet dataset filtered by IDs.
-
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        Triplet dataset containing CGMES data.
-    IDs_dataframe : pandas.DataFrame
-        DataFrame containing IDs to filter by.
-    IDs_column_name : str
-        Column name in IDs_dataframe containing IDs (e.g., 'PowerTransformer.ID').
-
-    Returns
-    -------
-    pandas.DataFrame
-        Pivoted DataFrame with IDs as index and KEYs as columns.
-
-    Examples
-    --------
-    >>> table = tableview_by_IDs(data, ids_df, 'PowerTransformer.ID')
-    """
-    class_name = IDs_column_name.split(".")[1]
-    meta_separator = "_"
-    result = pandas.merge(IDs_dataframe, data,
-                          left_on  = IDs_column_name,
-                          right_on = "ID",
-                          how      = "inner",
-                          suffixes=('', meta_separator + class_name))\
-                          [["ID_" + class_name, "KEY", "VALUE"]].\
-                          drop_duplicates(["ID" + meta_separator + class_name, "KEY"]).\
-                          pivot(index="ID" + meta_separator + class_name, columns ="KEY")["VALUE"]
-
-    return result
 
 def get_limits(data):
     """Retrieve operational limits from a CGMES dataset, including equipment types.

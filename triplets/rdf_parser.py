@@ -541,6 +541,56 @@ def key_tableview(data, key_name, string_to_number=True):
     return data_view
 
 
+
+def id_tableview(data, id, string_to_number=True):
+    """Create a tabular view of a CGMES triplet dataset filtered by ID-s.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    id : str or list or pandas.DataFrame
+        DataFrame containing IDs to filter by.
+    string_to_number : bool, optional
+        If True, convert columns containing numbers to numeric types (default is True).
+
+
+    Returns
+    -------
+    pandas.DataFrame
+        Pivoted DataFrame with IDs as index and KEYs as columns.
+
+    Examples
+    --------
+    >>> table = id_tableview(data, 'UUID')
+    >>> table = id_tableview(data, ['UUID_1', 'UUID_2'])
+    >>> table = id_tableview(data, pandas.DataFrame({"ID":['UUID_1', 'UUID_2']})
+    """
+    if isinstance(id, str):
+        id = [id]
+
+    if isinstance(id, list):
+        id = pandas.DataFrame({"ID": id})
+
+    id_data = filter_by_triplet(data, id)
+
+    if id_data.empty:
+        logger.warning(f'No data available for {id}')
+        return None
+
+    data_view = id_data.drop_duplicates(["ID", "KEY"]).pivot(index="ID", columns ="KEY")["VALUE"]
+
+    if string_to_number:
+        # Convert to data type to numeric in columns that contain only numbers (for easier data usage later on)
+        for column in data_view.columns:
+            try:
+                data_view[column] = pandas.to_numeric(data_view[column], errors="raise")
+            except (ValueError, TypeError):
+                pass
+
+    return data_view
+
+
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.key_tableview = key_tableview
 
@@ -1597,7 +1647,32 @@ def remove_triplet_from_triplet(from_triplet, what_triplet, columns=["ID", "KEY"
     return from_triplet.drop(from_triplet.reset_index().merge(what_triplet[columns], on=columns, how="inner")["index"], axis=0)
 
 
-def filter_triplet_by_type(triplet, type):
+def filter_by_triplet(data, filter_triplet):
+    """Filter riplet DataFrame using IDs from another DataFrame.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    filter_triplet : pandas.DataFrame
+        DataFrame containing atleast colum ID to filter by.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Filtered DataFrame with columns ['ID, 'KEY', 'VALUE', 'INSTANCE_ID'].
+
+    Examples
+    --------
+    >>> filtered = filter_by_triplet(data, filter_triplet)
+    """
+
+    return data.merge(filter_triplet[["ID"]], on="ID", how="inner")
+
+pandas.filter_triplet_by_triplet = filter_by_triplet
+
+
+def filter_by_type(data, type_name, type_key="Type"):
     """Filter triplet dataset by objects of a specific type.
 
     Parameters
