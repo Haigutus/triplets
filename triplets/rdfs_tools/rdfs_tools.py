@@ -15,6 +15,18 @@ pandas.set_option('display.max_colwidth', None)
 def get_owl_metadata(data):
     """Returns metadata about Profile defined in RDFS OWL Ontology"""
     return data.merge(data.query("KEY == 'type' and VALUE == 'http://www.w3.org/2002/07/owl#Ontology'").ID).set_index("KEY")["VALUE"]
+
+def get_profile_metadata(data):
+    """Returns metadata about CIM profile defined in RDFS"""
+
+    profile_domain = data.query("VALUE == 'baseUML'")["ID"].to_list()[0].split(".")[0]
+    profile_metadata = data[data.ID.str.contains(profile_domain)].query("KEY == 'isFixed'").copy(deep=True)
+
+    profile_metadata["ID"] = profile_metadata.ID.str.split("#", expand=True)[1].str.split(".", expand=True)[1]
+
+    return profile_metadata.set_index("ID")["VALUE"]
+
+
 def list_of_files(root_path, file_extension, go_deep=False):
 
     path_list = [root_path]
@@ -180,15 +192,7 @@ def concrete_classes_list(data):
     return list(data.query("VALUE == 'http://iec.ch/TC57/NonStandard/UML#concrete'")["ID"])
 
 
-def get_profile_metadata(data):
-    """Returns metadata about CIM profile defined in RDFS"""
 
-    profile_domain = data.query("VALUE == 'baseUML'")["ID"].to_list()[0].split(".")[0]
-    profile_metadata = data[data.ID.str.contains(profile_domain)].query("KEY == 'isFixed'").copy(deep=True)
-
-    profile_metadata["ID"] = profile_metadata.ID.str.split("#", expand=True)[1].str.split(".", expand=True)[1]
-
-    return profile_metadata.set_index("ID")["VALUE"]
 
 # Full Model class is missing in RDFS, thus added here manually # TODO add Supersedes
 fullmodel_conf = { "FullModel": {
@@ -256,7 +260,7 @@ def dangling_references(data, relation_names):
 
 if __name__ == '__main__':
 
-    path = r"..\profiles\ENTSOE\2019-05-09_RDFS_CGMES_2_4_15\EquipmentProfileCoreOperationShortCircuitRDFSAugmented-v2_4_15-09May2019.rdf"
+    path = r"../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreOperationShortCircuitRDFSAugmented-v2_4_15-4Sep2020.rdf"
 
     data = load_all_to_dataframe([path])
 

@@ -42,18 +42,6 @@ cgmes_data_types_map = {
  'Frequency': 'xsd:float',
  'Temperature': 'xsd:float'}
 
-
-
-path = r"rdfs/ObjectRegistryProfile_RDFSv2020_21Sep2022.rdf"
-#path = r"rdfs/DocumentHeaderProfile_RDFSv2020_21Sep2022.rdf"
-path = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
-path = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_NC/ObjectRegistryProfile_v2_1_1_RDFSv2020_12Jun2023.rdf"
-
-
-
-
-#add_header = True
-
 cim_serializations = {
 "552_ED1": {
     "id_attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}ID",
@@ -77,7 +65,7 @@ cim_serializations = {
     }
 }
 
-def convert(rdf_schema, serialization_version="552_ED2"):
+def convert(data, serialization_version="552_ED2"):
 
 
 
@@ -93,9 +81,6 @@ def convert(rdf_schema, serialization_version="552_ED2"):
     enumeration_attribute = cim_serializations[serialization_version]["enumeration_attribute"]
     enumeration_prefix = cim_serializations[serialization_version]["enumeration_prefix"]
 
-
-    data = load_all_to_dataframe(rdf_schema)
-
     # Dictionary to keep all configurations
     conf_dict = {}
 
@@ -106,7 +91,7 @@ def convert(rdf_schema, serialization_version="552_ED2"):
         profile_data = data.query(f"INSTANCE_ID == '{profile}'")
 
         # Get current profile metadata
-        metadata = get_owl_metadata(profile_data).to_dict()
+        metadata = get_metadata(profile_data).to_dict()
         profile_name = metadata["keyword"]
 
         # Get namspace map
@@ -192,36 +177,39 @@ def convert(rdf_schema, serialization_version="552_ED2"):
                     parameter_def["range"] = parameter_dict["range"]
 
                 else:
-                    data_type = parameter_dict.get("dataType", "nan")
+                    data_type = parameter_dict.get("dataType")
 
                     # If regular parameter
-                    if str(data_type) != "nan":
+                    if data_type:
 
                         # Get the parameter data type
                         data_type_namespace, data_type_name = data_type.split("#")
-                        data_type_meta = data.get_object_data(data_type).to_dict()
 
-                        if data_type_namespace == "":
-                            data_type_namespace = xml_base
+                        # Add only, if not already present
+                        if not conf_dict[profile_name].get(data_type_name):
+                            data_type_meta = data.get_object_data(data_type).to_dict()
 
-                        data_type_def = {
-                            "description": data_type_meta.get("comment", ""),
-                            "type": data_type_meta.get("stereotype", ""),
-                            "xsd:type": cgmes_data_types_map.get(data_type_name, ""),
-                            "namespace": data_type_namespace
-                        }
+                            if data_type_namespace == "":
+                                data_type_namespace = xml_base
 
-                        # Add data type to export
-                        conf_dict[profile_name][data_type_name] = data_type_def
+                            data_type_def = {
+                                "description": data_type_meta.get("comment", ""),
+                                "type": data_type_meta.get("stereotype", ""),
+                                "xsd:type": cgmes_data_types_map.get(data_type_name, ""),
+                                "namespace": data_type_namespace
+                            }
 
-                        # Add data type to parameter definition
-                        parameter_def["type"] = data_type_name
+                            # Add data type to export
+                            conf_dict[profile_name][data_type_name] = data_type_def
+
+                            # Add data type to parameter definition
+                            parameter_def["type"] = data_type_name
 
                     # If enumeration
                     else:
                         parameter_def["attrib"] = {
                                                       "attribute": enumeration_attribute,
-                                                      "value_prefix": enumeration_prefix
+                                                      "value_prefix": enumeration_prefix # TODO - prefix should be used per value
                                                   }
                         parameter_def["type"] = "Enumeration"
                         parameter_def["xsd:type"] = "xsd:anyURI"
@@ -268,6 +256,31 @@ def convert(rdf_schema, serialization_version="552_ED2"):
 #         conf_dict[profile_name].update(new_fullmodel_conf)
 
 # Export conf
+
+def get_metadata(data):
+
+    # OWL metadata
+    metadata = get_owl_metadata(data)
+
+    # Get some data from category
+    category = data.merge(data.query("VALUE == 'http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#ClassCategory'")["ID"])
+    category = category[category.ID.str.contains("Profile")]
+    category_metadata = category.query("KEY == 'label' or KEY == 'comment'")[["KEY", "VALUE"]].set_index("KEY")["VALUE"]
+
+
+    if metadata.empty:
+        # Older CGMES 2.4 ENTSO-E CIM RDFS metadata
+        metadata = get_profile_metadata(data)
+        metadata["publisher"] = "ENTSO-E"
+        metadata["title"] = metadata["shortName"]
+        metadata["keyword"] = metadata["shortName"]
+        metadata["versionInfo"] = "2.4.15"
+        metadata["modified"] = metadata["date"]
+
+    metadata = pandas.concat([metadata, category_metadata])
+
+    return metadata
+
 
 if __name__ == '__main__':
 
