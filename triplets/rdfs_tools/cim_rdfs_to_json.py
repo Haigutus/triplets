@@ -65,9 +65,15 @@ cim_serializations = {
     }
 }
 
-def convert(data, serialization_version="552_ED2"):
+def get_namespace_map(data: pandas.DataFrame):
+    """Extract namespace map from data."""
+    namespace_map = data.merge(data.query("KEY == 'Type' and VALUE == 'NamespaceMap'").ID).set_index("KEY")["VALUE"].to_dict()
+    namespace_map.pop("Type", None)
+    xml_base = namespace_map.pop("xml_base", None)
+    return namespace_map, xml_base
 
 
+def convert_profile(profile_data, serialization_version="552_ED2"):
 
     id_attribute = cim_serializations[serialization_version]["id_attribute"]
     id_prefix = cim_serializations[serialization_version]["id_prefix"]
@@ -81,7 +87,170 @@ def convert(data, serialization_version="552_ED2"):
     enumeration_attribute = cim_serializations[serialization_version]["enumeration_attribute"]
     enumeration_prefix = cim_serializations[serialization_version]["enumeration_prefix"]
 
-    # Dictionary to keep all configurations
+    # Get namspace map
+    namespace_map, xml_base = get_namespace_map(profile_data)
+
+    # Dictionary to keep current profile schema
+    profile = {}
+    profile["NamespaceMap"] = namespace_map
+    profile["XMLBase"] = xml_base
+
+    classes_defined_externally = profile_data.query("KEY == 'stereotype' and VALUE == 'Description'").ID.to_list()
+
+    # Add concrete classes
+    for concrete_class in concrete_classes_list(profile_data):
+
+        # Define class namespace
+        class_namespace, class_name = concrete_class.split("#")
+
+        class_meta = profile_data.get_object_data(concrete_class).to_dict()
+
+        if class_namespace == "":
+            class_namespace = xml_base
+        else:
+            class_namespace = class_namespace + "#"
+
+        # ----------------------------------------------------------------------
+        # 1. Decide *how* the class is identified in the XML output
+        # ----------------------------------------------------------------------
+        #   * If the class lives **inside** this profile → use the normal RDF-ID
+        #   * If the class is **imported** from another profile (EQ, TP, …) → use
+        #     the “about” attribute (the class already has a global URI)
+        # ----------------------------------------------------------------------
+        class_is_local = concrete_class not in classes_defined_externally
+        class_ID_attribute = id_attribute if class_is_local else about_attribute
+        class_ID_prefix = id_prefix if class_is_local else about_prefix
+
+
+        # Add class definition
+        profile[class_name] = {
+            "attrib": {
+                "attribute": class_ID_attribute,
+                "value_prefix": class_ID_prefix
+            },
+            "type": "Class",
+            "stereotyped": not class_is_local,
+            "namespace": class_namespace,
+            "description": class_meta.get("comment", ""),
+            "parameters": []
+        }
+
+        # Add attributes
+
+        for parameter, parameter_meta in parameters_tableview_all(profile_data, concrete_class).iterrows():
+
+            parameter_dict = parameter_meta.to_dict()
+
+            print(parameter_dict)
+
+            # TODO - export this and add it to Association metadata
+            association_used = parameter_dict.get("AssociationUsed")
+
+            # If it is association but not used, we don't export it
+            if association_used == 'No':
+                continue
+
+            # If it is used association or regular parameter, then we need the name and namespace
+            parameter_namespace, parameter_name = parameter.split("#")
+
+            if parameter_namespace == "":
+                parameter_namespace = xml_base
+
+            else:
+                parameter_namespace = parameter_namespace + "#"
+
+            parameter_def = {
+                "description": parameter_dict.get("comment", ""),
+                "multiplicity": parameter_dict["multiplicity"].split("#M:")[1],
+                "namespace": parameter_namespace
+            }
+
+            parameter_def["xsd:minOccours"], parameter_def["xsd:maxOccours"] = parse_multiplicity(parameter_dict["multiplicity"])
+
+            # If association
+            if association_used == 'Yes':
+                parameter_def["attrib"] = {
+                    "attribute": resource_attribute,
+                    "value_prefix": resource_prefix
+                }
+
+                parameter_def["type"] = "Association"
+                parameter_def["xsd:type"] = "xsd:anyURI"
+                parameter_def["range"] = parameter_dict["range"]
+
+            else:
+                data_type = parameter_dict.get("dataType")
+
+                # If regular attribute, find its data type and add to export
+                if data_type:
+
+                    # Set parameter type to Attribute
+                    parameter_def["type"] = "Attribute"
+
+                    # Get the attribute data type and add to export
+                    data_type_namespace, data_type_name = data_type.split("#")
+
+                    data_type_meta = data.get_object_data(data_type).to_dict()
+
+                    if data_type_namespace == "":
+                        data_type_namespace = xml_base
+
+                    data_type_def = {
+                        "description": data_type_meta.get("comment", ""),
+                        "type": data_type_meta.get("stereotype", ""),
+                        "xsd:type": cgmes_data_types_map.get(data_type_name, ""),
+                        "namespace": data_type_namespace
+                    }
+
+                    # Add data type to export
+                    profile[data_type_name] = data_type_def
+
+                    # Add data type to attribute definition
+                    parameter_def["dataType"] = data_type_name
+                    parameter_def["xsd:type"] = data_type_def["xsd:type"]
+
+                # If enumeration
+                else:
+                    parameter_def["attrib"] = {
+                        "attribute": enumeration_attribute,
+                        "value_prefix": enumeration_prefix  # TODO - prefix should be used per value
+                    }
+                    parameter_def["type"] = "Enumeration"
+                    parameter_def["xsd:type"] = "xsd:anyURI"
+                    parameter_def["range"] = parameter_dict["range"].replace("#", "")
+                    parameter_def["values"] = []
+
+                    # Add allowed values
+                    values = profile_data.query(f"VALUE == '{parameter_dict['range']}' and KEY == 'type'").ID.tolist()
+
+                    for value in values:
+
+                        value_namespace, value_name = value.split("#")
+                        value_meta = data.get_object_data(value).to_dict()
+
+                        if value_namespace == "":
+                            value_namespace = xml_base
+
+                        value_def = {
+                            "description": value_meta.get("comment", ""),
+                            "namespace": value_namespace,
+                            "type": "EnumerationValue"
+                        }
+
+                        parameter_def["values"].append(value_name)
+                        profile[value_name] = value_def
+
+            # Add parameter definition
+            profile[parameter_name] = parameter_def
+
+            # Add to class
+            profile[class_name]["parameters"].append(parameter_name)
+
+    return profile
+
+def convert(data, serialization_version="552_ED2"):
+
+   # Dictionary to keep all configurations
     conf_dict = {}
 
     # For each profile in loaded RDFS
@@ -94,153 +263,12 @@ def convert(data, serialization_version="552_ED2"):
         metadata = get_metadata(profile_data).to_dict()
         profile_name = metadata["keyword"]
 
-        # Get namspace map
-        namespace_map = data.merge(data.query("KEY == 'Type' and VALUE == 'NamespaceMap'").ID).set_index("KEY")["VALUE"].to_dict()
-        namespace_map.pop("Type", None)
-        xml_base = namespace_map.pop("xml_base", None)
+        profile = {"ProfileMetadata": metadata}
 
-        # Dictionary to keep current profile schema
-        conf_dict[profile_name] = {}
-        conf_dict[profile_name]["NamespaceMap"] = namespace_map
-
-        classes_defined_externally = profile_data.query("KEY == 'stereotype' and VALUE == 'Description'").ID.to_list()
-
-        # Add concrete classes
-        for concrete_class in concrete_classes_list(profile_data):
-
-            # Define class namespace
-            class_namespace, class_name = concrete_class.split("#")
-
-            class_meta = profile_data.get_object_data(concrete_class).to_dict()
-
-            if class_namespace == "":
-                class_namespace = xml_base
-            else:
-                class_namespace = class_namespace + "#"
-
-            class_ID_attribute = id_attribute
-            class_ID_prefix = id_prefix
-
-            if concrete_class in classes_defined_externally:
-                class_ID_attribute = about_attribute
-                class_ID_prefix = about_prefix
-
-            # Add class definition
-            conf_dict[profile_name][class_name] = {
-                                                    "attrib": {
-                                                                "attribute": class_ID_attribute,
-                                                                "value_prefix": class_ID_prefix
-                                                             },
-                                                    "namespace": class_namespace,
-                                                    "description": class_meta.get("comment", ""),
-                                                    "parameters": []
-                                                    }
-
-            # Add attributes
-
-            for parameter, parameter_meta in parameters_tableview_all(profile_data, concrete_class).iterrows():
-
-                parameter_dict = parameter_meta.to_dict()
-
-                association_used = parameter_dict.get("AssociationUsed", "NaN")
-
-                # If it is association but not used, we don't export it
-                if association_used == 'No':
-                    continue
-
-                # If it is used association or regular parameter, then we need the name and namespace
-                parameter_namespace, parameter_name = parameter.split("#")
-
-                if parameter_namespace == "":
-                    parameter_namespace = xml_base
-
-                else:
-                    parameter_namespace = parameter_namespace + "#"
-
-                parameter_def = {
-                    "description": parameter_dict.get("comment", ""),
-                    "multiplicity": parameter_dict["multiplicity"].split("#M:")[1],
-                    "namespace": parameter_namespace
-                }
-
-                parameter_def["xsd:minOccours"], parameter_def["xsd:maxOccours"] = parse_multiplicity(parameter_dict["multiplicity"])
-
-                # If association
-                if association_used == 'Yes':
-                    parameter_def["attrib"] = {
-                                                   "attribute": resource_attribute,
-                                                   "value_prefix": resource_prefix
-                                              }
-
-                    parameter_def["type"] = "Association"
-                    parameter_def["xsd:type"] = "xsd:anyURI"
-                    parameter_def["range"] = parameter_dict["range"]
-
-                else:
-                    data_type = parameter_dict.get("dataType")
-
-                    # If regular parameter
-                    if data_type:
-
-                        # Get the parameter data type
-                        data_type_namespace, data_type_name = data_type.split("#")
-
-                        # Add only, if not already present
-                        if not conf_dict[profile_name].get(data_type_name):
-                            data_type_meta = data.get_object_data(data_type).to_dict()
-
-                            if data_type_namespace == "":
-                                data_type_namespace = xml_base
-
-                            data_type_def = {
-                                "description": data_type_meta.get("comment", ""),
-                                "type": data_type_meta.get("stereotype", ""),
-                                "xsd:type": cgmes_data_types_map.get(data_type_name, ""),
-                                "namespace": data_type_namespace
-                            }
-
-                            # Add data type to export
-                            conf_dict[profile_name][data_type_name] = data_type_def
-
-                            # Add data type to parameter definition
-                            parameter_def["type"] = data_type_name
-
-                    # If enumeration
-                    else:
-                        parameter_def["attrib"] = {
-                                                      "attribute": enumeration_attribute,
-                                                      "value_prefix": enumeration_prefix # TODO - prefix should be used per value
-                                                  }
-                        parameter_def["type"] = "Enumeration"
-                        parameter_def["xsd:type"] = "xsd:anyURI"
-                        parameter_def["range"] = parameter_dict["range"].replace("#", "")
-                        parameter_def["values"] = []
-
-                        # Add allowed values
-                        values = profile_data.query(f"VALUE == '{parameter_dict['range']}' and KEY == 'type'").ID.tolist()
-
-                        for value in values:
-
-                            value_namespace, value_name = value.split("#")
-                            value_meta = data.get_object_data(value).to_dict()
-
-                            if value_namespace == "":
-                                value_namespace = xml_base
-
-                            value_def = {
-                                "description": value_meta.get("comment", ""),
-                                "namespace": value_namespace
-                            }
-
-                            parameter_def["values"].append(value_name)
-                            conf_dict[profile_name][value_name] = value_def
+        profile.update(convert_profile(profile_data, serialization_version))
 
 
-                # Add parameter definition
-                conf_dict[profile_name][parameter_name] = parameter_def
-
-                # Add to class
-                conf_dict[profile_name][class_name]["parameters"].append(parameter_name)
+        conf_dict[profile_name] = profile
 
     return conf_dict
 
@@ -289,8 +317,46 @@ if __name__ == '__main__':
                         format='%(levelname) -10s %(asctime)s %(name) -30s %(funcName) -35s %(lineno) -5d: %(message)s',
                         level=logging.DEBUG)
 
-    file_name = "../export_schema/{publisher}_{title}_{versionInfo}_{modified}.json".format(**metadata)
+
+    path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
+    #path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/DatasetMetadata/CurrentRelease/RDFS/DatasetMetadata-AP-Voc-RDFS2020_v3-0-0.rdf"
+    #path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/DatasetMetadata/PastReleases/RDFS/Header-AP-Voc-RDFS2020_v2-3-5.rdf"
+
+    serialization_version = "552_ED2"
+
+    data = load_all_to_dataframe(path)
+
+    metadata = get_metadata(data)
+
+    conf_dict = convert(data, serialization_version)
+
+    metadata["serialization_version"] = serialization_version
+
+    file_name = "../export_schema/{publisher}_{label}_{versionInfo}_{modified}_{serialization_version}.json".format(**metadata.to_dict())
+    #file_name = "../export_schema/ENTSO-E_FileHeaderProfile_3.0.0_2019-07-26.json"
 
 
     with open(file_name, "w") as file_object:
         json.dump(conf_dict, file_object, indent=4)
+
+    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
+    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
+    # path = r"../../rdfs/ENTSOE_CGMES_3.0.1/FileHeader_RDFS2019.rdf"
+    # path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/CGMES/RDFS/61970-600-2_Header-AP-Voc-RDFS2019_v3-0-0.rdf"
+    # path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/CGMES/RDFS/61970-600-2_Equipment-AP-Voc-RDFS2020_v3-0-0.rdf"
+    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
+    path = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_CGMES_3.0.1/IEC61970-600-2_CGMES_3_0_0_RDFS2020_EQ.rdf"
+
+
+
+    # path_new = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_CGMES_3.0.1/IEC61970-600-2_CGMES_3_0_0_RDFS2020_SSH.rdf"
+    # path_old = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_CGMES_2.4.15/SteadyStateHypothesisProfileRDFSAugmented-v2_4_15-4Sep2020.rdf"
+    # path_old = r"../../rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
+    #
+    # data_new = load_all_to_dataframe(path_new)
+    # print(data.merge(data.query("KEY == 'type' and VALUE == 'http://www.w3.org/2002/07/owl#Ontology'").ID))
+    #
+    # data_old = load_all_to_dataframe(path_old)
+    # profile_domain = data_old.query("VALUE == 'baseUML'")["ID"].to_list()[0].split(".")[0]
+    # print(data_old[data_old.ID.str.contains(profile_domain)].query("KEY == 'isFixed'"))
+
