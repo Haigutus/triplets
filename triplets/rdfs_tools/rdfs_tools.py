@@ -6,7 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-pandas.set_option("display.max_rows", 15)
+pandas.set_option("display.max_rows", 20)
 pandas.set_option("display.max_columns", 8)
 pandas.set_option("display.width", 1000)
 pandas.set_option('display.max_colwidth', None)
@@ -27,43 +27,33 @@ def get_profile_metadata(data):
     return profile_metadata.set_index("ID")["VALUE"]
 
 
-def list_of_files(root_path, file_extension, go_deep=False):
-
-    path_list = [root_path]
+def list_of_files(root_path, file_extension, deep=False):
 
     matches = []
+    root_path = os.path.abspath(root_path)
+    ext = file_extension.lower()
 
-    for path in path_list:
+    if not os.path.exists(root_path):
+        print(f"Path does not exist: {root_path}")
+        return []
 
-        if os.path.isdir(path) == True:
-            print("{} is not a path".format(path))
+    if os.path.isfile(root_path):
+        return [root_path] if root_path.lower().endswith(ext) else []
 
-            for filename in os.listdir(path):
-
-                full_path = os.path.join(path, filename)
-
-                if filename.lower().endswith(file_extension.lower()):
-                    matches.append(full_path)
-
-                else:
-                    print("Not a {} file: {}".format(file_extension, filename))
-
-                    if go_deep == True:
-                        print("Adding path to futher processing -> {}".format(full_path))
-                        path_list.append(full_path)
-
-
-def list_of_files(path, file_extension):
-
-    matches = []
-    for filename in os.listdir(path):
-
-        if filename.lower().endswith(file_extension.lower()):
-            matches.append(os.path.join(path, filename))
-        else:
-            print("Not a {} file: {}".format(file_extension, filename))
+    # Directory case
+    if deep:
+        for dirpath, _, filenames in os.walk(root_path):
+            for filename in filenames:
+                if filename.lower().endswith(ext):
+                    matches.append(os.path.join(dirpath, filename))
+    else:
+        for filename in os.listdir(root_path):
+            full_path = os.path.join(root_path, filename)
+            if os.path.isfile(full_path) and filename.lower().endswith(ext):
+                matches.append(full_path)
 
     return matches
+
 
 
 def get_class_parameters(data, class_name):
@@ -79,7 +69,7 @@ def get_class_parameters(data, class_name):
 
     # Usually only one inheritance, warn if not
     if len(class_data["extends"]) > 1:
-        print(f"WARNING - {class_name} is inheriting form more than one class -> {class_data['extends']}")
+        logger.warning(f"{class_name} is inheriting form more than one class -> {class_data['extends']}")
 
     return class_data
 
@@ -101,17 +91,17 @@ def get_all_class_parameters(data, class_name):
         # Add classes that this class extends to processing
         class_name_list.extend(class_data["extends"])
 
-    print("Inheritance sequence")  # TODO add this as a output
-    print(" -> ".join(class_name_list))
+    logger.info("Inheritance sequence")  # TODO add this as a output
+    logger.info(" -> ".join(class_name_list))
 
-    return all_class_parameters
+    return all_class_parameters, class_name_list
 
 
 def parameters_tableview_all(data, class_name):
     """Provide class name to get table of all class parameters"""
 
     # Get All parameter names of class (natural and inherited)
-    all_class_parameters = get_all_class_parameters(data, class_name)
+    all_class_parameters, inheritance = get_all_class_parameters(data, class_name)
 
     # Get parameters data
     type_data = all_class_parameters[["ID"]].merge(data, on="ID").drop_duplicates(["ID", "KEY"])
@@ -119,7 +109,7 @@ def parameters_tableview_all(data, class_name):
     # Pivot to table
     data_view = type_data.pivot(index="ID", columns="KEY")["VALUE"]
 
-    return data_view
+    return data_view, inheritance
 
 
 def parameters_tableview(data, class_name):
@@ -145,7 +135,7 @@ def parameters_tableview(data, class_name):
 def validation_view(data, class_name):
 
 
-    data_view = parameters_tableview_all(data, class_name)
+    data_view, _ = parameters_tableview_all(data, class_name)
 
     validation_data = multiplicity_to_XSD_format(data_view)
 
@@ -167,10 +157,15 @@ def multiplicity_to_XSD_format(data_table_view):
 
 def get_namespace_and_name(uri, default_namespace):
 
-    namespace, name = uri.split("#")
+    separator = "#" if "#" in uri else "/"
+
+    namespace, name = uri.rsplit(separator, maxsplit=1)
 
     if namespace == "":
-        namespace = default_namespace.replace("#", "")
+        namespace = default_namespace
+
+    namespace = f"{namespace}{separator}"
+
 
     return namespace, name
 

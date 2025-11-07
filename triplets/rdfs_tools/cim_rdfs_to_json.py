@@ -1,4 +1,8 @@
 import json
+from multiprocessing.sharedctypes import class_cache
+
+from six import class_types
+
 from triplets.rdfs_tools import *
 import logging
 
@@ -40,7 +44,10 @@ cgmes_data_types_map = {
  'CapacitancePerLength': 'xsd:float',
  'Decimal': 'xsd:float',
  'Frequency': 'xsd:float',
- 'Temperature': 'xsd:float'}
+ 'Temperature': 'xsd:float',
+ "IRI": "xsd:anyURI",
+ "URI": "xsd:anyURI"
+}
 
 cim_serializations = {
 "552_ED1": {
@@ -92,8 +99,8 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
     # Dictionary to keep current profile schema
     profile = {}
-    profile["NamespaceMap"] = namespace_map
-    profile["XMLBase"] = xml_base
+    profile["ProfileNamespaceMap"] = namespace_map
+    profile["ProfileXMLBase"] = xml_base
 
     classes_defined_externally = profile_data.query("KEY == 'stereotype' and VALUE == 'Description'").ID.to_list()
 
@@ -101,14 +108,9 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
     for concrete_class in concrete_classes_list(profile_data):
 
         # Define class namespace
-        class_namespace, class_name = concrete_class.split("#")
+        class_namespace, class_name = get_namespace_and_name(concrete_class, default_namespace=xml_base)
 
         class_meta = profile_data.get_object_data(concrete_class).to_dict()
-
-        if class_namespace == "":
-            class_namespace = xml_base
-        else:
-            class_namespace = class_namespace + "#"
 
         # ----------------------------------------------------------------------
         # 1. Decide *how* the class is identified in the XML output
@@ -121,6 +123,8 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
         class_ID_attribute = id_attribute if class_is_local else about_attribute
         class_ID_prefix = id_prefix if class_is_local else about_prefix
 
+        class_parameters_table, class_inheritance = parameters_tableview_all(profile_data, concrete_class)
+
 
         # Add class definition
         profile[class_name] = {
@@ -129,6 +133,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 "value_prefix": class_ID_prefix
             },
             "type": "Class",
+            "inheritance": class_inheritance,
             "stereotyped": not class_is_local,
             "namespace": class_namespace,
             "description": class_meta.get("comment", ""),
@@ -137,11 +142,9 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
         # Add attributes
 
-        for parameter, parameter_meta in parameters_tableview_all(profile_data, concrete_class).iterrows():
+        for parameter, parameter_meta in class_parameters_table.iterrows():
 
             parameter_dict = parameter_meta.to_dict()
-
-            print(parameter_dict)
 
             # TODO - export this and add it to Association metadata
             association_used = parameter_dict.get("AssociationUsed")
@@ -150,14 +153,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
             if association_used == 'No':
                 continue
 
-            # If it is used association or regular parameter, then we need the name and namespace
-            parameter_namespace, parameter_name = parameter.split("#")
-
-            if parameter_namespace == "":
-                parameter_namespace = xml_base
-
-            else:
-                parameter_namespace = parameter_namespace + "#"
+            parameter_namespace, parameter_name = get_namespace_and_name(parameter, default_namespace=xml_base)
 
             parameter_def = {
                 "description": parameter_dict.get("comment", ""),
@@ -188,9 +184,9 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                     parameter_def["type"] = "Attribute"
 
                     # Get the attribute data type and add to export
-                    data_type_namespace, data_type_name = data_type.split("#")
+                    data_type_namespace, data_type_name = get_namespace_and_name(data_type, default_namespace=xml_base)
 
-                    data_type_meta = data.get_object_data(data_type).to_dict()
+                    data_type_meta = profile_data.get_object_data(data_type).to_dict()
 
                     if data_type_namespace == "":
                         data_type_namespace = xml_base
@@ -225,7 +221,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
                     for value in values:
 
-                        value_namespace, value_name = value.split("#")
+                        value_namespace, value_name = get_namespace_and_name(value, default_namespace=xml_base)
                         value_meta = data.get_object_data(value).to_dict()
 
                         if value_namespace == "":
@@ -251,7 +247,8 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 def convert(data, serialization_version="552_ED2"):
 
    # Dictionary to keep all configurations
-    conf_dict = {}
+    #conf_dict = {}
+    conf_list = []
 
     # For each profile in loaded RDFS
     profiles = data["INSTANCE_ID"].unique()
@@ -261,29 +258,28 @@ def convert(data, serialization_version="552_ED2"):
 
         # Get current profile metadata
         metadata = get_metadata(profile_data).to_dict()
-        profile_name = metadata["keyword"]
+        metadata["serialization"] = serialization_version
+        #profile_name = metadata["keyword"]
 
         profile = {"ProfileMetadata": metadata}
 
         profile.update(convert_profile(profile_data, serialization_version))
 
+        #conf_dict[profile_name] = profile
+        conf_list.append(profile)
 
-        conf_dict[profile_name] = profile
+    return conf_list
 
-    return conf_dict
+def insert_profile_into_profile(insert_to, insert_what, subset=None):
+
+    insert_to = insert_to.copy()
+
+    insert_to.update(insert_what.get(subset, insert_what))
+
+    return insert_to
 
 
 
-# Add FullModel definiton
-
-# if add_header:
-#     with open("ENTSO-E_Document header vocabulary_2.1.0_2022-07-21.json", "r") as file_object:
-#         new_fullmodel_conf = json.load(file_object)["DH"]
-#
-#     for profile_name in conf_dict:
-#         conf_dict[profile_name].update(new_fullmodel_conf)
-
-# Export conf
 
 def get_metadata(data):
 
@@ -297,17 +293,40 @@ def get_metadata(data):
 
 
     if metadata.empty:
-        # Older CGMES 2.4 ENTSO-E CIM RDFS metadata
+        # Make Older CGMES 2.4 ENTSO-E CIM RDFS metadata compatible with new owl based metadata
         metadata = get_profile_metadata(data)
         metadata["publisher"] = "ENTSO-E"
         metadata["title"] = metadata["shortName"]
         metadata["keyword"] = metadata["shortName"]
-        metadata["versionInfo"] = "2.4.15"
+        metadata["versionInfo"] = uml.split("v")[-1] if (uml := metadata.get("entsoeUML")) else ""
         metadata["modified"] = metadata["date"]
 
     metadata = pandas.concat([metadata, category_metadata])
+    metadata["title"] = data.type_tableview("Distribution").label.iloc[0].rsplit("/",1)[-1]
 
     return metadata
+
+
+def export_single_profile(path, serialization_version="552_ED2", additional_metadata=None):
+
+    data = load_all_to_dataframe(path)
+
+    metadata = get_metadata(data).to_dict()
+
+    if additional_metadata:
+        metadata.update(additional_metadata)
+
+    conf_dict = convert(data, serialization_version)
+
+    metadata["serialization_version"] = serialization_version
+
+    file_name = "../export_schema/{publisher}_{label}_{versionInfo}_{modified}_{serialization_version}.json".format(**metadata)
+
+    with open(file_name, "w") as file_object:
+        json.dump(conf_dict, file_object, indent=4)
+
+    return conf_dict
+
 
 
 if __name__ == '__main__':
@@ -319,25 +338,15 @@ if __name__ == '__main__':
 
 
     path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
+    path = r"/rdfs/ENTSOE_FH/DatasetMetadata-AP-Voc-RDFS2020_v3-0-0.rdf"
+    path = r"/rdfs/ENTSOE_FH/Header-AP-Voc-RDFS2020_v2-3-5.rdf"
+    path = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
     #path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/DatasetMetadata/CurrentRelease/RDFS/DatasetMetadata-AP-Voc-RDFS2020_v3-0-0.rdf"
     #path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/DatasetMetadata/PastReleases/RDFS/Header-AP-Voc-RDFS2020_v2-3-5.rdf"
 
-    serialization_version = "552_ED2"
+    #serialization_version = "552_ED2"
 
-    data = load_all_to_dataframe(path)
-
-    metadata = get_metadata(data)
-
-    conf_dict = convert(data, serialization_version)
-
-    metadata["serialization_version"] = serialization_version
-
-    file_name = "../export_schema/{publisher}_{label}_{versionInfo}_{modified}_{serialization_version}.json".format(**metadata.to_dict())
-    #file_name = "../export_schema/ENTSO-E_FileHeaderProfile_3.0.0_2019-07-26.json"
-
-
-    with open(file_name, "w") as file_object:
-        json.dump(conf_dict, file_object, indent=4)
+    #export = export_single_profile(path, serialization_version)
 
     # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
     # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
@@ -345,7 +354,7 @@ if __name__ == '__main__':
     # path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/CGMES/RDFS/61970-600-2_Header-AP-Voc-RDFS2019_v3-0-0.rdf"
     # path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/CGMES/RDFS/61970-600-2_Equipment-AP-Voc-RDFS2020_v3-0-0.rdf"
     # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
-    path = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_CGMES_3.0.1/IEC61970-600-2_CGMES_3_0_0_RDFS2020_EQ.rdf"
+    # path = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_CGMES_3.0.1/IEC61970-600-2_CGMES_3_0_0_RDFS2020_EQ.rdf"
 
 
 
@@ -359,4 +368,62 @@ if __name__ == '__main__':
     # data_old = load_all_to_dataframe(path_old)
     # profile_domain = data_old.query("VALUE == 'baseUML'")["ID"].to_list()[0].split(".")[0]
     # print(data_old[data_old.ID.str.contains(profile_domain)].query("KEY == 'isFixed'"))
+
+    # Convert CGMES 2.4
+    from triplets import export_schema
+    # Conf
+    base_name = "ENTSOE_CGMES_2.4.15"
+    header_name = "Header-AP-Voc-RDFS2020_v2-3-5.rdf"
+    serialization_versions = ["552_ED1", "552_ED2"]
+
+    # Load Header
+    header_data = load_all_to_dataframe(rf"../../rdfs/ENTSOE_FH/{header_name}")
+    header_profile = convert_profile(header_data, serialization_version="552_ED2")
+    header_profile.pop("ProfileXMLBase")
+    header_namespace_map = header_profile.pop("ProfileNamespaceMap")
+
+    # Load Schema
+    files_list = list_of_files(rf"../../rdfs/{base_name}", ".rdf")
+    data = load_all_to_dataframe(files_list)
+
+    for serialization_version in serialization_versions:
+
+        merged_profiles = convert(data, serialization_version)
+
+        # Loaded Profiles Meta
+        loaded_meta = pandas.DataFrame([{"profileSize": len(meta), **meta["ProfileMetadata"]} for meta in merged_profiles])
+
+        # DataFrame with all largest profiles per keyword
+        filtered_meta = data.loc[loaded_meta.groupby("keyword")['profileSize'].idxmax()]
+
+        merged_profiles_filtered = {profile["ProfileMetadata"]["keyword"].replace("_", ""):profile for index, profile in enumerate(merged_profiles) if index in filtered_meta.index.to_list()}
+
+        for keyword in merged_profiles_filtered.keys():
+
+            # Insert Header to each profile
+            merged_profiles_filtered[keyword].update(header_profile)
+
+            # Add header namespaces to map, only if missing
+            merged_profiles_filtered[keyword]["ProfileNamespaceMap"].update({key: value for key, value in header_namespace_map.items() if key not in merged_profiles_filtered[keyword]["ProfileNamespaceMap"]})
+
+        export_file_name = f"../export_schema/{base_name}_{serialization_version}.json"
+
+        with open(export_file_name, "w") as file_object:
+            json.dump(merged_profiles_filtered, file_object, indent=4)
+
+
+
+
+    # Convert CGMES 3.0
+
+    # Add FullModel definiton
+
+    # if add_header:
+    #     with open("ENTSO-E_Document header vocabulary_2.1.0_2022-07-21.json", "r") as file_object:
+    #         new_fullmodel_conf = json.load(file_object)["DH"]
+    #
+    #     for profile_name in conf_dict:
+    #         conf_dict[profile_name].update(new_fullmodel_conf)
+
+    # Export conf
 
