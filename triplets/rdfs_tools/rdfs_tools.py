@@ -19,7 +19,13 @@ def get_owl_metadata(data):
 def get_profile_metadata(data):
     """Returns metadata about CIM profile defined in RDFS"""
 
-    profile_domain = data.query("VALUE == 'baseUML'")["ID"].to_list()[0].split(".")[0]
+    base_uml = data.query("VALUE == 'baseUML'")
+
+    if base_uml.empty:
+        logger.warning("Missing baseUML")
+        return pandas.DataFrame()
+
+    profile_domain = base_uml["ID"].to_list()[0].split(".")[0]
     profile_metadata = data[data.ID.str.contains(profile_domain)].query("KEY == 'isFixed'").copy(deep=True)
 
     profile_metadata["ID"] = profile_metadata.ID.str.split("#", expand=True)[1].str.split(".", expand=True)[1]
@@ -105,6 +111,10 @@ def parameters_tableview_all(data, class_name):
 
     # Get parameters data
     type_data = all_class_parameters[["ID"]].merge(data, on="ID").drop_duplicates(["ID", "KEY"])
+
+    if type_data.empty:
+        logger.warning(f"Could not find type data for {class_name}")
+        return pandas.DataFrame(), []
 
     # Pivot to table
     data_view = type_data.pivot(index="ID", columns="KEY")["VALUE"]

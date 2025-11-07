@@ -1,8 +1,4 @@
 import json
-from multiprocessing.sharedctypes import class_cache
-
-from six import class_types
-
 from triplets.rdfs_tools import *
 import logging
 
@@ -295,11 +291,14 @@ def get_metadata(data):
     if metadata.empty:
         # Make Older CGMES 2.4 ENTSO-E CIM RDFS metadata compatible with new owl based metadata
         metadata = get_profile_metadata(data)
-        metadata["publisher"] = "ENTSO-E"
-        metadata["title"] = metadata["shortName"]
-        metadata["keyword"] = metadata["shortName"]
-        metadata["versionInfo"] = uml.split("v")[-1] if (uml := metadata.get("entsoeUML")) else ""
-        metadata["modified"] = metadata["date"]
+
+        if not metadata.empty:
+
+            metadata["publisher"] = "ENTSO-E"
+            metadata["title"] = metadata["shortName"]
+            metadata["keyword"] = metadata["shortName"]
+            metadata["versionInfo"] = uml.split("v")[-1] if (uml := metadata.get("entsoeUML")) else ""
+            metadata["modified"] = metadata["date"]
 
     metadata = pandas.concat([metadata, category_metadata])
     metadata["title"] = data.type_tableview("Distribution").label.iloc[0].rsplit("/",1)[-1]
@@ -327,52 +326,55 @@ def export_single_profile(path, serialization_version="552_ED2", additional_meta
 
     return conf_dict
 
-
-
-if __name__ == '__main__':
-
-    import sys
-    logging.basicConfig(stream=sys.stdout,
-                        format='%(levelname) -10s %(asctime)s %(name) -30s %(funcName) -35s %(lineno) -5d: %(message)s',
-                        level=logging.DEBUG)
-
-
-    path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
-    path = r"/rdfs/ENTSOE_FH/DatasetMetadata-AP-Voc-RDFS2020_v3-0-0.rdf"
-    path = r"/rdfs/ENTSOE_FH/Header-AP-Voc-RDFS2020_v2-3-5.rdf"
-    path = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
-    #path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/DatasetMetadata/CurrentRelease/RDFS/DatasetMetadata-AP-Voc-RDFS2020_v3-0-0.rdf"
-    #path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/DatasetMetadata/PastReleases/RDFS/Header-AP-Voc-RDFS2020_v2-3-5.rdf"
-
-    #serialization_version = "552_ED2"
-
-    #export = export_single_profile(path, serialization_version)
-
-    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
-    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
-    # path = r"../../rdfs/ENTSOE_CGMES_3.0.1/FileHeader_RDFS2019.rdf"
-    # path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/CGMES/RDFS/61970-600-2_Header-AP-Voc-RDFS2019_v3-0-0.rdf"
-    # path = r"/home/kristjan/Downloads/ApplicationProfilesLibrary-release1-1-0/CGMES/RDFS/61970-600-2_Equipment-AP-Voc-RDFS2020_v3-0-0.rdf"
-    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
-    # path = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_CGMES_3.0.1/IEC61970-600-2_CGMES_3_0_0_RDFS2020_EQ.rdf"
-
-
-
-    # path_new = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_CGMES_3.0.1/IEC61970-600-2_CGMES_3_0_0_RDFS2020_SSH.rdf"
-    # path_old = r"/home/kristjan/GIT/triplets/rdfs/ENTSOE_CGMES_2.4.15/SteadyStateHypothesisProfileRDFSAugmented-v2_4_15-4Sep2020.rdf"
-    # path_old = r"../../rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
-    #
-    # data_new = load_all_to_dataframe(path_new)
-    # print(data.merge(data.query("KEY == 'type' and VALUE == 'http://www.w3.org/2002/07/owl#Ontology'").ID))
-    #
-    # data_old = load_all_to_dataframe(path_old)
-    # profile_domain = data_old.query("VALUE == 'baseUML'")["ID"].to_list()[0].split(".")[0]
-    # print(data_old[data_old.ID.str.contains(profile_domain)].query("KEY == 'isFixed'"))
-
-    # Convert CGMES 2.4
-    from triplets import export_schema
-    # Conf
+def convert_entsoe_cgmes_2_4():
     base_name = "ENTSOE_CGMES_2.4.15"
+    header_name = "Header-AP-Voc-RDFS2020_v2-3-5.rdf"
+    serialization_versions = ["552_ED1", "552_ED2"]
+
+    # Load Header
+    header_data = load_all_to_dataframe(rf"../../rdfs/ENTSOE_FH/{header_name}")
+    header_profile = convert_profile(header_data, serialization_version="552_ED2")
+    header_profile.pop("ProfileXMLBase")
+    header_namespace_map = header_profile.pop("ProfileNamespaceMap")
+
+    # Load Schema
+    files_list = list_of_files(rf"../../rdfs/{base_name}", ".rdf")
+    data = load_all_to_dataframe(files_list)
+
+    for serialization_version in serialization_versions:
+
+        merged_profiles = convert(data, serialization_version)
+
+        # Loaded Profiles Meta
+        loaded_meta = pandas.DataFrame(
+            [{"profileSize": len(meta), **meta["ProfileMetadata"]} for meta in merged_profiles])
+
+        # DataFrame with all largest profiles per keyword
+        filtered_meta = data.loc[loaded_meta.groupby("keyword")['profileSize'].idxmax()]
+
+        merged_profiles_filtered = {profile["ProfileMetadata"]["keyword"].replace("_", ""): profile for
+                                    index, profile in enumerate(merged_profiles) if
+                                    index in filtered_meta.index.to_list()}
+
+        for keyword in merged_profiles_filtered.keys():
+            # Insert Header to each profile
+            merged_profiles_filtered[keyword].update(header_profile)
+
+            # Add header namespaces to map, only if missing
+            merged_profiles_filtered[keyword]["ProfileNamespaceMap"].update(
+                {key: value for key, value in header_namespace_map.items() if
+                 key not in merged_profiles_filtered[keyword]["ProfileNamespaceMap"]})
+
+        export_file_name = f"../export_schema/{base_name}_{serialization_version}.json"
+
+        with open(export_file_name, "w") as file_object:
+            json.dump(merged_profiles_filtered, file_object, indent=4)
+
+        logger.info(f"Exported to {export_file_name}")
+
+
+def convert_entsoe_cgmes_3_0():
+    base_name = "ENTSOE_CGMES_3.0.0"
     header_name = "Header-AP-Voc-RDFS2020_v2-3-5.rdf"
     serialization_versions = ["552_ED1", "552_ED2"]
 
@@ -393,13 +395,14 @@ if __name__ == '__main__':
         # Loaded Profiles Meta
         loaded_meta = pandas.DataFrame([{"profileSize": len(meta), **meta["ProfileMetadata"]} for meta in merged_profiles])
 
-        # DataFrame with all largest profiles per keyword
-        filtered_meta = data.loc[loaded_meta.groupby("keyword")['profileSize'].idxmax()]
-
-        merged_profiles_filtered = {profile["ProfileMetadata"]["keyword"].replace("_", ""):profile for index, profile in enumerate(merged_profiles) if index in filtered_meta.index.to_list()}
+        merged_profiles_filtered = {}
+        for profile in merged_profiles:
+            if "keyword" in profile["ProfileMetadata"]:
+                merged_profiles_filtered[profile["ProfileMetadata"]["keyword"]] = profile
+            else:
+                logger.error(f"Missing keyword in profile: {profile['ProfileMetadata']}, will not be included in export")
 
         for keyword in merged_profiles_filtered.keys():
-
             # Insert Header to each profile
             merged_profiles_filtered[keyword].update(header_profile)
 
@@ -411,19 +414,93 @@ if __name__ == '__main__':
         with open(export_file_name, "w") as file_object:
             json.dump(merged_profiles_filtered, file_object, indent=4)
 
+        logger.info(f"Exported to {export_file_name}")
 
 
+def convert_entsoe_nc():
+    base_name = "ENTSOE_NC"
+    header_name = "DatasetMetadata-AP-Voc-RDFS2020_v3-0-0.rdf"
+    serialization_versions = ["552_ED1", "552_ED2"]
 
-    # Convert CGMES 3.0
+    # Load Header
+    header_data = load_all_to_dataframe(rf"../../rdfs/ENTSOE_FH/{header_name}")
+    header_profile = convert_profile(header_data, serialization_version="552_ED2")
+    header_profile.pop("ProfileXMLBase")
+    header_namespace_map = header_profile.pop("ProfileNamespaceMap")
 
-    # Add FullModel definiton
+    # Load Schema
+    files_list = list_of_files(rf"../../rdfs/{base_name}", ".rdf")
+    data = load_all_to_dataframe(files_list)
 
-    # if add_header:
-    #     with open("ENTSO-E_Document header vocabulary_2.1.0_2022-07-21.json", "r") as file_object:
-    #         new_fullmodel_conf = json.load(file_object)["DH"]
+    for serialization_version in serialization_versions:
+
+        merged_profiles = convert(data, serialization_version)
+
+        # Loaded Profiles Meta
+        loaded_meta = pandas.DataFrame(
+            [{"profileSize": len(meta), **meta["ProfileMetadata"]} for meta in merged_profiles])
+
+        merged_profiles_filtered = {}
+        for profile in merged_profiles:
+            if "keyword" in profile["ProfileMetadata"]:
+                merged_profiles_filtered[profile["ProfileMetadata"]["keyword"]] = profile
+            else:
+                logger.error(
+                    f"Missing keyword in profile: {profile['ProfileMetadata']}, will not be included in export")
+
+        for keyword in merged_profiles_filtered.keys():
+            # Insert Header to each profile
+            merged_profiles_filtered[keyword].update(header_profile)
+
+            # Add header namespaces to map, only if missing
+            merged_profiles_filtered[keyword]["ProfileNamespaceMap"].update(
+                {key: value for key, value in header_namespace_map.items() if
+                 key not in merged_profiles_filtered[keyword]["ProfileNamespaceMap"]})
+
+        export_file_name = f"../export_schema/{base_name}_{serialization_version}.json"
+
+        with open(export_file_name, "w") as file_object:
+            json.dump(merged_profiles_filtered, file_object, indent=4)
+
+        logger.info(f"Exported to {export_file_name}")
+
+
+if __name__ == '__main__':
+
+    import sys
+    logging.basicConfig(stream=sys.stdout,
+                        format='%(levelname) -10s %(asctime)s %(name) -30s %(funcName) -35s %(lineno) -5d: %(message)s',
+                        level=logging.DEBUG)
+
+
+    path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
+    #path = r"/rdfs/ENTSOE_FH/DatasetMetadata-AP-Voc-RDFS2020_v3-0-0.rdf"
+    #path = r"/rdfs/ENTSOE_FH/Header-AP-Voc-RDFS2020_v2-3-5.rdf"
+
+
+    serialization_version = "552_ED2"
+
+    export = export_single_profile(path, serialization_version)
+
+    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
+    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
+    # path = r"../../rdfs/ENTSOE_CGMES_3.0.0/FileHeader_RDFS2019.rdf"
+    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
+
+
+    # path_old = r"../../rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
     #
-    #     for profile_name in conf_dict:
-    #         conf_dict[profile_name].update(new_fullmodel_conf)
+    # data_new = load_all_to_dataframe(path_new)
+    # print(data.merge(data.query("KEY == 'type' and VALUE == 'http://www.w3.org/2002/07/owl#Ontology'").ID))
+    #
+    # data_old = load_all_to_dataframe(path_old)
+    # profile_domain = data_old.query("VALUE == 'baseUML'")["ID"].to_list()[0].split(".")[0]
+    # print(data_old[data_old.ID.str.contains(profile_domain)].query("KEY == 'isFixed'"))
 
-    # Export conf
+
+
+
+
+
+
 
