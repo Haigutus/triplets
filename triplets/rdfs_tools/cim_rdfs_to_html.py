@@ -1,7 +1,7 @@
-from RDFS_tools import *
+from triplets.rdfs_tools import *
 import os
 
-files_list = list_of_files(r"rdfs\CGMES_2_4_15_09May2019_RDFS", ".rdf")
+files_list = list_of_files(r"../../rdfs/ENTSOE_CGMES_2.4.15", ".rdf")
 
 namespace_map = dict(    cim="http://iec.ch/TC57/2013/CIM-schema-cim16#",
                          cims="http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
@@ -16,12 +16,9 @@ prefix_map = {v: k for k, v in namespace_map.items()}
 
 def replace_namesapce_with_prefix(uri, default_namespace="http://iec.ch/TC57/2013/CIM-schema-cim16"):
 
-    namespace, name = uri.split("#")
+    namespace, name = get_namespace_and_name(uri, default_namespace)
 
-    if namespace == "":
-        namespace = default_namespace
-
-    prefix = prefix_map[f"{namespace}#"]
+    prefix = prefix_map.get(namespace)
 
     return f"{prefix}:{name}"
 
@@ -129,7 +126,3 @@ for file_path in files_list:
         view = view.reset_index()
 
         html_datatable(view, path)
-
-        #with open(path, "w") as file_object:
-        #    file_object.write(html_datatable(view))
-        #view.to_html(open(path, "w"), index=True)

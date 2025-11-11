@@ -1,9 +1,7 @@
 import json
-from Tools.RDF_PARSER.RDFS_tools import *
+from triplets.rdfs_tools import *
 
-#path = r"rdfs\ENTSOE_CGMES_2_4_15_09May2019_RDFS\EquipmentProfileCoreOperationShortCircuitRDFSAugmented-v2_4_15-09May2019.rdf"
-#path = r"rdfs\RDFS_UML_FDIS06_27Jan2020.zip"
-path = r"rdfs\CGMES_2_4_15_09May2019_RDFS\UNIQUE_RDFSAugmented-v2_4_15-09May2019.zip"
+path = r"../../rdfs/ENTSOE_CGMES_2.4.15/DiagramLayoutProfileRDFSAugmented-v2_4_15-4Sep2020.rdf"
 
 data = load_all_to_dataframe([path])
 
@@ -63,7 +61,9 @@ for profile in profiles:
 
         # Add attributes
 
-        for parameter, parameter_meta in parameters_tableview_all(profile_data, concrete_class).iterrows():
+        parameter_table, inheritance = parameters_tableview_all(profile_data, concrete_class)
+
+        for parameter, parameter_meta in parameter_table.iterrows():
 
             parameter_dict = parameter_meta.to_dict()
 
@@ -101,10 +101,10 @@ for profile in profiles:
                 parameter_def["range"] = parameter_dict["range"]
 
             else:
-                data_type = parameter_dict.get("dataType", "nan")
+                data_type = parameter_dict.get("dataType")
 
                 # If regular parameter
-                if str(data_type) != "nan":
+                if data_type:
 
                     data_type_namespace, data_type_name = data_type.split("#")
 

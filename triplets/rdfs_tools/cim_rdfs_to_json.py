@@ -47,6 +47,7 @@ cgmes_data_types_map = {
 
 cim_serializations = {
 "552_ED1": {
+    "conformsTo":"urn:iso:std:iec:61970-552:2013",
     "id_attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}ID",
     "id_prefix": "_",
     "about_attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about",
@@ -57,6 +58,7 @@ cim_serializations = {
     "enumeration_prefix": "",
     },
 "552_ED2": {
+    "conformsTo":"urn:iso:std:iec:61970-552:2016",
     "id_attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about",
     "id_prefix": "urn:uuid:",
     "about_attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about",

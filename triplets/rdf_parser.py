@@ -660,10 +660,12 @@ def generate_xml(instance_data,
 
         # TODO - needs to be extended
         profile_map = {
-            "Equipment": "EQ",
+            "EquipmentCore": "EQ",
             "SteadyState": "SSH",
             "StateVariables": "SV",
-            "Topology": "TP"
+            "Topology/": "TP",
+            "EquipmentBoundary": "EQBD",
+            "TopologyBoundary": "TPBD"
         }
 
         for key, value in profile_map.items():
@@ -940,7 +942,7 @@ pandas.DataFrame.get_object_data = get_object_data
 def tableview_to_triplet(data):
     """Makes a triplet of dataview"""
     # TODO add only when tableveiw is created
-    return data.reset_index().melt(id_vars="ID", value_name="VALUE", var_name="KEY")
+    return data.reset_index().melt(id_vars="ID", value_name="VALUE", var_name="KEY").astype(str)
 
 
 pandas.DataFrame.tableview_to_triplet = tableview_to_triplet
@@ -1187,7 +1189,8 @@ if __name__ == '__main__':
 
     # Load export format configuration
     import json
-    with open(r"../profiles/ENTSOE/CGMES_v2_4_15_2014_08_07.json", "r") as conf_file:
+    from triplets.export_schema import schemas
+    with open(schemas.ENTSOE_CGMES_2_4_15_552_ED1, "r") as conf_file:
         rdf_map = json.load(conf_file)
 
     # Export triplet to CGMES
