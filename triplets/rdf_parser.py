@@ -8,8 +8,10 @@
 # Copyright:   (c) kristjan.vilgo 2018
 # Licence:     MIT
 # -------------------------------------------------------------------------------
-from io import BytesIO
 import os
+import json
+from io import BytesIO
+from enum import StrEnum
 
 from lxml import etree
 from lxml.builder import ElementMaker
@@ -104,6 +106,62 @@ def _remove_prefix(original_string, prefix_string):
     return original_string
 
 
+def get_namespace_map(data: pandas.DataFrame):
+    """
+    Extract namespace prefix-to-URI mapping and optional xml:base from a triplet dataset.
+
+    This function searches for a `NamespaceMap` object (identified by ``KEY='Type'`` and ``VALUE='NamespaceMap'``)
+    within the dataset. It then collects all key-value pairs under that instance where:
+    - ``KEY`` is the namespace prefix (e.g., "cim", "rdf")
+    - ``VALUE`` is the full URI (e.g., "http://iec.ch/TC57/2013/CIM-schema-cim16#")
+
+    Special keys:
+    - ``xml_base``: Extracted separately if present (used as base URI in RDF).
+    - ``Type``: Automatically excluded.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset with columns ['INSTANCE_ID', 'ID', 'KEY', 'VALUE'].
+        Must contain a `NamespaceMap` instance for successful extraction.
+
+    Returns
+    -------
+    namespace_map : dict
+        Mapping of namespace prefixes to URIs (e.g., ``{"cim": "...", "rdf": "..."}``).
+        **Empty dict** if no `NamespaceMap` is found.
+    xml_base : str
+        Value of ``xml_base`` if defined within the `NamespaceMap`; otherwise ``empty str``.
+
+    Examples
+    --------
+    >>> ns_map, base = get_namespace_map(triplet_data)
+    >>> print(ns_map)
+    {'cim': 'http://iec.ch/TC57/2013/CIM-schema-cim16#', 'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'}
+    >>> print(base)
+    'http://example.com/base/'
+
+    >>> ns_map, base = get_namespace_map(empty_data)
+    >>> print(ns_map, base)
+    {} ""
+
+    Notes
+    -----
+    - The function is **idempotent** and safe to call on any dataset.
+    - Uses inner merge on ``ID`` to scope entries to the correct `NamespaceMap` instance.
+    - Always returns a tuple of length 2: ``(dict, str)``.
+    """
+    namespace_map_data = data.merge(data.query("KEY == 'Type' and VALUE == 'NamespaceMap'").ID)
+
+    if namespace_map_data.empty:
+        return {}, ""
+
+    namespace_map = namespace_map_data.set_index("KEY")["VALUE"].to_dict()
+    namespace_map.pop("Type", None)
+    xml_base = namespace_map.pop("xml_base", None)
+    return namespace_map, xml_base
+
+
 def clean_ID(ID):
     """Remove common CIM ID prefixes from a string.
 
@@ -133,9 +191,9 @@ def clean_ID(ID):
 
     # replace_count = 1 # Remove only once the ID prefix string, otherwise we risk of removing characters from within ID
     # clean_ID      = ID.replace("urn:uuid:", "", replace_count).replace("#_", "", replace_count).replace("_", "", replace_count)
-    ID = ID.removeprefix("urn:uuid:")
-    ID = ID.removeprefix("#_")
-    ID = ID.removeprefix("_")
+    ID = _remove_prefix(ID, "urn:uuid:")
+    ID = _remove_prefix(ID, "#_")
+    ID = _remove_prefix(ID, "_")
 
     return ID
 
@@ -341,9 +399,8 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
                 VALUE = clean_ID(element.attrib[RDF_RESOURCE])
 
                 # TODO - NB CIM enumeration specific
-                # TODO - Fix export conf, to include the namespace and enum prefix
                 if VALUE.startswith("http"):
-                    VALUE = VALUE.split(".")[-1]
+                    VALUE = VALUE.split("#")[-1]
 
             data_list.append((ID, KEY, VALUE, INSTANCE_ID))
 
@@ -1109,44 +1166,86 @@ def _get_qname(namespace, tag=None):
     return qname
 
 
+
 def generate_xml(instance_data,
                  rdf_map=None,
-                 namespace_map={"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"},
+                 namespace_map=None,
                  class_KEY="Type",
                  export_undefined=True,
                  comment=None,
                  debug=False):
-    """Generate an RDF XML file from a triplet dataset instance.
-
-    Parameters
-    ----------
-    instance_data : pandas.DataFrame
-        Triplet dataset for a single instance.
-    rdf_map : dict, optional
-        Dictionary mapping classes and keys to RDF namespaces and attributes.
-    namespace_map : dict, optional
-        Dictionary of namespace prefixes and URIs (default includes RDF namespace).
-    class_KEY : str, optional
-        Key used to identify object types (default is 'Type').
-    export_undefined : bool, optional
-        If True, export undefined classes and tags with default settings (default is True).
-    comment : str, optional
-        Comment to include in the XML output (default is None).
-    debug : bool, optional
-        If True, log timing information for debugging (default is False).
-
-    Returns
-    -------
-    dict
-        Dictionary with 'filename' (str) and 'file' (bytes) containing the XML output.
-
-    Examples
-    --------
-    >>> xml_data = generate_xml(instance_data, rdf_map, namespace_map)
     """
+        Generate an RDF XML file from a triplet dataset instance.
+
+        This function processes a single instance (grouped by ``INSTANCE_ID``) from a triplet
+        dataset and exports it as an RDF/XML document using provided or inferred mapping rules.
+
+        Parameters
+        ----------
+        instance_data : pandas.DataFrame
+            Triplet dataset for a single instance, with columns [''ID', 'KEY', 'VALUE', INSTANCE_ID'].
+            Must contain at least one row with ``KEY == class_KEY`` to define object types.
+        rdf_map : dict or str, optional
+            Dictionary mapping CIM classes and attributes to RDF namespaces and export rules.
+            If a string is provided, it is treated as a file path to a JSON configuration.
+            If ``None``, attempts to infer from instance data (e.g., profile-based mapping).
+        namespace_map : dict, optional
+            Mapping of namespace prefixes to URIs (e.g., ``{"cim": "http://iec.ch/TC57/2013/CIM-schema-cim16#"}``).
+            Must include ``"rdf"`` namespace. If ``None``, inferred from ``rdf_map`` or instance.
+        class_KEY : str, default "Type"
+            Column key used to identify object class/type in the triplet data.
+        export_undefined : bool, default True
+            If True, export classes and attributes without explicit mapping using default RDF settings.
+            If False, skip unmapped elements with a warning.
+        comment : str, optional
+            Optional comment to insert at the top of the XML output (as XML comment).
+        debug : bool, default False
+            If True, log detailed timing and debug information during processing.
+
+        Returns
+        -------
+        dict
+            Dictionary containing:
+            - ``'filename'`` (str): Generated filename (from ``label`` or UUID).
+            - ``'file'`` (bytes): UTF-8 encoded XML content.
+
+        Raises
+        ------
+        KeyError
+            If required columns are missing in ``instance_data``.
+        ValueError
+            If invalid export configuration or mapping is detected.
+
+        Examples
+        --------
+        >>> instance = data[data["INSTANCE_ID"] == 1]
+        >>> result = generate_xml(
+        ...     instance,
+        ...     rdf_map="config/eq_profile.json",
+        ...     comment="Exported on 2025-11-11",
+        ...     debug=True
+        ... )
+        >>> with open(result["filename"], "wb") as f:
+        ...     f.write(result["file"])
+
+        Notes
+        -----
+        - Supports profile-based mapping (e.g., "EQ", "SSH") via ``Model.profile`` or ``Model.messageType``.
+        - Uses ``lxml.etree`` with ``ElementMaker`` for XML construction.
+        - Undefined classes are exported with ``rdf:about="urn:uuid:<ID>"`` when ``export_undefined=True``.
+        """
     # TODO - Use if logger debug
     if debug:
         start_time = datetime.datetime.now()
+
+    # config map, is not given as dict, assume path and load it
+    if not isinstance(rdf_map, dict):
+        with open(rdf_map, "r") as conf_file:
+            rdf_map = json.load(conf_file)
+
+    # No map in function call, use instance map
+    if not namespace_map:
+        namespace_map, xml_base = get_namespace_map(instance_data)
 
     # Filename is kept under label
     label_data = instance_data[instance_data["KEY"] == "label"]
@@ -1172,12 +1271,14 @@ def generate_xml(instance_data,
     if not instance_type and not profile_data.empty:
         instance_type_url = profile_data.at[profile_data.index[0], 'VALUE']
 
-        # TODO - needs to be extended
+        # TODO - needs to be extended and made more intelligent, maybe scan profile?
         profile_map = {
-            "Equipment": "EQ",
+            "EquipmentCore": "EQ",
             "SteadyState": "SSH",
             "StateVariables": "SV",
-            "Topology": "TP"
+            "Topology/": "TP",
+            "EquipmentBoundary": "EQBD",
+            "TopologyBoundary": "TPBD"
         }
 
         for key, value in profile_map.items():
@@ -1189,6 +1290,10 @@ def generate_xml(instance_data,
     # TODO - needs revision, add support both for md:FullModel, dcat:DataSet and without profile definiton
     instance_rdf_map = rdf_map.get(instance_type, rdf_map)
 
+    # No map in function call, nor in instance data, use profile map
+    if not namespace_map and instance_rdf_map:
+        namespace_map = instance_rdf_map.get("ProfileNamespaceMap")
+
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(instance_type))
         if not export_undefined:
@@ -1199,7 +1304,7 @@ def generate_xml(instance_data,
     E = ElementMaker(nsmap=namespace_map)
 
     # Create xml root element
-    RDF = E(QName(namespace_map["rdf"], "RDF"))
+    RDF = E(QName(namespace_map.get("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"), "RDF"))
 
     # Add comment
     if comment:
@@ -1277,7 +1382,14 @@ def generate_xml(instance_data,
                 text_prefix = tag_def.get("text", "")
 
                 if attrib:
-                    tag.attrib[_get_qname(attrib["attribute"])] = f"{attrib['value_prefix']}{VALUE}"
+
+                    value_prefix = attrib.get("value_prefix", "")
+
+                    # Get namespace for enumerations
+                    if not value_prefix:
+                        value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace", "")
+
+                    tag.attrib[_get_qname(attrib["attribute"])] = f"{value_prefix}{VALUE}"
                 else:
                     tag.text = f"{text_prefix}{VALUE}"
 
@@ -1317,56 +1429,85 @@ def generate_xml(instance_data,
 
     return {"filename": file_name, "file": xml}
 
+class ExportType(StrEnum):
+    XML_PER_INSTANCE = "xml_per_instance"
+    XML_PER_INSTANCE_ZIP_PER_ALL = "xml_per_instance_zip_per_all"
+    XML_PER_INSTANCE_ZIP_PER_XML = "xml_per_instance_zip_per_xml"
 
-def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"},
+
+def export_to_cimxml(data,
+                     rdf_map=None,
+                     namespace_map=None,
                      class_KEY="Type",
                      export_undefined=True,
-                     export_type="xml_per_instance_zip_per_xml",
+                     export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
                      global_zip_filename="Export.zip",
                      debug=False,
                      export_to_memory=False,
                      export_base_path="",
                      comment=None,
                      max_workers=None):
-    """Export a triplet dataset to CIM RDF XML or ZIP files.
-
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        Triplet dataset containing RDF data.
-    rdf_map : dict, optional
-        Dictionary mapping classes and keys to RDF namespaces and attributes.
-    namespace_map : dict, optional
-        Dictionary of namespace prefixes and URIs (default includes RDF namespace).
-    class_KEY : str, optional
-        Key used to identify object types (default is 'Type').
-    export_undefined : bool, optional
-        If True, export undefined classes and tags with default settings (default is True).
-    export_type : str, optional
-        Export format: 'xml_per_instance', 'xml_per_instance_zip_per_all', or
-        'xml_per_instance_zip_per_xml' (default is 'xml_per_instance_zip_per_xml').
-    global_zip_filename : str, optional
-        Filename for the global ZIP archive (default is 'Export.zip').
-    debug : bool, optional
-        If True, log timing information for debugging (default is False).
-    export_to_memory : bool, optional
-        If True, return file objects in memory; otherwise, save to disk (default is False).
-    export_base_path : str, optional
-        Directory path to save exported files (default is empty, uses current directory).
-    comment : str, optional
-        Comment to include in the XML output (default is None).
-    max_workers : int, optional
-        Number of worker processes for parallel processing (default is None).
-
-    Returns
-    -------
-    list
-        List of file-like objects (if export_to_memory=True) or filenames (if export_to_memory=False).
-
-    Examples
-    --------
-    >>> files = data.export_to_cimxml(rdf_map, export_type="xml_per_instance")
     """
+        Export a full triplet dataset to CIM RDF XML files or ZIP archives.
+
+        Processes all instances (grouped by ``INSTANCE_ID``) and exports them according to the
+        specified ``export_type``. Supports parallel processing and in-memory or disk output.
+
+        Parameters
+        ----------
+        data : pandas.DataFrame
+            Full triplet dataset with columns ['INSTANCE_ID', 'ID', 'KEY', 'VALUE'].
+        rdf_map : dict or str, optional
+            RDF mapping configuration (see :func:`generate_xml`).
+        namespace_map : dict, optional
+            Namespace prefix-to-URI mapping (see :func:`generate_xml`).
+        class_KEY : str, default "Type"
+            Key identifying object types in triplet data.
+        export_undefined : bool, default True
+            Export unmapped classes/attributes with default RDF syntax.
+        export_type : ExportType or str, default ExportType.XML_PER_INSTANCE_ZIP_PER_XML
+            Export format:
+            - ``XML_PER_INSTANCE``: One XML file per instance.
+            - ``XML_PER_INSTANCE_ZIP_PER_ALL``: All XMLs in a single ZIP.
+            - ``XML_PER_INSTANCE_ZIP_PER_XML``: Each XML in its own ZIP.
+        global_zip_filename : str, default "Export.zip"
+            Filename for the global ZIP archive (used with ``ZIP_PER_ALL``).
+        debug : bool, default False
+            Enable detailed timing and debug logging.
+        export_to_memory : bool, default False
+            If True, return file-like objects (``BytesIO``); if False, save to disk.
+        export_base_path : str, default ""
+            Directory to save files when ``export_to_memory=False``. Uses current directory if empty.
+        comment : str, optional
+            Optional XML comment added to each generated file.
+        max_workers : int, optional
+            Number of parallel workers for XML generation. If ``None``, runs sequentially.
+
+        Returns
+        -------
+        list
+            - If ``export_to_memory=True``: List of ``BytesIO`` objects with ``.name`` attribute.
+            - If ``export_to_memory=False``: List of saved filenames (relative to ``export_base_path``).
+
+        Examples
+        --------
+        >>> files = export_to_cimxml(
+        ...     data,
+        ...     rdf_map="config/cim_map.json",
+        ...     export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
+        ...     export_to_memory=True,
+        ...     max_workers=4
+        ... )
+        >>> for f in files:
+        ...     print(f"name:", f.name)
+
+        Notes
+        -----
+        - Uses ``concurrent.futures.ProcessPoolExecutor`` for parallel XML generation.
+        - All XML files are UTF-8 encoded with XML declaration and pretty-printing.
+        - ZIP files use DEFLATED compression.
+        - Filenames are derived from instance ``label`` or UUID.
+        """
     if debug:
         start_time = datetime.datetime.now()
         init_time = start_time
@@ -1411,7 +1552,7 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
     ### Export XML ###
     exported_files = []
 
-    if export_type == "xml_per_instance":
+    if export_type == ExportType.XML_PER_INSTANCE:
         for document in xml_documents:
 
             file_object = BytesIO(document["file"])
@@ -1422,7 +1563,7 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
             logger.info(f"Exported {document['filename']} to memory")
 
     ### Export ZIP containing all xml ###
-    elif export_type == "xml_per_instance_zip_per_all":
+    elif export_type == ExportType.XML_PER_INSTANCE_ZIP_PER_ALL:
 
         gloabl_zip_fileobject = BytesIO()
         gloabl_zip_fileobject.name = global_zip_filename
@@ -1438,7 +1579,7 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
 
 
     ### Export each xml in separate zip ###
-    elif export_type == "xml_per_instance_zip_per_xml":
+    elif export_type == ExportType.XML_PER_INSTANCE_ZIP_PER_XML:
 
         for document in xml_documents:
 
@@ -1531,7 +1672,7 @@ def tableview_to_triplet(data):
     >>> triplet = tableview_to_triplet(table_view)
     """
     # TODO add only when tableveiw is created
-    return data.reset_index().melt(id_vars="ID", value_name="VALUE", var_name="KEY")
+    return data.reset_index().melt(id_vars="ID", value_name="VALUE", var_name="KEY").astype(str)
 
 
 pandas.DataFrame.tableview_to_triplet = tableview_to_triplet
@@ -1962,11 +2103,6 @@ if __name__ == '__main__':
     # NP (CA.nI)  :   {data.type_tableview("ControlArea").iloc[0]["ControlArea.netInterchange"]} MW
     # """)
 
-    namespace_map = dict(cim="http://iec.ch/TC57/2013/CIM-schema-cim16#",
-                         entsoe="http://entsoe.eu/CIM/SchemaExtension/3/1#",
-                         md="http://iec.ch/TC57/61970-552/ModelDescription/1#",
-                         rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#")
-
     #Export Config
 
 
@@ -1974,19 +2110,16 @@ if __name__ == '__main__':
 
     export_type = "xml_per_instance_zip_per_xml"
 
-    # Load export format configuration
-    #import json
-    #with open(r"../profiles/ENTSOE/CGMES_v2_4_15_2014_08_07.json", "r") as conf_file:
-    #    rdf_map = json.load(conf_file)
+    from triplets.export_schema import schemas
 
-    # Export triplet to CGMES
-    #data.export_to_cimxml(rdf_map=rdf_map,
-    #                      namespace_map=namespace_map,
-    #                      export_undefined=False,
-    #                      export_type=export_type,
-    #                      debug=True,
-    #                      export_to_memory=False,
-    #                      max_workers=None)
+    #Export triplet to CGMES
+    data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1,
+                         namespace_map=None,
+                         export_undefined=False,
+                         export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
+                         debug=True,
+                         export_to_memory=False,
+                         max_workers=None)
 
     import cProfile
 
