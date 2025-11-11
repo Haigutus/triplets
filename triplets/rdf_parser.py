@@ -10,6 +10,7 @@
 # -------------------------------------------------------------------------------
 from io import BytesIO
 import os
+from enum import StrEnum
 
 from lxml import etree
 from lxml.builder import ElementMaker
@@ -133,9 +134,9 @@ def clean_ID(ID):
 
     # replace_count = 1 # Remove only once the ID prefix string, otherwise we risk of removing characters from within ID
     # clean_ID      = ID.replace("urn:uuid:", "", replace_count).replace("#_", "", replace_count).replace("_", "", replace_count)
-    ID = remove_prefix(ID, "urn:uuid:")
-    ID = remove_prefix(ID, "#_")
-    ID = remove_prefix(ID, "_")
+    ID = _remove_prefix(ID, "urn:uuid:")
+    ID = _remove_prefix(ID, "#_")
+    ID = _remove_prefix(ID, "_")
 
     return ID
 
@@ -1319,11 +1320,16 @@ def generate_xml(instance_data,
 
     return {"filename": file_name, "file": xml}
 
+class ExportType(StrEnum):
+    XML_PER_INSTANCE = "xml_per_instance"
+    XML_PER_INSTANCE_ZIP_PER_ALL = "xml_per_instance_zip_per_all"
+    XML_PER_INSTANCE_ZIP_PER_XML = "xml_per_instance_zip_per_xml"
+
 
 def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"},
                      class_KEY="Type",
                      export_undefined=True,
-                     export_type="xml_per_instance_zip_per_xml",
+                     export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
                      global_zip_filename="Export.zip",
                      debug=False,
                      export_to_memory=False,
@@ -1413,7 +1419,7 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
     ### Export XML ###
     exported_files = []
 
-    if export_type == "xml_per_instance":
+    if export_type == ExportType.XML_PER_INSTANCE:
         for document in xml_documents:
 
             file_object = BytesIO(document["file"])
@@ -1424,7 +1430,7 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
             logger.info(f"Exported {document['filename']} to memory")
 
     ### Export ZIP containing all xml ###
-    elif export_type == "xml_per_instance_zip_per_all":
+    elif export_type == ExportType.XML_PER_INSTANCE_ZIP_PER_ALL:
 
         gloabl_zip_fileobject = BytesIO()
         gloabl_zip_fileobject.name = global_zip_filename
@@ -1440,7 +1446,7 @@ def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.or
 
 
     ### Export each xml in separate zip ###
-    elif export_type == "xml_per_instance_zip_per_xml":
+    elif export_type == ExportType.XML_PER_INSTANCE_ZIP_PER_XML:
 
         for document in xml_documents:
 
