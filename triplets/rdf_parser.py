@@ -351,9 +351,8 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
                 VALUE = clean_ID(element.attrib[RDF_RESOURCE])
 
                 # TODO - NB CIM enumeration specific
-                # TODO - Fix export conf, to include the namespace and enum prefix
                 if VALUE.startswith("http"):
-                    VALUE = VALUE.split(".")[-1]
+                    VALUE = VALUE.split("#")[-1]
 
             data_list.append((ID, KEY, VALUE, INSTANCE_ID))
 
@@ -1303,7 +1302,14 @@ def generate_xml(instance_data,
                 text_prefix = tag_def.get("text", "")
 
                 if attrib:
-                    tag.attrib[_get_qname(attrib["attribute"])] = f"{attrib['value_prefix']}{VALUE}"
+
+                    value_prefix = attrib.get("value_prefix", "")
+
+                    # Get namespace for enumerations
+                    if not value_prefix:
+                        value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace", "")
+
+                    tag.attrib[_get_qname(attrib["attribute"])] = f"{value_prefix}{VALUE}"
                 else:
                     tag.text = f"{text_prefix}{VALUE}"
 
