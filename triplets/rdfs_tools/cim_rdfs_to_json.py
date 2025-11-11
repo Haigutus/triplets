@@ -70,14 +70,6 @@ cim_serializations = {
     }
 }
 
-def get_namespace_map(data: pandas.DataFrame):
-    """Extract namespace map from data."""
-    namespace_map = data.merge(data.query("KEY == 'Type' and VALUE == 'NamespaceMap'").ID).set_index("KEY")["VALUE"].to_dict()
-    namespace_map.pop("Type", None)
-    xml_base = namespace_map.pop("xml_base", None)
-    return namespace_map, xml_base
-
-
 def convert_profile(profile_data, serialization_version="552_ED2"):
 
     id_attribute = cim_serializations[serialization_version]["id_attribute"]

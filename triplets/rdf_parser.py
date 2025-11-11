@@ -8,8 +8,9 @@
 # Copyright:   (c) kristjan.vilgo 2018
 # Licence:     MIT
 # -------------------------------------------------------------------------------
-from io import BytesIO
 import os
+import json
+from io import BytesIO
 from enum import StrEnum
 
 from lxml import etree
@@ -103,6 +104,14 @@ def _remove_prefix(original_string, prefix_string):
         return original_string[prefix_length:]
 
     return original_string
+
+
+def get_namespace_map(data: pandas.DataFrame):
+    """Extract namespace map from data."""
+    namespace_map = data.merge(data.query("KEY == 'Type' and VALUE == 'NamespaceMap'").ID).set_index("KEY")["VALUE"].to_dict()
+    namespace_map.pop("Type", None)
+    xml_base = namespace_map.pop("xml_base", None)
+    return namespace_map, xml_base
 
 
 def clean_ID(ID):
@@ -1110,9 +1119,10 @@ def _get_qname(namespace, tag=None):
     return qname
 
 
+
 def generate_xml(instance_data,
                  rdf_map=None,
-                 namespace_map={"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"},
+                 namespace_map=None,
                  class_KEY="Type",
                  export_undefined=True,
                  comment=None,
@@ -1149,6 +1159,15 @@ def generate_xml(instance_data,
     if debug:
         start_time = datetime.datetime.now()
 
+    # config map, is not given as dict, assume path and load it
+    if not isinstance(rdf_map, dict):
+        with open(rdf_map, "r") as conf_file:
+            rdf_map = json.load(conf_file)
+
+    # No map in function call, use instance map
+    if not namespace_map:
+        namespace_map, xml_base = get_namespace_map(instance_data)
+
     # Filename is kept under label
     label_data = instance_data[instance_data["KEY"] == "label"]
 
@@ -1173,7 +1192,7 @@ def generate_xml(instance_data,
     if not instance_type and not profile_data.empty:
         instance_type_url = profile_data.at[profile_data.index[0], 'VALUE']
 
-        # TODO - needs to be extended
+        # TODO - needs to be extended and made more intelligent, maybe scan profile?
         profile_map = {
             "EquipmentCore": "EQ",
             "SteadyState": "SSH",
@@ -1192,6 +1211,10 @@ def generate_xml(instance_data,
     # TODO - needs revision, add support both for md:FullModel, dcat:DataSet and without profile definiton
     instance_rdf_map = rdf_map.get(instance_type, rdf_map)
 
+    # No map in function call, nor in instance data, use profile map
+    if not namespace_map and instance_rdf_map:
+        namespace_map = instance_rdf_map.get("ProfileNamespaceMap")
+
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(instance_type))
         if not export_undefined:
@@ -1202,7 +1225,7 @@ def generate_xml(instance_data,
     E = ElementMaker(nsmap=namespace_map)
 
     # Create xml root element
-    RDF = E(QName(namespace_map["rdf"], "RDF"))
+    RDF = E(QName(namespace_map.get("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"), "RDF"))
 
     # Add comment
     if comment:
@@ -1326,7 +1349,9 @@ class ExportType(StrEnum):
     XML_PER_INSTANCE_ZIP_PER_XML = "xml_per_instance_zip_per_xml"
 
 
-def export_to_cimxml(data, rdf_map=None, namespace_map={"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"},
+def export_to_cimxml(data,
+                     rdf_map=None,
+                     namespace_map=None,
                      class_KEY="Type",
                      export_undefined=True,
                      export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
@@ -1970,11 +1995,6 @@ if __name__ == '__main__':
     # NP (CA.nI)  :   {data.type_tableview("ControlArea").iloc[0]["ControlArea.netInterchange"]} MW
     # """)
 
-    namespace_map = dict(cim="http://iec.ch/TC57/2013/CIM-schema-cim16#",
-                         entsoe="http://entsoe.eu/CIM/SchemaExtension/3/1#",
-                         md="http://iec.ch/TC57/61970-552/ModelDescription/1#",
-                         rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#")
-
     #Export Config
 
 
@@ -1982,20 +2002,16 @@ if __name__ == '__main__':
 
     export_type = "xml_per_instance_zip_per_xml"
 
-    # Load export format configuration
-    import json
     from triplets.export_schema import schemas
-    with open(schemas.ENTSOE_CGMES_2_4_15_552_ED1, "r") as conf_file:
-        rdf_map = json.load(conf_file)
 
-    # Export triplet to CGMES
-    #data.export_to_cimxml(rdf_map=rdf_map,
-    #                      namespace_map=namespace_map,
-    #                      export_undefined=False,
-    #                      export_type=export_type,
-    #                      debug=True,
-    #                      export_to_memory=False,
-    #                      max_workers=None)
+    #Export triplet to CGMES
+    data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1,
+                         namespace_map=None,
+                         export_undefined=False,
+                         export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
+                         debug=True,
+                         export_to_memory=False,
+                         max_workers=None)
 
     import cProfile
 

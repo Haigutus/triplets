@@ -1,4 +1,4 @@
-from triplets.rdf_parser import load_all_to_dataframe
+from triplets.rdf_parser import load_all_to_dataframe, get_namespace_map
 import pandas
 import os
 
