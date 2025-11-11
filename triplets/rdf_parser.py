@@ -1800,7 +1800,7 @@ def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_i
         for object_name in exclude_objects:
             excluded_data = filter_by_type(diff, object_name)
             diff = remove_triplet_from_triplet(diff, excluded_data)
-            print(f"INFO - removed {object_name} from diff")
+            logger.info(f"INFO - removed {object_name} from diff")
 
     # Extract types on left and right to get changed/modified types
     removed_added_modified_types = pandas.concat([
@@ -1809,11 +1809,11 @@ def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_i
         ])[["ID", "KEY", "VALUE"]].drop_duplicates()
 
     # Print old file name
-    for _, file_id in file_id_data.query(f"KEY == '{file_id_key}' and _merge == '-'").VALUE.items():
+    for _, file_id in old_data.query(f"KEY == '{file_id_key}'").VALUE.items():
         print(f"--- {file_id}")# from-file-modification-time")
 
     # Print new file name
-    for _, file_id in file_id_data.query(f"KEY == '{file_id_key}' and _merge == '+'").VALUE.items():
+    for _, file_id in new_data.query(f"KEY == '{file_id_key}'").VALUE.items():
         print(f"+++ {file_id}")# to-file-modification-time")
 
     # Print changes
