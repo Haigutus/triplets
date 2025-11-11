@@ -5,14 +5,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>triplets.rdf_parser &mdash; triplets 0.0.11 documentation</title>
+  <title>triplets.rdf_parser &mdash; triplets 0.0.12 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
 
   
       <script src="../../_static/jquery.js?v=5d32c60e"></script>
       <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../../_static/documentation_options.js?v=0c446633"></script>
+      <script src="../../_static/documentation_options.js?v=3bbcec59"></script>
       <script src="../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
@@ -80,8 +80,10 @@
 <span class="c1"># Copyright:   (c) kristjan.vilgo 2018</span>
 <span class="c1"># Licence:     MIT</span>
 <span class="c1"># -------------------------------------------------------------------------------</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">io</span><span class="w"> </span><span class="kn">import</span> <span class="n">BytesIO</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">io</span><span class="w"> </span><span class="kn">import</span> <span class="n">BytesIO</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">StrEnum</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">lxml</span><span class="w"> </span><span class="kn">import</span> <span class="n">etree</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">lxml.builder</span><span class="w"> </span><span class="kn">import</span> <span class="n">ElementMaker</span>
@@ -117,9 +119,7 @@
 <span class="c1"># FUNCTIONS - go down for sample code</span>
 
 
-<div class="viewcode-block" id="print_duration">
-<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.print_duration">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">print_duration</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">start_time</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_print_duration</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">start_time</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Print duration between now and start time.</span>
 
 <span class="sd">    Parameters</span>
@@ -139,19 +139,16 @@
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
 <span class="sd">    &gt;&gt;&gt; start = datetime.datetime.now()</span>
-<span class="sd">    &gt;&gt;&gt; duration, end = print_duration(&quot;Operation completed&quot;, start)</span>
+<span class="sd">    &gt;&gt;&gt; duration, end = _print_duration(&quot;Operation completed&quot;, start)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">end_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
     <span class="n">duration</span> <span class="o">=</span> <span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="n">duration</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">duration</span><span class="p">,</span> <span class="n">end_time</span></div>
+    <span class="k">return</span> <span class="n">duration</span><span class="p">,</span> <span class="n">end_time</span>
 
 
-
-<div class="viewcode-block" id="remove_prefix">
-<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.remove_prefix">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">remove_prefix</span><span class="p">(</span><span class="n">original_string</span><span class="p">,</span> <span class="n">prefix_string</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_remove_prefix</span><span class="p">(</span><span class="n">original_string</span><span class="p">,</span> <span class="n">prefix_string</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a specified prefix from a string.</span>
 
 <span class="sd">    Parameters</span>
@@ -168,9 +165,9 @@
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; remove_prefix(&quot;urn:uuid:1234&quot;, &quot;urn:uuid:&quot;)</span>
+<span class="sd">    &gt;&gt;&gt; _remove_prefix(&quot;urn:uuid:1234&quot;, &quot;urn:uuid:&quot;)</span>
 <span class="sd">    &#39;1234&#39;</span>
-<span class="sd">    &gt;&gt;&gt; remove_prefix(&quot;abc&quot;, &quot;xyz&quot;)</span>
+<span class="sd">    &gt;&gt;&gt; _remove_prefix(&quot;abc&quot;, &quot;xyz&quot;)</span>
 <span class="sd">    &#39;abc&#39;</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">prefix_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">prefix_string</span><span class="p">)</span>
@@ -178,7 +175,65 @@
     <span class="k">if</span> <span class="n">original_string</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">prefix_length</span><span class="p">]</span> <span class="o">==</span> <span class="n">prefix_string</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">original_string</span><span class="p">[</span><span class="n">prefix_length</span><span class="p">:]</span>
 
-    <span class="k">return</span> <span class="n">original_string</span></div>
+    <span class="k">return</span> <span class="n">original_string</span>
+
+
+<div class="viewcode-block" id="get_namespace_map">
+<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.get_namespace_map">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_namespace_map</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Extract namespace prefix-to-URI mapping and optional xml:base from a triplet dataset.</span>
+
+<span class="sd">    This function searches for a `NamespaceMap` object (identified by ``KEY=&#39;Type&#39;`` and ``VALUE=&#39;NamespaceMap&#39;``)</span>
+<span class="sd">    within the dataset. It then collects all key-value pairs under that instance where:</span>
+<span class="sd">    - ``KEY`` is the namespace prefix (e.g., &quot;cim&quot;, &quot;rdf&quot;)</span>
+<span class="sd">    - ``VALUE`` is the full URI (e.g., &quot;http://iec.ch/TC57/2013/CIM-schema-cim16#&quot;)</span>
+
+<span class="sd">    Special keys:</span>
+<span class="sd">    - ``xml_base``: Extracted separately if present (used as base URI in RDF).</span>
+<span class="sd">    - ``Type``: Automatically excluded.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset with columns [&#39;INSTANCE_ID&#39;, &#39;ID&#39;, &#39;KEY&#39;, &#39;VALUE&#39;].</span>
+<span class="sd">        Must contain a `NamespaceMap` instance for successful extraction.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    namespace_map : dict</span>
+<span class="sd">        Mapping of namespace prefixes to URIs (e.g., ``{&quot;cim&quot;: &quot;...&quot;, &quot;rdf&quot;: &quot;...&quot;}``).</span>
+<span class="sd">        **Empty dict** if no `NamespaceMap` is found.</span>
+<span class="sd">    xml_base : str</span>
+<span class="sd">        Value of ``xml_base`` if defined within the `NamespaceMap`; otherwise ``empty str``.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; ns_map, base = get_namespace_map(triplet_data)</span>
+<span class="sd">    &gt;&gt;&gt; print(ns_map)</span>
+<span class="sd">    {&#39;cim&#39;: &#39;http://iec.ch/TC57/2013/CIM-schema-cim16#&#39;, &#39;rdf&#39;: &#39;http://www.w3.org/1999/02/22-rdf-syntax-ns#&#39;}</span>
+<span class="sd">    &gt;&gt;&gt; print(base)</span>
+<span class="sd">    &#39;http://example.com/base/&#39;</span>
+
+<span class="sd">    &gt;&gt;&gt; ns_map, base = get_namespace_map(empty_data)</span>
+<span class="sd">    &gt;&gt;&gt; print(ns_map, base)</span>
+<span class="sd">    {} &quot;&quot;</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - The function is **idempotent** and safe to call on any dataset.</span>
+<span class="sd">    - Uses inner merge on ``ID`` to scope entries to the correct `NamespaceMap` instance.</span>
+<span class="sd">    - Always returns a tuple of length 2: ``(dict, str)``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">namespace_map_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;Type&#39; and VALUE == &#39;NamespaceMap&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">ID</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">namespace_map_data</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{},</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="n">namespace_map</span> <span class="o">=</span> <span class="n">namespace_map_data</span><span class="o">.</span><span class="n">set_index</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+    <span class="n">namespace_map</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">xml_base</span> <span class="o">=</span> <span class="n">namespace_map</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;xml_base&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">namespace_map</span><span class="p">,</span> <span class="n">xml_base</span></div>
 
 
 
@@ -209,13 +264,13 @@
 <span class="sd">    &gt;&gt;&gt; clean_ID(&quot;#_abc&quot;)</span>
 <span class="sd">    &#39;abc&#39;</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># TODO - a lot of replacements have been done using replace function, but is it valid that these charecaters are not present in UUID-s? is replace once sufficent?</span>
+    <span class="c1"># TODO - a lot of replacements have been done using replace function, but is it valid that these characters are not present in UUID-s? is replace once sufficent?</span>
 
     <span class="c1"># replace_count = 1 # Remove only once the ID prefix string, otherwise we risk of removing characters from within ID</span>
     <span class="c1"># clean_ID      = ID.replace(&quot;urn:uuid:&quot;, &quot;&quot;, replace_count).replace(&quot;#_&quot;, &quot;&quot;, replace_count).replace(&quot;_&quot;, &quot;&quot;, replace_count)</span>
-    <span class="n">ID</span> <span class="o">=</span> <span class="n">ID</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">&quot;urn:uuid:&quot;</span><span class="p">)</span>
-    <span class="n">ID</span> <span class="o">=</span> <span class="n">ID</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">&quot;#_&quot;</span><span class="p">)</span>
-    <span class="n">ID</span> <span class="o">=</span> <span class="n">ID</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">)</span>
+    <span class="n">ID</span> <span class="o">=</span> <span class="n">_remove_prefix</span><span class="p">(</span><span class="n">ID</span><span class="p">,</span> <span class="s2">&quot;urn:uuid:&quot;</span><span class="p">)</span>
+    <span class="n">ID</span> <span class="o">=</span> <span class="n">_remove_prefix</span><span class="p">(</span><span class="n">ID</span><span class="p">,</span> <span class="s2">&quot;#_&quot;</span><span class="p">)</span>
+    <span class="n">ID</span> <span class="o">=</span> <span class="n">_remove_prefix</span><span class="p">(</span><span class="n">ID</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">ID</span></div>
 
@@ -262,13 +317,13 @@
     <span class="n">instance_id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span>  <span class="c1"># Guarantees unique ID for each loaded instance of data, in erronous data it happens that same UUID is used for multiple files</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;XML loaded to tree object&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;XML loaded to tree object&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
 
     <span class="c1"># EXTRACT RDF OBJECTS</span>
     <span class="n">RDF_objects</span> <span class="o">=</span> <span class="n">parsed_xml</span><span class="o">.</span><span class="n">iterchildren</span><span class="p">()</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;All children put to a generator&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;All children put to a generator&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">RDF_objects</span><span class="p">,</span> <span class="n">instance_id</span><span class="p">,</span> <span class="n">namesapce_map</span></div>
 
@@ -425,12 +480,18 @@
             <span class="n">VALUE_NS</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
 
             <span class="k">if</span> <span class="n">VALUE</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">element</span><span class="o">.</span><span class="n">attrib</span><span class="p">:</span>
+
+                <span class="c1"># TODO - NB CIM ID specific, to be skipped for generic parsing</span>
                 <span class="n">VALUE</span> <span class="o">=</span> <span class="n">clean_ID</span><span class="p">(</span><span class="n">element</span><span class="o">.</span><span class="n">attrib</span><span class="p">[</span><span class="n">RDF_RESOURCE</span><span class="p">])</span>
+
+                <span class="c1"># TODO - NB CIM enumeration specific</span>
+                <span class="k">if</span> <span class="n">VALUE</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;http&quot;</span><span class="p">):</span>
+                    <span class="n">VALUE</span> <span class="o">=</span> <span class="n">VALUE</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
 
             <span class="n">data_list</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">ID</span><span class="p">,</span> <span class="n">KEY</span><span class="p">,</span> <span class="n">VALUE</span><span class="p">,</span> <span class="n">INSTANCE_ID</span><span class="p">))</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;All values put to data list&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;All values put to data list&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">data_list</span></div>
 
 
@@ -466,7 +527,7 @@
     <span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data_list</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">data_type</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;List of data loaded to DataFrame&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;List of data loaded to DataFrame&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">data</span></div>
 
@@ -497,6 +558,9 @@
 <span class="sd">    --------</span>
 <span class="sd">    &gt;&gt;&gt; df = load_all_to_dataframe([&quot;data.zip&quot;, &quot;file.xml&quot;], max_workers=4)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># TODO - Support folder</span>
+
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
         <span class="n">process_start</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
 
@@ -527,8 +591,8 @@
     <span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data_list</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">data_type</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;Data list loaded to DataFrame&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
-        <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;All loaded in &quot;</span><span class="p">,</span> <span class="n">process_start</span><span class="p">)</span>
+        <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;Data list loaded to DataFrame&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;All loaded in &quot;</span><span class="p">,</span> <span class="n">process_start</span><span class="p">)</span>
         <span class="c1"># logger.debug(data.info())</span>
 
     <span class="k">return</span> <span class="n">data</span></div>
@@ -568,12 +632,12 @@
     <span class="n">type_id</span> <span class="o">=</span> <span class="n">data</span><span class="p">[(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">type_name</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">type_key</span><span class="p">)]</span>
 
     <span class="k">if</span> <span class="n">type_id</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;No data available for </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">type_name</span><span class="p">))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;No data available for </span><span class="si">{</span><span class="n">type_name</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>
 
     <span class="c1"># Filter original data by found type_id data</span>
     <span class="c1"># There can&#39;t be duplicate ID and KEY pairs for pivot, but this will lose data on full model DependantOn and other info, solution would be to use pivot table function.</span>
-    <span class="n">type_data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">type_id</span><span class="p">[[</span><span class="s2">&quot;ID&quot;</span><span class="p">]],</span> <span class="n">data</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">])</span>
+    <span class="n">type_data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">type_id</span><span class="p">[[</span><span class="s2">&quot;ID&quot;</span><span class="p">]],</span> <span class="n">data</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">])</span>
 
     <span class="c1"># Convert form triplets to a table view all objects of same type</span>
     <span class="n">data_view</span> <span class="o">=</span> <span class="n">type_data</span><span class="o">.</span><span class="n">pivot</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span>
@@ -596,14 +660,14 @@
 
 <div class="viewcode-block" id="key_tableview">
 <a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.key_tableview">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">key_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">key_name</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">key_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a table view of all objects with a specified key.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    data : pandas.DataFrame</span>
 <span class="sd">        Triplet dataset containing RDF data.</span>
-<span class="sd">    key_name : str</span>
+<span class="sd">    key : str</span>
 <span class="sd">        The key to filter objects by (e.g., &#39;GeneratingUnit.maxOperatingP&#39;).</span>
 <span class="sd">    string_to_number : bool, optional</span>
 <span class="sd">        If True, convert columns containing numbers to numeric types (default is True).</span>
@@ -618,18 +682,71 @@
 <span class="sd">    &gt;&gt;&gt; table = data.key_tableview(&quot;GeneratingUnit.maxOperatingP&quot;)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># Get all ID-s of rows where KEY == key_name</span>
-    <span class="n">type_id</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">key_name</span><span class="p">]</span>
+    <span class="n">key_id</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">key</span><span class="p">]</span>
 
-    <span class="k">if</span> <span class="n">type_id</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;No data available for </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">key_name</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">key_id</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;No data available for </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>
 
-    <span class="c1"># Filter original data by found type_id data</span>
+    <span class="c1"># Filter original data by found key_id data</span>
     <span class="c1"># There can&#39;t be duplicate ID and KEY pairs for pivot, but this will lose data on full model DependantOn and other info, solution would be to use pivot table function.</span>
-    <span class="n">type_data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">type_id</span><span class="p">[[</span><span class="s2">&quot;ID&quot;</span><span class="p">]],</span> <span class="n">data</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">])</span>
+    <span class="n">type_data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">key_id</span><span class="p">[[</span><span class="s2">&quot;ID&quot;</span><span class="p">]],</span> <span class="n">data</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">])</span>
 
     <span class="c1"># Convert form triplets to a table view all objects of same type</span>
     <span class="n">data_view</span> <span class="o">=</span> <span class="n">type_data</span><span class="o">.</span><span class="n">pivot</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">string_to_number</span><span class="p">:</span>
+        <span class="c1"># Convert to data type to numeric in columns that contain only numbers (for easier data usage later on)</span>
+        <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">data_view</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">data_view</span><span class="p">[</span><span class="n">column</span><span class="p">]</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">to_numeric</span><span class="p">(</span><span class="n">data_view</span><span class="p">[</span><span class="n">column</span><span class="p">],</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;raise&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+                <span class="k">pass</span>
+
+    <span class="k">return</span> <span class="n">data_view</span></div>
+
+
+
+
+<div class="viewcode-block" id="id_tableview">
+<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.id_tableview">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">id</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a tabular view of a CGMES triplet dataset filtered by ID-s.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+<span class="sd">    id : str or list or pandas.DataFrame</span>
+<span class="sd">        DataFrame containing IDs to filter by.</span>
+<span class="sd">    string_to_number : bool, optional</span>
+<span class="sd">        If True, convert columns containing numbers to numeric types (default is True).</span>
+
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        Pivoted DataFrame with IDs as index and KEYs as columns.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; table = id_tableview(data, &#39;UUID&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; table = id_tableview(data, [&#39;UUID_1&#39;, &#39;UUID_2&#39;])</span>
+<span class="sd">    &gt;&gt;&gt; table = id_tableview(data, pandas.DataFrame({&quot;ID&quot;:[&#39;UUID_1&#39;, &#39;UUID_2&#39;]})</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="nb">id</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="p">[</span><span class="nb">id</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="nb">id</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="nb">id</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">&quot;ID&quot;</span><span class="p">:</span> <span class="nb">id</span><span class="p">})</span>
+
+    <span class="n">id_data</span> <span class="o">=</span> <span class="n">filter_by_triplet</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">id</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">id_data</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;No data available for </span><span class="si">{</span><span class="nb">id</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="n">data_view</span> <span class="o">=</span> <span class="n">id_data</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">pivot</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">columns</span> <span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span>
 
     <span class="k">if</span> <span class="n">string_to_number</span><span class="p">:</span>
         <span class="c1"># Convert to data type to numeric in columns that contain only numbers (for easier data usage later on)</span>
@@ -1092,7 +1209,7 @@
 <span class="c1"># Extend this functionality to pandas DataFrame</span>
 <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="o">.</span><span class="n">set_VALUE_at_KEY_and_ID</span> <span class="o">=</span> <span class="n">set_VALUE_at_KEY_and_ID</span>
 
-
+<span class="c1"># TODO - add CSV export</span>
 <div class="viewcode-block" id="export_to_excel">
 <a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.export_to_excel">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">export_to_excel</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
@@ -1159,10 +1276,8 @@
 <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="o">.</span><span class="n">export_to_excel</span> <span class="o">=</span> <span class="n">export_to_excel</span>
 
 
-<div class="viewcode-block" id="get_qname">
-<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.get_qname">[docs]</a>
 <span class="nd">@lru_cache</span><span class="p">(</span><span class="n">maxsize</span><span class="o">=</span><span class="mi">250</span><span class="p">)</span>  <span class="c1"># Adjust maxsize based on the number of unique QName combinations</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_qname</span><span class="p">(</span><span class="n">namespace</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_qname</span><span class="p">(</span><span class="n">namespace</span><span class="p">,</span> <span class="n">tag</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a QName for a given namespace and tag, with caching.</span>
 
 <span class="sd">    Parameters</span>
@@ -1179,11 +1294,11 @@
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; qname = get_qname(&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#&quot;, &quot;RDF&quot;)</span>
+<span class="sd">    &gt;&gt;&gt; qname = _get_qname(&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#&quot;, &quot;RDF&quot;)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">qname</span> <span class="o">=</span> <span class="n">QName</span><span class="p">(</span><span class="n">namespace</span><span class="p">,</span> <span class="n">tag</span><span class="p">)</span>
     <span class="c1">#logger.debug(f&quot;Cache info: {get_qname.cache_info()}&quot;)</span>
-    <span class="k">return</span> <span class="n">qname</span></div>
+    <span class="k">return</span> <span class="n">qname</span>
 
 
 
@@ -1191,41 +1306,83 @@
 <a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.generate_xml">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">generate_xml</span><span class="p">(</span><span class="n">instance_data</span><span class="p">,</span>
                  <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-                 <span class="n">namespace_map</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;rdf&quot;</span><span class="p">:</span> <span class="s2">&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#&quot;</span><span class="p">},</span>
+                 <span class="n">namespace_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                  <span class="n">class_KEY</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span>
                  <span class="n">export_undefined</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                  <span class="n">comment</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                  <span class="n">debug</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate an RDF XML file from a triplet dataset instance.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Generate an RDF XML file from a triplet dataset instance.</span>
 
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    instance_data : pandas.DataFrame</span>
-<span class="sd">        Triplet dataset for a single instance.</span>
-<span class="sd">    rdf_map : dict, optional</span>
-<span class="sd">        Dictionary mapping classes and keys to RDF namespaces and attributes.</span>
-<span class="sd">    namespace_map : dict, optional</span>
-<span class="sd">        Dictionary of namespace prefixes and URIs (default includes RDF namespace).</span>
-<span class="sd">    class_KEY : str, optional</span>
-<span class="sd">        Key used to identify object types (default is &#39;Type&#39;).</span>
-<span class="sd">    export_undefined : bool, optional</span>
-<span class="sd">        If True, export undefined classes and tags with default settings (default is True).</span>
-<span class="sd">    comment : str, optional</span>
-<span class="sd">        Comment to include in the XML output (default is None).</span>
-<span class="sd">    debug : bool, optional</span>
-<span class="sd">        If True, log timing information for debugging (default is False).</span>
+<span class="sd">        This function processes a single instance (grouped by ``INSTANCE_ID``) from a triplet</span>
+<span class="sd">        dataset and exports it as an RDF/XML document using provided or inferred mapping rules.</span>
 
-<span class="sd">    Returns</span>
-<span class="sd">    -------</span>
-<span class="sd">    dict</span>
-<span class="sd">        Dictionary with &#39;filename&#39; (str) and &#39;file&#39; (bytes) containing the XML output.</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        instance_data : pandas.DataFrame</span>
+<span class="sd">            Triplet dataset for a single instance, with columns [&#39;&#39;ID&#39;, &#39;KEY&#39;, &#39;VALUE&#39;, INSTANCE_ID&#39;].</span>
+<span class="sd">            Must contain at least one row with ``KEY == class_KEY`` to define object types.</span>
+<span class="sd">        rdf_map : dict or str, optional</span>
+<span class="sd">            Dictionary mapping CIM classes and attributes to RDF namespaces and export rules.</span>
+<span class="sd">            If a string is provided, it is treated as a file path to a JSON configuration.</span>
+<span class="sd">            If ``None``, attempts to infer from instance data (e.g., profile-based mapping).</span>
+<span class="sd">        namespace_map : dict, optional</span>
+<span class="sd">            Mapping of namespace prefixes to URIs (e.g., ``{&quot;cim&quot;: &quot;http://iec.ch/TC57/2013/CIM-schema-cim16#&quot;}``).</span>
+<span class="sd">            Must include ``&quot;rdf&quot;`` namespace. If ``None``, inferred from ``rdf_map`` or instance.</span>
+<span class="sd">        class_KEY : str, default &quot;Type&quot;</span>
+<span class="sd">            Column key used to identify object class/type in the triplet data.</span>
+<span class="sd">        export_undefined : bool, default True</span>
+<span class="sd">            If True, export classes and attributes without explicit mapping using default RDF settings.</span>
+<span class="sd">            If False, skip unmapped elements with a warning.</span>
+<span class="sd">        comment : str, optional</span>
+<span class="sd">            Optional comment to insert at the top of the XML output (as XML comment).</span>
+<span class="sd">        debug : bool, default False</span>
+<span class="sd">            If True, log detailed timing and debug information during processing.</span>
 
-<span class="sd">    Examples</span>
-<span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; xml_data = generate_xml(instance_data, rdf_map, namespace_map)</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        dict</span>
+<span class="sd">            Dictionary containing:</span>
+<span class="sd">            - ``&#39;filename&#39;`` (str): Generated filename (from ``label`` or UUID).</span>
+<span class="sd">            - ``&#39;file&#39;`` (bytes): UTF-8 encoded XML content.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        KeyError</span>
+<span class="sd">            If required columns are missing in ``instance_data``.</span>
+<span class="sd">        ValueError</span>
+<span class="sd">            If invalid export configuration or mapping is detected.</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+<span class="sd">        &gt;&gt;&gt; instance = data[data[&quot;INSTANCE_ID&quot;] == 1]</span>
+<span class="sd">        &gt;&gt;&gt; result = generate_xml(</span>
+<span class="sd">        ...     instance,</span>
+<span class="sd">        ...     rdf_map=&quot;config/eq_profile.json&quot;,</span>
+<span class="sd">        ...     comment=&quot;Exported on 2025-11-11&quot;,</span>
+<span class="sd">        ...     debug=True</span>
+<span class="sd">        ... )</span>
+<span class="sd">        &gt;&gt;&gt; with open(result[&quot;filename&quot;], &quot;wb&quot;) as f:</span>
+<span class="sd">        ...     f.write(result[&quot;file&quot;])</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        - Supports profile-based mapping (e.g., &quot;EQ&quot;, &quot;SSH&quot;) via ``Model.profile`` or ``Model.messageType``.</span>
+<span class="sd">        - Uses ``lxml.etree`` with ``ElementMaker`` for XML construction.</span>
+<span class="sd">        - Undefined classes are exported with ``rdf:about=&quot;urn:uuid:&lt;ID&gt;&quot;`` when ``export_undefined=True``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+    <span class="c1"># TODO - Use if logger debug</span>
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
         <span class="n">start_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
+
+    <span class="c1"># config map, is not given as dict, assume path and load it</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">conf_file</span><span class="p">:</span>
+            <span class="n">rdf_map</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">conf_file</span><span class="p">)</span>
+
+    <span class="c1"># No map in function call, use instance map</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">namespace_map</span><span class="p">:</span>
+        <span class="n">namespace_map</span><span class="p">,</span> <span class="n">xml_base</span> <span class="o">=</span> <span class="n">get_namespace_map</span><span class="p">(</span><span class="n">instance_data</span><span class="p">)</span>
 
     <span class="c1"># Filename is kept under label</span>
     <span class="n">label_data</span> <span class="o">=</span> <span class="n">instance_data</span><span class="p">[</span><span class="n">instance_data</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;label&quot;</span><span class="p">]</span>
@@ -1251,12 +1408,14 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="n">instance_type</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
         <span class="n">instance_type_url</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">at</span><span class="p">[</span><span class="n">profile_data</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s1">&#39;VALUE&#39;</span><span class="p">]</span>
 
-        <span class="c1"># TODO - needs to be extended</span>
+        <span class="c1"># TODO - needs to be extended and made more intelligent, maybe scan profile?</span>
         <span class="n">profile_map</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s2">&quot;Equipment&quot;</span><span class="p">:</span> <span class="s2">&quot;EQ&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;EquipmentCore&quot;</span><span class="p">:</span> <span class="s2">&quot;EQ&quot;</span><span class="p">,</span>
             <span class="s2">&quot;SteadyState&quot;</span><span class="p">:</span> <span class="s2">&quot;SSH&quot;</span><span class="p">,</span>
             <span class="s2">&quot;StateVariables&quot;</span><span class="p">:</span> <span class="s2">&quot;SV&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;Topology&quot;</span><span class="p">:</span> <span class="s2">&quot;TP&quot;</span>
+            <span class="s2">&quot;Topology/&quot;</span><span class="p">:</span> <span class="s2">&quot;TP&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;EquipmentBoundary&quot;</span><span class="p">:</span> <span class="s2">&quot;EQBD&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;TopologyBoundary&quot;</span><span class="p">:</span> <span class="s2">&quot;TPBD&quot;</span>
         <span class="p">}</span>
 
         <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">profile_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -1268,6 +1427,10 @@
     <span class="c1"># TODO - needs revision, add support both for md:FullModel, dcat:DataSet and without profile definiton</span>
     <span class="n">instance_rdf_map</span> <span class="o">=</span> <span class="n">rdf_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">instance_type</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">)</span>
 
+    <span class="c1"># No map in function call, nor in instance data, use profile map</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">namespace_map</span> <span class="ow">and</span> <span class="n">instance_rdf_map</span><span class="p">:</span>
+        <span class="n">namespace_map</span> <span class="o">=</span> <span class="n">instance_rdf_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ProfileNamespaceMap&quot;</span><span class="p">)</span>
+
     <span class="k">if</span> <span class="n">instance_rdf_map</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;No rdf mapping available for </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">instance_type</span><span class="p">))</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">export_undefined</span><span class="p">:</span>
@@ -1278,7 +1441,7 @@
     <span class="n">E</span> <span class="o">=</span> <span class="n">ElementMaker</span><span class="p">(</span><span class="n">nsmap</span><span class="o">=</span><span class="n">namespace_map</span><span class="p">)</span>
 
     <span class="c1"># Create xml root element</span>
-    <span class="n">RDF</span> <span class="o">=</span> <span class="n">E</span><span class="p">(</span><span class="n">QName</span><span class="p">(</span><span class="n">namespace_map</span><span class="p">[</span><span class="s2">&quot;rdf&quot;</span><span class="p">],</span> <span class="s2">&quot;RDF&quot;</span><span class="p">))</span>
+    <span class="n">RDF</span> <span class="o">=</span> <span class="n">E</span><span class="p">(</span><span class="n">QName</span><span class="p">(</span><span class="n">namespace_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rdf&quot;</span><span class="p">,</span> <span class="s2">&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#&quot;</span><span class="p">),</span> <span class="s2">&quot;RDF&quot;</span><span class="p">))</span>
 
     <span class="c1"># Add comment</span>
     <span class="k">if</span> <span class="n">comment</span><span class="p">:</span>
@@ -1289,7 +1452,7 @@
     <span class="c1"># TODO ensure that the Header class is serialised first</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;File root generated&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;File root generated&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
 
     <span class="c1"># Generate objects (Class instance)</span>
     <span class="c1"># TODO: Maybe group by class name: less lookups</span>
@@ -1320,16 +1483,16 @@
 
         <span class="c1"># Create class element</span>
         <span class="c1"># logger.debug(class_namespace, class_name) # DEBUG</span>
-        <span class="n">rdf_object</span> <span class="o">=</span> <span class="n">E</span><span class="p">(</span><span class="n">get_qname</span><span class="p">(</span><span class="n">class_namespace</span><span class="p">,</span> <span class="n">class_name</span><span class="p">))</span>
+        <span class="n">rdf_object</span> <span class="o">=</span> <span class="n">E</span><span class="p">(</span><span class="n">_get_qname</span><span class="p">(</span><span class="n">class_namespace</span><span class="p">,</span> <span class="n">class_name</span><span class="p">))</span>
         <span class="c1"># Add ID attribute</span>
-        <span class="n">rdf_object</span><span class="o">.</span><span class="n">attrib</span><span class="p">[</span><span class="n">get_qname</span><span class="p">(</span><span class="n">id_name</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">id_value_prefix</span><span class="si">}{</span><span class="n">ID</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">rdf_object</span><span class="o">.</span><span class="n">attrib</span><span class="p">[</span><span class="n">_get_qname</span><span class="p">(</span><span class="n">id_name</span><span class="p">)]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">id_value_prefix</span><span class="si">}{</span><span class="n">ID</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="c1"># Add object to RDF</span>
         <span class="n">RDF</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rdf_object</span><span class="p">)</span>
         <span class="c1"># Add object with it&#39;s ID to dict (later we use it to add attributes to that class)</span>
         <span class="n">objects</span><span class="p">[</span><span class="n">ID</span><span class="p">]</span> <span class="o">=</span> <span class="n">rdf_object</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;Objects added&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;Objects added&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
 
     <span class="c1"># Add attribute to objects</span>
     <span class="c1"># TODO - maybe make work que here, all Objects are generated, we now need to just add attributes to them, but we are going object by object</span>
@@ -1351,12 +1514,19 @@
             <span class="n">tag_def</span> <span class="o">=</span> <span class="n">instance_rdf_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">KEY</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 
             <span class="k">if</span> <span class="n">tag_def</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">tag</span> <span class="o">=</span> <span class="n">E</span><span class="p">(</span><span class="n">get_qname</span><span class="p">(</span><span class="n">tag_def</span><span class="p">[</span><span class="s2">&quot;namespace&quot;</span><span class="p">],</span> <span class="n">KEY</span><span class="p">))</span>
+                <span class="n">tag</span> <span class="o">=</span> <span class="n">E</span><span class="p">(</span><span class="n">_get_qname</span><span class="p">(</span><span class="n">tag_def</span><span class="p">[</span><span class="s2">&quot;namespace&quot;</span><span class="p">],</span> <span class="n">KEY</span><span class="p">))</span>
                 <span class="n">attrib</span> <span class="o">=</span> <span class="n">tag_def</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;attrib&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
                 <span class="n">text_prefix</span> <span class="o">=</span> <span class="n">tag_def</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
 
                 <span class="k">if</span> <span class="n">attrib</span><span class="p">:</span>
-                    <span class="n">tag</span><span class="o">.</span><span class="n">attrib</span><span class="p">[</span><span class="n">get_qname</span><span class="p">(</span><span class="n">attrib</span><span class="p">[</span><span class="s2">&quot;attribute&quot;</span><span class="p">])]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">attrib</span><span class="p">[</span><span class="s1">&#39;value_prefix&#39;</span><span class="p">]</span><span class="si">}{</span><span class="n">VALUE</span><span class="si">}</span><span class="s2">&quot;</span>
+
+                    <span class="n">value_prefix</span> <span class="o">=</span> <span class="n">attrib</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;value_prefix&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+                    <span class="c1"># Get namespace for enumerations</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">value_prefix</span><span class="p">:</span>
+                        <span class="n">value_prefix</span> <span class="o">=</span> <span class="n">instance_rdf_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">VALUE</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;namespace&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+                    <span class="n">tag</span><span class="o">.</span><span class="n">attrib</span><span class="p">[</span><span class="n">_get_qname</span><span class="p">(</span><span class="n">attrib</span><span class="p">[</span><span class="s2">&quot;attribute&quot;</span><span class="p">])]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">value_prefix</span><span class="si">}{</span><span class="n">VALUE</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">tag</span><span class="o">.</span><span class="n">text</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">text_prefix</span><span class="si">}{</span><span class="n">VALUE</span><span class="si">}</span><span class="s2">&quot;</span>
 
@@ -1383,7 +1553,7 @@
     <span class="c1"># etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding=&#39;UTF-8&#39;)</span>
     <span class="c1"># logger.debug(etree.tostring(RDF, pretty_print=True).decode())</span>
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;Attributes added&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;Attributes added&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
 
     <span class="c1"># Convert to XML</span>
     <span class="n">xml</span> <span class="o">=</span> <span class="n">etree</span><span class="o">.</span><span class="n">tostring</span><span class="p">(</span><span class="n">RDF</span><span class="p">,</span> <span class="n">pretty_print</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">xml_declaration</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s1">&#39;UTF-8&#39;</span><span class="p">)</span>
@@ -1392,63 +1562,95 @@
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Exporting RDF to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file_name</span><span class="p">))</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;XML created&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;XML created&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;filename&quot;</span><span class="p">:</span> <span class="n">file_name</span><span class="p">,</span> <span class="s2">&quot;file&quot;</span><span class="p">:</span> <span class="n">xml</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="ExportType">
+<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.ExportType">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ExportType</span><span class="p">(</span><span class="n">StrEnum</span><span class="p">):</span>
+    <span class="n">XML_PER_INSTANCE</span> <span class="o">=</span> <span class="s2">&quot;xml_per_instance&quot;</span>
+    <span class="n">XML_PER_INSTANCE_ZIP_PER_ALL</span> <span class="o">=</span> <span class="s2">&quot;xml_per_instance_zip_per_all&quot;</span>
+    <span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span> <span class="o">=</span> <span class="s2">&quot;xml_per_instance_zip_per_xml&quot;</span></div>
 
 
 
 <div class="viewcode-block" id="export_to_cimxml">
 <a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.export_to_cimxml">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">export_to_cimxml</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">namespace_map</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;rdf&quot;</span><span class="p">:</span> <span class="s2">&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#&quot;</span><span class="p">},</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">export_to_cimxml</span><span class="p">(</span><span class="n">data</span><span class="p">,</span>
+                     <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                     <span class="n">namespace_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                      <span class="n">class_KEY</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span>
                      <span class="n">export_undefined</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-                     <span class="n">export_type</span><span class="o">=</span><span class="s2">&quot;xml_per_instance_zip_per_xml&quot;</span><span class="p">,</span>
+                     <span class="n">export_type</span><span class="o">=</span><span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span><span class="p">,</span>
                      <span class="n">global_zip_filename</span><span class="o">=</span><span class="s2">&quot;Export.zip&quot;</span><span class="p">,</span>
                      <span class="n">debug</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                      <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                      <span class="n">export_base_path</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
                      <span class="n">comment</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                      <span class="n">max_workers</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Export a triplet dataset to CIM RDF XML or ZIP files.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Export a full triplet dataset to CIM RDF XML files or ZIP archives.</span>
 
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    data : pandas.DataFrame</span>
-<span class="sd">        Triplet dataset containing RDF data.</span>
-<span class="sd">    rdf_map : dict, optional</span>
-<span class="sd">        Dictionary mapping classes and keys to RDF namespaces and attributes.</span>
-<span class="sd">    namespace_map : dict, optional</span>
-<span class="sd">        Dictionary of namespace prefixes and URIs (default includes RDF namespace).</span>
-<span class="sd">    class_KEY : str, optional</span>
-<span class="sd">        Key used to identify object types (default is &#39;Type&#39;).</span>
-<span class="sd">    export_undefined : bool, optional</span>
-<span class="sd">        If True, export undefined classes and tags with default settings (default is True).</span>
-<span class="sd">    export_type : str, optional</span>
-<span class="sd">        Export format: &#39;xml_per_instance&#39;, &#39;xml_per_instance_zip_per_all&#39;, or</span>
-<span class="sd">        &#39;xml_per_instance_zip_per_xml&#39; (default is &#39;xml_per_instance_zip_per_xml&#39;).</span>
-<span class="sd">    global_zip_filename : str, optional</span>
-<span class="sd">        Filename for the global ZIP archive (default is &#39;Export.zip&#39;).</span>
-<span class="sd">    debug : bool, optional</span>
-<span class="sd">        If True, log timing information for debugging (default is False).</span>
-<span class="sd">    export_to_memory : bool, optional</span>
-<span class="sd">        If True, return file objects in memory; otherwise, save to disk (default is False).</span>
-<span class="sd">    export_base_path : str, optional</span>
-<span class="sd">        Directory path to save exported files (default is empty, uses current directory).</span>
-<span class="sd">    comment : str, optional</span>
-<span class="sd">        Comment to include in the XML output (default is None).</span>
-<span class="sd">    max_workers : int, optional</span>
-<span class="sd">        Number of worker processes for parallel processing (default is None).</span>
+<span class="sd">        Processes all instances (grouped by ``INSTANCE_ID``) and exports them according to the</span>
+<span class="sd">        specified ``export_type``. Supports parallel processing and in-memory or disk output.</span>
 
-<span class="sd">    Returns</span>
-<span class="sd">    -------</span>
-<span class="sd">    list</span>
-<span class="sd">        List of file-like objects (if export_to_memory=True) or filenames (if export_to_memory=False).</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        data : pandas.DataFrame</span>
+<span class="sd">            Full triplet dataset with columns [&#39;INSTANCE_ID&#39;, &#39;ID&#39;, &#39;KEY&#39;, &#39;VALUE&#39;].</span>
+<span class="sd">        rdf_map : dict or str, optional</span>
+<span class="sd">            RDF mapping configuration (see :func:`generate_xml`).</span>
+<span class="sd">        namespace_map : dict, optional</span>
+<span class="sd">            Namespace prefix-to-URI mapping (see :func:`generate_xml`).</span>
+<span class="sd">        class_KEY : str, default &quot;Type&quot;</span>
+<span class="sd">            Key identifying object types in triplet data.</span>
+<span class="sd">        export_undefined : bool, default True</span>
+<span class="sd">            Export unmapped classes/attributes with default RDF syntax.</span>
+<span class="sd">        export_type : ExportType or str, default ExportType.XML_PER_INSTANCE_ZIP_PER_XML</span>
+<span class="sd">            Export format:</span>
+<span class="sd">            - ``XML_PER_INSTANCE``: One XML file per instance.</span>
+<span class="sd">            - ``XML_PER_INSTANCE_ZIP_PER_ALL``: All XMLs in a single ZIP.</span>
+<span class="sd">            - ``XML_PER_INSTANCE_ZIP_PER_XML``: Each XML in its own ZIP.</span>
+<span class="sd">        global_zip_filename : str, default &quot;Export.zip&quot;</span>
+<span class="sd">            Filename for the global ZIP archive (used with ``ZIP_PER_ALL``).</span>
+<span class="sd">        debug : bool, default False</span>
+<span class="sd">            Enable detailed timing and debug logging.</span>
+<span class="sd">        export_to_memory : bool, default False</span>
+<span class="sd">            If True, return file-like objects (``BytesIO``); if False, save to disk.</span>
+<span class="sd">        export_base_path : str, default &quot;&quot;</span>
+<span class="sd">            Directory to save files when ``export_to_memory=False``. Uses current directory if empty.</span>
+<span class="sd">        comment : str, optional</span>
+<span class="sd">            Optional XML comment added to each generated file.</span>
+<span class="sd">        max_workers : int, optional</span>
+<span class="sd">            Number of parallel workers for XML generation. If ``None``, runs sequentially.</span>
 
-<span class="sd">    Examples</span>
-<span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; files = data.export_to_cimxml(rdf_map, export_type=&quot;xml_per_instance&quot;)</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        list</span>
+<span class="sd">            - If ``export_to_memory=True``: List of ``BytesIO`` objects with ``.name`` attribute.</span>
+<span class="sd">            - If ``export_to_memory=False``: List of saved filenames (relative to ``export_base_path``).</span>
+
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+<span class="sd">        &gt;&gt;&gt; files = export_to_cimxml(</span>
+<span class="sd">        ...     data,</span>
+<span class="sd">        ...     rdf_map=&quot;config/cim_map.json&quot;,</span>
+<span class="sd">        ...     export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,</span>
+<span class="sd">        ...     export_to_memory=True,</span>
+<span class="sd">        ...     max_workers=4</span>
+<span class="sd">        ... )</span>
+<span class="sd">        &gt;&gt;&gt; for f in files:</span>
+<span class="sd">        ...     print(f&quot;name:&quot;, f.name)</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        - Uses ``concurrent.futures.ProcessPoolExecutor`` for parallel XML generation.</span>
+<span class="sd">        - All XML files are UTF-8 encoded with XML declaration and pretty-printing.</span>
+<span class="sd">        - ZIP files use DEFLATED compression.</span>
+<span class="sd">        - Filenames are derived from instance ``label`` or UUID.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
         <span class="n">start_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
         <span class="n">init_time</span> <span class="o">=</span> <span class="n">start_time</span>
@@ -1462,7 +1664,7 @@
     <span class="n">xml_documents</span> <span class="o">=</span> <span class="p">[]</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;All file instance ID-s identified&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;All file instance ID-s identified&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
 
     <span class="c1"># if max_workers:</span>
     <span class="c1">#     with ProcessPoolExecutor(max_workers=max_workers) as executor:</span>
@@ -1489,11 +1691,11 @@
                                              <span class="n">comment</span><span class="p">,</span>
                                              <span class="n">debug</span><span class="p">))</span>
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;All XML created in memory &quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;All XML created in memory &quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
     <span class="c1">### Export XML ###</span>
     <span class="n">exported_files</span> <span class="o">=</span> <span class="p">[]</span>
 
-    <span class="k">if</span> <span class="n">export_type</span> <span class="o">==</span> <span class="s2">&quot;xml_per_instance&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">export_type</span> <span class="o">==</span> <span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">document</span> <span class="ow">in</span> <span class="n">xml_documents</span><span class="p">:</span>
 
             <span class="n">file_object</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">(</span><span class="n">document</span><span class="p">[</span><span class="s2">&quot;file&quot;</span><span class="p">])</span>
@@ -1504,7 +1706,7 @@
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Exported </span><span class="si">{</span><span class="n">document</span><span class="p">[</span><span class="s1">&#39;filename&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> to memory&quot;</span><span class="p">)</span>
 
     <span class="c1">### Export ZIP containing all xml ###</span>
-    <span class="k">elif</span> <span class="n">export_type</span> <span class="o">==</span> <span class="s2">&quot;xml_per_instance_zip_per_all&quot;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">export_type</span> <span class="o">==</span> <span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE_ZIP_PER_ALL</span><span class="p">:</span>
 
         <span class="n">gloabl_zip_fileobject</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">()</span>
         <span class="n">gloabl_zip_fileobject</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">global_zip_filename</span>
@@ -1520,7 +1722,7 @@
 
 
     <span class="c1">### Export each xml in separate zip ###</span>
-    <span class="k">elif</span> <span class="n">export_type</span> <span class="o">==</span> <span class="s2">&quot;xml_per_instance_zip_per_xml&quot;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">export_type</span> <span class="o">==</span> <span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span><span class="p">:</span>
 
         <span class="k">for</span> <span class="n">document</span> <span class="ow">in</span> <span class="n">xml_documents</span><span class="p">:</span>
 
@@ -1538,8 +1740,8 @@
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Supported options are: xml_per_instance, xml_per_instance_zip_per_all, xml_per_instance_zip_per_xml&quot;</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;Files saved in&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
-        <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;Whole Export done in&quot;</span><span class="p">,</span> <span class="n">init_time</span><span class="p">)</span>
+        <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;Files saved in&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;Whole Export done in&quot;</span><span class="p">,</span> <span class="n">init_time</span><span class="p">)</span>
 
     <span class="c1"># Save files to disk</span>
     <span class="k">if</span> <span class="n">export_to_memory</span><span class="p">:</span>
@@ -1619,7 +1821,7 @@
 <span class="sd">    &gt;&gt;&gt; triplet = tableview_to_triplet(table_view)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># TODO add only when tableveiw is created</span>
-    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span><span class="o">.</span><span class="n">melt</span><span class="p">(</span><span class="n">id_vars</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">value_name</span><span class="o">=</span><span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="n">var_name</span><span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span><span class="o">.</span><span class="n">melt</span><span class="p">(</span><span class="n">id_vars</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">value_name</span><span class="o">=</span><span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="n">var_name</span><span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span></div>
 
 
 
@@ -1756,17 +1958,47 @@
 
 
 
-<div class="viewcode-block" id="filter_triplet_by_type">
-<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.filter_triplet_by_type">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">filter_triplet_by_type</span><span class="p">(</span><span class="n">triplet</span><span class="p">,</span> <span class="nb">type</span><span class="p">):</span>
+<div class="viewcode-block" id="filter_by_triplet">
+<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.filter_by_triplet">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">filter_by_triplet</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">filter_triplet</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Filter riplet DataFrame using IDs from another DataFrame.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing CGMES data.</span>
+<span class="sd">    filter_triplet : pandas.DataFrame</span>
+<span class="sd">        DataFrame containing atleast colum ID to filter by.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        Filtered DataFrame with columns [&#39;ID, &#39;KEY&#39;, &#39;VALUE&#39;, &#39;INSTANCE_ID&#39;].</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; filtered = filter_by_triplet(data, filter_triplet)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">filter_triplet</span><span class="p">[[</span><span class="s2">&quot;ID&quot;</span><span class="p">]],</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;inner&quot;</span><span class="p">)</span></div>
+
+
+<span class="n">pandas</span><span class="o">.</span><span class="n">filter_triplet_by_triplet</span> <span class="o">=</span> <span class="n">filter_by_triplet</span>
+
+
+<div class="viewcode-block" id="filter_by_type">
+<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.filter_by_type">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">filter_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Filter triplet dataset by objects of a specific type.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    triplet : pandas.DataFrame</span>
+<span class="sd">    data : pandas.DataFrame</span>
 <span class="sd">        Triplet dataset containing RDF data.</span>
-<span class="sd">    type : str</span>
+<span class="sd">    type_name : str</span>
 <span class="sd">        Object type to filter by (e.g., &#39;ACLineSegment&#39;).</span>
+<span class="sd">    type_key : str</span>
+<span class="sd">        Key used in triplet to indicate type, by default &quot;Type&quot;</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -1775,16 +2007,18 @@
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; filtered = filter_triplet_by_type(data, &quot;ACLineSegment&quot;)</span>
+<span class="sd">    &gt;&gt;&gt; filtered = filter_by_type(data, &quot;ACLineSegment&quot;)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">triplet</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">triplet</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;Type&#39; and VALUE == @type&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">ID</span><span class="p">)</span></div>
+    <span class="n">filter_triplet</span> <span class="o">=</span> <span class="n">data</span><span class="p">[(</span><span class="n">data</span><span class="o">.</span><span class="n">KEY</span> <span class="o">==</span> <span class="n">type_key</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">VALUE</span> <span class="o">==</span> <span class="n">type_name</span><span class="p">)]</span>
+
+    <span class="k">return</span> <span class="n">filter_by_triplet</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">filter_triplet</span><span class="p">)</span></div>
 
 
 
-<div class="viewcode-block" id="triplet_diff">
-<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.triplet_diff">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">triplet_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the difference between two triplet datasets.</span>
+<div class="viewcode-block" id="diff_between_triplet">
+<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.diff_between_triplet">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">diff_between_triplet</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the difference between two Triplet DataFrames.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -1801,11 +2035,40 @@
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; diff = triplet_diff(old_data, new_data)</span>
+<span class="sd">    &gt;&gt;&gt; diff = diff_between_triplet(old_data, new_data)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">old_data</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">new_data</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s1">&#39;outer&#39;</span><span class="p">,</span> <span class="n">indicator</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;_OLD&quot;</span><span class="p">,</span> <span class="s2">&quot;_NEW&quot;</span><span class="p">),</span> <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;_merge != &#39;both&#39;&quot;</span><span class="p">)</span></div>
 
 
+<div class="viewcode-block" id="diff_between_INSTANCE">
+<a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.diff_between_INSTANCE">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">diff_between_INSTANCE</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">INSTANCE_ID_1</span><span class="p">,</span> <span class="n">INSTANCE_ID_2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Identify differences between two loaded INSTANCES, by thier INSTACE_ID in the same Triplet DataFrame.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : pandas.DataFrame</span>
+<span class="sd">        Triplet dataset containing two or more INSTANCE.</span>
+<span class="sd">    INSTANCE_ID_1 : str</span>
+<span class="sd">        UUID of the first INSTANCE.</span>
+<span class="sd">    INSTANCE_ID_2 : str</span>
+<span class="sd">        UUID of the second INSTANCE.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        DataFrame containing triplets that differ between the two model parts.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    &gt;&gt;&gt; diff = diff_between_INSTANCE(&#39;uuid1&#39;, &#39;uuid2&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">diff</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;INSTANCE_ID == &#39;</span><span class="si">{}</span><span class="s2">&#39; or INSTANCE_ID == &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">INSTANCE_ID_1</span><span class="p">,</span> <span class="n">INSTANCE_ID_2</span><span class="p">))</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">],</span> <span class="n">keep</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">diff</span></div>
+
+
+<span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="o">.</span><span class="n">diff_between_INSTANCE</span> <span class="o">=</span> <span class="n">diff_between_INSTANCE</span>
 
 <div class="viewcode-block" id="print_triplet_diff">
 <a class="viewcode-back" href="../../triplets.rdf_parser.html#triplets.rdf_parser.print_triplet_diff">[docs]</a>
@@ -1836,20 +2099,20 @@
 <span class="sd">    &gt;&gt;&gt; print_triplet_diff(old_data, new_data, exclude_objects=[&quot;NamespaceMap&quot;])</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># Get diff between datasets</span>
-    <span class="n">diff</span> <span class="o">=</span> <span class="n">triplet_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">)</span>
+    <span class="n">diff</span> <span class="o">=</span> <span class="n">diff_between_triplet</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">)</span>
     <span class="n">diff</span> <span class="o">=</span> <span class="n">diff</span><span class="o">.</span><span class="n">replace</span><span class="p">({</span><span class="s1">&#39;_merge&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;left_only&quot;</span><span class="p">:</span> <span class="s2">&quot;-&quot;</span><span class="p">,</span> <span class="s2">&quot;right_only&quot;</span><span class="p">:</span> <span class="s2">&quot;+&quot;</span><span class="p">}})</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;ID&#39;</span><span class="p">,</span> <span class="s1">&#39;KEY&#39;</span><span class="p">])</span>
 
     <span class="c1"># Extract internal structures keeping file name information</span>
-    <span class="n">file_id_data</span> <span class="o">=</span> <span class="n">filter_triplet_by_type</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">file_id_object</span><span class="p">)</span>
+    <span class="n">file_id_data</span> <span class="o">=</span> <span class="n">filter_by_type</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">file_id_object</span><span class="p">)</span>
     <span class="n">diff</span> <span class="o">=</span> <span class="n">remove_triplet_from_triplet</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">file_id_data</span><span class="p">)</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;INFO - removed </span><span class="si">{</span><span class="n">file_id_object</span><span class="si">}</span><span class="s2"> from diff&quot;</span><span class="p">)</span>
 
     <span class="c1"># Exclude defined types form export</span>
     <span class="k">if</span> <span class="n">exclude_objects</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">object_name</span> <span class="ow">in</span> <span class="n">exclude_objects</span><span class="p">:</span>
-            <span class="n">excluded_data</span> <span class="o">=</span> <span class="n">filter_triplet_by_type</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">object_name</span><span class="p">)</span>
+            <span class="n">excluded_data</span> <span class="o">=</span> <span class="n">filter_by_type</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">object_name</span><span class="p">)</span>
             <span class="n">diff</span> <span class="o">=</span> <span class="n">remove_triplet_from_triplet</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">excluded_data</span><span class="p">)</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;INFO - removed </span><span class="si">{</span><span class="n">object_name</span><span class="si">}</span><span class="s2"> from diff&quot;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;INFO - removed </span><span class="si">{</span><span class="n">object_name</span><span class="si">}</span><span class="s2"> from diff&quot;</span><span class="p">)</span>
 
     <span class="c1"># Extract types on left and right to get changed/modified types</span>
     <span class="n">removed_added_modified_types</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span>
@@ -1858,11 +2121,11 @@
         <span class="p">])[[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span>
 
     <span class="c1"># Print old file name</span>
-    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">file_id</span> <span class="ow">in</span> <span class="n">file_id_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;KEY == &#39;</span><span class="si">{</span><span class="n">file_id_key</span><span class="si">}</span><span class="s2">&#39; and _merge == &#39;-&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">file_id</span> <span class="ow">in</span> <span class="n">old_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;KEY == &#39;</span><span class="si">{</span><span class="n">file_id_key</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;--- </span><span class="si">{</span><span class="n">file_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="c1"># from-file-modification-time&quot;)</span>
 
     <span class="c1"># Print new file name</span>
-    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">file_id</span> <span class="ow">in</span> <span class="n">file_id_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;KEY == &#39;</span><span class="si">{</span><span class="n">file_id_key</span><span class="si">}</span><span class="s2">&#39; and _merge == &#39;+&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">file_id</span> <span class="ow">in</span> <span class="n">new_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;KEY == &#39;</span><span class="si">{</span><span class="n">file_id_key</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;+++ </span><span class="si">{</span><span class="n">file_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="c1"># to-file-modification-time&quot;)</span>
 
     <span class="c1"># Print changes</span>
@@ -2017,11 +2280,6 @@
     <span class="c1"># NP (CA.nI)  :   {data.type_tableview(&quot;ControlArea&quot;).iloc[0][&quot;ControlArea.netInterchange&quot;]} MW</span>
     <span class="c1"># &quot;&quot;&quot;)</span>
 
-    <span class="n">namespace_map</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">cim</span><span class="o">=</span><span class="s2">&quot;http://iec.ch/TC57/2013/CIM-schema-cim16#&quot;</span><span class="p">,</span>
-                         <span class="n">entsoe</span><span class="o">=</span><span class="s2">&quot;http://entsoe.eu/CIM/SchemaExtension/3/1#&quot;</span><span class="p">,</span>
-                         <span class="n">md</span><span class="o">=</span><span class="s2">&quot;http://iec.ch/TC57/61970-552/ModelDescription/1#&quot;</span><span class="p">,</span>
-                         <span class="n">rdf</span><span class="o">=</span><span class="s2">&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#&quot;</span><span class="p">)</span>
-
     <span class="c1">#Export Config</span>
 
 
@@ -2029,19 +2287,16 @@
 
     <span class="n">export_type</span> <span class="o">=</span> <span class="s2">&quot;xml_per_instance_zip_per_xml&quot;</span>
 
-    <span class="c1"># Load export format configuration</span>
-    <span class="c1">#import json</span>
-    <span class="c1">#with open(r&quot;../profiles/ENTSOE/CGMES_v2_4_15_2014_08_07.json&quot;, &quot;r&quot;) as conf_file:</span>
-    <span class="c1">#    rdf_map = json.load(conf_file)</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">triplets.export_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">schemas</span>
 
-    <span class="c1"># Export triplet to CGMES</span>
-    <span class="c1">#data.export_to_cimxml(rdf_map=rdf_map,</span>
-    <span class="c1">#                      namespace_map=namespace_map,</span>
-    <span class="c1">#                      export_undefined=False,</span>
-    <span class="c1">#                      export_type=export_type,</span>
-    <span class="c1">#                      debug=True,</span>
-    <span class="c1">#                      export_to_memory=False,</span>
-    <span class="c1">#                      max_workers=None)</span>
+    <span class="c1">#Export triplet to CGMES</span>
+    <span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span><span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_2_4_15_552_ED1</span><span class="p">,</span>
+                         <span class="n">namespace_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                         <span class="n">export_undefined</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                         <span class="n">export_type</span><span class="o">=</span><span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span><span class="p">,</span>
+                         <span class="n">debug</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                         <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                         <span class="n">max_workers</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 
     <span class="kn">import</span><span class="w"> </span><span class="nn">cProfile</span>
 

@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>triplets.rdf_parser module &mdash; triplets 0.0.11 documentation</title>
+  <title>triplets.rdf_parser module &mdash; triplets 0.0.12 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=0c446633"></script>
+      <script src="_static/documentation_options.js?v=3bbcec59"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -45,21 +45,30 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="triplets.cgmes_tools.html">triplets.cgmes_tools module</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">triplets.rdf_parser module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.ExportType"><code class="docutils literal notranslate"><span class="pre">ExportType</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE"><code class="docutils literal notranslate"><span class="pre">ExportType.XML_PER_INSTANCE</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL"><code class="docutils literal notranslate"><span class="pre">ExportType.XML_PER_INSTANCE_ZIP_PER_ALL</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_XML"><code class="docutils literal notranslate"><span class="pre">ExportType.XML_PER_INSTANCE_ZIP_PER_XML</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.clean_ID"><code class="docutils literal notranslate"><span class="pre">clean_ID()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.diff_between_INSTANCE"><code class="docutils literal notranslate"><span class="pre">diff_between_INSTANCE()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.diff_between_triplet"><code class="docutils literal notranslate"><span class="pre">diff_between_triplet()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.export_to_cimxml"><code class="docutils literal notranslate"><span class="pre">export_to_cimxml()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.export_to_excel"><code class="docutils literal notranslate"><span class="pre">export_to_excel()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.export_to_networkx"><code class="docutils literal notranslate"><span class="pre">export_to_networkx()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.filter_triplet_by_type"><code class="docutils literal notranslate"><span class="pre">filter_triplet_by_type()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.filter_by_triplet"><code class="docutils literal notranslate"><span class="pre">filter_by_triplet()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.filter_by_type"><code class="docutils literal notranslate"><span class="pre">filter_by_type()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.find_all_xml"><code class="docutils literal notranslate"><span class="pre">find_all_xml()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.generate_xml"><code class="docutils literal notranslate"><span class="pre">generate_xml()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.get_namespace_map"><code class="docutils literal notranslate"><span class="pre">get_namespace_map()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.get_object_data"><code class="docutils literal notranslate"><span class="pre">get_object_data()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.get_qname"><code class="docutils literal notranslate"><span class="pre">get_qname()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.id_tableview"><code class="docutils literal notranslate"><span class="pre">id_tableview()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.key_tableview"><code class="docutils literal notranslate"><span class="pre">key_tableview()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.load_RDF_objects_from_XML"><code class="docutils literal notranslate"><span class="pre">load_RDF_objects_from_XML()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.load_RDF_to_dataframe"><code class="docutils literal notranslate"><span class="pre">load_RDF_to_dataframe()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.load_RDF_to_list"><code class="docutils literal notranslate"><span class="pre">load_RDF_to_list()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.load_all_to_dataframe"><code class="docutils literal notranslate"><span class="pre">load_all_to_dataframe()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.print_duration"><code class="docutils literal notranslate"><span class="pre">print_duration()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.print_triplet_diff"><code class="docutils literal notranslate"><span class="pre">print_triplet_diff()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.references"><code class="docutils literal notranslate"><span class="pre">references()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.references_all"><code class="docutils literal notranslate"><span class="pre">references_all()</span></code></a></li>
@@ -68,12 +77,10 @@
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.references_simple"><code class="docutils literal notranslate"><span class="pre">references_simple()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.references_to"><code class="docutils literal notranslate"><span class="pre">references_to()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.references_to_simple"><code class="docutils literal notranslate"><span class="pre">references_to_simple()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.remove_prefix"><code class="docutils literal notranslate"><span class="pre">remove_prefix()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.remove_triplet_from_triplet"><code class="docutils literal notranslate"><span class="pre">remove_triplet_from_triplet()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.set_VALUE_at_KEY"><code class="docutils literal notranslate"><span class="pre">set_VALUE_at_KEY()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.set_VALUE_at_KEY_and_ID"><code class="docutils literal notranslate"><span class="pre">set_VALUE_at_KEY_and_ID()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.tableview_to_triplet"><code class="docutils literal notranslate"><span class="pre">tableview_to_triplet()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.triplet_diff"><code class="docutils literal notranslate"><span class="pre">triplet_diff()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.type_tableview"><code class="docutils literal notranslate"><span class="pre">type_tableview()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.types_dict"><code class="docutils literal notranslate"><span class="pre">types_dict()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#triplets.rdf_parser.update_triplet_from_tableview"><code class="docutils literal notranslate"><span class="pre">update_triplet_from_tableview()</span></code></a></li>
@@ -108,6 +115,27 @@
              
   <section id="module-triplets.rdf_parser">
 <span id="triplets-rdf-parser-module"></span><h1>triplets.rdf_parser module<a class="headerlink" href="#module-triplets.rdf_parser" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="triplets.rdf_parser.ExportType">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">ExportType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#ExportType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.ExportType" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">StrEnum</span></code></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="triplets.rdf_parser.ExportType.XML_PER_INSTANCE">
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance'</span></em><a class="headerlink" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL">
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE_ZIP_PER_ALL</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance_zip_per_all'</span></em><a class="headerlink" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_XML">
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE_ZIP_PER_XML</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance_zip_per_xml'</span></em><a class="headerlink" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_XML" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.rdf_parser.clean_ID">
 <span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">clean_ID</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ID</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#clean_ID"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.clean_ID" title="Link to this definition"></a></dt>
@@ -138,38 +166,111 @@
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="triplets.rdf_parser.export_to_cimxml">
-<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">export_to_cimxml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{'rdf':</span> <span class="pre">'http://www.w3.org/1999/02/22-rdf-syntax-ns#'}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'xml_per_instance_zip_per_xml'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_zip_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Export.zip'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_base_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#export_to_cimxml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.export_to_cimxml" title="Link to this definition"></a></dt>
-<dd><p>Export a triplet dataset to CIM RDF XML or ZIP files.</p>
+<dt class="sig sig-object py" id="triplets.rdf_parser.diff_between_INSTANCE">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">diff_between_INSTANCE</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">INSTANCE_ID_1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">INSTANCE_ID_2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#diff_between_INSTANCE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.diff_between_INSTANCE" title="Link to this definition"></a></dt>
+<dd><p>Identify differences between two loaded INSTANCES, by thier INSTACE_ID in the same Triplet DataFrame.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p></li>
-<li><p><strong>rdf_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Dictionary mapping classes and keys to RDF namespaces and attributes.</p></li>
-<li><p><strong>namespace_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Dictionary of namespace prefixes and URIs (default includes RDF namespace).</p></li>
-<li><p><strong>class_KEY</strong> (<em>str</em><em>, </em><em>optional</em>) – Key used to identify object types (default is ‘Type’).</p></li>
-<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, export undefined classes and tags with default settings (default is True).</p></li>
-<li><p><strong>export_type</strong> (<em>str</em><em>, </em><em>optional</em>) – Export format: ‘xml_per_instance’, ‘xml_per_instance_zip_per_all’, or
-‘xml_per_instance_zip_per_xml’ (default is ‘xml_per_instance_zip_per_xml’).</p></li>
-<li><p><strong>global_zip_filename</strong> (<em>str</em><em>, </em><em>optional</em>) – Filename for the global ZIP archive (default is ‘Export.zip’).</p></li>
-<li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, log timing information for debugging (default is False).</p></li>
-<li><p><strong>export_to_memory</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, return file objects in memory; otherwise, save to disk (default is False).</p></li>
-<li><p><strong>export_base_path</strong> (<em>str</em><em>, </em><em>optional</em>) – Directory path to save exported files (default is empty, uses current directory).</p></li>
-<li><p><strong>comment</strong> (<em>str</em><em>, </em><em>optional</em>) – Comment to include in the XML output (default is None).</p></li>
-<li><p><strong>max_workers</strong> (<em>int</em><em>, </em><em>optional</em>) – Number of worker processes for parallel processing (default is None).</p></li>
+<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing two or more INSTANCE.</p></li>
+<li><p><strong>INSTANCE_ID_1</strong> (<em>str</em>) – UUID of the first INSTANCE.</p></li>
+<li><p><strong>INSTANCE_ID_2</strong> (<em>str</em>) – UUID of the second INSTANCE.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>List of file-like objects (if export_to_memory=True) or filenames (if export_to_memory=False).</p>
+<dd class="field-even"><p>DataFrame containing triplets that differ between the two model parts.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pandas.DataFrame</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">diff</span> <span class="o">=</span> <span class="n">diff_between_INSTANCE</span><span class="p">(</span><span class="s1">&#39;uuid1&#39;</span><span class="p">,</span> <span class="s1">&#39;uuid2&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdf_parser.diff_between_triplet">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">diff_between_triplet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#diff_between_triplet"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.diff_between_triplet" title="Link to this definition"></a></dt>
+<dd><p>Compute the difference between two Triplet DataFrames.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>old_data</strong> (<em>pandas.DataFrame</em>) – Original triplet dataset.</p></li>
+<li><p><strong>new_data</strong> (<em>pandas.DataFrame</em>) – New triplet dataset to compare against.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame containing triplets unique to old_data or new_data, with an ‘_merge’ column
+indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pandas.DataFrame</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">diff</span> <span class="o">=</span> <span class="n">diff_between_triplet</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdf_parser.export_to_cimxml">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">export_to_cimxml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">ExportType.XML_PER_INSTANCE_ZIP_PER_XML</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_zip_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Export.zip'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_base_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#export_to_cimxml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.export_to_cimxml" title="Link to this definition"></a></dt>
+<dd><p>Export a full triplet dataset to CIM RDF XML files or ZIP archives.</p>
+<p>Processes all instances (grouped by <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>) and exports them according to the
+specified <code class="docutils literal notranslate"><span class="pre">export_type</span></code>. Supports parallel processing and in-memory or disk output.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Full triplet dataset with columns [‘INSTANCE_ID’, ‘ID’, ‘KEY’, ‘VALUE’].</p></li>
+<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – RDF mapping configuration (see <a class="reference internal" href="#triplets.rdf_parser.generate_xml" title="triplets.rdf_parser.generate_xml"><code class="xref py py-func docutils literal notranslate"><span class="pre">generate_xml()</span></code></a>).</p></li>
+<li><p><strong>namespace_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Namespace prefix-to-URI mapping (see <a class="reference internal" href="#triplets.rdf_parser.generate_xml" title="triplets.rdf_parser.generate_xml"><code class="xref py py-func docutils literal notranslate"><span class="pre">generate_xml()</span></code></a>).</p></li>
+<li><p><strong>class_KEY</strong> (<em>str</em><em>, </em><em>default &quot;Type&quot;</em>) – Key identifying object types in triplet data.</p></li>
+<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>default True</em>) – Export unmapped classes/attributes with default RDF syntax.</p></li>
+<li><p><strong>export_type</strong> (<a class="reference internal" href="#triplets.rdf_parser.ExportType" title="triplets.rdf_parser.ExportType"><em>ExportType</em></a><em> or </em><em>str</em><em>, </em><em>default ExportType.XML_PER_INSTANCE_ZIP_PER_XML</em>) – Export format:
+- <code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE</span></code>: One XML file per instance.
+- <code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE_ZIP_PER_ALL</span></code>: All XMLs in a single ZIP.
+- <code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE_ZIP_PER_XML</span></code>: Each XML in its own ZIP.</p></li>
+<li><p><strong>global_zip_filename</strong> (<em>str</em><em>, </em><em>default &quot;Export.zip&quot;</em>) – Filename for the global ZIP archive (used with <code class="docutils literal notranslate"><span class="pre">ZIP_PER_ALL</span></code>).</p></li>
+<li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>default False</em>) – Enable detailed timing and debug logging.</p></li>
+<li><p><strong>export_to_memory</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, return file-like objects (<code class="docutils literal notranslate"><span class="pre">BytesIO</span></code>); if False, save to disk.</p></li>
+<li><p><strong>export_base_path</strong> (<em>str</em><em>, </em><em>default &quot;&quot;</em>) – Directory to save files when <code class="docutils literal notranslate"><span class="pre">export_to_memory=False</span></code>. Uses current directory if empty.</p></li>
+<li><p><strong>comment</strong> (<em>str</em><em>, </em><em>optional</em>) – Optional XML comment added to each generated file.</p></li>
+<li><p><strong>max_workers</strong> (<em>int</em><em>, </em><em>optional</em>) – Number of parallel workers for XML generation. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, runs sequentially.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>If <code class="docutils literal notranslate"><span class="pre">export_to_memory=True</span></code>: List of <code class="docutils literal notranslate"><span class="pre">BytesIO</span></code> objects with <code class="docutils literal notranslate"><span class="pre">.name</span></code> attribute.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">export_to_memory=False</span></code>: List of saved filenames (relative to <code class="docutils literal notranslate"><span class="pre">export_base_path</span></code>).</p></li>
+</ul>
+</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>list</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">files</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">export_type</span><span class="o">=</span><span class="s2">&quot;xml_per_instance&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">files</span> <span class="o">=</span> <span class="n">export_to_cimxml</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">data</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">&quot;config/cim_map.json&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">export_type</span><span class="o">=</span><span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">max_workers</span><span class="o">=</span><span class="mi">4</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;name:&quot;</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
 </pre></div>
 </div>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Uses <code class="docutils literal notranslate"><span class="pre">concurrent.futures.ProcessPoolExecutor</span></code> for parallel XML generation.</p></li>
+<li><p>All XML files are UTF-8 encoded with XML declaration and pretty-printing.</p></li>
+<li><p>ZIP files use DEFLATED compression.</p></li>
+<li><p>Filenames are derived from instance <code class="docutils literal notranslate"><span class="pre">label</span></code> or UUID.</p></li>
+</ul>
 </dd></dl>
 
 <dl class="py function">
@@ -222,14 +323,39 @@
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="triplets.rdf_parser.filter_triplet_by_type">
-<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">filter_triplet_by_type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">triplet</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#filter_triplet_by_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.filter_triplet_by_type" title="Link to this definition"></a></dt>
+<dt class="sig sig-object py" id="triplets.rdf_parser.filter_by_triplet">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">filter_by_triplet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filter_triplet</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#filter_by_triplet"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.filter_by_triplet" title="Link to this definition"></a></dt>
+<dd><p>Filter riplet DataFrame using IDs from another DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing CGMES data.</p></li>
+<li><p><strong>filter_triplet</strong> (<em>pandas.DataFrame</em>) – DataFrame containing atleast colum ID to filter by.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Filtered DataFrame with columns [‘ID, ‘KEY’, ‘VALUE’, ‘INSTANCE_ID’].</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pandas.DataFrame</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_by_triplet</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">filter_triplet</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdf_parser.filter_by_type">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">filter_by_type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#filter_by_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.filter_by_type" title="Link to this definition"></a></dt>
 <dd><p>Filter triplet dataset by objects of a specific type.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>triplet</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p></li>
-<li><p><strong>type</strong> (<em>str</em>) – Object type to filter by (e.g., ‘ACLineSegment’).</p></li>
+<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p></li>
+<li><p><strong>type_name</strong> (<em>str</em>) – Object type to filter by (e.g., ‘ACLineSegment’).</p></li>
+<li><p><strong>type_key</strong> (<em>str</em>) – Key used in triplet to indicate type, by default “Type”</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -240,7 +366,7 @@
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplet_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -276,31 +402,106 @@
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.rdf_parser.generate_xml">
-<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">generate_xml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{'rdf':</span> <span class="pre">'http://www.w3.org/1999/02/22-rdf-syntax-ns#'}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#generate_xml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.generate_xml" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">generate_xml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#generate_xml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.generate_xml" title="Link to this definition"></a></dt>
 <dd><p>Generate an RDF XML file from a triplet dataset instance.</p>
+<p>This function processes a single instance (grouped by <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>) from a triplet
+dataset and exports it as an RDF/XML document using provided or inferred mapping rules.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>instance_data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset for a single instance.</p></li>
-<li><p><strong>rdf_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Dictionary mapping classes and keys to RDF namespaces and attributes.</p></li>
-<li><p><strong>namespace_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Dictionary of namespace prefixes and URIs (default includes RDF namespace).</p></li>
-<li><p><strong>class_KEY</strong> (<em>str</em><em>, </em><em>optional</em>) – Key used to identify object types (default is ‘Type’).</p></li>
-<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, export undefined classes and tags with default settings (default is True).</p></li>
-<li><p><strong>comment</strong> (<em>str</em><em>, </em><em>optional</em>) – Comment to include in the XML output (default is None).</p></li>
-<li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, log timing information for debugging (default is False).</p></li>
+<li><p><strong>instance_data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset for a single instance, with columns [‘’ID’, ‘KEY’, ‘VALUE’, INSTANCE_ID’].
+Must contain at least one row with <code class="docutils literal notranslate"><span class="pre">KEY</span> <span class="pre">==</span> <span class="pre">class_KEY</span></code> to define object types.</p></li>
+<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Dictionary mapping CIM classes and attributes to RDF namespaces and export rules.
+If a string is provided, it is treated as a file path to a JSON configuration.
+If <code class="docutils literal notranslate"><span class="pre">None</span></code>, attempts to infer from instance data (e.g., profile-based mapping).</p></li>
+<li><p><strong>namespace_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Mapping of namespace prefixes to URIs (e.g., <code class="docutils literal notranslate"><span class="pre">{&quot;cim&quot;:</span> <span class="pre">&quot;http://iec.ch/TC57/2013/CIM-schema-cim16#&quot;}</span></code>).
+Must include <code class="docutils literal notranslate"><span class="pre">&quot;rdf&quot;</span></code> namespace. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, inferred from <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> or instance.</p></li>
+<li><p><strong>class_KEY</strong> (<em>str</em><em>, </em><em>default &quot;Type&quot;</em>) – Column key used to identify object class/type in the triplet data.</p></li>
+<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, export classes and attributes without explicit mapping using default RDF settings.
+If False, skip unmapped elements with a warning.</p></li>
+<li><p><strong>comment</strong> (<em>str</em><em>, </em><em>optional</em>) – Optional comment to insert at the top of the XML output (as XML comment).</p></li>
+<li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, log detailed timing and debug information during processing.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Dictionary with ‘filename’ (str) and ‘file’ (bytes) containing the XML output.</p>
+<dd class="field-even"><p>Dictionary containing:
+- <code class="docutils literal notranslate"><span class="pre">'filename'</span></code> (str): Generated filename (from <code class="docutils literal notranslate"><span class="pre">label</span></code> or UUID).
+- <code class="docutils literal notranslate"><span class="pre">'file'</span></code> (bytes): UTF-8 encoded XML content.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>dict</p>
 </dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>KeyError</strong> – If required columns are missing in <code class="docutils literal notranslate"><span class="pre">instance_data</span></code>.</p></li>
+<li><p><strong>ValueError</strong> – If invalid export configuration or mapping is detected.</p></li>
+</ul>
+</dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">xml_data</span> <span class="o">=</span> <span class="n">generate_xml</span><span class="p">(</span><span class="n">instance_data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">namespace_map</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">instance</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">generate_xml</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">instance</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">&quot;config/eq_profile.json&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">comment</span><span class="o">=</span><span class="s2">&quot;Exported on 2025-11-11&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;filename&quot;</span><span class="p">],</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;file&quot;</span><span class="p">])</span>
 </pre></div>
 </div>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Supports profile-based mapping (e.g., “EQ”, “SSH”) via <code class="docutils literal notranslate"><span class="pre">Model.profile</span></code> or <code class="docutils literal notranslate"><span class="pre">Model.messageType</span></code>.</p></li>
+<li><p>Uses <code class="docutils literal notranslate"><span class="pre">lxml.etree</span></code> with <code class="docutils literal notranslate"><span class="pre">ElementMaker</span></code> for XML construction.</p></li>
+<li><p>Undefined classes are exported with <code class="docutils literal notranslate"><span class="pre">rdf:about=&quot;urn:uuid:&lt;ID&gt;&quot;</span></code> when <code class="docutils literal notranslate"><span class="pre">export_undefined=True</span></code>.</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdf_parser.get_namespace_map">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">get_namespace_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#get_namespace_map"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.get_namespace_map" title="Link to this definition"></a></dt>
+<dd><p>Extract namespace prefix-to-URI mapping and optional xml:base from a triplet dataset.</p>
+<p>This function searches for a <cite>NamespaceMap</cite> object (identified by <code class="docutils literal notranslate"><span class="pre">KEY='Type'</span></code> and <code class="docutils literal notranslate"><span class="pre">VALUE='NamespaceMap'</span></code>)
+within the dataset. It then collects all key-value pairs under that instance where:
+- <code class="docutils literal notranslate"><span class="pre">KEY</span></code> is the namespace prefix (e.g., “cim”, “rdf”)
+- <code class="docutils literal notranslate"><span class="pre">VALUE</span></code> is the full URI (e.g., “<a class="reference external" href="http://iec.ch/TC57/2013/CIM-schema">http://iec.ch/TC57/2013/CIM-schema</a>-cim16#”)</p>
+<p>Special keys:
+- <code class="docutils literal notranslate"><span class="pre">xml_base</span></code>: Extracted separately if present (used as base URI in RDF).
+- <code class="docutils literal notranslate"><span class="pre">Type</span></code>: Automatically excluded.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset with columns [‘INSTANCE_ID’, ‘ID’, ‘KEY’, ‘VALUE’].
+Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>namespace_map</strong> (<em>dict</em>) – Mapping of namespace prefixes to URIs (e.g., <code class="docutils literal notranslate"><span class="pre">{&quot;cim&quot;:</span> <span class="pre">&quot;...&quot;,</span> <span class="pre">&quot;rdf&quot;:</span> <span class="pre">&quot;...&quot;}</span></code>).
+<strong>Empty dict</strong> if no <cite>NamespaceMap</cite> is found.</p></li>
+<li><p><strong>xml_base</strong> (<em>str</em>) – Value of <code class="docutils literal notranslate"><span class="pre">xml_base</span></code> if defined within the <cite>NamespaceMap</cite>; otherwise <code class="docutils literal notranslate"><span class="pre">empty</span> <span class="pre">str</span></code>.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ns_map</span><span class="p">,</span> <span class="n">base</span> <span class="o">=</span> <span class="n">get_namespace_map</span><span class="p">(</span><span class="n">triplet_data</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">ns_map</span><span class="p">)</span>
+<span class="go">{&#39;cim&#39;: &#39;http://iec.ch/TC57/2013/CIM-schema-cim16#&#39;, &#39;rdf&#39;: &#39;http://www.w3.org/1999/02/22-rdf-syntax-ns#&#39;}</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
+<span class="go">&#39;http://example.com/base/&#39;</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ns_map</span><span class="p">,</span> <span class="n">base</span> <span class="o">=</span> <span class="n">get_namespace_map</span><span class="p">(</span><span class="n">empty_data</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">ns_map</span><span class="p">,</span> <span class="n">base</span><span class="p">)</span>
+<span class="go">{} &quot;&quot;</span>
+</pre></div>
+</div>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The function is <strong>idempotent</strong> and safe to call on any dataset.</p></li>
+<li><p>Uses inner merge on <code class="docutils literal notranslate"><span class="pre">ID</span></code> to scope entries to the correct <cite>NamespaceMap</cite> instance.</p></li>
+<li><p>Always returns a tuple of length 2: <code class="docutils literal notranslate"><span class="pre">(dict,</span> <span class="pre">str)</span></code>.</p></li>
+</ul>
 </dd></dl>
 
 <dl class="py function">
@@ -328,38 +529,41 @@
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="triplets.rdf_parser.get_qname">
-<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">get_qname</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">namespace</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#get_qname"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.get_qname" title="Link to this definition"></a></dt>
-<dd><p>Generate a QName for a given namespace and tag, with caching.</p>
+<dt class="sig sig-object py" id="triplets.rdf_parser.id_tableview">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">id_tableview</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">string_to_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#id_tableview"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.id_tableview" title="Link to this definition"></a></dt>
+<dd><p>Create a tabular view of a CGMES triplet dataset filtered by ID-s.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>namespace</strong> (<em>str</em>) – The namespace URI.</p></li>
-<li><p><strong>tag</strong> (<em>str</em><em>, </em><em>optional</em>) – The tag name (default is None).</p></li>
+<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing CGMES data.</p></li>
+<li><p><strong>id</strong> (<em>str</em><em> or </em><em>list</em><em> or </em><em>pandas.DataFrame</em>) – DataFrame containing IDs to filter by.</p></li>
+<li><p><strong>string_to_number</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, convert columns containing numbers to numeric types (default is True).</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The qualified name object for the namespace and tag.</p>
+<dd class="field-even"><p>Pivoted DataFrame with IDs as index and KEYs as columns.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>lxml.etree.QName</p>
+<dd class="field-odd"><p>pandas.DataFrame</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">qname</span> <span class="o">=</span> <span class="n">get_qname</span><span class="p">(</span><span class="s2">&quot;http://www.w3.org/1999/02/22-rdf-syntax-ns#&quot;</span><span class="p">,</span> <span class="s2">&quot;RDF&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;UUID&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;UUID_1&#39;</span><span class="p">,</span> <span class="s1">&#39;UUID_2&#39;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">&quot;ID&quot;</span><span class="p">:[</span><span class="s1">&#39;UUID_1&#39;</span><span class="p">,</span> <span class="s1">&#39;UUID_2&#39;</span><span class="p">]})</span>
 </pre></div>
 </div>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.rdf_parser.key_tableview">
-<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">key_tableview</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">string_to_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#key_tableview"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.key_tableview" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">key_tableview</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">string_to_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#key_tableview"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.key_tableview" title="Link to this definition"></a></dt>
 <dd><p>Create a table view of all objects with a specified key.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p></li>
-<li><p><strong>key_name</strong> (<em>str</em>) – The key to filter objects by (e.g., ‘GeneratingUnit.maxOperatingP’).</p></li>
+<li><p><strong>key</strong> (<em>str</em>) – The key to filter objects by (e.g., ‘GeneratingUnit.maxOperatingP’).</p></li>
 <li><p><strong>string_to_number</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, convert columns containing numbers to numeric types (default is True).</p></li>
 </ul>
 </dd>
@@ -475,33 +679,6 @@
 </dl>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span> <span class="o">=</span> <span class="n">load_all_to_dataframe</span><span class="p">([</span><span class="s2">&quot;data.zip&quot;</span><span class="p">,</span> <span class="s2">&quot;file.xml&quot;</span><span class="p">],</span> <span class="n">max_workers</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="triplets.rdf_parser.print_duration">
-<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">print_duration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_time</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#print_duration"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.print_duration" title="Link to this definition"></a></dt>
-<dd><p>Print duration between now and start time.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>text</strong> (<em>str</em>) – Description of the timed operation to include in the log message.</p></li>
-<li><p><strong>start_time</strong> (<em>datetime.datetime</em>) – Start time of the operation.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A tuple containing:
-- duration (timedelta): Time elapsed since start_time.
-- end_time (datetime.datetime): Current time when the function is called.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>tuple</p>
-</dd>
-</dl>
-<p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">start</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">duration</span><span class="p">,</span> <span class="n">end</span> <span class="o">=</span> <span class="n">print_duration</span><span class="p">(</span><span class="s2">&quot;Operation completed&quot;</span><span class="p">,</span> <span class="n">start</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -718,33 +895,6 @@
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="triplets.rdf_parser.remove_prefix">
-<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">remove_prefix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">original_string</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prefix_string</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#remove_prefix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.remove_prefix" title="Link to this definition"></a></dt>
-<dd><p>Remove a specified prefix from a string.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>original_string</strong> (<em>str</em>) – The input string to process.</p></li>
-<li><p><strong>prefix_string</strong> (<em>str</em>) – The prefix to remove from the input string.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The input string with the prefix removed if present; otherwise, the original string.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>str</p>
-</dd>
-</dl>
-<p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">remove_prefix</span><span class="p">(</span><span class="s2">&quot;urn:uuid:1234&quot;</span><span class="p">,</span> <span class="s2">&quot;urn:uuid:&quot;</span><span class="p">)</span>
-<span class="go">&#39;1234&#39;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">remove_prefix</span><span class="p">(</span><span class="s2">&quot;abc&quot;</span><span class="p">,</span> <span class="s2">&quot;xyz&quot;</span><span class="p">)</span>
-<span class="go">&#39;abc&#39;</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py function">
 <dt class="sig sig-object py" id="triplets.rdf_parser.remove_triplet_from_triplet">
 <span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">remove_triplet_from_triplet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">from_triplet</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">what_triplet</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">columns</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['ID',</span> <span class="pre">'KEY',</span> <span class="pre">'VALUE']</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#remove_triplet_from_triplet"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.remove_triplet_from_triplet" title="Link to this definition"></a></dt>
 <dd><p>Remove triplets from one dataset that match another.</p>
@@ -834,31 +984,6 @@
 </ul>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">triplet</span> <span class="o">=</span> <span class="n">tableview_to_triplet</span><span class="p">(</span><span class="n">table_view</span><span class="p">)</span>
-</pre></div>
-</div>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="triplets.rdf_parser.triplet_diff">
-<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">triplet_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#triplet_diff"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.triplet_diff" title="Link to this definition"></a></dt>
-<dd><p>Compute the difference between two triplet datasets.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>old_data</strong> (<em>pandas.DataFrame</em>) – Original triplet dataset.</p></li>
-<li><p><strong>new_data</strong> (<em>pandas.DataFrame</em>) – New triplet dataset to compare against.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>DataFrame containing triplets unique to old_data or new_data, with an ‘_merge’ column
-indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>pandas.DataFrame</p>
-</dd>
-</dl>
-<p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">diff</span> <span class="o">=</span> <span class="n">triplet_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>

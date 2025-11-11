@@ -5,14 +5,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>triplets.cgmes_tools &mdash; triplets 0.0.11 documentation</title>
+  <title>triplets.cgmes_tools &mdash; triplets 0.0.12 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
 
   
       <script src="../../_static/jquery.js?v=5d32c60e"></script>
       <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../../_static/documentation_options.js?v=0c446633"></script>
+      <script src="../../_static/documentation_options.js?v=3bbcec59"></script>
       <script src="../../_static/doctools.js?v=9bcbadda"></script>
       <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/js/theme.js"></script>
@@ -71,7 +71,7 @@
              
   <h1>Source code for triplets.cgmes_tools</h1><div class="highlight"><pre>
 <span></span><span class="c1">#-------------------------------------------------------------------------------</span>
-<span class="c1"># Name:        CGMEStools</span>
+<span class="c1"># Name:        cgmes_tools</span>
 <span class="c1"># Purpose:     Collection of functions to work with CGMES files</span>
 <span class="c1">#</span>
 <span class="c1"># Author:      kristjan.vilgo</span>
@@ -80,27 +80,18 @@
 <span class="c1"># Copyright:   (c) kristjan.vilgo 2019</span>
 <span class="c1"># Licence:     MIT</span>
 <span class="c1">#-------------------------------------------------------------------------------</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">uuid4</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">aniso8601</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
-
-<span class="kn">from</span><span class="w"> </span><span class="nn">lxml.builder</span><span class="w"> </span><span class="kn">import</span> <span class="n">ElementMaker</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">lxml.etree</span><span class="w"> </span><span class="kn">import</span> <span class="n">QName</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">uuid4</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">lxml</span><span class="w"> </span><span class="kn">import</span> <span class="n">etree</span>
-
-<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">OrderedDict</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">builtins</span><span class="w"> </span><span class="kn">import</span> <span class="nb">str</span>
-
-<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">triplets</span><span class="w"> </span><span class="kn">import</span> <span class="n">rdf_parser</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
-
-<span class="kn">from</span><span class="w"> </span><span class="nn">triplets</span><span class="w"> </span><span class="kn">import</span> <span class="n">rdf_parser</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -589,7 +580,7 @@
 <span class="sd">    0  uuid1  10X1001A1001A021</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">name_map</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;ID&quot;</span><span class="p">:</span> <span class="s2">&quot;mRID&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">:</span> <span class="s2">&quot;EIC&quot;</span><span class="p">}</span>
-    <span class="k">return</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">filter_triplet_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;IdentifiedObject.energyIdentCodeEic&#39;&quot;</span><span class="p">)[</span><span class="n">name_map</span><span class="o">.</span><span class="n">keys</span><span class="p">()]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">name_map</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">filter_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;IdentifiedObject.energyIdentCodeEic&#39;&quot;</span><span class="p">)[</span><span class="n">name_map</span><span class="o">.</span><span class="n">keys</span><span class="p">()]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">name_map</span><span class="p">)</span></div>
 
 
 
@@ -676,98 +667,8 @@
 
 
 
-<div class="viewcode-block" id="get_diff_between_model_parts">
-<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.get_diff_between_model_parts">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_diff_between_model_parts</span><span class="p">(</span><span class="n">UUID_1</span><span class="p">,</span> <span class="n">UUID_2</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Identify differences between two CGMES model parts based on their UUIDs.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    UUID_1 : str</span>
-<span class="sd">        UUID of the first model part.</span>
-<span class="sd">    UUID_2 : str</span>
-<span class="sd">        UUID of the second model part.</span>
-
-<span class="sd">    Returns</span>
-<span class="sd">    -------</span>
-<span class="sd">    pandas.DataFrame</span>
-<span class="sd">        DataFrame containing triplets that differ between the two model parts.</span>
-
-<span class="sd">    Examples</span>
-<span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; diff = get_diff_between_model_parts(&#39;uuid1&#39;, &#39;uuid2&#39;)</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">diff</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;INSTANCE_ID == &#39;</span><span class="si">{}</span><span class="s2">&#39; or INSTANCE_ID == &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">UUID_1</span><span class="p">,</span> <span class="n">UUID_2</span><span class="p">))</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">],</span> <span class="n">keep</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-
-    <span class="k">return</span> <span class="n">diff</span></div>
 
 
-<div class="viewcode-block" id="filter_dataframe_by_dataframe">
-<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.filter_dataframe_by_dataframe">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">filter_dataframe_by_dataframe</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">filter_data</span><span class="p">,</span> <span class="n">filter_column_name</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Filter a CGMES triplet dataset using IDs from another DataFrame.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    data : pandas.DataFrame</span>
-<span class="sd">        Triplet dataset containing CGMES data.</span>
-<span class="sd">    filter_data : pandas.DataFrame</span>
-<span class="sd">        DataFrame containing IDs to filter by.</span>
-<span class="sd">    filter_column_name : str</span>
-<span class="sd">        Column name in filter_data containing IDs (e.g., &#39;PowerTransformer.ID&#39;).</span>
-
-<span class="sd">    Returns</span>
-<span class="sd">    -------</span>
-<span class="sd">    pandas.DataFrame</span>
-<span class="sd">        Filtered DataFrame with columns [&#39;ID_&lt;class_name&gt;&#39;, &#39;KEY&#39;, &#39;VALUE&#39;].</span>
-
-<span class="sd">    Examples</span>
-<span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; filtered = filter_dataframe_by_dataframe(data, filter_df, &#39;PowerTransformer.ID&#39;)</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">class_name</span> <span class="o">=</span> <span class="n">filter_column_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
-    <span class="n">meta_separator</span> <span class="o">=</span> <span class="s2">&quot;_&quot;</span>
-
-    <span class="n">result</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">filter_column_name</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="n">filter_column_name</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;inner&quot;</span><span class="p">,</span> <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">meta_separator</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">))[[</span><span class="s2">&quot;ID_&quot;</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">]]</span>
-
-    <span class="k">return</span> <span class="n">result</span></div>
-
-
-<div class="viewcode-block" id="tableview_by_IDs">
-<a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.tableview_by_IDs">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tableview_by_IDs</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">IDs_dataframe</span><span class="p">,</span> <span class="n">IDs_column_name</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a tabular view of a CGMES triplet dataset filtered by IDs.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    data : pandas.DataFrame</span>
-<span class="sd">        Triplet dataset containing CGMES data.</span>
-<span class="sd">    IDs_dataframe : pandas.DataFrame</span>
-<span class="sd">        DataFrame containing IDs to filter by.</span>
-<span class="sd">    IDs_column_name : str</span>
-<span class="sd">        Column name in IDs_dataframe containing IDs (e.g., &#39;PowerTransformer.ID&#39;).</span>
-
-<span class="sd">    Returns</span>
-<span class="sd">    -------</span>
-<span class="sd">    pandas.DataFrame</span>
-<span class="sd">        Pivoted DataFrame with IDs as index and KEYs as columns.</span>
-
-<span class="sd">    Examples</span>
-<span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; table = tableview_by_IDs(data, ids_df, &#39;PowerTransformer.ID&#39;)</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">class_name</span> <span class="o">=</span> <span class="n">IDs_column_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
-    <span class="n">meta_separator</span> <span class="o">=</span> <span class="s2">&quot;_&quot;</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">IDs_dataframe</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span>
-                          <span class="n">left_on</span>  <span class="o">=</span> <span class="n">IDs_column_name</span><span class="p">,</span>
-                          <span class="n">right_on</span> <span class="o">=</span> <span class="s2">&quot;ID&quot;</span><span class="p">,</span>
-                          <span class="n">how</span>      <span class="o">=</span> <span class="s2">&quot;inner&quot;</span><span class="p">,</span>
-                          <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">meta_separator</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">))</span>\
-                          <span class="p">[[</span><span class="s2">&quot;ID_&quot;</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">]]</span><span class="o">.</span>\
-                          <span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span> <span class="o">+</span> <span class="n">meta_separator</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">])</span><span class="o">.</span>\
-                          <span class="n">pivot</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span> <span class="o">+</span> <span class="n">meta_separator</span> <span class="o">+</span> <span class="n">class_name</span><span class="p">,</span> <span class="n">columns</span> <span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span>
-
-    <span class="k">return</span> <span class="n">result</span></div>
 
 
 <div class="viewcode-block" id="get_limits">
@@ -825,7 +726,7 @@
 
 <div class="viewcode-block" id="darw_relations_graph">
 <a class="viewcode-back" href="../../triplets.cgmes_tools.html#triplets.cgmes_tools.darw_relations_graph">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">darw_relations_graph</span><span class="p">(</span><span class="n">reference_data</span><span class="p">,</span> <span class="n">ID_COLUMN</span><span class="p">,</span> <span class="n">notebook</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">darw_relations_graph</span><span class="p">(</span><span class="n">reference_data</span><span class="p">,</span> <span class="n">ID_COLUMN</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">notebook</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a temporary HTML file to visualize relations in a CGMES dataset.</span>
 
 <span class="sd">    Parameters</span>
@@ -852,6 +753,9 @@
 <span class="sd">    --------</span>
 <span class="sd">    &gt;&gt;&gt; file_path = darw_relations_graph(data, &#39;ID&#39;)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Maybe redo the process. Find iteratively all relations by merge ID and VALUE columns, starting with single object ID</span>
+
     <span class="kn">from</span><span class="w"> </span><span class="nn">pyvis.network</span><span class="w"> </span><span class="kn">import</span> <span class="n">Network</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">pyvis.options</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">options</span>
 
@@ -873,7 +777,8 @@
     <span class="c1"># node_name = urlparse(dataframe[dataframe.KEY == &quot;Model.profile&quot;].VALUE.tolist()[0]).path  # FullModel does not have IdentifiedObject.name</span>
 
     <span class="c1"># Add nodes/objects</span>
-    <span class="nb">print</span><span class="p">(</span><span class="n">node_data</span><span class="p">)</span>
+    <span class="c1">#print(node_data)</span>
+    <span class="c1"># TODO - maybe group by ID and then iterate</span>
     <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">node_data</span><span class="o">.</span><span class="n">itertuples</span><span class="p">():</span>
         <span class="c1">#print(node)</span>
         <span class="n">object_data</span> <span class="o">=</span> <span class="n">reference_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2"> == &#39;</span><span class="si">{}</span><span class="s2">&#39;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ID_COLUMN</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">ID</span><span class="p">))</span>
@@ -939,15 +844,13 @@
     <span class="n">graph</span><span class="o">.</span><span class="n">set_options</span> <span class="o">=</span> <span class="n">options</span>
 
     <span class="k">if</span> <span class="n">notebook</span> <span class="o">==</span> <span class="kc">False</span><span class="p">:</span>
-        <span class="c1"># Change directory to temp</span>
-        <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
 
         <span class="c1"># Create unique filename</span>
         <span class="n">from_UUID</span> <span class="o">=</span> <span class="n">reference_data</span><span class="p">[</span><span class="n">ID_COLUMN</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="n">file_name</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">&quot;</span><span class="si">{}</span><span class="s2">.html&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">from_UUID</span><span class="p">)</span>
+        <span class="n">file_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">from_UUID</span><span class="si">}</span><span class="s2">.html&quot;</span>
 
         <span class="c1"># Show graph</span>
-        <span class="n">graph</span><span class="o">.</span><span class="n">show</span><span class="p">(</span><span class="n">file_name</span><span class="p">,</span> <span class="n">notebook</span><span class="o">=</span><span class="n">notebook</span><span class="p">)</span>
+        <span class="n">graph</span><span class="o">.</span><span class="n">show</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">file_name</span><span class="p">),</span> <span class="n">local</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
         <span class="c1"># Returns file path</span>
         <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">file_name</span><span class="p">)</span>
