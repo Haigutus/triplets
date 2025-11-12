@@ -1,128 +1,145 @@
-from triplets.rdfs_tools import *
+from triplets.rdf_parser import load_all_to_dataframe
+from triplets.rdfs_tools import rdfs_tools
 import os
+import logging
 
-files_list = list_of_files(r"../../rdfs/ENTSOE_CGMES_2.4.15", ".rdf")
+logger = logging.getLogger(__name__)
 
-namespace_map = dict(    cim="http://iec.ch/TC57/2013/CIM-schema-cim16#",
-                         cims="http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
-                         entsoe="http://entsoe.eu/CIM/SchemaExtension/3/1#",
-                         cgmbp="http://entsoe.eu/CIM/Extensions/CGM-BP/2020#",
-                         md="http://iec.ch/TC57/61970-552/ModelDescription/1#",
-                         rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-                         rdfs="http://www.w3.org/2000/01/rdf-schema#",
-                         xsd="http://www.w3.org/2001/XMLSchema#")
+def export_to_html(folder_path=r"../../rdfs/ENTSOE_CGMES_2.4.15", file_extension=".rdf", namespace_map=None):
 
-prefix_map = {v: k for k, v in namespace_map.items()}
+    files_list = rdfs_tools.list_of_files(folder_path, file_extension)
 
-def replace_namesapce_with_prefix(uri, default_namespace="http://iec.ch/TC57/2013/CIM-schema-cim16"):
+    if not namespace_map:
+        namespace_map = dict(    cim="http://iec.ch/TC57/2013/CIM-schema-cim16#",
+                                 cims="http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
+                                 entsoe="http://entsoe.eu/CIM/SchemaExtension/3/1#",
+                                 cgmbp="http://entsoe.eu/CIM/Extensions/CGM-BP/2020#",
+                                 md="http://iec.ch/TC57/61970-552/ModelDescription/1#",
+                                 rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+                                 rdfs="http://www.w3.org/2000/01/rdf-schema#",
+                                 xsd="http://www.w3.org/2001/XMLSchema#")
 
-    namespace, name = get_namespace_and_name(uri, default_namespace)
+    prefix_map = {v: k for k, v in namespace_map.items()}
 
-    prefix = prefix_map.get(namespace)
+    def replace_namesapce_with_prefix(uri, default_namespace="http://iec.ch/TC57/2013/CIM-schema-cim16"):
 
-    return f"{prefix}:{name}"
+        namespace, name = rdfs_tools.get_namespace_and_name(uri, default_namespace)
 
+        prefix = prefix_map.get(namespace)
 
-def html_datatable(table, path):
-    """Create nice formatted HTML table from pandas dataframe"""
-
-    html = f"""
-    <html>
-        <body>
-            <head>
-                <style>
-				#settings {{
-					font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
-					border-collapse: collapse;
-					width: 100%;
-				}}
-
-				#settings td, #setting th {{
-					border: 1px solid #ddd;
-					padding: 8px;
-				}}
-
-				#settings tr:nth-child(even){{background-color: #f2f2f2;}}
-
-				#settings tr:hover {{background-color: #ddd;}}
-
-				#settings th {{
-					padding-top: 12px;
-					padding-bottom: 12px;
-                    padding-left: 8px;
-					padding-right: 12px;
-					text-align: left;
-					background-color: #001f3f;
-					color: white;
-				}}
-
-				</style>
-            </head>
-
-            {table.to_html(index=False, index_names=False, table_id="settings")}
-
-        </body>
-    </html>
-
-            """
-
-    with open(path, "w") as file_object:
-        file_object.write(html)
-
-    return html
+        return f"{prefix}:{name}"
 
 
-for file_path in files_list:
+    def html_datatable(table, path):
+        """Create nice formatted HTML table from pandas dataframe"""
 
-    path_list = [file_path]
+        html = f"""
+        <html>
+            <body>
+                <head>
+                    <style>
+                    #settings {{
+                        font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+                        border-collapse: collapse;
+                        width: 100%;
+                    }}
+    
+                    #settings td, #setting th {{
+                        border: 1px solid #ddd;
+                        padding: 8px;
+                    }}
+    
+                    #settings tr:nth-child(even){{background-color: #f2f2f2;}}
+    
+                    #settings tr:hover {{background-color: #ddd;}}
+    
+                    #settings th {{
+                        padding-top: 12px;
+                        padding-bottom: 12px;
+                        padding-left: 8px;
+                        padding-right: 12px;
+                        text-align: left;
+                        background-color: #001f3f;
+                        color: white;
+                    }}
+    
+                    </style>
+                </head>
+    
+                {table.to_html(index=False, index_names=False, table_id="settings")}
+    
+            </body>
+        </html>
+    
+                """
 
-    data = load_all_to_dataframe(path_list)
+        with open(path, "w") as file_object:
+            file_object.write(html)
+
+        return html
 
 
-    # Packages
+    for file_path in files_list:
 
-    packages = data.query("VALUE == 'http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#ClassCategory'")[["ID"]]
+        path_list = [file_path]
 
-    # Profile metadata
-
-    profile_metadata = get_profile_metadata(data).to_frame()
-
-    metadata = profile_metadata["VALUE"].to_dict()
-
-    # entsoeURI
-    entsoeURI_url_list = profile_metadata[profile_metadata.index.str.contains("entsoeURI")].VALUE.tolist()
-
-    entsoeURI_list = []
-
-    for url in entsoeURI_url_list:
-        entsoeURI_list.append(url.split("/")[-3])
+        data = load_all_to_dataframe(path_list)
 
 
-    # Write to files
+        # Packages
 
-    #filename = "_".join([metadata["shortName"], metadata["entsoeUML"], metadata["date"]] + entsoeURI_list).replace(".", "").replace("-", "") + ".html"
+        packages = data.query("VALUE == 'http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#ClassCategory'")[["ID"]]
 
-    filename = ".html"
+        # Profile metadata
 
-    #print(filename)
+        profile_metadata = rdfs_tools.get_profile_metadata(data).to_frame()
+
+        metadata = profile_metadata["VALUE"].to_dict()
+
+        # entsoeURI
+        entsoeURI_url_list = profile_metadata[profile_metadata.index.str.contains("entsoeURI")].VALUE.tolist()
+
+        entsoeURI_list = []
+
+        for url in entsoeURI_url_list:
+            entsoeURI_list.append(url.split("/")[-3])
 
 
-    folder = os.path.join(metadata["entsoeUML"], metadata["shortName"], "_".join(entsoeURI_list))
-    if not os.path.exists(folder):
-        os.makedirs(folder)
+        # Write to files
 
-    html_datatable(profile_metadata.reset_index(), os.path.join(folder, "Profile" + filename))
-    html_datatable(packages, os.path.join(folder, "Packages" + filename))
-    #packages.to_html(open(os.path.join(folder, "Packages" + filename), "w"), index=False)
+        #filename = "_".join([metadata["shortName"], metadata["entsoeUML"], metadata["date"]] + entsoeURI_list).replace(".", "").replace("-", "") + ".html"
+
+        filename = ".html"
+
+        #print(filename)
+
+        if "entsoeUML" in  metadata.keys():
+            folder = os.path.join(metadata["entsoeUML"], metadata["shortName"], "_".join(entsoeURI_list))
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+
+            html_datatable(profile_metadata.reset_index(), os.path.join(folder, "Profile" + filename))
+            html_datatable(packages, os.path.join(folder, "Packages" + filename))
+            #packages.to_html(open(os.path.join(folder, "Packages" + filename), "w"), index=False)
 
 
-    for concrete_class in concrete_classes_list(data):
+            for concrete_class in rdfs_tools.concrete_classes_list(data):
 
-        namespace, name = get_namespace_and_name(concrete_class, metadata['namespaceUML'])
+                logger.debug(concrete_class)
 
-        path = os.path.join(folder, name + filename)
-        view = validation_view(data, concrete_class)
-        view.index = view.index.map(replace_namesapce_with_prefix)
-        view = view.reset_index()
+                namespace, name = rdfs_tools.get_namespace_and_name(concrete_class, metadata['namespaceUML'])
 
-        html_datatable(view, path)
+                path = os.path.join(folder, name + filename)
+                view = rdfs_tools.validation_view(data, concrete_class)
+                view.index = view.index.map(replace_namesapce_with_prefix)
+                view = view.reset_index()
+
+                html_datatable(view, path)
+                logger.info(f"Exported: {path}")
+
+if __name__ == "__main__":
+    import sys
+    logging.basicConfig(stream=sys.stdout,
+                        format='%(levelname) -10s %(asctime)s %(name) -30s %(funcName) -35s %(lineno) -5d: %(message)s',
+                        level=logging.DEBUG)
+    export_to_html()

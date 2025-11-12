@@ -1,5 +1,6 @@
 import json
-from triplets.rdfs_tools import *
+from triplets.rdf_parser import load_all_to_dataframe
+from triplets.rdfs_tools import rdfs_tools
 
 path = r"../../rdfs/ENTSOE_CGMES_2.4.15/DiagramLayoutProfileRDFSAugmented-v2_4_15-4Sep2020.rdf"
 
@@ -15,7 +16,7 @@ for profile in profiles:
     profile_data = data.query(f"INSTANCE_ID == '{profile}'")
 
     # Get current profile metadata
-    metadata = get_profile_metadata(profile_data).to_dict()
+    metadata = rdfs_tools.get_profile_metadata(profile_data).to_dict()
     profile_name = metadata["shortName"].replace("_", "")
 
     # Dictionary to keep current profile metadata
@@ -28,7 +29,7 @@ for profile in profiles:
 
     classes_defined_externally = profile_data.query("KEY == 'stereotype' and VALUE == 'Description'").ID.to_list()
 
-    for concrete_class in concrete_classes_list(profile_data):
+    for concrete_class in rdfs_tools.concrete_classes_list(profile_data):
 
         # Define class namespace
         class_namespace, class_name = concrete_class.split("#")
@@ -61,7 +62,7 @@ for profile in profiles:
 
         # Add attributes
 
-        parameter_table, inheritance = parameters_tableview_all(profile_data, concrete_class)
+        parameter_table, inheritance = rdfs_tools.parameters_tableview_all(profile_data, concrete_class)
 
         for parameter, parameter_meta in parameter_table.iterrows():
 
@@ -84,11 +85,11 @@ for profile in profiles:
 
             parameter_def = {
                 "description": parameter_dict.get("comment", ""),
-                "multiplicity": parameter_dict["multiplicity"].split("#M:")[1],
+                "multiplicity": parameter_dict["multiplicity"].split("M:")[1],
                 "namespace": parameter_namespace
             }
 
-            parameter_def["xsd:minOccours"], parameter_def["xsd:maxOccours"] = parse_multiplicity(parameter_dict["multiplicity"])
+            parameter_def["xsd:minOccours"], parameter_def["xsd:maxOccours"] = rdfs_tools.parse_multiplicity(parameter_dict["multiplicity"])
 
             # If association
             if association_used == 'Yes':
@@ -176,7 +177,7 @@ for profile in profiles:
 # Add FullModel definiton
 
 for profile_name in conf_dict:
-    conf_dict[profile_name].update(fullmodel_conf)
+    conf_dict[profile_name].update(rdfs_tools.fullmodel_conf)
 
 # Export conf
 

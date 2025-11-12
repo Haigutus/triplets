@@ -1,5 +1,7 @@
 import json
-from triplets.rdfs_tools import *
+import pandas
+from triplets.rdf_parser import get_namespace_map, load_all_to_dataframe
+from triplets.rdfs_tools import rdfs_tools
 import logging
 
 logger = logging.getLogger(__name__)
@@ -95,10 +97,10 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
     classes_defined_externally = profile_data.query("KEY == 'stereotype' and VALUE == 'Description'").ID.to_list()
 
     # Add concrete classes
-    for concrete_class in concrete_classes_list(profile_data):
+    for concrete_class in rdfs_tools.concrete_classes_list(profile_data):
 
         # Define class namespace
-        class_namespace, class_name = get_namespace_and_name(concrete_class, default_namespace=xml_base)
+        class_namespace, class_name = rdfs_tools.get_namespace_and_name(concrete_class, default_namespace=xml_base)
 
         class_meta = profile_data.get_object_data(concrete_class).to_dict()
 
@@ -113,7 +115,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
         class_ID_attribute = id_attribute if class_is_local else about_attribute
         class_ID_prefix = id_prefix if class_is_local else about_prefix
 
-        class_parameters_table, class_inheritance = parameters_tableview_all(profile_data, concrete_class)
+        class_parameters_table, class_inheritance = rdfs_tools.parameters_tableview_all(profile_data, concrete_class)
 
 
         # Add class definition
@@ -143,15 +145,15 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
             if association_used == 'No':
                 continue
 
-            parameter_namespace, parameter_name = get_namespace_and_name(parameter, default_namespace=xml_base)
+            parameter_namespace, parameter_name = rdfs_tools.get_namespace_and_name(parameter, default_namespace=xml_base)
 
             parameter_def = {
                 "description": parameter_dict.get("comment", ""),
-                "multiplicity": parameter_dict["multiplicity"].split("#M:")[1],
+                "multiplicity": parameter_dict["multiplicity"].split("M:")[1],
                 "namespace": parameter_namespace
             }
 
-            parameter_def["xsd:minOccours"], parameter_def["xsd:maxOccours"] = parse_multiplicity(parameter_dict["multiplicity"])
+            parameter_def["xsd:minOccours"], parameter_def["xsd:maxOccours"] = rdfs_tools.parse_multiplicity(parameter_dict["multiplicity"])
 
             # If association
             if association_used == 'Yes':
@@ -174,7 +176,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                     parameter_def["type"] = "Attribute"
 
                     # Get the attribute data type and add to export
-                    data_type_namespace, data_type_name = get_namespace_and_name(data_type, default_namespace=xml_base)
+                    data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(data_type, default_namespace=xml_base)
 
                     data_type_meta = profile_data.get_object_data(data_type).to_dict()
 
@@ -211,8 +213,8 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
                     for value in values:
 
-                        value_namespace, value_name = get_namespace_and_name(value, default_namespace=xml_base)
-                        value_meta = data.get_object_data(value).to_dict()
+                        value_namespace, value_name = rdfs_tools.get_namespace_and_name(value, default_namespace=xml_base)
+                        value_meta = profile_data.get_object_data(value).to_dict()
 
                         if value_namespace == "":
                             value_namespace = xml_base
@@ -274,7 +276,7 @@ def insert_profile_into_profile(insert_to, insert_what, subset=None):
 def get_metadata(data):
 
     # OWL metadata
-    metadata = get_owl_metadata(data)
+    metadata = rdfs_tools.get_owl_metadata(data)
 
     # Get some data from category
     category = data.merge(data.query("VALUE == 'http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#ClassCategory'")["ID"])
@@ -284,7 +286,7 @@ def get_metadata(data):
 
     if metadata.empty:
         # Make Older CGMES 2.4 ENTSO-E CIM RDFS metadata compatible with new owl based metadata
-        metadata = get_profile_metadata(data)
+        metadata = rdfs_tools.get_profile_metadata(data)
 
         if not metadata.empty:
 
@@ -313,7 +315,7 @@ def export_single_profile(path, serialization_version="552_ED2", additional_meta
 
     metadata["serialization_version"] = serialization_version
 
-    file_name = "../export_schema/{publisher}_{label}_{versionInfo}_{modified}_{serialization_version}.json".format(**metadata)
+    file_name = "../export_schema/{publisher}_{keyword}_{versionInfo}_{modified}_{serialization_version}.json".format(**metadata)
 
     with open(file_name, "w") as file_object:
         json.dump(conf_dict, file_object, indent=4)
@@ -332,7 +334,7 @@ def convert_entsoe_cgmes_2_4():
     header_namespace_map = header_profile.pop("ProfileNamespaceMap")
 
     # Load Schema
-    files_list = list_of_files(rf"../../rdfs/{base_name}", ".rdf")
+    files_list = rdfs_tools.list_of_files(rf"../../rdfs/{base_name}", ".rdf")
     data = load_all_to_dataframe(files_list)
 
     for serialization_version in serialization_versions:
@@ -379,7 +381,7 @@ def convert_entsoe_cgmes_3_0():
     header_namespace_map = header_profile.pop("ProfileNamespaceMap")
 
     # Load Schema
-    files_list = list_of_files(rf"../../rdfs/{base_name}", ".rdf")
+    files_list = rdfs_tools.list_of_files(rf"../../rdfs/{base_name}", ".rdf")
     data = load_all_to_dataframe(files_list)
 
     for serialization_version in serialization_versions:
@@ -423,7 +425,7 @@ def convert_entsoe_nc():
     header_namespace_map = header_profile.pop("ProfileNamespaceMap")
 
     # Load Schema
-    files_list = list_of_files(rf"../../rdfs/{base_name}", ".rdf")
+    files_list = rdfs_tools.list_of_files(rf"../../rdfs/{base_name}", ".rdf")
     data = load_all_to_dataframe(files_list)
 
     for serialization_version in serialization_versions:

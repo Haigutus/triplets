@@ -1,4 +1,4 @@
-from triplets.rdf_parser import load_all_to_dataframe, get_namespace_map
+from triplets.rdf_parser import load_all_to_dataframe
 import pandas
 import os
 
@@ -158,7 +158,7 @@ def validation_view(data, class_name):
 def multiplicity_to_XSD_format(data_table_view):
     """Converts multiplicity defined in extended RDFS to XSD minOccurs and maxOccurs and adds them to the table"""
 
-    multiplicity = data_table_view.multiplicity.str.split("#M:").str[1]
+    multiplicity = data_table_view.multiplicity.str.split("M:").str[1]
     data_table_view["minOccurs"] = multiplicity.str[0]
     data_table_view["maxOccurs"] = multiplicity.str[-1].str.replace("n", "unbounded")
 
@@ -184,7 +184,7 @@ def get_namespace_and_name(uri, default_namespace):
 def parse_multiplicity(uri):
     """Converts multiplicity defined in extended RDFS to XSD minOccurs and maxOccurs"""
 
-    multiplicity = str(uri).split("#M:")[1]
+    multiplicity = str(uri).split("M:")[1]
 
     minOccurs = multiplicity[0].replace("n", "unbounded")
     maxOccurs = multiplicity[-1]
@@ -194,7 +194,7 @@ def parse_multiplicity(uri):
 
 def concrete_classes_list(data):
     """Returns list of Concrete classes from Triplet"""
-    return list(data.query("VALUE == 'http://iec.ch/TC57/NonStandard/UML#concrete'")["ID"])
+    return list(data.query("KEY == 'stereotype' and VALUE == 'concrete'")["ID"])
 
 
 
@@ -265,7 +265,7 @@ def dangling_references(data, relation_names):
 
 if __name__ == '__main__':
 
-    path = r"../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreOperationShortCircuitRDFSAugmented-v2_4_15-4Sep2020.rdf"
+    path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreOperationShortCircuitRDFSAugmented-v2_4_15-4Sep2020.rdf"
 
     data = load_all_to_dataframe([path])
 
