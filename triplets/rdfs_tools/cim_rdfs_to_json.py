@@ -149,7 +149,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
             parameter_def = {
                 "description": parameter_dict.get("comment", ""),
-                "multiplicity": parameter_dict["multiplicity"].split("#M:")[1],
+                "multiplicity": parameter_dict["multiplicity"].split("M:")[1],
                 "namespace": parameter_namespace
             }
 
