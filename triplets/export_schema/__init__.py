@@ -55,3 +55,5 @@ def load_schema_files(start_path):
 
 # Load schema files starting from config_directory
 load_schema_files(config_directory)
+
+__all__ = ["schemas"]
