@@ -184,7 +184,7 @@ def get_namespace_and_name(uri, default_namespace):
 def parse_multiplicity(uri):
     """Converts multiplicity defined in extended RDFS to XSD minOccurs and maxOccurs"""
 
-    multiplicity = str(uri).split("#M:")[1]
+    multiplicity = str(uri).split("M:")[1]
 
     minOccurs = multiplicity[0].replace("n", "unbounded")
     maxOccurs = multiplicity[-1]
