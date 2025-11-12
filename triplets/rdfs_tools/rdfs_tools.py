@@ -194,7 +194,7 @@ def parse_multiplicity(uri):
 
 def concrete_classes_list(data):
     """Returns list of Concrete classes from Triplet"""
-    return list(data.query("VALUE == 'http://iec.ch/TC57/NonStandard/UML#concrete'")["ID"])
+    return list(data.query("KEY == 'stereotype' and VALUE == 'concrete'")["ID"])
 
 
 
