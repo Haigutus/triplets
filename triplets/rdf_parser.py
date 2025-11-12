@@ -396,7 +396,7 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
             if VALUE is None and element.attrib:
 
                 # TODO - NB CIM ID specific, to be skipped for generic parsing
-                VALUE = clean_ID(element.attrib[RDF_RESOURCE])
+                VALUE = clean_ID(element.attrib.get(RDF_RESOURCE, ""))
 
                 # TODO - NB CIM enumeration specific
                 if VALUE.startswith("http"):
