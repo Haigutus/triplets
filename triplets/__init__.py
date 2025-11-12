@@ -2,7 +2,7 @@
 from . import cgmes_tools         # exposes cgmes_tools.*
 from . import rdf_parser          # exposes rdf_parser.*
 from . import export_schema       # exposes export_schema.*
-from .rdfs_tools import *         # expose what is exposed in rdfs_tools/__init__.py
+from . import rdfs_tools
 
 __all__ = [
     'cgmes_tools',
