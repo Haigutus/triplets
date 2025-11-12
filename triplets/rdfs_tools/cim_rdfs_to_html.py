@@ -1,7 +1,16 @@
-from triplets.rdfs_tools import *
+from triplets.rdf_parser import load_all_to_dataframe
+from triplets.rdfs_tools import rdfs_tools
 import os
+import sys
+import logging
 
-files_list = list_of_files(r"../../rdfs/ENTSOE_CGMES_2.4.15", ".rdf")
+logger = logging.getLogger(__name__)
+
+logging.basicConfig(stream=sys.stdout,
+                    format='%(levelname) -10s %(asctime)s %(name) -30s %(funcName) -35s %(lineno) -5d: %(message)s',
+                    level=logging.DEBUG)
+
+files_list = rdfs_tools.list_of_files(r"../../rdfs/ENTSOE_CGMES_2.4.15", ".rdf")
 
 namespace_map = dict(    cim="http://iec.ch/TC57/2013/CIM-schema-cim16#",
                          cims="http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
@@ -16,7 +25,7 @@ prefix_map = {v: k for k, v in namespace_map.items()}
 
 def replace_namesapce_with_prefix(uri, default_namespace="http://iec.ch/TC57/2013/CIM-schema-cim16"):
 
-    namespace, name = get_namespace_and_name(uri, default_namespace)
+    namespace, name = rdfs_tools.get_namespace_and_name(uri, default_namespace)
 
     prefix = prefix_map.get(namespace)
 
@@ -85,7 +94,7 @@ for file_path in files_list:
 
     # Profile metadata
 
-    profile_metadata = get_profile_metadata(data).to_frame()
+    profile_metadata = rdfs_tools.get_profile_metadata(data).to_frame()
 
     metadata = profile_metadata["VALUE"].to_dict()
 
@@ -106,23 +115,26 @@ for file_path in files_list:
 
     #print(filename)
 
+    if "entsoeUML" in  metadata.keys():
+        folder = os.path.join(metadata["entsoeUML"], metadata["shortName"], "_".join(entsoeURI_list))
+        if not os.path.exists(folder):
+            os.makedirs(folder)
 
-    folder = os.path.join(metadata["entsoeUML"], metadata["shortName"], "_".join(entsoeURI_list))
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-
-    html_datatable(profile_metadata.reset_index(), os.path.join(folder, "Profile" + filename))
-    html_datatable(packages, os.path.join(folder, "Packages" + filename))
-    #packages.to_html(open(os.path.join(folder, "Packages" + filename), "w"), index=False)
+        html_datatable(profile_metadata.reset_index(), os.path.join(folder, "Profile" + filename))
+        html_datatable(packages, os.path.join(folder, "Packages" + filename))
+        #packages.to_html(open(os.path.join(folder, "Packages" + filename), "w"), index=False)
 
 
-    for concrete_class in concrete_classes_list(data):
+        for concrete_class in rdfs_tools.concrete_classes_list(data):
 
-        namespace, name = get_namespace_and_name(concrete_class, metadata['namespaceUML'])
+            logger.debug(concrete_class)
 
-        path = os.path.join(folder, name + filename)
-        view = validation_view(data, concrete_class)
-        view.index = view.index.map(replace_namesapce_with_prefix)
-        view = view.reset_index()
+            namespace, name = rdfs_tools.get_namespace_and_name(concrete_class, metadata['namespaceUML'])
 
-        html_datatable(view, path)
+            path = os.path.join(folder, name + filename)
+            view = rdfs_tools.validation_view(data, concrete_class)
+            view.index = view.index.map(replace_namesapce_with_prefix)
+            view = view.reset_index()
+
+            html_datatable(view, path)
+            logger.info(f"Exported: {path}")
