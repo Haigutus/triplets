@@ -34,8 +34,6 @@ exclude_patterns = [
     "setup.py",
     "versioneer.py"
     "modules.rst"
-    "triplets/rdfs_tools*"
-    "triplets/export_schema*"
 ]
 
 
