@@ -1,14 +1,19 @@
-# RDF parser:
+### About:
 
  - Parses CIM RDF/XML data to pandas dataframe with 4 columns [ID, KEY, VALUE, INSTANCE_ID] (triplestore like)
  - The solution does not care about CIM version nor namespaces
  - Input files can be xml or zip files (containing one or mutiple xml files)
  - All files are parsed into one and same Pandas DataFrame, thus if you want single file or single data model, you need to filter on INSTANCE_ID column
 
-## Documentation:
+### Documentation:
 https://haigutus.github.io/triplets
 
-## To get started:
+### To get started:
+
+```shell
+python -m pip install triplets
+```
+
 
 ```python
 import pandas
@@ -18,7 +23,7 @@ path = "CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"
 data = pandas.read_RDF([path])
 ```
 
-## Result:
+### Result:
 
 ![image](https://user-images.githubusercontent.com/11408965/64228384-53350500-ceef-11e9-9a8b-473ed1dc6e4d.png)
 
@@ -30,6 +35,16 @@ data.type_tableview("ACLineSegment")
 ```
 
 ![image](https://user-images.githubusercontent.com/11408965/64228433-7eb7ef80-ceef-11e9-81d4-43e39ecf099d.png)
+
+
+### Export:
+
+```python
+data.export_to_cimxml(
+    rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1,
+    export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
+)
+```
 
 
 Look into examples folders for more
