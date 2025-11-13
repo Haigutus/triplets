@@ -1,0 +1,22 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+pandas = "*"
+lxml = "*"
+aniso8601 = "*"
+pyvis = "==0.3.1"
+pyarrow = "*"
+
+[dev-packages]
+pylint = "*"
+sphinx = "*"
+sphinx-multiversion = "*"
+myst-parser = "*"
+sphinx-rtd-theme = "*"
+sphinxcontrib-napoleon = "*"
+
+[requires]
+python_version = "3.11"

@@ -23,6 +23,12 @@ setup(
     install_requires=[
         "pandas", "lxml", 'aniso8601',
     ],
+    extras_require={
+        'full': [
+            "pyvis==0.3.1",
+            "pyarrow"
+        ]
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
