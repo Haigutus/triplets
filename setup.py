@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 import versioneer
 
 with open("README.md", "r") as fh:
@@ -8,7 +8,11 @@ setup(
     name='triplets',
     version=versioneer.get_version().split("+")[0],
     cmdclass=versioneer.get_cmdclass(),
-    packages=['triplets'],
+    packages=find_packages(),
+    package_data={
+        'triplets.export_schema': ['*.json'],  # Globs all JSON files in the export_schema package
+    },
+    include_package_data=True,  # Still needed for consistency with MANIFEST.in
     long_description=long_description,
     long_description_content_type="text/markdown",
     url='https://github.com/Haigutus/triplets',

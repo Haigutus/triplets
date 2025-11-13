@@ -1,2 +1,3 @@
 include versioneer.py
 include triplets/_version.py
+recursive-include triplets/export_schema *

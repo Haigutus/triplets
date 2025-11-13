@@ -1,7 +1,7 @@
 # Import modules explicitly for package namespace
-from . import cgmes_tools
-from . import rdf_parser
 from . import export_schema
+from . import rdf_parser
+from . import cgmes_tools
 from . import rdfs_tools
 
 __all__ = [
