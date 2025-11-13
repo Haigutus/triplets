@@ -1,0 +1,296 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>triplets.rdfs_tools package &mdash; triplets 0.0.16 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=c7cdf6fe"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="triplets.cgmes_tools module" href="triplets.cgmes_tools.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            triplets
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Quickstart:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="triplets.rdf_parser.html">triplets.rdf_parser module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.cgmes_tools.html">triplets.cgmes_tools module</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">triplets.rdfs_tools package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#triplets-rdfs-tools-rdfs-to-azuredtdl-v2-module">triplets.rdfs_tools.RDFS_to_AzureDTDL_V2 module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-triplets.rdfs_tools.cim_rdfs_to_html">triplets.rdfs_tools.cim_rdfs_to_html module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_html.export_to_html"><code class="docutils literal notranslate"><span class="pre">export_to_html()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#module-triplets.rdfs_tools.cim_rdfs_to_json">triplets.rdfs_tools.cim_rdfs_to_json module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert"><code class="docutils literal notranslate"><span class="pre">convert()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert_entsoe_cgmes_2_4"><code class="docutils literal notranslate"><span class="pre">convert_entsoe_cgmes_2_4()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert_entsoe_cgmes_3_0"><code class="docutils literal notranslate"><span class="pre">convert_entsoe_cgmes_3_0()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert_entsoe_nc"><code class="docutils literal notranslate"><span class="pre">convert_entsoe_nc()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert_profile"><code class="docutils literal notranslate"><span class="pre">convert_profile()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.export_single_profile"><code class="docutils literal notranslate"><span class="pre">export_single_profile()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.get_metadata"><code class="docutils literal notranslate"><span class="pre">get_metadata()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.insert_profile_into_profile"><code class="docutils literal notranslate"><span class="pre">insert_profile_into_profile()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#triplets-rdfs-tools-cim-rdfs-to-json-deprecated-module">triplets.rdfs_tools.cim_rdfs_to_json_deprecated module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-triplets.rdfs_tools.rdfs_tools">triplets.rdfs_tools.rdfs_tools module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.concrete_classes_list"><code class="docutils literal notranslate"><span class="pre">concrete_classes_list()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.dangling_references"><code class="docutils literal notranslate"><span class="pre">dangling_references()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.get_all_class_parameters"><code class="docutils literal notranslate"><span class="pre">get_all_class_parameters()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.get_class_parameters"><code class="docutils literal notranslate"><span class="pre">get_class_parameters()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.get_namespace_and_name"><code class="docutils literal notranslate"><span class="pre">get_namespace_and_name()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.get_owl_metadata"><code class="docutils literal notranslate"><span class="pre">get_owl_metadata()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.get_profile_metadata"><code class="docutils literal notranslate"><span class="pre">get_profile_metadata()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.get_used_relations"><code class="docutils literal notranslate"><span class="pre">get_used_relations()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.list_of_files"><code class="docutils literal notranslate"><span class="pre">list_of_files()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.multiplicity_to_XSD_format"><code class="docutils literal notranslate"><span class="pre">multiplicity_to_XSD_format()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.parameters_tableview"><code class="docutils literal notranslate"><span class="pre">parameters_tableview()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.parameters_tableview_all"><code class="docutils literal notranslate"><span class="pre">parameters_tableview_all()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.parse_multiplicity"><code class="docutils literal notranslate"><span class="pre">parse_multiplicity()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.validation_view"><code class="docutils literal notranslate"><span class="pre">validation_view()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#module-triplets.rdfs_tools">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">triplets</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">triplets.rdfs_tools package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/triplets.rdfs_tools.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="triplets-rdfs-tools-package">
+<h1>triplets.rdfs_tools package<a class="headerlink" href="#triplets-rdfs-tools-package" title="Link to this heading"></a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading"></a></h2>
+</section>
+<section id="triplets-rdfs-tools-rdfs-to-azuredtdl-v2-module">
+<h2>triplets.rdfs_tools.RDFS_to_AzureDTDL_V2 module<a class="headerlink" href="#triplets-rdfs-tools-rdfs-to-azuredtdl-v2-module" title="Link to this heading"></a></h2>
+</section>
+<section id="module-triplets.rdfs_tools.cim_rdfs_to_html">
+<span id="triplets-rdfs-tools-cim-rdfs-to-html-module"></span><h2>triplets.rdfs_tools.cim_rdfs_to_html module<a class="headerlink" href="#module-triplets.rdfs_tools.cim_rdfs_to_html" title="Link to this heading"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_html.export_to_html">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_html.</span></span><span class="sig-name descname"><span class="pre">export_to_html</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'../../rdfs/ENTSOE_CGMES_2.4.15'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_extension</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'.rdf'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_html.html#export_to_html"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_html.export_to_html" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-triplets.rdfs_tools.cim_rdfs_to_json">
+<span id="triplets-rdfs-tools-cim-rdfs-to-json-module"></span><h2>triplets.rdfs_tools.cim_rdfs_to_json module<a class="headerlink" href="#module-triplets.rdfs_tools.cim_rdfs_to_json" title="Link to this heading"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.convert">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">convert</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">serialization_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'552_ED2'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#convert"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.convert_entsoe_cgmes_2_4">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">convert_entsoe_cgmes_2_4</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#convert_entsoe_cgmes_2_4"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert_entsoe_cgmes_2_4" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.convert_entsoe_cgmes_3_0">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">convert_entsoe_cgmes_3_0</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#convert_entsoe_cgmes_3_0"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert_entsoe_cgmes_3_0" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.convert_entsoe_nc">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">convert_entsoe_nc</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#convert_entsoe_nc"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert_entsoe_nc" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.convert_profile">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">convert_profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">profile_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">serialization_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'552_ED2'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#convert_profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert_profile" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.export_single_profile">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">export_single_profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">serialization_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'552_ED2'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">additional_metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#export_single_profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.export_single_profile" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.get_metadata">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">get_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#get_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.get_metadata" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.insert_profile_into_profile">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">insert_profile_into_profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">insert_to</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">insert_what</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#insert_profile_into_profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.insert_profile_into_profile" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="triplets-rdfs-tools-cim-rdfs-to-json-deprecated-module">
+<h2>triplets.rdfs_tools.cim_rdfs_to_json_deprecated module<a class="headerlink" href="#triplets-rdfs-tools-cim-rdfs-to-json-deprecated-module" title="Link to this heading"></a></h2>
+</section>
+<section id="module-triplets.rdfs_tools.rdfs_tools">
+<span id="triplets-rdfs-tools-rdfs-tools-module"></span><h2>triplets.rdfs_tools.rdfs_tools module<a class="headerlink" href="#module-triplets.rdfs_tools.rdfs_tools" title="Link to this heading"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.concrete_classes_list">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">concrete_classes_list</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#concrete_classes_list"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.concrete_classes_list" title="Link to this definition"></a></dt>
+<dd><p>Returns list of Concrete classes from Triplet</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.dangling_references">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">dangling_references</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relation_names</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#dangling_references"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.dangling_references" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.get_all_class_parameters">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">get_all_class_parameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#get_all_class_parameters"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.get_all_class_parameters" title="Link to this definition"></a></dt>
+<dd><p>Returns all parameters of the class including from classes it extends</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.get_class_parameters">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">get_class_parameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#get_class_parameters"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.get_class_parameters" title="Link to this definition"></a></dt>
+<dd><p>Returns parameters of the class and all the class names it extends</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.get_namespace_and_name">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">get_namespace_and_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_namespace</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#get_namespace_and_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.get_namespace_and_name" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.get_owl_metadata">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">get_owl_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#get_owl_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.get_owl_metadata" title="Link to this definition"></a></dt>
+<dd><p>Returns metadata about Profile defined in RDFS OWL Ontology</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.get_profile_metadata">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">get_profile_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#get_profile_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.get_profile_metadata" title="Link to this definition"></a></dt>
+<dd><p>Returns metadata about CIM profile defined in RDFS</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.get_used_relations">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">get_used_relations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#get_used_relations"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.get_used_relations" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.list_of_files">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">list_of_files</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">root_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_extension</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">deep</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#list_of_files"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.list_of_files" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.multiplicity_to_XSD_format">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">multiplicity_to_XSD_format</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_table_view</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#multiplicity_to_XSD_format"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.multiplicity_to_XSD_format" title="Link to this definition"></a></dt>
+<dd><p>Converts multiplicity defined in extended RDFS to XSD minOccurs and maxOccurs and adds them to the table</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.parameters_tableview">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">parameters_tableview</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#parameters_tableview"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.parameters_tableview" title="Link to this definition"></a></dt>
+<dd><p>Provide class name to get table of class parameters and names of classes it extends</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.parameters_tableview_all">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">parameters_tableview_all</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#parameters_tableview_all"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.parameters_tableview_all" title="Link to this definition"></a></dt>
+<dd><p>Provide class name to get table of all class parameters</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.parse_multiplicity">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">parse_multiplicity</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#parse_multiplicity"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.parse_multiplicity" title="Link to this definition"></a></dt>
+<dd><p>Converts multiplicity defined in extended RDFS to XSD minOccurs and maxOccurs</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.validation_view">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">validation_view</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#validation_view"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.validation_view" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-triplets.rdfs_tools">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-triplets.rdfs_tools" title="Link to this heading"></a></h2>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="triplets.cgmes_tools.html" class="btn btn-neutral float-left" title="triplets.cgmes_tools module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Kristjan Vilgo.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

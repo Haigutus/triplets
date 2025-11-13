@@ -1,0 +1,432 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>triplets.rdfs_tools.rdfs_tools &mdash; triplets 0.0.16 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=c7cdf6fe"></script>
+      <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            triplets
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Quickstart:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.rdf_parser.html">triplets.rdf_parser module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.cgmes_tools.html">triplets.cgmes_tools module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.rdfs_tools.html">triplets.rdfs_tools package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">triplets</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">triplets.rdfs_tools.rdfs_tools</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for triplets.rdfs_tools.rdfs_tools</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">triplets.rdf_parser</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_all_to_dataframe</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="n">pandas</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s2">&quot;display.max_rows&quot;</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>
+<span class="n">pandas</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s2">&quot;display.max_columns&quot;</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
+<span class="n">pandas</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s2">&quot;display.width&quot;</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span>
+<span class="n">pandas</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s1">&#39;display.max_colwidth&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="get_owl_metadata">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.get_owl_metadata">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_owl_metadata</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns metadata about Profile defined in RDFS OWL Ontology&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;type&#39; and VALUE == &#39;http://www.w3.org/2002/07/owl#Ontology&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">ID</span><span class="p">)</span><span class="o">.</span><span class="n">set_index</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="get_profile_metadata">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.get_profile_metadata">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_profile_metadata</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns metadata about CIM profile defined in RDFS&quot;&quot;&quot;</span>
+
+    <span class="n">base_uml</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;VALUE == &#39;baseUML&#39;&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">base_uml</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Missing baseUML&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+
+    <span class="n">profile_domain</span> <span class="o">=</span> <span class="n">base_uml</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">to_list</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">profile_metadata</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="o">.</span><span class="n">ID</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="n">profile_domain</span><span class="p">)]</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;isFixed&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">deep</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">profile_metadata</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">profile_metadata</span><span class="o">.</span><span class="n">ID</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">,</span> <span class="n">expand</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">profile_metadata</span><span class="o">.</span><span class="n">set_index</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span></div>
+
+
+
+<div class="viewcode-block" id="list_of_files">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.list_of_files">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">list_of_files</span><span class="p">(</span><span class="n">root_path</span><span class="p">,</span> <span class="n">file_extension</span><span class="p">,</span> <span class="n">deep</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+
+    <span class="n">matches</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">root_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">root_path</span><span class="p">)</span>
+    <span class="n">ext</span> <span class="o">=</span> <span class="n">file_extension</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">root_path</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Path does not exist: </span><span class="si">{</span><span class="n">root_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">root_path</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">root_path</span><span class="p">]</span> <span class="k">if</span> <span class="n">root_path</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">ext</span><span class="p">)</span> <span class="k">else</span> <span class="p">[]</span>
+
+    <span class="c1"># Directory case</span>
+    <span class="k">if</span> <span class="n">deep</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">dirpath</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">filenames</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">root_path</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">filenames</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">ext</span><span class="p">):</span>
+                    <span class="n">matches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dirpath</span><span class="p">,</span> <span class="n">filename</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">root_path</span><span class="p">):</span>
+            <span class="n">full_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root_path</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">full_path</span><span class="p">)</span> <span class="ow">and</span> <span class="n">filename</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">ext</span><span class="p">):</span>
+                <span class="n">matches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">full_path</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">matches</span></div>
+
+
+
+
+<div class="viewcode-block" id="get_class_parameters">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.get_class_parameters">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_class_parameters</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">class_name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns parameters of the class and all the class names it extends&quot;&quot;&quot;</span>
+
+    <span class="n">class_data</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">class_name</span><span class="p">}</span>
+
+    <span class="c1"># Get parameters</span>
+    <span class="n">class_data</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;VALUE == @class_name &amp; KEY == &#39;domain&#39;&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Add parent classes (if present)</span>
+    <span class="n">class_data</span><span class="p">[</span><span class="s2">&quot;extends&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;ID == @class_name and KEY == &#39;subClassOf&#39;&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">())</span>
+
+    <span class="c1"># Usually only one inheritance, warn if not</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">class_data</span><span class="p">[</span><span class="s2">&quot;extends&quot;</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">class_name</span><span class="si">}</span><span class="s2"> is inheriting form more than one class -&gt; </span><span class="si">{</span><span class="n">class_data</span><span class="p">[</span><span class="s1">&#39;extends&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">class_data</span></div>
+
+
+
+<div class="viewcode-block" id="get_all_class_parameters">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.get_all_class_parameters">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_all_class_parameters</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">class_name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns all parameters of the class including from classes it extends&quot;&quot;&quot;</span>
+
+    <span class="n">all_class_parameters</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+    <span class="n">class_name_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">class_name</span><span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">class_name</span> <span class="ow">in</span> <span class="n">class_name_list</span><span class="p">:</span>
+
+        <span class="c1"># Get current class parameters</span>
+        <span class="n">class_data</span> <span class="o">=</span> <span class="n">get_class_parameters</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">class_name</span><span class="p">)</span>
+
+        <span class="c1"># Add parameters to others</span>
+        <span class="n">all_class_parameters</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">all_class_parameters</span><span class="p">,</span> <span class="n">class_data</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]])</span>
+
+        <span class="c1"># Add classes that this class extends to processing</span>
+        <span class="n">class_name_list</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">class_data</span><span class="p">[</span><span class="s2">&quot;extends&quot;</span><span class="p">])</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Inheritance sequence&quot;</span><span class="p">)</span>  <span class="c1"># TODO add this as a output</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot; -&gt; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">class_name_list</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">all_class_parameters</span><span class="p">,</span> <span class="n">class_name_list</span></div>
+
+
+
+<div class="viewcode-block" id="parameters_tableview_all">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.parameters_tableview_all">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">parameters_tableview_all</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">class_name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Provide class name to get table of all class parameters&quot;&quot;&quot;</span>
+
+    <span class="c1"># Get All parameter names of class (natural and inherited)</span>
+    <span class="n">all_class_parameters</span><span class="p">,</span> <span class="n">inheritance</span> <span class="o">=</span> <span class="n">get_all_class_parameters</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">class_name</span><span class="p">)</span>
+
+    <span class="c1"># Get parameters data</span>
+    <span class="n">type_data</span> <span class="o">=</span> <span class="n">all_class_parameters</span><span class="p">[[</span><span class="s2">&quot;ID&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">])</span>
+
+    <span class="k">if</span> <span class="n">type_data</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Could not find type data for </span><span class="si">{</span><span class="n">class_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(),</span> <span class="p">[]</span>
+
+    <span class="c1"># Pivot to table</span>
+    <span class="n">data_view</span> <span class="o">=</span> <span class="n">type_data</span><span class="o">.</span><span class="n">pivot</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">data_view</span><span class="p">,</span> <span class="n">inheritance</span></div>
+
+
+
+<div class="viewcode-block" id="parameters_tableview">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.parameters_tableview">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">parameters_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">class_name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Provide class name to get table of class parameters and names of classes it extends&quot;&quot;&quot;</span>
+
+    <span class="c1"># Get All parameter names of class (natural and inherited)</span>
+    <span class="n">class_data</span> <span class="o">=</span> <span class="n">get_class_parameters</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">class_name</span><span class="p">)</span>
+
+    <span class="c1">#print(class_data)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">class_data</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+        <span class="c1"># Get parameters data</span>
+        <span class="n">type_data</span> <span class="o">=</span> <span class="p">(</span><span class="n">class_data</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">])[[</span><span class="s2">&quot;ID&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">])</span>
+
+        <span class="c1"># Pivot to table</span>
+        <span class="n">data_view</span> <span class="o">=</span> <span class="n">type_data</span><span class="o">.</span><span class="n">pivot</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">)[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">data_view</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">return</span> <span class="n">data_view</span><span class="p">,</span> <span class="n">class_data</span><span class="p">[</span><span class="s2">&quot;extends&quot;</span><span class="p">]</span></div>
+
+
+
+<div class="viewcode-block" id="validation_view">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.validation_view">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validation_view</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">class_name</span><span class="p">):</span>
+
+
+    <span class="n">data_view</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">parameters_tableview_all</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">class_name</span><span class="p">)</span>
+
+    <span class="n">validation_data</span> <span class="o">=</span> <span class="n">multiplicity_to_XSD_format</span><span class="p">(</span><span class="n">data_view</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="s2">&quot;AssociationUsed&quot;</span> <span class="ow">in</span> <span class="n">validation_data</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+        <span class="n">validation_data</span> <span class="o">=</span> <span class="n">validation_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;AssociationUsed != &#39;No&#39;&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">validation_data</span><span class="p">[[</span><span class="s1">&#39;minOccurs&#39;</span><span class="p">,</span> <span class="s1">&#39;maxOccurs&#39;</span><span class="p">,</span> <span class="s1">&#39;comment&#39;</span><span class="p">]]</span> <span class="c1">#[[&#39;minOccurs&#39;, &#39;maxOccurs&#39;, &#39;dataType&#39;, &#39;domain&#39;, &#39;label&#39;, &#39;comment&#39;]]</span></div>
+
+
+
+<div class="viewcode-block" id="multiplicity_to_XSD_format">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.multiplicity_to_XSD_format">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">multiplicity_to_XSD_format</span><span class="p">(</span><span class="n">data_table_view</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Converts multiplicity defined in extended RDFS to XSD minOccurs and maxOccurs and adds them to the table&quot;&quot;&quot;</span>
+
+    <span class="n">multiplicity</span> <span class="o">=</span> <span class="n">data_table_view</span><span class="o">.</span><span class="n">multiplicity</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;M:&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">data_table_view</span><span class="p">[</span><span class="s2">&quot;minOccurs&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">multiplicity</span><span class="o">.</span><span class="n">str</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">data_table_view</span><span class="p">[</span><span class="s2">&quot;maxOccurs&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">multiplicity</span><span class="o">.</span><span class="n">str</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;n&quot;</span><span class="p">,</span> <span class="s2">&quot;unbounded&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">data_table_view</span></div>
+
+
+
+<div class="viewcode-block" id="get_namespace_and_name">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.get_namespace_and_name">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_namespace_and_name</span><span class="p">(</span><span class="n">uri</span><span class="p">,</span> <span class="n">default_namespace</span><span class="p">):</span>
+
+    <span class="n">separator</span> <span class="o">=</span> <span class="s2">&quot;#&quot;</span> <span class="k">if</span> <span class="s2">&quot;#&quot;</span> <span class="ow">in</span> <span class="n">uri</span> <span class="k">else</span> <span class="s2">&quot;/&quot;</span>
+
+    <span class="n">namespace</span><span class="p">,</span> <span class="n">name</span> <span class="o">=</span> <span class="n">uri</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="n">separator</span><span class="p">,</span> <span class="n">maxsplit</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">namespace</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+        <span class="n">namespace</span> <span class="o">=</span> <span class="n">default_namespace</span>
+
+    <span class="n">namespace</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">namespace</span><span class="si">}{</span><span class="n">separator</span><span class="si">}</span><span class="s2">&quot;</span>
+
+
+    <span class="k">return</span> <span class="n">namespace</span><span class="p">,</span> <span class="n">name</span></div>
+
+
+
+
+<div class="viewcode-block" id="parse_multiplicity">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.parse_multiplicity">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">parse_multiplicity</span><span class="p">(</span><span class="n">uri</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Converts multiplicity defined in extended RDFS to XSD minOccurs and maxOccurs&quot;&quot;&quot;</span>
+
+    <span class="n">multiplicity</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uri</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;M:&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="n">minOccurs</span> <span class="o">=</span> <span class="n">multiplicity</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;n&quot;</span><span class="p">,</span> <span class="s2">&quot;unbounded&quot;</span><span class="p">)</span>
+    <span class="n">maxOccurs</span> <span class="o">=</span> <span class="n">multiplicity</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">minOccurs</span><span class="p">,</span> <span class="n">maxOccurs</span></div>
+
+
+
+<div class="viewcode-block" id="concrete_classes_list">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.concrete_classes_list">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">concrete_classes_list</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns list of Concrete classes from Triplet&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;stereotype&#39; and VALUE == &#39;concrete&#39;&quot;</span><span class="p">)[</span><span class="s2">&quot;ID&quot;</span><span class="p">])</span></div>
+
+
+
+
+
+<span class="c1"># Full Model class is missing in RDFS, thus added here manually # TODO add Supersedes</span>
+<span class="n">fullmodel_conf</span> <span class="o">=</span> <span class="p">{</span> <span class="s2">&quot;FullModel&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;attrib&quot;</span><span class="p">:</span> <span class="p">{</span>
+                            <span class="s2">&quot;attribute&quot;</span><span class="p">:</span> <span class="s2">&quot;{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about&quot;</span><span class="p">,</span>
+                            <span class="s2">&quot;value_prefix&quot;</span><span class="p">:</span> <span class="s2">&quot;urn:uuid:&quot;</span>
+                            <span class="p">},</span>
+                            <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://iec.ch/TC57/61970-552/ModelDescription/1#&quot;</span><span class="p">},</span>
+
+                    <span class="s2">&quot;Model.DependentOn&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;attrib&quot;</span><span class="p">:</span> <span class="p">{</span>
+                            <span class="s2">&quot;attribute&quot;</span><span class="p">:</span> <span class="s2">&quot;{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource&quot;</span><span class="p">,</span>
+                            <span class="s2">&quot;value_prefix&quot;</span><span class="p">:</span> <span class="s2">&quot;urn:uuid:&quot;</span>
+                        <span class="p">},</span>
+                        <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://iec.ch/TC57/61970-552/ModelDescription/1#&quot;</span>
+                    <span class="p">},</span>
+
+                    <span class="s2">&quot;Model.Supersedes&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;attrib&quot;</span><span class="p">:</span> <span class="p">{</span>
+                            <span class="s2">&quot;attribute&quot;</span><span class="p">:</span> <span class="s2">&quot;{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource&quot;</span><span class="p">,</span>
+                            <span class="s2">&quot;value_prefix&quot;</span><span class="p">:</span> <span class="s2">&quot;urn:uuid:&quot;</span>
+                        <span class="p">},</span>
+                        <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://iec.ch/TC57/61970-552/ModelDescription/1#&quot;</span>
+                    <span class="p">},</span>
+
+                    <span class="s2">&quot;Model.created&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://iec.ch/TC57/61970-552/ModelDescription/1#&quot;</span>
+                    <span class="p">},</span>
+                    <span class="s2">&quot;Model.description&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://iec.ch/TC57/61970-552/ModelDescription/1#&quot;</span>
+                    <span class="p">},</span>
+                    <span class="s2">&quot;Model.messageType&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://entsoe.eu/CIM/Extensions/CGM-BP/2020#&quot;</span>
+                    <span class="p">},</span>
+                    <span class="s2">&quot;Model.modelingAuthoritySet&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://iec.ch/TC57/61970-552/ModelDescription/1#&quot;</span>
+                    <span class="p">},</span>
+                    <span class="s2">&quot;Model.modelingEntity&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://entsoe.eu/CIM/Extensions/CGM-BP/2020#&quot;</span>
+                    <span class="p">},</span>
+                    <span class="s2">&quot;Model.processType&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://entsoe.eu/CIM/Extensions/CGM-BP/2020#&quot;</span>
+                    <span class="p">},</span>
+                    <span class="s2">&quot;Model.profile&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://iec.ch/TC57/61970-552/ModelDescription/1#&quot;</span>
+                    <span class="p">},</span>
+                    <span class="s2">&quot;Model.scenarioTime&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://iec.ch/TC57/61970-552/ModelDescription/1#&quot;</span>
+                    <span class="p">},</span>
+                    <span class="s2">&quot;Model.version&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;namespace&quot;</span><span class="p">:</span> <span class="s2">&quot;http://iec.ch/TC57/61970-552/ModelDescription/1#&quot;</span>
+                    <span class="p">}}</span>
+
+<div class="viewcode-block" id="get_used_relations">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.get_used_relations">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_used_relations</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="n">relations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;AssociationUsed&#39; and VALUE == &#39;Yes&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;ID&quot;</span><span class="p">:</span> <span class="s2">&quot;RELATION_NAME&quot;</span><span class="p">})</span>
+    <span class="k">return</span> <span class="n">relations</span><span class="o">.</span><span class="n">RELATION_NAME</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="dangling_references">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.dangling_references">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">dangling_references</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">relation_names</span><span class="p">):</span>
+    <span class="n">references</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">relation_names</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;RELATION_NAME&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;Type&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">references</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="n">indicator</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;right&quot;</span><span class="p">,</span> <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;_TO&quot;</span><span class="p">,</span> <span class="s2">&quot;_FROM&quot;</span><span class="p">))</span></div>
+
+
+
+
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">path</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">&quot;../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreOperationShortCircuitRDFSAugmented-v2_4_15-4Sep2020.rdf&quot;</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="n">load_all_to_dataframe</span><span class="p">([</span><span class="n">path</span><span class="p">])</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="n">validation_view</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;#ACLineSegment&quot;</span><span class="p">))</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">validation_view</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;#PowerTransformerEnd&quot;</span><span class="p">))</span>
+
+
+
+
+
+
+
+
+<span class="c1">#print(validation_view(&quot;#ACLineSegment&quot;))</span>
+<span class="c1">#print(validation_view(&quot;#PowerTransformerEnd&quot;))</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Kristjan Vilgo.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -7,11 +7,18 @@ Documentation
 ======================
 
 .. toctree::
+   :maxdepth: 1
+   :caption: Quickstart:
+
+   quickstart
+
+.. toctree::
    :maxdepth: 2
    :caption: Contents:
 
-   triplets.cgmes_tools
    triplets.rdf_parser
+   triplets.cgmes_tools
+   triplets.rdfs_tools
 
 Indices and tables
 ==================
