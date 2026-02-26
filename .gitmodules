@@ -1,0 +1,3 @@
+[submodule "test_data/relicapgrid"]
+	path = test_data/relicapgrid
+	url = https://github.com/entsoe/relicapgrid
