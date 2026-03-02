@@ -358,6 +358,7 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
     RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     RDF_ID = f"{{{RDF_NS}}}ID"
     RDF_ABOUT = f"{{{RDF_NS}}}about"
+    RDF_NODEID = f"{{{RDF_NS}}}nodeID"
     RDF_RESOURCE = f"{{{RDF_NS}}}resource"
 
     # Generate list for RDF data and store the original filename under rdf:label in dcat:Distribution object
@@ -379,7 +380,7 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
     VALUE_NS = ""
 
     for RDF_object in RDF_objects:
-        ID = clean_ID(RDF_object.attrib.get(RDF_ID) or RDF_object.attrib.get(RDF_ABOUT))
+        ID = clean_ID(RDF_object.attrib.get(RDF_ID) or RDF_object.attrib.get(RDF_ABOUT) or RDF_object.attrib.get(RDF_NODEID))
         KEY = "Type"
         KEY_NS = RDF_NS
         # Use partition instead of split, with fallback for no "}"
@@ -396,7 +397,7 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
             if VALUE is None and element.attrib:
 
                 # TODO - NB CIM ID specific, to be skipped for generic parsing
-                VALUE = clean_ID(element.attrib.get(RDF_RESOURCE, ""))
+                VALUE = clean_ID(element.attrib.get(RDF_RESOURCE) or element.attrib.get(RDF_NODEID) or "")
 
                 # TODO - NB CIM enumeration specific
                 if VALUE.startswith("http"):
