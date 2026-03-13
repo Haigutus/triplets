@@ -510,7 +510,7 @@ def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False, data_
 pandas.read_RDF = load_all_to_dataframe
 
 
-def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
+def type_tableview(data, type_name, string_to_number=True, type_key="Type", multivalue=False):
     """Create a table view of all objects of a specified type.
 
     Parameters
@@ -523,6 +523,8 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
         If True, convert columns containing numbers to numeric types (default is True).
     type_key : str, optional
         Key used to identify object types in the dataset (default is 'Type').
+    multivalue : bool, optional
+        If True, aggregate duplicate (ID, KEY) pairs into lists (default is False).
 
     Returns
     -------
@@ -531,7 +533,7 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
 
     Examples
     --------
-    >>> table = data.type_tableview("ACLineSegment")
+    >>> table = data.type_tableview("ACLineSegment", multivalue=True)
     """
     # Get all ID-s of rows where Type == type_name
     type_id = data[(data["VALUE"] == type_name) & (data["KEY"] == type_key)]
@@ -541,11 +543,24 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
         return None
 
     # Filter original data by found type_id data
-    # There can't be duplicate ID and KEY pairs for pivot, but this will lose data on full model DependantOn and other info, solution would be to use pivot table function.
-    type_data = pandas.merge(type_id[["ID"]], data, on="ID").drop_duplicates(["ID", "KEY"])
+    type_data = pandas.merge(type_id[["ID"]], data, on="ID")
 
     # Convert form triplets to a table view all objects of same type
-    data_view = type_data.pivot(index="ID", columns="KEY")["VALUE"]
+    if multivalue:
+        # Define an aggregation function that returns a single value if only one exists, 
+        # otherwise returns a list.
+        def _aggregate(x):
+            x_list = list(x)
+            if len(x_list) == 1:
+                return x_list[0]
+            return x_list
+        
+        # Aggregate duplicate values into lists where necessary
+        data_view = type_data.pivot_table(index="ID", columns="KEY", values="VALUE", aggfunc=_aggregate)
+    else:
+        # Fallback to previous behavior: drop duplicates and pivot
+        type_data = type_data.drop_duplicates(["ID", "KEY"])
+        data_view = type_data.pivot(index="ID", columns="KEY")["VALUE"]
 
     if string_to_number:
         # Convert to data type to numeric in columns that contain only numbers (for easier data usage later on)
@@ -1650,13 +1665,15 @@ def get_object_data(data, object_UUID):
 pandas.DataFrame.get_object_data = get_object_data
 
 
-def tableview_to_triplet(data):
+def tableview_to_triplet(data, multivalue=False):
     """Convert a table view back to a triplet format.
 
     Parameters
     ----------
     data : pandas.DataFrame
         Pivoted DataFrame (table view) to convert.
+    multivalue : bool, optional
+        If True, unpack list values into separate triplets (default is False).
 
     Returns
     -------
@@ -1669,10 +1686,32 @@ def tableview_to_triplet(data):
 
     Examples
     --------
-    >>> triplet = tableview_to_triplet(table_view)
+    >>> triplet = tableview_to_triplet(table_view, multivalue=True)
     """
-    # TODO add only when tableveiw is created
-    return data.reset_index().melt(id_vars="ID", value_name="VALUE", var_name="KEY").astype(str)
+    # Reshape the table view back to triplet format
+    triplet_df = data.reset_index().melt(id_vars="ID", value_name="VALUE", var_name="KEY")
+
+    if multivalue:
+        # Define a function to safely parse list strings if needed
+        # TODO - maybe this should be handled before, eg this function should assume lists and passers responsibility is to ensure list
+        import ast
+        def _ensure_list(val):
+            if isinstance(val, str) and val.startswith("[") and val.endswith("]"):
+                try:
+                    parsed = ast.literal_eval(val)
+                    if isinstance(parsed, list):
+                        return parsed
+                except (ValueError, SyntaxError):
+                    pass
+            return val
+
+        # Ensure values that look like lists are treated as lists before exploding
+        triplet_df["VALUE"] = triplet_df["VALUE"].apply(_ensure_list)
+        
+        # Unpack list values into separate rows
+        triplet_df = triplet_df.explode("VALUE")
+
+    return triplet_df.astype(str)
 
 
 pandas.DataFrame.tableview_to_triplet = tableview_to_triplet
