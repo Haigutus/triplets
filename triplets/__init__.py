@@ -3,12 +3,14 @@ from . import export_schema
 from . import rdf_parser
 from . import cgmes_tools
 from . import rdfs_tools
+from . import cim_spreadsheet
 
 __all__ = [
     'cgmes_tools',
     'rdf_parser',
     'export_schema',
-    'rdfs_tools'
+    'rdfs_tools',
+    'cim_spreadsheet'
 ]
 
 from ._version import get_versions
