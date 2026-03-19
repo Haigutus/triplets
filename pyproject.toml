@@ -1,0 +1,31 @@
+[project]
+name = "triplets"
+version = "0.1.0"
+description = "Simple tools to load/modify/export XML/RDF data using Pandas DataFrames"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    { name = "Kristjan Vilgo", email = "kristjan.vilgo@gmail.com" }
+]
+license = { text = "MIT" }
+dependencies = [
+    "pandas",
+    "lxml",
+    "aniso8601",
+    "openpyxl",
+]
+
+[project.scripts]
+cim-spreadsheet = "tools.cim_spreadsheet_cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0", "versioneer"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[tool.uv]
+managed = true
