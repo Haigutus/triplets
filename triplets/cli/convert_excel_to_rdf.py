@@ -1,5 +1,6 @@
 import sys
 import argparse
+import warnings
 from excel_to_rdf import convert_excel_to_rdf, version
 
 parser = argparse.ArgumentParser(description="""Convert EXCEL representation of RDF data to RDF/XML""",
@@ -20,6 +21,14 @@ parser.add_argument('--sheets', type=str, nargs='+', help='Names of Excel Sheets
 
 
 arg = parser.parse_args()
+
+warnings.warn(
+    "convert_excel_to_rdf is deprecated and will be removed in a future version. "
+    "Please use 'cim-spreadsheet to-cim' instead. "
+    "See: cim-spreadsheet --help",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 convert_excel_to_rdf(rdf_conf_path=arg.conf,
                      source_excel_path=arg.input,

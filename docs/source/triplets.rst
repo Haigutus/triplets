@@ -9,6 +9,7 @@ Subpackages
 
    triplets.export_schema
    triplets.rdfs_tools
+   triplets.cli
 
 Submodules
 ----------

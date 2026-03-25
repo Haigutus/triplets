@@ -1,10 +1,10 @@
 from datetime import datetime
 import sys
 import pandas
+import warnings
 from uuid import uuid4
 
-sys.path.append("..")
-import RDF_parser
+from .. import rdf_parser as RDF_parser
 
 version = "0.0.5_2025-03-14"
 
@@ -16,6 +16,14 @@ def convert_excel_to_rdf(rdf_conf_path,
                          destination_rdf_path=None,
                          export_type="xml_per_instance"
                          ):
+
+    warnings.warn(
+        "excel_to_rdf.convert_excel_to_rdf is deprecated and will be removed in a future version. "
+        "Please use 'cim-spreadsheet to-cim' instead. "
+        "See: cim-spreadsheet --help",
+        DeprecationWarning,
+        stacklevel=2
+    )
 
     # TODO - maybe add send to EDX functionality
     # TODO - maybe add filename form metadata creation

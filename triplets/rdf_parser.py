@@ -1092,68 +1092,369 @@ def set_VALUE_at_KEY_and_ID(data, key, value, id):
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.set_VALUE_at_KEY_and_ID = set_VALUE_at_KEY_and_ID
 
-# TODO - add CSV export
-def export_to_excel(data, path=None):
-    """Export triplet data to an Excel file, with each type on a separate sheet.
+def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, single_file=False, filename=None, apply_formatting=True):
+    """Export triplet data to Excel file(s), with each type on a separate sheet.
 
     Parameters
     ----------
     data : pandas.DataFrame
         Triplet dataset containing RDF data.
     path : str, optional
-        Directory path to save the Excel file (default is current working directory).
+        Directory path to save Excel file(s), or file path when single_file=True
+        (default is current working directory). Only used when export_to_memory=False.
+    multivalue : bool, default True
+        If True, aggregate duplicate (ID, KEY) pairs into lists.
+    export_to_memory : bool, default False
+        If True, return BytesIO objects; if False, save to disk.
+    single_file : bool, default False
+        If True, export all data to a single file instead of one file per INSTANCE_ID.
+    filename : str, optional
+        Filename to use when single_file=True. If None, uses 'export.xlsx'.
+    apply_formatting : bool, default True
+        If True, apply column width (38) and freeze panes formatting to Excel sheets.
+
+    Returns
+    -------
+    BytesIO or list
+        - If single_file=True and export_to_memory=True: Single BytesIO object
+        - If single_file=True and export_to_memory=False: Single filename string
+        - If single_file=False and export_to_memory=True: List of BytesIO objects with .name attribute
+        - If single_file=False and export_to_memory=False: List of saved filenames
 
     Notes
     -----
     - Uses 'label' key to determine the filename for each INSTANCE_ID.
     - Each object type is exported to a separate sheet.
-    - TODO: Add support for XlsxWriter properties for better formatting.
+    - Requires openpyxl (install with: pip install openpyxl).
+    - Uses openpyxl for Excel export with formatting (column width, freeze panes).
 
     Examples
     --------
-    >>> data.export_to_excel("output_dir")
+    Export to directory:
+        >>> data.export_to_excel("output_dir")
+
+    Export to memory:
+        >>> excel_files = data.export_to_excel(export_to_memory=True)
+        >>> for f in excel_files:
+        ...     print(f.name)
     """
-    # TODO set some nice properties - https://xlsxwriter.readthedocs.io/workbook.html#workbook-set-properties
+    from io import BytesIO
 
-    labels = data.query("KEY == 'label'").iterrows()
-    # TODO dont use iterrows
-    # TODO instead of label use Distribution
-    for _, label in labels:
-        instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
+    # Single file mode - export all data to one file
+    if single_file:
+        if filename is None:
+            filename = 'export.xlsx'
 
-        types = instance_data.types_dict()
+        # Convert all data to tableviews
+        tableviews = triplet_to_tableviews(data, multivalue=multivalue)
 
-        file_name = '{}.xlsx'.format(label.VALUE.split(".")[0])
+        # Write to BytesIO
+        output = BytesIO()
+        output.name = filename
 
-        if path is None:
-            path = os.getcwd()
+        try:
+            with pandas.ExcelWriter(output, engine='openpyxl') as writer:
+                for class_type, class_data in tableviews.items():
+                    class_data.to_excel(writer, sheet_name=class_type)
 
-        file_path = os.path.join(path, file_name)
+                    if apply_formatting:
+                        # Apply formatting using openpyxl
+                        sheet = writer.sheets[class_type]
 
-        logger.info("Exporting excel: {}".format(file_path))
-        writer = pandas.ExcelWriter(file_path)
+                        # Set column width for all columns
+                        from openpyxl.utils import get_column_letter
+                        for i in range(1, len(class_data.columns) + 2):  # +2 for index column
+                            column_letter = get_column_letter(i)
+                            sheet.column_dimensions[column_letter].width = 38
 
-        for class_type in types:
-            class_data = instance_data.type_tableview(class_type)
-            class_data.to_excel(writer, class_type)
+                        # Freeze first row and first column (ID column)
+                        sheet.freeze_panes = 'B2'
+        except ImportError as e:
+            raise ImportError(
+                "openpyxl is required for Excel export. "
+                "Install it with: pip install openpyxl"
+            ) from e
 
-            # Get sheet to do some formatting
-            sheet = writer.sheets[class_type]
+        output.seek(0)
 
-            # Set default column size, if this does not work you are missing XslxWriter module
-            first_col = 0
-            last_col = len(class_data.columns)
-            width = 38
-            sheet.set_column(first_col, last_col, width)
+        # Return or save single file
+        if export_to_memory:
+            return output
+        else:
+            # path is the file path when single_file=True
+            if path is None:
+                path = os.getcwd()
 
-            # freeze column names and ID column
-            sheet.freeze_panes(1, 1)
+            # If path is a directory, append filename
+            if os.path.isdir(path) or not path.endswith('.xlsx'):
+                export_path = os.path.join(path, filename)
+            else:
+                export_path = path
 
-        writer.save()
+            with open(export_path, 'wb') as export_file_object:
+                output.seek(0)
+                export_file_object.write(output.read())
+
+            logger.info(f'Saved {export_path}')
+            return filename
+
+    # Multi-file mode - export one file per INSTANCE_ID
+    else:
+        labels = data.query("KEY == 'label'")
+        exported_files = []
+
+        for _, label in labels.iterrows():
+            instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
+
+            # Use new core function to get tableviews
+            tableviews = triplet_to_tableviews(instance_data, multivalue=multivalue)
+
+            file_name = '{}.xlsx'.format(label.VALUE.split(".")[0])
+
+            # Always write to BytesIO first
+            output = BytesIO()
+            output.name = file_name
+
+            try:
+                with pandas.ExcelWriter(output, engine='openpyxl') as writer:
+                    for class_type, class_data in tableviews.items():
+                        class_data.to_excel(writer, sheet_name=class_type)
+
+                        if apply_formatting:
+                            # Apply formatting using openpyxl
+                            sheet = writer.sheets[class_type]
+
+                            # Set column width for all columns
+                            from openpyxl.utils import get_column_letter
+                            for i in range(1, len(class_data.columns) + 2):  # +2 for index column
+                                column_letter = get_column_letter(i)
+                                sheet.column_dimensions[column_letter].width = 38
+
+                            # Freeze first row and first column (ID column)
+                            sheet.freeze_panes = 'B2'
+            except ImportError as e:
+                raise ImportError(
+                    "openpyxl is required for Excel export. "
+                    "Install it with: pip install openpyxl"
+                ) from e
+
+            output.seek(0)
+            exported_files.append(output)
+
+        # Return BytesIO objects if export_to_memory, otherwise save to disk
+        if export_to_memory:
+            return exported_files
+        else:
+            if path is None:
+                path = os.getcwd()
+
+            exported_file_names = []
+
+            for file_object in exported_files:
+                export_path = os.path.join(path, file_object.name)
+                with open(export_path, 'wb') as export_file_object:
+                    file_object.seek(0)
+                    export_file_object.write(file_object.read())
+
+                exported_file_names.append(file_object.name)
+                logger.info(f'Saved {export_path}')
+
+            return exported_file_names
 
 
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.export_to_excel = export_to_excel
+
+
+def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):
+    """Export triplet data to CSV files, with each type as a separate file.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    path : str, optional
+        Directory path to save CSV file(s) (default is current working directory).
+        Only used when export_to_memory=False.
+    multivalue : bool, default True
+        If True, aggregate duplicate (ID, KEY) pairs into lists.
+    export_to_memory : bool, default False
+        If True, return BytesIO objects; if False, save to disk.
+    single_file : bool, default False
+        If True, export all data using a single base filename instead of one set per INSTANCE_ID.
+    base_filename : str, optional
+        Base filename to use when single_file=True. If None, uses 'export'.
+        Files will be named as '{base_filename}_{classname}.csv'.
+
+    Returns
+    -------
+    list
+        - If export_to_memory=True: List of BytesIO objects with .name attribute
+        - If export_to_memory=False: List of saved filenames
+
+    Notes
+    -----
+    - Uses 'label' key to determine the base filename for each INSTANCE_ID.
+    - Each object type is exported to a separate CSV file.
+    - CSV files are named as "{label}_{classname}.csv".
+
+    Examples
+    --------
+    Export to directory:
+        >>> data.export_to_csv("output_dir")
+
+    Export to memory:
+        >>> csv_files = data.export_to_csv(export_to_memory=True)
+        >>> for f in csv_files:
+        ...     print(f.name)
+    """
+    from io import BytesIO
+
+    # Single file mode - export all data with one base filename
+    if single_file:
+        if base_filename is None:
+            base_filename = 'export'
+
+        # Convert all data to tableviews
+        tableviews = triplet_to_tableviews(data, multivalue=multivalue)
+
+        exported_files = []
+
+        # Export each class type to a separate CSV file
+        for class_type, class_data in tableviews.items():
+            file_name = '{}_{}.csv'.format(base_filename, class_type)
+
+            # Write to BytesIO
+            output = BytesIO()
+            output.name = file_name
+
+            # Write CSV to BytesIO
+            csv_string = class_data.to_csv()
+            output.write(csv_string.encode('utf-8'))
+
+            output.seek(0)
+            exported_files.append(output)
+
+        # Return or save files
+        if export_to_memory:
+            return exported_files
+        else:
+            if path is None:
+                path = os.getcwd()
+
+            exported_file_names = []
+
+            for file_object in exported_files:
+                export_path = os.path.join(path, file_object.name)
+                with open(export_path, 'wb') as export_file_object:
+                    file_object.seek(0)
+                    export_file_object.write(file_object.read())
+
+                exported_file_names.append(file_object.name)
+                logger.info(f'Saved {export_path}')
+
+            return exported_file_names
+
+    # Multi-file mode - export one set per INSTANCE_ID
+    else:
+        labels = data.query("KEY == 'label'")
+        exported_files = []
+
+        for _, label in labels.iterrows():
+            instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
+
+            # Use new core function to get tableviews
+            tableviews = triplet_to_tableviews(instance_data, multivalue=multivalue)
+
+            base_name = label.VALUE.split(".")[0]
+
+            # Export each class type to a separate CSV file
+            for class_type, class_data in tableviews.items():
+                file_name = '{}_{}.csv'.format(base_name, class_type)
+
+                # Always write to BytesIO first
+                output = BytesIO()
+                output.name = file_name
+
+                # Write CSV to BytesIO
+                csv_string = class_data.to_csv()
+                output.write(csv_string.encode('utf-8'))
+
+                output.seek(0)
+                exported_files.append(output)
+
+        # Return BytesIO objects if export_to_memory, otherwise save to disk
+        if export_to_memory:
+            return exported_files
+        else:
+            if path is None:
+                path = os.getcwd()
+
+            exported_file_names = []
+
+            for file_object in exported_files:
+                export_path = os.path.join(path, file_object.name)
+                with open(export_path, 'wb') as export_file_object:
+                    file_object.seek(0)
+                    export_file_object.write(file_object.read())
+
+                exported_file_names.append(file_object.name)
+                logger.info(f'Saved {export_path}')
+
+            return exported_file_names
+
+
+# Extend this functionality to pandas DataFrame
+pandas.DataFrame.export_to_csv = export_to_csv
+
+
+def triplet_to_tableviews(triplet_df, multivalue=False):
+    """
+    Convert triplet DataFrame to dict of tableview DataFrames.
+    Generic function - works for any serialization format (Excel, CSV, etc.).
+
+    Args:
+        triplet_df: DataFrame with columns [ID, KEY, VALUE, INSTANCE_ID]
+        multivalue: If True, aggregate duplicate (ID, KEY) pairs into lists
+
+    Returns:
+        dict: {class_name: tableview_df}
+    """
+    types = triplet_df.types_dict()
+    tableviews = {}
+
+    for class_name in types:
+        table_view = triplet_df.type_tableview(class_name, multivalue=multivalue)
+        if table_view is not None:
+            tableviews[class_name] = table_view
+
+    return tableviews
+
+
+def tableviews_to_triplet(tableviews, multivalue=False):
+    """
+    Convert dict of tableview DataFrames to triplet DataFrame.
+    Generic function - works for any deserialization format (Excel, CSV, etc.).
+
+    Args:
+        tableviews: dict of {class_name: tableview_df}
+        multivalue: If True, unpack list values into separate triplets
+
+    Returns:
+        DataFrame with columns [ID, KEY, VALUE, INSTANCE_ID]
+    """
+    all_triplets = []
+
+    for class_name, df in tableviews.items():
+        df['Type'] = class_name
+        triplet = df.tableview_to_triplet(multivalue=multivalue)
+        triplet = triplet[triplet['VALUE'].notna()]
+        all_triplets.append(triplet)
+
+    if not all_triplets:
+        return pandas.DataFrame(columns=['ID', 'KEY', 'VALUE', 'INSTANCE_ID'])
+
+    return pandas.concat(all_triplets, ignore_index=True)
 
 
 @lru_cache(maxsize=250)  # Adjust maxsize based on the number of unique QName combinations

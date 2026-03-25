@@ -23,6 +23,12 @@ setup(
     install_requires=[
         "pandas", "lxml", 'aniso8601',
     ],
+    entry_points={
+        'console_scripts': [
+            'cim-spreadsheet=triplets.cli.cim_spreadsheet:main',
+            'cim-diff=triplets.cli.cim_diff:main',
+        ],
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

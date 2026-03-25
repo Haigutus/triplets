@@ -1,6 +1,6 @@
 [project]
 name = "triplets"
-version = "0.1.0"
+version = "0.0.17"
 description = "Simple tools to load/modify/export XML/RDF data using Pandas DataFrames"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -12,11 +12,23 @@ dependencies = [
     "pandas",
     "lxml",
     "aniso8601",
+]
+
+[project.optional-dependencies]
+optional = [
+    "pyvis",
     "openpyxl",
+]
+docs = [
+    "sphinx>=4.0",
+    "sphinx-rtd-theme",
+    "sphinx-multiversion",
+    "myst-parser",
 ]
 
 [project.scripts]
-cim-spreadsheet = "tools.cim_spreadsheet_cli:main"
+cim-spreadsheet = "triplets.cli.cim_spreadsheet:main"
+cim-diff = "triplets.cli.cim_diff:main"
 
 [build-system]
 requires = ["setuptools>=61.0", "versioneer"]

@@ -19,6 +19,7 @@ Documentation
    triplets.rdf_parser
    triplets.cgmes_tools
    triplets.rdfs_tools
+   triplets.cli
 
 Indices and tables
 ==================
