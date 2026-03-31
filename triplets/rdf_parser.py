@@ -1447,7 +1447,7 @@ def tableviews_to_triplet(tableviews, multivalue=False):
 
     for class_name, df in tableviews.items():
         if 'Type' not in df.columns:
-            df['Type'] = class_name
+            df = df.assign(Type=class_name)
         triplet = df.tableview_to_triplet(multivalue=multivalue)
         triplet = triplet[triplet['VALUE'].notna()]
         all_triplets.append(triplet)

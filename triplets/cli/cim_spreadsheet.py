@@ -166,17 +166,13 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
     if zip_output is None:
         zip_output = (format == "csv")
 
-    # Load data
     data = rdf_parser.load_all_to_dataframe(cim_path)
 
-    # Determine filename for export
     base_name = os.path.basename(output_path).replace('.zip', '').replace('.xlsx', '').replace('.csv', '')
     if not base_name:
         base_name = 'export'
 
-    # Export based on format using core functions
     if format == "excel":
-        # Use core export_to_excel with single_file mode
         excel_file = data.export_to_excel(
             export_to_memory=True,
             multivalue=multivalue,
@@ -196,7 +192,6 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
                 f.write(excel_file.getvalue())
 
     elif format == "csv":
-        # Use core export_to_csv with single_file mode
         csv_files = data.export_to_csv(
             export_to_memory=True,
             multivalue=multivalue,
@@ -288,12 +283,10 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
         else:
             format = "excel"
 
-    # Deserialize to tableviews
     tableviews = {}
     raw_triplets = []
 
     if format == "excel":
-        # Deserialize Excel to tableviews
         try:
             # Check if it's a zipped Excel file (not just an xlsx which is also a zip)
             if input_path.endswith('.zip') and zipfile.is_zipfile(input_path):
@@ -326,8 +319,6 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
             ) from e
 
     elif format == "csv":
-        # Deserialize CSV to tableviews
-        # Use base filenames (without .csv) as sheet names, analogous to Excel sheet names
         csv_dataframes = {}
 
         if zipfile.is_zipfile(input_path):
@@ -348,13 +339,9 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
         else:
             raise ValueError(f"CSV format requires a directory or ZIP file, got: {input_path}")
 
-        # Handle triplets sheet (by CSV base filename)
         if triplets_sheet and triplets_sheet in csv_dataframes:
             triplet_df = csv_dataframes.pop(triplets_sheet).reset_index()
-            if all(col in triplet_df.columns for col in ["ID", "KEY", "VALUE"]):
-                raw_triplets.append(triplet_df[["ID", "KEY", "VALUE"]])
-            else:
-                logging.warning(f"Triplets CSV '{triplets_sheet}' missing required columns (ID, KEY, VALUE), skipping")
+            _extract_raw_triplets(triplet_df, triplets_sheet, raw_triplets)
 
         # Filter by sheet names if specified
         if sheets is not None:
@@ -365,31 +352,28 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
 
         tableviews.update(csv_dataframes)
 
-    # Convert tableviews to triplet
     data = rdf_parser.tableviews_to_triplet(tableviews, multivalue=multivalue)
 
-    # Add raw triplets if any
     if raw_triplets:
         data = pandas.concat([data] + raw_triplets, ignore_index=True)
 
-    # Set version metadata
     from triplets._version import get_versions
     version = get_versions()['version']
-    data.set_VALUE_at_KEY("Model.applicationSoftware", f"triplets_v{version}")
-    # TODO - add support for new header
+    tool_version = f"triplets-{version}"
+    # Old header (md:FullModel) uses Model.applicationSoftware
+    data.set_VALUE_at_KEY("Model.applicationSoftware", tool_version)
+    # New header (dcat:Dataset) uses applicationSoftware (eumd namespace)
+    data.set_VALUE_at_KEY("applicationSoftware", tool_version)
 
-    # Add INSTANCE_ID if missing
     if "INSTANCE_ID" not in data.columns or data["INSTANCE_ID"].isna().all():
         data["INSTANCE_ID"] = str(uuid4())
 
-    # Export type defaults
     if zip_output is None:
         zip_output = True
 
     if export_type is None:
         export_type = "xml_per_instance_zip_per_all" if zip_output else "xml_per_instance"
 
-    # Create output directory
     os.makedirs(output_path, exist_ok=True)
 
     # Export to CIM XML
@@ -401,6 +385,15 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
         export_base_path=output_path,
         debug=False
     )
+
+
+def _extract_raw_triplets(df, source_name, raw_triplets):
+    """Validate and extract raw triplets from a DataFrame, appending to raw_triplets list."""
+    required = ["ID", "KEY", "VALUE"]
+    if all(col in df.columns for col in required):
+        raw_triplets.append(df[required])
+    else:
+        logging.warning(f"Triplets source '{source_name}' missing required columns (ID, KEY, VALUE), skipping")
 
 
 def _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets=None, triplets_sheet=None):
@@ -440,21 +433,17 @@ def _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets=None, triplet
     else:
         sheets_to_read = sheets
 
-    # Read tableview sheets
-    for sheet_name in sheets_to_read:
-        if sheet_name in excel_obj.sheet_names:
-            tableviews[sheet_name] = pandas.read_excel(excel_obj, sheet_name=sheet_name, index_col=0)
-        else:
-            logging.warning(f"Sheet '{sheet_name}' not found in Excel file, skipping")
+    valid_sheets = [s for s in sheets_to_read if s in excel_obj.sheet_names]
+    for s in sheets_to_read:
+        if s not in excel_obj.sheet_names:
+            logging.warning(f"Sheet '{s}' not found in Excel file, skipping")
 
-    # Read raw triplets sheet if specified
+    if valid_sheets:
+        tableviews.update(pandas.read_excel(excel_obj, sheet_name=valid_sheets, index_col=0))
+
     if triplets_sheet and triplets_sheet in excel_obj.sheet_names:
         triplet_df = pandas.read_excel(excel_obj, sheet_name=triplets_sheet)
-        # Ensure it has the required columns
-        if all(col in triplet_df.columns for col in ["ID", "KEY", "VALUE"]):
-            raw_triplets.append(triplet_df[["ID", "KEY", "VALUE"]])
-        else:
-            logging.warning(f"Triplets sheet '{triplets_sheet}' missing required columns (ID, KEY, VALUE), skipping")
+        _extract_raw_triplets(triplet_df, triplets_sheet, raw_triplets)
 
 
 def detect_conversion_direction(input_path, output_path):
@@ -500,10 +489,10 @@ def detect_conversion_direction(input_path, output_path):
     """
 
     # Check if input is CIM XML
-    input_is_cim = input_path.endswith(('.xml', '.rdf')) or (
-        zipfile.is_zipfile(input_path) and
-        any(f.endswith(('.xml', '.rdf')) for f in zipfile.ZipFile(input_path).namelist())
-    )
+    input_is_cim = input_path.endswith(('.xml', '.rdf'))
+    if not input_is_cim and zipfile.is_zipfile(input_path):
+        with zipfile.ZipFile(input_path, 'r') as zf:
+            input_is_cim = any(f.endswith(('.xml', '.rdf')) for f in zf.namelist())
 
     # Check if input is spreadsheet
     input_is_spreadsheet = input_path.endswith(('.xlsx', '.xls', '.csv')) or (

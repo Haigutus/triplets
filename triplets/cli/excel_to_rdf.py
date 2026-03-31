@@ -59,8 +59,9 @@ def convert_excel_to_rdf(rdf_conf_path,
     # Concat all converted triplets
     data = pandas.concat(triplet_data_list, ignore_index=True)
 
-    # Set Converter version
-    data.set_VALUE_at_KEY("Model.applicationSoftware", f"ExcelToRDFConverter_{version}")
+    tool_version = f"triplets-{version}"
+    data.set_VALUE_at_KEY("Model.applicationSoftware", tool_version)
+    data.set_VALUE_at_KEY("applicationSoftware", tool_version)
 
     # Add instance ID
     data["INSTANCE_ID"] = str(uuid4())
