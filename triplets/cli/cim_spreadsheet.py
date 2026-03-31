@@ -96,8 +96,8 @@ Features
 - Support for both Excel (.xlsx) and CSV formats
 - ZIP compression support for output files
 - Multivalue mode enabled by default (aggregates/unpacks duplicate ID+KEY pairs into lists)
-- Sheet selection for Excel files
-- Raw triplets import from dedicated Excel sheet
+- Sheet/file selection for both Excel and CSV formats
+- Raw triplets import from dedicated Excel sheet or CSV file
 - Handles zipped input/output files automatically
 
 See Also
@@ -249,11 +249,14 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
     zip_output : bool, optional
         Whether to ZIP the output. Defaults to True.
     sheets : list of str, optional
-        Specific sheet names to convert (Excel only). If None, converts all
-        sheets except triplets_sheet.
+        Specific sheet/file names to convert. For Excel, these are sheet names.
+        For CSV, these are base filenames (without .csv extension).
+        If None, converts all sheets/files except triplets_sheet.
     triplets_sheet : str, optional
-        Name of Excel sheet containing raw triplets (ID, KEY, VALUE columns)
-        to include in the output. This sheet is not processed as tableview data.
+        Name of sheet/file containing raw triplets (ID, KEY, VALUE columns)
+        to include in the output. For Excel, this is a sheet name. For CSV,
+        this is a base filename (without .csv extension).
+        This sheet is not processed as tableview data.
 
     Returns
     -------
@@ -323,24 +326,44 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
             ) from e
 
     elif format == "csv":
-        # Deserialize CSV to tableviews (CSV doesn't support raw triplets or sheet selection)
+        # Deserialize CSV to tableviews
+        # Use base filenames (without .csv) as sheet names, analogous to Excel sheet names
+        csv_dataframes = {}
+
         if zipfile.is_zipfile(input_path):
             # Read from ZIP
             with zipfile.ZipFile(input_path, 'r') as zf:
                 for filename in zf.namelist():
                     if filename.endswith('.csv'):
-                        class_name = filename[:-4]
+                        sheet_name = os.path.basename(filename)[:-4]
                         csv_content = zf.read(filename).decode('utf-8')
-                        tableviews[class_name] = pandas.read_csv(StringIO(csv_content), index_col=0)
+                        csv_dataframes[sheet_name] = pandas.read_csv(StringIO(csv_content), index_col=0)
         elif os.path.isdir(input_path):
             # Read from directory
             for filename in os.listdir(input_path):
                 if filename.endswith('.csv'):
-                    class_name = filename[:-4]
+                    sheet_name = filename[:-4]
                     csv_path = os.path.join(input_path, filename)
-                    tableviews[class_name] = pandas.read_csv(csv_path, index_col=0)
+                    csv_dataframes[sheet_name] = pandas.read_csv(csv_path, index_col=0)
         else:
             raise ValueError(f"CSV format requires a directory or ZIP file, got: {input_path}")
+
+        # Handle triplets sheet (by CSV base filename)
+        if triplets_sheet and triplets_sheet in csv_dataframes:
+            triplet_df = csv_dataframes.pop(triplets_sheet).reset_index()
+            if all(col in triplet_df.columns for col in ["ID", "KEY", "VALUE"]):
+                raw_triplets.append(triplet_df[["ID", "KEY", "VALUE"]])
+            else:
+                logging.warning(f"Triplets CSV '{triplets_sheet}' missing required columns (ID, KEY, VALUE), skipping")
+
+        # Filter by sheet names if specified
+        if sheets is not None:
+            csv_dataframes = {k: v for k, v in csv_dataframes.items() if k in sheets}
+            for sheet_name in sheets:
+                if sheet_name not in csv_dataframes:
+                    logging.warning(f"CSV '{sheet_name}' not found, skipping")
+
+        tableviews.update(csv_dataframes)
 
     # Convert tableviews to triplet
     data = rdf_parser.tableviews_to_triplet(tableviews, multivalue=multivalue)
@@ -569,8 +592,8 @@ def main():
     # Spreadsheet to CIM specific arguments
     parser.add_argument("--rdf-map", "-r", help="Path to RDF map JSON (for to-cim conversion)")
     parser.add_argument("--export-type", "-e", choices=["xml_per_instance", "xml_per_instance_zip_per_all", "xml_per_instance_zip_per_xml"], help="How to package CIM XML export (for to-cim conversion)")
-    parser.add_argument("--sheets", "-s", nargs='+', help="Specific sheet names to convert (for to-cim from Excel)")
-    parser.add_argument("--triplets-sheet", "-t", help="Sheet name containing raw triplets (ID, KEY, VALUE) to include (for to-cim from Excel)")
+    parser.add_argument("--sheets", "-s", nargs='+', help="Specific sheet/file names to convert (Excel sheet names or CSV base filenames)")
+    parser.add_argument("--triplets-sheet", "-t", help="Sheet/file name containing raw triplets (ID, KEY, VALUE) to include (Excel sheet name or CSV base filename)")
 
     args = parser.parse_args()
 
