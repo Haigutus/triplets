@@ -58,10 +58,7 @@ class SHACLParser:
         
         constraint = {'id': str(shape_uri)}
         if property_name:
-            if self.keep_namespaces:
-                constraint['property'] = property_name
-            else:
-                constraint['property'] = property_name if '.' in property_name else f"{class_name}.{property_name}"
+            constraint['property'] = property_name
         if class_name:
             constraint['class'] = class_name
 
@@ -81,6 +78,14 @@ class SHACLParser:
             (SH.minLength, 'min_length', int),
             (SH.maxLength, 'max_length', int),
             (SH.node, 'sh_node', str),
+            (SH.nodeKind, 'node_kind', self._get_name),
+            (SH.hasValue, 'has_value', str),
+            (SH['in'], 'allowed_values', lambda v: list(rdflib.collection.Collection(self.graph, v)) if v else []),
+            (SH.equals, 'equals', self._get_name),
+            (SH.disjoint, 'disjoint', self._get_name),
+            (SH.lessThan, 'less_than', self._get_name),
+            (SH.closed, 'closed', bool),
+            (SH.ignoredProperties, 'ignored_properties', lambda v: list(rdflib.collection.Collection(self.graph, v)) if v else []),
         ]
 
         for term, key, transform in mapping:

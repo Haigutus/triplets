@@ -21,7 +21,7 @@ setup(
     author_email='kristjan.vilgo@gmail.com',
     description='Simple tools to load/modify/export XML/RDF data using Pandas DataFrames',
     install_requires=[
-        "pandas", "lxml", 'aniso8601',
+        "pandas", "lxml", 'aniso8601', 'rdflib',
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

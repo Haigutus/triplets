@@ -1,3 +1,12 @@
 [submodule "test_data/relicapgrid"]
 	path = test_data/relicapgrid
 	url = https://github.com/entsoe/relicapgrid
+[submodule "test_data/entsoe-profiles"]
+	path = test_data/entsoe-profiles
+	url = https://github.com/entsoe/application-profiles-library
+[submodule "vendor/qlever"]
+	path = vendor/qlever
+	url = https://github.com/ad-freiburg/qlever.git
+[submodule "vendor/pugixml"]
+	path = vendor/pugixml
+	url = https://github.com/zeux/pugixml.git

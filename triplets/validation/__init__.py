@@ -1,6 +1,7 @@
 import pandas as pd
 
 from .rdflib_shacl_parser import parse_shacl
+from .shacl_report import generate_shacl_report, write_shacl_report
 
 def validate_shacl(df, rules, engine=None, check_external=True, **kwargs):
     """
@@ -23,6 +24,9 @@ def validate_shacl(df, rules, engine=None, check_external=True, **kwargs):
     elif engine == 'polars_parallel':
         from .polars_shacl_parallel import validate as polars_parallel_validate
         return polars_parallel_validate(df, rules, check_external=check_external, **kwargs)
+    elif engine == 'pyshacl':
+        from .pyshacl_shacl import validate as pyshacl_validate
+        return pyshacl_validate(df, rules, **kwargs)
     else:
         from .pandas_shacl import validate as pandas_validate
         return pandas_validate(df, rules, check_external=check_external, **kwargs)

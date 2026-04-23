@@ -1,0 +1,33 @@
+[project]
+name = "triplets"
+version = "0.1.0"
+requires-python = ">=3.8"
+dependencies = [
+    "pandas",
+    "lxml",
+    "aniso8601",
+    "rdflib",
+    "pyshacl>=0.24.1",
+    "openpyxl>=3.1.5",
+    "oxrdflib>=0.5.0",
+    "pyarrow>=17.0.0",
+    "polars>=1.8.2",
+]
+
+[project.optional-dependencies]
+polars = [
+    "polars>=1.0.0",
+    "pyarrow>=14.0.0",
+]
+sparql = [
+    "oxrdflib>=0.5.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "polars>=1.0.0",
+    "pyarrow>=14.0.0",
+    "oxrdflib>=0.5.0",
+]
+
+[tool.uv]
+exclude-newer = "P14D"

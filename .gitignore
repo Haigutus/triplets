@@ -3,3 +3,27 @@
 /dist/
 /venv/
 /docs/build/
+
+# IDE
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Test data (large files)
+triplets/*.xml
+triplets/*.zip
+
+# Rust build artifacts
+rdf_parser_rust/target/
+
+# Cython generated C/C++
+triplets/*.cpp
+
+# Validation/benchmark output
+*.xlsx

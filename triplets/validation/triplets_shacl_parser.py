@@ -73,7 +73,7 @@ class SHACLParser:
         
         constraint = {'id': shape_id}
         if property_name:
-            constraint['property'] = property_name if '.' in property_name else f"{class_name}.{property_name}"
+            constraint['property'] = property_name
         if class_name:
             constraint['class'] = class_name
 
