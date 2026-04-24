@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rdf:RDF
+   xmlns:dcterms="http://purl.org/dc/terms/"
+   xmlns:prov="http://www.w3.org/ns/prov#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:sh="http://www.w3.org/ns/shacl#"
+>
+  <rdf:Description rdf:nodeID="Nb10a6a53476e44e782074ae0f9df42ad">
+    <rdf:type rdf:resource="http://www.w3.org/ns/shacl#ValidationResult"/>
+    <sh:focusNode>1f9ecd81-e069-4040-bd64-f34b0fac3a60</sh:focusNode>
+    <sh:resultPath>SchedulingArea.ControlArea</sh:resultPath>
+    <sh:resultSeverity rdf:resource="http://www.w3.org/ns/shacl#Violation"/>
+    <sh:resultMessage>Technical Error: Entity is referenced by 0 objects via SchedulingArea.ControlArea, minimum required is 1</sh:resultMessage>
+    <sh:resultMessage>Cardinality violation. Lower bound shall be 1</sh:resultMessage>
+    <sh:resultMessage>Description: This constraint validates the cardinality of the association at the inverse direction.</sh:resultMessage>
+    <sh:sourceShape rdf:resource="https://ap-con.cim4.eu/EquipmentReliability-Simple/2.4#ControlArea.SchedulingArea-cardinality"/>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N3954ac888db24cbab6f5d7136d144f67">
+    <rdf:type rdf:resource="http://www.w3.org/ns/shacl#ValidationReport"/>
+    <sh:conforms rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</sh:conforms>
+    <prov:generatedAtTime rdf:datatype="http://www.w3.org/2001/XMLSchema#dateTime">2026-03-26T15:00:22.070442+00:00</prov:generatedAtTime>
+    <prov:wasGeneratedBy>triplets 0.0.17+4.g4ee5d47.dirty</prov:wasGeneratedBy>
+    <dcterms:source>Org-NineRealms_CD.xml</dcterms:source>
+    <dcterms:conformsTo>EquipmentReliability-AP-Con-Simple-SHACL.ttl</dcterms:conformsTo>
+    <dcterms:conformsTo>DatasetMetadata-AP-Con-SHACL.ttl</dcterms:conformsTo>
+    <sh:result rdf:nodeID="Nb10a6a53476e44e782074ae0f9df42ad"/>
+    <sh:result rdf:nodeID="Nf6fa88c8723a4467b219112ba4194d05"/>
+    <sh:result rdf:nodeID="N0bf238c37eaf4a66ad8c1eb347430455"/>
+    <sh:result rdf:nodeID="N2b3133609d64417e8422a79098feb389"/>
+    <sh:result rdf:nodeID="N7bc8d9eb349a4891a256af4327b265f0"/>
+    <sh:result rdf:nodeID="Nc35d1a7029b54ba0be8a2ea20114a5e5"/>
+    <sh:result rdf:nodeID="N1cd81534d2714628bf13da34aa25db63"/>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="Nc35d1a7029b54ba0be8a2ea20114a5e5">
+    <rdf:type rdf:resource="http://www.w3.org/ns/shacl#ValidationResult"/>
+    <sh:focusNode>aaccbbc9-1adc-433f-bc74-672c5a2383a9</sh:focusNode>
+    <sh:resultPath>SchedulingArea.ControlArea</sh:resultPath>
+    <sh:resultSeverity rdf:resource="http://www.w3.org/ns/shacl#Violation"/>
+    <sh:resultMessage>Technical Error: Entity is referenced by 0 objects via SchedulingArea.ControlArea, minimum required is 1</sh:resultMessage>
+    <sh:resultMessage>Cardinality violation. Lower bound shall be 1</sh:resultMessage>
+    <sh:resultMessage>Description: This constraint validates the cardinality of the association at the inverse direction.</sh:resultMessage>
+    <sh:sourceShape rdf:resource="https://ap-con.cim4.eu/EquipmentReliability-Simple/2.4#ControlArea.SchedulingArea-cardinality"/>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N1cd81534d2714628bf13da34aa25db63">
+    <rdf:type rdf:resource="http://www.w3.org/ns/shacl#ValidationResult"/>
+    <sh:focusNode>d220bcdc-0ab8-44ce-bb17-1c154f02adcd</sh:focusNode>
+    <sh:resultPath>BiddingZoneBorder.FromBiddingZone</sh:resultPath>
+    <sh:resultSeverity rdf:resource="http://www.w3.org/ns/shacl#Violation"/>
+    <sh:resultMessage>Technical Error: Entity is referenced by 0 objects via BiddingZoneBorder.FromBiddingZone, minimum required is 1</sh:resultMessage>
+    <sh:resultMessage>Cardinality violation. Lower bound shall be 1</sh:resultMessage>
+    <sh:resultMessage>Description: This constraint validates the cardinality of the association at the inverse direction.</sh:resultMessage>
+    <sh:sourceShape rdf:resource="https://ap-con.cim4.eu/EquipmentReliability-Simple/2.4#BiddingZone.FromBiddingZoneBorder-cardinality"/>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N0bf238c37eaf4a66ad8c1eb347430455">
+    <rdf:type rdf:resource="http://www.w3.org/ns/shacl#ValidationResult"/>
+    <sh:focusNode>b20c892a-a5d2-4378-8744-c2cfea79d0be</sh:focusNode>
+    <sh:resultPath>SchedulingArea.ControlArea</sh:resultPath>
+    <sh:resultSeverity rdf:resource="http://www.w3.org/ns/shacl#Violation"/>
+    <sh:resultMessage>Technical Error: Entity is referenced by 0 objects via SchedulingArea.ControlArea, minimum required is 1</sh:resultMessage>
+    <sh:resultMessage>Cardinality violation. Lower bound shall be 1</sh:resultMessage>
+    <sh:resultMessage>Description: This constraint validates the cardinality of the association at the inverse direction.</sh:resultMessage>
+    <sh:sourceShape rdf:resource="https://ap-con.cim4.eu/EquipmentReliability-Simple/2.4#ControlArea.SchedulingArea-cardinality"/>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N2b3133609d64417e8422a79098feb389">
+    <rdf:type rdf:resource="http://www.w3.org/ns/shacl#ValidationResult"/>
+    <sh:focusNode>50487bb8-be6d-42a8-9358-cc0bbfe6cfa7</sh:focusNode>
+    <sh:resultPath>SchedulingArea.ControlArea</sh:resultPath>
+    <sh:resultSeverity rdf:resource="http://www.w3.org/ns/shacl#Violation"/>
+    <sh:resultMessage>Technical Error: Entity is referenced by 0 objects via SchedulingArea.ControlArea, minimum required is 1</sh:resultMessage>
+    <sh:resultMessage>Cardinality violation. Lower bound shall be 1</sh:resultMessage>
+    <sh:resultMessage>Description: This constraint validates the cardinality of the association at the inverse direction.</sh:resultMessage>
+    <sh:sourceShape rdf:resource="https://ap-con.cim4.eu/EquipmentReliability-Simple/2.4#ControlArea.SchedulingArea-cardinality"/>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="N7bc8d9eb349a4891a256af4327b265f0">
+    <rdf:type rdf:resource="http://www.w3.org/ns/shacl#ValidationResult"/>
+    <sh:focusNode>ebccc726-b760-46c6-b7f6-8289bafce797</sh:focusNode>
+    <sh:resultPath>SchedulingArea.ControlArea</sh:resultPath>
+    <sh:resultSeverity rdf:resource="http://www.w3.org/ns/shacl#Violation"/>
+    <sh:resultMessage>Technical Error: Entity is referenced by 0 objects via SchedulingArea.ControlArea, minimum required is 1</sh:resultMessage>
+    <sh:resultMessage>Cardinality violation. Lower bound shall be 1</sh:resultMessage>
+    <sh:resultMessage>Description: This constraint validates the cardinality of the association at the inverse direction.</sh:resultMessage>
+    <sh:sourceShape rdf:resource="https://ap-con.cim4.eu/EquipmentReliability-Simple/2.4#ControlArea.SchedulingArea-cardinality"/>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="Nf6fa88c8723a4467b219112ba4194d05">
+    <rdf:type rdf:resource="http://www.w3.org/ns/shacl#ValidationResult"/>
+    <sh:focusNode>642a2421-d5ef-450a-90c3-868485f2bf37</sh:focusNode>
+    <sh:resultPath>SchedulingArea.ControlArea</sh:resultPath>
+    <sh:resultSeverity rdf:resource="http://www.w3.org/ns/shacl#Violation"/>
+    <sh:resultMessage>Technical Error: Entity is referenced by 0 objects via SchedulingArea.ControlArea, minimum required is 1</sh:resultMessage>
+    <sh:resultMessage>Cardinality violation. Lower bound shall be 1</sh:resultMessage>
+    <sh:resultMessage>Description: This constraint validates the cardinality of the association at the inverse direction.</sh:resultMessage>
+    <sh:sourceShape rdf:resource="https://ap-con.cim4.eu/EquipmentReliability-Simple/2.4#ControlArea.SchedulingArea-cardinality"/>
+  </rdf:Description>
+</rdf:RDF>
