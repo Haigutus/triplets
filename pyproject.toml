@@ -12,6 +12,7 @@ dependencies = [
     "oxrdflib>=0.5.0",
     "pyarrow>=17.0.0",
     "polars>=1.8.2",
+    "pyvis>=0.3.1,<0.3.2",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +29,10 @@ dev = [
     "pyarrow>=14.0.0",
     "oxrdflib>=0.5.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["performance: marks performance tests (run with '-m performance')"]
 
 [tool.uv]
 exclude-newer = "P14D"
