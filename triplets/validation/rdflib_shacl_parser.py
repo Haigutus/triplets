@@ -28,7 +28,8 @@ class SHACLParser:
     def _load_and_parse(self):
         for file_path in self.files:
             try:
-                self.graph.parse(str(file_path), format='xml')
+                fmt = 'turtle' if str(file_path).endswith('.ttl') else 'xml'
+                self.graph.parse(str(file_path), format=fmt)
             except Exception as e:
                 logger.error(f"Error parsing {file_path}: {e}")
 
@@ -51,14 +52,33 @@ class SHACLParser:
                     self.constraints[target_class].append(constraint)
                     self.stats['extracted'] += 1
 
+    def _resolve_path(self, path_node):
+        """Resolve sh:path, handling sh:inversePath and sh:alternativePath."""
+        if path_node is None:
+            return None, False
+        if isinstance(path_node, rdflib.URIRef):
+            return self._get_name(path_node), False
+        inverse = self.graph.value(path_node, SH.inversePath)
+        if inverse:
+            return self._get_name(inverse), True
+        alt = self.graph.value(path_node, SH.alternativePath)
+        if alt:
+            for item in rdflib.collection.Collection(self.graph, alt):
+                inv = self.graph.value(item, SH.inversePath)
+                if inv:
+                    return self._get_name(inv), True
+        return self._get_name(path_node), False
+
     def _parse_shape(self, shape_uri, class_name=None):
         """Recursively parses a SHACL shape (PropertyShape or nested)."""
         path_uri = self.graph.value(shape_uri, SH.path)
-        property_name = self._get_name(path_uri) if path_uri else None
-        
+        property_name, is_inverse = self._resolve_path(path_uri)
+
         constraint = {'id': str(shape_uri)}
         if property_name:
             constraint['property'] = property_name
+        if is_inverse:
+            constraint['inverse_path'] = True
         if class_name:
             constraint['class'] = class_name
 
@@ -80,7 +100,7 @@ class SHACLParser:
             (SH.node, 'sh_node', str),
             (SH.nodeKind, 'node_kind', self._get_name),
             (SH.hasValue, 'has_value', str),
-            (SH['in'], 'allowed_values', lambda v: list(rdflib.collection.Collection(self.graph, v)) if v else []),
+            (SH['in'], 'allowed_values', lambda v: [self._get_name(item) for item in rdflib.collection.Collection(self.graph, v)] if v else []),
             (SH.equals, 'equals', self._get_name),
             (SH.disjoint, 'disjoint', self._get_name),
             (SH.lessThan, 'less_than', self._get_name),

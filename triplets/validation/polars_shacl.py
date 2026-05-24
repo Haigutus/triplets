@@ -82,6 +82,30 @@ def _pattern(df, property_path, regex, **kwargs):
         (pl.lit(f"Value '") + pl.col("VALUE") + pl.lit(f"' does not match pattern: {regex}")).alias("ERROR_MESSAGE")
     ]).select(["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
 
+def _has_value(df, property_path, required_value, **kwargs):
+    """ that property has a specific required value."""
+    all_ids = df.select("ID").unique()
+    ids_with_value = df.filter((pl.col("KEY") == property_path) & (pl.col("VALUE") == required_value)).select("ID").unique()
+    missing = all_ids.join(ids_with_value, on="ID", how="anti")
+    if missing.is_empty(): return pl.DataFrame(schema=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
+    return missing.with_columns([
+        pl.lit(property_path).alias("KEY"), pl.lit(None, dtype=pl.Utf8).alias("VALUE"), pl.lit("sh:hasValue").alias("VIOLATION_TYPE"),
+        pl.lit(f"Property {property_path} does not have required value '{required_value}'").alias("ERROR_MESSAGE")
+    ]).select(["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
+
+def _in(df, property_path, allowed_values, **kwargs):
+    """ that values are in allowed set."""
+    allowed = [str(v) for v in allowed_values]
+    data = df.filter(pl.col("KEY") == property_path)
+    if data.is_empty(): return pl.DataFrame(schema=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
+    local_names = data.select(pl.col("VALUE").str.split("#").list.last().str.split("/").list.last().alias("_local"))["_local"]
+    violations = data.filter(~local_names.is_in(allowed))
+    if violations.is_empty(): return pl.DataFrame(schema=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
+    return violations.with_columns([
+        pl.lit("sh:in").alias("VIOLATION_TYPE"),
+        (pl.lit("Value '") + pl.col("VALUE") + pl.lit("' is not in allowed set")).alias("ERROR_MESSAGE")
+    ]).select(["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
+
 def _min_inclusive(df, property_path, min_value, **kwargs):
     """ min inclusive constraint."""
     violations = df.filter(pl.col("KEY") == property_path).with_columns(pl.col("VALUE").cast(pl.Float64, strict=False).alias("num")).filter(pl.col("num") < min_value)
@@ -183,7 +207,8 @@ def _not(df, property_path, constraint, **kwargs):
 
 CONSTRAINT_VALIDATORS = {
     'sh:minCount': _min_count, 'sh:maxCount': _max_count, 'sh:datatype': _datatype, 'sh:minLength': _min_length,
-    'sh:maxLength': _max_length, 'sh:pattern': _pattern, 'sh:minInclusive': _min_inclusive, 'sh:maxInclusive': _max_inclusive,
+    'sh:maxLength': _max_length, 'sh:pattern': _pattern, 'sh:hasValue': _has_value, 'sh:in': _in,
+    'sh:minInclusive': _min_inclusive, 'sh:maxInclusive': _max_inclusive,
     'sh:class': _class, 'sh:nodeKind': _node_kind, 'sh:and': _and, 'sh:or': _or, 'sh:not': _not
 }
 
@@ -195,11 +220,46 @@ INTERNAL_TO_SHACL = {
     'and': 'sh:and', 'or': 'sh:or', 'not': 'sh:not'
 }
 
+def _inverse_min_count(df, property_path, min_count, target_class=None, full_df=None, **kwargs):
+    """Inverse path minimum cardinality."""
+    source_df = full_df if full_df is not None else df
+    if target_class:
+        target_ids = df.filter((pl.col("KEY") == "Type") & (pl.col("VALUE") == target_class)).select("ID").unique()
+    else:
+        target_ids = df.select("ID").unique()
+    refs = source_df.filter(pl.col("KEY") == property_path)
+    counts = refs.group_by("VALUE").agg(pl.len().alias("count")).rename({"VALUE": "ID"})
+    result = target_ids.join(counts, on="ID", how="left").with_columns(pl.col("count").fill_null(0))
+    violations = result.filter(pl.col("count") < min_count)
+    if violations.is_empty(): return pl.DataFrame(schema=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
+    return violations.with_columns([
+        pl.lit(property_path).alias("KEY"), pl.lit(None, dtype=pl.Utf8).alias("VALUE"), pl.lit("sh:minCount(inverse)").alias("VIOLATION_TYPE"),
+        (pl.lit(f"Entity is referenced by ") + pl.col("count").cast(pl.Utf8) + pl.lit(f" objects via {property_path}, minimum required is {min_count}")).alias("ERROR_MESSAGE")
+    ]).select(["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
+
+def _inverse_max_count(df, property_path, max_count, target_class=None, full_df=None, **kwargs):
+    """Inverse path maximum cardinality."""
+    source_df = full_df if full_df is not None else df
+    if target_class:
+        target_ids = df.filter((pl.col("KEY") == "Type") & (pl.col("VALUE") == target_class)).select("ID").unique()
+    else:
+        target_ids = df.select("ID").unique()
+    refs = source_df.filter(pl.col("KEY") == property_path)
+    counts = refs.group_by("VALUE").agg(pl.len().alias("count")).rename({"VALUE": "ID"})
+    result = target_ids.join(counts, on="ID", how="left").with_columns(pl.col("count").fill_null(0))
+    violations = result.filter(pl.col("count") > max_count)
+    if violations.is_empty(): return pl.DataFrame(schema=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
+    return violations.with_columns([
+        pl.lit(property_path).alias("KEY"), pl.lit(None, dtype=pl.Utf8).alias("VALUE"), pl.lit("sh:maxCount(inverse)").alias("VIOLATION_TYPE"),
+        (pl.lit(f"Entity is referenced by ") + pl.col("count").cast(pl.Utf8) + pl.lit(f" objects via {property_path}, maximum allowed is {max_count}")).alias("ERROR_MESSAGE")
+    ]).select(["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
+
 def validate(df, rules, check_external=True, **kwargs):
     """ Apply Polars validators to a list of SHACL constraint dictionaries."""
     all_violations = []
     for constraint in rules:
         target_class = constraint.get('class')
+        is_inverse = constraint.get('inverse_path', False)
         df_to_check = df
         if target_class:
             target_ids = df.filter((pl.col("KEY") == "Type") & (pl.col("VALUE") == target_class)).select("ID").unique()
@@ -207,6 +267,22 @@ def validate(df, rules, check_external=True, **kwargs):
             if df_to_check.is_empty(): continue
 
         prop = constraint.get('property')
+
+        if is_inverse:
+            for key in ('min_count', 'max_count'):
+                value = constraint.get(key)
+                if value is None: continue
+                validator = _inverse_min_count if key == 'min_count' else _inverse_max_count
+                violations = validator(df_to_check, prop, value, target_class=target_class, full_df=df)
+                if not violations.is_empty():
+                    if 'severity' in constraint: violations = violations.with_columns(pl.lit(constraint['severity']).alias("SEVERITY"))
+                    if 'rule_name' in constraint: violations = violations.with_columns(pl.lit(constraint['rule_name']).alias("RULE_NAME"))
+                    if 'id' in constraint: violations = violations.with_columns(pl.lit(constraint['id']).alias("SOURCE_SHAPE"))
+                    if 'description' in constraint: violations = violations.with_columns(pl.lit(constraint['description']).alias("DESCRIPTION"))
+                    if 'message' in constraint: violations = violations.with_columns(pl.lit(constraint['message']).alias("MESSAGE"))
+                    all_violations.append(violations)
+            continue
+
         for key, value in constraint.items():
             shacl_term = INTERNAL_TO_SHACL.get(key)
             if shacl_term and shacl_term in CONSTRAINT_VALIDATORS:

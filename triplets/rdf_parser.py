@@ -400,7 +400,7 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
                 VALUE = clean_ID(element.attrib.get(RDF_RESOURCE) or element.attrib.get(RDF_NODEID) or "")
 
                 # TODO - NB CIM enumeration specific
-                if VALUE.startswith("http"):
+                if VALUE.startswith("http") and "#" in VALUE and not VALUE.endswith("#"):
                     VALUE = VALUE.split("#")[-1]
 
             data_list.append((ID, KEY, VALUE, INSTANCE_ID))
@@ -1287,6 +1287,14 @@ def generate_xml(instance_data,
                 instance_type = value
                 continue
 
+    # Fallback: detect NC profile type from dcat:keyword
+    if not instance_type:
+        keyword_data = instance_data[instance_data["KEY"] == "keyword"]
+        if not keyword_data.empty:
+            keyword = keyword_data.at[keyword_data.index[0], 'VALUE']
+            if keyword in rdf_map:
+                instance_type = keyword
+
     # If there is sub structure available in schema get it, otherwise use root definitions
     # TODO - needs revision, add support both for md:FullModel, dcat:DataSet and without profile definiton
     instance_rdf_map = rdf_map.get(instance_type, rdf_map)
@@ -1324,6 +1332,10 @@ def generate_xml(instance_data,
 
         ID = class_data.ID
         class_name = class_data.VALUE
+
+        # Skip internal bookkeeping types
+        if class_name in ("Distribution", "NamespaceMap", ""):
+            continue
 
         # Get class export definition
         class_def = instance_rdf_map.get(class_name, None)

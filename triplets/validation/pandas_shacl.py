@@ -121,11 +121,13 @@ def _in(df, property_path, allowed_values, **kwargs):
     """ that values are in allowed set."""
     property_data = df.query("KEY == @property_path")
     if property_data.empty: return pandas.DataFrame(columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
-    violations = property_data[~property_data['VALUE'].isin(allowed_values)]
+    allowed_set = set(str(v) for v in allowed_values)
+    local_names = property_data['VALUE'].str.split('#').str[-1].str.split('/').str[-1]
+    violations = property_data[~local_names.isin(allowed_set)]
     if violations.empty: return pandas.DataFrame(columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "ERROR_MESSAGE"])
     return pandas.DataFrame({
         "ID": violations["ID"].values, "KEY": violations["KEY"].values, "VALUE": violations["VALUE"].values, "VIOLATION_TYPE": "sh:in",
-        "ERROR_MESSAGE": [f"Value '{v}' is not in allowed set {allowed_values}" for v in violations["VALUE"].values]
+        "ERROR_MESSAGE": [f"Value '{v}' is not in allowed set" for v in violations["VALUE"].values]
     })
 
 def _min_inclusive(df, property_path, min_value, **kwargs):
