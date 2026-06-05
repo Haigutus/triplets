@@ -1,0 +1,36 @@
+RealGrid (~1.14M rows, 3.9 MB zip) - categorical_columns ON vs OFF
+Measured with current code (python_lxml uses StringBuilder, cython_pugixml direct).
+
+PANDAS return DF.memory_usage(deep=True):
+  python_lxml + cat=ON  :  50.2 MB   (KEY dtype=dictionary<...>[pyarrow], nunique=185)
+  python_lxml + cat=OFF : 113.3 MB
+  --> 2.26x memory reduction with categories
+
+  cython_pugixml + cat=ON  :  50.2 MB
+  cython_pugixml + cat=OFF : 113.3 MB
+  --> same 2.26x win (the encoding is on the Arrow table before to_pandas)
+
+POLARS est_size:
+  cat=ON  : 41.5 MB (Categorical)
+  cat=OFF : 95.8 MB (String)
+  --> 2.31x memory reduction
+
+SPEED (from benchmark JSONs + direct measurement):
+  Parsing is 2-19% slower with cat=ON (the dictionary_encode pass + slightly different conversion).
+  Example (cython_pugixml -> pandas): ~0.170s (ON) vs ~0.135s (OFF) in direct measure; benchmark showed similar ratio.
+
+  However, type_tableview after load is FASTER with cat=ON:
+    pandas: 71.9 ms (ON) vs 80.0 ms (OFF)  --> ~11% faster
+    polars: 15.0 ms (ON) vs 19.0 ms (OFF)  --> ~21% faster
+
+  Reason: dictionary/Categorical columns make the filter + pivot inside type_tableview much cheaper (no repeated string comparisons on low-cardinality KEY).
+
+Full reports:
+- parsers_performance.json          (cat=ON default)
+- parsers_performance_nocat.json    (cat=OFF)
+- dataframe_performance.json        (cat=ON)
+- dataframe_performance_nocat.json  (cat=OFF)
+
+See git history for the baseline from before the builder + cat changes.
+
+Measurement script used: /tmp/mem_compare.py (run in .venv)
