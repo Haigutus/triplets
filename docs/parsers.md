@@ -74,20 +74,24 @@ triplets/parser/
 ## Usage
 
 ```python
-import pandas as pd
+import pandas
+import polars
 import triplets
 
 # auto (best available engine)
-df = pd.read_RDF(["grid_EQ.xml", "data.zip"])
+data = pandas.read_RDF(["grid_EQ.xml", "data.zip"])
 
 # explicit engine selection
-df = pd.read_RDF(path, engine="python_lxml_pandas")
-df = pd.read_RDF(path, engine="python_lxml_arrow")
-df = pd.read_RDF(path, engine="cython_pugixml_arrow")
+data = pandas.read_RDF(path, engine="python_lxml_pandas")
+data = pandas.read_RDF(path, engine="python_lxml_arrow")
+data = pandas.read_RDF(path, engine="cython_pugixml_arrow")
+
+# polars
+data = polars.read_rdf(["grid_EQ.xml"], return_type="polars")
 
 # return Arrow or Polars directly
 table = triplets.parser.parse(path, return_type="arrow")
-pdf = triplets.parser.parse(path, return_type="polars")
+data = triplets.parser.parse(path, return_type="polars")
 ```
 
 ## Building the Cython Engine
