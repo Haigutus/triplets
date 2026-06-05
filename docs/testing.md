@@ -90,3 +90,62 @@ pixi run test                         # all tests
 pixi run test-parser                  # parser tests only
 pixi run build-cython-pugixml-arrow   # build cython extension
 ```
+
+## CI / Release Workflow
+
+The GitHub Actions workflow (`.github/workflows/build-wheels.yml`) runs automatically:
+
+| Trigger | What happens |
+|---------|-------------|
+| **Pull Request** | Build wheels for all platforms + publish RC to [TestPyPI](https://test.pypi.org/project/triplets/) |
+| **Tag push** (`v*`) | Build wheels + publish release to [PyPI](https://pypi.org/project/triplets/) |
+| **Manual** (workflow_dispatch) | Build wheels only (no publish) |
+
+### Installing an RC from a PR
+
+Every PR automatically publishes a release candidate to TestPyPI. To install it:
+
+```shell
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ triplets
+```
+
+The `--extra-index-url` is needed so that dependencies (pandas, lxml, etc.) are still fetched from real PyPI.
+
+### Publishing a Release
+
+```shell
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+This triggers the full build matrix and publishes to PyPI.
+
+### Version Numbering
+
+Versioneer derives the version from git tags:
+
+- Tagged commit `v0.1.0` -> version `0.1.0`
+- 3 commits after tag -> version `0.1.0+3.gabcdef1`
+- No tag -> version `0+untagged.N.gabcdef1`
+
+TestPyPI accepts these PEP 440 dev versions, so every PR build gets a unique version.
+
+### Setup for Trusted Publishing
+
+The workflow uses PyPI trusted publishing (no API tokens needed). To enable it:
+
+1. Go to [PyPI](https://pypi.org/manage/project/triplets/settings/publishing/) -> Publishing -> Add a new publisher
+2. Set: GitHub repository `Haigutus/triplets`, workflow `build-wheels.yml`, environment `(leave blank)`
+3. Repeat for [TestPyPI](https://test.pypi.org/manage/project/triplets/settings/publishing/)
+
+### Build Matrix
+
+Wheels are built for:
+
+| Platform | Architecture |
+|----------|-------------|
+| Linux (manylinux) | x86_64, aarch64 |
+| macOS | x86_64 (Intel), arm64 (Apple Silicon) |
+| Windows | AMD64 |
+
+CPython 3.10, 3.11, 3.12, 3.13. Each wheel includes the compiled `cython_pugixml_arrow` extension.

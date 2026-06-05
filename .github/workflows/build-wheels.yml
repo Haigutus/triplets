@@ -1,9 +1,15 @@
 name: Build wheels
 
 on:
+  pull_request:       # build RC on every PR (test that it works)
   push:
-    tags: ["v*"]
-  workflow_dispatch:  # allow manual trigger
+    tags: ["v*"]      # build + publish release on tag
+  workflow_dispatch:   # manual trigger
+
+# Cancel in-progress runs for the same PR
+concurrency:
+  group: wheels-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Pure-python sdist (always works, no cython extension)
@@ -14,11 +20,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+          fetch-depth: 0  # full history for versioneer
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - run: pip install build
       - run: python -m build --sdist
+
       - uses: actions/upload-artifact@v4
         with:
           name: sdist
@@ -40,7 +50,7 @@ jobs:
           - os: ubuntu-latest
             arch: aarch64
             cibw_archs: aarch64
-          # macOS x86_64
+          # macOS x86_64 (Intel)
           - os: macos-13
             arch: x86_64
             cibw_archs: x86_64
@@ -57,8 +67,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+          fetch-depth: 0
 
-      # QEMU for cross-compiling Linux aarch64 on x86_64 runner
       - name: Set up QEMU
         if: matrix.arch == 'aarch64'
         uses: docker/setup-qemu-action@v3
@@ -75,18 +85,11 @@ jobs:
       - name: Build wheels
         run: cibuildwheel --output-dir dist
         env:
-          # Build for CPython 3.10-3.13
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_SKIP: "*-musllinux_*"
-
-          # Build dependencies (installed in the build container)
           CIBW_BUILD_REQUIRES: "cython>=3.0 setuptools>=61 numpy pyarrow>=14.0"
-
-          # Build the cython extension
           CIBW_BEFORE_BUILD: "python setup_cython_parser.py build_ext --inplace"
-
-          # Test the built wheel
           CIBW_TEST_REQUIRES: "pytest pyarrow>=14.0"
           CIBW_TEST_COMMAND: "pytest {project}/tests/test_parser_backends.py -q --tb=short -k 'not realgrid'"
 
@@ -95,14 +98,34 @@ jobs:
           name: wheels-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/*.whl
 
-  # Publish to PyPI on tag push
+  # On PR: publish RC to TestPyPI so it can be pip-installed for testing
+  publish-rc:
+    name: Publish RC to TestPyPI
+    needs: [sdist, wheels]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  # On tag: publish release to PyPI
   publish:
     name: Publish to PyPI
     needs: [sdist, wheels]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
-      id-token: write  # for trusted publishing
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
