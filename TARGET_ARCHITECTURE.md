@@ -53,8 +53,9 @@ graph TB
     end
 
     subgraph "parser/ engines"
-        P --> P1["lxml_pandas.py ✅"]
-        P --> P2["pugixml_arrow.pyx 🔧"]
+        P --> P1["python_lxml_pandas.py ✅"]
+        P --> P2["python_lxml_arrow.py 📦"]
+        P --> P3["cython_pugixml_arrow.pyx 🔧"]
     end
 
     subgraph "export/ engines"
@@ -90,8 +91,10 @@ triplets/
 │
 ├── parser/
 │   ├── __init__.py              # parse() dispatcher, find_all_xml, clean_ID, get_namespace_map
-│   ├── lxml_pandas.py           # engine: lxml → pandas DataFrame (default)
-│   ├── pugixml_arrow.pyx        # engine: pugixml + arrow → zero-copy (12.9x)
+│   ├── utils.py                 # shared: RDF constants, clean_ID, find_all_xml, _split_prefixed_name
+│   ├── python_lxml_pandas.py    # engine: lxml → list → pandas DataFrame (default, no extra deps)
+│   ├── python_lxml_arrow.py     # engine: lxml → Arrow RecordBatch (needs pyarrow)
+│   ├── cython_pugixml_arrow.pyx # engine: pugixml C++ → Arrow RecordBatch (needs C++ build + pyarrow)
 │   └── vendor/
 │       └── pugixml/             # vendored pugixml source (MIT, ~300KB)
 │
@@ -136,7 +139,7 @@ tests/
 ├── data/
 │   ├── tiny_eq.xml              # <20 triples, committed
 │   └── tiny_shacl.xml           # minimal SHACL shapes
-├── test_parser.py               # lxml_pandas + pugixml_arrow engines
+├── test_parser.py               # python_lxml_pandas + python_lxml_arrow + cython_pugixml_arrow engines
 ├── test_query.py                # pandas + polars + sparql engines
 ├── test_validation.py           # pandas + polars + pyshacl engines
 ├── test_export.py               # excel, cimxml roundtrip
@@ -169,10 +172,25 @@ pixi.toml
 
 | Engine | File | Requires | Speed |
 |--------|------|----------|-------|
-| `lxml_pandas` | `lxml_pandas.py` | lxml (core dep) | 1x baseline, **always works** |
-| `pugixml_arrow` | `pugixml_arrow.pyx` | C++ build + pugixml + pyarrow | 12.9x |
+| `python_lxml_pandas` | `python_lxml_pandas.py` | lxml + pandas (core deps) | 1x baseline, **always works** |
+| `python_lxml_arrow` | `python_lxml_arrow.py` | lxml + pyarrow (`pip install triplets[arrow]`) | ~1x parse, better interop |
+| `cython_pugixml_arrow` | `cython_pugixml_arrow.pyx` | C++ build + pugixml + pyarrow | 12.9x |
 
-Fallback: `pugixml_arrow` → `lxml_pandas`
+`python_lxml_pandas` is the old proven lxml → list-of-tuples → `pd.DataFrame()` path, restored
+as the default so the core package has **zero dependencies beyond lxml + pandas**.
+
+`python_lxml_arrow` uses lxml for XML parsing but streams to Arrow `StringBuilder` builders
+instead of Python lists, producing `pa.RecordBatch`. Better for polars interop and
+dictionary-encoding (categorical columns). Requires pyarrow.
+
+`cython_pugixml_arrow` does everything in C++ (pugixml parse + Arrow C++ builders via Cython).
+Fastest path. Supports mmap for local files.
+
+See `CYTHON_PERFORMANCE_IDEAS.md` (in this directory) for additional optimization opportunities
+beyond mmap (in-builder dictionary encoding for KEY/INSTANCE_ID, single-pass attribute walking,
+nogil for the hot loop, builder Reserve, etc.).
+
+Fallback: `cython_pugixml_arrow` → `python_lxml_arrow` → `python_lxml_pandas`
 
 ### query/
 
@@ -216,7 +234,36 @@ Fallback: `polars` → `pandas`
 Same structure in every submodule `__init__.py`:
 
 ```python
-# query/__init__.py
+# parser/__init__.py
+
+def _auto_engine():
+    """Pick best available parser engine (fastest first)."""
+    try:
+        from .cython_pugixml_arrow import load_rdf_to_arrow  # noqa: F401
+        return "cython_pugixml_arrow"
+    except ImportError:
+        pass
+    try:
+        from .python_lxml_arrow import load_rdf_to_arrow  # noqa: F401
+        return "python_lxml_arrow"
+    except ImportError:
+        pass
+    return "python_lxml_pandas"
+
+def parse(sources, engine="auto", return_type="pandas", **kwargs):
+    if engine == "auto":
+        engine = _auto_engine()
+    if engine == "cython_pugixml_arrow":
+        from .cython_pugixml_arrow import load_rdf_to_arrow as fn
+    elif engine == "python_lxml_arrow":
+        from .python_lxml_arrow import load_rdf_to_arrow as fn
+    else:
+        from .python_lxml_pandas import load_rdf_to_dataframe as fn
+    # ... dispatch to fn, handle batching, return_type conversion
+```
+
+```python
+# query/__init__.py  (same pattern, different engines)
 
 def _auto_engine(df):
     """Pick best available engine for the given DataFrame."""
@@ -236,18 +283,6 @@ def type_tableview(df, *args, engine="auto", **kwargs):
     else:
         from .pandas_engine import type_tableview as fn
     return fn(df, *args, **kwargs)
-
-def sparql(df, query_str, engine="auto", **kwargs):
-    if engine == "auto":
-        try:
-            from .sparql_qlever import query as fn
-        except ImportError:
-            from .sparql_oxigraph import query as fn
-    elif engine == "sparql_qlever":
-        from .sparql_qlever import query as fn
-    else:
-        from .sparql_oxigraph import query as fn
-    return fn(df, query_str, **kwargs)
 
 # ... same pattern for every function
 ```
@@ -333,9 +368,11 @@ except ImportError:
 import triplets
 
 # ── Parse ──
-df = triplets.parser.parse(["grid_EQ.xml"])
-df = triplets.parser.parse(["grid_EQ.xml"], engine="pugixml_arrow")
-df = pd.read_RDF(["grid_EQ.xml"])                                    # convenience
+df = triplets.parser.parse(["grid_EQ.xml"])                                      # auto (best available)
+df = triplets.parser.parse(["grid_EQ.xml"], engine="python_lxml_pandas")         # explicit: no pyarrow needed
+df = triplets.parser.parse(["grid_EQ.xml"], engine="python_lxml_arrow")          # explicit: arrow intermediate
+df = triplets.parser.parse(["grid_EQ.xml"], engine="cython_pugixml_arrow")       # explicit: fastest
+df = pd.read_RDF(["grid_EQ.xml"])                                                # convenience
 
 # ── CIM query (df.cim.*) ──
 df.cim.type_tableview("ACLineSegment")
@@ -397,6 +434,9 @@ pandas = ">=2.0"
 lxml = ">=4.9"
 aniso8601 = "*"
 
+[feature.arrow.dependencies]
+pyarrow = ">=14.0.0"
+
 [feature.polars.dependencies]
 polars = ">=1.0.0"
 pyarrow = ">=14.0.0"
@@ -428,17 +468,17 @@ openpyxl = ">=3.1.5"
 pytest = ">=7.0"
 
 [environments]
-default = { features = ["validation", "polars", "excel"] }
-full = { features = ["validation", "polars", "sparql", "pyshacl", "excel"] }
-build = { features = ["validation", "polars", "sparql", "pyshacl", "excel", "build"] }
-dev = { features = ["validation", "polars", "sparql", "pyshacl", "excel", "build", "dev"] }
+default = { features = ["validation", "arrow", "polars", "excel"] }
+full = { features = ["validation", "arrow", "polars", "sparql", "pyshacl", "excel"] }
+build = { features = ["validation", "arrow", "polars", "sparql", "pyshacl", "excel", "build"] }
+dev = { features = ["validation", "arrow", "polars", "sparql", "pyshacl", "excel", "build", "dev"] }
 
 [tasks]
 test = "pytest tests/"
 test-unit = "pytest tests/ -m 'not integration and not benchmark'"
 test-integration = "pytest tests/ -m integration"
 bench = "pytest tests/benchmarks/"
-build-pugixml-arrow = "cd triplets/parser && cython pugixml_arrow.pyx ..."
+build-cython-pugixml-arrow = "python setup_cython_parser.py build_ext --inplace"
 build-qlever = "cd triplets/query && cmake ..."
 ```
 
@@ -494,13 +534,19 @@ pytest markers:
 
 | Pattern | Example | Meaning |
 |---|---|---|
-| `{lib}_{output}.py` | `lxml_pandas.py` | uses lxml, produces pandas DataFrame |
-| `{lib}_{output}.pyx` | `pugixml_arrow.pyx` | uses pugixml, produces arrow tables |
+| `{runtime}_{lib}_{output}.py` | `python_lxml_pandas.py` | Python + lxml, produces pandas DataFrame |
+| `{runtime}_{lib}_{output}.py` | `python_lxml_arrow.py` | Python + lxml, produces Arrow tables |
+| `{runtime}_{lib}_{output}.pyx` | `cython_pugixml_arrow.pyx` | Cython + pugixml, produces Arrow tables |
 | `{framework}_engine.py` | `pandas_engine.py` | query engine using pandas |
 | `{framework}_shacl.py` | `polars_shacl.py` | SHACL validation using polars |
 | `{tool}_engine.py` | `pyshacl_engine.py` | validation engine wrapping pyshacl |
 | `sparql_{backend}.py` | `sparql_oxigraph.py` | SPARQL query via oxigraph |
 | `{source}_shacl_parser.py` | `rdflib_shacl_parser.py` | parse SHACL shapes via rdflib |
+
+For **parser/ engines**, the three-part `{runtime}_{lib}_{output}` convention makes clear:
+- **runtime**: `python` (pure Python) or `cython` (compiled)
+- **lib**: which XML library (`lxml`, `pugixml`)
+- **output**: what it produces (`pandas` DataFrame or `arrow` RecordBatch)
 
 ---
 
@@ -508,12 +554,12 @@ pytest markers:
 
 | Principle | Implementation |
 |---|---|
-| **Engines inside submodules** | `parser/pugixml_arrow.pyx`, `query/sparql_qlever.pyx` |
+| **Engines inside submodules** | `parser/python_lxml_pandas.py`, `parser/cython_pugixml_arrow.pyx`, `query/sparql_qlever.pyx` |
 | **Fallback to simplest** | Auto-detect fastest available, always fall back to pure pandas/lxml |
 | **`engine=` everywhere** | Every public function accepts `engine=` parameter |
 | **SPARQL under query** | `query/sparql_oxigraph.py`, `query/sparql_qlever.pyx` — alongside pandas/polars |
 | **Three accessors** | `df.cim.*` (query/export), `df.shacl.*` (validation), `df.sparql.*` (SPARQL) |
 | **Keep pyshacl** | `engine="pyshacl"` in validation |
-| **Uniform naming** | `{lib/tool}_{output/purpose}.py` |
+| **Uniform naming** | `{runtime}_{lib}_{output}.py` for parser, `{framework}_{purpose}.py` elsewhere |
 | **pixi for builds** | C/C++ deps managed alongside Python |
 | **Gradual migration** | `rdf_parser.py` → re-export shim → deprecation → removal |
