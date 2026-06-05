@@ -1,14 +1,15 @@
-"""Build script for the cython_pugixml (perf CIMXML parser) Cython extension only.
+"""Build script for the cython_pugixml_arrow parser extension.
 
-Usage (in pixi build env or with deps present):
+Usage (local dev):
     python setup_cython_parser.py build_ext --inplace
 
-Based on cues from setup_cython.py + rdf_extract_cython_arrow.pyx requirements.
+Also invoked by cibuildwheel for cross-platform wheel builds.
 """
 
 from setuptools import setup, Extension
 from Cython.Build import cythonize
 import os
+import sys
 import pyarrow
 import numpy
 
@@ -17,7 +18,7 @@ PUGIXML_SRC = os.path.join(os.path.dirname(__file__), "vendor", "pugixml", "src"
 if not os.path.exists(os.path.join(PUGIXML_SRC, "pugixml.cpp")):
     raise RuntimeError(
         f"pugixml source not found at {PUGIXML_SRC}. "
-        "Run: git submodule update --init vendor/pugixml (in worktree)"
+        "Run: git submodule update --init vendor/pugixml"
     )
 
 pa_include = pyarrow.get_include()
@@ -26,6 +27,16 @@ try:
     np_include = numpy.get_include()
 except Exception:
     np_include = None
+
+# Platform-specific compiler flags
+if sys.platform == "win32":
+    extra_compile_args = ["/O2", "/std:c++20"]
+    extra_link_args = []
+    runtime_library_dirs = []
+else:
+    extra_compile_args = ["-O3", "-std=c++20", "-fPIC"]
+    extra_link_args = ["-Wl,-rpath," + d for d in pa_lib_dirs]
+    runtime_library_dirs = pa_lib_dirs
 
 ext = Extension(
     "triplets.parser.cython_pugixml_arrow",
@@ -37,9 +48,9 @@ ext = Extension(
     library_dirs=pa_lib_dirs,
     libraries=["arrow_python"],
     language="c++",
-    extra_compile_args=["-O3", "-std=c++20", "-fPIC"],
-    extra_link_args=["-Wl,-rpath," + d for d in pa_lib_dirs],
-    runtime_library_dirs=pa_lib_dirs,
+    extra_compile_args=extra_compile_args,
+    extra_link_args=extra_link_args,
+    runtime_library_dirs=runtime_library_dirs,
 )
 
 setup(
