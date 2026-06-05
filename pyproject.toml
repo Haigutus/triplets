@@ -35,7 +35,14 @@ markers = [
 exclude-newer = "P14D"
 
 [build-system]
-requires = ["setuptools>=61", "wheel", "versioneer", "Cython>=3; platform_system != 'Emscripten'"]
+requires = [
+    "setuptools>=61",
+    "wheel",
+    "versioneer",
+    "Cython>=3.0; platform_system != 'Emscripten'",
+    "pyarrow>=14.0; platform_system != 'Emscripten'",
+    "numpy; platform_system != 'Emscripten'",
+]
 build-backend = "setuptools.build_meta"
 
 [tool.uv.extra-build-dependencies]
