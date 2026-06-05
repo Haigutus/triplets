@@ -1,6 +1,6 @@
 [project]
 name = "triplets"
-version = "0.1.0"
+dynamic = ["version"]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -48,5 +48,9 @@ build-backend = "setuptools.build_meta"
 [tool.uv.extra-build-dependencies]
 triplets = ["versioneer", "setuptools"]
 
-# Note: the cython_pugixml perf backend is built via pixi (pixi.toml) or
-# python setup_cython_parser.py build_ext --inplace (not via pip wheel by default yet).
+[tool.setuptools.dynamic]
+version = {attr = "triplets._version.__version__"}
+
+# Note: the cython_pugixml perf backend is built into published wheels via cibuildwheel
+# (see .github/workflows/build-wheels.yml). For local dev: pixi or setup_cython_parser.py.
+# Version is dynamic via versioneer (setuptools + triplets.__version__); see setup.py.

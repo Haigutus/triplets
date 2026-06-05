@@ -28,15 +28,17 @@ try:
 except Exception:
     np_include = None
 
-# Platform-specific compiler flags
+# Platform-specific compiler flags + libraries (must match setup.py exactly)
 if sys.platform == "win32":
     extra_compile_args = ["/O2", "/std:c++20"]
     extra_link_args = []
     runtime_library_dirs = []
+    libraries = ["arrow_python", "arrow"]
 else:
     extra_compile_args = ["-O3", "-std=c++20", "-fPIC"]
     extra_link_args = ["-Wl,-rpath," + d for d in pa_lib_dirs]
     runtime_library_dirs = pa_lib_dirs
+    libraries = ["arrow_python"]
 
 ext = Extension(
     "triplets.parser.cython_pugixml_arrow",
@@ -46,7 +48,7 @@ ext = Extension(
     ],
     include_dirs=[PUGIXML_SRC, pa_include] + ([np_include] if np_include else []),
     library_dirs=pa_lib_dirs,
-    libraries=["arrow_python"],
+    libraries=libraries,
     language="c++",
     extra_compile_args=extra_compile_args,
     extra_link_args=extra_link_args,

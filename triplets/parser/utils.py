@@ -57,12 +57,28 @@ def find_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
 
     for item in items:
         if isinstance(item, str):
-            try:
-                item = open(item, "rb")
-            except Exception:
-                logger.warning("Could not open: %s", item)
+            item_lower = item.lower()
+            if ".xml" in item_lower or ".rdf" in item_lower:
+                # Keep str path (no open fd here). Engines accept str paths (enables cython mmap).
+                xml_files_list.append(item)
+                if debug:
+                    logger.debug("Added: %s", item)
+                continue
+            elif ".zip" in item_lower:
+                try:
+                    item = open(item, "rb")
+                except Exception:
+                    logger.warning("Could not open zip: %s", item)
+                    continue
+                zip_files_list.append(item)
+                if debug:
+                    logger.debug("Added for zip processing: %s", item)
+                continue
+            else:
+                logger.warning("Not supported file: %s", item)
                 continue
 
+        # non-str (fileobj or pre-opened): determine lower from .name if present
         if hasattr(item, "name"):
             item_lower = getattr(item, "name", "").lower()
         else:

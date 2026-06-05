@@ -1,11 +1,11 @@
-/triplet_tools.egg-info/
 /build/
 /dist/
 /venv/
 /docs/build/
 # Compiled parser extensions (build with pixi or setup_cython_parser.py in matching env)
 *.so
-triplets/parser/backends/cython_pugixml*.so
-build/
 *.egg-info/
+# Note: cython_pugixml_arrow.cpp is intentionally tracked (allows building ext from sdist without cython in some flows)
+# benchmark json reports under documents/ are tracked for perf history/docs
+
 

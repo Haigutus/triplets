@@ -1,3 +1,6 @@
 include versioneer.py
 include triplets/_version.py
+include setup.py setup_cython_parser.py pyproject.toml
+include triplets/parser/cython_pugixml_arrow.pyx
 recursive-include triplets/export_schema *
+recursive-include vendor/pugixml *

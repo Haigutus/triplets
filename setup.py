@@ -3,9 +3,6 @@ import sys
 from setuptools import setup, find_packages, Extension
 import versioneer
 
-with open("README.md", "r") as fh:
-    long_description = fh.read()
-
 # Build cython_pugixml_arrow extension if Cython + pyarrow are available
 # (wheels via cibuildwheel, or local dev with pixi/build env)
 ext_modules = []
@@ -60,28 +57,17 @@ if os.path.exists(os.path.join(PUGIXML_SRC, "pugixml.cpp")):
         pass  # Cython/pyarrow not available — build pure-python wheel
 
 setup(
-    name='triplets',
-    version=versioneer.get_version().split("+")[0],
+    # Most metadata (name, version dynamic, description, license, authors, dependencies,
+    # readme) comes from pyproject.toml. We keep setup.py for:
+    # - versioneer cmdclass (for sdist etc)
+    # - conditional cython ext_modules (complex platform logic + vendor submodule)
+    # - package discovery + export_schema data
     cmdclass=versioneer.get_cmdclass(),
+    version=versioneer.get_version().split("+")[0],
     packages=find_packages(),
     package_data={
         'triplets.export_schema': ['*.json'],
     },
     include_package_data=True,
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    url='https://github.com/Haigutus/triplets',
-    license='MIT',
-    author='Kristjan Vilgo',
-    author_email='kristjan.vilgo@gmail.com',
-    description='Simple tools to load/modify/export XML/RDF data using Pandas DataFrames',
-    install_requires=[
-        "pandas", "lxml", 'aniso8601',
-    ],
     ext_modules=ext_modules,
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
-    ]
 )

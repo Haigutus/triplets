@@ -168,8 +168,7 @@ The workflow uses PyPI trusted publishing (no API tokens needed). To enable it:
 1. Go to [PyPI](https://pypi.org/manage/project/triplets/settings/publishing/) -> Publishing -> Add a new publisher
 2. Set: GitHub repository `Haigutus/triplets`, workflow `build-wheels.yml`, environment `pypi`
 
-If you prefer to keep using the existing twine + secrets approach, the old
-`python-publish.yml` workflow still works for pure-python releases.
+The legacy `python-publish.yml` has been removed; all releases (including pure-python sdists) now use `build-wheels.yml` with trusted publishing and cibuildwheel.
 
 ### Build Matrix
 
@@ -181,4 +180,4 @@ Wheels are built for:
 | macOS | x86_64 (Intel), arm64 (Apple Silicon) |
 | Windows | AMD64 |
 
-CPython 3.10, 3.11, 3.12, 3.13. Each wheel includes the compiled `cython_pugixml_arrow` extension.
+CPython 3.11, 3.12, 3.13 (requires-python >=3.11). Each wheel includes the compiled `cython_pugixml_arrow` extension (usable when pyarrow also installed).

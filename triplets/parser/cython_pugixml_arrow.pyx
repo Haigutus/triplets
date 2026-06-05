@@ -7,7 +7,7 @@ This is the "pugixml parser" / performance backend for triplets CIMXML parsing.
 Uses pugixml C++ directly (no pygixml PyPI wheel) + Arrow C++ builders.
 
 Build: pixi (see pixi.toml) or python setup_cython_parser.py build_ext --inplace
-(see setup_cython.py cues for Extension + vendor/pugixml).
+(see setup.py / setup_cython_parser.py for Extension + vendor/pugixml).
 
 Exposes load_rdf_to_dataframe_cython_pugixml (or load_rdf_to_dataframe) for the parser package.
 """

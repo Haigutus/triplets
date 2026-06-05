@@ -56,7 +56,7 @@ def _load_engine(name: str):
             from . import cython_pugixml_arrow as m  # type: ignore[attr-defined]
             _ENGINES[name] = m
             return m
-        except Exception as e:
+        except ImportError as e:
             raise ImportError(
                 "cython_pugixml_arrow engine not available (compiled extension missing). "
                 "Build with: pixi run build-cython-pugixml-arrow "
@@ -72,8 +72,11 @@ def get_engine(name: str = "auto"):
         for candidate in ("cython_pugixml_arrow", "python_lxml_arrow", "python_lxml_pandas"):
             try:
                 return candidate, _load_engine(candidate)
-            except (ImportError, Exception):
+            except ImportError:
                 continue
+            except Exception:
+                # real error in engine (e.g. during load), surface it rather than silent fallback
+                raise
         # Should never reach here since python_lxml_pandas always works
         return "python_lxml_pandas", _load_engine("python_lxml_pandas")
     resolved = _ENGINE_ALIASES.get(name, name)
@@ -138,8 +141,16 @@ def parse(
         results = [_one(f) for f in xml_files]
 
     if not results:
+        # Fallback empty after file list processing (should be rare; engines return DataFrames/Batches)
         import pandas as pd
-        return pd.DataFrame(columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+        empty = pd.DataFrame(columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+        if return_type == "arrow":
+            import pyarrow as pa
+            return pa.Table.from_pandas(empty)
+        if return_type == "polars":
+            import polars as pl
+            return pl.from_pandas(empty)
+        return empty
 
     if is_arrow_engine:
         return _finalize_arrow(results, return_type, categorical_columns, debug)
