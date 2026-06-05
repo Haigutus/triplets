@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-06-05T12:38:11.479718Z",
+  "file": "test_data/relicapgrid/Instance/Grid/IGM_Svedala/20220615T2230Z__Svedala_EQ_1.xml",
+  "file_size_mb": 3.8248414993286133,
+  "repeats": 5,
+  "benchmarks": [
+    {
+      "label": "cython_pugixml + str_path (mmap)",
+      "mean_s": 0.008739974399213679,
+      "min_s": 0.007435246996465139,
+      "max_s": 0.013018413999816403,
+      "mean_mem_delta_mb": -0.3453125,
+      "n_rows": 47718
+    },
+    {
+      "label": "cython_pugixml + fileobj (read+buffer)",
+      "mean_s": 0.007350899398443289,
+      "min_s": 0.007031975997961126,
+      "max_s": 0.007663336000405252,
+      "mean_mem_delta_mb": 0.0,
+      "n_rows": 47718
+    },
+    {
+      "label": "python_lxml + str_path",
+      "mean_s": 0.06383505319827236,
+      "min_s": 0.06039589199644979,
+      "max_s": 0.06698657800734509,
+      "mean_mem_delta_mb": 0.00546875,
+      "n_rows": 47718
+    },
+    {
+      "label": "direct cython str (mmap)",
+      "mean_s": 0.004016903202864341,
+      "min_s": 0.003607476013712585,
+      "max_s": 0.005125054012751207,
+      "mean_mem_delta_mb": -0.1703125,
+      "n_rows": 47718
+    }
+  ]
+}
