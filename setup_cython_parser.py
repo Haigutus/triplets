@@ -13,7 +13,7 @@ import sys
 import pyarrow
 import numpy
 
-PUGIXML_SRC = os.path.join(os.path.dirname(__file__), "vendor", "pugixml", "src")
+PUGIXML_SRC = os.path.join("vendor", "pugixml", "src")
 
 if not os.path.exists(os.path.join(PUGIXML_SRC, "pugixml.cpp")):
     raise RuntimeError(

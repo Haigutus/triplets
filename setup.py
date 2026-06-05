@@ -9,7 +9,9 @@ with open("README.md", "r") as fh:
 # Build cython_pugixml_arrow extension if Cython + pyarrow are available
 # (wheels via cibuildwheel, or local dev with pixi/build env)
 ext_modules = []
-PUGIXML_SRC = os.path.join(os.path.dirname(__file__), "vendor", "pugixml", "src")
+
+# Use relative paths (setuptools rejects absolute paths in containers)
+PUGIXML_SRC = os.path.join("vendor", "pugixml", "src")
 
 if os.path.exists(os.path.join(PUGIXML_SRC, "pugixml.cpp")):
     try:
