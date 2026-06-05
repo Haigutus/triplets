@@ -90,7 +90,7 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: ""
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: ""
           CIBW_TEST_REQUIRES: "pytest pyarrow>=14.0"
-          CIBW_TEST_COMMAND: "pytest {project}/tests/test_parser_backends.py -q --tb=short -k 'not realgrid'"
+          CIBW_TEST_COMMAND: "pytest {project}/tests/test_parser_backends.py -q --tb=short -k \"not realgrid\""
 
       - uses: actions/upload-artifact@v4
         with:
