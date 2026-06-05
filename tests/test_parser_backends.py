@@ -8,7 +8,18 @@ import pandas as pd
 
 import triplets  # registers read_RDF etc
 from triplets.parser import parse, read_rdf
-from tests.conftest import HAS_PYARROW, HAS_CYTHON_PUGIXML_ARROW
+
+try:
+    import pyarrow  # noqa: F401
+    HAS_PYARROW = True
+except ImportError:
+    HAS_PYARROW = False
+
+try:
+    from triplets.parser import cython_pugixml_arrow  # noqa: F401
+    HAS_CYTHON_PUGIXML_ARROW = True
+except Exception:
+    HAS_CYTHON_PUGIXML_ARROW = False
 
 
 @pytest.fixture(scope="module")
