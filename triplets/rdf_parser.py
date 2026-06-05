@@ -249,81 +249,14 @@ def load_RDF_objects_from_XML(path_or_fileobject, debug=False):
 
 
 def find_all_xml(list_of_paths_to_zip_globalzip_xml, debug=False):
-    """Extract XML files from a list of paths or ZIP archives.
-
-    Parameters
-    ----------
-    list_of_paths_to_zip_globalzip_xml : list
-        List of paths to XML files, ZIP archives, or file-like objects.
-    debug : bool, optional
-        If True, log file processing details for debugging (default is False).
-
-    Returns
-    -------
-    list
-        List of file-like objects for XML files found in the input paths or ZIPs.
-
-    Notes
-    -----
-    - Supports XML, RDF, and ZIP files; other file types are logged as unsupported.
-    - TODO: Add support for random folders.
-
-    Examples
-    --------
-    >>> xml_files = find_all_xml(["data.zip", "file.xml"])
-    """
-    xml_files_list = []
-    zip_files_list = []  # TODO - add support random folders as well
-
-    for item in list_of_paths_to_zip_globalzip_xml:
-
-        if type(item) == str:
-            item = open(item, "rb")
-
-        item_lower = item.name.lower()
-
-        if ".xml" in item_lower or ".rdf" in item_lower:
-            xml_files_list.append(item)
-
-            if debug:
-                logger.debug("Added: {}".format(item))
-
-        elif ".zip" in item_lower:
-            zip_files_list.append(item)
-
-            if debug:
-                logger.debug("Added for further processing: {}".format(item))
-
-        else:
-            logger.warning("Not supported file: {}".format(item))
-
-    for zip_file_path in zip_files_list:
-
-        zip_container = zipfile.ZipFile(zip_file_path)
-        zipped_files = zip_container.namelist()
-
-        for zipped_file in zipped_files:
-
-            zipped_file_lower = zipped_file.lower()
-
-            if ".xml" in zipped_file_lower or ".rdf" in zipped_file_lower:
-                file_object = BytesIO(zip_container.read(zipped_file))
-                file_object.name = zipped_file
-                xml_files_list.append(file_object)
-
-                if debug:
-                    logger.debug("Added: {}".format(zipped_file))
-
-            elif ".zip" in zipped_file_lower:
-                zip_files_list.append(BytesIO(zip_container.read(zipped_file)))
-
-                if debug:
-                    logger.debug("Added for further processing: {}".format(zipped_file))
-
-            else:
-                logger.warning("Not supported file: {}".format(zipped_file))
-
-    return xml_files_list
+    """Delegated to triplets.parser.utils. Deprecated: use triplets.parser.find_all_xml()."""
+    import warnings
+    warnings.warn(
+        "rdf_parser.find_all_xml is deprecated, use triplets.parser.find_all_xml()",
+        DeprecationWarning, stacklevel=2,
+    )
+    from .parser import find_all_xml as _find_all
+    return _find_all(list_of_paths_to_zip_globalzip_xml, debug=debug)
 
 
 def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
@@ -410,100 +343,47 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
 
 
 def load_RDF_to_dataframe(path_or_fileobject, debug=False, data_type="string"):
-    """Parse a single RDF XML file into a Pandas DataFrame.
+    """Parse single file via triplets.parser. Deprecated: use triplets.parser.parse() directly."""
+    import warnings
+    warnings.warn(
+        "load_RDF_to_dataframe is deprecated, use triplets.parser.parse()",
+        DeprecationWarning, stacklevel=2,
+    )
+    from .parser import parse as _parse
+    df = _parse(path_or_fileobject, debug=debug, engine="auto", return_type="pandas")
+    if data_type and data_type != "string":
+        try:
+            df = df.astype(data_type)
+        except Exception:
+            pass
+    return df
 
-    Parameters
-    ----------
-    path_or_fileobject : str or file-like object
-        Path to the XML file or a file-like object containing RDF XML data.
-    debug : bool, optional
-        If True, log timing information for debugging (default is False).
-    data_type : str, optional
-        Data type for DataFrame columns (default is 'string').
 
-    Returns
-    -------
-    pandas.DataFrame
-        DataFrame with columns ['ID', 'KEY', 'VALUE', 'INSTANCE_ID'] representing the triplestore.
+def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False, data_type="string", max_workers=None, engine="auto", return_type="pandas", categorical_columns=("INSTANCE_ID", "KEY"), **kw):
+    """Parse via triplets.parser. Deprecated: use triplets.parser.parse() directly.
 
-    Examples
-    --------
-    >>> df = load_RDF_to_dataframe("file.xml")
+    Supports:
+      engine="python_lxml_pandas" | "python_lxml_arrow" | "cython_pugixml_arrow" | "auto"
+      return_type="pandas" | "arrow" | "polars"
+      max_workers (thread batching over files)
+      categorical_columns: tuple of cols to dictionary-encode (default INSTANCE_ID, KEY for memory savings).
     """
-    data_list = load_RDF_to_list(path_or_fileobject, debug)
-
-    if debug:
-        start_time = datetime.datetime.now()
-
-    data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"], dtype=data_type)
-
-    if debug:
-        _, start_time = _print_duration("List of data loaded to DataFrame", start_time)
-
-    return data
-
-
-def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False, data_type="string", max_workers=None):
-    """Parse multiple RDF XML files or ZIP archives into a single Pandas DataFrame.
-
-    Parameters
-    ----------
-    list_of_paths_to_zip_globalzip_xml : list or str
-        List of paths to XML files, ZIP archives, or a single path.
-    debug : bool, optional
-        If True, log timing information for debugging (default is False).
-    data_type : str, optional
-        Data type for DataFrame columns (default is 'string').
-    max_workers : int, optional
-        Number of worker threads for parallel processing (default is None).
-
-    Returns
-    -------
-    pandas.DataFrame
-        DataFrame with columns ['ID', 'KEY', 'VALUE', 'INSTANCE_ID'] containing all parsed data.
-
-    Examples
-    --------
-    >>> df = load_all_to_dataframe(["data.zip", "file.xml"], max_workers=4)
-    """
-
-    # TODO - Support folder
-
-    if debug:
-        process_start = datetime.datetime.now()
-
-    # List is expected, but if no list lets assume it is single element list
-    if type(list_of_paths_to_zip_globalzip_xml) != list:
-        list_of_paths_to_zip_globalzip_xml = [list_of_paths_to_zip_globalzip_xml]
-
-    list_of_xmls = find_all_xml(list_of_paths_to_zip_globalzip_xml, debug)
-
-    data_list = []
-
-    if max_workers:
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit each task individually
-            futures = [executor.submit(load_RDF_to_list, xml, debug) for xml in list_of_xmls]
-            # Collect results as they complete
-            results = [future.result() for future in futures]
-            data_list = [item for sublist in results for item in sublist]
-
-    else:
-        for xml in list_of_xmls:
-            data_list.extend(load_RDF_to_list(xml, debug))
-
-    if debug:
-        start_time = datetime.datetime.now()
-
-    data = pandas.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"], dtype=data_type)
-
-    if debug:
-        _print_duration("Data list loaded to DataFrame", start_time)
-        _print_duration("All loaded in ", process_start)
-        # logger.debug(data.info())
-
-    return data
+    from .parser import parse as _parse
+    df = _parse(
+        list_of_paths_to_zip_globalzip_xml,
+        debug=debug,
+        max_workers=max_workers,
+        engine=engine,
+        return_type=return_type or "pandas",
+        categorical_columns=categorical_columns,
+        **kw,
+    )
+    if return_type in (None, "pandas", "df") and data_type and data_type != "string":
+        try:
+            df = df.astype(data_type)
+        except Exception:
+            pass
+    return df
 
 
 # Extend this functionality to pandas DataFrame

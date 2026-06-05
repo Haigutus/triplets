@@ -3,3 +3,9 @@
 /dist/
 /venv/
 /docs/build/
+# Compiled parser extensions (build with pixi or setup_cython_parser.py in matching env)
+*.so
+triplets/parser/backends/cython_pugixml*.so
+build/
+*.egg-info/
+

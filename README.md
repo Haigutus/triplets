@@ -48,3 +48,42 @@ data.export_to_cimxml(
 
 
 Look into examples folders for more
+
+## Parser engines (refactored)
+
+Three parser engines with automatic fallback (fastest available):
+
+| Engine | Requires | Speed |
+|--------|----------|-------|
+| `python_lxml_pandas` | lxml + pandas (core) | 1x baseline, **always works** |
+| `python_lxml_arrow` | + pyarrow (`pip install triplets[arrow]`) | ~1x, better interop |
+| `cython_pugixml_arrow` | + C++ build | 12.9x |
+
+```python
+import pandas as pd
+import triplets  # registers pd.read_RDF and pd.read_rdf
+
+# default (auto: best available engine)
+df = pd.read_RDF(["grid_EQ.xml", "data.zip"])
+
+# explicit engine selection
+df = pd.read_RDF(path, engine="python_lxml_pandas")       # no pyarrow needed
+df = pd.read_RDF(path, engine="python_lxml_arrow")        # arrow intermediate
+df_fast = pd.read_RDF(path, engine="cython_pugixml_arrow") # fastest
+
+# performance engine: direct pugixml C++ + Arrow builders (zero Python objects per triple)
+# Build first (no system C++ deps needed):
+#   pixi install -e build
+#   pixi run build-cython-pugixml-arrow
+
+# Return Arrow or Polars directly
+table = triplets.parser.parse(path, return_type="arrow")
+pdf = triplets.parser.parse(path, return_type="polars")
+
+# Also available as
+data = triplets.parser.parse(["f.xml"], engine="python_lxml_pandas", return_type="pandas")
+```
+
+See `pixi.toml` for build environment and `tests/test_parser_backends.py` for usage.
+See [docs/parsers.md](docs/parsers.md) for the full call sequence and architecture.
+
