@@ -85,8 +85,7 @@ jobs:
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_SKIP: "*-musllinux_*"
-          CIBW_BUILD_REQUIRES: "cython>=3.0 setuptools>=61 numpy pyarrow>=14.0"
-          CIBW_BEFORE_BUILD: "python setup_cython_parser.py build_ext --inplace"
+          CIBW_BEFORE_BUILD: "pip install cython>=3.0 setuptools>=61 numpy pyarrow>=14.0 && python {project}/setup_cython_parser.py build_ext --inplace"
           CIBW_TEST_REQUIRES: "pytest pyarrow>=14.0"
           CIBW_TEST_COMMAND: "pytest {project}/tests/test_parser_backends.py -q --tb=short -k 'not realgrid'"
 
