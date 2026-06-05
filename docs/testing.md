@@ -97,46 +97,79 @@ The GitHub Actions workflow (`.github/workflows/build-wheels.yml`) runs automati
 
 | Trigger | What happens |
 |---------|-------------|
-| **Pull Request** | Build wheels for all platforms + publish RC to [TestPyPI](https://test.pypi.org/project/triplets/) |
-| **Tag push** (`v*`) | Build wheels + publish release to [PyPI](https://pypi.org/project/triplets/) |
+| **GitHub Release** (RC or final) | Build wheels for all platforms + publish to PyPI |
+| **Pull Request** | Build wheels only (no publish, catches build failures early) |
 | **Manual** (workflow_dispatch) | Build wheels only (no publish) |
 
-### Installing an RC from a PR
+### Publishing a Release Candidate
 
-Every PR automatically publishes a release candidate to TestPyPI. To install it:
+1. Tag with an RC version (bare number, matching existing pattern):
+   ```shell
+   git tag 0.1.0rc1
+   git push origin 0.1.0rc1
+   ```
+
+2. Create a GitHub Release from the tag (mark as pre-release)
+
+3. The workflow builds wheels for all platforms and publishes to PyPI
+
+4. Users install the RC:
+   ```shell
+   pip install --pre triplets
+   # or pin the exact RC:
+   pip install triplets==0.1.0rc1
+   ```
+
+### Publishing a Final Release
 
 ```shell
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ triplets
+git tag 0.1.0
+git push origin 0.1.0
 ```
 
-The `--extra-index-url` is needed so that dependencies (pandas, lxml, etc.) are still fetched from real PyPI.
-
-### Publishing a Release
+Create a GitHub Release from the tag. The workflow builds and publishes to PyPI.
 
 ```shell
-git tag v0.1.0
-git push origin v0.1.0
+pip install triplets
 ```
 
-This triggers the full build matrix and publishes to PyPI.
+### Verifying the Cython Engine in a Wheel
+
+After installing a wheel (RC or release), verify the compiled extension is included:
+
+```python
+import triplets
+
+# Check which engine auto-detection picks
+engine_name, _ = triplets.parser.get_engine("auto")
+print(engine_name)  # "cython_pugixml_arrow" if the wheel has it
+
+# Or import directly
+from triplets.parser import cython_pugixml_arrow
+print("cython engine available")
+```
 
 ### Version Numbering
 
-Versioneer derives the version from git tags:
+Tags use bare numbers (matching existing releases like `0.0.17`):
 
-- Tagged commit `v0.1.0` -> version `0.1.0`
-- 3 commits after tag -> version `0.1.0+3.gabcdef1`
-- No tag -> version `0+untagged.N.gabcdef1`
+| Tag | PyPI version | pip install |
+|-----|-------------|-------------|
+| `0.1.0rc1` | `0.1.0rc1` (pre-release) | `pip install --pre triplets` |
+| `0.1.0rc2` | `0.1.0rc2` (pre-release) | `pip install --pre triplets` |
+| `0.1.0` | `0.1.0` (stable) | `pip install triplets` |
 
-TestPyPI accepts these PEP 440 dev versions, so every PR build gets a unique version.
+PyPI treats `rc` versions as pre-releases — they are only installed when `--pre` is passed or a specific version is pinned.
 
 ### Setup for Trusted Publishing
 
 The workflow uses PyPI trusted publishing (no API tokens needed). To enable it:
 
 1. Go to [PyPI](https://pypi.org/manage/project/triplets/settings/publishing/) -> Publishing -> Add a new publisher
-2. Set: GitHub repository `Haigutus/triplets`, workflow `build-wheels.yml`, environment `(leave blank)`
-3. Repeat for [TestPyPI](https://test.pypi.org/manage/project/triplets/settings/publishing/)
+2. Set: GitHub repository `Haigutus/triplets`, workflow `build-wheels.yml`, environment `pypi`
+
+If you prefer to keep using the existing twine + secrets approach, the old
+`python-publish.yml` workflow still works for pure-python releases.
 
 ### Build Matrix
 
