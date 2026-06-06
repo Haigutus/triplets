@@ -503,9 +503,8 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False):
         # column" case because the heavy lifting (1.14M string appends) was avoided.
         # This small Python-side construction happens only once per XML file.
         import pyarrow as pa
-        import numpy as np
         inst_dict = pa.array([instance_id.decode('utf-8')])
-        inst_indices = pa.array(np.zeros(nrows, dtype=np.int32))
+        inst_indices = pa.repeat(pa.scalar(0, type=pa.int32()), nrows)
         inst_col = pa.DictionaryArray.from_arrays(inst_indices, inst_dict)
 
         batch_py = pa.RecordBatch.from_arrays(
