@@ -93,6 +93,8 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH=$(python -c 'import pyarrow; print(pyarrow.get_library_dirs()[0])') auditwheel repair -w {dest_dir} {wheel} --exclude 'libarrow_python.so*' --exclude 'libarrow.so*'"
           # macOS: skip delocate (macosx_* tags are accepted by PyPI as-is)
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: ""
+          # Windows: delvewheel runs by default in cibw 4.0+; exclude arrow DLLs (provided by pyarrow at runtime)
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} -v {wheel} --no-dll arrow_python.dll --no-dll arrow.dll"
           # Force UTF-8 on Windows (versioneer's find_sources hits cp1252 encoding errors)
           CIBW_ENVIRONMENT_WINDOWS: "PYTHONUTF8=1"
           CIBW_TEST_REQUIRES: "pytest pyarrow>=14.0"
