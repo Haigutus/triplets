@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:cim="http://iec.ch/TC57/2013/CIM-schema-cim16#"
+         xmlns:md="http://iec.ch/TC57/61970-552/ModelDescription/1#"
+         xml:base="minimal_cim.xml">
+  <md:FullModel rdf:about="minimal">
+    <md:Model.profile>http://entsoe.eu/CIM/EquipmentCore/3/1</md:Model.profile>
+  </md:FullModel>
+  <cim:Substation rdf:ID="SS1">
+    <cim:IdentifiedObject.name>Sub1</cim:IdentifiedObject.name>
+  </cim:Substation>
+  <cim:VoltageLevel rdf:ID="VL1">
+    <cim:VoltageLevel.Substation rdf:resource="#SS1"/>
+  </cim:VoltageLevel>
+  <cim:BaseVoltage rdf:ID="_BV10">
+    <cim:BaseVoltage.nominalVoltage>10</cim:BaseVoltage.nominalVoltage>
+  </cim:BaseVoltage>
+  <!-- nodeID example (supported) -->
+  <cim:ConnectivityNode rdf:nodeID="nodeA">
+    <cim:ConnectivityNode.ConnectivityNodeContainer rdf:resource="#VL1"/>
+  </cim:ConnectivityNode>
+</rdf:RDF>

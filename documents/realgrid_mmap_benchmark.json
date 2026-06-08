@@ -1,0 +1,41 @@
+{
+  "timestamp": "2026-06-05T12:40:58.282958Z",
+  "dataset": "RealGrid (extracted 4 files ~82MB)",
+  "zip": "test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip",
+  "num_files": 4,
+  "repeats": 4,
+  "benchmarks": [
+    {
+      "label": "cython via ZIP (no mmap)",
+      "mean_s": 0.2024,
+      "min_s": 0.1971,
+      "max_s": 0.2125,
+      "mean_mem_delta_mb": 10.0,
+      "rows": 1146215
+    },
+    {
+      "label": "cython via str paths (mmap)",
+      "mean_s": 0.1525,
+      "min_s": 0.149,
+      "max_s": 0.1564,
+      "mean_mem_delta_mb": 1.7,
+      "rows": 1146215
+    },
+    {
+      "label": "python_lxml via str paths",
+      "mean_s": 1.5463,
+      "min_s": 1.5274,
+      "max_s": 1.5749,
+      "mean_mem_delta_mb": 0.0,
+      "rows": 1146215
+    },
+    {
+      "label": "direct cython str paths (mmap)",
+      "mean_s": 0.0957,
+      "min_s": 0.0949,
+      "max_s": 0.0974,
+      "mean_mem_delta_mb": "n/a",
+      "rows": 1146215
+    }
+  ]
+}

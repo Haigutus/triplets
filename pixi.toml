@@ -1,0 +1,41 @@
+[workspace]
+name = "triplets"
+version = "0.1.0"
+description = "RDF/XML toolkit for ENTSO-E/CGMES power grid data (parser focus)"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64"]
+
+[dependencies]
+python = ">=3.11"
+pandas = ">=2.0"
+lxml = ">=4.9"
+
+[feature.test.dependencies]
+pytest = ">=7.0"
+pytest-xdist = "*"
+
+[feature.arrow.dependencies]
+pyarrow = ">=14.0"
+
+[feature.polars.dependencies]
+polars = ">=1.0"
+pyarrow = ">=14.0"
+
+[feature.build.dependencies]
+cython = ">=3.0"
+setuptools = ">=61"
+numpy = "*"  # for pyarrow numpy_interop headers in some builds
+compilers = "*"
+pyarrow = "*"
+
+[environments]
+default = { features = ["test"] }
+arrow = { features = ["test", "arrow"] }
+build = { features = ["build", "test", "arrow", "polars"] }
+dev = { features = ["build", "test", "arrow", "polars"] }
+
+[tasks]
+build-cython-pugixml-arrow = "python setup_cython_parser.py build_ext --inplace"
+test = "pytest -q --tb=no"
+test-parser = "pytest tests/test_parser_backends.py -q --tb=short"
+sync-uv = "uv sync --dev"

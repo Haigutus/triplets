@@ -1,0 +1,53 @@
+[project]
+name = "triplets"
+dynamic = ["version"]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0",
+    "lxml>=4.9",
+    "aniso8601",
+]
+
+[project.optional-dependencies]
+arrow = [
+    "pyarrow>=14.0",
+]
+polars = [
+    "polars>=1.0",
+    "pyarrow>=14.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-xdist",
+    "polars>=1.0",
+    "pyarrow>=14.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "performance: marks performance tests (run with '-m performance')",
+    "requires_perf_backend: needs the compiled cython_pugixml extension",
+]
+
+[tool.uv]
+exclude-newer = "P14D"
+
+[build-system]
+requires = [
+    "setuptools>=61",
+    "wheel",
+    "versioneer",
+    "Cython>=3.0; platform_system != 'Emscripten'",
+    "pyarrow>=14.0; platform_system != 'Emscripten'",
+    "numpy; platform_system != 'Emscripten'",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.uv.extra-build-dependencies]
+triplets = ["versioneer", "setuptools"]
+
+# Note: version is managed by versioneer in setup.py (derives from git tags).
+# The cython_pugixml perf backend is built into published wheels via cibuildwheel
+# (see .github/workflows/build-wheels.yml). For local dev: pixi or setup_cython_parser.py.
