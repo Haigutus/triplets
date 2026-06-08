@@ -6,16 +6,16 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>triplets package &mdash; triplets 0.0.17 documentation</title>
+  <title>triplets package &mdash; triplets 0.1.0rc1 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=63b572e7"></script>
-      <script src="_static/doctools.js?v=9bcbadda"></script>
-      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/documentation_options.js?v=944ffb79"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" /> 
@@ -681,7 +681,7 @@ ratio of total Q to P.</p></li>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.cgmes_tools.update_FullModel_from_filename">
-<span class="sig-prename descclassname"><span class="pre">triplets.cgmes_tools.</span></span><span class="sig-name descname"><span class="pre">update_FullModel_from_filename</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parser=&lt;function</span> <span class="pre">get_metadata_from_filename&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">update=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add=True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/cgmes_tools.html#update_FullModel_from_filename"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.cgmes_tools.update_FullModel_from_filename" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.cgmes_tools.</span></span><span class="sig-name descname"><span class="pre">update_FullModel_from_filename</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parser</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">get_metadata_from_filename&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">update</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/cgmes_tools.html#update_FullModel_from_filename"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.cgmes_tools.update_FullModel_from_filename" title="Link to this definition"></a></dt>
 <dd><p>Update FullModel metadata in a triplet dataset using metadata parsed from filenames.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -736,21 +736,21 @@ ratio of total Q to P.</p></li>
 <span id="triplets-rdf-parser-module"></span><h2>triplets.rdf_parser module<a class="headerlink" href="#module-triplets.rdf_parser" title="Link to this heading"></a></h2>
 <dl class="py class">
 <dt class="sig sig-object py" id="triplets.rdf_parser.ExportType">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">ExportType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#ExportType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.ExportType" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">ExportType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#ExportType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.ExportType" title="Link to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">StrEnum</span></code></p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="triplets.rdf_parser.ExportType.XML_PER_INSTANCE">
-<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance'</span></em><a class="headerlink" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance'</span></span><a class="headerlink" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL">
-<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE_ZIP_PER_ALL</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance_zip_per_all'</span></em><a class="headerlink" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE_ZIP_PER_ALL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance_zip_per_all'</span></span><a class="headerlink" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_XML">
-<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE_ZIP_PER_XML</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance_zip_per_xml'</span></em><a class="headerlink" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_XML" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE_ZIP_PER_XML</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance_zip_per_xml'</span></span><a class="headerlink" href="#triplets.rdf_parser.ExportType.XML_PER_INSTANCE_ZIP_PER_XML" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -993,30 +993,7 @@ specified <code class="docutils literal notranslate"><span class="pre">export_ty
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.rdf_parser.find_all_xml">
 <span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">find_all_xml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">list_of_paths_to_zip_globalzip_xml</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#find_all_xml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.find_all_xml" title="Link to this definition"></a></dt>
-<dd><p>Extract XML files from a list of paths or ZIP archives.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>list_of_paths_to_zip_globalzip_xml</strong> (<em>list</em>) – List of paths to XML files, ZIP archives, or file-like objects.</p></li>
-<li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, log file processing details for debugging (default is False).</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>List of file-like objects for XML files found in the input paths or ZIPs.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>list</p>
-</dd>
-</dl>
-<p class="rubric">Notes</p>
-<ul class="simple">
-<li><p>Supports XML, RDF, and ZIP files; other file types are logged as unsupported.</p></li>
-<li><p>TODO: Add support for random folders.</p></li>
-</ul>
-<p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">xml_files</span> <span class="o">=</span> <span class="n">find_all_xml</span><span class="p">([</span><span class="s2">&quot;data.zip&quot;</span><span class="p">,</span> <span class="s2">&quot;file.xml&quot;</span><span class="p">])</span>
-</pre></div>
-</div>
+<dd><p>Delegated to triplets.parser.utils. Deprecated: use triplets.parser.find_all_xml().</p>
 </dd></dl>
 
 <dl class="py function">
@@ -1229,26 +1206,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.rdf_parser.load_RDF_to_dataframe">
 <span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">load_RDF_to_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_or_fileobject</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'string'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#load_RDF_to_dataframe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.load_RDF_to_dataframe" title="Link to this definition"></a></dt>
-<dd><p>Parse a single RDF XML file into a Pandas DataFrame.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>path_or_fileobject</strong> (<em>str</em><em> or </em><em>file-like object</em>) – Path to the XML file or a file-like object containing RDF XML data.</p></li>
-<li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, log timing information for debugging (default is False).</p></li>
-<li><p><strong>data_type</strong> (<em>str</em><em>, </em><em>optional</em>) – Data type for DataFrame columns (default is ‘string’).</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>DataFrame with columns [‘ID’, ‘KEY’, ‘VALUE’, ‘INSTANCE_ID’] representing the triplestore.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>pandas.DataFrame</p>
-</dd>
-</dl>
-<p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span> <span class="o">=</span> <span class="n">load_RDF_to_dataframe</span><span class="p">(</span><span class="s2">&quot;file.xml&quot;</span><span class="p">)</span>
-</pre></div>
-</div>
+<dd><p>Parse single file via triplets.parser. Deprecated: use triplets.parser.parse() directly.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -1278,28 +1236,15 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.rdf_parser.load_all_to_dataframe">
-<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">load_all_to_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">list_of_paths_to_zip_globalzip_xml</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'string'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#load_all_to_dataframe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.load_all_to_dataframe" title="Link to this definition"></a></dt>
-<dd><p>Parse multiple RDF XML files or ZIP archives into a single Pandas DataFrame.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>list_of_paths_to_zip_globalzip_xml</strong> (<em>list</em><em> or </em><em>str</em>) – List of paths to XML files, ZIP archives, or a single path.</p></li>
-<li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, log timing information for debugging (default is False).</p></li>
-<li><p><strong>data_type</strong> (<em>str</em><em>, </em><em>optional</em>) – Data type for DataFrame columns (default is ‘string’).</p></li>
-<li><p><strong>max_workers</strong> (<em>int</em><em>, </em><em>optional</em>) – Number of worker threads for parallel processing (default is None).</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>DataFrame with columns [‘ID’, ‘KEY’, ‘VALUE’, ‘INSTANCE_ID’] containing all parsed data.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>pandas.DataFrame</p>
+<span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">load_all_to_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">list_of_paths_to_zip_globalzip_xml</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'string'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'pandas'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">categorical_columns</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">('INSTANCE_ID',</span> <span class="pre">'KEY')</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kw</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#load_all_to_dataframe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdf_parser.load_all_to_dataframe" title="Link to this definition"></a></dt>
+<dd><p>Parse via triplets.parser. Deprecated: use triplets.parser.parse() directly.</p>
+<dl class="simple">
+<dt>Supports:</dt><dd><p>engine=”python_lxml_pandas” | “python_lxml_arrow” | “cython_pugixml_arrow” | “auto”
+return_type=”pandas” | “arrow” | “polars”
+max_workers (thread batching over files)
+categorical_columns: tuple of cols to dictionary-encode (default INSTANCE_ID, KEY for memory savings).</p>
 </dd>
 </dl>
-<p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span> <span class="o">=</span> <span class="n">load_all_to_dataframe</span><span class="p">([</span><span class="s2">&quot;data.zip&quot;</span><span class="p">,</span> <span class="s2">&quot;file.xml&quot;</span><span class="p">],</span> <span class="n">max_workers</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
-</pre></div>
-</div>
 </dd></dl>
 
 <dl class="py function">

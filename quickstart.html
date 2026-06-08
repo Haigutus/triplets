@@ -6,16 +6,16 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quickstart &mdash; triplets 0.0.17 documentation</title>
+  <title>Quickstart &mdash; triplets 0.1.0rc1 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=63b572e7"></script>
-      <script src="_static/doctools.js?v=9bcbadda"></script>
-      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/documentation_options.js?v=944ffb79"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -50,6 +50,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#to-get-started">To get started:</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#result">Result:</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#export">Export:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#parser-engines">Parser engines</a></li>
 </ul>
 </li>
 </ul>
@@ -130,6 +131,61 @@
 </pre></div>
 </div>
 <p>Look into examples folders for more</p>
+</section>
+<section id="parser-engines">
+<h2>Parser engines<a class="headerlink" href="#parser-engines" title="Link to this heading"></a></h2>
+<p>Three parser engines with automatic fallback (fastest available):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Engine</p></th>
+<th class="head"><p>Requires</p></th>
+<th class="head"><p>Speed</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">python_lxml_pandas</span></code></p></td>
+<td><p>lxml + pandas (core)</p></td>
+<td><p>1x baseline, <strong>always works</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">python_lxml_arrow</span></code></p></td>
+<td><p>+ pyarrow (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">triplets[arrow]</span></code>)</p></td>
+<td><p>~1x, better interop</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cython_pugixml_arrow</span></code></p></td>
+<td><p>+ C++ build</p></td>
+<td><p>9.8x</p></td>
+</tr>
+</tbody>
+</table>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">polars</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>  <span class="c1"># registers pandas.read_RDF, polars.read_rdf etc.</span>
+
+<span class="c1"># default (auto: best available engine)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="s2">&quot;grid_EQ.xml&quot;</span><span class="p">,</span> <span class="s2">&quot;data.zip&quot;</span><span class="p">])</span>
+
+<span class="c1"># explicit engine selection</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;python_lxml_pandas&quot;</span><span class="p">)</span>        <span class="c1"># no pyarrow needed</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;python_lxml_arrow&quot;</span><span class="p">)</span>         <span class="c1"># arrow intermediate</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;cython_pugixml_arrow&quot;</span><span class="p">)</span>      <span class="c1"># fastest</span>
+
+<span class="c1"># polars</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">read_rdf</span><span class="p">([</span><span class="s2">&quot;grid_EQ.xml&quot;</span><span class="p">],</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">&quot;polars&quot;</span><span class="p">)</span>
+
+<span class="c1"># return Arrow directly</span>
+<span class="n">table</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">&quot;arrow&quot;</span><span class="p">)</span>
+
+<span class="c1"># direct API call (same as read_RDF)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">([</span><span class="s2">&quot;f.xml&quot;</span><span class="p">],</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;python_lxml_pandas&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To build the performance engine (no system C++ deps needed):</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pixi<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>build
+pixi<span class="w"> </span>run<span class="w"> </span>build-cython-pugixml-arrow
+</pre></div>
+</div>
+<p>See <code class="docutils literal notranslate"><span class="pre">pixi.toml</span></code> for build environment and <code class="docutils literal notranslate"><span class="pre">tests/test_parser_backends.py</span></code> for usage.
+See <a class="reference internal" href="#docs/parsers.md"><span class="xref myst">docs/parsers.md</span></a> for the full call sequence and architecture.</p>
 </section>
 </section>
 
