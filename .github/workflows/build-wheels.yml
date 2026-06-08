@@ -87,12 +87,12 @@ jobs:
           CIBW_BUILD: "cp311-* cp312-* cp313-*"  # matches pyproject requires-python >=3.11; keep in sync with docs/testing.md
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_SKIP: "*-musllinux_*"
-          # auditwheel/delocate must run to apply manylinux/macOS platform tags,
-          # but exclude arrow shared libs (provided by pyarrow at runtime).
-          # LD_LIBRARY_PATH lets auditwheel find the libs for inspection without bundling them.
-          CIBW_ENVIRONMENT_LINUX: "LD_LIBRARY_PATH=$(python -c 'import pyarrow; print(pyarrow.get_library_dirs()[0])'):$LD_LIBRARY_PATH"
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel} --exclude 'libarrow_python.so*' --exclude 'libarrow.so*'"
-          CIBW_REPAIR_WHEEL_COMMAND_MACOS: "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} --exclude libarrow_python --exclude libarrow {wheel}"
+          # auditwheel applies manylinux tags (required by PyPI for Linux).
+          # Exclude arrow shared libs — provided by pyarrow at runtime.
+          # LD_LIBRARY_PATH is set inline so pyarrow is already installed.
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "LD_LIBRARY_PATH=$(python -c 'import pyarrow; print(pyarrow.get_library_dirs()[0])') auditwheel repair -w {dest_dir} {wheel} --exclude 'libarrow_python.so*' --exclude 'libarrow.so*'"
+          # macOS: skip delocate (macosx_* tags are accepted by PyPI as-is)
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: ""
           # Force UTF-8 on Windows (versioneer's find_sources hits cp1252 encoding errors)
           CIBW_ENVIRONMENT_WINDOWS: "PYTHONUTF8=1"
           CIBW_TEST_REQUIRES: "pytest pyarrow>=14.0"
