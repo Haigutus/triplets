@@ -11,7 +11,11 @@ https://haigutus.github.io/triplets
 ### To get started:
 
 ```shell
-python -m pip install triplets
+# Core (python_lxml_pandas engine, no extra deps)
+pip install triplets
+
+# With pyarrow (enables python_lxml_arrow + cython_pugixml_arrow engines, ~12x faster)
+pip install triplets[arrow]
 ```
 
 ```python
@@ -52,11 +56,14 @@ Look into examples folders for more
 
 Three parser engines with automatic fallback (fastest available):
 
-| Engine | Requires | Speed |
-|--------|----------|-------|
-| `python_lxml_pandas` | lxml + pandas (core) | 1x baseline, **always works** |
-| `python_lxml_arrow` | + pyarrow (`pip install triplets[arrow]`) | ~1x, better interop |
-| `cython_pugixml_arrow` | + C++ build | 9.8x |
+| Engine | Install | Speed |
+|--------|---------|-------|
+| `python_lxml_pandas` | `pip install triplets` | 1x baseline, **always works** |
+| `python_lxml_arrow` | `pip install triplets[arrow]` | ~1x, better interop |
+| `cython_pugixml_arrow` | `pip install triplets[arrow]` (included in wheels) | **12x faster** |
+
+The `cython_pugixml_arrow` engine is a compiled C++ extension included in published wheels.
+It requires pyarrow at runtime, so install with `triplets[arrow]` to enable it.
 
 ```python
 import pandas
@@ -81,11 +88,8 @@ table = triplets.parser.parse(path, return_type="arrow")
 data = triplets.parser.parse(["f.xml"], engine="python_lxml_pandas")
 ```
 
-To build the performance engine (no system C++ deps needed):
-```shell
-pixi install -e build
-pixi run build-cython-pugixml-arrow
-```
+The cython engine is pre-built in published wheels — no compilation needed.
+For local development builds, see [docs/building.md](docs/building.md).
 
 See `pixi.toml` for build environment and `tests/test_parser_backends.py` for usage.
 See [docs/parsers.md](docs/parsers.md) for the full call sequence and architecture.
