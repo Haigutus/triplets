@@ -518,10 +518,3 @@ def get_versions():
     return {"version": "0+unknown", "full-revisionid": None,
             "dirty": None,
             "error": "unable to compute version", "date": None}
-
-
-# Provide a top-level __version__ (str) for [tool.setuptools.dynamic] version attr lookup.
-# Importing only "triplets._version" (not the full "triplets" package) avoids pulling
-# runtime dependencies (lxml, pandas, ...) during PEP 517 build isolation for sdist/wheel metadata.
-# The full package __init__.py also re-exports it for runtime.
-__version__ = get_versions()["version"]

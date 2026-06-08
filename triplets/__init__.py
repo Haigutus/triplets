@@ -11,7 +11,9 @@ __all__ = [
     'rdfs_tools'
 ]
 
-from ._version import __version__  # set by _version.py using versioneer (safe to import standalone)
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions
 
 # Expose the new parser API at top level
 from .parser import parse, read_rdf as read_rdf_func  # noqa: F401
