@@ -50,9 +50,11 @@ jobs:
           - os: ubuntu-latest
             arch: aarch64
             cibw_archs: aarch64
-          - os: macos-13
-            arch: x86_64
-            cibw_archs: x86_64
+          # macOS x86_64 (Intel) — disabled, macos-13 runner rarely available
+          # Intel Macs are EOL; users can install from sdist if needed
+          # - os: macos-13
+          #   arch: x86_64
+          #   cibw_archs: x86_64
           - os: macos-14
             arch: arm64
             cibw_archs: arm64
