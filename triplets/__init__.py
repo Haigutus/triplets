@@ -4,6 +4,7 @@ from . import rdf_parser
 from . import cgmes_tools
 from . import rdfs_tools
 from . import cli
+from . import tools
 
 __all__ = [
     'cgmes_tools',
