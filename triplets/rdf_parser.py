@@ -1984,7 +1984,9 @@ def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_i
     """
     # Get diff between datasets
     diff = diff_between_triplet(old_data, new_data)
-    diff = diff.replace({'_merge': {"left_only": "-", "right_only": "+"}}).sort_values(by=['ID', 'KEY'])
+    # Convert _merge to plain string before replacing (avoids categorical setitem error with pyarrow dtypes)
+    diff["_merge"] = diff["_merge"].astype(str).replace({"left_only": "-", "right_only": "+"})
+    diff = diff.sort_values(by=['ID', 'KEY'])
 
     # Extract internal structures keeping file name information
     file_id_data = filter_by_type(diff, file_id_object)
