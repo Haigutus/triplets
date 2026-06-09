@@ -469,3 +469,68 @@ class TestPolarsExportNquads:
         # Each line should be a valid N-Quad
         assert lines[0].endswith(" .\n")
         assert "<urn:uuid:" in lines[0]
+
+
+# ── Roundtrip test (export CIM XML → reimport → compare) ────────────────────
+
+class TestCimxmlRoundtrip:
+    """Export Svedala EQ (CGMES 3.0) to CIM XML, reimport, verify data is identical."""
+
+    def test_roundtrip_types_match(self, svedala_eq):
+        from triplets.export_schema import schemas
+
+        result = svedala_eq.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+            export_type="xml_per_instance",
+            export_to_memory=True,
+        )
+        assert len(result) > 0
+        result[0].seek(0)
+        reimported = pandas.read_RDF([result[0]])
+
+        # All object types should survive the roundtrip
+        orig_types = set(svedala_eq.types_dict().keys()) - {"Distribution", "NamespaceMap"}
+        reimp_types = set(reimported.types_dict().keys()) - {"Distribution", "NamespaceMap"}
+        assert orig_types == reimp_types, f"Missing: {orig_types - reimp_types}, Extra: {reimp_types - orig_types}"
+
+    def test_roundtrip_object_counts_match(self, svedala_eq):
+        from triplets.export_schema import schemas
+
+        result = svedala_eq.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+            export_type="xml_per_instance",
+            export_to_memory=True,
+        )
+        result[0].seek(0)
+        reimported = pandas.read_RDF([result[0]])
+
+        orig_td = svedala_eq.types_dict()
+        reimp_td = reimported.types_dict()
+        for type_name in orig_td:
+            if type_name in ("Distribution", "NamespaceMap"):
+                continue
+            assert orig_td[type_name] == reimp_td.get(type_name, 0), \
+                f"{type_name}: {orig_td[type_name]} -> {reimp_td.get(type_name, 0)}"
+
+    def test_roundtrip_no_data_diff(self, svedala_eq):
+        from triplets.export_schema import schemas
+
+        result = svedala_eq.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+            export_type="xml_per_instance",
+            export_to_memory=True,
+        )
+        result[0].seek(0)
+        reimported = pandas.read_RDF([result[0]])
+
+        # Diff excluding meta rows (Distribution, NamespaceMap have different IDs per parse)
+        diff = triplets.tools.diff_between_triplet(svedala_eq, reimported)
+        meta_ids = set()
+        for meta_type in ("Distribution", "NamespaceMap"):
+            ids = diff[
+                (diff["KEY"].astype(str) == "Type") &
+                (diff["VALUE"].astype(str) == meta_type)
+            ]["ID"].astype(str).unique()
+            meta_ids.update(ids)
+        data_diff = diff[~diff["ID"].astype(str).isin(meta_ids)]
+        assert len(data_diff) == 0, f"Data diff has {len(data_diff)} rows:\n{data_diff.head(10)}"
