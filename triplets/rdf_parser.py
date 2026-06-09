@@ -390,7 +390,7 @@ def load_all_to_dataframe(list_of_paths_to_zip_globalzip_xml, debug=False, data_
 pandas.read_RDF = load_all_to_dataframe
 
 
-def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
+def type_tableview(data, type_name, string_to_number=True, type_key="Type", multivalue=False):
     """Create a table view of all objects of a specified type.
 
     Parameters
@@ -403,6 +403,8 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
         If True, convert columns containing numbers to numeric types (default is True).
     type_key : str, optional
         Key used to identify object types in the dataset (default is 'Type').
+    multivalue : bool, optional
+        If True, aggregate duplicate (ID, KEY) pairs into lists (default is False).
 
     Returns
     -------
@@ -411,7 +413,7 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
 
     Examples
     --------
-    >>> table = data.type_tableview("ACLineSegment")
+    >>> table = data.type_tableview("ACLineSegment", multivalue=True)
     """
     # Get all ID-s of rows where Type == type_name
     type_id = data[(data["VALUE"] == type_name) & (data["KEY"] == type_key)]
@@ -421,14 +423,22 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type"):
         return None
 
     # Filter original data by found type_id data
-    # There can't be duplicate ID and KEY pairs for pivot, but this will lose data on full model DependantOn and other info, solution would be to use pivot table function.
-    type_data = pandas.merge(type_id[["ID"]], data, on="ID").drop_duplicates(["ID", "KEY"])
+    type_data = pandas.merge(type_id[["ID"]], data, on="ID")
 
-    # Convert form triplets to a table view all objects of same type
-    data_view = type_data.pivot(index="ID", columns="KEY")["VALUE"]
+    # Convert from triplets to a table view of all objects of same type
+    if multivalue:
+        def _aggregate(x):
+            x_list = list(x)
+            if len(x_list) == 1:
+                return x_list[0]
+            return x_list
+
+        data_view = type_data.pivot_table(index="ID", columns="KEY", values="VALUE", aggfunc=_aggregate)
+    else:
+        type_data = type_data.drop_duplicates(["ID", "KEY"])
+        data_view = type_data.pivot(index="ID", columns="KEY")["VALUE"]
 
     if string_to_number:
-        # Convert to data type to numeric in columns that contain only numbers (for easier data usage later on)
         for column in data_view.columns:
             try:
                 data_view[column] = pandas.to_numeric(data_view[column], errors="raise")
@@ -957,68 +967,225 @@ def set_VALUE_at_KEY_and_ID(data, key, value, id):
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.set_VALUE_at_KEY_and_ID = set_VALUE_at_KEY_and_ID
 
-# TODO - add CSV export
-def export_to_excel(data, path=None):
-    """Export triplet data to an Excel file, with each type on a separate sheet.
+def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, single_file=False, filename=None, apply_formatting=True):
+    """Export triplet data to Excel file(s), with each type on a separate sheet.
 
     Parameters
     ----------
     data : pandas.DataFrame
         Triplet dataset containing RDF data.
     path : str, optional
-        Directory path to save the Excel file (default is current working directory).
+        Directory path to save Excel file(s), or file path when single_file=True.
+    multivalue : bool, default True
+        If True, aggregate duplicate (ID, KEY) pairs into lists.
+    export_to_memory : bool, default False
+        If True, return BytesIO objects; if False, save to disk.
+    single_file : bool, default False
+        If True, export all data to a single file instead of one file per INSTANCE_ID.
+    filename : str, optional
+        Filename to use when single_file=True. If None, uses 'export.xlsx'.
+    apply_formatting : bool, default True
+        If True, apply column width and freeze panes formatting.
 
-    Notes
-    -----
-    - Uses 'label' key to determine the filename for each INSTANCE_ID.
-    - Each object type is exported to a separate sheet.
-    - TODO: Add support for XlsxWriter properties for better formatting.
-
-    Examples
-    --------
-    >>> data.export_to_excel("output_dir")
+    Returns
+    -------
+    BytesIO, str, or list
+        Depends on single_file and export_to_memory flags.
     """
-    # TODO set some nice properties - https://xlsxwriter.readthedocs.io/workbook.html#workbook-set-properties
+    from io import BytesIO
 
-    labels = data.query("KEY == 'label'").iterrows()
-    # TODO dont use iterrows
-    # TODO instead of label use Distribution
-    for _, label in labels:
-        instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
+    if single_file:
+        if filename is None:
+            filename = 'export.xlsx'
 
-        types = instance_data.types_dict()
+        tableviews = triplet_to_tableviews(data, multivalue=multivalue)
+        output = BytesIO()
+        output.name = filename
 
-        file_name = '{}.xlsx'.format(label.VALUE.split(".")[0])
+        with pandas.ExcelWriter(output, engine='openpyxl') as writer:
+            for class_type, class_data in tableviews.items():
+                class_data.to_excel(writer, sheet_name=class_type)
+                if apply_formatting:
+                    from openpyxl.utils import get_column_letter
+                    sheet = writer.sheets[class_type]
+                    for i in range(1, len(class_data.columns) + 2):
+                        sheet.column_dimensions[get_column_letter(i)].width = 38
+                    sheet.freeze_panes = 'B2'
 
-        if path is None:
-            path = os.getcwd()
+        output.seek(0)
 
-        file_path = os.path.join(path, file_name)
+        if export_to_memory:
+            return output
+        else:
+            if path is None:
+                path = os.getcwd()
+            if os.path.isdir(path) or not path.endswith('.xlsx'):
+                export_path = os.path.join(path, filename)
+            else:
+                export_path = path
+            with open(export_path, 'wb') as f:
+                f.write(output.read())
+            logger.info(f'Saved {export_path}')
+            return filename
+    else:
+        labels = data.query("KEY == 'label'")
+        exported_files = []
 
-        logger.info("Exporting excel: {}".format(file_path))
-        writer = pandas.ExcelWriter(file_path)
+        for _, label in labels.iterrows():
+            instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
+            tableviews = triplet_to_tableviews(instance_data, multivalue=multivalue)
+            file_name = '{}.xlsx'.format(label.VALUE.split(".")[0])
+            output = BytesIO()
+            output.name = file_name
 
-        for class_type in types:
-            class_data = instance_data.type_tableview(class_type)
-            class_data.to_excel(writer, class_type)
+            with pandas.ExcelWriter(output, engine='openpyxl') as writer:
+                for class_type, class_data in tableviews.items():
+                    class_data.to_excel(writer, sheet_name=class_type)
+                    if apply_formatting:
+                        from openpyxl.utils import get_column_letter
+                        sheet = writer.sheets[class_type]
+                        for i in range(1, len(class_data.columns) + 2):
+                            sheet.column_dimensions[get_column_letter(i)].width = 38
+                        sheet.freeze_panes = 'B2'
 
-            # Get sheet to do some formatting
-            sheet = writer.sheets[class_type]
+            output.seek(0)
+            exported_files.append(output)
 
-            # Set default column size, if this does not work you are missing XslxWriter module
-            first_col = 0
-            last_col = len(class_data.columns)
-            width = 38
-            sheet.set_column(first_col, last_col, width)
-
-            # freeze column names and ID column
-            sheet.freeze_panes(1, 1)
-
-        writer.save()
+        if export_to_memory:
+            return exported_files
+        else:
+            if path is None:
+                path = os.getcwd()
+            exported_file_names = []
+            for file_object in exported_files:
+                export_path = os.path.join(path, file_object.name)
+                with open(export_path, 'wb') as f:
+                    file_object.seek(0)
+                    f.write(file_object.read())
+                exported_file_names.append(file_object.name)
+                logger.info(f'Saved {export_path}')
+            return exported_file_names
 
 
 # Extend this functionality to pandas DataFrame
 pandas.DataFrame.export_to_excel = export_to_excel
+
+
+def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):
+    """Export triplet data to CSV files, with each type as a separate file.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing RDF data.
+    path : str, optional
+        Directory path to save CSV file(s).
+    multivalue : bool, default True
+        If True, aggregate duplicate (ID, KEY) pairs into lists.
+    export_to_memory : bool, default False
+        If True, return BytesIO objects; if False, save to disk.
+    single_file : bool, default False
+        If True, export all data using a single base filename.
+    base_filename : str, optional
+        Base filename when single_file=True. If None, uses 'export'.
+    """
+    from io import BytesIO
+
+    if single_file:
+        if base_filename is None:
+            base_filename = 'export'
+        tableviews = triplet_to_tableviews(data, multivalue=multivalue)
+        exported_files = []
+        for class_type, class_data in tableviews.items():
+            file_name = '{}_{}.csv'.format(base_filename, class_type)
+            output = BytesIO()
+            output.name = file_name
+            output.write(class_data.to_csv().encode('utf-8'))
+            output.seek(0)
+            exported_files.append(output)
+    else:
+        labels = data.query("KEY == 'label'")
+        exported_files = []
+        for _, label in labels.iterrows():
+            instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
+            tableviews = triplet_to_tableviews(instance_data, multivalue=multivalue)
+            base_name = label.VALUE.split(".")[0]
+            for class_type, class_data in tableviews.items():
+                file_name = '{}_{}.csv'.format(base_name, class_type)
+                output = BytesIO()
+                output.name = file_name
+                output.write(class_data.to_csv().encode('utf-8'))
+                output.seek(0)
+                exported_files.append(output)
+
+    if export_to_memory:
+        return exported_files
+    else:
+        if path is None:
+            path = os.getcwd()
+        exported_file_names = []
+        for file_object in exported_files:
+            export_path = os.path.join(path, file_object.name)
+            with open(export_path, 'wb') as f:
+                file_object.seek(0)
+                f.write(file_object.read())
+            exported_file_names.append(file_object.name)
+            logger.info(f'Saved {export_path}')
+        return exported_file_names
+
+
+pandas.DataFrame.export_to_csv = export_to_csv
+
+
+def triplet_to_tableviews(triplet_df, multivalue=False):
+    """Convert triplet DataFrame to dict of tableview DataFrames.
+
+    Parameters
+    ----------
+    triplet_df : pandas.DataFrame
+        Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
+    multivalue : bool, default False
+        If True, aggregate duplicate (ID, KEY) pairs into lists.
+
+    Returns
+    -------
+    dict
+        {class_name: tableview_df}
+    """
+    types = triplet_df.types_dict()
+    tableviews = {}
+    for class_name in types:
+        table_view = triplet_df.type_tableview(class_name, multivalue=multivalue)
+        if table_view is not None:
+            tableviews[class_name] = table_view
+    return tableviews
+
+
+def tableviews_to_triplet(tableviews, multivalue=False):
+    """Convert dict of tableview DataFrames to triplet DataFrame.
+
+    Parameters
+    ----------
+    tableviews : dict
+        {class_name: tableview_df}
+    multivalue : bool, default False
+        If True, unpack list values into separate triplets.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Triplet DataFrame with columns [ID, KEY, VALUE, INSTANCE_ID].
+    """
+    all_triplets = []
+    for class_name, df in tableviews.items():
+        if 'Type' not in df.columns:
+            df = df.assign(Type=class_name)
+        triplet = df.tableview_to_triplet(multivalue=multivalue)
+        triplet = triplet[triplet['VALUE'].notna()]
+        all_triplets.append(triplet)
+    if not all_triplets:
+        return pandas.DataFrame(columns=['ID', 'KEY', 'VALUE', 'INSTANCE_ID'])
+    return pandas.concat(all_triplets, ignore_index=True)
 
 
 @lru_cache(maxsize=250)  # Adjust maxsize based on the number of unique QName combinations
@@ -1530,29 +1697,39 @@ def get_object_data(data, object_UUID):
 pandas.DataFrame.get_object_data = get_object_data
 
 
-def tableview_to_triplet(data):
+def tableview_to_triplet(data, multivalue=False):
     """Convert a table view back to a triplet format.
 
     Parameters
     ----------
     data : pandas.DataFrame
         Pivoted DataFrame (table view) to convert.
+    multivalue : bool, optional
+        If True, unpack list values into separate triplets (default is False).
 
     Returns
     -------
     pandas.DataFrame
         Triplet DataFrame with columns ['ID', 'KEY', 'VALUE'].
-
-    Notes
-    -----
-    - TODO: Ensure this is only used on valid table views.
-
-    Examples
-    --------
-    >>> triplet = tableview_to_triplet(table_view)
     """
-    # TODO add only when tableveiw is created
-    return data.reset_index().melt(id_vars="ID", value_name="VALUE", var_name="KEY").astype(str)
+    triplet_df = data.reset_index().melt(id_vars="ID", value_name="VALUE", var_name="KEY")
+
+    if multivalue:
+        import ast
+        def _ensure_list(val):
+            if isinstance(val, str) and val.startswith("[") and val.endswith("]"):
+                try:
+                    parsed = ast.literal_eval(val)
+                    if isinstance(parsed, list):
+                        return parsed
+                except (ValueError, SyntaxError):
+                    pass
+            return val
+
+        triplet_df["VALUE"] = triplet_df["VALUE"].apply(_ensure_list)
+        triplet_df = triplet_df.explode("VALUE")
+
+    return triplet_df.astype(str)
 
 
 pandas.DataFrame.tableview_to_triplet = tableview_to_triplet
