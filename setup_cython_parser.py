@@ -40,13 +40,16 @@ else:
     runtime_library_dirs = pa_lib_dirs
     libraries = ["arrow_python"]
 
-ext = Extension(
+include_dirs = [PUGIXML_SRC, pa_include] + ([np_include] if np_include else [])
+
+# Parser extension
+parser_ext = Extension(
     "triplets.parser.cython_pugixml_arrow",
     sources=[
         "triplets/parser/cython_pugixml_arrow.pyx",
         os.path.join(PUGIXML_SRC, "pugixml.cpp"),
     ],
-    include_dirs=[PUGIXML_SRC, pa_include] + ([np_include] if np_include else []),
+    include_dirs=include_dirs,
     library_dirs=pa_lib_dirs,
     libraries=libraries,
     language="c++",
@@ -55,11 +58,32 @@ ext = Extension(
     runtime_library_dirs=runtime_library_dirs,
 )
 
+extensions = [parser_ext]
+
+# CIM XML export extension (if .pyx exists)
+cimxml_pyx = "triplets/export/cimxml_cython_pugixml.pyx"
+if os.path.exists(cimxml_pyx):
+    export_ext = Extension(
+        "triplets.export.cimxml_cython_pugixml",
+        sources=[
+            cimxml_pyx,
+            os.path.join(PUGIXML_SRC, "pugixml.cpp"),
+        ],
+        include_dirs=include_dirs,
+        library_dirs=pa_lib_dirs,
+        libraries=libraries,
+        language="c++",
+        extra_compile_args=extra_compile_args,
+        extra_link_args=extra_link_args,
+        runtime_library_dirs=runtime_library_dirs,
+    )
+    extensions.append(export_ext)
+
 setup(
-    name="triplets-parser-cython-pugixml",
+    name="triplets-cython-extensions",
     packages=[],
     ext_modules=cythonize(
-        [ext],
+        extensions,
         compiler_directives={
             "language_level": "3",
             "boundscheck": False,

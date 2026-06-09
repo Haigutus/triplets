@@ -31,7 +31,8 @@ if os.path.exists(os.path.join(PUGIXML_SRC, "pugixml.cpp")):
             runtime_library_dirs = pa_lib_dirs
             libraries = ["arrow_python"]
 
-        ext = Extension(
+        # Parser: cython_pugixml_arrow (Arrow → pugixml → triplet DataFrame)
+        parser_ext = Extension(
             "triplets.parser.cython_pugixml_arrow",
             sources=[
                 "triplets/parser/cython_pugixml_arrow.pyx",
@@ -45,8 +46,30 @@ if os.path.exists(os.path.join(PUGIXML_SRC, "pugixml.cpp")):
             extra_link_args=extra_link_args,
             runtime_library_dirs=runtime_library_dirs,
         )
+
+        extensions = [parser_ext]
+
+        # Export: cimxml_cython_pugixml (Arrow triplets → pugixml DOM → CIM XML)
+        cimxml_pyx = "triplets/export/cimxml_cython_pugixml.pyx"
+        if os.path.exists(cimxml_pyx):
+            export_ext = Extension(
+                "triplets.export.cimxml_cython_pugixml",
+                sources=[
+                    cimxml_pyx,
+                    os.path.join(PUGIXML_SRC, "pugixml.cpp"),
+                ],
+                include_dirs=[PUGIXML_SRC, pa_include, np_include],
+                library_dirs=pa_lib_dirs,
+                libraries=libraries,
+                language="c++",
+                extra_compile_args=extra_compile_args,
+                extra_link_args=extra_link_args,
+                runtime_library_dirs=runtime_library_dirs,
+            )
+            extensions.append(export_ext)
+
         ext_modules = cythonize(
-            [ext],
+            extensions,
             compiler_directives={
                 "language_level": "3",
                 "boundscheck": False,

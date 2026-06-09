@@ -1,0 +1,6 @@
+/* Wider content area — furo defaults to 46em which wastes screen space */
+.content {
+    width: 70em !important;
+    max-width: 90% !important;
+    padding: 0 2em !important;
+}

@@ -48,10 +48,12 @@ autodoc_default_options = {
 
 html_theme = 'furo'
 html_static_path = ['_static']
+html_css_files = ['custom.css']
 
 html_theme_options = {
     "sidebar_hide_name": False,
     "navigation_with_keys": True,
+    "top_of_page_buttons": ["view"],
 }
 
 html_sidebars = {
@@ -64,6 +66,9 @@ html_sidebars = {
         "version-selector.html",
     ],
 }
+
+# Shorter TOC depth for cleaner right sidebar
+toc_object_entries_show_parents = "hide"
 
 # -- MyST (Markdown support) --------------------------------------------------
 
