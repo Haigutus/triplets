@@ -54,6 +54,17 @@ html_theme_options = {
     "navigation_with_keys": True,
 }
 
+html_sidebars = {
+    "**": [
+        "sidebar/brand.html",
+        "sidebar/search.html",
+        "sidebar/scroll-start.html",
+        "sidebar/navigation.html",
+        "sidebar/scroll-end.html",
+        "version-selector.html",
+    ],
+}
+
 # -- MyST (Markdown support) --------------------------------------------------
 
 myst_heading_anchors = 3

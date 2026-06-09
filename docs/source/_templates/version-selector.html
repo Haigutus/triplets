@@ -1,0 +1,36 @@
+<div id="version-selector" style="padding: 0.5rem 1rem; border-top: 1px solid var(--color-sidebar-border);">
+  <label for="version-select" style="font-size: 0.85em; color: var(--color-sidebar-caption);">Version</label>
+  <select id="version-select" onchange="if(this.value) window.location.href=this.value"
+          style="width: 100%; padding: 0.3em; margin-top: 0.3em; border-radius: 4px;
+                 border: 1px solid var(--color-sidebar-border);
+                 background: var(--color-sidebar-background);
+                 color: var(--color-sidebar-text);">
+    <option value="">Loading...</option>
+  </select>
+</div>
+<script>
+  fetch('/triplets/versions.json')
+    .then(r => r.json())
+    .then(versions => {
+      const sel = document.getElementById('version-select');
+      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
+      versions.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = '/triplets/' + v + '/';
+        opt.textContent = v;
+        // Highlight current version
+        if (window.location.pathname.includes('/' + v + '/')) {
+          opt.selected = true;
+        }
+        sel.appendChild(opt);
+      });
+      // Check if we're on latest
+      if (window.location.pathname.includes('/latest/')) {
+        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
+      }
+    })
+    .catch(() => {
+      document.getElementById('version-select').innerHTML =
+        '<option value="">latest</option>';
+    });
+</script>

@@ -17,7 +17,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          fetch-depth: 0  # full history for sphinx-multiversion
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -27,18 +27,87 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install furo sphinx myst-parser sphinx-multiversion
-          python3 -m pip install lxml pandas aniso8601 polars pyarrow
+          python3 -m pip install furo sphinx myst-parser
+          python3 -m pip install lxml pandas aniso8601
 
-      - name: Build Sphinx docs
+      # Build current version (latest)
+      - name: Build current docs
         run: |
           cd docs
           make html
+          mkdir -p _site/latest
+          cp -r build/html/* _site/latest/
+
+      # Build docs for each release tag that has docs/source/conf.py
+      - name: Build versioned docs
+        run: |
+          VERSIONS_JSON='[]'
+          for tag in $(git tag --sort=-version:refname); do
+            # Check if this tag has Sphinx docs
+            if git show "$tag:docs/source/conf.py" >/dev/null 2>&1; then
+              echo "Building docs for $tag..."
+
+              # Checkout tag's docs and source
+              git worktree add "/tmp/docs-$tag" "$tag" 2>/dev/null || continue
+
+              # Install tag-specific deps (older versions may need sphinx-rtd-theme)
+              if grep -q "furo" "/tmp/docs-$tag/docs/source/conf.py" 2>/dev/null; then
+                THEME_PKG="furo"
+              else
+                THEME_PKG="sphinx-rtd-theme"
+              fi
+              python3 -m pip install $THEME_PKG sphinx myst-parser 2>/dev/null || true
+
+              # Try to install the package from that tag
+              cd "/tmp/docs-$tag"
+              python3 -m pip install -e . 2>/dev/null || python3 -m pip install lxml pandas aniso8601 2>/dev/null || true
+
+              # Build
+              cd docs
+              make html 2>/dev/null || { echo "  Build failed for $tag, skipping"; cd "$GITHUB_WORKSPACE"; git worktree remove "/tmp/docs-$tag" --force 2>/dev/null; continue; }
+
+              # Copy to site
+              mkdir -p "$GITHUB_WORKSPACE/docs/_site/$tag"
+              cp -r build/html/* "$GITHUB_WORKSPACE/docs/_site/$tag/"
+
+              # Cleanup
+              cd "$GITHUB_WORKSPACE"
+              git worktree remove "/tmp/docs-$tag" --force 2>/dev/null || true
+
+              VERSIONS_JSON=$(echo "$VERSIONS_JSON" | python3 -c "
+          import sys, json
+          v = json.load(sys.stdin)
+          v.append('$tag')
+          json.dump(v, sys.stdout)
+          ")
+
+              echo "  Done: $tag"
+            fi
+          done
+
+          echo "Built versions: $VERSIONS_JSON"
+          echo "$VERSIONS_JSON" > docs/_site/versions.json
+
+      # Create index.html that redirects to latest
+      - name: Create version index
+        run: |
+          cat > docs/_site/index.html << 'HEREDOC'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta http-equiv="refresh" content="0; url=latest/">
+            <title>Redirecting to latest docs...</title>
+          </head>
+          <body>
+            <p>Redirecting to <a href="latest/">latest documentation</a>...</p>
+          </body>
+          </html>
+          HEREDOC
 
       - name: Deploy to GitHub Pages
-        if: github.event_name == 'release'
+        if: github.event_name != 'pull_request'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build/html
+          publish_dir: docs/_site
           publish_branch: gh-pages
