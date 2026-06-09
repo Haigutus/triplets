@@ -1,8 +1,8 @@
-# Migrating from 0.0.x to 0.1
+# Migration: 0.0.x → 0.1
 
 ## Breaking changes
 
-### Python 3.11 minimum
+#### Python 3.11 minimum
 
 Python 3.10 is no longer supported. The `StrEnum` class (used internally) requires 3.11+.
 
