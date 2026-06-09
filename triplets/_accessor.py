@@ -108,6 +108,9 @@ class TripletsAccessor:
     def export_to_cimxml(self, *a, **kw):
         return export.export_to_cimxml(self._df, *a, **kw)
 
+    def export_to_nquads(self, *a, **kw):
+        return export.export_to_nquads(self._df, *a, **kw)
+
     def export_to_networkx(self, **kw):
         return export.export_to_networkx(self._df, **kw)
 
