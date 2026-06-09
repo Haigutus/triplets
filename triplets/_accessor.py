@@ -74,6 +74,9 @@ class TripletsAccessor:
     def filter_by_triplet(self, *a, **kw):
         return tools.filter_by_triplet(self._df, *a, **kw)
 
+    def filter_triplets(self, *a, **kw):
+        return tools.filter_triplets(self._df, *a, **kw)
+
     # ── Mutate ───────────────────────────────────────────────────────────
     def set_VALUE_at_KEY(self, *a, **kw):
         return tools.set_VALUE_at_KEY(self._df, *a, **kw)
@@ -158,6 +161,9 @@ try:
         # ── Filter ───────────────────────────────────────────────────────
         def filter_by_type(self, *a, **kw):
             return tools.filter_by_type(self._df, *a, **kw)
+
+        def filter_triplets(self, *a, **kw):
+            return tools.filter_triplets(self._df, *a, **kw)
 
         # ── Transform ────────────────────────────────────────────────────
         def triplet_to_tableviews(self, **kw):

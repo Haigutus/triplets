@@ -251,6 +251,33 @@ def filter_by_triplet(data, filter_triplet):
     return data.join(filter_triplet.select(["ID", "KEY", "VALUE"]), on=["ID", "KEY", "VALUE"], how="semi")
 
 
+def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex=False):
+    """Filter triplets by any combination of columns with optional regex.
+
+    Parameters
+    ----------
+    data : polars.DataFrame
+        Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
+    ID, KEY, VALUE, INSTANCE_ID : str, optional
+        Filter value. If regex=True, treated as regex pattern.
+    regex : bool, default False
+        If True, use regex matching (str.contains). If False, exact match.
+
+    Returns
+    -------
+    polars.DataFrame
+        Filtered triplet dataset.
+    """
+    expr = pl.lit(True)
+    for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
+        if val is not None:
+            if regex:
+                expr = expr & pl.col(col).cast(pl.Utf8).str.contains(val)
+            else:
+                expr = expr & (pl.col(col).cast(pl.Utf8) == val)
+    return data.filter(expr)
+
+
 def set_VALUE_at_KEY(data, key, value):
     """Set VALUE for all rows with a given KEY (in-place mutation via reassignment)."""
     return data.with_columns(

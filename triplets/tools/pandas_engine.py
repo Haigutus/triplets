@@ -845,6 +845,38 @@ def filter_by_type(data, type_name, type_key="Type"):
     return filter_by_triplet(data, filter_triplet)
 
 
+def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex=False):
+    """Filter triplets by any combination of columns with optional regex.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
+    ID, KEY, VALUE, INSTANCE_ID : str, optional
+        Filter value. If regex=True, treated as regex pattern.
+    regex : bool, default False
+        If True, use regex matching (re.search). If False, exact match.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Filtered triplet dataset.
+
+    Examples
+    --------
+    >>> filter_triplets(data, KEY="Type", VALUE="ACLineSegment")
+    >>> filter_triplets(data, VALUE=".*Substation.*", regex=True)
+    """
+    mask = pandas.Series(True, index=data.index)
+    for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
+        if val is not None:
+            if regex:
+                mask = mask & data[col].astype(str).str.contains(val, regex=True, na=False)
+            else:
+                mask = mask & (data[col].astype(str) == val)
+    return data[mask]
+
+
 def diff_between_triplet(old_data, new_data):
     """Compute the difference between two Triplet DataFrames.
 
