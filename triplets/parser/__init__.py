@@ -98,12 +98,15 @@ def parse(
 ) -> Any:
     """Main entry: parse CIM RDF/XML (or zips) using chosen engine.
 
-    engine: "auto" (best available), "python_lxml_pandas", "python_lxml_arrow",
-            "cython_pugixml_arrow", or aliases "native"/"pugixml"/"performance".
-    return_type: "pandas" (default), "arrow" (pa.Table), "polars" (requires polars).
-    categorical_columns: columns to dictionary-encode (Arrow engines) or convert to
-                        pd.Categorical (pandas engine). Defaults to INSTANCE_ID and KEY
-                        (highly repetitive → big memory win). Pass None or () to disable.
+    Parameters
+    ----------
+    engine : str, default "auto"
+        Parser engine. "auto" picks best available.
+        Options: "python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow".
+    return_type : str, default "pandas"
+        Output format: "pandas", "arrow", or "polars".
+    categorical_columns : tuple or None, default ("INSTANCE_ID", "KEY")
+        Columns to dictionary-encode for memory savings. Pass None to disable.
     """
     engine_name, engine_mod = get_engine(engine)
     is_arrow_engine = engine_name in _ARROW_ENGINES

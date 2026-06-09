@@ -73,3 +73,9 @@ toc_object_entries_show_parents = "hide"
 # -- MyST (Markdown support) --------------------------------------------------
 
 myst_heading_anchors = 3
+
+# Suppress common warnings
+suppress_warnings = [
+    "myst.header",          # non-consecutive heading levels in README/migration docs
+    "ref.duplicate",        # duplicate object descriptions (rdf_parser re-exports)
+]

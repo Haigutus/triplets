@@ -40,31 +40,31 @@ jobs:
 
       # Build docs for each release tag that has docs/source/conf.py
       - name: Build versioned docs
+        continue-on-error: true
         run: |
           VERSIONS_JSON='[]'
           for tag in $(git tag --sort=-version:refname); do
-            # Check if this tag has Sphinx docs
             if git show "$tag:docs/source/conf.py" >/dev/null 2>&1; then
               echo "Building docs for $tag..."
 
-              # Checkout tag's docs and source
               git worktree add "/tmp/docs-$tag" "$tag" 2>/dev/null || continue
 
-              # Install tag-specific deps (older versions may need sphinx-rtd-theme)
+              # Install theme for this tag
               if grep -q "furo" "/tmp/docs-$tag/docs/source/conf.py" 2>/dev/null; then
-                THEME_PKG="furo"
+                python3 -m pip install -q furo 2>/dev/null || true
               else
-                THEME_PKG="sphinx-rtd-theme"
+                python3 -m pip install -q sphinx-rtd-theme sphinxcontrib-napoleon 2>/dev/null || true
               fi
-              python3 -m pip install $THEME_PKG sphinx myst-parser 2>/dev/null || true
 
-              # Try to install the package from that tag
+              # Install the package so autodoc can import modules
               cd "/tmp/docs-$tag"
-              python3 -m pip install -e . 2>/dev/null || python3 -m pip install lxml pandas aniso8601 2>/dev/null || true
+              export PYTHONPATH="/tmp/docs-$tag:$PYTHONPATH"
+              python3 -m pip install -q lxml pandas aniso8601 2>/dev/null || true
+              python3 -m pip install -q -e . 2>/dev/null || true
 
-              # Build
+              # Build (show errors for debugging)
               cd docs
-              make html 2>/dev/null || { echo "  Build failed for $tag, skipping"; cd "$GITHUB_WORKSPACE"; git worktree remove "/tmp/docs-$tag" --force 2>/dev/null; continue; }
+              make html 2>&1 || { echo "  Build failed for $tag, skipping"; cd "$GITHUB_WORKSPACE"; git worktree remove "/tmp/docs-$tag" --force 2>/dev/null; continue; }
 
               # Copy to site
               mkdir -p "$GITHUB_WORKSPACE/docs/_site/$tag"
