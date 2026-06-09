@@ -39,9 +39,24 @@ try:
 except ImportError:
     pass
 
-# Register triplet operations on DuckDB connections (if duckdb is installed)
+# Register read_rdf on DuckDB connections (if duckdb is installed)
 try:
-    from . import duckdb_engine  # noqa: F401
+    import duckdb as _duckdb
+    import logging as _logging
+
+    _duckdb_logger = _logging.getLogger(__name__)
+
+    def _duckdb_read_rdf(self, paths, table_name="triplets", **kwargs):
+        """Parse RDF/XML files and load into DuckDB table via Arrow (zero-copy)."""
+        arrow_table = parse(paths, return_type="arrow", **kwargs)
+        self.register("_arrow_import", arrow_table)
+        self.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM _arrow_import")
+        self.unregister("_arrow_import")
+        row_count = self.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+        _duckdb_logger.info(f"Loaded {row_count} rows into {table_name}")
+        return row_count
+
+    _duckdb.DuckDBPyConnection.read_rdf = _duckdb_read_rdf
 except ImportError:
     pass
 

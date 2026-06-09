@@ -192,9 +192,35 @@ try:
         def export_to_networkx(self, **kw):
             return export.export_to_networkx(self._df, **kw)
 
-        # ── Diff ─────────────────────────────────────────────────────────
-        def diff_between_INSTANCE(self, *a, **kw):
-            return tools.diff_between_INSTANCE(self._df, *a, **kw)
+except ImportError:
+    pass
 
+
+# ── DuckDB connection ───────────────────────────────────────────────────────
+try:
+    import duckdb
+
+    from .tools import duckdb_engine as _duckdb_tools
+    from .export import nquads_duckdb as _duckdb_nquads
+    from .export import csv_duckdb as _duckdb_csv
+
+    # Tools
+    duckdb.DuckDBPyConnection.types_dict = _duckdb_tools.types_dict
+    duckdb.DuckDBPyConnection.type_tableview = _duckdb_tools.type_tableview
+    duckdb.DuckDBPyConnection.filter_triplets = _duckdb_tools.filter_triplets
+    duckdb.DuckDBPyConnection.filter_by_type = _duckdb_tools.filter_by_type
+    duckdb.DuckDBPyConnection.references_to = _duckdb_tools.references_to
+    duckdb.DuckDBPyConnection.references_from = _duckdb_tools.references_from
+
+    # Export
+    duckdb.DuckDBPyConnection.export_to_nquads = _duckdb_nquads.export_to_nquads
+    duckdb.DuckDBPyConnection.export_to_csv = _duckdb_csv.export_to_csv
+
+    def _duckdb_export_to_excel(self, path, table_name="triplets"):
+        """Export triplets table to Excel via pandas + openpyxl."""
+        df = self.execute(f"SELECT * FROM {table_name}").df()
+        return export.export_to_excel(df, path=path)
+
+    duckdb.DuckDBPyConnection.export_to_excel = _duckdb_export_to_excel
 except ImportError:
     pass
