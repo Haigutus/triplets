@@ -5,7 +5,5 @@
 # Compiled parser extensions (build with pixi or setup_cython_parser.py in matching env)
 *.so
 *.egg-info/
-# Note: cython_pugixml_arrow.cpp is intentionally tracked (allows building ext from sdist without cython in some flows)
-# benchmark json reports under documents/ are tracked for perf history/docs
-
-
+# pyvis local JS libs (created by graph.show())
+/lib/

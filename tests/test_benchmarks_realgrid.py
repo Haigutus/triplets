@@ -4,7 +4,7 @@ Run with:
   python -m pytest tests/test_benchmarks_realgrid.py --benchmark-only -v
 
   python -m pytest tests/test_benchmarks_realgrid.py --benchmark-only \
-    --benchmark-json=documents/parsers_performance.json -q -k "parse"
+    --benchmark-json=tests/performance_results/parsers_performance.json -q -k "parse"
 """
 import pytest
 import pandas
