@@ -1,4 +1,4 @@
-# Migration: 0.0.x → 0.1
+# Migration: 0.0 → 0.1
 
 ## Breaking changes
 
@@ -63,8 +63,8 @@ They will be removed in 0.2.
 
 ### Import paths
 
-| Old (0.0.x) | New (0.1) |
-|-------------|-----------|
+| Old (0.0) | New (0.1) |
+|-----------|-----------|
 | `triplets.rdf_parser.type_tableview` | `triplets.tools.type_tableview` |
 | `triplets.rdf_parser.key_tableview` | `triplets.tools.key_tableview` |
 | `triplets.rdf_parser.types_dict` | `triplets.tools.types_dict` |

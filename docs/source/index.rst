@@ -25,14 +25,14 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.
    :maxdepth: 2
    :caption: API Reference
 
-   triplets.parser
-   triplets.tools
-   triplets.export
-   triplets.cli
-   triplets.cgmes_tools
-   triplets.rdfs_tools
-   triplets.rdf_parser
-   triplets.export_schema
+   Parser <triplets.parser>
+   Tools <triplets.tools>
+   Export <triplets.export>
+   CLI <triplets.cli>
+   CGMES Tools <triplets.cgmes_tools>
+   RDFS Tools <triplets.rdfs_tools>
+   rdf_parser (deprecated) <triplets.rdf_parser>
+   Export Schema <triplets.export_schema>
 
 Indices and tables
 ==================
