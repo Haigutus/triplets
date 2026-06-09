@@ -91,5 +91,65 @@ data = triplets.parser.parse(["f.xml"], engine="python_lxml_pandas")
 The cython engine is pre-built in published wheels — no compilation needed.
 For local development builds, see [docs/building.md](docs/building.md).
 
-See `pixi.toml` for build environment and `tests/test_parser_backends.py` for usage.
 See [docs/parsers.md](docs/parsers.md) for the full call sequence and architecture.
+
+## New in 0.1: Module structure
+
+Functions from `rdf_parser.py` are now organized into dedicated modules:
+
+```python
+import triplets
+
+# Parser (parse XML to DataFrames)
+data = triplets.parser.parse(["grid.xml"])
+
+# Tools (query, filter, diff, transform — pandas + polars engines)
+triplets.tools.type_tableview(data, "ACLineSegment")
+triplets.tools.types_dict(data)
+triplets.tools.filter_by_type(data, "Terminal")
+
+# Export (Excel, CSV, CIM XML, NetworkX)
+triplets.export.export_to_excel(data, export_to_memory=True)
+triplets.export.export_to_cimxml(data, rdf_map=rdf_map)
+
+# Accessor namespace (same functions via df.triplets.*)
+data.triplets.type_tableview("ACLineSegment")
+data.triplets.export_to_excel(export_to_memory=True)
+
+# CLI tools
+# cim-spreadsheet -i model.xml -o output.xlsx
+# cim-diff original.xml modified.xml
+```
+
+The old `rdf_parser.py` functions still work but emit deprecation warnings.
+
+## Migrating from 0.0.x to 0.1
+
+### Breaking changes
+
+| Change | Old (0.0.x) | New (0.1) |
+|--------|-------------|-----------|
+| Minimum Python | 3.10 | **3.11** |
+| `to_networkx()` | `data.to_networkx()` | `data.export_to_networkx()` |
+| pyarrow dtypes | All columns `object`/`str` | Arrow engines return `string[pyarrow]` and `dictionary[pyarrow]` dtypes. Use `.astype(str)` if you need plain strings. |
+| `.str` accessor | Works directly | With arrow dtypes, use `.astype(str).str.contains(...)` instead of `.str.contains(...)` |
+
+### Deprecations (still work, will be removed in 0.2)
+
+| Old | New |
+|-----|-----|
+| `triplets.rdf_parser.type_tableview(data, ...)` | `triplets.tools.type_tableview(data, ...)` |
+| `triplets.rdf_parser.filter_by_type(data, ...)` | `triplets.tools.filter_by_type(data, ...)` |
+| `triplets.rdf_parser.export_to_excel(data, ...)` | `triplets.export.export_to_excel(data, ...)` |
+| All other `rdf_parser.*` functions | Corresponding `triplets.tools.*` or `triplets.export.*` |
+| `pandas.DataFrame.type_tableview(...)` (monkey-patch) | `data.triplets.type_tableview(...)` (accessor) |
+
+### New features
+
+- **Three parser engines** with automatic fallback (`python_lxml_pandas`, `python_lxml_arrow`, `cython_pugixml_arrow`)
+- **Polars support** — `polars.read_rdf()` + polars-native tools engine (1.6-18.7x faster)
+- **`df.triplets.*` accessor** namespace for both pandas and polars
+- **`engine=` parameter** on all tools functions for explicit pandas/polars selection
+- **`multivalue=` parameter** on `type_tableview`, `export_to_excel`, `export_to_csv`
+- **CLI tools** — `cim-spreadsheet` (CIM XML <-> Excel/CSV) and `cim-diff`
+- **Cross-platform wheels** with compiled C++ parser (Linux, macOS, Windows)

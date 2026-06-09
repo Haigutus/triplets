@@ -17,7 +17,8 @@ import aniso8601
 from uuid import uuid4
 from lxml import etree
 from builtins import str
-from triplets import rdf_parser
+from triplets import tools as rdf_parser  # backwards compat alias; tools replaces rdf_parser
+from triplets.parser import parse as load_all_to_dataframe
 
 import logging
 
@@ -722,16 +723,14 @@ def darw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False):
 
     # graph.show_buttons()
 
-    graph.set_options = options
-
     if notebook == False:
 
         # Create unique filename
         from_UUID = reference_data[ID_COLUMN].tolist()[0]
         file_name = f"{from_UUID}.html"
 
-        # Show graph
-        graph.show(os.path.join(file_name), local=False)
+        # Show graph (works in notebooks and standalone)
+        graph.show(file_name)
 
         # Returns file path
         return os.path.abspath(file_name)
@@ -960,7 +959,8 @@ def get_dangling_references(data, detailed=False):
     >>> dangling = get_dangling_references(data, detailed=True)
     """
     cgmes_reference_pattern = r"\.[A-Z]"
-    references = data[data.KEY.str.contains(cgmes_reference_pattern)]
+    # Convert KEY to string first to handle pyarrow-backed dictionary dtypes
+    references = data[data["KEY"].astype(str).str.contains(cgmes_reference_pattern)]
     dangling_references = data.query("KEY == 'Type'").merge(references, left_on="ID", right_on="VALUE", indicator=True, how="right", suffixes=("_TO", "_FROM")).query("_merge != 'both'")
 
     if detailed:
@@ -974,7 +974,7 @@ if __name__ == '__main__':
 
     path_list = ["../test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"]
 
-    data = rdf_parser.load_all_to_dataframe(path_list)
+    data = load_all_to_dataframe(path_list)
 
 
     object_UUID = "99722373_VL_TN1"

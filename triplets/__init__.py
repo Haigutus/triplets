@@ -4,6 +4,9 @@ from . import rdf_parser
 from . import cgmes_tools
 from . import rdfs_tools
 from . import cli
+from . import tools
+from . import export
+from . import _accessor  # registers df.triplets.* namespace  # noqa: F401
 
 __all__ = [
     'cgmes_tools',

@@ -1,0 +1,383 @@
+"""Comprehensive tests for all rdf_parser.py data manipulation functions.
+
+Written BEFORE the tools/export refactor as a safety net.
+All tests must pass both before and after the refactor.
+
+Uses Svedala IGM data (EQ+SSH+TP+SV, ~95K rows, 50 types, 4 instances).
+Benchmarked operations are marked for performance tracking.
+"""
+import pytest
+import pandas
+import triplets
+from pathlib import Path
+
+SVEDALA_DIR = Path("test_data/relicapgrid/Instance/Grid/IGM_Svedala")
+SVEDALA_FILES = [
+    str(SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"),
+    str(SVEDALA_DIR / "20220615T2230Z_2D_Svedala_SSH_1.xml"),
+    str(SVEDALA_DIR / "20220615T2230Z_2D_Svedala_TP_1.xml"),
+    str(SVEDALA_DIR / "20220615T2230Z_2D_Svedala_SV_1.xml"),
+]
+
+SKIP_REASON = "Svedala test data not available (needs git submodule)"
+
+
+@pytest.fixture(scope="module")
+def svedala_data():
+    """Load Svedala IGM dataset (module-scoped, loaded once)."""
+    if not SVEDALA_DIR.exists():
+        pytest.skip(SKIP_REASON)
+    return pandas.read_RDF(SVEDALA_FILES)
+
+
+@pytest.fixture(scope="module")
+def svedala_eq():
+    """Just the EQ instance (single file, for simpler tests)."""
+    eq_file = SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"
+    if not eq_file.exists():
+        pytest.skip(SKIP_REASON)
+    return pandas.read_RDF([str(eq_file)])
+
+
+# ── Query functions ─────────────────────────────────────────────────────────
+
+class TestTypeTableview:
+    def test_returns_dataframe(self, svedala_data):
+        tv = svedala_data.type_tableview("ACLineSegment")
+        assert isinstance(tv, pandas.DataFrame)
+        assert len(tv) == 97
+
+    def test_index_is_id(self, svedala_data):
+        tv = svedala_data.type_tableview("ACLineSegment")
+        assert tv.index.name == "ID"
+
+    def test_columns_are_properties(self, svedala_data):
+        tv = svedala_data.type_tableview("ACLineSegment")
+        assert "Type" in tv.columns
+        assert "IdentifiedObject.name" in tv.columns
+
+    def test_string_to_number(self, svedala_data):
+        tv = svedala_data.type_tableview("ACLineSegment", string_to_number=True)
+        # May be float64, int64, or double[pyarrow] depending on backend
+        assert pandas.api.types.is_numeric_dtype(tv["Conductor.length"])
+
+    def test_string_to_number_false(self, svedala_data):
+        tv = svedala_data.type_tableview("ACLineSegment", string_to_number=False)
+        assert tv["Conductor.length"].dtype == object or "str" in str(tv["Conductor.length"].dtype)
+
+    def test_nonexistent_type_returns_none(self, svedala_data):
+        tv = svedala_data.type_tableview("NonExistentType123")
+        assert tv is None
+
+    def test_multivalue(self, svedala_data):
+        tv = svedala_data.type_tableview("FullModel", multivalue=True)
+        assert tv is not None
+        assert len(tv) > 0
+
+    @pytest.mark.benchmark(group="tools-query")
+    def test_benchmark(self, benchmark, svedala_data):
+        benchmark(svedala_data.type_tableview, "Terminal", string_to_number=False)
+
+
+class TestKeyTableview:
+    def test_returns_dataframe(self, svedala_data):
+        tv = svedala_data.key_tableview("IdentifiedObject.name")
+        assert isinstance(tv, pandas.DataFrame)
+        assert len(tv) > 0
+
+    def test_nonexistent_key_returns_none(self, svedala_data):
+        tv = svedala_data.key_tableview("NonExistent.key")
+        assert tv is None
+
+
+class TestIdTableview:
+    def test_returns_dataframe(self, svedala_data):
+        # Get a known Substation ID
+        subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]
+        sub_id = subs["ID"].iloc[0]
+        tv = triplets.rdf_parser.id_tableview(svedala_data, sub_id)
+        assert isinstance(tv, pandas.DataFrame)
+        assert len(tv) > 0
+
+
+class TestTypesDict:
+    def test_returns_dict(self, svedala_data):
+        td = svedala_data.types_dict()
+        assert isinstance(td, dict)
+        assert "ACLineSegment" in td
+        assert "Terminal" in td
+        assert "Substation" in td
+
+    def test_count_matches(self, svedala_data):
+        td = svedala_data.types_dict()
+        assert td["ACLineSegment"] == 97
+        assert td["Substation"] == 56
+
+    @pytest.mark.benchmark(group="tools-query")
+    def test_benchmark(self, benchmark, svedala_data):
+        benchmark(svedala_data.types_dict)
+
+
+class TestGetObjectData:
+    def test_returns_data(self, svedala_data):
+        subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]
+        sub_id = subs["ID"].iloc[0]
+        obj = svedala_data.get_object_data(sub_id)
+        # Returns Series (single object) or DataFrame
+        assert len(obj) > 0
+
+
+class TestGetNamespaceMap:
+    def test_returns_data(self, svedala_data):
+        nsmap = triplets.rdf_parser.get_namespace_map(svedala_data)
+        assert nsmap is not None
+        # get_namespace_map returns a DataFrame with namespace info
+        assert len(nsmap) > 0
+
+
+# ── Reference functions ─────────────────────────────────────────────────────
+
+class TestReferencesTo:
+    def test_returns_dataframe(self, svedala_data):
+        subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]
+        sub_id = subs["ID"].iloc[0]
+        refs = svedala_data.references_to(sub_id)
+        assert isinstance(refs, pandas.DataFrame)
+        assert len(refs) > 0
+
+    @pytest.mark.benchmark(group="tools-references")
+    def test_benchmark(self, benchmark, svedala_data):
+        subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]
+        sub_id = subs["ID"].iloc[0]
+        benchmark(svedala_data.references_to, sub_id)
+
+
+class TestReferencesFrom:
+    def test_returns_dataframe(self, svedala_data):
+        terms = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Terminal")]
+        term_id = terms["ID"].iloc[0]
+        refs = svedala_data.references_from(term_id)
+        assert isinstance(refs, pandas.DataFrame)
+        assert len(refs) > 0
+
+
+class TestReferencesSimple:
+    def test_returns_dataframe(self, svedala_data):
+        subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]
+        sub_id = subs["ID"].iloc[0]
+        refs = svedala_data.references_simple(sub_id)
+        assert isinstance(refs, pandas.DataFrame)
+        assert len(refs) > 0
+
+
+class TestReferences:
+    def test_returns_dataframe(self, svedala_data):
+        subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]
+        sub_id = subs["ID"].iloc[0]
+        refs = svedala_data.references(sub_id)
+        assert isinstance(refs, pandas.DataFrame)
+
+
+# ── Filter functions ────────────────────────────────────────────────────────
+
+class TestFilterByType:
+    def test_returns_correct_type(self, svedala_data):
+        filtered = triplets.rdf_parser.filter_by_type(svedala_data, "ACLineSegment")
+        assert isinstance(filtered, pandas.DataFrame)
+        assert len(filtered) > 0
+        # All IDs in the result should be ACLineSegment IDs
+        acl_ids = set(svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "ACLineSegment")]["ID"])
+        assert set(filtered["ID"].unique()).issubset(acl_ids)
+
+    @pytest.mark.benchmark(group="tools-filter")
+    def test_benchmark(self, benchmark, svedala_data):
+        benchmark(triplets.rdf_parser.filter_by_type, svedala_data, "ACLineSegment")
+
+
+class TestFilterByTriplet:
+    def test_returns_dataframe(self, svedala_data):
+        filter_df = pandas.DataFrame({
+            "ID": [svedala_data["ID"].iloc[10]],
+            "KEY": [svedala_data["KEY"].iloc[10]],
+            "VALUE": [svedala_data["VALUE"].iloc[10]],
+        })
+        filtered = triplets.rdf_parser.filter_by_triplet(svedala_data, filter_df)
+        assert isinstance(filtered, pandas.DataFrame)
+        assert len(filtered) > 0
+
+
+# ── Mutate functions ────────────────────────────────────────────────────────
+
+class TestSetValueAtKey:
+    def test_modifies_data(self, svedala_eq):
+        data = svedala_eq.copy()
+        data.set_VALUE_at_KEY("Model.description", "test_value")
+        modified = data[data["KEY"] == "Model.description"]["VALUE"]
+        if len(modified) > 0:
+            assert all(v == "test_value" for v in modified.values)
+
+
+class TestSetValueAtKeyAndID:
+    def test_modifies_specific_row(self, svedala_data):
+        data = svedala_data.copy()
+        target = data[(data["KEY"] == "Type") & (data["VALUE"] == "Substation")].iloc[0]
+        data.set_VALUE_at_KEY_and_ID("Type", "TestType", target["ID"])
+        modified = data[(data["ID"] == target["ID"]) & (data["KEY"] == "Type")]
+        assert modified["VALUE"].iloc[0] == "TestType"
+
+
+class TestUpdateTripletFromTriplet:
+    def test_update(self, svedala_eq):
+        data = svedala_eq.copy()
+        update = pandas.DataFrame({
+            "ID": [data["ID"].iloc[5]],
+            "KEY": [data["KEY"].iloc[5]],
+            "VALUE": ["UPDATED_VALUE"],
+            "INSTANCE_ID": [data["INSTANCE_ID"].iloc[5]],
+        })
+        result = data.update_triplet_from_triplet(update)
+        assert isinstance(result, pandas.DataFrame)
+
+
+class TestUpdateTripletFromTableview:
+    def test_update(self, svedala_data):
+        tv = svedala_data.type_tableview("Substation", string_to_number=False)
+        if tv is not None and len(tv) > 0:
+            data = svedala_data.copy()
+            result = data.update_triplet_from_tableview(tv)
+            assert isinstance(result, pandas.DataFrame)
+
+
+class TestRemoveTripletFromTriplet:
+    def test_removes_rows(self, svedala_data):
+        to_remove = svedala_data.head(5)[["ID", "KEY", "VALUE"]]
+        original_len = len(svedala_data)
+        result = triplets.rdf_parser.remove_triplet_from_triplet(svedala_data, to_remove)
+        assert len(result) < original_len
+
+
+# ── Transform functions ─────────────────────────────────────────────────────
+
+class TestTripletToTableviews:
+    def test_returns_dict(self, svedala_eq):
+        tvs = triplets.rdf_parser.triplet_to_tableviews(svedala_eq)
+        assert isinstance(tvs, dict)
+        assert len(tvs) > 0
+        for name, df in tvs.items():
+            assert isinstance(df, pandas.DataFrame)
+
+    def test_multivalue(self, svedala_eq):
+        tvs = triplets.rdf_parser.triplet_to_tableviews(svedala_eq, multivalue=True)
+        assert len(tvs) > 0
+
+
+class TestTableviewsToTriplet:
+    def test_roundtrip(self, svedala_eq):
+        tvs = triplets.rdf_parser.triplet_to_tableviews(svedala_eq)
+        result = triplets.rdf_parser.tableviews_to_triplet(tvs)
+        assert isinstance(result, pandas.DataFrame)
+        assert "ID" in result.columns
+        assert "KEY" in result.columns
+        assert "VALUE" in result.columns
+
+
+class TestTableviewToTriplet:
+    def test_returns_dataframe(self, svedala_data):
+        tv = svedala_data.type_tableview("ACLineSegment", string_to_number=False)
+        result = tv.tableview_to_triplet()
+        assert isinstance(result, pandas.DataFrame)
+        assert "ID" in result.columns
+        assert "KEY" in result.columns
+        assert "VALUE" in result.columns
+
+    def test_multivalue(self, svedala_data):
+        tv = svedala_data.type_tableview("FullModel", multivalue=True)
+        result = tv.tableview_to_triplet(multivalue=True)
+        assert isinstance(result, pandas.DataFrame)
+
+
+# ── Diff functions ──────────────────────────────────────────────────────────
+
+class TestDiffBetweenTriplet:
+    def test_returns_dataframe(self, svedala_eq):
+        modified = svedala_eq.copy()
+        modified.iloc[5, modified.columns.get_loc("VALUE")] = "CHANGED"
+        diff = triplets.rdf_parser.diff_between_triplet(svedala_eq, modified)
+        assert isinstance(diff, pandas.DataFrame)
+        assert len(diff) > 0
+
+
+class TestDiffBetweenInstance:
+    def test_returns_dataframe(self, svedala_data):
+        instances = svedala_data["INSTANCE_ID"].unique()
+        if len(instances) >= 2:
+            diff = svedala_data.diff_between_INSTANCE(instances[0], instances[1])
+            assert isinstance(diff, pandas.DataFrame)
+
+
+class TestPrintTripletDiff:
+    def test_runs_without_error(self, svedala_eq):
+        # Create modified copy using loc to avoid categorical setitem issues
+        modified = svedala_eq.copy()
+        # Use a row with plain string VALUE (not categorical)
+        idx = modified.index[5]
+        modified.at[idx, "VALUE"] = str(modified.at[idx, "VALUE"]) + "_CHANGED"
+        triplets.rdf_parser.print_triplet_diff(svedala_eq, modified)
+
+
+# ── Export functions ────────────────────────────────────────────────────────
+
+class TestExportToExcel:
+    @pytest.fixture(autouse=True)
+    def _require_openpyxl(self):
+        pytest.importorskip("openpyxl")
+
+    def test_export_to_memory(self, svedala_eq):
+        result = svedala_eq.export_to_excel(export_to_memory=True)
+        assert result is not None
+        if isinstance(result, list):
+            assert len(result) > 0
+            assert hasattr(result[0], 'read')
+        else:
+            assert hasattr(result, 'read')
+
+    def test_export_single_file(self, svedala_eq):
+        result = svedala_eq.export_to_excel(
+            export_to_memory=True,
+            single_file=True,
+            filename="test.xlsx"
+        )
+        assert hasattr(result, 'read')
+        assert result.name == "test.xlsx"
+
+    @pytest.mark.benchmark(group="tools-export")
+    def test_benchmark(self, benchmark, svedala_eq):
+        benchmark(svedala_eq.export_to_excel, export_to_memory=True, single_file=True)
+
+
+class TestExportToCsv:
+    def test_export_to_memory(self, svedala_eq):
+        result = svedala_eq.export_to_csv(export_to_memory=True)
+        assert isinstance(result, list)
+        assert len(result) > 0
+        assert hasattr(result[0], 'read')
+
+
+class TestExportToCimxml:
+    def test_export_to_memory(self, svedala_eq):
+        from triplets.export_schema import schemas
+        result = svedala_eq.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1,
+            export_type="xml_per_instance",
+            export_to_memory=True,
+        )
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+
+class TestExportToNetworkx:
+    def test_returns_graph(self, svedala_eq):
+        networkx = pytest.importorskip("networkx")
+        G = svedala_eq.export_to_networkx()
+        assert isinstance(G, networkx.Graph)
+        assert G.number_of_nodes() > 0
