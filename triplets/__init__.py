@@ -39,3 +39,9 @@ try:
 except ImportError:
     pass
 
+# Register triplet operations on DuckDB connections (if duckdb is installed)
+try:
+    from . import duckdb_engine  # noqa: F401
+except ImportError:
+    pass
+

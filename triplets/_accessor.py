@@ -160,17 +160,31 @@ try:
             return tools.filter_by_type(self._df, *a, **kw)
 
         # ── Transform ────────────────────────────────────────────────────
-        def types_dict(self, **kw):
-            return tools.types_dict(self._df, **kw)
-
-        def type_tableview(self, *a, **kw):
-            return tools.type_tableview(self._df, *a, **kw)
-
         def triplet_to_tableviews(self, **kw):
             return tools.triplet_to_tableviews(self._df, **kw)
 
         def tableview_to_triplet(self, **kw):
             return tools.tableview_to_triplet(self._df, **kw)
+
+        # ── Diff ─────────────────────────────────────────────────────────
+        def diff_between_INSTANCE(self, *a, **kw):
+            return tools.diff_between_INSTANCE(self._df, *a, **kw)
+
+        # ── Export ───────────────────────────────────────────────────────
+        def export_to_excel(self, *a, **kw):
+            return export.export_to_excel(self._df, *a, **kw)
+
+        def export_to_csv(self, *a, **kw):
+            return export.export_to_csv(self._df, *a, **kw)
+
+        def export_to_cimxml(self, *a, **kw):
+            return export.export_to_cimxml(self._df, *a, **kw)
+
+        def export_to_nquads(self, *a, **kw):
+            return export.export_to_nquads(self._df, *a, **kw)
+
+        def export_to_networkx(self, **kw):
+            return export.export_to_networkx(self._df, **kw)
 
         # ── Diff ─────────────────────────────────────────────────────────
         def diff_between_INSTANCE(self, *a, **kw):

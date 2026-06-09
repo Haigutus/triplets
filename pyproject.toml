@@ -45,6 +45,9 @@ docs = [
     "sphinx>=9.0.4",
     "sphinx-multiversion>=0.2.4",
 ]
+duckdb = [
+    "duckdb>=1.5.3",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
