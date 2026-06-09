@@ -9,6 +9,10 @@ dependencies = [
     "aniso8601",
 ]
 
+[project.scripts]
+cim-spreadsheet = "triplets.cli.cim_spreadsheet:main"
+cim-diff = "triplets.cli.cim_diff:main"
+
 [project.optional-dependencies]
 arrow = [
     "pyarrow>=14.0",
@@ -17,11 +21,15 @@ polars = [
     "polars>=1.0",
     "pyarrow>=14.0",
 ]
+excel = [
+    "openpyxl>=3.1.5",
+]
 dev = [
     "pytest>=7.0",
     "pytest-xdist",
     "polars>=1.0",
     "pyarrow>=14.0",
+    "openpyxl>=3.1.5",
 ]
 
 [tool.pytest.ini_options]
