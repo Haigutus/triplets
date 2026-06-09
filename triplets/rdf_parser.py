@@ -573,7 +573,7 @@ pandas.DataFrame.diff_between_INSTANCE = diff_between_INSTANCE
 pandas.DataFrame.export_to_excel = export_to_excel
 pandas.DataFrame.export_to_csv = export_to_csv
 pandas.DataFrame.export_to_cimxml = export_to_cimxml
-pandas.DataFrame.to_networkx = export_to_networkx
+pandas.DataFrame.export_to_networkx = export_to_networkx
 pandas.filter_triplet_by_triplet = filter_by_triplet
 
 # Let's add empty dataframe to keep changes

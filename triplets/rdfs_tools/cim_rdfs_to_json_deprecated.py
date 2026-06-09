@@ -1,5 +1,5 @@
 import json
-from triplets.rdf_parser import load_all_to_dataframe
+from triplets.parser import parse as load_all_to_dataframe
 from triplets.rdfs_tools import rdfs_tools
 
 path = r"../../rdfs/ENTSOE_CGMES_2.4.15/DiagramLayoutProfileRDFSAugmented-v2_4_15-4Sep2020.rdf"

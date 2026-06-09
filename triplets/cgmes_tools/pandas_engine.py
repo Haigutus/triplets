@@ -17,7 +17,8 @@ import aniso8601
 from uuid import uuid4
 from lxml import etree
 from builtins import str
-from triplets import rdf_parser
+from triplets import tools as rdf_parser  # backwards compat alias; tools replaces rdf_parser
+from triplets.parser import parse as load_all_to_dataframe
 
 import logging
 
@@ -973,7 +974,7 @@ if __name__ == '__main__':
 
     path_list = ["../test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"]
 
-    data = rdf_parser.load_all_to_dataframe(path_list)
+    data = load_all_to_dataframe(path_list)
 
 
     object_UUID = "99722373_VL_TN1"

@@ -1,4 +1,4 @@
-from triplets.rdf_parser import load_all_to_dataframe
+from triplets.parser import parse as load_all_to_dataframe
 from triplets.rdfs_tools import rdfs_tools
 import os
 import logging

@@ -1,6 +1,7 @@
 import json
 import pandas
-from triplets.rdf_parser import get_namespace_map, load_all_to_dataframe
+from triplets.tools import get_namespace_map
+from triplets.parser import parse as load_all_to_dataframe
 from triplets.rdfs_tools import rdfs_tools
 import logging
 

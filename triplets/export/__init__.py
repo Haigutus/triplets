@@ -28,4 +28,4 @@ __all__ = [
 pandas.DataFrame.export_to_excel = export_to_excel
 pandas.DataFrame.export_to_csv = export_to_csv
 pandas.DataFrame.export_to_cimxml = export_to_cimxml
-pandas.DataFrame.to_networkx = export_to_networkx
+pandas.DataFrame.export_to_networkx = export_to_networkx
