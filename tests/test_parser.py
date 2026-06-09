@@ -8,8 +8,13 @@ import pandas
 import triplets
 from triplets.parser import parse, find_all_xml, clean_ID, read_rdf
 
-REALGRID_ZIP = "test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"
-MINIMAL = "tests/data/minimal_cim.xml"
+from pathlib import Path
+
+_TEST_DIR = Path(__file__).parent
+_PROJECT_DIR = _TEST_DIR.parent
+
+REALGRID_ZIP = str(_PROJECT_DIR / "test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip")
+MINIMAL = str(_TEST_DIR / "data" / "minimal_cim.xml")
 
 try:
     import pyarrow  # noqa: F401
