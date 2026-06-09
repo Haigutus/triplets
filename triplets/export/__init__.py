@@ -7,9 +7,25 @@ Each format has its own {format}_{engine}.py file.
 import pandas
 
 from .excel_pandas import export_to_excel
-from .csv_pandas import export_to_csv
 from .cimxml_pandas import export_to_cimxml, generate_xml, ExportType, _get_qname
 from .networkx_pandas import export_to_networkx
+
+
+def _is_polars(data):
+    return hasattr(data, '__module__') and 'polars' in type(data).__module__
+
+
+def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):
+    """Export triplet DataFrame to CSV files.
+
+    Auto-detects engine: polars if input is polars DataFrame, else pandas.
+    """
+    if _is_polars(data):
+        from .csv_polars import export_to_csv as _fn
+    else:
+        from .csv_pandas import export_to_csv as _fn
+    return _fn(data, path=path, multivalue=multivalue, export_to_memory=export_to_memory,
+               single_file=single_file, base_filename=base_filename)
 
 
 def export_to_nquads(data, path):
