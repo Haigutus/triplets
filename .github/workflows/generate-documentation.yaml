@@ -3,6 +3,8 @@ name: Deploy Sphinx Docs to GitHub Pages
 on:
   release:
     types: [created]
+  pull_request:  # validate docs build on PRs
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -13,27 +15,30 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # full history for sphinx-multiversion
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.11'  # Use your Python version
+          python-version: '3.13'
 
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-napoleon sphinx-multiversion myst-parser
-          python3 -m pip install lxml pandas aniso8601
+          python3 -m pip install furo sphinx myst-parser sphinx-multiversion
+          python3 -m pip install lxml pandas aniso8601 polars pyarrow
 
       - name: Build Sphinx docs
         run: |
           cd docs
-          make html  # Builds to docs/build/html
+          make html
 
       - name: Deploy to GitHub Pages
+        if: github.event_name == 'release'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build/html  # Deploy the built HTML
-          publish_branch: gh-pages  # Target branch for Pages
+          publish_dir: docs/build/html
+          publish_branch: gh-pages

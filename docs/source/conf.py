@@ -1,33 +1,25 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath('../..'))  # Points to the project root
+sys.path.insert(0, os.path.abspath('../..'))
 
 import triplets
 
-# Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
-
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+# -- Project information -------------------------------------------------------
 
 project = 'triplets'
 copyright = '2025, Kristjan Vilgo'
 author = 'Kristjan Vilgo'
 release = triplets.__version__
 
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+# -- General configuration -----------------------------------------------------
 
 extensions = [
-    'sphinx.ext.autodoc',      # Automatically document modules and functions
-    'sphinx.ext.napoleon',     # Support for NumPy-style docstrings
-    'sphinx.ext.viewcode',     # Add links to source code
-    'sphinx.ext.githubpages',  # Configures export suitable for github pages
-    'sphinx_multiversion',
-    'myst_parser'
+    'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.githubpages',
+    'myst_parser',
 ]
 
 source_suffix = {
@@ -36,19 +28,32 @@ source_suffix = {
 }
 
 templates_path = ['_templates']
-exclude_patterns = [
-    "setup.py",
-    "versioneer.py"
-    "modules.rst"
-]
+exclude_patterns = []
 
-
-
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
-
-html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
+# -- Napoleon (NumPy-style docstrings) ----------------------------------------
 
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
+
+# -- Autodoc -------------------------------------------------------------------
+
+autodoc_member_order = 'bysource'
+autodoc_default_options = {
+    'members': True,
+    'undoc-members': False,
+    'show-inheritance': True,
+}
+
+# -- HTML output (furo theme) -------------------------------------------------
+
+html_theme = 'furo'
+html_static_path = ['_static']
+
+html_theme_options = {
+    "sidebar_hide_name": False,
+    "navigation_with_keys": True,
+}
+
+# -- MyST (Markdown support) --------------------------------------------------
+
+myst_heading_anchors = 3
