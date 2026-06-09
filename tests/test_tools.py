@@ -381,3 +381,91 @@ class TestExportToNetworkx:
         G = svedala_eq.export_to_networkx()
         assert isinstance(G, networkx.Graph)
         assert G.number_of_nodes() > 0
+
+
+# ── Polars engine tests ─────────────────────────────────────────────────────
+
+class TestPolarsMultivalue:
+    """Test multivalue support in polars engine."""
+
+    @pytest.fixture(scope="class")
+    def pl_data(self):
+        polars = pytest.importorskip("polars")
+        if not SVEDALA_DIR.exists():
+            pytest.skip(SKIP_REASON)
+        return polars.read_rdf(SVEDALA_FILES)
+
+    def test_type_tableview_multivalue(self, pl_data):
+        from triplets.tools import polars_engine as pe
+        tv = pe.type_tableview(pl_data, "FullModel", multivalue=True)
+        assert tv is not None
+        assert len(tv) > 0
+        # DependentOn should be comma-separated for multi-value
+        dep = tv["Model.DependentOn"][0]
+        assert isinstance(dep, str)
+
+    def test_type_tableview_multivalue_single_values(self, pl_data):
+        import polars
+        from triplets.tools import polars_engine as pe
+        tv = pe.type_tableview(pl_data, "Substation", multivalue=True, string_to_number=False)
+        assert tv is not None
+        assert len(tv) > 0
+        # Substation shouldn't have multi-values, so all should be plain strings
+        for col in tv.columns:
+            if col == "ID":
+                continue
+            assert tv[col].dtype == polars.Utf8 or tv[col].dtype == polars.String
+
+    def test_type_tableview_parity_with_pandas(self, pl_data, svedala_data):
+        """Polars multivalue and pandas multivalue should have same row count."""
+        from triplets.tools import polars_engine as pe
+        tv_pl = pe.type_tableview(pl_data, "ACLineSegment", multivalue=True, string_to_number=False)
+        tv_pd = svedala_data.type_tableview("ACLineSegment", multivalue=True)
+        assert len(tv_pl) == len(tv_pd)
+
+
+class TestPolarsExportCsv:
+    """Test CSV export via polars engine."""
+
+    @pytest.fixture(scope="class")
+    def pl_eq(self):
+        polars = pytest.importorskip("polars")
+        eq_file = SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"
+        if not eq_file.exists():
+            pytest.skip(SKIP_REASON)
+        return polars.read_rdf([str(eq_file)])
+
+    def test_csv_export_to_memory(self, pl_eq):
+        result = triplets.export.export_to_csv(pl_eq, export_to_memory=True, single_file=True)
+        assert isinstance(result, list)
+        assert len(result) > 0
+        assert hasattr(result[0], "read")
+
+    def test_csv_export_multivalue(self, pl_eq):
+        result = triplets.export.export_to_csv(pl_eq, export_to_memory=True, single_file=True, multivalue=True)
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+
+class TestPolarsExportNquads:
+    """Test N-Quads export via polars engine."""
+
+    @pytest.fixture(scope="class")
+    def pl_eq(self):
+        polars = pytest.importorskip("polars")
+        eq_file = SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"
+        if not eq_file.exists():
+            pytest.skip(SKIP_REASON)
+        return polars.read_rdf([str(eq_file)])
+
+    def test_nquads_export(self, pl_eq, tmp_path):
+        output = str(tmp_path / "test.nq")
+        triplets.export.export_to_nquads(pl_eq, output)
+        import os
+        assert os.path.exists(output)
+        with open(output) as f:
+            lines = f.readlines()
+        assert len(lines) == len(pl_eq)
+        # Each line should be a valid N-Quad
+        assert lines[0].endswith(" .\n")
+        assert "<urn:uuid:" in lines[0]

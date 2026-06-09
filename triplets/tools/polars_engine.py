@@ -23,12 +23,25 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type", mult
     type_data = type_ids.join(data, on="ID", how="inner")
 
     if multivalue:
-        data_view = type_data.group_by(["ID", "KEY"]).agg(
-            pl.when(pl.col("VALUE").count() == 1)
-            .then(pl.col("VALUE").first())
-            .otherwise(pl.col("VALUE").implode().list.eval(pl.element()).first())
-            .alias("VALUE")
-        ).pivot(on="KEY", index="ID", values="VALUE")
+        # Aggregate all values per (ID, KEY) into lists, then pivot.
+        # After pivot, convert single-element lists back to scalars.
+        agg = type_data.group_by(["ID", "KEY"]).agg(
+            pl.col("VALUE").alias("VALUE")
+        )
+        data_view = agg.pivot(on="KEY", index="ID", values="VALUE")
+        # Unwrap single-element lists to scalars for cleaner output.
+        # Multi-element lists stay as lists (matching pandas multivalue behavior).
+        for col in data_view.columns:
+            if col == "ID":
+                continue
+            dtype = data_view[col].dtype
+            if dtype == pl.List(pl.Utf8) or dtype == pl.List(pl.String):
+                data_view = data_view.with_columns(
+                    pl.when(pl.col(col).list.len() == 1)
+                    .then(pl.col(col).list.first())
+                    .otherwise(pl.col(col).list.join(", "))
+                    .alias(col)
+                )
     else:
         type_data = type_data.unique(subset=["ID", "KEY"], keep="first")
         data_view = type_data.pivot(on="KEY", index="ID", values="VALUE")

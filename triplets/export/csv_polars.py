@@ -36,8 +36,7 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
         td = polars_engine.types_dict(df)
         views = {}
         for class_name in td:
-            # Use multivalue=False for polars CSV — list aggregation not needed for CSV output
-            tv = polars_engine.type_tableview(df, class_name, string_to_number=False, multivalue=False)
+            tv = polars_engine.type_tableview(df, class_name, string_to_number=False, multivalue=multivalue)
             if tv is not None:
                 views[class_name] = tv
         return views
