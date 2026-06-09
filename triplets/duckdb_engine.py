@@ -6,16 +6,16 @@ registered directly on DuckDB connections:
     import duckdb
     import triplets
 
-    con = duckdb.connect()                          # in-memory
-    con = duckdb.connect("grid.duckdb")             # persistent
+    data = duckdb.connect()                          # in-memory
+    data = duckdb.connect("grid.duckdb")             # persistent
 
-    con.read_rdf(["grid_EQ.xml", "grid_SSH.xml"])   # parse → Arrow → DuckDB (zero-copy)
-    con.types_dict()                                 # → dict
-    con.type_tableview("ACLineSegment").df()         # → pandas DataFrame
-    con.type_tableview("ACLineSegment").pl()         # → polars DataFrame
-    con.filter_triplets(KEY="Type").arrow()           # → pyarrow Table
-    con.references_to("some-uuid").df()
-    con.sql("SELECT * FROM triplets WHERE KEY LIKE 'Model.%'").pl()
+    data.read_rdf(["grid_EQ.xml", "grid_SSH.xml"])   # parse → Arrow → DuckDB (zero-copy)
+    data.types_dict()                                 # → dict
+    data.type_tableview("ACLineSegment").df()         # → pandas DataFrame
+    data.type_tableview("ACLineSegment").pl()         # → polars DataFrame
+    data.filter_triplets(KEY="Type").arrow()           # → pyarrow Table
+    data.references_to("some-uuid").df()
+    data.sql("SELECT * FROM triplets WHERE KEY LIKE 'Model.%'").pl()
 
 All methods except types_dict return DuckDBPyRelation (lazy, chainable).
 Call .df(), .pl(), .arrow(), .fetchall() to materialize.
