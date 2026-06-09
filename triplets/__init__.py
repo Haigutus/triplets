@@ -23,14 +23,16 @@ from .parser import parse, read_rdf as read_rdf_func  # noqa: F401
 # Register read_rdf on pandas and polars (monkey-patch, standard approach)
 # There is no official plugin API for top-level read functions in either library.
 # This is the same pattern used by pandas-gbq (pd.read_gbq) and similar.
+# polars uses functools.partial so return_type defaults to "polars" automatically.
+from functools import partial
 import pandas as pd
-pd.read_RDF = parse
-pd.read_rdf = parse
+pd.read_RDF = partial(parse, return_type="pandas")
+pd.read_rdf = partial(parse, return_type="pandas")
 
 try:
     import polars as pl
-    pl.read_rdf = parse
-    pl.read_RDF = parse
+    pl.read_rdf = partial(parse, return_type="polars")
+    pl.read_RDF = partial(parse, return_type="polars")
 except ImportError:
     pass
 

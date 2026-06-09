@@ -78,8 +78,8 @@ data = pandas.read_RDF(path, engine="python_lxml_pandas")        # no pyarrow ne
 data = pandas.read_RDF(path, engine="python_lxml_arrow")         # arrow intermediate
 data = pandas.read_RDF(path, engine="cython_pugixml_arrow")      # fastest
 
-# polars
-data = polars.read_rdf(["grid_EQ.xml"], return_type="polars")
+# polars (returns polars DataFrame automatically)
+data = polars.read_rdf(["grid_EQ.xml"])
 
 # return Arrow directly
 table = triplets.parser.parse(path, return_type="arrow")
