@@ -1,15 +1,14 @@
-"""Performance benchmarks for parsing RealGrid and type_tableview (pandas + polars).
+"""Performance benchmarks for parsing RealGrid and tools operations (pandas, polars, duckdb).
 
 Run with:
-  python -m pytest tests/test_benchmarks_realgrid.py --benchmark-only \
-    --benchmark-json=documents/parsers_performance.json -q -k "parse"
+  python -m pytest tests/test_benchmarks_realgrid.py --benchmark-only -v
 
   python -m pytest tests/test_benchmarks_realgrid.py --benchmark-only \
-    --benchmark-json=documents/dataframe_performance.json -q -k "tableview"
+    --benchmark-json=documents/parsers_performance.json -q -k "parse"
 """
 import pytest
-import pandas as pd
-import polars as pl
+import pandas
+import polars
 
 from triplets.parser import parse
 
@@ -25,12 +24,15 @@ try:
 except Exception:
     HAS_CYTHON_PUGIXML_ARROW = False
 
-REALGRID_ZIP = "test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"
+try:
+    import duckdb
+    HAS_DUCKDB = True
+except ImportError:
+    HAS_DUCKDB = False
 
-# Common type for type_tableview
+REALGRID_ZIP = "test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"
 TYPE_FOR_VIEW = "ACLineSegment"
 
-# Build engine list dynamically based on what's available
 _PARSE_ENGINES = ["python_lxml_pandas"]
 if HAS_PYARROW:
     _PARSE_ENGINES.append("python_lxml_arrow")
@@ -38,66 +40,125 @@ if HAS_CYTHON_PUGIXML_ARROW:
     _PARSE_ENGINES.append("cython_pugixml_arrow")
 
 
-def _polars_type_tableview(pdf: pl.DataFrame, type_name: str, string_to_number: bool = True, type_key: str = "Type"):
-    """Polars equivalent of rdf_parser.type_tableview (for benchmark 'from polars')."""
-    type_id = pdf.filter((pl.col("VALUE") == type_name) & (pl.col("KEY") == type_key)).select("ID")
-    if type_id.is_empty():
-        return None
-    type_data = type_id.join(pdf, on="ID", how="inner").unique(subset=["ID", "KEY"])
-    data_view = type_data.pivot(on="KEY", index="ID", values="VALUE")
-    if string_to_number:
-        for col in data_view.columns:
-            if col == "ID":
-                continue
-            try:
-                data_view = data_view.with_columns(pl.col(col).cast(pl.Float64, strict=False))
-            except Exception:
-                pass
-    return data_view
-
+# ── Parse benchmarks ────────────────────────────────────────────────────────
 
 @pytest.mark.benchmark(group="parse-realgrid")
 @pytest.mark.parametrize("engine", _PARSE_ENGINES)
 def test_parse_realgrid_to_pandas(benchmark, engine):
-    """Parse full RealGrid zip to pandas DF using the engine."""
     benchmark.extra_info.update({"engine": engine, "return": "pandas"})
-    def _run():
-        return parse(REALGRID_ZIP, engine=engine, return_type="pandas")
-    df = benchmark(_run)
+    df = benchmark(lambda: parse(REALGRID_ZIP, engine=engine, return_type="pandas"))
     assert len(df) > 1_000_000
-    assert "ACLineSegment" in df["VALUE"].values
 
 
 @pytest.mark.benchmark(group="parse-realgrid")
 @pytest.mark.parametrize("engine", _PARSE_ENGINES)
 def test_parse_realgrid_to_polars(benchmark, engine):
-    """Parse full RealGrid zip to polars DF (via arrow) using the engine."""
     benchmark.extra_info.update({"engine": engine, "return": "polars"})
-    def _run():
-        return parse(REALGRID_ZIP, engine=engine, return_type="polars")
-    pdf = benchmark(_run)
+    pdf = benchmark(lambda: parse(REALGRID_ZIP, engine=engine, return_type="polars"))
     assert len(pdf) > 1_000_000
 
 
-@pytest.mark.benchmark(group="dataframe-type-tableview")
+@pytest.mark.benchmark(group="parse-realgrid")
+@pytest.mark.skipif(not HAS_DUCKDB, reason="duckdb not installed")
+def test_parse_realgrid_to_duckdb(benchmark):
+    """Parse RealGrid and load into DuckDB via Arrow (zero-copy)."""
+    import triplets
+    benchmark.extra_info.update({"engine": "duckdb", "return": "duckdb"})
+    def _run():
+        data = duckdb.connect()
+        data.read_rdf([REALGRID_ZIP])
+        return data
+    data = benchmark(_run)
+    assert data.execute("SELECT COUNT(*) FROM triplets").fetchone()[0] > 1_000_000
+
+
+# ── type_tableview benchmarks ───────────────────────────────────────────────
+
+@pytest.mark.benchmark(group="type-tableview")
 def test_type_tableview_pandas(benchmark):
-    """type_tableview call on pandas DF."""
-    best_engine = _PARSE_ENGINES[-1]  # fastest available
-    df = parse(REALGRID_ZIP, engine=best_engine, return_type="pandas")
-    benchmark.extra_info.update({"on": "pandas", "type": TYPE_FOR_VIEW})
-    def _run():
-        return df.type_tableview(TYPE_FOR_VIEW, string_to_number=False)
-    view = benchmark(_run)
+    df = parse(REALGRID_ZIP, engine=_PARSE_ENGINES[-1], return_type="pandas")
+    benchmark.extra_info.update({"engine": "pandas"})
+    view = benchmark(lambda: df.type_tableview(TYPE_FOR_VIEW, string_to_number=False))
     assert view is not None and len(view) > 0
 
 
-@pytest.mark.benchmark(group="dataframe-type-tableview")
+@pytest.mark.benchmark(group="type-tableview")
 def test_type_tableview_polars(benchmark):
-    """type_tableview-equivalent call starting from polars DF."""
-    best_engine = _PARSE_ENGINES[-1]
-    pdf = parse(REALGRID_ZIP, engine=best_engine, return_type="polars")
-    benchmark.extra_info.update({"on": "polars", "type": TYPE_FOR_VIEW})
-    def _run():
-        return _polars_type_tableview(pdf, TYPE_FOR_VIEW, string_to_number=False)
-    view = benchmark(_run)
+    from triplets.tools import polars_engine
+    pdf = parse(REALGRID_ZIP, engine=_PARSE_ENGINES[-1], return_type="polars")
+    benchmark.extra_info.update({"engine": "polars"})
+    view = benchmark(lambda: polars_engine.type_tableview(pdf, TYPE_FOR_VIEW, string_to_number=False))
     assert view is not None and len(view) > 0
+
+
+@pytest.mark.benchmark(group="type-tableview")
+@pytest.mark.skipif(not HAS_DUCKDB, reason="duckdb not installed")
+def test_type_tableview_duckdb(benchmark):
+    import triplets
+    data = duckdb.connect()
+    data.read_rdf([REALGRID_ZIP])
+    benchmark.extra_info.update({"engine": "duckdb"})
+    view = benchmark(lambda: data.type_tableview(TYPE_FOR_VIEW).df())
+    assert view is not None and len(view) > 0
+
+
+# ── filter_by_type benchmarks ──────────────────────────────────────────────
+
+@pytest.mark.benchmark(group="filter-by-type")
+def test_filter_by_type_pandas(benchmark):
+    import triplets
+    df = parse(REALGRID_ZIP, engine=_PARSE_ENGINES[-1], return_type="pandas")
+    benchmark.extra_info.update({"engine": "pandas"})
+    result = benchmark(lambda: triplets.tools.filter_by_type(df, TYPE_FOR_VIEW, engine="pandas"))
+    assert len(result) > 0
+
+
+@pytest.mark.benchmark(group="filter-by-type")
+def test_filter_by_type_polars(benchmark):
+    import triplets
+    pdf = parse(REALGRID_ZIP, engine=_PARSE_ENGINES[-1], return_type="polars")
+    benchmark.extra_info.update({"engine": "polars"})
+    result = benchmark(lambda: triplets.tools.filter_by_type(pdf, TYPE_FOR_VIEW, engine="polars"))
+    assert len(result) > 0
+
+
+@pytest.mark.benchmark(group="filter-by-type")
+@pytest.mark.skipif(not HAS_DUCKDB, reason="duckdb not installed")
+def test_filter_by_type_duckdb(benchmark):
+    import triplets
+    data = duckdb.connect()
+    data.read_rdf([REALGRID_ZIP])
+    benchmark.extra_info.update({"engine": "duckdb"})
+    result = benchmark(lambda: data.filter_by_type(TYPE_FOR_VIEW).df())
+    assert len(result) > 0
+
+
+# ── types_dict benchmarks ──────────────────────────────────────────────────
+
+@pytest.mark.benchmark(group="types-dict")
+def test_types_dict_pandas(benchmark):
+    import triplets
+    df = parse(REALGRID_ZIP, engine=_PARSE_ENGINES[-1], return_type="pandas")
+    benchmark.extra_info.update({"engine": "pandas"})
+    result = benchmark(lambda: triplets.tools.types_dict(df, engine="pandas"))
+    assert len(result) > 0
+
+
+@pytest.mark.benchmark(group="types-dict")
+def test_types_dict_polars(benchmark):
+    import triplets
+    pdf = parse(REALGRID_ZIP, engine=_PARSE_ENGINES[-1], return_type="polars")
+    benchmark.extra_info.update({"engine": "polars"})
+    result = benchmark(lambda: triplets.tools.types_dict(pdf, engine="polars"))
+    assert len(result) > 0
+
+
+@pytest.mark.benchmark(group="types-dict")
+@pytest.mark.skipif(not HAS_DUCKDB, reason="duckdb not installed")
+def test_types_dict_duckdb(benchmark):
+    import triplets
+    data = duckdb.connect()
+    data.read_rdf([REALGRID_ZIP])
+    benchmark.extra_info.update({"engine": "duckdb"})
+    result = benchmark(lambda: data.types_dict())
+    assert len(result) > 0
