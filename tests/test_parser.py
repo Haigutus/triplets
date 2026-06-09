@@ -82,6 +82,17 @@ def test_realgrid_parse_and_meta(realgrid_data):
     assert "Distribution" in data["VALUE"].values
 
 
+def test_duckdb_read_rdf():
+    """DuckDB con.read_rdf() loads data via Arrow zero-copy."""
+    duckdb = pytest.importorskip("duckdb")
+    import triplets
+    data = duckdb.connect()
+    rows = data.read_rdf([MINIMAL])
+    assert rows == 17
+    td = data.types_dict()
+    assert "Substation" in td
+
+
 def test_read_rdf_with_categorical(realgrid_data):
     df = read_rdf(REALGRID_ZIP, engine="cython_pugixml_arrow", categorical_columns=("INSTANCE_ID", "KEY"))
     # KEY should be categorical-like (low unique)

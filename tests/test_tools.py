@@ -534,3 +534,48 @@ class TestCimxmlRoundtrip:
             meta_ids.update(ids)
         data_diff = diff[~diff["ID"].astype(str).isin(meta_ids)]
         assert len(data_diff) == 0, f"Data diff has {len(data_diff)} rows:\n{data_diff.head(10)}"
+
+
+# ── DuckDB tools tests ──────────────────────────────────────────────────────
+
+class TestDuckdbTools:
+    """Test triplet tools operations via DuckDB monkey-patched connection."""
+
+    @pytest.fixture(scope="class")
+    def db(self):
+        duckdb = pytest.importorskip("duckdb")
+        import triplets
+        if not SVEDALA_DIR.exists():
+            pytest.skip(SKIP_REASON)
+        data = duckdb.connect()
+        data.read_rdf(SVEDALA_FILES)
+        return data
+
+    def test_types_dict(self, db):
+        td = db.types_dict()
+        assert isinstance(td, dict)
+        assert "ACLineSegment" in td
+        assert "Substation" in td
+
+    def test_type_tableview(self, db):
+        tv = db.type_tableview("Substation").df()
+        assert len(tv) > 0
+        assert "IdentifiedObject.name" in tv.columns
+
+    def test_filter_triplets_exact(self, db):
+        df = db.filter_triplets(KEY="Type", VALUE="Substation").df()
+        assert len(df) > 0
+        assert all(df["KEY"] == "Type")
+
+    def test_filter_triplets_regex(self, db):
+        df = db.filter_triplets(KEY="Model.*", regex=True).df()
+        assert len(df) > 0
+
+    def test_filter_by_type(self, db):
+        df = db.filter_by_type("ACLineSegment").df()
+        assert len(df) > 0
+
+    def test_references_to(self, db):
+        sub_id = db.filter_triplets(KEY="Type", VALUE="Substation").df()["ID"].iloc[0]
+        df = db.references_to(sub_id).df()
+        assert isinstance(df, pandas.DataFrame)
