@@ -722,16 +722,14 @@ def darw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False):
 
     # graph.show_buttons()
 
-    graph.set_options = options
-
     if notebook == False:
 
         # Create unique filename
         from_UUID = reference_data[ID_COLUMN].tolist()[0]
         file_name = f"{from_UUID}.html"
 
-        # Show graph
-        graph.show(os.path.join(file_name), local=False)
+        # Show graph (works in notebooks and standalone)
+        graph.show(file_name)
 
         # Returns file path
         return os.path.abspath(file_name)
@@ -960,7 +958,8 @@ def get_dangling_references(data, detailed=False):
     >>> dangling = get_dangling_references(data, detailed=True)
     """
     cgmes_reference_pattern = r"\.[A-Z]"
-    references = data[data.KEY.str.contains(cgmes_reference_pattern)]
+    # Convert KEY to string first to handle pyarrow-backed dictionary dtypes
+    references = data[data["KEY"].astype(str).str.contains(cgmes_reference_pattern)]
     dangling_references = data.query("KEY == 'Type'").merge(references, left_on="ID", right_on="VALUE", indicator=True, how="right", suffixes=("_TO", "_FROM")).query("_merge != 'both'")
 
     if detailed:
