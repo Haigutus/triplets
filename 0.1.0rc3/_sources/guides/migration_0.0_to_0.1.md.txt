@@ -1,0 +1,107 @@
+# Migration: 0.0.x → 0.1
+
+## Breaking changes
+
+#### Python 3.11 minimum
+
+Python 3.10 is no longer supported. The `StrEnum` class (used internally) requires 3.11+.
+
+### `to_networkx()` renamed to `export_to_networkx()`
+
+```python
+# Old
+graph = data.to_networkx()
+
+# New
+graph = data.export_to_networkx()
+```
+
+### Arrow-backed dtypes (when using pyarrow engines)
+
+When `triplets[arrow]` is installed, the `python_lxml_arrow` and `cython_pugixml_arrow` engines
+return DataFrames with `string[pyarrow]` and `dictionary<...>[pyarrow]` column dtypes instead of
+plain `object`/`str`.
+
+This affects code that:
+- Uses `.str` accessor on filtered columns — may fail with `"Can only use .str accessor with string values"`
+- Checks `dtype == object` or `dtype == str`
+- Does in-place mutation on categorical columns
+
+**Fix:** Convert to plain strings where needed:
+
+```python
+# Before (may fail with pyarrow dtypes)
+data[data.KEY.str.contains(pattern)]
+
+# After (works with any dtype)
+data[data["KEY"].astype(str).str.contains(pattern)]
+```
+
+To avoid arrow dtypes entirely, use the pandas-only engine:
+
+```python
+data = pandas.read_RDF(files, engine="python_lxml_pandas")  # always returns plain str dtypes
+```
+
+### Dictionary-encoded KEY and INSTANCE_ID columns
+
+With arrow engines, `KEY` and `INSTANCE_ID` columns are dictionary-encoded (categorical) by default.
+This saves ~60% memory but may affect code that expects plain string columns:
+
+```python
+# Check if a column is categorical
+print(data["KEY"].dtype)  # dictionary<values=string, indices=int32, ordered=0>[pyarrow]
+
+# Convert to plain strings if needed
+data["KEY"] = data["KEY"].astype(str)
+```
+
+## Deprecations
+
+All functions in `rdf_parser.py` now emit `DeprecationWarning` and delegate to the new modules.
+They will be removed in 0.2.
+
+### Import paths
+
+| Old (0.0.x) | New (0.1) |
+|-------------|-----------|
+| `triplets.rdf_parser.type_tableview` | `triplets.tools.type_tableview` |
+| `triplets.rdf_parser.key_tableview` | `triplets.tools.key_tableview` |
+| `triplets.rdf_parser.types_dict` | `triplets.tools.types_dict` |
+| `triplets.rdf_parser.filter_by_type` | `triplets.tools.filter_by_type` |
+| `triplets.rdf_parser.references_to` | `triplets.tools.references_to` |
+| `triplets.rdf_parser.export_to_excel` | `triplets.export.export_to_excel` |
+| `triplets.rdf_parser.export_to_csv` | `triplets.export.export_to_csv` |
+| `triplets.rdf_parser.export_to_cimxml` | `triplets.export.export_to_cimxml` |
+| `triplets.rdf_parser.export_to_networkx` | `triplets.export.export_to_networkx` |
+| All other `rdf_parser.*` query/filter/diff functions | `triplets.tools.*` |
+
+### DataFrame methods
+
+The old monkey-patched methods (`data.type_tableview(...)`) still work but the recommended
+approach is the accessor namespace:
+
+```python
+# Old (monkey-patch, still works)
+data.type_tableview("ACLineSegment")
+
+# New (accessor namespace)
+data.triplets.type_tableview("ACLineSegment")
+```
+
+Both call the same underlying function. The accessor namespace works for both pandas and polars.
+
+## New module structure
+
+```
+triplets/
+├── parser/          # parse XML to DataFrames (3 engines)
+├── tools/           # query, filter, diff, transform (pandas + polars engines)
+├── export/          # Excel, CSV, CIM XML, NetworkX (pandas engine)
+├── cli/             # cim-spreadsheet, cim-diff CLI tools
+├── cgmes_tools/     # CGMES metadata, visualization, data quality
+├── rdfs_tools/      # RDF Schema utilities
+├── export_schema/   # ENTSO-E JSON schema files
+├── _accessor.py     # df.triplets.* namespace registration
+└── rdf_parser.py    # deprecated shim (will be removed in 0.2)
+```
