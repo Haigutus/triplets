@@ -15,12 +15,97 @@ Usage:
     data.triplets.type_tableview("ACLineSegment")
 """
 
-import pandas
-from . import tools, export
 import logging
+import pandas
+
+from . import tools, export
+
 logger = logging.getLogger(__name__)
 
+try:
+    import polars
+except ImportError:
+    polars = None
 
+try:
+    import duckdb
+except ImportError:
+    duckdb = None
+
+
+# ── Method registries ────────────────────────────────────────────────────────
+# Each name maps 1:1 to a function in tools/ or export/ that takes the
+# DataFrame as its first argument. The accessor classes below are generated
+# from these lists.
+
+PANDAS_TOOL_METHODS = [
+    # query
+    "type_tableview", "key_tableview", "id_tableview", "types_dict",
+    "get_object_data", "get_namespace_map",
+    # references
+    "references_to_simple", "references_to", "references_from_simple",
+    "references_from", "references_all", "references_simple", "references",
+    # filter
+    "filter_by_type", "filter_by_triplet", "filter_triplets",
+    # mutate
+    "set_VALUE_at_KEY", "set_VALUE_at_KEY_and_ID",
+    "update_triplet_from_triplet", "update_triplet_from_tableview",
+    # transform
+    "triplet_to_tableviews", "tableview_to_triplet",
+    # diff
+    "diff_between_INSTANCE",
+]
+
+# Subset of tools currently implemented by the polars engine
+POLARS_TOOL_METHODS = [
+    # query
+    "type_tableview", "key_tableview", "id_tableview", "types_dict",
+    "get_object_data", "get_namespace_map",
+    # references
+    "references_to", "references_from", "references",
+    # filter
+    "filter_by_type", "filter_triplets",
+    # transform
+    "triplet_to_tableviews", "tableview_to_triplet",
+    # diff
+    "diff_between_INSTANCE",
+]
+
+EXPORT_METHODS = [
+    "export_to_excel", "export_to_csv", "export_to_cimxml",
+    "export_to_nquads", "export_to_networkx",
+]
+
+# Subset of tools implemented by the duckdb engine (patched onto the
+# connection object directly, the connection holds the triplets table)
+DUCKDB_TOOL_METHODS = [
+    "types_dict", "type_tableview", "filter_triplets", "filter_by_type",
+    "references_to", "references_from",
+]
+
+DUCKDB_EXPORT_METHODS = ["export_to_excel", "export_to_csv", "export_to_nquads"]
+
+
+def _delegate(module, name):
+    """Make an accessor method that calls module.name(self._df, ...)."""
+    function = getattr(module, name)
+
+    def method(self, *args, **kwargs):
+        return function(self._df, *args, **kwargs)
+
+    method.__name__ = name
+    method.__doc__ = function.__doc__
+    return method
+
+
+def _add_methods(accessor_class, tool_methods):
+    for name in tool_methods:
+        setattr(accessor_class, name, _delegate(tools, name))
+    for name in EXPORT_METHODS:
+        setattr(accessor_class, name, _delegate(export, name))
+
+
+# ── pandas ────────────────────────────────────────────────────────────────────
 @pandas.api.extensions.register_dataframe_accessor("triplets")
 class TripletsAccessor:
     """Triplet operations on pandas DataFrames via df.triplets.* namespace."""
@@ -28,212 +113,46 @@ class TripletsAccessor:
     def __init__(self, df):
         self._df = df
 
-    # ── Query ────────────────────────────────────────────────────────────
-    def type_tableview(self, *a, **kw):
-        return tools.type_tableview(self._df, *a, **kw)
 
-    def key_tableview(self, *a, **kw):
-        return tools.key_tableview(self._df, *a, **kw)
-
-    def id_tableview(self, *a, **kw):
-        return tools.id_tableview(self._df, *a, **kw)
-
-    def types_dict(self, **kw):
-        return tools.types_dict(self._df, **kw)
-
-    def get_object_data(self, *a, **kw):
-        return tools.get_object_data(self._df, *a, **kw)
-
-    def get_namespace_map(self, **kw):
-        return tools.get_namespace_map(self._df, **kw)
-
-    # ── References ───────────────────────────────────────────────────────
-    def references_to_simple(self, *a, **kw):
-        return tools.references_to_simple(self._df, *a, **kw)
-
-    def references_to(self, *a, **kw):
-        return tools.references_to(self._df, *a, **kw)
-
-    def references_from_simple(self, *a, **kw):
-        return tools.references_from_simple(self._df, *a, **kw)
-
-    def references_from(self, *a, **kw):
-        return tools.references_from(self._df, *a, **kw)
-
-    def references_all(self, **kw):
-        return tools.references_all(self._df, **kw)
-
-    def references_simple(self, *a, **kw):
-        return tools.references_simple(self._df, *a, **kw)
-
-    def references(self, *a, **kw):
-        return tools.references(self._df, *a, **kw)
-
-    # ── Filter ───────────────────────────────────────────────────────────
-    def filter_by_type(self, *a, **kw):
-        return tools.filter_by_type(self._df, *a, **kw)
-
-    def filter_by_triplet(self, *a, **kw):
-        return tools.filter_by_triplet(self._df, *a, **kw)
-
-    def filter_triplets(self, *a, **kw):
-        return tools.filter_triplets(self._df, *a, **kw)
-
-    # ── Mutate ───────────────────────────────────────────────────────────
-    def set_VALUE_at_KEY(self, *a, **kw):
-        return tools.set_VALUE_at_KEY(self._df, *a, **kw)
-
-    def set_VALUE_at_KEY_and_ID(self, *a, **kw):
-        return tools.set_VALUE_at_KEY_and_ID(self._df, *a, **kw)
-
-    def update_triplet_from_triplet(self, *a, **kw):
-        return tools.update_triplet_from_triplet(self._df, *a, **kw)
-
-    def update_triplet_from_tableview(self, *a, **kw):
-        return tools.update_triplet_from_tableview(self._df, *a, **kw)
-
-    # ── Transform ────────────────────────────────────────────────────────
-    def triplet_to_tableviews(self, **kw):
-        return tools.triplet_to_tableviews(self._df, **kw)
-
-    def tableview_to_triplet(self, **kw):
-        return tools.tableview_to_triplet(self._df, **kw)
-
-    # ── Diff ─────────────────────────────────────────────────────────────
-    def diff_between_INSTANCE(self, *a, **kw):
-        return tools.diff_between_INSTANCE(self._df, *a, **kw)
-
-    # ── Export ───────────────────────────────────────────────────────────
-    def export_to_excel(self, *a, **kw):
-        return export.export_to_excel(self._df, *a, **kw)
-
-    def export_to_csv(self, *a, **kw):
-        return export.export_to_csv(self._df, *a, **kw)
-
-    def export_to_cimxml(self, *a, **kw):
-        return export.export_to_cimxml(self._df, *a, **kw)
-
-    def export_to_nquads(self, *a, **kw):
-        return export.export_to_nquads(self._df, *a, **kw)
-
-    def export_to_networkx(self, **kw):
-        return export.export_to_networkx(self._df, **kw)
-
-
+_add_methods(TripletsAccessor, PANDAS_TOOL_METHODS)
 logger.debug("Registered pandas triplets accessor")
 
 
-# ── Polars namespace ─────────────────────────────────────────────────────────
-try:
-    import polars as pl
-
-    @pl.api.register_dataframe_namespace("triplets")
+# ── polars ────────────────────────────────────────────────────────────────────
+if polars:
+    @polars.api.register_dataframe_namespace("triplets")
     class PolarsTripletsAccessor:
         """Triplet operations on polars DataFrames via df.triplets.* namespace."""
 
         def __init__(self, df):
             self._df = df
 
-        # ── Query ────────────────────────────────────────────────────────
-        def type_tableview(self, *a, **kw):
-            return tools.type_tableview(self._df, *a, **kw)
-
-        def key_tableview(self, *a, **kw):
-            return tools.key_tableview(self._df, *a, **kw)
-
-        def id_tableview(self, *a, **kw):
-            return tools.id_tableview(self._df, *a, **kw)
-
-        def types_dict(self, **kw):
-            return tools.types_dict(self._df, **kw)
-
-        def get_object_data(self, *a, **kw):
-            return tools.get_object_data(self._df, *a, **kw)
-
-        def get_namespace_map(self, **kw):
-            return tools.get_namespace_map(self._df, **kw)
-
-        # ── References ───────────────────────────────────────────────────
-        def references_to(self, *a, **kw):
-            return tools.references_to(self._df, *a, **kw)
-
-        def references_from(self, *a, **kw):
-            return tools.references_from(self._df, *a, **kw)
-
-        def references(self, *a, **kw):
-            return tools.references(self._df, *a, **kw)
-
-        # ── Filter ───────────────────────────────────────────────────────
-        def filter_by_type(self, *a, **kw):
-            return tools.filter_by_type(self._df, *a, **kw)
-
-        def filter_triplets(self, *a, **kw):
-            return tools.filter_triplets(self._df, *a, **kw)
-
-        # ── Transform ────────────────────────────────────────────────────
-        def triplet_to_tableviews(self, **kw):
-            return tools.triplet_to_tableviews(self._df, **kw)
-
-        def tableview_to_triplet(self, **kw):
-            return tools.tableview_to_triplet(self._df, **kw)
-
-        # ── Diff ─────────────────────────────────────────────────────────
-        def diff_between_INSTANCE(self, *a, **kw):
-            return tools.diff_between_INSTANCE(self._df, *a, **kw)
-
-        # ── Export ───────────────────────────────────────────────────────
-        def export_to_excel(self, *a, **kw):
-            return export.export_to_excel(self._df, *a, **kw)
-
-        def export_to_csv(self, *a, **kw):
-            return export.export_to_csv(self._df, *a, **kw)
-
-        def export_to_cimxml(self, *a, **kw):
-            return export.export_to_cimxml(self._df, *a, **kw)
-
-        def export_to_nquads(self, *a, **kw):
-            return export.export_to_nquads(self._df, *a, **kw)
-
-        def export_to_networkx(self, **kw):
-            return export.export_to_networkx(self._df, **kw)
-
-        logger.debug("Registered polars triplets namespace accessor")
-
-except ImportError:
+    _add_methods(PolarsTripletsAccessor, POLARS_TOOL_METHODS)
+    logger.debug("Registered polars triplets namespace accessor")
+else:
     logger.debug("polars not installed, skipping triplets namespace accessor")
-    pass
 
 
-# ── DuckDB connection ───────────────────────────────────────────────────────
-try:
-    import duckdb
-    from .tools import duckdb_engine as _duckdb_tools
+# ── DuckDB ────────────────────────────────────────────────────────────────────
+if duckdb:
+    from .tools import duckdb_engine
 
-    # Tools
-    duckdb.DuckDBPyConnection.types_dict = _duckdb_tools.types_dict
-    duckdb.DuckDBPyConnection.type_tableview = _duckdb_tools.type_tableview
-    duckdb.DuckDBPyConnection.filter_triplets = _duckdb_tools.filter_triplets
-    duckdb.DuckDBPyConnection.filter_by_type = _duckdb_tools.filter_by_type
-    duckdb.DuckDBPyConnection.references_to = _duckdb_tools.references_to
-    duckdb.DuckDBPyConnection.references_from = _duckdb_tools.references_from
+    def _duckdb_export(name):
+        """Make a connection method: fetch the triplets table, run the pandas export."""
+        function = getattr(export, name)
 
-    # Export — DuckDB exports go through pandas (fetch .df() then use pandas export)
-    def _duckdb_export_to_excel(self, path, table_name="triplets"):
-        df = self.execute(f"SELECT * FROM {table_name}").df()
-        return export.export_to_excel(df, path=path)
+        def method(connection, *args, table_name="triplets", **kwargs):
+            df = connection.execute(f"SELECT * FROM {table_name}").df()
+            return function(df, *args, **kwargs)
 
-    def _duckdb_export_to_nquads(self, path, rdf_map=None, table_name="triplets"):
-        df = self.execute(f"SELECT * FROM {table_name}").df()
-        return export.export_to_nquads(df, path, rdf_map=rdf_map)
+        method.__name__ = name
+        method.__doc__ = function.__doc__
+        return method
 
-    def _duckdb_export_to_csv(self, path=None, table_name="triplets", **kwargs):
-        df = self.execute(f"SELECT * FROM {table_name}").df()
-        return export.export_to_csv(df, path=path, **kwargs)
-
-    duckdb.DuckDBPyConnection.export_to_excel = _duckdb_export_to_excel
-    duckdb.DuckDBPyConnection.export_to_nquads = _duckdb_export_to_nquads
-    duckdb.DuckDBPyConnection.export_to_csv = _duckdb_export_to_csv
+    for name in DUCKDB_TOOL_METHODS:
+        setattr(duckdb.DuckDBPyConnection, name, getattr(duckdb_engine, name))
+    for name in DUCKDB_EXPORT_METHODS:
+        setattr(duckdb.DuckDBPyConnection, name, _duckdb_export(name))
     logger.debug("Registered DuckDB connection tools + export helpers")
-except ImportError:
+else:
     logger.debug("duckdb not installed, skipping DuckDB tools/export patches")
-    pass

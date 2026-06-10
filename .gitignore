@@ -2,8 +2,17 @@
 /dist/
 /venv/
 /docs/build/
+# Python bytecode
+__pycache__/
+*.py[cod]
 # Compiled parser extensions (build with pixi or setup_cython_parser.py in matching env)
 *.so
+# Cython-generated C++ (regenerated from .pyx on every build; committing them
+# makes CI checkouts dirty and breaks the versioneer release version)
+triplets/parser/cython_pugixml_arrow.cpp
+triplets/export/cimxml_cython_pugixml.cpp
 *.egg-info/
+# IDE
+/.idea/
 # pyvis local JS libs (created by graph.show())
 /lib/
