@@ -14,5 +14,3 @@ triplets/export/cimxml_cython_pugixml.cpp
 *.egg-info/
 # IDE
 /.idea/
-# pyvis local JS libs (created by graph.show())
-/lib/

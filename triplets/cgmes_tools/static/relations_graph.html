@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>$title</title>
+<script>$vis_js</script>
+<style>
+    html, body { margin: 0; height: 100%; font-family: sans-serif; }
+    #graph { width: 100%; height: 100%; }
+    #panel {
+        display: none; flex-direction: column; position: fixed;
+        top: 10px; right: 10px; max-width: 90vw; max-height: calc(100vh - 20px);
+        background: #fff; border: 1px solid #ccc; border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.15); z-index: 10;
+    }
+    #panel-header {
+        display: flex; align-items: center; gap: 8px;
+        padding: 6px 10px; border-bottom: 1px solid #ddd; background: #f7f7f7;
+    }
+    #panel-title { font-weight: bold; font-size: 13px; flex: 1; }
+    #panel-content { overflow: auto; padding: 10px; }
+    #panel-content table { border-collapse: collapse; font-size: 12px; }
+    #panel-content th, #panel-content td {
+        border: 1px solid #ddd; padding: 2px 8px; text-align: left;
+        white-space: nowrap;  /* keep UUIDs on one line */
+    }
+    #panel-content th { background: #f0f0f0; }
+    button { cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="graph"></div>
+<div id="panel">
+    <div id="panel-header">
+        <span id="panel-title"></span>
+        <button id="panel-copy" title="Copy table as tab-separated text">Copy</button>
+        <button id="panel-close">&#10005;</button>
+    </div>
+    <div id="panel-content"></div>
+</div>
+<script>
+    const nodes = new vis.DataSet($nodes);
+    const edges = new vis.DataSet($edges);
+    const network = new vis.Network(document.getElementById("graph"), {nodes, edges}, $options);
+
+    const panel = document.getElementById("panel");
+    const panelTitle = document.getElementById("panel-title");
+    const panelContent = document.getElementById("panel-content");
+
+    network.on("selectNode", function (params) {
+        const node = nodes.get(params.nodes[0]);
+        panelTitle.textContent = node.label;
+        panelContent.innerHTML = node.objectTable || "";
+        panel.style.display = "flex";
+    });
+    network.on("deselectNode", function () { panel.style.display = "none"; });
+    document.getElementById("panel-close").onclick = function () { panel.style.display = "none"; };
+
+    document.getElementById("panel-copy").onclick = function () {
+        const rows = Array.from(panelContent.querySelectorAll("tr")).map(
+            tr => Array.from(tr.children).map(cell => cell.innerText).join("\t")
+        ).join("\n");
+        navigator.clipboard.writeText(rows);
+    };
+</script>
+</body>
+</html>

@@ -124,30 +124,27 @@ class TestGetDanglingReferences:
         assert isinstance(result, pandas.DataFrame)
 
 
-# ── Visualization (pyvis) ──────────────────────────────────────────────────
+# ── Visualization (vis-network) ────────────────────────────────────────────
 
 class TestVisualization:
-    @pytest.fixture(autouse=True)
-    def _require_pyvis(self):
-        pytest.importorskip("pyvis")
-
     def test_draw_relations_to_notebook(self, svedala_data):
-        from pyvis.network import Network
         subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
         result = cgmes_tools.draw_relations_to(svedala_data, subs, notebook=True)
-        assert isinstance(result, Network)
+        assert isinstance(result, str)
+        assert "new vis.Network" in result
+        assert hasattr(result, "_repr_html_")  # displays inline in Jupyter
 
     def test_draw_relations_from_notebook(self, svedala_data):
-        from pyvis.network import Network
         subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
         result = cgmes_tools.draw_relations_from(svedala_data, subs, notebook=True)
-        assert isinstance(result, Network)
+        assert isinstance(result, str)
+        assert "new vis.Network" in result
 
     def test_draw_relations_notebook(self, svedala_data):
-        from pyvis.network import Network
         subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
         result = cgmes_tools.draw_relations(svedala_data, subs, notebook=True, levels=1)
-        assert isinstance(result, Network)
+        assert isinstance(result, str)
+        assert "new vis.Network" in result
 
     def test_draw_relations_to_file(self, svedala_data):
         subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
@@ -155,9 +152,14 @@ class TestVisualization:
             orig_cwd = os.getcwd()
             os.chdir(tmpdir)
             try:
-                result = cgmes_tools.draw_relations_to(svedala_data, subs, notebook=False)
+                result = cgmes_tools.draw_relations_to(svedala_data, subs, notebook=False, open_browser=False)
                 assert os.path.exists(result)
                 assert os.path.getsize(result) > 0
+                with open(result, encoding="utf-8") as f:
+                    content = f.read()
+                # self-contained: vendored vis-network JS + node data table for the panel
+                assert "vis-network" in content
+                assert "objectTable" in content
             finally:
                 os.chdir(orig_cwd)
 
