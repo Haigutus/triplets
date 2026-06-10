@@ -1,24 +1,38 @@
-.. triplets documentation master file, created by
-   sphinx-quickstart on Thu Oct  9 19:24:14 2025.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+triplets
+========
 
-Documentation
-======================
+RDF/XML toolkit for ENTSO-E/CGMES power grid data.
+
+Parses CIM RDF/XML to pandas/polars DataFrames, provides query/filter/diff tools,
+and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Quickstart:
+   :caption: Getting Started
 
    quickstart
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 1
+   :caption: Guides
 
-   triplets.rdf_parser
-   triplets.cgmes_tools
-   triplets.rdfs_tools
+   guides/parsers
+   guides/building
+   guides/testing
+   guides/migration_0.0_to_0.1
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API Reference
+
+   Parser <triplets.parser>
+   Tools <triplets.tools>
+   Export <triplets.export>
+   CLI <triplets.cli>
+   CGMES Tools <triplets.cgmes_tools>
+   RDFS Tools <triplets.rdfs_tools>
+   rdf_parser (deprecated) <triplets.rdf_parser>
+   Export Schema <triplets.export_schema>
 
 Indices and tables
 ==================
@@ -26,4 +40,3 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-

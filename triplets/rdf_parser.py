@@ -588,9 +588,12 @@ if __name__ == '__main__':
                         format='%(levelname) -10s %(asctime)s %(name) -30s %(funcName) -35s %(lineno) -5d: %(message)s',
                         level=logging.DEBUG)
 
+    # When run directly, use absolute imports instead of relative
+    from triplets.parser import parse
     path = "../test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"
 
-    data = pandas.read_RDF([path], debug=True)
+    # logger is in DEBUG state above; the debug= param is no longer required (auto-detected from logger level)
+    data = parse([path])  # exercises new auto debug behavior (no explicit debug=True)
 
     print("Loaded types")
     print(data.query("KEY == 'Type'")["VALUE"].value_counts())

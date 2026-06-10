@@ -1,8 +1,6 @@
 # -------------------------------------------------------------------------------
-# Name:        export/pandas_engine.py
-# Purpose:     Export functions for triplet DataFrames (Excel, CSV, CIM XML, NetworkX)
-#
-# Extracted from rdf_parser.py
+# Name:        export/cimxml_pandas.py
+# Purpose:     Export triplet DataFrames to CIM RDF XML format
 # -------------------------------------------------------------------------------
 import os
 import json
@@ -22,7 +20,7 @@ from lxml import etree
 from lxml.builder import ElementMaker
 from lxml.etree import QName
 
-from triplets.tools import triplet_to_tableviews, get_namespace_map
+from triplets.tools import get_namespace_map
 
 logger = logging.getLogger(__name__)
 
@@ -48,165 +46,6 @@ def _print_duration(text, start_time):
     duration = end_time - start_time
     logger.info(f"{text} {duration}")
     return duration, end_time
-
-
-def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, single_file=False, filename=None, apply_formatting=True):
-    """Export triplet data to Excel file(s), with each type on a separate sheet.
-
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        Triplet dataset containing RDF data.
-    path : str, optional
-        Directory path to save Excel file(s), or file path when single_file=True.
-    multivalue : bool, default True
-        If True, aggregate duplicate (ID, KEY) pairs into lists.
-    export_to_memory : bool, default False
-        If True, return BytesIO objects; if False, save to disk.
-    single_file : bool, default False
-        If True, export all data to a single file instead of one file per INSTANCE_ID.
-    filename : str, optional
-        Filename to use when single_file=True. If None, uses 'export.xlsx'.
-    apply_formatting : bool, default True
-        If True, apply column width and freeze panes formatting.
-
-    Returns
-    -------
-    BytesIO, str, or list
-        Depends on single_file and export_to_memory flags.
-    """
-    if single_file:
-        if filename is None:
-            filename = 'export.xlsx'
-
-        tableviews = triplet_to_tableviews(data, multivalue=multivalue)
-        output = BytesIO()
-        output.name = filename
-
-        with pandas.ExcelWriter(output, engine='openpyxl') as writer:
-            for class_type, class_data in tableviews.items():
-                class_data.to_excel(writer, sheet_name=class_type)
-                if apply_formatting:
-                    from openpyxl.utils import get_column_letter
-                    sheet = writer.sheets[class_type]
-                    for i in range(1, len(class_data.columns) + 2):
-                        sheet.column_dimensions[get_column_letter(i)].width = 38
-                    sheet.freeze_panes = 'B2'
-
-        output.seek(0)
-
-        if export_to_memory:
-            return output
-        else:
-            if path is None:
-                path = os.getcwd()
-            if os.path.isdir(path) or not path.endswith('.xlsx'):
-                export_path = os.path.join(path, filename)
-            else:
-                export_path = path
-            with open(export_path, 'wb') as f:
-                f.write(output.read())
-            logger.info(f'Saved {export_path}')
-            return filename
-    else:
-        labels = data.query("KEY == 'label'")
-        exported_files = []
-
-        for _, label in labels.iterrows():
-            instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
-            tableviews = triplet_to_tableviews(instance_data, multivalue=multivalue)
-            file_name = '{}.xlsx'.format(label.VALUE.split(".")[0])
-            output = BytesIO()
-            output.name = file_name
-
-            with pandas.ExcelWriter(output, engine='openpyxl') as writer:
-                for class_type, class_data in tableviews.items():
-                    class_data.to_excel(writer, sheet_name=class_type)
-                    if apply_formatting:
-                        from openpyxl.utils import get_column_letter
-                        sheet = writer.sheets[class_type]
-                        for i in range(1, len(class_data.columns) + 2):
-                            sheet.column_dimensions[get_column_letter(i)].width = 38
-                        sheet.freeze_panes = 'B2'
-
-            output.seek(0)
-            exported_files.append(output)
-
-        if export_to_memory:
-            return exported_files
-        else:
-            if path is None:
-                path = os.getcwd()
-            exported_file_names = []
-            for file_object in exported_files:
-                export_path = os.path.join(path, file_object.name)
-                with open(export_path, 'wb') as f:
-                    file_object.seek(0)
-                    f.write(file_object.read())
-                exported_file_names.append(file_object.name)
-                logger.info(f'Saved {export_path}')
-            return exported_file_names
-
-
-def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):
-    """Export triplet data to CSV files, with each type as a separate file.
-
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        Triplet dataset containing RDF data.
-    path : str, optional
-        Directory path to save CSV file(s).
-    multivalue : bool, default True
-        If True, aggregate duplicate (ID, KEY) pairs into lists.
-    export_to_memory : bool, default False
-        If True, return BytesIO objects; if False, save to disk.
-    single_file : bool, default False
-        If True, export all data using a single base filename.
-    base_filename : str, optional
-        Base filename when single_file=True. If None, uses 'export'.
-    """
-    if single_file:
-        if base_filename is None:
-            base_filename = 'export'
-        tableviews = triplet_to_tableviews(data, multivalue=multivalue)
-        exported_files = []
-        for class_type, class_data in tableviews.items():
-            file_name = '{}_{}.csv'.format(base_filename, class_type)
-            output = BytesIO()
-            output.name = file_name
-            output.write(class_data.to_csv().encode('utf-8'))
-            output.seek(0)
-            exported_files.append(output)
-    else:
-        labels = data.query("KEY == 'label'")
-        exported_files = []
-        for _, label in labels.iterrows():
-            instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
-            tableviews = triplet_to_tableviews(instance_data, multivalue=multivalue)
-            base_name = label.VALUE.split(".")[0]
-            for class_type, class_data in tableviews.items():
-                file_name = '{}_{}.csv'.format(base_name, class_type)
-                output = BytesIO()
-                output.name = file_name
-                output.write(class_data.to_csv().encode('utf-8'))
-                output.seek(0)
-                exported_files.append(output)
-
-    if export_to_memory:
-        return exported_files
-    else:
-        if path is None:
-            path = os.getcwd()
-        exported_file_names = []
-        for file_object in exported_files:
-            export_path = os.path.join(path, file_object.name)
-            with open(export_path, 'wb') as f:
-                file_object.seek(0)
-                f.write(file_object.read())
-            exported_file_names.append(file_object.name)
-            logger.info(f'Saved {export_path}')
-        return exported_file_names
 
 
 @lru_cache(maxsize=250)  # Adjust maxsize based on the number of unique QName combinations
@@ -687,40 +526,3 @@ def export_to_cimxml(data,
             logger.info(f'Saved {export_path}')
 
         return exported_file_names
-
-
-def export_to_networkx(data):
-    """Convert a triplet dataset to a NetworkX graph.
-
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        Triplet dataset containing RDF data.
-
-    Returns
-    -------
-    networkx.Graph
-        A NetworkX graph with nodes (IDs with Type attributes) and edges (references).
-
-    Notes
-    -----
-    - TODO: Add all node data and support additional graph export formats.
-
-    Examples
-    --------
-    >>> graph = data.to_networkx()
-    """
-    import networkx
-
-    #  TODO - Add all node data
-    #  TODO - Add all supported graph export formats
-
-    edges = data.references_all()
-    nodes = data[["ID", "KEY", "VALUE"]].drop_duplicates().query("KEY == 'Type'")[["ID", "VALUE"]]
-
-    graph = networkx.Graph()
-
-    graph.add_nodes_from([(ID, {"Type": VALUE}) for ID, VALUE in nodes.values])
-    graph.add_edges_from([(FROM, TO, {"Type": KEY}) for FROM, KEY, TO in edges.values])
-
-    return graph

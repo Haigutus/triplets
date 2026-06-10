@@ -381,3 +381,201 @@ class TestExportToNetworkx:
         G = svedala_eq.export_to_networkx()
         assert isinstance(G, networkx.Graph)
         assert G.number_of_nodes() > 0
+
+
+# ── Polars engine tests ─────────────────────────────────────────────────────
+
+class TestPolarsMultivalue:
+    """Test multivalue support in polars engine."""
+
+    @pytest.fixture(scope="class")
+    def pl_data(self):
+        polars = pytest.importorskip("polars")
+        if not SVEDALA_DIR.exists():
+            pytest.skip(SKIP_REASON)
+        return polars.read_rdf(SVEDALA_FILES)
+
+    def test_type_tableview_multivalue(self, pl_data):
+        from triplets.tools import polars_engine as pe
+        tv = pe.type_tableview(pl_data, "FullModel", multivalue=True)
+        assert tv is not None
+        assert len(tv) > 0
+        # DependentOn should be comma-separated for multi-value
+        dep = tv["Model.DependentOn"][0]
+        assert isinstance(dep, str)
+
+    def test_type_tableview_multivalue_single_values(self, pl_data):
+        import polars
+        from triplets.tools import polars_engine as pe
+        tv = pe.type_tableview(pl_data, "Substation", multivalue=True, string_to_number=False)
+        assert tv is not None
+        assert len(tv) > 0
+        # Substation shouldn't have multi-values, so all should be plain strings
+        for col in tv.columns:
+            if col == "ID":
+                continue
+            assert tv[col].dtype == polars.Utf8 or tv[col].dtype == polars.String
+
+    def test_type_tableview_parity_with_pandas(self, pl_data, svedala_data):
+        """Polars multivalue and pandas multivalue should have same row count."""
+        from triplets.tools import polars_engine as pe
+        tv_pl = pe.type_tableview(pl_data, "ACLineSegment", multivalue=True, string_to_number=False)
+        tv_pd = svedala_data.type_tableview("ACLineSegment", multivalue=True)
+        assert len(tv_pl) == len(tv_pd)
+
+
+class TestPolarsExportCsv:
+    """Test CSV export via polars engine."""
+
+    @pytest.fixture(scope="class")
+    def pl_eq(self):
+        polars = pytest.importorskip("polars")
+        eq_file = SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"
+        if not eq_file.exists():
+            pytest.skip(SKIP_REASON)
+        return polars.read_rdf([str(eq_file)])
+
+    def test_csv_export_to_memory(self, pl_eq):
+        result = triplets.export.export_to_csv(pl_eq, export_to_memory=True, single_file=True)
+        assert isinstance(result, list)
+        assert len(result) > 0
+        assert hasattr(result[0], "read")
+
+    def test_csv_export_multivalue(self, pl_eq):
+        result = triplets.export.export_to_csv(pl_eq, export_to_memory=True, single_file=True, multivalue=True)
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+
+class TestPolarsExportNquads:
+    """Test N-Quads export via polars engine."""
+
+    @pytest.fixture(scope="class")
+    def pl_eq(self):
+        polars = pytest.importorskip("polars")
+        eq_file = SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"
+        if not eq_file.exists():
+            pytest.skip(SKIP_REASON)
+        return polars.read_rdf([str(eq_file)])
+
+    def test_nquads_export(self, pl_eq, tmp_path):
+        output = str(tmp_path / "test.nq")
+        triplets.export.export_to_nquads(pl_eq, output)
+        import os
+        assert os.path.exists(output)
+        with open(output) as f:
+            lines = f.readlines()
+        assert len(lines) == len(pl_eq)
+        # Each line should be a valid N-Quad
+        assert lines[0].endswith(" .\n")
+        assert "<urn:uuid:" in lines[0]
+
+
+# ── Roundtrip test (export CIM XML → reimport → compare) ────────────────────
+
+class TestCimxmlRoundtrip:
+    """Export Svedala EQ (CGMES 3.0) to CIM XML, reimport, verify data is identical."""
+
+    def test_roundtrip_types_match(self, svedala_eq):
+        from triplets.export_schema import schemas
+
+        result = svedala_eq.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+            export_type="xml_per_instance",
+            export_to_memory=True,
+        )
+        assert len(result) > 0
+        result[0].seek(0)
+        reimported = pandas.read_RDF([result[0]])
+
+        # All object types should survive the roundtrip
+        orig_types = set(svedala_eq.types_dict().keys()) - {"Distribution", "NamespaceMap"}
+        reimp_types = set(reimported.types_dict().keys()) - {"Distribution", "NamespaceMap"}
+        assert orig_types == reimp_types, f"Missing: {orig_types - reimp_types}, Extra: {reimp_types - orig_types}"
+
+    def test_roundtrip_object_counts_match(self, svedala_eq):
+        from triplets.export_schema import schemas
+
+        result = svedala_eq.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+            export_type="xml_per_instance",
+            export_to_memory=True,
+        )
+        result[0].seek(0)
+        reimported = pandas.read_RDF([result[0]])
+
+        orig_td = svedala_eq.types_dict()
+        reimp_td = reimported.types_dict()
+        for type_name in orig_td:
+            if type_name in ("Distribution", "NamespaceMap"):
+                continue
+            assert orig_td[type_name] == reimp_td.get(type_name, 0), \
+                f"{type_name}: {orig_td[type_name]} -> {reimp_td.get(type_name, 0)}"
+
+    def test_roundtrip_no_data_diff(self, svedala_eq):
+        from triplets.export_schema import schemas
+
+        result = svedala_eq.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+            export_type="xml_per_instance",
+            export_to_memory=True,
+        )
+        result[0].seek(0)
+        reimported = pandas.read_RDF([result[0]])
+
+        # Diff excluding meta rows (Distribution, NamespaceMap have different IDs per parse)
+        diff = triplets.tools.diff_between_triplet(svedala_eq, reimported)
+        meta_ids = set()
+        for meta_type in ("Distribution", "NamespaceMap"):
+            ids = diff[
+                (diff["KEY"].astype(str) == "Type") &
+                (diff["VALUE"].astype(str) == meta_type)
+            ]["ID"].astype(str).unique()
+            meta_ids.update(ids)
+        data_diff = diff[~diff["ID"].astype(str).isin(meta_ids)]
+        assert len(data_diff) == 0, f"Data diff has {len(data_diff)} rows:\n{data_diff.head(10)}"
+
+
+# ── DuckDB tools tests ──────────────────────────────────────────────────────
+
+class TestDuckdbTools:
+    """Test triplet tools operations via DuckDB monkey-patched connection."""
+
+    @pytest.fixture(scope="class")
+    def db(self):
+        duckdb = pytest.importorskip("duckdb")
+        import triplets
+        if not SVEDALA_DIR.exists():
+            pytest.skip(SKIP_REASON)
+        data = duckdb.connect()
+        data.read_rdf(SVEDALA_FILES)
+        return data
+
+    def test_types_dict(self, db):
+        td = db.types_dict()
+        assert isinstance(td, dict)
+        assert "ACLineSegment" in td
+        assert "Substation" in td
+
+    def test_type_tableview(self, db):
+        tv = db.type_tableview("Substation").df()
+        assert len(tv) > 0
+        assert "IdentifiedObject.name" in tv.columns
+
+    def test_filter_triplets_exact(self, db):
+        df = db.filter_triplets(KEY="Type", VALUE="Substation").df()
+        assert len(df) > 0
+        assert all(df["KEY"] == "Type")
+
+    def test_filter_triplets_regex(self, db):
+        df = db.filter_triplets(KEY="Model.*", regex=True).df()
+        assert len(df) > 0
+
+    def test_filter_by_type(self, db):
+        df = db.filter_by_type("ACLineSegment").df()
+        assert len(df) > 0
+
+    def test_references_to(self, db):
+        sub_id = db.filter_triplets(KEY="Type", VALUE="Substation").df()["ID"].iloc[0]
+        df = db.references_to(sub_id).df()
+        assert isinstance(df, pandas.DataFrame)

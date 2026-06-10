@@ -3,6 +3,8 @@ name: Deploy Sphinx Docs to GitHub Pages
 on:
   release:
     types: [created]
+  pull_request:  # validate docs build on PRs
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -13,27 +15,99 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.11'  # Use your Python version
+          python-version: '3.13'
 
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-napoleon sphinx-multiversion myst-parser
+          python3 -m pip install furo sphinx myst-parser
           python3 -m pip install lxml pandas aniso8601
 
-      - name: Build Sphinx docs
+      # Build current version (latest)
+      - name: Build current docs
         run: |
           cd docs
-          make html  # Builds to docs/build/html
+          make html
+          mkdir -p _site/latest
+          cp -r build/html/* _site/latest/
+
+      # Build docs for each release tag that has docs/source/conf.py
+      - name: Build versioned docs
+        continue-on-error: true
+        run: |
+          VERSIONS_JSON='[]'
+          for tag in $(git tag --sort=-version:refname); do
+            if git show "$tag:docs/source/conf.py" >/dev/null 2>&1; then
+              echo "Building docs for $tag..."
+
+              git worktree add "/tmp/docs-$tag" "$tag" 2>/dev/null || continue
+
+              # Install theme for this tag
+              if grep -q "furo" "/tmp/docs-$tag/docs/source/conf.py" 2>/dev/null; then
+                python3 -m pip install -q furo 2>/dev/null || true
+              else
+                python3 -m pip install -q sphinx-rtd-theme sphinxcontrib-napoleon 2>/dev/null || true
+              fi
+
+              # Install the package so autodoc can import modules
+              cd "/tmp/docs-$tag"
+              export PYTHONPATH="/tmp/docs-$tag:$PYTHONPATH"
+              python3 -m pip install -q lxml pandas aniso8601 2>/dev/null || true
+              python3 -m pip install -q -e . 2>/dev/null || true
+
+              # Build (show errors for debugging)
+              cd docs
+              make html 2>&1 || { echo "  Build failed for $tag, skipping"; cd "$GITHUB_WORKSPACE"; git worktree remove "/tmp/docs-$tag" --force 2>/dev/null; continue; }
+
+              # Copy to site
+              mkdir -p "$GITHUB_WORKSPACE/docs/_site/$tag"
+              cp -r build/html/* "$GITHUB_WORKSPACE/docs/_site/$tag/"
+
+              # Cleanup
+              cd "$GITHUB_WORKSPACE"
+              git worktree remove "/tmp/docs-$tag" --force 2>/dev/null || true
+
+              VERSIONS_JSON=$(echo "$VERSIONS_JSON" | python3 -c "
+          import sys, json
+          v = json.load(sys.stdin)
+          v.append('$tag')
+          json.dump(v, sys.stdout)
+          ")
+
+              echo "  Done: $tag"
+            fi
+          done
+
+          echo "Built versions: $VERSIONS_JSON"
+          echo "$VERSIONS_JSON" > docs/_site/versions.json
+
+      # Create index.html that redirects to latest
+      - name: Create version index
+        run: |
+          cat > docs/_site/index.html << 'HEREDOC'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta http-equiv="refresh" content="0; url=latest/">
+            <title>Redirecting to latest docs...</title>
+          </head>
+          <body>
+            <p>Redirecting to <a href="latest/">latest documentation</a>...</p>
+          </body>
+          </html>
+          HEREDOC
 
       - name: Deploy to GitHub Pages
+        if: github.event_name != 'pull_request'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build/html  # Deploy the built HTML
-          publish_branch: gh-pages  # Target branch for Pages
+          publish_dir: docs/_site
+          publish_branch: gh-pages

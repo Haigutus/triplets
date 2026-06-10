@@ -257,9 +257,12 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False):
     # Debug timing and per-file identity
     cdef object start_time
     cdef object _dt  # lazy datetime module, only when debug=True
+    cdef object _logger = None
     if debug:
         import datetime as _dt_mod
+        import logging as _logging_mod
         _dt = _dt_mod
+        _logger = _logging_mod.getLogger("triplets.parser.cython_pugixml_arrow")
         start_time = _dt.datetime.now()
 
     # Per-file identity (used for INSTANCE_ID column and for metadata rows).
@@ -321,7 +324,7 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False):
 
     if debug:
         end = _dt.datetime.now()
-        print(f"  XML parse: {end - start_time}")
+        _logger.debug("[%s] XML parse: %s", file_name, end - start_time)
         start_time = end
 
     cdef xml_node root = doc.first_child()
@@ -476,7 +479,7 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False):
 
         if debug:
             end = _dt.datetime.now()
-            print(f"  Extraction: {end - start_time}")
+            _logger.debug("[%s] Extraction: %s", file_name, end - start_time)
             start_time = end
 
         # ── Build Arrow RecordBatch ──────────────────────────────────────
@@ -514,7 +517,7 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False):
 
         if debug:
             end = _dt.datetime.now()
-            print(f"  Arrow finalize: {end - start_time}")
+            _logger.debug("[%s] Arrow finalize: %s", file_name, end - start_time)
 
         return batch_py
 

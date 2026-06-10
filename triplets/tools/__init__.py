@@ -21,9 +21,11 @@ def _auto_engine(data):
     if hasattr(data, '__module__') and 'polars' in type(data).__module__:
         try:
             from . import polars_engine
+            logger.debug(f"engine auto-selected: polars (input is polars DataFrame)")
             return "polars"
         except ImportError:
             pass
+    logger.debug(f"engine auto-selected: pandas")
     return "pandas"
 
 
@@ -31,6 +33,8 @@ def _get_engine(engine, data=None):
     """Resolve engine name and return the module."""
     if engine == "auto":
         engine = _auto_engine(data) if data is not None else "pandas"
+    else:
+        logger.debug(f"engine set: {engine}")
     if engine == "polars":
         from . import polars_engine
         return polars_engine
@@ -85,6 +89,9 @@ def filter_by_type(data, type_name, type_key="Type", engine="auto"):
 
 def filter_by_triplet(data, filter_triplet, engine="auto"):
     return _get_engine(engine, data).filter_by_triplet(data, filter_triplet)
+
+def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex=False, engine="auto"):
+    return _get_engine(engine, data).filter_triplets(data, ID=ID, KEY=KEY, VALUE=VALUE, INSTANCE_ID=INSTANCE_ID, regex=regex)
 
 def set_VALUE_at_KEY(data, key, value, engine="auto"):
     return _get_engine(engine, data).set_VALUE_at_KEY(data, key, value)
@@ -141,6 +148,7 @@ pandas.DataFrame.references_simple = lambda self, *a, **kw: references_simple(se
 pandas.DataFrame.references = lambda self, *a, **kw: references(self, *a, **kw)
 pandas.DataFrame.filter_by_type = lambda self, *a, **kw: filter_by_type(self, *a, **kw)
 pandas.DataFrame.filter_by_triplet = lambda self, *a, **kw: filter_by_triplet(self, *a, **kw)
+pandas.DataFrame.filter_triplets = lambda self, *a, **kw: filter_triplets(self, *a, **kw)
 pandas.DataFrame.set_VALUE_at_KEY = lambda self, *a, **kw: set_VALUE_at_KEY(self, *a, **kw)
 pandas.DataFrame.set_VALUE_at_KEY_and_ID = lambda self, *a, **kw: set_VALUE_at_KEY_and_ID(self, *a, **kw)
 pandas.DataFrame.tableview_to_triplet = lambda self, *a, **kw: tableview_to_triplet(self, *a, **kw)

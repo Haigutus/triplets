@@ -71,15 +71,17 @@ def get_engine(name: str = "auto"):
     if name == "auto":
         for candidate in ("cython_pugixml_arrow", "python_lxml_arrow", "python_lxml_pandas"):
             try:
+                logger.debug(f"auto - test engine availability: {candidate}")
                 return candidate, _load_engine(candidate)
             except ImportError:
                 continue
             except Exception:
                 # real error in engine (e.g. during load), surface it rather than silent fallback
                 raise
-        # Should never reach here since python_lxml_pandas always works
-        return "python_lxml_pandas", _load_engine("python_lxml_pandas")
+
     resolved = _ENGINE_ALIASES.get(name, name)
+
+    logger.debug(f"engine set: {resolved}")
     return resolved, _load_engine(resolved)
 
 
@@ -98,13 +100,21 @@ def parse(
 ) -> Any:
     """Main entry: parse CIM RDF/XML (or zips) using chosen engine.
 
-    engine: "auto" (best available), "python_lxml_pandas", "python_lxml_arrow",
-            "cython_pugixml_arrow", or aliases "native"/"pugixml"/"performance".
-    return_type: "pandas" (default), "arrow" (pa.Table), "polars" (requires polars).
-    categorical_columns: columns to dictionary-encode (Arrow engines) or convert to
-                        pd.Categorical (pandas engine). Defaults to INSTANCE_ID and KEY
-                        (highly repetitive → big memory win). Pass None or () to disable.
+    Parameters
+    ----------
+    debug : bool, default False
+        Enable verbose debug output (file discovery, row counts, timing in some engines, etc.).
+        When False but the logger is at DEBUG level (logging.basicConfig(level=logging.DEBUG) or
+        getLogger("triplets.parser").setLevel(logging.DEBUG)), debug output is auto-enabled.
+    engine : str, default "auto"
+        Parser engine. "auto" picks best available.
+        Options: "python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow".
+    return_type : str, default "pandas"
+        Output format: "pandas", "arrow", or "polars".
+    categorical_columns : tuple or None, default ("INSTANCE_ID", "KEY")
+        Columns to dictionary-encode for memory savings. Pass None to disable.
     """
+    debug = debug or logger.isEnabledFor(logging.DEBUG)
     engine_name, engine_mod = get_engine(engine)
     is_arrow_engine = engine_name in _ARROW_ENGINES
 

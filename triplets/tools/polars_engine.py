@@ -23,12 +23,25 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type", mult
     type_data = type_ids.join(data, on="ID", how="inner")
 
     if multivalue:
-        data_view = type_data.group_by(["ID", "KEY"]).agg(
-            pl.when(pl.col("VALUE").count() == 1)
-            .then(pl.col("VALUE").first())
-            .otherwise(pl.col("VALUE").implode().list.eval(pl.element()).first())
-            .alias("VALUE")
-        ).pivot(on="KEY", index="ID", values="VALUE")
+        # Aggregate all values per (ID, KEY) into lists, then pivot.
+        # After pivot, convert single-element lists back to scalars.
+        agg = type_data.group_by(["ID", "KEY"]).agg(
+            pl.col("VALUE").alias("VALUE")
+        )
+        data_view = agg.pivot(on="KEY", index="ID", values="VALUE")
+        # Unwrap single-element lists to scalars for cleaner output.
+        # Multi-element lists stay as lists (matching pandas multivalue behavior).
+        for col in data_view.columns:
+            if col == "ID":
+                continue
+            dtype = data_view[col].dtype
+            if dtype == pl.List(pl.Utf8) or dtype == pl.List(pl.String):
+                data_view = data_view.with_columns(
+                    pl.when(pl.col(col).list.len() == 1)
+                    .then(pl.col(col).list.first())
+                    .otherwise(pl.col(col).list.join(", "))
+                    .alias(col)
+                )
     else:
         type_data = type_data.unique(subset=["ID", "KEY"], keep="first")
         data_view = type_data.pivot(on="KEY", index="ID", values="VALUE")
@@ -236,6 +249,33 @@ def filter_by_type(data, type_name, type_key="Type"):
 def filter_by_triplet(data, filter_triplet):
     """Filter data to rows matching the filter triplet."""
     return data.join(filter_triplet.select(["ID", "KEY", "VALUE"]), on=["ID", "KEY", "VALUE"], how="semi")
+
+
+def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex=False):
+    """Filter triplets by any combination of columns with optional regex.
+
+    Parameters
+    ----------
+    data : polars.DataFrame
+        Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
+    ID, KEY, VALUE, INSTANCE_ID : str, optional
+        Filter value. If regex=True, treated as regex pattern.
+    regex : bool, default False
+        If True, use regex matching (str.contains). If False, exact match.
+
+    Returns
+    -------
+    polars.DataFrame
+        Filtered triplet dataset.
+    """
+    expr = pl.lit(True)
+    for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
+        if val is not None:
+            if regex:
+                expr = expr & pl.col(col).cast(pl.Utf8).str.contains(val)
+            else:
+                expr = expr & (pl.col(col).cast(pl.Utf8) == val)
+    return data.filter(expr)
 
 
 def set_VALUE_at_KEY(data, key, value):
