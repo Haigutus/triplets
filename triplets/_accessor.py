@@ -199,10 +199,7 @@ except ImportError:
 # ── DuckDB connection ───────────────────────────────────────────────────────
 try:
     import duckdb
-
     from .tools import duckdb_engine as _duckdb_tools
-    from .export import nquads_duckdb as _duckdb_nquads
-    from .export import csv_duckdb as _duckdb_csv
 
     # Tools
     duckdb.DuckDBPyConnection.types_dict = _duckdb_tools.types_dict
@@ -212,15 +209,21 @@ try:
     duckdb.DuckDBPyConnection.references_to = _duckdb_tools.references_to
     duckdb.DuckDBPyConnection.references_from = _duckdb_tools.references_from
 
-    # Export
-    duckdb.DuckDBPyConnection.export_to_nquads = _duckdb_nquads.export_to_nquads
-    duckdb.DuckDBPyConnection.export_to_csv = _duckdb_csv.export_to_csv
-
+    # Export — DuckDB exports go through pandas (fetch .df() then use pandas export)
     def _duckdb_export_to_excel(self, path, table_name="triplets"):
-        """Export triplets table to Excel via pandas + openpyxl."""
         df = self.execute(f"SELECT * FROM {table_name}").df()
         return export.export_to_excel(df, path=path)
 
+    def _duckdb_export_to_nquads(self, path, rdf_map=None, table_name="triplets"):
+        df = self.execute(f"SELECT * FROM {table_name}").df()
+        return export.export_to_nquads(df, path, rdf_map=rdf_map)
+
+    def _duckdb_export_to_csv(self, path=None, table_name="triplets", **kwargs):
+        df = self.execute(f"SELECT * FROM {table_name}").df()
+        return export.export_to_csv(df, path=path, **kwargs)
+
     duckdb.DuckDBPyConnection.export_to_excel = _duckdb_export_to_excel
+    duckdb.DuckDBPyConnection.export_to_nquads = _duckdb_export_to_nquads
+    duckdb.DuckDBPyConnection.export_to_csv = _duckdb_export_to_csv
 except ImportError:
     pass

@@ -1,19 +1,15 @@
-"""N-Quads export using pandas string operations.
-
-Converts [ID, KEY, VALUE, INSTANCE_ID] triplet DataFrame to N-Quads format.
-Each quad: <subject> <predicate> <object> <graph> .
-
-Pandas approach: vectorized string concat (no iterrows).
-"""
+"""N-Quads export using pandas — schema-aware value classification."""
 
 import pandas
 
-CIM_NS = "http://iec.ch/TC57/CIM100#"
-RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+from .nquads_utils import (
+    make_subject, make_predicate, make_object, make_graph,
+    build_key_metadata,
+)
 
 
-def export_to_nquads(data, path):
-    """Export triplet DataFrame to N-Quads file using pandas.
+def export_to_nquads(data, path, rdf_map=None):
+    """Export triplet DataFrame to N-Quads file.
 
     Parameters
     ----------
@@ -21,25 +17,26 @@ def export_to_nquads(data, path):
         Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
     path : str
         Output file path (.nq).
+    rdf_map : dict or str, optional
+        Export schema for proper enum/association detection.
+        If None, enumerations won't get namespace (exported as literals).
     """
+    enum_keys, key_namespaces = build_key_metadata(rdf_map) if rdf_map else (set(), {})
+
     id_col = data["ID"].astype(str)
     key_col = data["KEY"].astype(str)
     val_col = data["VALUE"].astype(str)
     inst_col = data["INSTANCE_ID"].astype(str)
 
-    is_type = key_col == "Type"
+    subjects = id_col.apply(make_subject)
+    predicates = key_col.apply(lambda k: make_predicate(k, key_namespaces))
+    objects = pandas.Series(
+        [make_object(k, v, enum_keys) for k, v in zip(key_col, val_col)],
+        index=data.index,
+    )
+    graphs = inst_col.apply(make_graph)
 
-    s = "<urn:uuid:" + id_col + ">"
-
-    p = pandas.Series(f"<{CIM_NS}" + key_col + ">", index=data.index)
-    p[is_type] = f"<{RDF_TYPE}>"
-
-    o = '"' + val_col + '"'
-    o[is_type] = f"<{CIM_NS}" + val_col[is_type] + ">"
-
-    g = "<urn:uuid:" + inst_col + ">"
-
-    quads = s + " " + p + " " + o + " " + g + " ."
+    quads = subjects + " " + predicates + " " + objects + " " + graphs + " ."
 
     with open(path, "w") as f:
         f.write("\n".join(quads.values) + "\n")

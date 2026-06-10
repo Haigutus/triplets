@@ -28,22 +28,19 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
                single_file=single_file, base_filename=base_filename)
 
 
-def export_to_nquads(data, path):
+def export_to_nquads(data, path, rdf_map=None):
     """Export triplet DataFrame to N-Quads file.
 
-    Auto-detects engine: polars if input is polars DataFrame, else pandas.
+    Parameters
+    ----------
+    rdf_map : dict or str, optional
+        Export schema for proper enum detection. If None, enums exported as literals.
     """
-    if hasattr(data, '__module__') and 'polars' in type(data).__module__:
+    if _is_polars(data):
         from .nquads_polars import export_to_nquads as _fn
-        return _fn(data, path)
-    try:
-        import polars
-        # Convert pandas to polars for the faster path
-        from .nquads_polars import export_to_nquads as _fn
-        return _fn(polars.from_pandas(data), path)
-    except ImportError:
-        from .nquads_pandas import export_to_nquads as _fn
-        return _fn(data, path)
+        return _fn(data, path, rdf_map=rdf_map)
+    from .nquads_pandas import export_to_nquads as _fn
+    return _fn(data, path, rdf_map=rdf_map)
 
 
 __all__ = [
