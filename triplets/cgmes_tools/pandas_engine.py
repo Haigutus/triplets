@@ -9,7 +9,10 @@
 # Licence:     MIT
 #-------------------------------------------------------------------------------
 
+import html
+import json
 import os
+import webbrowser
 import pandas
 import math
 import aniso8601
@@ -608,7 +611,73 @@ def get_limits(data):
     return limits
 
 
-def darw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False):
+GRAPH_OPTIONS = {
+    "nodes": {
+        "shape": "dot",
+        "size": 10,
+    },
+    "edges": {
+        "color": {"inherit": True},
+        "smooth": False,
+    },
+    "layout": {
+        "hierarchical": {
+            "enabled": True,
+            "direction": "LR",
+            "sortMethod": "directed",
+        },
+    },
+    "interaction": {
+        "navigationButtons": True,
+    },
+    "physics": {
+        "hierarchicalRepulsion": {
+            "centralGravity": 0,
+            "springLength": 75,
+            "nodeDistance": 145,
+            "damping": 0.2,
+        },
+        "maxVelocity": 28,
+        "minVelocity": 0.75,
+        "solver": "hierarchicalRepulsion",
+    },
+}
+
+
+class RelationsGraph(str):
+    """Self-contained HTML document of a relations graph. Displays inline in Jupyter."""
+
+    def _repr_html_(self):
+        return f'<iframe srcdoc="{html.escape(self)}" style="width:100%; height:650px; border:none"></iframe>'
+
+
+def _render_graph_html(title, nodes, edges, options):
+    """Fill the vis-network graph template (vendored, works offline)."""
+    from importlib.resources import files
+    from string import Template
+
+    def as_json(data):
+        return json.dumps(data).replace("</", "<\\/")  # keep "</script>" in values from closing the script tag
+
+    static = files("triplets.cgmes_tools") / "static"
+    template = Template((static / "relations_graph.html").read_text(encoding="utf-8"))
+    return template.substitute(
+        title=title,
+        vis_js=(static / "vis-network.min.js").read_text(encoding="utf-8"),
+        nodes=as_json(nodes),
+        edges=as_json(edges),
+        options=as_json(options),
+    )
+
+
+def _instance_filenames(data):
+    """Map INSTANCE_ID -> source filename (no path). Distribution objects store it under KEY 'label'."""
+    distributions = data[(data["KEY"] == "Type") & (data["VALUE"] == "Distribution")]["ID"]
+    labels = data[(data["KEY"] == "label") & data["ID"].isin(distributions)]
+    return {instance_id: os.path.basename(str(path)) for instance_id, path in zip(labels["INSTANCE_ID"], labels["VALUE"])}
+
+
+def darw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False, open_browser=True, instance_labels=None):
     """Create a temporary HTML file to visualize relations in a CGMES dataset.
 
     Parameters
@@ -618,128 +687,88 @@ def darw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False):
     ID_COLUMN : str
         Column name containing IDs (e.g., 'ID').
     notebook : bool, optional
-        If True, render the graph for Jupyter notebook (default is False).
+        If True, return the graph HTML for Jupyter notebook display (default is False).
+    open_browser : bool, optional
+        If True, open the generated HTML file in the default browser
+        (default is True; only applies when notebook=False).
+    instance_labels : dict, optional
+        INSTANCE_ID -> filename mapping shown in the object data tables.
+        If None, derived from reference_data (Type==Distribution, KEY==label).
 
     Returns
     -------
-    str or pyvis.network.Network
-        File path to the generated HTML file (if notebook=False) or the Network object
-        (if notebook=True).
+    str or RelationsGraph
+        File path to the generated HTML file (if notebook=False) or the graph
+        HTML (if notebook=True).
 
     Notes
     -----
-    - Uses pyvis for visualization with a hierarchical layout.
-    - Nodes include object data in hover tooltips.
+    - Renders with vis-network (vendored, hierarchical layout); the HTML is
+      self-contained and works offline.
+    - Selecting a node opens a panel with the object data table and a copy button.
 
     Examples
     --------
     >>> file_path = darw_relations_graph(data, 'ID')
     """
 
-    # Maybe redo the process. Find iteratively all relations by merge ID and VALUE columns, starting with single object ID
+    pivot = reference_data.drop_duplicates([ID_COLUMN, "KEY"]).pivot(index=ID_COLUMN, columns="KEY")["VALUE"].reset_index()
 
-    from pyvis.network import Network
-    import pyvis.options as options
+    # Node name: first available of
+    #   IdentifiedObject.name,
+    #   Model.profile (old FullModel header),
+    #   keyword       (new dcat:Dataset header, short profile name; conformsTo can be multiple),
+    #   label         (Distribution carries the source filename there),
+    # falling back to the object ID.
+    node_data = pivot[[ID_COLUMN, "Type"]].copy()
+    name = pandas.Series(pandas.NA, index=pivot.index, dtype="object")
+    for column in ("IdentifiedObject.name", "Model.profile", "keyword", "label"):
+        if column in pivot.columns:
+            name = name.fillna(pivot[column])
+    node_data["name"] = name.fillna(pivot[ID_COLUMN])
 
-    node_data = reference_data.drop_duplicates([ID_COLUMN, "KEY"]).pivot(index=ID_COLUMN, columns="KEY")["VALUE"].reset_index()
+    if instance_labels is None:
+        instance_labels = _instance_filenames(reference_data)
 
-    columns = node_data.columns
-
-    if "IdentifiedObject.name" in columns:
-        node_data = node_data[["ID", "Type", "IdentifiedObject.name"]].rename(columns={"IdentifiedObject.name": "name"})
-    elif "Model.profile" in columns:
-        node_data = node_data[["ID", "Type", "Model.profile"]].rename(columns={"Model.profile": "name"})
-    else:
-        node_data = node_data[["ID", "Type"]]
-        node_data["name"] = ""
-
-    # Visualize with pyvis
-
-    graph = Network(directed=True, width="100%", height="1000", notebook=notebook)
-    # node_name = urlparse(dataframe[dataframe.KEY == "Model.profile"].VALUE.tolist()[0]).path  # FullModel does not have IdentifiedObject.name
-
-    # Add nodes/objects
-    #print(node_data)
-    # TODO - maybe group by ID and then iterate
+    # Nodes: label + level for layout, object data table for the selection panel
+    nodes = []
     for node in node_data.itertuples():
-        #print(node)
         object_data = reference_data.query("{} == '{}'".format(ID_COLUMN, node.ID))
-        #print(object_data)
+        object_table = object_data[[ID_COLUMN, "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={ID_COLUMN: "ID"}).drop_duplicates()
+        # Show the source filename instead of the instance UUID
+        object_table["INSTANCE_ID"] = object_table["INSTANCE_ID"].map(instance_labels).fillna(object_table["INSTANCE_ID"])
+        nodes.append({
+            "id": node.ID,
+            "label": "{} - {}".format(node.Type, node.name),
+            "title": node.ID,  # plain-text hover tooltip
+            "size": 10,
+            "level": int(object_data.level.iloc[0]),
+            "objectTable": object_table.to_html(index=False),
+        })
 
-        node_name  = u"{} - {}".format(node.Type, node.name)
-        # Add object data table to node hover title
-        node_title = object_data[[ID_COLUMN, "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={ID_COLUMN: "ID"}).to_html(index=False)
-        #print(node_title)
-        node_level = object_data.level.tolist()[0]
+    # Edges
+    edges = []
+    if "ID_FROM" in reference_data.columns and "ID_TO" in reference_data.columns:
+        connections = reference_data[["ID_FROM", "ID_TO"]].dropna().drop_duplicates()
+        edges = [{"from": id_from, "to": id_to, "arrows": "to"} for id_from, id_to in connections.itertuples(index=False)]
 
-        graph.add_node(node.ID, node_name, title=node_title, size=10, level=node_level)
+    from_UUID = reference_data[ID_COLUMN].tolist()[0]
+    graph_html = _render_graph_html(title=from_UUID, nodes=nodes, edges=edges, options=GRAPH_OPTIONS)
 
+    if notebook:
+        return RelationsGraph(graph_html)
 
-    # Add connections
-
-    reference_data_columns = reference_data.columns
-
-    if "ID_FROM" in reference_data_columns and "ID_TO" in reference_data_columns:
-
-        connections = list(reference_data[["ID_FROM", "ID_TO"]].dropna().drop_duplicates().to_records(index=False))
-        graph.add_edges(connections)
-
-    # Set options
-
-    graph.set_options("""
-    var options = {
-        "nodes": {
-            "shape": "dot",
-            "size": 10
-        },
-        "edges": {
-            "color": {
-                "inherit": true
-            },
-            "smooth": false
-        },
-        "layout": {
-            "hierarchical": {
-                "enabled": true,
-                "direction": "LR",
-                "sortMethod": "directed"
-            }
-        },
-        "interaction": {
-            "navigationButtons": true
-        },
-        "physics": {
-            "hierarchicalRepulsion": {
-                "centralGravity": 0,
-                "springLength": 75,
-                "nodeDistance": 145,
-                "damping": 0.2
-            },
-            "maxVelocity": 28,
-            "minVelocity": 0.75,
-            "solver": "hierarchicalRepulsion"
-        }
-    }""")
-
-    # graph.show_buttons()
-
-    if notebook == False:
-
-        # Create unique filename
-        from_UUID = reference_data[ID_COLUMN].tolist()[0]
-        file_name = f"{from_UUID}.html"
-
-        # Show graph (works in notebooks and standalone)
-        graph.show(file_name)
-
-        # Returns file path
-        return os.path.abspath(file_name)
-
-    return graph
+    file_name = f"{from_UUID}.html"
+    with open(file_name, "w", encoding="utf-8") as file:
+        file.write(graph_html)
+    file_path = os.path.abspath(file_name)
+    if open_browser:
+        webbrowser.open(f"file://{file_path}")
+    return file_path
 
 
 
-def draw_relations_to(data, UUID, notebook=False):
+def draw_relations_to(data, UUID, notebook=False, open_browser=True):
     """Visualize relations pointing to a specific UUID in a CGMES dataset.
 
     Parameters
@@ -753,9 +782,9 @@ def draw_relations_to(data, UUID, notebook=False):
 
     Returns
     -------
-    str or pyvis.network.Network
-        File path to the generated HTML file (if notebook=False) or the Network object
-        (if notebook=True).
+    str or RelationsGraph
+        File path to the generated HTML file (if notebook=False) or the graph
+        HTML (if notebook=True).
 
     Examples
     --------
@@ -765,10 +794,10 @@ def draw_relations_to(data, UUID, notebook=False):
 
     ID_COLUMN = "ID"
 
-    return darw_relations_graph(reference_data, ID_COLUMN, notebook)
+    return darw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
 
 
-def draw_relations_from(data, UUID, notebook=False):
+def draw_relations_from(data, UUID, notebook=False, open_browser=True):
     """Visualize relations originating from a specific UUID in a CGMES dataset.
 
     Parameters
@@ -782,9 +811,9 @@ def draw_relations_from(data, UUID, notebook=False):
 
     Returns
     -------
-    str or pyvis.network.Network
-        File path to the generated HTML file (if notebook=False) or the Network object
-        (if notebook=True).
+    str or RelationsGraph
+        File path to the generated HTML file (if notebook=False) or the graph
+        HTML (if notebook=True).
 
     Examples
     --------
@@ -794,10 +823,10 @@ def draw_relations_from(data, UUID, notebook=False):
 
     ID_COLUMN = "ID"
 
-    return darw_relations_graph(reference_data, ID_COLUMN, notebook)
+    return darw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
 
 
-def draw_relations(data, UUID, notebook=False, levels=2):
+def draw_relations(data, UUID, notebook=False, levels=2, open_browser=True):
     """Visualize all relations (incoming and outgoing) for a specific UUID in a CGMES dataset.
 
     Parameters
@@ -813,9 +842,9 @@ def draw_relations(data, UUID, notebook=False, levels=2):
 
     Returns
     -------
-    str or pyvis.network.Network
-        File path to the generated HTML file (if notebook=False) or the Network object
-        (if notebook=True).
+    str or RelationsGraph
+        File path to the generated HTML file (if notebook=False) or the graph
+        HTML (if notebook=True).
 
     Examples
     --------
@@ -825,7 +854,7 @@ def draw_relations(data, UUID, notebook=False, levels=2):
 
     ID_COLUMN = "ID"
 
-    return darw_relations_graph(reference_data, ID_COLUMN, notebook)
+    return darw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
 
 
 def scale_load(data, load_setpoint, cos_f=None):

@@ -36,8 +36,8 @@ dev = [
     "openpyxl>=3.1.5",
     "rdflib>=7.6.0",
 ]
+# vis-network JS is vendored in triplets/cgmes_tools/static — graph drawing needs no extra deps
 visualization = [
-    "pyvis>=0.3.0,<0.3.2",  # 0.3.2 breaks graph.show() template rendering
     "networkx>=3.0",
 ]
 docs = [

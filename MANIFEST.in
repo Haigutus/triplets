@@ -4,4 +4,5 @@ include setup.py setup_cython_parser.py pyproject.toml
 include triplets/parser/cython_pugixml_arrow.pyx
 include triplets/export/cimxml_cython_pugixml.pyx
 recursive-include triplets/export_schema *
+recursive-include triplets/cgmes_tools/static *
 recursive-include vendor/pugixml *
