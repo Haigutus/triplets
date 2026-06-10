@@ -17,6 +17,8 @@ Usage:
 
 import pandas
 from . import tools, export
+import logging
+logger = logging.getLogger(__name__)
 
 
 @pandas.api.extensions.register_dataframe_accessor("triplets")
@@ -118,6 +120,9 @@ class TripletsAccessor:
         return export.export_to_networkx(self._df, **kw)
 
 
+logger.debug("Registered pandas triplets accessor")
+
+
 # ── Polars namespace ─────────────────────────────────────────────────────────
 try:
     import polars as pl
@@ -192,7 +197,10 @@ try:
         def export_to_networkx(self, **kw):
             return export.export_to_networkx(self._df, **kw)
 
+        logger.debug("Registered polars triplets namespace accessor")
+
 except ImportError:
+    logger.debug("polars not installed, skipping triplets namespace accessor")
     pass
 
 
@@ -225,5 +233,7 @@ try:
     duckdb.DuckDBPyConnection.export_to_excel = _duckdb_export_to_excel
     duckdb.DuckDBPyConnection.export_to_nquads = _duckdb_export_to_nquads
     duckdb.DuckDBPyConnection.export_to_csv = _duckdb_export_to_csv
+    logger.debug("Registered DuckDB connection tools + export helpers")
 except ImportError:
+    logger.debug("duckdb not installed, skipping DuckDB tools/export patches")
     pass

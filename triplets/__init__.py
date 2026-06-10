@@ -29,14 +29,18 @@ from .parser import parse, read_rdf as read_rdf_func  # noqa: F401
 # polars uses functools.partial so return_type defaults to "polars" automatically.
 from functools import partial
 import pandas as pd
+import logging
 pd.read_RDF = partial(parse, return_type="pandas")
 pd.read_rdf = partial(parse, return_type="pandas")
+logging.getLogger(__name__).debug("Registered pandas.read_rdf (and read_RDF)")
 
 try:
     import polars as pl
     pl.read_rdf = partial(parse, return_type="polars")
     pl.read_RDF = partial(parse, return_type="polars")
+    logging.getLogger(__name__).debug("Registered polars.read_rdf (polars available)")
 except ImportError:
+    logging.getLogger(__name__).debug("polars not installed, skipping read_rdf registration")
     pass
 
 # Register read_rdf on DuckDB connections (if duckdb is installed)
@@ -57,6 +61,8 @@ try:
         return row_count
 
     _duckdb.DuckDBPyConnection.read_rdf = _duckdb_read_rdf
+    _duckdb_logger.debug("Registered DuckDBPyConnection.read_rdf (via Arrow)")
 except ImportError:
+    logging.getLogger(__name__).debug("duckdb not installed, skipping read_rdf registration")
     pass
 

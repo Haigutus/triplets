@@ -21,9 +21,11 @@ def _auto_engine(data):
     if hasattr(data, '__module__') and 'polars' in type(data).__module__:
         try:
             from . import polars_engine
+            logger.debug(f"engine auto-selected: polars (input is polars DataFrame)")
             return "polars"
         except ImportError:
             pass
+    logger.debug(f"engine auto-selected: pandas")
     return "pandas"
 
 
@@ -31,6 +33,8 @@ def _get_engine(engine, data=None):
     """Resolve engine name and return the module."""
     if engine == "auto":
         engine = _auto_engine(data) if data is not None else "pandas"
+    else:
+        logger.debug(f"engine set: {engine}")
     if engine == "polars":
         from . import polars_engine
         return polars_engine

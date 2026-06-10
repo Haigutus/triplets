@@ -5,6 +5,8 @@ Each format has its own {format}_{engine}.py file.
 """
 
 import pandas
+import logging
+logger = logging.getLogger(__name__)
 
 from .excel_pandas import export_to_excel
 from .cimxml_pandas import export_to_cimxml, generate_xml, ExportType, _get_qname
@@ -21,8 +23,10 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
     Auto-detects engine: polars if input is polars DataFrame, else pandas.
     """
     if _is_polars(data):
+        logger.debug("format=csv, engine=polars (auto-detected)")
         from .csv_polars import export_to_csv as _fn
     else:
+        logger.debug("format=csv, engine=pandas (auto-detected)")
         from .csv_pandas import export_to_csv as _fn
     return _fn(data, path=path, multivalue=multivalue, export_to_memory=export_to_memory,
                single_file=single_file, base_filename=base_filename)
@@ -37,8 +41,10 @@ def export_to_nquads(data, path, rdf_map=None):
         Export schema for proper enum detection. If None, enums exported as literals.
     """
     if _is_polars(data):
+        logger.debug("format=nquads, engine=polars (auto-detected)")
         from .nquads_polars import export_to_nquads as _fn
         return _fn(data, path, rdf_map=rdf_map)
+    logger.debug("format=nquads, engine=pandas (auto-detected)")
     from .nquads_pandas import export_to_nquads as _fn
     return _fn(data, path, rdf_map=rdf_map)
 
