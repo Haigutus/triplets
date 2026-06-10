@@ -1,0 +1,853 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.cli" href="triplets.cli.html"><link rel="prev" title="triplets.tools" href="triplets.tools.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>triplets.export - triplets 0.1.0rc2+0.g48924ec.dirty documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=17187ace" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">triplets 0.1.0rc2+0.g48924ec.dirty documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  
+  <span class="sidebar-brand-text">triplets 0.1.0rc2+0.g48924ec.dirty documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="guides/parsers.html">Parser Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/migration_0.0_to_0.1.html">Migration: 0.0.x → 0.1</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Export</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.cli.html">CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.cgmes_tools.html">CGMES Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.rdfs_tools.html">RDFS Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.rdf_parser.html">rdf_parser (deprecated)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.export_schema.html">Export Schema</a></li>
+</ul>
+
+</div></div><div id="version-selector" style="padding: 0.5rem 1rem; border-top: 1px solid var(--color-sidebar-border);">
+  <label for="version-select" style="font-size: 0.85em; color: var(--color-sidebar-caption);">Version</label>
+  <select id="version-select" onchange="if(this.value) window.location.href=this.value"
+          style="width: 100%; padding: 0.3em; margin-top: 0.3em; border-radius: 4px;
+                 border: 1px solid var(--color-sidebar-border);
+                 background: var(--color-sidebar-background);
+                 color: var(--color-sidebar-text);">
+    <option value="">Loading...</option>
+  </select>
+</div>
+<script>
+  fetch('/triplets/versions.json')
+    .then(r => r.json())
+    .then(versions => {
+      const sel = document.getElementById('version-select');
+      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
+      versions.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = '/triplets/' + v + '/';
+        opt.textContent = v;
+        // Highlight current version
+        if (window.location.pathname.includes('/' + v + '/')) {
+          opt.selected = true;
+        }
+        sel.appendChild(opt);
+      });
+      // Check if we're on latest
+      if (window.location.pathname.includes('/latest/')) {
+        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
+      }
+    })
+    .catch(() => {
+      document.getElementById('version-select').innerHTML =
+        '<option value="">latest</option>';
+    });
+</script>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/triplets.export.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="module-triplets.export">
+<span id="triplets-export"></span><h1>triplets.export<a class="headerlink" href="#module-triplets.export" title="Link to this heading">¶</a></h1>
+<p>Triplet DataFrame export functions.</p>
+<p>Formats: Excel, CSV, CIM XML, N-Quads, NetworkX.
+Each format has its own {format}_{engine}.py file.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.export_to_excel">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">export_to_excel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multivalue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">single_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">apply_formatting</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/excel_pandas.html#export_to_excel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.export_to_excel" title="Link to this definition">¶</a></dt>
+<dd><p>Export triplet data to Excel file(s), with each type on a separate sheet.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p></li>
+<li><p><strong>path</strong> (<em>str</em><em>, </em><em>optional</em>) – Directory path to save Excel file(s), or file path when single_file=True.</p></li>
+<li><p><strong>multivalue</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, aggregate duplicate (ID, KEY) pairs into lists.</p></li>
+<li><p><strong>export_to_memory</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, return BytesIO objects; if False, save to disk.</p></li>
+<li><p><strong>single_file</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, export all data to a single file instead of one file per INSTANCE_ID.</p></li>
+<li><p><strong>filename</strong> (<em>str</em><em>, </em><em>optional</em>) – Filename to use when single_file=True. If None, uses ‘export.xlsx’.</p></li>
+<li><p><strong>apply_formatting</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, apply column width and freeze panes formatting.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Depends on single_file and export_to_memory flags.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>BytesIO, str, or list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.export_to_csv">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">export_to_csv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multivalue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">single_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export.html#export_to_csv"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.export_to_csv" title="Link to this definition">¶</a></dt>
+<dd><p>Export triplet DataFrame to CSV files.</p>
+<p>Auto-detects engine: polars if input is polars DataFrame, else pandas.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.export_to_cimxml">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">export_to_cimxml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">ExportType.XML_PER_INSTANCE_ZIP_PER_XML</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_zip_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Export.zip'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_base_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pandas.html#export_to_cimxml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.export_to_cimxml" title="Link to this definition">¶</a></dt>
+<dd><p>Export a full triplet dataset to CIM RDF XML files or ZIP archives.</p>
+<p>Processes all instances (grouped by <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>) and exports them according to the
+specified <code class="docutils literal notranslate"><span class="pre">export_type</span></code>. Supports parallel processing and in-memory or disk output.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Full triplet dataset with columns [‘INSTANCE_ID’, ‘ID’, ‘KEY’, ‘VALUE’].</p></li>
+<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – RDF mapping configuration (see <a class="reference internal" href="#triplets.export.generate_xml" title="triplets.export.generate_xml"><code class="xref py py-func docutils literal notranslate"><span class="pre">generate_xml()</span></code></a>).</p></li>
+<li><p><strong>namespace_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Namespace prefix-to-URI mapping (see <a class="reference internal" href="#triplets.export.generate_xml" title="triplets.export.generate_xml"><code class="xref py py-func docutils literal notranslate"><span class="pre">generate_xml()</span></code></a>).</p></li>
+<li><p><strong>class_KEY</strong> (<em>str</em><em>, </em><em>default &quot;Type&quot;</em>) – Key identifying object types in triplet data.</p></li>
+<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>default True</em>) – Export unmapped classes/attributes with default RDF syntax.</p></li>
+<li><p><strong>export_type</strong> (<a class="reference internal" href="#triplets.export.ExportType" title="triplets.export.ExportType"><em>ExportType</em></a><em> or </em><em>str</em><em>, </em><em>default ExportType.XML_PER_INSTANCE_ZIP_PER_XML</em>) – Export format:
+- <code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE</span></code>: One XML file per instance.
+- <code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE_ZIP_PER_ALL</span></code>: All XMLs in a single ZIP.
+- <code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE_ZIP_PER_XML</span></code>: Each XML in its own ZIP.</p></li>
+<li><p><strong>global_zip_filename</strong> (<em>str</em><em>, </em><em>default &quot;Export.zip&quot;</em>) – Filename for the global ZIP archive (used with <code class="docutils literal notranslate"><span class="pre">ZIP_PER_ALL</span></code>).</p></li>
+<li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>default False</em>) – Enable detailed timing and debug logging.</p></li>
+<li><p><strong>export_to_memory</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, return file-like objects (<code class="docutils literal notranslate"><span class="pre">BytesIO</span></code>); if False, save to disk.</p></li>
+<li><p><strong>export_base_path</strong> (<em>str</em><em>, </em><em>default &quot;&quot;</em>) – Directory to save files when <code class="docutils literal notranslate"><span class="pre">export_to_memory=False</span></code>. Uses current directory if empty.</p></li>
+<li><p><strong>comment</strong> (<em>str</em><em>, </em><em>optional</em>) – Optional XML comment added to each generated file.</p></li>
+<li><p><strong>max_workers</strong> (<em>int</em><em>, </em><em>optional</em>) – Number of parallel workers for XML generation. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, runs sequentially.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>If <code class="docutils literal notranslate"><span class="pre">export_to_memory=True</span></code>: List of <code class="docutils literal notranslate"><span class="pre">BytesIO</span></code> objects with <code class="docutils literal notranslate"><span class="pre">.name</span></code> attribute.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">export_to_memory=False</span></code>: List of saved filenames (relative to <code class="docutils literal notranslate"><span class="pre">export_base_path</span></code>).</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">files</span> <span class="o">=</span> <span class="n">export_to_cimxml</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">data</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">&quot;config/cim_map.json&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">export_type</span><span class="o">=</span><span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">max_workers</span><span class="o">=</span><span class="mi">4</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;name:&quot;</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</pre></div>
+</div>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Uses <code class="docutils literal notranslate"><span class="pre">concurrent.futures.ProcessPoolExecutor</span></code> for parallel XML generation.</p></li>
+<li><p>All XML files are UTF-8 encoded with XML declaration and pretty-printing.</p></li>
+<li><p>ZIP files use DEFLATED compression.</p></li>
+<li><p>Filenames are derived from instance <code class="docutils literal notranslate"><span class="pre">label</span></code> or UUID.</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.export_to_nquads">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">export_to_nquads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export.html#export_to_nquads"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.export_to_nquads" title="Link to this definition">¶</a></dt>
+<dd><p>Export triplet DataFrame to N-Quads file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema for proper enum detection. If None, enums exported as literals.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.export_to_networkx">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">export_to_networkx</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/networkx_pandas.html#export_to_networkx"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.export_to_networkx" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a triplet dataset to a NetworkX graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A NetworkX graph with nodes (IDs with Type attributes) and edges (references).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>networkx.Graph</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>TODO: Add all node data and support additional graph export formats.</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">graph</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">to_networkx</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.generate_xml">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">generate_xml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pandas.html#generate_xml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.generate_xml" title="Link to this definition">¶</a></dt>
+<dd><p>Generate an RDF XML file from a triplet dataset instance.</p>
+<p>This function processes a single instance (grouped by <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>) from a triplet
+dataset and exports it as an RDF/XML document using provided or inferred mapping rules.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>instance_data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset for a single instance, with columns [‘’ID’, ‘KEY’, ‘VALUE’, INSTANCE_ID’].
+Must contain at least one row with <code class="docutils literal notranslate"><span class="pre">KEY</span> <span class="pre">==</span> <span class="pre">class_KEY</span></code> to define object types.</p></li>
+<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Dictionary mapping CIM classes and attributes to RDF namespaces and export rules.
+If a string is provided, it is treated as a file path to a JSON configuration.
+If <code class="docutils literal notranslate"><span class="pre">None</span></code>, attempts to infer from instance data (e.g., profile-based mapping).</p></li>
+<li><p><strong>namespace_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Mapping of namespace prefixes to URIs (e.g., <code class="docutils literal notranslate"><span class="pre">{&quot;cim&quot;:</span> <span class="pre">&quot;http://iec.ch/TC57/2013/CIM-schema-cim16#&quot;}</span></code>).
+Must include <code class="docutils literal notranslate"><span class="pre">&quot;rdf&quot;</span></code> namespace. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, inferred from <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> or instance.</p></li>
+<li><p><strong>class_KEY</strong> (<em>str</em><em>, </em><em>default &quot;Type&quot;</em>) – Column key used to identify object class/type in the triplet data.</p></li>
+<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, export classes and attributes without explicit mapping using default RDF settings.
+If False, skip unmapped elements with a warning.</p></li>
+<li><p><strong>comment</strong> (<em>str</em><em>, </em><em>optional</em>) – Optional comment to insert at the top of the XML output (as XML comment).</p></li>
+<li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, log detailed timing and debug information during processing.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary containing:
+- <code class="docutils literal notranslate"><span class="pre">'filename'</span></code> (str): Generated filename (from <code class="docutils literal notranslate"><span class="pre">label</span></code> or UUID).
+- <code class="docutils literal notranslate"><span class="pre">'file'</span></code> (bytes): UTF-8 encoded XML content.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>KeyError</strong> – If required columns are missing in <code class="docutils literal notranslate"><span class="pre">instance_data</span></code>.</p></li>
+<li><p><strong>ValueError</strong> – If invalid export configuration or mapping is detected.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">instance</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">generate_xml</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">instance</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">&quot;config/eq_profile.json&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">comment</span><span class="o">=</span><span class="s2">&quot;Exported on 2025-11-11&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;filename&quot;</span><span class="p">],</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;file&quot;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Supports profile-based mapping (e.g., “EQ”, “SSH”) via <code class="docutils literal notranslate"><span class="pre">Model.profile</span></code> or <code class="docutils literal notranslate"><span class="pre">Model.messageType</span></code>.</p></li>
+<li><p>Uses <code class="docutils literal notranslate"><span class="pre">lxml.etree</span></code> with <code class="docutils literal notranslate"><span class="pre">ElementMaker</span></code> for XML construction.</p></li>
+<li><p>Undefined classes are exported with <code class="docutils literal notranslate"><span class="pre">rdf:about=&quot;urn:uuid:&lt;ID&gt;&quot;</span></code> when <code class="docutils literal notranslate"><span class="pre">export_undefined=True</span></code>.</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="triplets.export.ExportType">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">ExportType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pandas.html#ExportType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.ExportType" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">StrEnum</span></code></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="triplets.export.ExportType.XML_PER_INSTANCE">
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance'</span></span><a class="headerlink" href="#triplets.export.ExportType.XML_PER_INSTANCE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="triplets.export.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL">
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE_ZIP_PER_ALL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance_zip_per_all'</span></span><a class="headerlink" href="#triplets.export.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="triplets.export.ExportType.XML_PER_INSTANCE_ZIP_PER_XML">
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE_ZIP_PER_XML</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance_zip_per_xml'</span></span><a class="headerlink" href="#triplets.export.ExportType.XML_PER_INSTANCE_ZIP_PER_XML" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<section id="module-triplets.export.cimxml_pandas">
+<span id="triplets-export-cimxml-pandas"></span><h2>triplets.export.cimxml_pandas<a class="headerlink" href="#module-triplets.export.cimxml_pandas" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.cimxml_pandas.generate_xml">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.cimxml_pandas.</span></span><span class="sig-name descname"><span class="pre">generate_xml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pandas.html#generate_xml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.cimxml_pandas.generate_xml" title="Link to this definition">¶</a></dt>
+<dd><p>Generate an RDF XML file from a triplet dataset instance.</p>
+<p>This function processes a single instance (grouped by <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>) from a triplet
+dataset and exports it as an RDF/XML document using provided or inferred mapping rules.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>instance_data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset for a single instance, with columns [‘’ID’, ‘KEY’, ‘VALUE’, INSTANCE_ID’].
+Must contain at least one row with <code class="docutils literal notranslate"><span class="pre">KEY</span> <span class="pre">==</span> <span class="pre">class_KEY</span></code> to define object types.</p></li>
+<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Dictionary mapping CIM classes and attributes to RDF namespaces and export rules.
+If a string is provided, it is treated as a file path to a JSON configuration.
+If <code class="docutils literal notranslate"><span class="pre">None</span></code>, attempts to infer from instance data (e.g., profile-based mapping).</p></li>
+<li><p><strong>namespace_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Mapping of namespace prefixes to URIs (e.g., <code class="docutils literal notranslate"><span class="pre">{&quot;cim&quot;:</span> <span class="pre">&quot;http://iec.ch/TC57/2013/CIM-schema-cim16#&quot;}</span></code>).
+Must include <code class="docutils literal notranslate"><span class="pre">&quot;rdf&quot;</span></code> namespace. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, inferred from <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> or instance.</p></li>
+<li><p><strong>class_KEY</strong> (<em>str</em><em>, </em><em>default &quot;Type&quot;</em>) – Column key used to identify object class/type in the triplet data.</p></li>
+<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, export classes and attributes without explicit mapping using default RDF settings.
+If False, skip unmapped elements with a warning.</p></li>
+<li><p><strong>comment</strong> (<em>str</em><em>, </em><em>optional</em>) – Optional comment to insert at the top of the XML output (as XML comment).</p></li>
+<li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, log detailed timing and debug information during processing.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary containing:
+- <code class="docutils literal notranslate"><span class="pre">'filename'</span></code> (str): Generated filename (from <code class="docutils literal notranslate"><span class="pre">label</span></code> or UUID).
+- <code class="docutils literal notranslate"><span class="pre">'file'</span></code> (bytes): UTF-8 encoded XML content.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>KeyError</strong> – If required columns are missing in <code class="docutils literal notranslate"><span class="pre">instance_data</span></code>.</p></li>
+<li><p><strong>ValueError</strong> – If invalid export configuration or mapping is detected.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">instance</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">generate_xml</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">instance</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">&quot;config/eq_profile.json&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">comment</span><span class="o">=</span><span class="s2">&quot;Exported on 2025-11-11&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;filename&quot;</span><span class="p">],</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;file&quot;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Supports profile-based mapping (e.g., “EQ”, “SSH”) via <code class="docutils literal notranslate"><span class="pre">Model.profile</span></code> or <code class="docutils literal notranslate"><span class="pre">Model.messageType</span></code>.</p></li>
+<li><p>Uses <code class="docutils literal notranslate"><span class="pre">lxml.etree</span></code> with <code class="docutils literal notranslate"><span class="pre">ElementMaker</span></code> for XML construction.</p></li>
+<li><p>Undefined classes are exported with <code class="docutils literal notranslate"><span class="pre">rdf:about=&quot;urn:uuid:&lt;ID&gt;&quot;</span></code> when <code class="docutils literal notranslate"><span class="pre">export_undefined=True</span></code>.</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="triplets.export.cimxml_pandas.ExportType">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">triplets.export.cimxml_pandas.</span></span><span class="sig-name descname"><span class="pre">ExportType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pandas.html#ExportType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.cimxml_pandas.ExportType" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">StrEnum</span></code></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="triplets.export.cimxml_pandas.ExportType.XML_PER_INSTANCE">
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance'</span></span><a class="headerlink" href="#triplets.export.cimxml_pandas.ExportType.XML_PER_INSTANCE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="triplets.export.cimxml_pandas.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL">
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE_ZIP_PER_ALL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance_zip_per_all'</span></span><a class="headerlink" href="#triplets.export.cimxml_pandas.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="triplets.export.cimxml_pandas.ExportType.XML_PER_INSTANCE_ZIP_PER_XML">
+<span class="sig-name descname"><span class="pre">XML_PER_INSTANCE_ZIP_PER_XML</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'xml_per_instance_zip_per_xml'</span></span><a class="headerlink" href="#triplets.export.cimxml_pandas.ExportType.XML_PER_INSTANCE_ZIP_PER_XML" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.cimxml_pandas.export_to_cimxml">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.cimxml_pandas.</span></span><span class="sig-name descname"><span class="pre">export_to_cimxml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">ExportType.XML_PER_INSTANCE_ZIP_PER_XML</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_zip_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Export.zip'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_base_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pandas.html#export_to_cimxml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.cimxml_pandas.export_to_cimxml" title="Link to this definition">¶</a></dt>
+<dd><p>Export a full triplet dataset to CIM RDF XML files or ZIP archives.</p>
+<p>Processes all instances (grouped by <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>) and exports them according to the
+specified <code class="docutils literal notranslate"><span class="pre">export_type</span></code>. Supports parallel processing and in-memory or disk output.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Full triplet dataset with columns [‘INSTANCE_ID’, ‘ID’, ‘KEY’, ‘VALUE’].</p></li>
+<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – RDF mapping configuration (see <a class="reference internal" href="#triplets.export.cimxml_pandas.generate_xml" title="triplets.export.cimxml_pandas.generate_xml"><code class="xref py py-func docutils literal notranslate"><span class="pre">generate_xml()</span></code></a>).</p></li>
+<li><p><strong>namespace_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Namespace prefix-to-URI mapping (see <a class="reference internal" href="#triplets.export.cimxml_pandas.generate_xml" title="triplets.export.cimxml_pandas.generate_xml"><code class="xref py py-func docutils literal notranslate"><span class="pre">generate_xml()</span></code></a>).</p></li>
+<li><p><strong>class_KEY</strong> (<em>str</em><em>, </em><em>default &quot;Type&quot;</em>) – Key identifying object types in triplet data.</p></li>
+<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>default True</em>) – Export unmapped classes/attributes with default RDF syntax.</p></li>
+<li><p><strong>export_type</strong> (<a class="reference internal" href="#triplets.export.cimxml_pandas.ExportType" title="triplets.export.cimxml_pandas.ExportType"><em>ExportType</em></a><em> or </em><em>str</em><em>, </em><em>default ExportType.XML_PER_INSTANCE_ZIP_PER_XML</em>) – Export format:
+- <code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE</span></code>: One XML file per instance.
+- <code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE_ZIP_PER_ALL</span></code>: All XMLs in a single ZIP.
+- <code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE_ZIP_PER_XML</span></code>: Each XML in its own ZIP.</p></li>
+<li><p><strong>global_zip_filename</strong> (<em>str</em><em>, </em><em>default &quot;Export.zip&quot;</em>) – Filename for the global ZIP archive (used with <code class="docutils literal notranslate"><span class="pre">ZIP_PER_ALL</span></code>).</p></li>
+<li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>default False</em>) – Enable detailed timing and debug logging.</p></li>
+<li><p><strong>export_to_memory</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, return file-like objects (<code class="docutils literal notranslate"><span class="pre">BytesIO</span></code>); if False, save to disk.</p></li>
+<li><p><strong>export_base_path</strong> (<em>str</em><em>, </em><em>default &quot;&quot;</em>) – Directory to save files when <code class="docutils literal notranslate"><span class="pre">export_to_memory=False</span></code>. Uses current directory if empty.</p></li>
+<li><p><strong>comment</strong> (<em>str</em><em>, </em><em>optional</em>) – Optional XML comment added to each generated file.</p></li>
+<li><p><strong>max_workers</strong> (<em>int</em><em>, </em><em>optional</em>) – Number of parallel workers for XML generation. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, runs sequentially.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>If <code class="docutils literal notranslate"><span class="pre">export_to_memory=True</span></code>: List of <code class="docutils literal notranslate"><span class="pre">BytesIO</span></code> objects with <code class="docutils literal notranslate"><span class="pre">.name</span></code> attribute.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">export_to_memory=False</span></code>: List of saved filenames (relative to <code class="docutils literal notranslate"><span class="pre">export_base_path</span></code>).</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">files</span> <span class="o">=</span> <span class="n">export_to_cimxml</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">data</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">&quot;config/cim_map.json&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">export_type</span><span class="o">=</span><span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">max_workers</span><span class="o">=</span><span class="mi">4</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;name:&quot;</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</pre></div>
+</div>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Uses <code class="docutils literal notranslate"><span class="pre">concurrent.futures.ProcessPoolExecutor</span></code> for parallel XML generation.</p></li>
+<li><p>All XML files are UTF-8 encoded with XML declaration and pretty-printing.</p></li>
+<li><p>ZIP files use DEFLATED compression.</p></li>
+<li><p>Filenames are derived from instance <code class="docutils literal notranslate"><span class="pre">label</span></code> or UUID.</p></li>
+</ul>
+</dd></dl>
+
+</section>
+<section id="module-triplets.export.excel_pandas">
+<span id="triplets-export-excel-pandas"></span><h2>triplets.export.excel_pandas<a class="headerlink" href="#module-triplets.export.excel_pandas" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.excel_pandas.export_to_excel">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.excel_pandas.</span></span><span class="sig-name descname"><span class="pre">export_to_excel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multivalue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">single_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">apply_formatting</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/excel_pandas.html#export_to_excel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.excel_pandas.export_to_excel" title="Link to this definition">¶</a></dt>
+<dd><p>Export triplet data to Excel file(s), with each type on a separate sheet.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p></li>
+<li><p><strong>path</strong> (<em>str</em><em>, </em><em>optional</em>) – Directory path to save Excel file(s), or file path when single_file=True.</p></li>
+<li><p><strong>multivalue</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, aggregate duplicate (ID, KEY) pairs into lists.</p></li>
+<li><p><strong>export_to_memory</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, return BytesIO objects; if False, save to disk.</p></li>
+<li><p><strong>single_file</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, export all data to a single file instead of one file per INSTANCE_ID.</p></li>
+<li><p><strong>filename</strong> (<em>str</em><em>, </em><em>optional</em>) – Filename to use when single_file=True. If None, uses ‘export.xlsx’.</p></li>
+<li><p><strong>apply_formatting</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, apply column width and freeze panes formatting.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Depends on single_file and export_to_memory flags.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>BytesIO, str, or list</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-triplets.export.csv_pandas">
+<span id="triplets-export-csv-pandas"></span><h2>triplets.export.csv_pandas<a class="headerlink" href="#module-triplets.export.csv_pandas" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.csv_pandas.export_to_csv">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.csv_pandas.</span></span><span class="sig-name descname"><span class="pre">export_to_csv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multivalue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">single_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/csv_pandas.html#export_to_csv"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.csv_pandas.export_to_csv" title="Link to this definition">¶</a></dt>
+<dd><p>Export triplet data to CSV files, with each type as a separate file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p></li>
+<li><p><strong>path</strong> (<em>str</em><em>, </em><em>optional</em>) – Directory path to save CSV file(s).</p></li>
+<li><p><strong>multivalue</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, aggregate duplicate (ID, KEY) pairs into lists.</p></li>
+<li><p><strong>export_to_memory</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, return BytesIO objects; if False, save to disk.</p></li>
+<li><p><strong>single_file</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, export all data using a single base filename.</p></li>
+<li><p><strong>base_filename</strong> (<em>str</em><em>, </em><em>optional</em>) – Base filename when single_file=True. If None, uses ‘export’.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="triplets-export-csv-polars">
+<h2>triplets.export.csv_polars<a class="headerlink" href="#triplets-export-csv-polars" title="Link to this heading">¶</a></h2>
+</section>
+<section id="module-triplets.export.nquads_pandas">
+<span id="triplets-export-nquads-pandas"></span><h2>triplets.export.nquads_pandas<a class="headerlink" href="#module-triplets.export.nquads_pandas" title="Link to this heading">¶</a></h2>
+<p>N-Quads export using pandas — schema-aware value classification.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.nquads_pandas.export_to_nquads">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_pandas.</span></span><span class="sig-name descname"><span class="pre">export_to_nquads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_pandas.html#export_to_nquads"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_pandas.export_to_nquads" title="Link to this definition">¶</a></dt>
+<dd><p>Export triplet DataFrame to N-Quads file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].</p></li>
+<li><p><strong>path</strong> (<em>str</em>) – Output file path (.nq).</p></li>
+<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema for proper enum/association detection.
+If None, enumerations won’t get namespace (exported as literals).</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="triplets-export-nquads-polars">
+<h2>triplets.export.nquads_polars<a class="headerlink" href="#triplets-export-nquads-polars" title="Link to this heading">¶</a></h2>
+</section>
+<section id="module-triplets.export.networkx_pandas">
+<span id="triplets-export-networkx-pandas"></span><h2>triplets.export.networkx_pandas<a class="headerlink" href="#module-triplets.export.networkx_pandas" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.networkx_pandas.export_to_networkx">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.networkx_pandas.</span></span><span class="sig-name descname"><span class="pre">export_to_networkx</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/networkx_pandas.html#export_to_networkx"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.networkx_pandas.export_to_networkx" title="Link to this definition">¶</a></dt>
+<dd><p>Convert a triplet dataset to a NetworkX graph.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A NetworkX graph with nodes (IDs with Type attributes) and edges (references).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>networkx.Graph</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>TODO: Add all node data and support additional graph export formats.</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">graph</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">to_networkx</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="triplets.cli.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">triplets.cli</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="triplets.tools.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">triplets.tools</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, Kristjan Vilgo
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">triplets.export</a><ul>
+<li><a class="reference internal" href="#triplets.export.export_to_excel"><code class="docutils literal notranslate"><span class="pre">export_to_excel()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.export_to_csv"><code class="docutils literal notranslate"><span class="pre">export_to_csv()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.export_to_cimxml"><code class="docutils literal notranslate"><span class="pre">export_to_cimxml()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.export_to_nquads"><code class="docutils literal notranslate"><span class="pre">export_to_nquads()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.export_to_networkx"><code class="docutils literal notranslate"><span class="pre">export_to_networkx()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.generate_xml"><code class="docutils literal notranslate"><span class="pre">generate_xml()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.ExportType"><code class="docutils literal notranslate"><span class="pre">ExportType</span></code></a><ul>
+<li><a class="reference internal" href="#triplets.export.ExportType.XML_PER_INSTANCE"><code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL"><code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE_ZIP_PER_ALL</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.ExportType.XML_PER_INSTANCE_ZIP_PER_XML"><code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE_ZIP_PER_XML</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-triplets.export.cimxml_pandas">triplets.export.cimxml_pandas</a><ul>
+<li><a class="reference internal" href="#triplets.export.cimxml_pandas.generate_xml"><code class="docutils literal notranslate"><span class="pre">generate_xml()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.cimxml_pandas.ExportType"><code class="docutils literal notranslate"><span class="pre">ExportType</span></code></a><ul>
+<li><a class="reference internal" href="#triplets.export.cimxml_pandas.ExportType.XML_PER_INSTANCE"><code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.cimxml_pandas.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL"><code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE_ZIP_PER_ALL</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.cimxml_pandas.ExportType.XML_PER_INSTANCE_ZIP_PER_XML"><code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE_ZIP_PER_XML</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#triplets.export.cimxml_pandas.export_to_cimxml"><code class="docutils literal notranslate"><span class="pre">export_to_cimxml()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-triplets.export.excel_pandas">triplets.export.excel_pandas</a><ul>
+<li><a class="reference internal" href="#triplets.export.excel_pandas.export_to_excel"><code class="docutils literal notranslate"><span class="pre">export_to_excel()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-triplets.export.csv_pandas">triplets.export.csv_pandas</a><ul>
+<li><a class="reference internal" href="#triplets.export.csv_pandas.export_to_csv"><code class="docutils literal notranslate"><span class="pre">export_to_csv()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#triplets-export-csv-polars">triplets.export.csv_polars</a></li>
+<li><a class="reference internal" href="#module-triplets.export.nquads_pandas">triplets.export.nquads_pandas</a><ul>
+<li><a class="reference internal" href="#triplets.export.nquads_pandas.export_to_nquads"><code class="docutils literal notranslate"><span class="pre">export_to_nquads()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#triplets-export-nquads-polars">triplets.export.nquads_polars</a></li>
+<li><a class="reference internal" href="#module-triplets.export.networkx_pandas">triplets.export.networkx_pandas</a><ul>
+<li><a class="reference internal" href="#triplets.export.networkx_pandas.export_to_networkx"><code class="docutils literal notranslate"><span class="pre">export_to_networkx()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=19a5c7b7"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>
