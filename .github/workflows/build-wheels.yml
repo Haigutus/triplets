@@ -127,3 +127,6 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # don't fail re-runs on files a previous partial publish already uploaded
+          skip-existing: true
