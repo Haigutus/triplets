@@ -76,6 +76,17 @@ They will be removed in 0.2.
 | `triplets.rdf_parser.export_to_networkx` | `triplets.export.export_to_networkx` |
 | All other `rdf_parser.*` query/filter/diff functions | `triplets.tools.*` |
 
+### cgmes_tools renames
+
+Old names keep working in 0.1 but emit `DeprecationWarning`; they will be removed in 0.2.
+
+| Old (0.0) | New (0.1) |
+|-----------|-----------|
+| `cgmes_tools.darw_relations_graph` | `cgmes_tools.draw_relations_graph` (typo fix) |
+| `cgmes_tools.statistics_GeneratingUnit_types` | `cgmes_tools.count_GeneratingUnit_types` |
+| `cgmes_tools.generate_instances_ID` | `cgmes_tools.generate_instance_ids` |
+| `cgmes_tools.get_model_data` | `cgmes_tools.get_model_triplets` |
+
 ### DataFrame methods
 
 The old monkey-patched methods (`data.type_tableview(...)`) still work but the recommended
