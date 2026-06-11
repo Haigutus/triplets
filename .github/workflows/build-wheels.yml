@@ -47,9 +47,11 @@ jobs:
           - os: ubuntu-latest
             arch: x86_64
             cibw_archs: x86_64
-          - os: ubuntu-latest
-            arch: aarch64
-            cibw_archs: aarch64
+          # Linux aarch64 — disabled, QEMU-emulated build dominates release time (~30 min)
+          # re-enable when needed or when GitHub arm64 runners are available
+          # - os: ubuntu-latest
+          #   arch: aarch64
+          #   cibw_archs: aarch64
           # macOS x86_64 (Intel) — disabled, macos-13 runner rarely available
           # Intel Macs are EOL; users can install from sdist if needed
           # - os: macos-13
