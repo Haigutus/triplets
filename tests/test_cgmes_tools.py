@@ -112,6 +112,53 @@ class TestGetLoadedModelParts:
         assert len(parts) == 4  # EQ, SSH, TP, SV
 
 
+# ── Input flavors (polars / arrow / duckdb converted at the boundary) ───────
+
+class TestInputFlavors:
+    def test_polars_input(self, svedala_data):
+        polars = pytest.importorskip("polars")
+        pl_data = polars.from_pandas(svedala_data)
+
+        models = cgmes_tools.get_loaded_models(pl_data)
+        assert isinstance(models, dict)
+
+        # DataFrame results come back as polars
+        parts = cgmes_tools.get_loaded_model_parts(pl_data)
+        assert isinstance(parts, polars.DataFrame)
+        assert len(parts) == 4
+
+    def test_arrow_input(self, svedala_data):
+        pyarrow = pytest.importorskip("pyarrow")
+        table = pyarrow.Table.from_pandas(svedala_data, preserve_index=False)
+
+        models = cgmes_tools.get_loaded_models(table)
+        assert isinstance(models, dict)
+
+        # DataFrame results come back as arrow
+        parts = cgmes_tools.get_loaded_model_parts(table)
+        assert isinstance(parts, pyarrow.Table)
+        assert parts.num_rows == 4
+
+    def test_duckdb_input(self, svedala_data):
+        duckdb = pytest.importorskip("duckdb")
+        con = duckdb.connect()
+        con.register("triplets_arrow", svedala_data)
+        con.execute("CREATE TABLE triplets AS SELECT * FROM triplets_arrow")
+
+        models = cgmes_tools.get_loaded_models(con)
+        assert isinstance(models, dict)
+
+        # duckdb input returns pandas
+        parts = cgmes_tools.get_loaded_model_parts(con)
+        assert isinstance(parts, pandas.DataFrame)
+        assert len(parts) == 4
+
+    def test_results_match_pandas(self, svedala_data):
+        polars = pytest.importorskip("polars")
+        expected = cgmes_tools.get_loaded_models(svedala_data)
+        assert cgmes_tools.get_loaded_models(polars.from_pandas(svedala_data)) == expected
+
+
 # ── Data quality ────────────────────────────────────────────────────────────
 
 class TestGetDanglingReferences:
