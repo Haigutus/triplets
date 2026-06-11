@@ -14,6 +14,8 @@ Fallback order: `cython_pugixml_arrow` -> `python_lxml_arrow` -> `python_lxml_pa
 
 All three engines expose the same interface: `load_rdf_to_dataframe(path_or_fileobject, debug=False)`
 
+Engine aliases: `performance` / `pugixml` -> `cython_pugixml_arrow`, `native` -> `python_lxml_pandas`
+
 ## Call Sequence
 
 ```
@@ -86,12 +88,31 @@ data = pandas.read_RDF(path, engine="python_lxml_pandas")
 data = pandas.read_RDF(path, engine="python_lxml_arrow")
 data = pandas.read_RDF(path, engine="cython_pugixml_arrow")
 
-# polars
-data = polars.read_rdf(["grid_EQ.xml"], return_type="polars")
+# polars (return_type defaults to "polars")
+data = polars.read_rdf(["grid_EQ.xml"])
 
 # return Arrow or Polars directly
 table = triplets.parser.parse(path, return_type="arrow")
 data = triplets.parser.parse(path, return_type="polars")
+```
+
+## Debug Output
+
+Debug output (file discovery, per-file parse timings, engine selection) follows the
+Python logging level — no `debug=True` needed:
+
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+data = pandas.read_RDF(["grid_EQ.xml"])  # debug output because logger is at DEBUG
+```
+
+Engine selection is logged at DEBUG level:
+
+```
+DEBUG triplets.parser: auto - test engine availability: cython_pugixml_arrow
+DEBUG triplets.parser.cython_pugixml_arrow: [grid_EQ.xml] XML parse: 0:00:00.052368
 ```
 
 ## Building the Cython Engine

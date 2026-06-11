@@ -2,25 +2,16 @@
 # Name:        export/cimxml_pandas.py
 # Purpose:     Export triplet DataFrames to CIM RDF XML format
 # -------------------------------------------------------------------------------
-import os
-import json
 import datetime
-import uuid
-import zipfile
 import logging
 
-from io import BytesIO
-from enum import StrEnum
 from functools import lru_cache
-from concurrent.futures import ProcessPoolExecutor
-
-import pandas
 
 from lxml import etree
 from lxml.builder import ElementMaker
 from lxml.etree import QName
 
-from triplets.tools import get_namespace_map
+from .cimxml_utils import load_rdf_map, resolve_instance_config
 
 logger = logging.getLogger(__name__)
 
@@ -144,64 +135,11 @@ def generate_xml(instance_data,
     if debug:
         start_time = datetime.datetime.now()
 
-    # config map, is not given as dict, assume path and load it
-    if not isinstance(rdf_map, dict):
-        with open(rdf_map, "r") as conf_file:
-            rdf_map = json.load(conf_file)
-
-    # No map in function call, use instance map
-    if not namespace_map:
-        namespace_map, xml_base = get_namespace_map(instance_data)
-
-    # Filename is kept under label
-    label_data = instance_data[instance_data["KEY"] == "label"]
-
-    if not label_data.empty:
-        file_name = label_data.at[label_data.index[0], 'VALUE']
-
-    else:
-        file_name = f"{uuid.uuid4()}.xml"
-
-    # Find schema reference to be used for export
-    # TODO remove dependency on this header field, which might not be present
-    # TODO: Refactor this, if schema is provided, the information how to pick it up should be in the schema
-
-    instance_type = None
-
-    message_type_data = instance_data[instance_data["KEY"] == "Model.messageType"]
-    profile_data = instance_data[instance_data["KEY"] == "Model.profile"]
-
-    if not message_type_data.empty:
-        instance_type = message_type_data.at[message_type_data.index[0], 'VALUE']
-
-    if not instance_type and not profile_data.empty:
-        instance_type_url = profile_data.at[profile_data.index[0], 'VALUE']
-
-        # TODO - needs to be extended and made more intelligent, maybe scan profile?
-        profile_map = {
-            "EquipmentCore": "EQ",
-            "SteadyState": "SSH",
-            "StateVariables": "SV",
-            "Topology/": "TP",
-            "EquipmentBoundary": "EQBD",
-            "TopologyBoundary": "TPBD"
-        }
-
-        for key, value in profile_map.items():
-            if key in instance_type_url:
-                instance_type = value
-                continue
-
-    # If there is sub structure available in schema get it, otherwise use root definitions
-    # TODO - needs revision, add support both for md:FullModel, dcat:DataSet and without profile definiton
-    instance_rdf_map = rdf_map.get(instance_type, rdf_map)
-
-    # No map in function call, nor in instance data, use profile map
-    if not namespace_map and instance_rdf_map:
-        namespace_map = instance_rdf_map.get("ProfileNamespaceMap")
+    rdf_map = load_rdf_map(rdf_map)
+    file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
 
     if instance_rdf_map is None:
-        logger.warning("No rdf mapping available for {}".format(instance_type))
+        logger.warning("No rdf mapping available for {}".format(file_name))
         if not export_undefined:
             logger.warning("File not created for {}".format(file_name))
             return
@@ -334,195 +272,3 @@ def generate_xml(instance_data,
         _, start_time = _print_duration("XML created", start_time)
 
     return {"filename": file_name, "file": xml}
-
-
-class ExportType(StrEnum):
-    XML_PER_INSTANCE = "xml_per_instance"
-    XML_PER_INSTANCE_ZIP_PER_ALL = "xml_per_instance_zip_per_all"
-    XML_PER_INSTANCE_ZIP_PER_XML = "xml_per_instance_zip_per_xml"
-
-
-def export_to_cimxml(data,
-                     rdf_map=None,
-                     namespace_map=None,
-                     class_KEY="Type",
-                     export_undefined=True,
-                     export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
-                     global_zip_filename="Export.zip",
-                     debug=False,
-                     export_to_memory=False,
-                     export_base_path="",
-                     comment=None,
-                     max_workers=None):
-    """
-        Export a full triplet dataset to CIM RDF XML files or ZIP archives.
-
-        Processes all instances (grouped by ``INSTANCE_ID``) and exports them according to the
-        specified ``export_type``. Supports parallel processing and in-memory or disk output.
-
-        Parameters
-        ----------
-        data : pandas.DataFrame
-            Full triplet dataset with columns ['INSTANCE_ID', 'ID', 'KEY', 'VALUE'].
-        rdf_map : dict or str, optional
-            RDF mapping configuration (see :func:`generate_xml`).
-        namespace_map : dict, optional
-            Namespace prefix-to-URI mapping (see :func:`generate_xml`).
-        class_KEY : str, default "Type"
-            Key identifying object types in triplet data.
-        export_undefined : bool, default True
-            Export unmapped classes/attributes with default RDF syntax.
-        export_type : ExportType or str, default ExportType.XML_PER_INSTANCE_ZIP_PER_XML
-            Export format:
-            - ``XML_PER_INSTANCE``: One XML file per instance.
-            - ``XML_PER_INSTANCE_ZIP_PER_ALL``: All XMLs in a single ZIP.
-            - ``XML_PER_INSTANCE_ZIP_PER_XML``: Each XML in its own ZIP.
-        global_zip_filename : str, default "Export.zip"
-            Filename for the global ZIP archive (used with ``ZIP_PER_ALL``).
-        debug : bool, default False
-            Enable detailed timing and debug logging.
-        export_to_memory : bool, default False
-            If True, return file-like objects (``BytesIO``); if False, save to disk.
-        export_base_path : str, default ""
-            Directory to save files when ``export_to_memory=False``. Uses current directory if empty.
-        comment : str, optional
-            Optional XML comment added to each generated file.
-        max_workers : int, optional
-            Number of parallel workers for XML generation. If ``None``, runs sequentially.
-
-        Returns
-        -------
-        list
-            - If ``export_to_memory=True``: List of ``BytesIO`` objects with ``.name`` attribute.
-            - If ``export_to_memory=False``: List of saved filenames (relative to ``export_base_path``).
-
-        Examples
-        --------
-        >>> files = export_to_cimxml(
-        ...     data,
-        ...     rdf_map="config/cim_map.json",
-        ...     export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
-        ...     export_to_memory=True,
-        ...     max_workers=4
-        ... )
-        >>> for f in files:
-        ...     print(f"name:", f.name)
-
-        Notes
-        -----
-        - Uses ``concurrent.futures.ProcessPoolExecutor`` for parallel XML generation.
-        - All XML files are UTF-8 encoded with XML declaration and pretty-printing.
-        - ZIP files use DEFLATED compression.
-        - Filenames are derived from instance ``label`` or UUID.
-        """
-    if debug:
-        start_time = datetime.datetime.now()
-        init_time = start_time
-
-    instances = data.groupby("INSTANCE_ID")
-
-    #TODO - this needs to be extended and put to a better place
-    #TODO - maybe rdfmap should use direct url, instead of short keys "EQ" etc
-
-    # Keep all file names and data to be exported
-    xml_documents = []
-
-    if debug:
-        _, start_time = _print_duration("All file instance ID-s identified", start_time)
-
-    # if max_workers:
-    #     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-    #         # Map the function to the XML list and accumulate results
-    #         xml_documents = executor.map(lambda _, instance: generate_xml(   instance,
-    #                                                                          rdf_map,
-    #                                                                          namespace_map,
-    #                                                                          class_KEY,
-    #                                                                          export_undefined,
-    #                                                                          comment,
-    #                                                                          debug), instances)
-    if max_workers:
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            futures = [executor.submit(generate_xml, instance, rdf_map, namespace_map, class_KEY, export_undefined,debug) for _, instance in instances]
-            xml_documents = [future.result() for future in futures if future.result() is not None]
-
-    else:
-        for _, instance in instances:
-            xml_documents.append(generate_xml(instance,
-                                             rdf_map,
-                                             namespace_map,
-                                             class_KEY,
-                                             export_undefined,
-                                             comment,
-                                             debug))
-    if debug:
-        _, start_time = _print_duration("All XML created in memory ", start_time)
-    ### Export XML ###
-    exported_files = []
-
-    if export_type == ExportType.XML_PER_INSTANCE:
-        for document in xml_documents:
-
-            file_object = BytesIO(document["file"])
-            file_object.name = document["filename"]
-
-            exported_files.append(file_object)
-
-            logger.info(f"Exported {document['filename']} to memory")
-
-    ### Export ZIP containing all xml ###
-    elif export_type == ExportType.XML_PER_INSTANCE_ZIP_PER_ALL:
-
-        gloabl_zip_fileobject = BytesIO()
-        gloabl_zip_fileobject.name = global_zip_filename
-
-        with zipfile.ZipFile(gloabl_zip_fileobject, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-
-            for document in xml_documents:
-                zip_file.writestr(document["filename"], document["file"])
-                logger.info(f'Added {document["filename"]} to ZIP')
-
-        exported_files.append(gloabl_zip_fileobject)
-        logger.info(f'Exported ZIP named {global_zip_filename} to memory')
-
-
-    ### Export each xml in separate zip ###
-    elif export_type == ExportType.XML_PER_INSTANCE_ZIP_PER_XML:
-
-        for document in xml_documents:
-
-            zip_file_object = BytesIO()
-            zip_file_object.name = document["filename"].replace('.xml', '.zip').replace('.XML', '.zip')
-
-            with zipfile.ZipFile(zip_file_object, mode='w', compression=zipfile.ZIP_DEFLATED) as zip_file:
-                zip_file.writestr(document["filename"], document["file"])
-
-            exported_files.append(zip_file_object)
-            logger.info(f'Exported {zip_file_object.name} to memory')
-
-    else:
-        logger.info("Not supported option")
-        logger.info("Supported options are: xml_per_instance, xml_per_instance_zip_per_all, xml_per_instance_zip_per_xml")
-
-    if debug:
-        _print_duration("Files saved in", start_time)
-        _print_duration("Whole Export done in", init_time)
-
-    # Save files to disk
-    if export_to_memory:
-        return exported_files
-
-    else:
-        exported_file_names = []
-
-        for file_object in exported_files:
-            export_path = os.path.join(export_base_path, file_object.name)
-            with open(export_path, 'wb') as export_file_object:
-
-                # Ensure that the read pointer is at the start of the file
-                file_object.seek(0)
-                export_file_object.write(file_object.read())
-
-            exported_file_names.append(file_object.name)
-            logger.info(f'Saved {export_path}')
-
-        return exported_file_names

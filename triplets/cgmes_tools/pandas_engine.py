@@ -36,7 +36,7 @@ dependencies = dict(EQ   = ["EQBD"],
                     TPBD = ["EQBD"],
                     EQBD = [])
 
-def generate_instances_ID(dependencies=dependencies):
+def generate_instance_ids(dependencies=dependencies):
     """Generate UUIDs for each profile defined in the dependencies dictionary.
 
     Parameters
@@ -52,7 +52,7 @@ def generate_instances_ID(dependencies=dependencies):
 
     Examples
     --------
-    >>> generate_instances_ID()
+    >>> generate_instance_ids()
     {'EQ': '123e4567-e89b-12d3-a456-426614174000', ...}
     """
     return {profile: str(uuid4()) for profile in dependencies}
@@ -429,7 +429,7 @@ def get_loaded_models(data):
 
     return dependancies_dict
 
-def get_model_data(data, model_instances_dataframe):
+def get_model_triplets(data, model_instances_dataframe):
     """Extract data for specific CGMES model instances.
 
     Parameters
@@ -446,7 +446,7 @@ def get_model_data(data, model_instances_dataframe):
 
     Examples
     --------
-    >>> model_data = get_model_data(data, models['SV_UUID'])
+    >>> model_data = get_model_triplets(data, models['SV_UUID'])
     """
     IGM_data = pandas.merge(data, model_instances_dataframe[["INSTANCE_ID"]].drop_duplicates(), right_on="INSTANCE_ID", left_on="INSTANCE_ID")
 
@@ -507,7 +507,7 @@ def get_loaded_model_parts(data):
     return data.type_tableview("FullModel")
 
 
-def statistics_GeneratingUnit_types(data):
+def count_GeneratingUnit_types(data):
     """Calculate statistics for GeneratingUnit types in a CGMES dataset.
 
     Parameters
@@ -522,7 +522,7 @@ def statistics_GeneratingUnit_types(data):
 
     Examples
     --------
-    >>> stats = statistics_GeneratingUnit_types(data)
+    >>> stats = count_GeneratingUnit_types(data)
     >>> print(stats)
        Type  count  TOTAL    %
     0  Hydro   10     20  50.0
@@ -677,7 +677,7 @@ def _instance_filenames(data):
     return {instance_id: os.path.basename(str(path)) for instance_id, path in zip(labels["INSTANCE_ID"], labels["VALUE"])}
 
 
-def darw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False, open_browser=True, instance_labels=None):
+def draw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False, open_browser=True, instance_labels=None):
     """Create a temporary HTML file to visualize relations in a CGMES dataset.
 
     Parameters
@@ -709,7 +709,7 @@ def darw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False, open_br
 
     Examples
     --------
-    >>> file_path = darw_relations_graph(data, 'ID')
+    >>> file_path = draw_relations_graph(data, 'ID')
     """
 
     pivot = reference_data.drop_duplicates([ID_COLUMN, "KEY"]).pivot(index=ID_COLUMN, columns="KEY")["VALUE"].reset_index()
@@ -735,8 +735,9 @@ def darw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False, open_br
     for node in node_data.itertuples():
         object_data = reference_data.query("{} == '{}'".format(ID_COLUMN, node.ID))
         object_table = object_data[[ID_COLUMN, "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={ID_COLUMN: "ID"}).drop_duplicates()
-        # Show the source filename instead of the instance UUID
-        object_table["INSTANCE_ID"] = object_table["INSTANCE_ID"].map(instance_labels).fillna(object_table["INSTANCE_ID"])
+        if instance_labels:
+            # Show the source filename instead of the instance UUID
+            object_table["INSTANCE_ID"] = object_table["INSTANCE_ID"].map(instance_labels).fillna(object_table["INSTANCE_ID"])
         nodes.append({
             "id": node.ID,
             "label": "{} - {}".format(node.Type, node.name),
@@ -794,7 +795,7 @@ def draw_relations_to(data, UUID, notebook=False, open_browser=True):
 
     ID_COLUMN = "ID"
 
-    return darw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
+    return draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
 
 
 def draw_relations_from(data, UUID, notebook=False, open_browser=True):
@@ -823,7 +824,7 @@ def draw_relations_from(data, UUID, notebook=False, open_browser=True):
 
     ID_COLUMN = "ID"
 
-    return darw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
+    return draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
 
 
 def draw_relations(data, UUID, notebook=False, levels=2, open_browser=True):
@@ -854,7 +855,7 @@ def draw_relations(data, UUID, notebook=False, levels=2, open_browser=True):
 
     ID_COLUMN = "ID"
 
-    return darw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
+    return draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
 
 
 def scale_load(data, load_setpoint, cos_f=None):

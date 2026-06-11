@@ -404,16 +404,46 @@ class TestExportToCsv:
         assert hasattr(result[0], 'read')
 
 
+# CIM XML export engines; cython_pugixml skipped when the extension is not built
+CIMXML_ENGINES = ["python_lxml", "cython_pugixml"]
+
+
+def require_cimxml_engine(engine):
+    if engine == "cython_pugixml":
+        pytest.importorskip("triplets.export.cimxml_cython_pugixml")
+
+
 class TestExportToCimxml:
-    def test_export_to_memory(self, svedala_eq):
+    @pytest.mark.parametrize("engine", CIMXML_ENGINES)
+    def test_export_to_memory(self, svedala_eq, engine):
+        require_cimxml_engine(engine)
         from triplets.export_schema import schemas
         result = svedala_eq.export_to_cimxml(
             rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1,
             export_type="xml_per_instance",
             export_to_memory=True,
+            engine=engine,
         )
         assert isinstance(result, list)
         assert len(result) > 0
+
+    def test_engines_produce_identical_output(self, svedala_eq):
+        require_cimxml_engine("cython_pugixml")
+        from triplets.export_schema import schemas
+        outputs = {}
+        for engine in CIMXML_ENGINES:
+            result = svedala_eq.export_to_cimxml(
+                rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+                export_type="xml_per_instance",
+                export_to_memory=True,
+                engine=engine,
+            )
+            outputs[engine] = pandas.read_RDF([result[0]])
+        diff = triplets.tools.diff_between_triplet(outputs["python_lxml"], outputs["cython_pugixml"])
+        # Distribution/NamespaceMap meta objects get fresh IDs per parse — exclude them
+        meta_ids = set(diff[(diff["KEY"] == "Type") & diff["VALUE"].isin(["Distribution", "NamespaceMap"])]["ID"])
+        real_diff = diff[~diff["ID"].isin(meta_ids) & (diff["KEY"] != "label")]
+        assert len(real_diff) == 0, f"Engines differ:\n{real_diff.head(10)}"
 
 
 class TestExportToNetworkx:
@@ -517,13 +547,16 @@ class TestPolarsExportNquads:
 class TestCimxmlRoundtrip:
     """Export Svedala EQ (CGMES 3.0) to CIM XML, reimport, verify data is identical."""
 
-    def test_roundtrip_types_match(self, svedala_eq):
+    @pytest.mark.parametrize("engine", CIMXML_ENGINES)
+    def test_roundtrip_types_match(self, svedala_eq, engine):
+        require_cimxml_engine(engine)
         from triplets.export_schema import schemas
 
         result = svedala_eq.export_to_cimxml(
             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
             export_type="xml_per_instance",
             export_to_memory=True,
+            engine=engine,
         )
         assert len(result) > 0
         result[0].seek(0)
@@ -534,13 +567,16 @@ class TestCimxmlRoundtrip:
         reimp_types = set(reimported.types_dict().keys()) - {"Distribution", "NamespaceMap"}
         assert orig_types == reimp_types, f"Missing: {orig_types - reimp_types}, Extra: {reimp_types - orig_types}"
 
-    def test_roundtrip_object_counts_match(self, svedala_eq):
+    @pytest.mark.parametrize("engine", CIMXML_ENGINES)
+    def test_roundtrip_object_counts_match(self, svedala_eq, engine):
+        require_cimxml_engine(engine)
         from triplets.export_schema import schemas
 
         result = svedala_eq.export_to_cimxml(
             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
             export_type="xml_per_instance",
             export_to_memory=True,
+            engine=engine,
         )
         result[0].seek(0)
         reimported = pandas.read_RDF([result[0]])
@@ -553,13 +589,16 @@ class TestCimxmlRoundtrip:
             assert orig_td[type_name] == reimp_td.get(type_name, 0), \
                 f"{type_name}: {orig_td[type_name]} -> {reimp_td.get(type_name, 0)}"
 
-    def test_roundtrip_no_data_diff(self, svedala_eq):
+    @pytest.mark.parametrize("engine", CIMXML_ENGINES)
+    def test_roundtrip_no_data_diff(self, svedala_eq, engine):
+        require_cimxml_engine(engine)
         from triplets.export_schema import schemas
 
         result = svedala_eq.export_to_cimxml(
             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
             export_type="xml_per_instance",
             export_to_memory=True,
+            engine=engine,
         )
         result[0].seek(0)
         reimported = pandas.read_RDF([result[0]])
