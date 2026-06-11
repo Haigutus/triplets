@@ -581,6 +581,32 @@ class TestNquadsDatatypes:
             assert literal.datatype == rdflib.XSD.float
             assert isinstance(literal.toPython(), float)
 
+    def test_references_resolve_within_dataset(self, svedala_eq, nquads_lines, tmp_path):
+        """Every urn:uuid reference resolves to a subject — except the references
+        the source data itself knows are dangling (boundary objects, other models)."""
+        rdflib = pytest.importorskip("rdflib")
+        from triplets import cgmes_tools
+
+        path = tmp_path / "refs.nq"
+        path.write_text("".join(nquads_lines))
+        dataset = rdflib.Dataset()
+        dataset.parse(str(path), format="nquads")
+
+        subjects = set()
+        uuid_objects = set()
+        for s, _, o, _ in dataset.quads((None, None, None, None)):
+            subjects.add(str(s))
+            if isinstance(o, rdflib.URIRef) and str(o).startswith("urn:uuid:"):
+                uuid_objects.add(str(o))
+        unresolved = {o.removeprefix("urn:uuid:") for o in uuid_objects - subjects}
+
+        dangling = cgmes_tools.get_dangling_references(svedala_eq, detailed=True)
+        known_dangling = set(dangling["VALUE_FROM"].astype(str))
+
+        assert unresolved, "single EQ file must have boundary references"
+        assert unresolved == unresolved & known_dangling, \
+            f"references neither resolved nor known-dangling: {sorted(unresolved - known_dangling)[:5]}"
+
     def test_string_literal_stays_plain(self, nquads_lines):
         # xsd:string is the RDF 1.1 default — no annotation
         name_lines = [l for l in nquads_lines if "IdentifiedObject.name>" in l]
