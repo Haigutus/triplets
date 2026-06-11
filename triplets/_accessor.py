@@ -46,14 +46,14 @@ PANDAS_TOOL_METHODS = [
     "references_to_simple", "references_to", "references_from_simple",
     "references_from", "references_all", "references_simple", "references",
     # filter
-    "filter_by_type", "filter_by_triplet", "filter_triplets",
+    "filter_triplets_by_type", "filter_triplets_by_triplets", "filter_triplets",
     # mutate
-    "set_VALUE_at_KEY", "set_VALUE_at_KEY_and_ID",
-    "update_triplet_from_triplet", "update_triplet_from_tableview",
+    "set_triplets_value_by_key", "set_triplets_value_by_key_and_id",
+    "update_triplets_from_triplets", "update_triplets_from_tableview",
     # transform
-    "triplet_to_tableviews", "tableview_to_triplet",
+    "triplets_to_tableviews", "tableview_to_triplets",
     # diff
-    "diff_between_INSTANCE",
+    "diff_triplets_by_instance",
 ]
 
 # Subset of tools currently implemented by the polars engine
@@ -64,11 +64,11 @@ POLARS_TOOL_METHODS = [
     # references
     "references_to", "references_from", "references",
     # filter
-    "filter_by_type", "filter_triplets",
+    "filter_triplets_by_type", "filter_triplets",
     # transform
-    "triplet_to_tableviews", "tableview_to_triplet",
+    "triplets_to_tableviews", "tableview_to_triplets",
     # diff
-    "diff_between_INSTANCE",
+    "diff_triplets_by_instance",
 ]
 
 EXPORT_METHODS = [
@@ -79,7 +79,7 @@ EXPORT_METHODS = [
 # Subset of tools implemented by the duckdb engine (patched onto the
 # connection object directly, the connection holds the triplets table)
 DUCKDB_TOOL_METHODS = [
-    "types_dict", "type_tableview", "filter_triplets", "filter_by_type",
+    "types_dict", "type_tableview", "filter_triplets", "filter_triplets_by_type",
     "references_to", "references_from",
 ]
 
@@ -103,6 +103,14 @@ def _add_methods(accessor_class, tool_methods):
         setattr(accessor_class, name, _delegate(tools, name))
     for name in EXPORT_METHODS:
         setattr(accessor_class, name, _delegate(export, name))
+    # convenience aliases (first-class, group by prefix for IDE autocomplete)
+    for alias, target in tools.ALIASES.items():
+        if target in tool_methods:
+            setattr(accessor_class, alias, _delegate(tools, alias))
+    # old names renamed in 0.1 — delegate through the tools alias, which warns
+    for old_name, new_name in tools.DEPRECATED_ALIASES.items():
+        if new_name in tool_methods:
+            setattr(accessor_class, old_name, _delegate(tools, old_name))
 
 
 # ── pandas ────────────────────────────────────────────────────────────────────
@@ -151,6 +159,9 @@ if duckdb:
 
     for name in DUCKDB_TOOL_METHODS:
         setattr(duckdb.DuckDBPyConnection, name, getattr(duckdb_engine, name))
+    for alias, target in tools.ALIASES.items():
+        if target in DUCKDB_TOOL_METHODS:
+            setattr(duckdb.DuckDBPyConnection, alias, getattr(duckdb_engine, target))
     for name in DUCKDB_EXPORT_METHODS:
         setattr(duckdb.DuckDBPyConnection, name, _duckdb_export(name))
     logger.debug("Registered DuckDB connection tools + export helpers")

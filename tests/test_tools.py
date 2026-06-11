@@ -211,7 +211,7 @@ class TestFilterByTriplet:
 class TestSetValueAtKey:
     def test_modifies_data(self, svedala_eq):
         data = svedala_eq.copy()
-        data.set_VALUE_at_KEY("Model.description", "test_value")
+        data.set_triplets_value_by_key("Model.description", "test_value")
         modified = data[data["KEY"] == "Model.description"]["VALUE"]
         if len(modified) > 0:
             assert all(v == "test_value" for v in modified.values)
@@ -221,7 +221,7 @@ class TestSetValueAtKeyAndID:
     def test_modifies_specific_row(self, svedala_data):
         data = svedala_data.copy()
         target = data[(data["KEY"] == "Type") & (data["VALUE"] == "Substation")].iloc[0]
-        data.set_VALUE_at_KEY_and_ID("Type", "TestType", target["ID"])
+        data.set_triplets_value_by_key_and_id("Type", "TestType", target["ID"])
         modified = data[(data["ID"] == target["ID"]) & (data["KEY"] == "Type")]
         assert modified["VALUE"].iloc[0] == "TestType"
 
@@ -235,7 +235,7 @@ class TestUpdateTripletFromTriplet:
             "VALUE": ["UPDATED_VALUE"],
             "INSTANCE_ID": [data["INSTANCE_ID"].iloc[5]],
         })
-        result = data.update_triplet_from_triplet(update)
+        result = data.update_triplets_from_triplets(update)
         assert isinstance(result, pandas.DataFrame)
 
 
@@ -244,7 +244,7 @@ class TestUpdateTripletFromTableview:
         tv = svedala_data.type_tableview("Substation", string_to_number=False)
         if tv is not None and len(tv) > 0:
             data = svedala_data.copy()
-            result = data.update_triplet_from_tableview(tv)
+            result = data.update_triplets_from_tableview(tv)
             assert isinstance(result, pandas.DataFrame)
 
 
@@ -284,7 +284,7 @@ class TestTableviewsToTriplet:
 class TestTableviewToTriplet:
     def test_returns_dataframe(self, svedala_data):
         tv = svedala_data.type_tableview("ACLineSegment", string_to_number=False)
-        result = tv.tableview_to_triplet()
+        result = tv.tableview_to_triplets()
         assert isinstance(result, pandas.DataFrame)
         assert "ID" in result.columns
         assert "KEY" in result.columns
@@ -292,7 +292,7 @@ class TestTableviewToTriplet:
 
     def test_multivalue(self, svedala_data):
         tv = svedala_data.type_tableview("FullModel", multivalue=True)
-        result = tv.tableview_to_triplet(multivalue=True)
+        result = tv.tableview_to_triplets(multivalue=True)
         assert isinstance(result, pandas.DataFrame)
 
 
@@ -311,7 +311,7 @@ class TestDiffBetweenInstance:
     def test_returns_dataframe(self, svedala_data):
         instances = svedala_data["INSTANCE_ID"].unique()
         if len(instances) >= 2:
-            diff = svedala_data.diff_between_INSTANCE(instances[0], instances[1])
+            diff = svedala_data.diff_triplets_by_instance(instances[0], instances[1])
             assert isinstance(diff, pandas.DataFrame)
 
 
@@ -323,6 +323,47 @@ class TestPrintTripletDiff:
         idx = modified.index[5]
         modified.at[idx, "VALUE"] = str(modified.at[idx, "VALUE"]) + "_CHANGED"
         triplets.rdf_parser.print_triplet_diff(svedala_eq, modified)
+
+
+# ── Deprecated tools aliases (renamed in 0.1) ───────────────────────────────
+
+class TestToolsDeprecatedAliases:
+    def test_module_alias_warns_and_works(self, svedala_data):
+        with pytest.warns(DeprecationWarning, match="filter_triplets_by_type"):
+            result = triplets.tools.filter_by_type(svedala_data, "ACLineSegment")
+        assert len(result) > 0
+
+    def test_dataframe_method_alias_warns(self, svedala_data):
+        with pytest.warns(DeprecationWarning, match="set_triplets_value_by_key"):
+            svedala_data.copy().set_VALUE_at_KEY("Model.description", "x")
+
+    def test_accessor_alias_warns(self, svedala_data):
+        with pytest.warns(DeprecationWarning, match="filter_triplets_by_type"):
+            result = svedala_data.triplets.filter_by_type("ACLineSegment")
+        assert len(result) > 0
+
+    def test_all_aliases_resolve(self):
+        for old_name, new_name in triplets.tools.DEPRECATED_ALIASES.items():
+            assert callable(getattr(triplets.tools, old_name)), old_name
+            assert callable(getattr(triplets.tools, new_name)), new_name
+
+
+class TestConvenienceAliases:
+    """First-class aliases (no deprecation) that group functions by prefix for IDE autocomplete."""
+
+    def test_aliases_are_same_function(self):
+        for alias, target in triplets.tools.ALIASES.items():
+            assert getattr(triplets.tools, alias) is getattr(triplets.tools, target), alias
+
+    def test_aliases_work_without_warning(self, svedala_data):
+        import warnings as warnings_module
+        with warnings_module.catch_warnings():
+            warnings_module.simplefilter("error", DeprecationWarning)
+            counts = svedala_data.get_types_count()
+            tv = svedala_data.tableview_by_type("ACLineSegment")
+            accessor_tv = svedala_data.triplets.tableview_by_type("ACLineSegment")
+        assert counts == svedala_data.types_dict()
+        assert len(tv) == len(accessor_tv)
 
 
 # ── Export functions ────────────────────────────────────────────────────────
@@ -563,7 +604,7 @@ class TestCimxmlRoundtrip:
         reimported = pandas.read_RDF([result[0]])
 
         # Diff excluding meta rows (Distribution, NamespaceMap have different IDs per parse)
-        diff = triplets.tools.diff_between_triplet(svedala_eq, reimported)
+        diff = triplets.tools.diff_triplets(svedala_eq, reimported)
         meta_ids = set()
         for meta_type in ("Distribution", "NamespaceMap"):
             ids = diff[
@@ -611,7 +652,7 @@ class TestDuckdbTools:
         assert len(df) > 0
 
     def test_filter_by_type(self, db):
-        df = db.filter_by_type("ACLineSegment").df()
+        df = db.filter_triplets_by_type("ACLineSegment").df()
         assert len(df) > 0
 
     def test_references_to(self, db):

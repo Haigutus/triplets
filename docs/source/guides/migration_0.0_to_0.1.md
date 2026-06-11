@@ -76,6 +76,31 @@ They will be removed in 0.2.
 | `triplets.rdf_parser.export_to_networkx` | `triplets.export.export_to_networkx` |
 | All other `rdf_parser.*` query/filter/diff functions | `triplets.tools.*` |
 
+### tools renames
+
+Function names follow `<action>_<format>_<qualifier>` since 0.1 ("triplets" = the
+long ID/KEY/VALUE/INSTANCE_ID table, "tableview" = the pivoted per-class table).
+Old names keep working but emit `DeprecationWarning`; they will be removed in 0.2.
+
+| Old (0.0.x) | New (0.1) |
+|-----------|-----------|
+| `filter_by_type` | `filter_triplets_by_type` |
+| `filter_by_triplet` | `filter_triplets_by_triplets` |
+| `set_VALUE_at_KEY` | `set_triplets_value_by_key` |
+| `set_VALUE_at_KEY_and_ID` | `set_triplets_value_by_key_and_id` |
+| `update_triplet_from_triplet` | `update_triplets_from_triplets` |
+| `update_triplet_from_tableview` | `update_triplets_from_tableview` |
+| `remove_triplet_from_triplet` | `remove_triplets_from_triplets` |
+| `triplet_to_tableviews` | `triplets_to_tableviews` |
+| `tableview_to_triplet` | `tableview_to_triplets` |
+| `tableviews_to_triplet` | `tableviews_to_triplets` |
+| `diff_between_triplet` | `diff_triplets` |
+| `diff_between_INSTANCE` | `diff_triplets_by_instance` |
+| `print_triplet_diff` | `print_triplets_diff` |
+
+The renames apply to `triplets.tools.*`, the DataFrame methods, and the
+`df.triplets.*` accessor alike.
+
 ### cgmes_tools renames
 
 Old names keep working in 0.1 but emit `DeprecationWarning`; they will be removed in 0.2.

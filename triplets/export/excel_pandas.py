@@ -9,7 +9,7 @@ from io import BytesIO
 
 import pandas
 
-from triplets.tools import triplet_to_tableviews
+from triplets.tools import triplets_to_tableviews
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
         if filename is None:
             filename = 'export.xlsx'
 
-        tableviews = triplet_to_tableviews(data, multivalue=multivalue)
+        tableviews = triplets_to_tableviews(data, multivalue=multivalue)
         output = BytesIO()
         output.name = filename
 
@@ -78,7 +78,7 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
 
         for _, label in labels.iterrows():
             instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
-            tableviews = triplet_to_tableviews(instance_data, multivalue=multivalue)
+            tableviews = triplets_to_tableviews(instance_data, multivalue=multivalue)
             file_name = '{}.xlsx'.format(label.VALUE.split(".")[0])
             output = BytesIO()
             output.name = file_name

@@ -238,7 +238,7 @@ def references(data, ID, levels=1):
     return references_simple(data, ID, levels=levels)
 
 
-def filter_by_type(data, type_name, type_key="Type"):
+def filter_triplets_by_type(data, type_name, type_key="Type"):
     """Filter triplet data to only include objects of a specific type."""
     type_ids = data.filter(
         (pl.col("KEY") == type_key) & (pl.col("VALUE") == type_name)
@@ -246,7 +246,7 @@ def filter_by_type(data, type_name, type_key="Type"):
     return type_ids.join(data, on="ID", how="inner")
 
 
-def filter_by_triplet(data, filter_triplet):
+def filter_triplets_by_triplets(data, filter_triplet):
     """Filter data to rows matching the filter triplet."""
     return data.join(filter_triplet.select(["ID", "KEY", "VALUE"]), on=["ID", "KEY", "VALUE"], how="semi")
 
@@ -278,7 +278,7 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     return data.filter(expr)
 
 
-def set_VALUE_at_KEY(data, key, value):
+def set_triplets_value_by_key(data, key, value):
     """Set VALUE for all rows with a given KEY (in-place mutation via reassignment)."""
     return data.with_columns(
         pl.when(pl.col("KEY") == key)
@@ -288,7 +288,7 @@ def set_VALUE_at_KEY(data, key, value):
     )
 
 
-def set_VALUE_at_KEY_and_ID(data, key, value, id):
+def set_triplets_value_by_key_and_id(data, key, value, id):
     """Set VALUE for a specific KEY and ID combination."""
     return data.with_columns(
         pl.when((pl.col("KEY") == key) & (pl.col("ID") == id))
@@ -298,7 +298,7 @@ def set_VALUE_at_KEY_and_ID(data, key, value, id):
     )
 
 
-def triplet_to_tableviews(triplet_df, multivalue=False):
+def triplets_to_tableviews(triplet_df, multivalue=False):
     """Convert triplet DataFrame to dict of tableview DataFrames."""
     td = types_dict(triplet_df)
     tableviews = {}
@@ -309,13 +309,13 @@ def triplet_to_tableviews(triplet_df, multivalue=False):
     return tableviews
 
 
-def tableviews_to_triplet(tableviews, multivalue=False):
+def tableviews_to_triplets(tableviews, multivalue=False):
     """Convert dict of tableview DataFrames to triplet DataFrame."""
     all_triplets = []
     for class_name, df in tableviews.items():
         if "Type" not in df.columns:
             df = df.with_columns(pl.lit(class_name).alias("Type"))
-        triplet = tableview_to_triplet(df, multivalue=multivalue)
+        triplet = tableview_to_triplets(df, multivalue=multivalue)
         triplet = triplet.filter(pl.col("VALUE").is_not_null())
         all_triplets.append(triplet)
     if not all_triplets:
@@ -323,7 +323,7 @@ def tableviews_to_triplet(tableviews, multivalue=False):
     return pl.concat(all_triplets)
 
 
-def tableview_to_triplet(data, multivalue=False):
+def tableview_to_triplets(data, multivalue=False):
     """Convert a table view back to triplet format."""
     # polars melt (unpivot)
     id_col = "ID" if "ID" in data.columns else data.columns[0]
@@ -347,7 +347,7 @@ def tableview_to_triplet(data, multivalue=False):
     return triplet_df.cast({"VALUE": pl.Utf8, "KEY": pl.Utf8, "ID": pl.Utf8})
 
 
-def update_triplet_from_triplet(data, update_data, update=True, add=True):
+def update_triplets_from_triplets(data, update_data, update=True, add=True):
     """Update triplet data with values from another triplet dataset."""
     if update:
         # Anti-join to remove old values, then concat new ones
@@ -361,20 +361,20 @@ def update_triplet_from_triplet(data, update_data, update=True, add=True):
     return data
 
 
-def update_triplet_from_tableview(data, tableview, update=True, add=True, instance_id=None):
+def update_triplets_from_tableview(data, tableview, update=True, add=True, instance_id=None):
     """Update triplet data from a tableview DataFrame."""
-    triplet = tableview_to_triplet(tableview)
+    triplet = tableview_to_triplets(tableview)
     if instance_id:
         triplet = triplet.with_columns(pl.lit(instance_id).alias("INSTANCE_ID"))
-    return update_triplet_from_triplet(data, triplet, update=update, add=add)
+    return update_triplets_from_triplets(data, triplet, update=update, add=add)
 
 
-def remove_triplet_from_triplet(from_triplet, what_triplet, columns=["ID", "KEY", "VALUE"]):
+def remove_triplets_from_triplets(from_triplet, what_triplet, columns=["ID", "KEY", "VALUE"]):
     """Remove rows from one triplet that match another (anti-join)."""
     return from_triplet.join(what_triplet.select(columns), on=columns, how="anti")
 
 
-def diff_between_triplet(old_data, new_data):
+def diff_triplets(old_data, new_data):
     """Find differences between two triplet datasets."""
     # Rows in old but not in new
     removed = old_data.join(
@@ -393,29 +393,29 @@ def diff_between_triplet(old_data, new_data):
     return pl.concat([removed, added])
 
 
-def diff_between_INSTANCE(data, INSTANCE_ID_1, INSTANCE_ID_2):
+def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
     """Find differences between two instances in the same dataset."""
     data1 = data.filter(pl.col("INSTANCE_ID") == INSTANCE_ID_1)
     data2 = data.filter(pl.col("INSTANCE_ID") == INSTANCE_ID_2)
-    return diff_between_triplet(data1, data2)
+    return diff_triplets(data1, data2)
 
 
-def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None):
+def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None):
     """Print a human-readable diff between two triplet datasets."""
-    diff = diff_between_triplet(old_data, new_data)
+    diff = diff_triplets(old_data, new_data)
     diff = diff.sort(["ID", "KEY"])
 
     # Remove file identification objects
-    file_ids = filter_by_type(diff, file_id_object)
+    file_ids = filter_triplets_by_type(diff, file_id_object)
     if not file_ids.is_empty():
-        diff = remove_triplet_from_triplet(diff, file_ids)
+        diff = remove_triplets_from_triplets(diff, file_ids)
 
     # Exclude specified types
     if exclude_objects:
         for obj in exclude_objects:
-            obj_data = filter_by_type(diff, obj)
+            obj_data = filter_triplets_by_type(diff, obj)
             if not obj_data.is_empty():
-                diff = remove_triplet_from_triplet(diff, obj_data)
+                diff = remove_triplets_from_triplets(diff, obj_data)
 
     if diff.is_empty():
         print("No differences found")

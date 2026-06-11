@@ -352,7 +352,7 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
 
         tableviews.update(csv_dataframes)
 
-    data = rdf_parser.tableviews_to_triplet(tableviews, multivalue=multivalue)
+    data = rdf_parser.tableviews_to_triplets(tableviews, multivalue=multivalue)
 
     if raw_triplets:
         data = pandas.concat([data] + raw_triplets, ignore_index=True)
@@ -361,9 +361,9 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
     version = get_versions()['version']
     tool_version = f"triplets-{version}"
     # Old header (md:FullModel) uses Model.applicationSoftware
-    data.set_VALUE_at_KEY("Model.applicationSoftware", tool_version)
+    data.set_triplets_value_by_key("Model.applicationSoftware", tool_version)
     # New header (dcat:Dataset) uses applicationSoftware (eumd namespace)
-    data.set_VALUE_at_KEY("applicationSoftware", tool_version)
+    data.set_triplets_value_by_key("applicationSoftware", tool_version)
 
     if "INSTANCE_ID" not in data.columns or data["INSTANCE_ID"].isna().all():
         data["INSTANCE_ID"] = str(uuid4())

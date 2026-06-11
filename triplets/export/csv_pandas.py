@@ -7,7 +7,7 @@ import logging
 
 from io import BytesIO
 
-from triplets.tools import triplet_to_tableviews
+from triplets.tools import triplets_to_tableviews
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
     if single_file:
         if base_filename is None:
             base_filename = 'export'
-        tableviews = triplet_to_tableviews(data, multivalue=multivalue)
+        tableviews = triplets_to_tableviews(data, multivalue=multivalue)
         exported_files = []
         for class_type, class_data in tableviews.items():
             file_name = '{}_{}.csv'.format(base_filename, class_type)
@@ -47,7 +47,7 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
         exported_files = []
         for _, label in labels.iterrows():
             instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
-            tableviews = triplet_to_tableviews(instance_data, multivalue=multivalue)
+            tableviews = triplets_to_tableviews(instance_data, multivalue=multivalue)
             base_name = label.VALUE.split(".")[0]
             for class_type, class_data in tableviews.items():
                 file_name = '{}_{}.csv'.format(base_name, class_type)

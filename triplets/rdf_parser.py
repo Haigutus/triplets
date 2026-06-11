@@ -406,93 +406,93 @@ def references(data, ID, levels=1):
 
 
 def filter_by_type(data, type_name, type_key="Type"):
-    """Deprecated: use triplets.tools.filter_by_type()"""
-    warnings.warn("rdf_parser.filter_by_type is deprecated, use triplets.tools.filter_by_type()", DeprecationWarning, stacklevel=2)
-    from .tools import filter_by_type as _fn
+    """Deprecated: use triplets.tools.filter_triplets_by_type()"""
+    warnings.warn("rdf_parser.filter_by_type is deprecated, use triplets.tools.filter_triplets_by_type()", DeprecationWarning, stacklevel=2)
+    from .tools import filter_triplets_by_type as _fn
     return _fn(data, type_name, type_key=type_key)
 
 
 def filter_by_triplet(data, filter_triplet):
-    """Deprecated: use triplets.tools.filter_by_triplet()"""
-    warnings.warn("rdf_parser.filter_by_triplet is deprecated, use triplets.tools.filter_by_triplet()", DeprecationWarning, stacklevel=2)
-    from .tools import filter_by_triplet as _fn
+    """Deprecated: use triplets.tools.filter_triplets_by_triplets()"""
+    warnings.warn("rdf_parser.filter_by_triplet is deprecated, use triplets.tools.filter_triplets_by_triplets()", DeprecationWarning, stacklevel=2)
+    from .tools import filter_triplets_by_triplets as _fn
     return _fn(data, filter_triplet)
 
 
 def set_VALUE_at_KEY(data, key, value):
-    """Deprecated: use triplets.tools.set_VALUE_at_KEY()"""
-    warnings.warn("rdf_parser.set_VALUE_at_KEY is deprecated, use triplets.tools.set_VALUE_at_KEY()", DeprecationWarning, stacklevel=2)
-    from .tools import set_VALUE_at_KEY as _fn
+    """Deprecated: use triplets.tools.set_triplets_value_by_key()"""
+    warnings.warn("rdf_parser.set_VALUE_at_KEY is deprecated, use triplets.tools.set_triplets_value_by_key()", DeprecationWarning, stacklevel=2)
+    from .tools import set_triplets_value_by_key as _fn
     return _fn(data, key, value)
 
 
 def set_VALUE_at_KEY_and_ID(data, key, value, id):
-    """Deprecated: use triplets.tools.set_VALUE_at_KEY_and_ID()"""
-    warnings.warn("rdf_parser.set_VALUE_at_KEY_and_ID is deprecated, use triplets.tools.set_VALUE_at_KEY_and_ID()", DeprecationWarning, stacklevel=2)
-    from .tools import set_VALUE_at_KEY_and_ID as _fn
+    """Deprecated: use triplets.tools.set_triplets_value_by_key_and_id()"""
+    warnings.warn("rdf_parser.set_VALUE_at_KEY_and_ID is deprecated, use triplets.tools.set_triplets_value_by_key_and_id()", DeprecationWarning, stacklevel=2)
+    from .tools import set_triplets_value_by_key_and_id as _fn
     return _fn(data, key, value, id)
 
 
 def triplet_to_tableviews(triplet_df, multivalue=False):
-    """Deprecated: use triplets.tools.triplet_to_tableviews()"""
-    warnings.warn("rdf_parser.triplet_to_tableviews is deprecated, use triplets.tools.triplet_to_tableviews()", DeprecationWarning, stacklevel=2)
-    from .tools import triplet_to_tableviews as _fn
+    """Deprecated: use triplets.tools.triplets_to_tableviews()"""
+    warnings.warn("rdf_parser.triplet_to_tableviews is deprecated, use triplets.tools.triplets_to_tableviews()", DeprecationWarning, stacklevel=2)
+    from .tools import triplets_to_tableviews as _fn
     return _fn(triplet_df, multivalue=multivalue)
 
 
 def tableviews_to_triplet(tableviews, multivalue=False):
-    """Deprecated: use triplets.tools.tableviews_to_triplet()"""
-    warnings.warn("rdf_parser.tableviews_to_triplet is deprecated, use triplets.tools.tableviews_to_triplet()", DeprecationWarning, stacklevel=2)
-    from .tools import tableviews_to_triplet as _fn
+    """Deprecated: use triplets.tools.tableviews_to_triplets()"""
+    warnings.warn("rdf_parser.tableviews_to_triplet is deprecated, use triplets.tools.tableviews_to_triplets()", DeprecationWarning, stacklevel=2)
+    from .tools import tableviews_to_triplets as _fn
     return _fn(tableviews, multivalue=multivalue)
 
 
 def tableview_to_triplet(data, multivalue=False):
-    """Deprecated: use triplets.tools.tableview_to_triplet()"""
-    warnings.warn("rdf_parser.tableview_to_triplet is deprecated, use triplets.tools.tableview_to_triplet()", DeprecationWarning, stacklevel=2)
-    from .tools import tableview_to_triplet as _fn
+    """Deprecated: use triplets.tools.tableview_to_triplets()"""
+    warnings.warn("rdf_parser.tableview_to_triplet is deprecated, use triplets.tools.tableview_to_triplets()", DeprecationWarning, stacklevel=2)
+    from .tools import tableview_to_triplets as _fn
     return _fn(data, multivalue=multivalue)
 
 
 def update_triplet_from_triplet(data, update_data, update=True, add=True):
-    """Deprecated: use triplets.tools.update_triplet_from_triplet()"""
-    warnings.warn("rdf_parser.update_triplet_from_triplet is deprecated, use triplets.tools.update_triplet_from_triplet()", DeprecationWarning, stacklevel=2)
-    from .tools import update_triplet_from_triplet as _fn
+    """Deprecated: use triplets.tools.update_triplets_from_triplets()"""
+    warnings.warn("rdf_parser.update_triplet_from_triplet is deprecated, use triplets.tools.update_triplets_from_triplets()", DeprecationWarning, stacklevel=2)
+    from .tools import update_triplets_from_triplets as _fn
     return _fn(data, update_data, update=update, add=add)
 
 
 def update_triplet_from_tableview(data, tableview, update=True, add=True, instance_id=None):
-    """Deprecated: use triplets.tools.update_triplet_from_tableview()"""
-    warnings.warn("rdf_parser.update_triplet_from_tableview is deprecated, use triplets.tools.update_triplet_from_tableview()", DeprecationWarning, stacklevel=2)
-    from .tools import update_triplet_from_tableview as _fn
+    """Deprecated: use triplets.tools.update_triplets_from_tableview()"""
+    warnings.warn("rdf_parser.update_triplet_from_tableview is deprecated, use triplets.tools.update_triplets_from_tableview()", DeprecationWarning, stacklevel=2)
+    from .tools import update_triplets_from_tableview as _fn
     return _fn(data, tableview, update=update, add=add, instance_id=instance_id)
 
 
 def remove_triplet_from_triplet(from_triplet, what_triplet, columns=["ID", "KEY", "VALUE"]):
-    """Deprecated: use triplets.tools.remove_triplet_from_triplet()"""
-    warnings.warn("rdf_parser.remove_triplet_from_triplet is deprecated, use triplets.tools.remove_triplet_from_triplet()", DeprecationWarning, stacklevel=2)
-    from .tools import remove_triplet_from_triplet as _fn
+    """Deprecated: use triplets.tools.remove_triplets_from_triplets()"""
+    warnings.warn("rdf_parser.remove_triplet_from_triplet is deprecated, use triplets.tools.remove_triplets_from_triplets()", DeprecationWarning, stacklevel=2)
+    from .tools import remove_triplets_from_triplets as _fn
     return _fn(from_triplet, what_triplet, columns=columns)
 
 
 def diff_between_triplet(old_data, new_data):
-    """Deprecated: use triplets.tools.diff_between_triplet()"""
-    warnings.warn("rdf_parser.diff_between_triplet is deprecated, use triplets.tools.diff_between_triplet()", DeprecationWarning, stacklevel=2)
-    from .tools import diff_between_triplet as _fn
+    """Deprecated: use triplets.tools.diff_triplets()"""
+    warnings.warn("rdf_parser.diff_between_triplet is deprecated, use triplets.tools.diff_triplets()", DeprecationWarning, stacklevel=2)
+    from .tools import diff_triplets as _fn
     return _fn(old_data, new_data)
 
 
 def diff_between_INSTANCE(data, INSTANCE_ID_1, INSTANCE_ID_2):
-    """Deprecated: use triplets.tools.diff_between_INSTANCE()"""
-    warnings.warn("rdf_parser.diff_between_INSTANCE is deprecated, use triplets.tools.diff_between_INSTANCE()", DeprecationWarning, stacklevel=2)
-    from .tools import diff_between_INSTANCE as _fn
+    """Deprecated: use triplets.tools.diff_triplets_by_instance()"""
+    warnings.warn("rdf_parser.diff_between_INSTANCE is deprecated, use triplets.tools.diff_triplets_by_instance()", DeprecationWarning, stacklevel=2)
+    from .tools import diff_triplets_by_instance as _fn
     return _fn(data, INSTANCE_ID_1, INSTANCE_ID_2)
 
 
 def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None):
-    """Deprecated: use triplets.tools.print_triplet_diff()"""
-    warnings.warn("rdf_parser.print_triplet_diff is deprecated, use triplets.tools.print_triplet_diff()", DeprecationWarning, stacklevel=2)
-    from .tools import print_triplet_diff as _fn
+    """Deprecated: use triplets.tools.print_triplets_diff()"""
+    warnings.warn("rdf_parser.print_triplet_diff is deprecated, use triplets.tools.print_triplets_diff()", DeprecationWarning, stacklevel=2)
+    from .tools import print_triplets_diff as _fn
     return _fn(old_data, new_data, file_id_object=file_id_object, file_id_key=file_id_key, exclude_objects=exclude_objects)
 
 

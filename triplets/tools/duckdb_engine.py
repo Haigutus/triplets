@@ -49,7 +49,7 @@ def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
     return self.sql(f"SELECT * FROM {table_name} WHERE {where}")
 
 
-def filter_by_type(self, type_name, table_name=TABLE_NAME):
+def filter_triplets_by_type(self, type_name, table_name=TABLE_NAME):
     """Filter to only objects of a specific type. Returns DuckDBPyRelation (lazy)."""
     return self.sql(f"""
         SELECT d.* FROM {table_name} d

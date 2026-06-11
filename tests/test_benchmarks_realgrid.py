@@ -102,14 +102,14 @@ def test_type_tableview_duckdb(benchmark):
     assert view is not None and len(view) > 0
 
 
-# ── filter_by_type benchmarks ──────────────────────────────────────────────
+# ── filter_triplets_by_type benchmarks ──────────────────────────────────────────────
 
 @pytest.mark.benchmark(group="filter-by-type")
 def test_filter_by_type_pandas(benchmark):
     import triplets
     df = parse(REALGRID_ZIP, engine=_PARSE_ENGINES[-1], return_type="pandas")
     benchmark.extra_info.update({"engine": "pandas"})
-    result = benchmark(lambda: triplets.tools.filter_by_type(df, TYPE_FOR_VIEW, engine="pandas"))
+    result = benchmark(lambda: triplets.tools.filter_triplets_by_type(df, TYPE_FOR_VIEW, engine="pandas"))
     assert len(result) > 0
 
 
@@ -118,7 +118,7 @@ def test_filter_by_type_polars(benchmark):
     import triplets
     pdf = parse(REALGRID_ZIP, engine=_PARSE_ENGINES[-1], return_type="polars")
     benchmark.extra_info.update({"engine": "polars"})
-    result = benchmark(lambda: triplets.tools.filter_by_type(pdf, TYPE_FOR_VIEW, engine="polars"))
+    result = benchmark(lambda: triplets.tools.filter_triplets_by_type(pdf, TYPE_FOR_VIEW, engine="polars"))
     assert len(result) > 0
 
 
@@ -129,7 +129,7 @@ def test_filter_by_type_duckdb(benchmark):
     data = duckdb.connect()
     data.read_rdf([REALGRID_ZIP])
     benchmark.extra_info.update({"engine": "duckdb"})
-    result = benchmark(lambda: data.filter_by_type(TYPE_FOR_VIEW).df())
+    result = benchmark(lambda: data.filter_triplets_by_type(TYPE_FOR_VIEW).df())
     assert len(result) > 0
 
 
