@@ -17,6 +17,7 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.
    :caption: Guides
 
    guides/parsers
+   guides/exports
    guides/building
    guides/testing
    guides/migration_0.0_to_0.1
