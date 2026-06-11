@@ -348,6 +348,24 @@ class TestToolsDeprecatedAliases:
             assert callable(getattr(triplets.tools, new_name)), new_name
 
 
+class TestConvenienceAliases:
+    """First-class aliases (no deprecation) that group functions by prefix for IDE autocomplete."""
+
+    def test_aliases_are_same_function(self):
+        for alias, target in triplets.tools.ALIASES.items():
+            assert getattr(triplets.tools, alias) is getattr(triplets.tools, target), alias
+
+    def test_aliases_work_without_warning(self, svedala_data):
+        import warnings as warnings_module
+        with warnings_module.catch_warnings():
+            warnings_module.simplefilter("error", DeprecationWarning)
+            counts = svedala_data.get_types_count()
+            tv = svedala_data.tableview_by_type("ACLineSegment")
+            accessor_tv = svedala_data.triplets.tableview_by_type("ACLineSegment")
+        assert counts == svedala_data.types_dict()
+        assert len(tv) == len(accessor_tv)
+
+
 # ── Export functions ────────────────────────────────────────────────────────
 
 class TestExportToExcel:

@@ -134,6 +134,20 @@ def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_
     return _get_engine(engine, old_data).print_triplets_diff(old_data, new_data, file_id_object=file_id_object, file_id_key=file_id_key, exclude_objects=exclude_objects)
 
 
+# ── Convenience aliases (not deprecated — both names are first-class) ───────
+# Alias → target. The aliases group functions by prefix for IDE autocomplete:
+# typing "get", "tableview" or "references" surfaces the whole family.
+ALIASES = {
+    "get_types_count": "types_dict",
+    "tableview_by_type": "type_tableview",
+    "tableview_by_key": "key_tableview",
+    "tableview_by_id": "id_tableview",
+}
+
+for _alias, _target in ALIASES.items():
+    globals()[_alias] = globals()[_target]
+
+
 # ── Deprecated names (renamed in 0.1; removal in 0.2) ───────────────────────
 # Old name → new name; old names keep working but emit DeprecationWarning.
 DEPRECATED_ALIASES = {
@@ -191,7 +205,7 @@ def _dataframe_method(function):
     return method
 
 
-for _name in DATAFRAME_METHODS + list(DEPRECATED_ALIASES):
+for _name in DATAFRAME_METHODS + list(ALIASES) + list(DEPRECATED_ALIASES):
     setattr(pandas.DataFrame, _name, _dataframe_method(globals()[_name]))
 
 pandas.DataFrame.changes = pandas.DataFrame()

@@ -103,6 +103,10 @@ def _add_methods(accessor_class, tool_methods):
         setattr(accessor_class, name, _delegate(tools, name))
     for name in EXPORT_METHODS:
         setattr(accessor_class, name, _delegate(export, name))
+    # convenience aliases (first-class, group by prefix for IDE autocomplete)
+    for alias, target in tools.ALIASES.items():
+        if target in tool_methods:
+            setattr(accessor_class, alias, _delegate(tools, alias))
     # old names renamed in 0.1 — delegate through the tools alias, which warns
     for old_name, new_name in tools.DEPRECATED_ALIASES.items():
         if new_name in tool_methods:
@@ -155,6 +159,9 @@ if duckdb:
 
     for name in DUCKDB_TOOL_METHODS:
         setattr(duckdb.DuckDBPyConnection, name, getattr(duckdb_engine, name))
+    for alias, target in tools.ALIASES.items():
+        if target in DUCKDB_TOOL_METHODS:
+            setattr(duckdb.DuckDBPyConnection, alias, getattr(duckdb_engine, target))
     for name in DUCKDB_EXPORT_METHODS:
         setattr(duckdb.DuckDBPyConnection, name, _duckdb_export(name))
     logger.debug("Registered DuckDB connection tools + export helpers")
