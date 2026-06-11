@@ -34,7 +34,7 @@ data = pandas.read_RDF([path])
 You can then query a dataframe of all same type elements and its parameters across all [EQ, SSH, TP, SV etc.] instance files, where parameters are columns and index is object ID-s
 
 ```python
-data.type_tableview("ACLineSegment")
+data.tableview_by_type("ACLineSegment")
 ```
 
 ![image](https://user-images.githubusercontent.com/11408965/64228433-7eb7ef80-ceef-11e9-81d4-43e39ecf099d.png)
@@ -76,8 +76,8 @@ import triplets
 
 data = polars.read_rdf(["grid_EQ.xml", "data.zip"])   # returns polars DataFrame
 
-data.triplets.types_dict()
-data.triplets.type_tableview("ACLineSegment")
+data.triplets.get_types_count()
+data.triplets.tableview_by_type("ACLineSegment")
 data.triplets.filter_triplets(KEY="Type", VALUE=".*Generator.*", regex=True)
 data.triplets.export_to_csv(export_to_memory=True)
 data.triplets.export_to_nquads("/tmp/output.nq")
@@ -93,9 +93,9 @@ data = duckdb.connect()                              # in-memory
 data = duckdb.connect("grid.duckdb")                 # persistent (no re-parsing next session)
 
 data.read_rdf(["grid_EQ.xml", "data.zip"])           # parse via Arrow (zero-copy into DuckDB)
-data.types_dict()                                     # → dict
-data.type_tableview("ACLineSegment").df()             # → pandas DataFrame
-data.type_tableview("ACLineSegment").pl()             # → polars DataFrame
+data.get_types_count()                                     # → dict
+data.tableview_by_type("ACLineSegment").df()             # → pandas DataFrame
+data.tableview_by_type("ACLineSegment").pl()             # → polars DataFrame
 data.filter_triplets(KEY="Type", VALUE=".*Sub.*", regex=True).df()
 data.filter_triplets_by_type("Terminal").df()
 data.references_to("some-uuid").df()
@@ -110,8 +110,8 @@ data.sql("SELECT VALUE, COUNT(*) FROM triplets WHERE KEY = 'Type' GROUP BY VALUE
 All engines share the same `df.triplets.*` accessor:
 
 ```python
-data.triplets.type_tableview("ACLineSegment")
-data.triplets.types_dict()
+data.triplets.tableview_by_type("ACLineSegment")
+data.triplets.get_types_count()
 data.triplets.filter_triplets(KEY="Type")
 data.triplets.export_to_excel(export_to_memory=True)
 data.triplets.export_to_nquads("/tmp/output.nq")
@@ -129,8 +129,8 @@ cim-diff original.xml modified.xml
 | Operation | pandas | polars | DuckDB |
 |-----------|--------|--------|--------|
 | Parse (cython engine) | 128ms | 156ms | 283ms |
-| type_tableview | 72ms | **21ms** | 53ms |
+| tableview_by_type | 72ms | **21ms** | 53ms |
 | filter_triplets_by_type | 103ms | **9ms** | 50ms |
-| types_dict | 21ms | **11ms** | 18ms |
+| get_types_count | 21ms | **11ms** | 18ms |
 
 The old `rdf_parser.py` functions still work but emit deprecation warnings.
