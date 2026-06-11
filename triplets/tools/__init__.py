@@ -12,6 +12,8 @@ specified explicitly with engine="pandas" or engine="polars".
 """
 
 import logging
+import functools
+import warnings
 
 logger = logging.getLogger(__name__)
 
@@ -84,75 +86,112 @@ def references_simple(data, reference, columns=None, levels=1, engine="auto"):
 def references(data, ID, levels=1, engine="auto"):
     return _get_engine(engine, data).references(data, ID, levels=levels)
 
-def filter_by_type(data, type_name, type_key="Type", engine="auto"):
-    return _get_engine(engine, data).filter_by_type(data, type_name, type_key=type_key)
+def filter_triplets_by_type(data, type_name, type_key="Type", engine="auto"):
+    return _get_engine(engine, data).filter_triplets_by_type(data, type_name, type_key=type_key)
 
-def filter_by_triplet(data, filter_triplet, engine="auto"):
-    return _get_engine(engine, data).filter_by_triplet(data, filter_triplet)
+def filter_triplets_by_triplets(data, filter_triplet, engine="auto"):
+    return _get_engine(engine, data).filter_triplets_by_triplets(data, filter_triplet)
 
 def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex=False, engine="auto"):
     return _get_engine(engine, data).filter_triplets(data, ID=ID, KEY=KEY, VALUE=VALUE, INSTANCE_ID=INSTANCE_ID, regex=regex)
 
-def set_VALUE_at_KEY(data, key, value, engine="auto"):
-    return _get_engine(engine, data).set_VALUE_at_KEY(data, key, value)
+def set_triplets_value_by_key(data, key, value, engine="auto"):
+    return _get_engine(engine, data).set_triplets_value_by_key(data, key, value)
 
-def set_VALUE_at_KEY_and_ID(data, key, value, id, engine="auto"):
-    return _get_engine(engine, data).set_VALUE_at_KEY_and_ID(data, key, value, id)
+def set_triplets_value_by_key_and_id(data, key, value, id, engine="auto"):
+    return _get_engine(engine, data).set_triplets_value_by_key_and_id(data, key, value, id)
 
-def triplet_to_tableviews(triplet_df, multivalue=False, engine="auto"):
-    return _get_engine(engine, triplet_df).triplet_to_tableviews(triplet_df, multivalue=multivalue)
+def triplets_to_tableviews(triplet_df, multivalue=False, engine="auto"):
+    return _get_engine(engine, triplet_df).triplets_to_tableviews(triplet_df, multivalue=multivalue)
 
-def tableviews_to_triplet(tableviews, multivalue=False, engine="auto"):
+def tableviews_to_triplets(tableviews, multivalue=False, engine="auto"):
     # tableviews is a dict — detect engine from first value if available
     data = next(iter(tableviews.values()), None) if tableviews else None
-    return _get_engine(engine, data).tableviews_to_triplet(tableviews, multivalue=multivalue)
+    return _get_engine(engine, data).tableviews_to_triplets(tableviews, multivalue=multivalue)
 
-def tableview_to_triplet(data, multivalue=False, engine="auto"):
-    return _get_engine(engine, data).tableview_to_triplet(data, multivalue=multivalue)
+def tableview_to_triplets(data, multivalue=False, engine="auto"):
+    return _get_engine(engine, data).tableview_to_triplets(data, multivalue=multivalue)
 
 def get_object_data(data, object_UUID, engine="auto"):
     return _get_engine(engine, data).get_object_data(data, object_UUID)
 
-def update_triplet_from_triplet(data, update_data, update=True, add=True, engine="auto"):
-    return _get_engine(engine, data).update_triplet_from_triplet(data, update_data, update=update, add=add)
+def update_triplets_from_triplets(data, update_data, update=True, add=True, engine="auto"):
+    return _get_engine(engine, data).update_triplets_from_triplets(data, update_data, update=update, add=add)
 
-def update_triplet_from_tableview(data, tableview, update=True, add=True, instance_id=None, engine="auto"):
-    return _get_engine(engine, data).update_triplet_from_tableview(data, tableview, update=update, add=add, instance_id=instance_id)
+def update_triplets_from_tableview(data, tableview, update=True, add=True, instance_id=None, engine="auto"):
+    return _get_engine(engine, data).update_triplets_from_tableview(data, tableview, update=update, add=add, instance_id=instance_id)
 
-def remove_triplet_from_triplet(from_triplet, what_triplet, columns=["ID", "KEY", "VALUE"], engine="auto"):
-    return _get_engine(engine, from_triplet).remove_triplet_from_triplet(from_triplet, what_triplet, columns=columns)
+def remove_triplets_from_triplets(from_triplet, what_triplet, columns=["ID", "KEY", "VALUE"], engine="auto"):
+    return _get_engine(engine, from_triplet).remove_triplets_from_triplets(from_triplet, what_triplet, columns=columns)
 
-def diff_between_triplet(old_data, new_data, engine="auto"):
-    return _get_engine(engine, old_data).diff_between_triplet(old_data, new_data)
+def diff_triplets(old_data, new_data, engine="auto"):
+    return _get_engine(engine, old_data).diff_triplets(old_data, new_data)
 
-def diff_between_INSTANCE(data, INSTANCE_ID_1, INSTANCE_ID_2, engine="auto"):
-    return _get_engine(engine, data).diff_between_INSTANCE(data, INSTANCE_ID_1, INSTANCE_ID_2)
+def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2, engine="auto"):
+    return _get_engine(engine, data).diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2)
 
-def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None, engine="auto"):
-    return _get_engine(engine, old_data).print_triplet_diff(old_data, new_data, file_id_object=file_id_object, file_id_key=file_id_key, exclude_objects=exclude_objects)
+def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None, engine="auto"):
+    return _get_engine(engine, old_data).print_triplets_diff(old_data, new_data, file_id_object=file_id_object, file_id_key=file_id_key, exclude_objects=exclude_objects)
+
+
+# ── Deprecated names (renamed in 0.1; removal in 0.2) ───────────────────────
+# Old name → new name; old names keep working but emit DeprecationWarning.
+DEPRECATED_ALIASES = {
+    "filter_by_type": "filter_triplets_by_type",
+    "filter_by_triplet": "filter_triplets_by_triplets",
+    "set_VALUE_at_KEY": "set_triplets_value_by_key",
+    "set_VALUE_at_KEY_and_ID": "set_triplets_value_by_key_and_id",
+    "update_triplet_from_triplet": "update_triplets_from_triplets",
+    "update_triplet_from_tableview": "update_triplets_from_tableview",
+    "remove_triplet_from_triplet": "remove_triplets_from_triplets",
+    "triplet_to_tableviews": "triplets_to_tableviews",
+    "tableview_to_triplet": "tableview_to_triplets",
+    "tableviews_to_triplet": "tableviews_to_triplets",
+    "diff_between_triplet": "diff_triplets",
+    "diff_between_INSTANCE": "diff_triplets_by_instance",
+    "print_triplet_diff": "print_triplets_diff",
+}
+
+
+def _deprecated_alias(old_name, new_name):
+    new_function = globals()[new_name]
+
+    @functools.wraps(new_function)
+    def wrapper(*args, **kwargs):
+        warnings.warn(f"tools.{old_name} is deprecated, use tools.{new_name}()",
+                      DeprecationWarning, stacklevel=2)
+        return new_function(*args, **kwargs)
+
+    return wrapper
+
+
+for _old, _new in DEPRECATED_ALIASES.items():
+    globals()[_old] = _deprecated_alias(_old, _new)
 
 
 # ── Register on pandas DataFrames (backwards compat) ────────────────────────
+# New names delegate directly; deprecated old names go through the warning alias.
+DATAFRAME_METHODS = [
+    "type_tableview", "key_tableview", "id_tableview", "types_dict",
+    "get_object_data",
+    "references_to_simple", "references_to", "references_from_simple",
+    "references_from", "references_all", "references_simple", "references",
+    "filter_triplets_by_type", "filter_triplets_by_triplets", "filter_triplets",
+    "set_triplets_value_by_key", "set_triplets_value_by_key_and_id",
+    "tableview_to_triplets", "update_triplets_from_triplets",
+    "update_triplets_from_tableview", "diff_triplets_by_instance",
+]
+
 import pandas
-pandas.DataFrame.type_tableview = lambda self, *a, **kw: type_tableview(self, *a, **kw)
-pandas.DataFrame.key_tableview = lambda self, *a, **kw: key_tableview(self, *a, **kw)
-pandas.DataFrame.id_tableview = lambda self, *a, **kw: id_tableview(self, *a, **kw)
-pandas.DataFrame.types_dict = lambda self, **kw: types_dict(self, **kw)
-pandas.DataFrame.get_object_data = lambda self, *a, **kw: get_object_data(self, *a, **kw)
-pandas.DataFrame.references_to_simple = lambda self, *a, **kw: references_to_simple(self, *a, **kw)
-pandas.DataFrame.references_to = lambda self, *a, **kw: references_to(self, *a, **kw)
-pandas.DataFrame.references_from_simple = lambda self, *a, **kw: references_from_simple(self, *a, **kw)
-pandas.DataFrame.references_from = lambda self, *a, **kw: references_from(self, *a, **kw)
-pandas.DataFrame.references_all = lambda self, **kw: references_all(self, **kw)
-pandas.DataFrame.references_simple = lambda self, *a, **kw: references_simple(self, *a, **kw)
-pandas.DataFrame.references = lambda self, *a, **kw: references(self, *a, **kw)
-pandas.DataFrame.filter_by_type = lambda self, *a, **kw: filter_by_type(self, *a, **kw)
-pandas.DataFrame.filter_by_triplet = lambda self, *a, **kw: filter_by_triplet(self, *a, **kw)
-pandas.DataFrame.filter_triplets = lambda self, *a, **kw: filter_triplets(self, *a, **kw)
-pandas.DataFrame.set_VALUE_at_KEY = lambda self, *a, **kw: set_VALUE_at_KEY(self, *a, **kw)
-pandas.DataFrame.set_VALUE_at_KEY_and_ID = lambda self, *a, **kw: set_VALUE_at_KEY_and_ID(self, *a, **kw)
-pandas.DataFrame.tableview_to_triplet = lambda self, *a, **kw: tableview_to_triplet(self, *a, **kw)
-pandas.DataFrame.update_triplet_from_triplet = lambda self, *a, **kw: update_triplet_from_triplet(self, *a, **kw)
-pandas.DataFrame.update_triplet_from_tableview = lambda self, *a, **kw: update_triplet_from_tableview(self, *a, **kw)
-pandas.DataFrame.diff_between_INSTANCE = lambda self, *a, **kw: diff_between_INSTANCE(self, *a, **kw)
+
+
+def _dataframe_method(function):
+    def method(self, *args, **kwargs):
+        return function(self, *args, **kwargs)
+    return method
+
+
+for _name in DATAFRAME_METHODS + list(DEPRECATED_ALIASES):
+    setattr(pandas.DataFrame, _name, _dataframe_method(globals()[_name]))
+
 pandas.DataFrame.changes = pandas.DataFrame()

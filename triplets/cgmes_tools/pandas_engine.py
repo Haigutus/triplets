@@ -299,7 +299,7 @@ def update_FullModel_from_dict(data, metadata, update=True, add=False):
 
     update_data = pandas.DataFrame(additional_meta_list)
 
-    return data.update_triplet_from_triplet(update_data, update, add)
+    return data.update_triplets_from_triplets(update_data, update, add)
 
 def update_FullModel_from_filename(data, parser=get_metadata_from_filename, update=False, add=True):
     """Update FullModel metadata in a triplet dataset using metadata parsed from filenames.
@@ -339,7 +339,7 @@ def update_FullModel_from_filename(data, parser=get_metadata_from_filename, upda
 
     update_data = pandas.DataFrame(additional_meta_list)
 
-    return data.update_triplet_from_triplet(update_data, update, add)
+    return data.update_triplets_from_triplets(update_data, update, add)
 
 
 def update_filename_from_FullModel(data, filename_mask=default_filename_mask, filename_key="label"):
@@ -375,7 +375,7 @@ def update_filename_from_FullModel(data, filename_mask=default_filename_mask, fi
         list_of_updates.append({"ID": label.ID, "KEY": filename_key, "VALUE": filename, "INSTANCE_ID": label.INSTANCE_ID})
 
     update_data = pandas.DataFrame(list_of_updates)
-    return data.update_triplet_from_triplet(update_data, add=False)
+    return data.update_triplets_from_triplets(update_data, add=False)
 
 
 def get_loaded_models(data):
@@ -480,7 +480,7 @@ def get_EIC_to_mRID_map(data, type):
     0  uuid1  10X1001A1001A021
     """
     name_map = {"ID": "mRID", "VALUE": "EIC"}
-    return rdf_parser.filter_by_type(data, type).drop_duplicates().query("KEY == 'IdentifiedObject.energyIdentCodeEic'")[name_map.keys()].rename(columns=name_map)
+    return rdf_parser.filter_triplets_by_type(data, type).drop_duplicates().query("KEY == 'IdentifiedObject.energyIdentCodeEic'")[name_map.keys()].rename(columns=name_map)
 
 
 def get_loaded_model_parts(data):
@@ -904,7 +904,7 @@ def scale_load(data, load_setpoint, cos_f=None):
     load_data["EnergyConsumer.q"] = load_data["EnergyConsumer.p"] * math.tan(math.acos(cos_f))
 
     # Update the dataset with the new scaled P and Q values
-    return data.update_triplet_from_tableview(load_data[['ID', 'EnergyConsumer.p', 'EnergyConsumer.q']], update=True, add=False)
+    return data.update_triplets_from_tableview(load_data[['ID', 'EnergyConsumer.p', 'EnergyConsumer.q']], update=True, add=False)
 
 
 def switch_equipment_terminals(data, equipment_id, connected: str="false"):
@@ -956,7 +956,7 @@ def switch_equipment_terminals(data, equipment_id, connected: str="false"):
     # Set the status (true/false)
     terminals["VALUE"] = connected
 
-    return data.update_triplet_from_triplet(terminals, add=False, update=True)
+    return data.update_triplets_from_triplets(terminals, add=False, update=True)
 
 
 

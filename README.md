@@ -97,7 +97,7 @@ data.types_dict()                                     # → dict
 data.type_tableview("ACLineSegment").df()             # → pandas DataFrame
 data.type_tableview("ACLineSegment").pl()             # → polars DataFrame
 data.filter_triplets(KEY="Type", VALUE=".*Sub.*", regex=True).df()
-data.filter_by_type("Terminal").df()
+data.filter_triplets_by_type("Terminal").df()
 data.references_to("some-uuid").df()
 data.export_to_nquads("/tmp/output.nq")
 
@@ -130,7 +130,7 @@ cim-diff original.xml modified.xml
 |-----------|--------|--------|--------|
 | Parse (cython engine) | 128ms | 156ms | 283ms |
 | type_tableview | 72ms | **21ms** | 53ms |
-| filter_by_type | 103ms | **9ms** | 50ms |
+| filter_triplets_by_type | 103ms | **9ms** | 50ms |
 | types_dict | 21ms | **11ms** | 18ms |
 
 The old `rdf_parser.py` functions still work but emit deprecation warnings.

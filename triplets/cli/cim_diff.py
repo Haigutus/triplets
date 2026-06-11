@@ -47,7 +47,7 @@ After installation, the tool can be invoked in three ways:
     modified = rdf_parser.load_all_to_dataframe(['modified.xml'])
 
     # Print diff
-    rdf_parser.print_triplet_diff(original, modified, exclude_objects=['NamespaceMap', 'Distribution'])
+    rdf_parser.print_triplets_diff(original, modified, exclude_objects=['NamespaceMap', 'Distribution'])
 
 Features
 --------
@@ -105,7 +105,7 @@ Use --no-default-exclusions to include these in the comparison.
 See Also
 --------
 cim-spreadsheet : Tool for converting between CIM XML and spreadsheet formats
-triplets.rdf_parser.print_triplet_diff : Core diff function
+triplets.rdf_parser.print_triplets_diff : Core diff function
 """
 
 import sys
@@ -166,7 +166,7 @@ def main():
     See Also
     --------
     triplets.rdf_parser.load_all_to_dataframe : Loads CIM XML into triplet format
-    triplets.rdf_parser.print_triplet_diff : Prints differences between triplet DataFrames
+    triplets.rdf_parser.print_triplets_diff : Prints differences between triplet DataFrames
     """
     parser = argparse.ArgumentParser(
         description="""Create diff in Unified format for XML RDF CIM files.
@@ -197,7 +197,7 @@ def main():
     original_data = rdf_parser.load_all_to_dataframe([args.original_file])
     changed_data = rdf_parser.load_all_to_dataframe([args.changed_file])
 
-    rdf_parser.print_triplet_diff(original_data, changed_data, exclude_objects=exclude_objects if exclude_objects else None)
+    rdf_parser.print_triplets_diff(original_data, changed_data, exclude_objects=exclude_objects if exclude_objects else None)
 
 if __name__ == "__main__":
     main()
