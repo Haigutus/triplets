@@ -9,6 +9,7 @@ million rows), and DataFrame results are converted back to the input flavor
 """
 import functools
 import logging
+import warnings
 
 import pandas
 
@@ -16,7 +17,7 @@ from . import pandas_engine
 from .pandas_engine import (  # noqa: F401 — no triplet-data argument, re-exported as-is
     dependencies,
     default_filename_mask,
-    generate_instances_ID,
+    generate_instance_ids,
     get_metadata_from_filename,
     get_filename_from_metadata,
     get_metadata_from_xml,
@@ -31,18 +32,26 @@ DATA_FUNCTIONS = [
     "get_metadata_from_FullModel", "update_FullModel_from_dict",
     "update_FullModel_from_filename", "update_filename_from_FullModel",
     # model inventory
-    "get_loaded_models", "get_model_data", "get_loaded_model_parts",
+    "get_loaded_models", "get_model_triplets", "get_loaded_model_parts",
     "get_EIC_to_mRID_map",
     # equipment / statistics
-    "get_GeneratingUnits", "statistics_GeneratingUnit_types", "get_limits",
+    "get_GeneratingUnits", "count_GeneratingUnit_types", "get_limits",
     # modification
     "scale_load", "switch_equipment_terminals",
     # data quality
     "get_dangling_references",
     # visualization
-    "darw_relations_graph", "draw_relations_to", "draw_relations_from",
+    "draw_relations_graph", "draw_relations_to", "draw_relations_from",
     "draw_relations",
 ]
+
+# Old name → new name; old names keep working but emit DeprecationWarning
+DEPRECATED_ALIASES = {
+    "darw_relations_graph": "draw_relations_graph",            # typo
+    "statistics_GeneratingUnit_types": "count_GeneratingUnit_types",
+    "generate_instances_ID": "generate_instance_ids",
+    "get_model_data": "get_model_triplets",
+}
 
 
 def _to_pandas(data):
@@ -85,11 +94,26 @@ def _pandas_boundary(function):
     return wrapper
 
 
+def _deprecated_alias(old_name, new_name):
+    new_function = globals()[new_name]
+
+    @functools.wraps(new_function)
+    def wrapper(*args, **kwargs):
+        warnings.warn(f"cgmes_tools.{old_name} is deprecated, use cgmes_tools.{new_name}()",
+                      DeprecationWarning, stacklevel=2)
+        return new_function(*args, **kwargs)
+
+    return wrapper
+
+
 for _name in DATA_FUNCTIONS:
     globals()[_name] = _pandas_boundary(getattr(pandas_engine, _name))
 
+for _old, _new in DEPRECATED_ALIASES.items():
+    globals()[_old] = _deprecated_alias(_old, _new)
+
 __all__ = [
-    "dependencies", "default_filename_mask", "generate_instances_ID",
+    "dependencies", "default_filename_mask", "generate_instance_ids",
     "get_metadata_from_filename", "get_filename_from_metadata",
     "get_metadata_from_xml",
-] + DATA_FUNCTIONS
+] + DATA_FUNCTIONS + list(DEPRECATED_ALIASES)

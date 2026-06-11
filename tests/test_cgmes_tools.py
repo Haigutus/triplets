@@ -40,14 +40,14 @@ def svedala_eq():
 
 class TestGenerateInstancesID:
     def test_returns_dict(self):
-        ids = cgmes_tools.generate_instances_ID()
+        ids = cgmes_tools.generate_instance_ids()
         assert isinstance(ids, dict)
         assert "EQ" in ids
         assert "SSH" in ids
         assert "SV" in ids
 
     def test_all_unique(self):
-        ids = cgmes_tools.generate_instances_ID()
+        ids = cgmes_tools.generate_instance_ids()
         values = list(ids.values())
         assert len(values) == len(set(values))
 
@@ -110,6 +110,26 @@ class TestGetLoadedModelParts:
         parts = cgmes_tools.get_loaded_model_parts(svedala_data)
         assert isinstance(parts, pandas.DataFrame)
         assert len(parts) == 4  # EQ, SSH, TP, SV
+
+
+# ── Deprecated aliases ──────────────────────────────────────────────────────
+
+class TestDeprecatedAliases:
+    def test_old_names_warn_and_work(self, svedala_data):
+        with pytest.warns(DeprecationWarning, match="generate_instance_ids"):
+            ids = cgmes_tools.generate_instances_ID()
+        assert isinstance(ids, dict)
+
+        with pytest.warns(DeprecationWarning, match="count_GeneratingUnit_types"):
+            result = cgmes_tools.statistics_GeneratingUnit_types(svedala_data)
+        assert result is not None
+
+    def test_typo_alias_darw(self, svedala_data):
+        subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
+        reference_data = svedala_data.references_to(subs, levels=1)
+        with pytest.warns(DeprecationWarning, match="draw_relations_graph"):
+            result = cgmes_tools.darw_relations_graph(reference_data, notebook=True)
+        assert "new vis.Network" in result
 
 
 # ── Input flavors (polars / arrow / duckdb converted at the boundary) ───────
@@ -215,5 +235,5 @@ class TestVisualization:
 
 class TestStatisticsGeneratingUnitTypes:
     def test_returns_dataframe(self, svedala_data):
-        result = cgmes_tools.statistics_GeneratingUnit_types(svedala_data)
+        result = cgmes_tools.count_GeneratingUnit_types(svedala_data)
         assert isinstance(result, pandas.DataFrame)
