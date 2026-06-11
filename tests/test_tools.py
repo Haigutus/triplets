@@ -542,6 +542,102 @@ class TestPolarsExportNquads:
         assert "<urn:uuid:" in lines[0]
 
 
+class TestNquadsDatatypes:
+    """With an export schema, literal attributes get xsd datatype annotations."""
+
+    @pytest.fixture(scope="class")
+    def nquads_lines(self, svedala_eq, tmp_path_factory):
+        from triplets.export_schema import schemas
+        output = str(tmp_path_factory.mktemp("nq") / "typed.nq")
+        triplets.export.export_to_nquads(svedala_eq, output, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+        with open(output) as f:
+            return f.readlines()
+
+    def test_numeric_literal_gets_datatype(self, nquads_lines):
+        length_lines = [l for l in nquads_lines if "Conductor.length" in l]
+        assert length_lines
+        assert all('^^<http://www.w3.org/2001/XMLSchema#float>' in l for l in length_lines)
+
+    def test_reference_keys_stay_iris(self, nquads_lines):
+        # xsd:anyURI keys (e.g. Model.DependentOn) are references, not typed literals
+        dep_lines = [l for l in nquads_lines if "Model.DependentOn" in l]
+        assert dep_lines
+        assert all("^^" not in l for l in dep_lines)
+
+    def test_rdflib_parses_export(self, nquads_lines, tmp_path):
+        rdflib = pytest.importorskip("rdflib")
+        path = tmp_path / "validate.nq"
+        path.write_text("".join(nquads_lines))
+
+        dataset = rdflib.Dataset()
+        dataset.parse(str(path), format="nquads")
+        assert len(dataset) == len(nquads_lines)
+
+        # typed literals round-trip through rdflib with the right python type
+        length_predicate = rdflib.URIRef("http://iec.ch/TC57/CIM100#Conductor.length")
+        lengths = [obj for _, _, obj, _ in dataset.quads((None, length_predicate, None, None))]
+        assert lengths
+        for literal in lengths:
+            assert literal.datatype == rdflib.XSD.float
+            assert isinstance(literal.toPython(), float)
+
+    def test_references_resolve_within_dataset(self, svedala_eq, nquads_lines, tmp_path):
+        """Every urn:uuid reference resolves to a subject — except the references
+        the source data itself knows are dangling (boundary objects, other models)."""
+        rdflib = pytest.importorskip("rdflib")
+        from triplets import cgmes_tools
+
+        path = tmp_path / "refs.nq"
+        path.write_text("".join(nquads_lines))
+        dataset = rdflib.Dataset()
+        dataset.parse(str(path), format="nquads")
+
+        subjects = set()
+        uuid_objects = set()
+        for s, _, o, _ in dataset.quads((None, None, None, None)):
+            subjects.add(str(s))
+            if isinstance(o, rdflib.URIRef) and str(o).startswith("urn:uuid:"):
+                uuid_objects.add(str(o))
+        unresolved = {o.removeprefix("urn:uuid:") for o in uuid_objects - subjects}
+
+        dangling = cgmes_tools.get_dangling_references(svedala_eq, detailed=True)
+        known_dangling = set(dangling["VALUE_FROM"].astype(str))
+
+        assert unresolved, "single EQ file must have boundary references"
+        assert unresolved == unresolved & known_dangling, \
+            f"references neither resolved nor known-dangling: {sorted(unresolved - known_dangling)[:5]}"
+
+    def test_string_literal_stays_plain(self, nquads_lines):
+        # xsd:string is the RDF 1.1 default — no annotation
+        name_lines = [l for l in nquads_lines if "IdentifiedObject.name>" in l]
+        assert name_lines
+        assert all("^^" not in l for l in name_lines)
+
+    def test_mrid_is_literal_not_reference(self, nquads_lines):
+        # mRID is a string attribute by schema; the UUID heuristic must not turn it into a urn:uuid reference
+        mrid_lines = [l for l in nquads_lines if "IdentifiedObject.mRID>" in l]
+        assert mrid_lines
+        for line in mrid_lines:
+            obj = line.split("> ", 2)[2]  # object + graph part after subject and predicate
+            assert obj.startswith('"'), line
+
+    def test_without_schema_no_datatypes(self, svedala_eq, tmp_path):
+        output = str(tmp_path / "untyped.nq")
+        triplets.export.export_to_nquads(svedala_eq, output)
+        with open(output) as f:
+            content = f.read()
+        assert "^^<" not in content
+
+    def test_polars_engine_matches_pandas(self, svedala_eq, tmp_path, nquads_lines):
+        polars = pytest.importorskip("polars")
+        from triplets.export_schema import schemas
+        output = str(tmp_path / "typed_pl.nq")
+        triplets.export.export_to_nquads(polars.from_pandas(svedala_eq), output, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+        with open(output) as f:
+            pl_lines = f.readlines()
+        assert sorted(pl_lines) == sorted(nquads_lines)
+
+
 # ── Roundtrip test (export CIM XML → reimport → compare) ────────────────────
 
 class TestCimxmlRoundtrip:

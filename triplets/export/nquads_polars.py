@@ -22,16 +22,17 @@ def export_to_nquads(data, path, rdf_map=None):
     path : str
         Output file path (.nq).
     rdf_map : dict or str, optional
-        Export schema for proper enum/association detection.
+        Export schema for proper enum/association detection and literal
+        datatype annotations ("400"^^<...XMLSchema#float>).
     """
-    enum_keys, key_namespaces = build_key_metadata(rdf_map) if rdf_map else (set(), {})
+    enum_keys, key_namespaces, key_datatypes = build_key_metadata(rdf_map) if rdf_map else (set(), {}, {})
 
     # Build quads row by row (complex classification can't be fully vectorized)
     quads = []
     for row in data.iter_rows(named=True):
         s = make_subject(str(row["ID"]))
         p = make_predicate(str(row["KEY"]), key_namespaces)
-        o = make_object(str(row["KEY"]), str(row["VALUE"]), enum_keys)
+        o = make_object(str(row["KEY"]), str(row["VALUE"]), enum_keys, key_datatypes)
         g = make_graph(str(row["INSTANCE_ID"]))
         quads.append(f"{s} {p} {o} {g} .")
 

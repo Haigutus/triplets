@@ -18,10 +18,11 @@ def export_to_nquads(data, path, rdf_map=None):
     path : str
         Output file path (.nq).
     rdf_map : dict or str, optional
-        Export schema for proper enum/association detection.
-        If None, enumerations won't get namespace (exported as literals).
+        Export schema for proper enum/association detection and literal
+        datatype annotations ("400"^^<...XMLSchema#float>). If None,
+        enumerations won't get namespace and literals stay untyped.
     """
-    enum_keys, key_namespaces = build_key_metadata(rdf_map) if rdf_map else (set(), {})
+    enum_keys, key_namespaces, key_datatypes = build_key_metadata(rdf_map) if rdf_map else (set(), {}, {})
 
     id_col = data["ID"].astype(str)
     key_col = data["KEY"].astype(str)
@@ -31,7 +32,7 @@ def export_to_nquads(data, path, rdf_map=None):
     subjects = id_col.apply(make_subject)
     predicates = key_col.apply(lambda k: make_predicate(k, key_namespaces))
     objects = pandas.Series(
-        [make_object(k, v, enum_keys) for k, v in zip(key_col, val_col)],
+        [make_object(k, v, enum_keys, key_datatypes) for k, v in zip(key_col, val_col)],
         index=data.index,
     )
     graphs = inst_col.apply(make_graph)
