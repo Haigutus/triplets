@@ -537,7 +537,7 @@ def _string_or_none(value):
     return None if value is None else str(value)
 
 
-def set_triplets_value_by_key(data, key, value):
+def set_triplets_value_at_key(data, key, value):
     """Set the value for all instances of a specified key.
 
     Parameters
@@ -556,12 +556,12 @@ def set_triplets_value_by_key(data, key, value):
 
     Examples
     --------
-    >>> data.set_triplets_value_by_key("label", "new_label")
+    >>> data.set_triplets_value_at_key("label", "new_label")
     """
     data.loc[data[data.KEY == key].index, "VALUE"] = _string_or_none(value)  # TODO add changes to change DataFrame
 
 
-def set_triplets_value_by_key_and_id(data, key, value, id):
+def set_triplets_value_at_key_and_id(data, key, value, id):
     """Set the value for a specific key and ID.
 
     Parameters
@@ -577,7 +577,7 @@ def set_triplets_value_by_key_and_id(data, key, value, id):
 
     Examples
     --------
-    >>> data.set_triplets_value_by_key_and_id("label", "new_label", "uuid1")
+    >>> data.set_triplets_value_at_key_and_id("label", "new_label", "uuid1")
     """
     data.loc[data[(data.ID == id) & (data.KEY == key)].index, "VALUE"] = _string_or_none(value)
 

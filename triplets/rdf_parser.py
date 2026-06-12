@@ -420,16 +420,16 @@ def filter_by_triplet(data, filter_triplet):
 
 
 def set_VALUE_at_KEY(data, key, value):
-    """Deprecated: use triplets.tools.set_triplets_value_by_key()"""
-    warnings.warn("rdf_parser.set_VALUE_at_KEY is deprecated, use triplets.tools.set_triplets_value_by_key()", DeprecationWarning, stacklevel=2)
-    from .tools import set_triplets_value_by_key as _fn
+    """Deprecated: use triplets.tools.set_triplets_value_at_key()"""
+    warnings.warn("rdf_parser.set_VALUE_at_KEY is deprecated, use triplets.tools.set_triplets_value_at_key()", DeprecationWarning, stacklevel=2)
+    from .tools import set_triplets_value_at_key as _fn
     return _fn(data, key, value)
 
 
 def set_VALUE_at_KEY_and_ID(data, key, value, id):
-    """Deprecated: use triplets.tools.set_triplets_value_by_key_and_id()"""
-    warnings.warn("rdf_parser.set_VALUE_at_KEY_and_ID is deprecated, use triplets.tools.set_triplets_value_by_key_and_id()", DeprecationWarning, stacklevel=2)
-    from .tools import set_triplets_value_by_key_and_id as _fn
+    """Deprecated: use triplets.tools.set_triplets_value_at_key_and_id()"""
+    warnings.warn("rdf_parser.set_VALUE_at_KEY_and_ID is deprecated, use triplets.tools.set_triplets_value_at_key_and_id()", DeprecationWarning, stacklevel=2)
+    from .tools import set_triplets_value_at_key_and_id as _fn
     return _fn(data, key, value, id)
 
 
