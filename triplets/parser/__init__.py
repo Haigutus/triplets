@@ -176,15 +176,8 @@ def _finalize_arrow(batches, return_type, categorical_columns, debug):
 
     if return_type == "pandas":
         import pandas as pd
-
-        def _dtype_mapper(arrow_type):
-            # Dictionary columns become plain pandas Categorical (None = pyarrow default),
-            # matching the pandas-engine path. ArrowDtype dictionary columns break e.g.
-            # pivot() on pandas 2.2.x ("'Series' object has no attribute '_pa_array'").
-            return None if pa.types.is_dictionary(arrow_type) else pd.ArrowDtype(arrow_type)
-
         try:
-            return table.to_pandas(types_mapper=_dtype_mapper)  # zero-copy, Arrow-backed dtypes
+            return table.to_pandas(types_mapper=pd.ArrowDtype)  # zero-copy, Arrow-backed dtypes
         except Exception:
             return table.to_pandas()
     if return_type == "arrow":
