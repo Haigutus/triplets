@@ -19,7 +19,7 @@ graph = data.export_to_networkx()
 ### Arrow-backed dtypes (when using pyarrow engines)
 
 When `triplets[arrow]` is installed, the `python_lxml_arrow` and `cython_pugixml_arrow` engines
-return DataFrames with `string[pyarrow]` and `dictionary<...>[pyarrow]` column dtypes instead of
+return DataFrames with `string[pyarrow]` and `category` column dtypes instead of
 plain `object`/`str`.
 
 This affects code that:
@@ -50,7 +50,7 @@ This saves ~60% memory but may affect code that expects plain string columns:
 
 ```python
 # Check if a column is categorical
-print(data["KEY"].dtype)  # dictionary<values=string, indices=int32, ordered=0>[pyarrow]
+print(data["KEY"].dtype)  # category (dictionary-encoded)
 
 # Convert to plain strings if needed
 data["KEY"] = data["KEY"].astype(str)
