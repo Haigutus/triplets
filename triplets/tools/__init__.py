@@ -95,11 +95,11 @@ def filter_triplets_by_triplets(data, filter_triplet, engine="auto"):
 def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex=False, engine="auto"):
     return _get_engine(engine, data).filter_triplets(data, ID=ID, KEY=KEY, VALUE=VALUE, INSTANCE_ID=INSTANCE_ID, regex=regex)
 
-def set_triplets_value_by_key(data, key, value, engine="auto"):
-    return _get_engine(engine, data).set_triplets_value_by_key(data, key, value)
+def set_triplets_value_at_key(data, key, value, engine="auto"):
+    return _get_engine(engine, data).set_triplets_value_at_key(data, key, value)
 
-def set_triplets_value_by_key_and_id(data, key, value, id, engine="auto"):
-    return _get_engine(engine, data).set_triplets_value_by_key_and_id(data, key, value, id)
+def set_triplets_value_at_key_and_id(data, key, value, id, engine="auto"):
+    return _get_engine(engine, data).set_triplets_value_at_key_and_id(data, key, value, id)
 
 def triplets_to_tableviews(triplet_df, multivalue=False, engine="auto"):
     return _get_engine(engine, triplet_df).triplets_to_tableviews(triplet_df, multivalue=multivalue)
@@ -153,8 +153,8 @@ for _alias, _target in ALIASES.items():
 DEPRECATED_ALIASES = {
     "filter_by_type": "filter_triplets_by_type",
     "filter_by_triplet": "filter_triplets_by_triplets",
-    "set_VALUE_at_KEY": "set_triplets_value_by_key",
-    "set_VALUE_at_KEY_and_ID": "set_triplets_value_by_key_and_id",
+    "set_VALUE_at_KEY": "set_triplets_value_at_key",
+    "set_VALUE_at_KEY_and_ID": "set_triplets_value_at_key_and_id",
     "update_triplet_from_triplet": "update_triplets_from_triplets",
     "update_triplet_from_tableview": "update_triplets_from_tableview",
     "remove_triplet_from_triplet": "remove_triplets_from_triplets",
@@ -164,6 +164,9 @@ DEPRECATED_ALIASES = {
     "diff_between_triplet": "diff_triplets",
     "diff_between_INSTANCE": "diff_triplets_by_instance",
     "print_triplet_diff": "print_triplets_diff",
+    # 0.1.0rc4 briefly named these _by_; corrected to _at_ before 0.1.0
+    "set_triplets_value_by_key": "set_triplets_value_at_key",
+    "set_triplets_value_by_key_and_id": "set_triplets_value_at_key_and_id",
 }
 
 
@@ -191,7 +194,7 @@ DATAFRAME_METHODS = [
     "references_to_simple", "references_to", "references_from_simple",
     "references_from", "references_all", "references_simple", "references",
     "filter_triplets_by_type", "filter_triplets_by_triplets", "filter_triplets",
-    "set_triplets_value_by_key", "set_triplets_value_by_key_and_id",
+    "set_triplets_value_at_key", "set_triplets_value_at_key_and_id",
     "tableview_to_triplets", "update_triplets_from_triplets",
     "update_triplets_from_tableview", "diff_triplets_by_instance",
 ]

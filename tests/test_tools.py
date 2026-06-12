@@ -211,7 +211,7 @@ class TestFilterByTriplet:
 class TestSetValueAtKey:
     def test_modifies_data(self, svedala_eq):
         data = svedala_eq.copy()
-        data.set_triplets_value_by_key("Model.description", "test_value")
+        data.set_triplets_value_at_key("Model.description", "test_value")
         modified = data[data["KEY"] == "Model.description"]["VALUE"]
         if len(modified) > 0:
             assert all(v == "test_value" for v in modified.values)
@@ -221,7 +221,7 @@ class TestSetValueAtKeyAndID:
     def test_modifies_specific_row(self, svedala_data):
         data = svedala_data.copy()
         target = data[(data["KEY"] == "Type") & (data["VALUE"] == "Substation")].iloc[0]
-        data.set_triplets_value_by_key_and_id("Type", "TestType", target["ID"])
+        data.set_triplets_value_at_key_and_id("Type", "TestType", target["ID"])
         modified = data[(data["ID"] == target["ID"]) & (data["KEY"] == "Type")]
         assert modified["VALUE"].iloc[0] == "TestType"
 
@@ -334,7 +334,7 @@ class TestToolsDeprecatedAliases:
         assert len(result) > 0
 
     def test_dataframe_method_alias_warns(self, svedala_data):
-        with pytest.warns(DeprecationWarning, match="set_triplets_value_by_key"):
+        with pytest.warns(DeprecationWarning, match="set_triplets_value_at_key"):
             svedala_data.copy().set_VALUE_at_KEY("Model.description", "x")
 
     def test_accessor_alias_warns(self, svedala_data):
@@ -373,10 +373,10 @@ class TestTripletsStringInvariant:
         if engine == "polars":
             polars = pytest.importorskip("polars")
             data = polars.from_pandas(frame)
-            result = triplets.tools.set_triplets_value_by_key(data, "k", 42)
+            result = triplets.tools.set_triplets_value_at_key(data, "k", 42)
             assert result["VALUE"][0] == "42"
         else:
-            triplets.tools.set_triplets_value_by_key(frame, "k", 42)
+            triplets.tools.set_triplets_value_at_key(frame, "k", 42)
             assert frame["VALUE"].iloc[0] == "42"
 
     @pytest.mark.parametrize("engine", ["pandas", "polars"])
@@ -385,10 +385,10 @@ class TestTripletsStringInvariant:
         if engine == "polars":
             polars = pytest.importorskip("polars")
             data = polars.from_pandas(frame)
-            result = triplets.tools.set_triplets_value_by_key(data, "k", None)
+            result = triplets.tools.set_triplets_value_at_key(data, "k", None)
             assert result["VALUE"][0] is None         # not the string "None"
         else:
-            triplets.tools.set_triplets_value_by_key(frame, "k", None)
+            triplets.tools.set_triplets_value_at_key(frame, "k", None)
             assert pandas.isna(frame["VALUE"].iloc[0])
 
 
