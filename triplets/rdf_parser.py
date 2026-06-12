@@ -576,9 +576,6 @@ pandas.DataFrame.export_to_cimxml = export_to_cimxml
 pandas.DataFrame.export_to_networkx = export_to_networkx
 pandas.filter_triplet_by_triplet = filter_by_triplet
 
-# Let's add empty dataframe to keep changes
-pandas.DataFrame.changes = pandas.DataFrame()
-
 
 # TEST AND EXAMPLES
 if __name__ == '__main__':
