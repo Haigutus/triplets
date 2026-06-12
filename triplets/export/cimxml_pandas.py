@@ -15,6 +15,8 @@ from .cimxml_utils import load_rdf_map, resolve_instance_config
 
 logger = logging.getLogger(__name__)
 
+RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+
 
 def _print_duration(text, start_time):
     """Print duration between now and start time.
@@ -70,7 +72,8 @@ def generate_xml(instance_data,
                  class_KEY="Type",
                  export_undefined=True,
                  comment=None,
-                 debug=False):
+                 debug=False,
+                 datatypes=False):
     """
         Generate an RDF XML file from a triplet dataset instance.
 
@@ -96,6 +99,9 @@ def generate_xml(instance_data,
             If False, skip unmapped elements with a warning.
         comment : str, optional
             Optional comment to insert at the top of the XML output (as XML comment).
+        datatypes : bool, default False
+            If True, annotate literal elements with rdf:datatype from the schema's
+            xsd:type (like the N-Quads export); xsd:string stays unannotated.
         debug : bool, default False
             If True, log detailed timing and debug information during processing.
 
@@ -137,6 +143,12 @@ def generate_xml(instance_data,
 
     rdf_map = load_rdf_map(rdf_map)
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
+
+    key_datatypes = {}
+    if datatypes:
+        # same KEY → xsd URI mapping the N-Quads export uses (string → None, anyURI excluded)
+        from .nquads_utils import build_key_metadata
+        _, _, key_datatypes = build_key_metadata(rdf_map)
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))
@@ -236,6 +248,9 @@ def generate_xml(instance_data,
                     tag.attrib[_get_qname(attrib["attribute"])] = f"{value_prefix}{VALUE}"
                 else:
                     tag.text = f"{text_prefix}{VALUE}"
+                    datatype = key_datatypes.get(KEY)
+                    if datatype:
+                        tag.attrib[_get_qname(RDF_NS, "datatype")] = datatype
 
                 _object.append(tag)
 
@@ -245,6 +260,11 @@ def generate_xml(instance_data,
                 if export_undefined:
                     tag = E(KEY)
                     tag.text = str(VALUE)
+                    # key_datatypes spans all schema profiles, so annotation works
+                    # even when instance profile resolution fell through
+                    datatype = key_datatypes.get(KEY)
+                    if datatype:
+                        tag.attrib[_get_qname(RDF_NS, "datatype")] = datatype
 
                     _object.append(tag)
 
