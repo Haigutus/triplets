@@ -455,6 +455,45 @@ class TestExportToCimxml:
         with pytest.raises(ValueError, match="missing columns.*VALUE"):
             triplets.export.export_to_nquads(broken, str(tmp_path / "x.nq"))
 
+    def test_polars_input_exports(self, svedala_eq):
+        """Polars input converts to pandas at the orchestrator and exports.
+
+        Note: the mixed string/int VALUE problem from issue #50 cannot occur
+        with polars input — polars columns are strictly typed, so a mixed
+        object VALUE column is rejected at frame construction already.
+        """
+        polars = pytest.importorskip("polars")
+        from triplets.export_schema import schemas
+        result = polars.from_pandas(svedala_eq).triplets.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+            export_type="xml_per_instance",
+            export_to_memory=True,
+        )
+        result[0].seek(0)
+        reimported = pandas.read_RDF([result[0]])
+        assert reimported.get_types_count()["ACLineSegment"] == svedala_eq.get_types_count()["ACLineSegment"]
+
+    def test_duckdb_input_exports(self, svedala_eq, tmp_path):
+        """DuckDB exports fetch the triplets table into pandas and export.
+
+        As with polars, DuckDB columns are strictly typed (VALUE is VARCHAR),
+        so the mixed string/int case from issue #50 cannot occur here.
+        """
+        duckdb = pytest.importorskip("duckdb")
+        from triplets.export_schema import schemas
+        con = duckdb.connect()
+        con.register("source", svedala_eq)
+        con.execute("CREATE TABLE triplets AS SELECT * FROM source")
+
+        result = con.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+            export_type="xml_per_instance",
+            export_to_memory=True,
+        )
+        result[0].seek(0)
+        reimported = pandas.read_RDF([result[0]])
+        assert reimported.get_types_count()["ACLineSegment"] == svedala_eq.get_types_count()["ACLineSegment"]
+
     def test_engines_produce_identical_output(self, svedala_eq):
         require_cimxml_engine("cython_pugixml")
         from triplets.export_schema import schemas

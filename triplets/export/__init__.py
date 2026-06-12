@@ -204,6 +204,10 @@ def export_to_cimxml(data,
         init_time = start_time
 
     _check_columns(data)
+    if _is_polars(data):
+        # the per-instance pipeline is pandas (groupby + engine contract)
+        logger.debug("format=cimxml: polars input → pandas")
+        data = data.to_pandas(use_pyarrow_extension_array=True)
     engine_name, engine_module = get_cimxml_engine(engine)
     generate = engine_module.generate_xml
 
