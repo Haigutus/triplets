@@ -19,8 +19,19 @@ logger = logging.getLogger(__name__)
 
 
 def _string_array(series):
-    """Pandas column → Arrow string array (32-bit offsets, as the extension expects)."""
-    return pyarrow.array(series.astype(object).where(series.notna(), None), type=pyarrow.string())
+    """Pandas column → flat Arrow string array (32-bit offsets, as the extension expects).
+
+    series is always pandas here: the export_to_cimxml orchestrator groups with
+    pandas groupby before calling the engine. astype("string[pyarrow]") accepts
+    any input dtype — numbers become text (as the lxml engine formats them),
+    nulls stay null — and is near zero-copy for already-arrow-backed columns.
+    """
+    array = pyarrow.array(series.astype("string[pyarrow]"), type=pyarrow.string())
+    # Arrow-backed pandas columns are stored as a ChunkedArray (one chunk per
+    # parsed file after concat); pyarrow.array() passes that through unchanged.
+    # The compiled extension pointer-casts the buffers of ONE contiguous array,
+    # so flatten: zero-copy for a single chunk, one concatenation otherwise.
+    return array.combine_chunks() if isinstance(array, pyarrow.ChunkedArray) else array
 
 
 def generate_xml(instance_data,

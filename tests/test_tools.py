@@ -427,6 +427,34 @@ class TestExportToCimxml:
         assert isinstance(result, list)
         assert len(result) > 0
 
+    @pytest.mark.parametrize("engine", CIMXML_ENGINES)
+    def test_numeric_values_export(self, svedala_eq, engine):
+        """Non-string VALUEs (e.g. numbers from edited tableviews) must export — issue #50."""
+        require_cimxml_engine(engine)
+        from triplets.export_schema import schemas
+        data = svedala_eq.copy()
+        data["VALUE"] = data["VALUE"].astype(object)
+        data.loc[data["KEY"] == "Conductor.length", "VALUE"] = 42
+        data.loc[data["KEY"] == "ACLineSegment.r", "VALUE"] = 1.5
+
+        result = data.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+            export_type="xml_per_instance",
+            export_to_memory=True,
+            engine=engine,
+        )
+        result[0].seek(0)
+        reimported = pandas.read_RDF([result[0]])
+        lengths = reimported[reimported["KEY"] == "Conductor.length"]["VALUE"].astype(str).unique()
+        assert list(lengths) == ["42"]
+
+    def test_missing_columns_raise(self, svedala_eq, tmp_path):
+        broken = svedala_eq.rename(columns={"VALUE": "VAL"})
+        with pytest.raises(ValueError, match="missing columns.*VALUE"):
+            broken.export_to_cimxml(export_to_memory=True)
+        with pytest.raises(ValueError, match="missing columns.*VALUE"):
+            triplets.export.export_to_nquads(broken, str(tmp_path / "x.nq"))
+
     def test_engines_produce_identical_output(self, svedala_eq):
         require_cimxml_engine("cython_pugixml")
         from triplets.export_schema import schemas
