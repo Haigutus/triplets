@@ -278,11 +278,16 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     return data.filter(expr)
 
 
+def _value_literal(value):
+    """VALUE entries are strings or null — never the string \"None\" or raw numbers."""
+    return pl.lit(None, dtype=pl.Utf8) if value is None else pl.lit(str(value))
+
+
 def set_triplets_value_by_key(data, key, value):
     """Set VALUE for all rows with a given KEY (in-place mutation via reassignment)."""
     return data.with_columns(
         pl.when(pl.col("KEY") == key)
-        .then(pl.lit(str(value)))
+        .then(_value_literal(value))
         .otherwise(pl.col("VALUE"))
         .alias("VALUE")
     )
@@ -292,7 +297,7 @@ def set_triplets_value_by_key_and_id(data, key, value, id):
     """Set VALUE for a specific KEY and ID combination."""
     return data.with_columns(
         pl.when((pl.col("KEY") == key) & (pl.col("ID") == id))
-        .then(pl.lit(str(value)))
+        .then(_value_literal(value))
         .otherwise(pl.col("VALUE"))
         .alias("VALUE")
     )

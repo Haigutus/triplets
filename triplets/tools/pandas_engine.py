@@ -532,6 +532,11 @@ def types_dict(data):
     return types_dictionary
 
 
+def _string_or_none(value):
+    """VALUE entries are strings or null — never the string "None" or raw numbers."""
+    return None if value is None else str(value)
+
+
 def set_triplets_value_by_key(data, key, value):
     """Set the value for all instances of a specified key.
 
@@ -553,7 +558,7 @@ def set_triplets_value_by_key(data, key, value):
     --------
     >>> data.set_triplets_value_by_key("label", "new_label")
     """
-    data.loc[data[data.KEY == key].index, "VALUE"] = value  # TODO add changes to change DataFrame
+    data.loc[data[data.KEY == key].index, "VALUE"] = _string_or_none(value)  # TODO add changes to change DataFrame
 
 
 def set_triplets_value_by_key_and_id(data, key, value, id):
@@ -574,7 +579,7 @@ def set_triplets_value_by_key_and_id(data, key, value, id):
     --------
     >>> data.set_triplets_value_by_key_and_id("label", "new_label", "uuid1")
     """
-    data.loc[data[(data.ID == id) & (data.KEY == key)].index, "VALUE"] = value
+    data.loc[data[(data.ID == id) & (data.KEY == key)].index, "VALUE"] = _string_or_none(value)
 
 
 def triplets_to_tableviews(triplet_df, multivalue=False):
@@ -682,7 +687,9 @@ def tableview_to_triplets(data, multivalue=False):
         triplet_df["VALUE"] = triplet_df["VALUE"].apply(_ensure_list)
         triplet_df = triplet_df.explode("VALUE")
 
-    return triplet_df.astype(str)
+    # nullable string dtype: numbers become text, melt's NaN holes stay null
+    # (plain astype(str) made them literal "nan" strings / mixed nan objects)
+    return triplet_df.astype("string")
 
 
 def update_triplets_from_triplets(data, update_data, update=True, add=True):
