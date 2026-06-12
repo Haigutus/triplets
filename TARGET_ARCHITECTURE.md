@@ -189,8 +189,8 @@ end-to-end — see also issue #34).
 | `pandas` | core | 1x, **always works** | DataFrame | ✅ |
 | `polars` | `triplets[polars]` | 4-29x | DataFrame | ✅ |
 | `duckdb` | `triplets[duckdb]` | between pandas and polars | SQL / DataFrame | ✅ |
-| `sparql_rdflib` | `triplets[sparql]` (rdflib) | 1x, pure python | SPARQL | 🚧 |
-| `sparql_qlever` | C++ build (libqlever) | 3.5-216x (2026-04 benchmark) | SPARQL | 🚧 |
+| `sparql_rdflib` | `triplets[sparql]` (rdflib) | 1x, pure python — **reference, always works**: rdflib's built-in SPARQL 1.1 engine (the former rdflib-sparql/rdfextras, merged into rdflib 4+) | SPARQL | 🚧 |
+| `sparql_qlever` | C++ build (libqlever) | 3.5-216x (2026-04 benchmark) — performance option | SPARQL | 🚧 |
 
 Fallback (DataFrame): auto-detect from input type (polars in → polars engine, else pandas)
 Fallback (SPARQL): `sparql_qlever` → `sparql_rdflib`
@@ -260,14 +260,17 @@ shapes.ttl ──rdflib──► constraint table (IR, DataFrame)
 
 | Engine | Requires | Notes |
 |--------|----------|-------|
-| `pandas` | core | reference executor, always works |
-| `polars` | `triplets[polars]` | IR → lazy plans — the performance option (2.4x already in the eager prototype) |
-| `duckdb` | `triplets[duckdb]` | IR → SQL; out-of-memory datasets; may also run the `sh:sparql` constraints (see SPARQL spike below) |
-| `pyshacl` | `triplets[pyshacl]` (rdflib) | external reference implementation — cross-check only, explicit |
+| `pyshacl` | `triplets[validation]` (rdflib) | **reference implementation, always works** — rdflib-based, full spec coverage |
+| `pandas` | core | experimental compiled-IR executor |
+| `polars` | `triplets[polars]` | experimental, IR → lazy plans — the performance option (2.4x already in the eager prototype) |
+| `duckdb` | `triplets[duckdb]` | experimental, IR → SQL; out-of-memory datasets; may also run the `sh:sparql` constraints (see SPARQL spike below) |
 
-Fallback: auto-detect from input flavor (like tools/); `pyshacl` never in
-the auto chain. Supported constraint subset = what the ENTSO-E RDFS→SHACL
-profiles actually emit (measure from the real shape files, not the spec).
+The rdflib-based `pyshacl` is the correctness baseline; our compiled-IR
+executors are **new, experimental, potentially much faster** — every engine
+is cross-checked against the reference in tests, and falls back to it for
+constraint kinds the IR does not cover yet. Supported IR constraint subset
+= what the ENTSO-E RDFS→SHACL profiles actually emit (measure from the real
+shape files, not the spec).
 The validation report is itself a triplets DataFrame (`sh:ValidationReport`
 vocabulary) — exportable via nquads/excel like any other data.
 Prototypes: `test_shacl_*.py` on this branch. Issue #16.
@@ -349,6 +352,12 @@ for themselves). First-class autocomplete aliases group by prefix:
 Producers enforce it (`tableview_to_triplets` → nullable string dtype,
 `set_value_at_key` normalizes); the compiled export tolerates violations
 anyway by casting at its boundary.
+
+**Schema-optional principle:** import and all data manipulation work
+**without any schema**. A schema (export_schema JSON / RDFS) is only ever
+an *enhancement* at export time — correct namespaces, enum handling, xsd
+datatypes in N-Quads — and schemaless export remains available. No tools/
+function may require a schema.
 
 ---
 
