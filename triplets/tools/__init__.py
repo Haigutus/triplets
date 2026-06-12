@@ -207,5 +207,3 @@ def _dataframe_method(function):
 
 for _name in DATAFRAME_METHODS + list(ALIASES) + list(DEPRECATED_ALIASES):
     setattr(pandas.DataFrame, _name, _dataframe_method(globals()[_name]))
-
-pandas.DataFrame.changes = pandas.DataFrame()
