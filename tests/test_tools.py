@@ -348,6 +348,50 @@ class TestToolsDeprecatedAliases:
             assert callable(getattr(triplets.tools, new_name)), new_name
 
 
+class TestTripletsStringInvariant:
+    """ID/KEY/VALUE are always strings or null — never mixed with numbers (issue #55)."""
+
+    def test_pandas_roundtrip_keeps_nulls_null(self):
+        tableview = pandas.DataFrame(
+            {"ID": ["a", "b"], "Type": ["T", "T"], "x.y": ["1", None]}
+        ).set_index("ID")
+        trip = triplets.tools.tableview_to_triplets(tableview, engine="pandas")
+        hole = trip[(trip["ID"] == "b") & (trip["KEY"] == "x.y")]["VALUE"]
+        assert hole.isna().all()                      # null stays null, not "nan"
+        non_null = trip["VALUE"].dropna()
+        assert all(isinstance(v, str) for v in non_null)
+
+    def test_pandas_roundtrip_stringifies_numbers(self, svedala_eq):
+        tableview = svedala_eq.tableview_by_type("ACLineSegment", string_to_number=True)
+        trip = triplets.tools.tableview_to_triplets(tableview, engine="pandas")
+        non_null = trip["VALUE"].dropna()
+        assert all(isinstance(v, str) for v in non_null)
+
+    @pytest.mark.parametrize("engine", ["pandas", "polars"])
+    def test_set_value_int_becomes_string(self, engine):
+        frame = pandas.DataFrame({"ID": ["a"], "KEY": ["k"], "VALUE": ["old"], "INSTANCE_ID": ["i"]})
+        if engine == "polars":
+            polars = pytest.importorskip("polars")
+            data = polars.from_pandas(frame)
+            result = triplets.tools.set_triplets_value_by_key(data, "k", 42)
+            assert result["VALUE"][0] == "42"
+        else:
+            triplets.tools.set_triplets_value_by_key(frame, "k", 42)
+            assert frame["VALUE"].iloc[0] == "42"
+
+    @pytest.mark.parametrize("engine", ["pandas", "polars"])
+    def test_set_value_none_stays_null(self, engine):
+        frame = pandas.DataFrame({"ID": ["a"], "KEY": ["k"], "VALUE": ["old"], "INSTANCE_ID": ["i"]})
+        if engine == "polars":
+            polars = pytest.importorskip("polars")
+            data = polars.from_pandas(frame)
+            result = triplets.tools.set_triplets_value_by_key(data, "k", None)
+            assert result["VALUE"][0] is None         # not the string "None"
+        else:
+            triplets.tools.set_triplets_value_by_key(frame, "k", None)
+            assert pandas.isna(frame["VALUE"].iloc[0])
+
+
 class TestConvenienceAliases:
     """First-class aliases (no deprecation) that group functions by prefix for IDE autocomplete."""
 
