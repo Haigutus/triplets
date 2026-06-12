@@ -410,7 +410,7 @@ with `importorskip`/skip markers, plus benchmarks.
 | `{format}_{engine}.py` | `cimxml_pugixml.py`, `nquads_polars.py` | export engines (format first — groups by what is produced) |
 | `{format}_utils.py` | `cimxml_utils.py`, `nquads_utils.py` | shared format helpers |
 | 🚧 `{framework}_shacl.py` | `polars_shacl.py` | validation engines |
-| 🚧 `sparql_{backend}.py` | `sparql_oxigraph.py` | SPARQL engines |
+| 🚧 `sparql_{backend}.py(x)` | `sparql_rdflib.py`, `sparql_qlever.pyx` | SPARQL engines |
 
 ---
 
