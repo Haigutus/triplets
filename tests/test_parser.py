@@ -81,6 +81,20 @@ def test_categorical_encoding(parser_engine, use_cat):
         assert df["KEY"].nunique() < 20
 
 
+def test_categorical_columns_are_plain_category(parser_engine):
+    """KEY/INSTANCE_ID must be plain pandas category, NOT ArrowDtype dictionary —
+    ArrowDtype dictionary columns break pivot() on pandas 2.2.x
+    ("'Series' object has no attribute '_pa_array'")."""
+    import pandas
+    df = parse(MINIMAL, engine=parser_engine, return_type="pandas")
+    for column in ("KEY", "INSTANCE_ID"):
+        assert isinstance(df[column].dtype, pandas.CategoricalDtype), \
+            f"{column} is {df[column].dtype}, expected category"
+    # pivot is the operation that crashed on ArrowDtype dictionary columns
+    pivoted = df.drop_duplicates(["ID", "KEY"]).pivot(index="ID", columns="KEY")["VALUE"]
+    assert len(pivoted) > 0
+
+
 # ── Return types ────────────────────────────────────────────────────────────
 
 def test_parse_returns_arrow_and_polars():
