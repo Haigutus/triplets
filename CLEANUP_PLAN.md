@@ -19,7 +19,7 @@ PyPI. `dev_shacl` now only matters as the **source for the SHACL/SPARQL port**.
 | 2 — Engine abstraction | conditional imports, opt-in fast_queries | ✅ done better on main: registry dispatchers with `engine=` everywhere, `df.triplets.*` accessor instead of monkey-patch opt-in |
 | 3 — Modern packaging + v0.1.0 | setuptools-scm, rdflib out of core | ✅ done with divergences: **versioneer kept**, extras done (`arrow/polars/duckdb/excel/...`), python ≥3.11, pandas `!=2.2.*`, released 0.1.0rc1–rc4 |
 | 4 — Cython build | `_native/` + env-gated build | ✅ done differently: extensions live in-tree (`parser/`, `export/`), built via pixi / `setup_cython_parser.py`, **prebuilt wheels via cibuildwheel** — users don't build at all |
-| 5 — SPARQL/qlever | `sparql/` module + benchmark | 🚧 **remaining** — benchmark done (qlever 3.5–216x vs oxigraph, 2026-04); module structure goes under `tools/` per TARGET_ARCHITECTURE.md (issue #5) |
+| 5 — SPARQL/qlever | `sparql/` module + benchmark | 🚧 **remaining** — benchmark done (qlever 3.5–216x vs oxigraph, 2026-04); decision: rdflib + qlever engines under `tools/`, **no oxigraph** (Rust stack, slower than qlever), fed via N-Quads export (issue #5) |
 | 6 — CI/CD & wheels | test matrix + publish | ✅ done: cibuildwheel matrix (linux x86_64, macOS arm64, windows; aarch64 disabled), PyPI publish on release with `skip-existing`, versioned docs deploy |
 
 **What remains on this branch to port to main** (the real successor of this plan):

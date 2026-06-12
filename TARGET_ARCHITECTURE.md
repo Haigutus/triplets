@@ -55,8 +55,8 @@ graph TB
     subgraph "User API"
         A["pd.read_RDF() / pl.read_rdf() / con.read_rdf()"] --> P
         B["df.triplets.tableview_by_type()"] --> Q
-        C["df.triplets.validate() 🚧"] --> V
-        D["df.triplets.sparql() 🚧"] --> Q
+        C["df.shacl.validate() 🚧"] --> V
+        D["df.sparql.query() 🚧"] --> Q
         E["df.triplets.export_to_cimxml()"] --> X
     end
 
@@ -84,14 +84,15 @@ graph TB
         Q --> Q1["pandas_engine.py ✅"]
         Q --> Q2["polars_engine.py 📦"]
         Q --> Q3["duckdb_engine.py 📦"]
-        Q --> Q4["sparql_oxigraph.py 📦 🚧"]
+        Q --> Q4["sparql_rdflib.py 📦 🚧"]
         Q --> Q5["sparql_qlever 🔧 🚧"]
     end
 
     subgraph "validation/ engines 🚧"
         V --> V1["pandas_shacl.py"]
-        V --> V2["polars_shacl.py"]
-        V --> V3["pyshacl_engine.py"]
+        V --> V2["polars_shacl.py (lazy)"]
+        V --> V3["duckdb_shacl.py"]
+        V --> V4["pyshacl_engine.py"]
     end
 ```
 
@@ -121,14 +122,16 @@ triplets/
 │   ├── pandas_engine.py         # engine: pure pandas (default)
 │   ├── polars_engine.py         # engine: polars (4-29x)
 │   ├── duckdb_engine.py         # engine: duckdb connection (SQL on triplets table)
-│   ├── sparql_oxigraph.py       # 🚧 engine: oxigraph via oxrdflib
-│   └── sparql_qlever.pyx        # 🚧 engine: libqlever (3.5-216x vs oxigraph, benchmarked)
+│   ├── sparql_rdflib.py         # 🚧 engine: rdflib (pure python, always works with [sparql])
+│   └── sparql_qlever.pyx        # 🚧 engine: libqlever — the performance option
+│                                #     (fed via N-Quads export; 3.5-216x in 2026-04 benchmark)
 │
 ├── validation/                  # 🚧 SHACL — prototypes on dev_shacl to be ported
 │   ├── __init__.py              # validate() dispatcher
 │   ├── pandas_shacl.py          # engine: pandas (default)
-│   ├── polars_shacl.py          # engine: polars (2.4x)
-│   ├── pyshacl_engine.py        # engine: pyshacl (external reference, explicit only)
+│   ├── polars_shacl.py          # engine: polars, lazy evaluation (performance option)
+│   ├── duckdb_shacl.py          # engine: duckdb (SQL constraints, out-of-memory datasets)
+│   ├── pyshacl_engine.py        # engine: rdflib/pyshacl (external reference, explicit only)
 │   ├── rdflib_shacl_parser.py   # parse SHACL shapes via rdflib
 │   ├── triplets_shacl_parser.py # parse SHACL shapes from triplet DataFrames (no rdflib)
 │   └── shacl_report.py          # SHACL validation report generation
@@ -185,11 +188,20 @@ end-to-end — see also issue #34).
 | `pandas` | core | 1x, **always works** | DataFrame | ✅ |
 | `polars` | `triplets[polars]` | 4-29x | DataFrame | ✅ |
 | `duckdb` | `triplets[duckdb]` | between pandas and polars | SQL / DataFrame | ✅ |
-| `sparql_oxigraph` | `triplets[sparql]` | 1x | SPARQL | 🚧 |
-| `sparql_qlever` | C++ build (libqlever) | 3.5-216x vs oxigraph (benchmarked 2026-04) | SPARQL | 🚧 |
+| `sparql_rdflib` | `triplets[sparql]` (rdflib) | 1x, pure python | SPARQL | 🚧 |
+| `sparql_qlever` | C++ build (libqlever) | 3.5-216x (2026-04 benchmark) | SPARQL | 🚧 |
 
 Fallback (DataFrame): auto-detect from input type (polars in → polars engine, else pandas)
-Fallback (SPARQL): `sparql_qlever` → `sparql_oxigraph`
+Fallback (SPARQL): `sparql_qlever` → `sparql_rdflib`
+
+SPARQL engines are fed through the **N-Quads export** (datatype-annotated,
+fast to write and to load) — triplets → .nq → engine, no per-triple API calls.
+
+**Design decision — no oxigraph engine.** Our native tooling is built on
+C/C++ via Cython (pugixml, Arrow, libqlever); oxigraph is a Rust stack and
+benchmarked 3.5–216x slower than qlever on CGMES data (2026-04). Interfacing
+a second, slower native runtime buys nothing: rdflib covers the no-build
+case, qlever covers performance.
 
 Future idea kept: `mql_engine.py` (CIMdesk Model Query Language) — issue #4.
 
@@ -212,13 +224,18 @@ SPARQL engines (qlever) and carries literal datatypes from the export schema
 
 ### validation/ 🚧
 
-| Engine | Requires | Speed (prototype) |
-|--------|----------|-------------------|
-| `pandas` | core | 1x, always works |
-| `polars` | `triplets[polars]` | 2.4x |
-| `pyshacl` | `triplets[pyshacl]` | external reference impl |
+Own SHACL engine over triplet DataFrames, same engine family as tools/:
 
-Fallback: `polars` → `pandas`; `pyshacl` explicit only (`engine="pyshacl"`).
+| Engine | Requires | Notes |
+|--------|----------|-------|
+| `pandas` | core | 1x, always works |
+| `polars` | `triplets[polars]` | lazy evaluation — the performance option (2.4x in eager prototype, lazy TBD) |
+| `duckdb` | `triplets[duckdb]` | SQL constraint evaluation, out-of-memory datasets |
+| `pyshacl` | `triplets[pyshacl]` (rdflib) | external reference implementation, explicit only |
+
+Fallback: auto-detect from input flavor (like tools/); `pyshacl` explicit
+only (`engine="pyshacl"`) — used to cross-check our engines, not in the
+auto chain.
 Prototypes: `test_shacl_*.py` on this branch. Issue #16.
 
 ---
@@ -272,10 +289,16 @@ DUCKDB_TOOL_METHODS = [...]     # connection subset
 EXPORT_METHODS = [...]
 ```
 
-When validation/SPARQL land, the open design choice is:
-`df.triplets.validate(...)` / `df.triplets.sparql(...)` methods (consistent
-with the single namespace) vs separate `df.shacl.*` / `df.sparql.*`
-namespaces (original idea, better autocomplete grouping). Decide at port time.
+**Decided:** validation and SPARQL get their own root accessors —
+`df.shacl.*` and `df.sparql.*` alongside `df.triplets.*`. Multiple root
+namespaces are cheap to register (same registry + `_delegate()` pattern) and
+keep each domain's autocomplete clean:
+
+```python
+df.shacl.validate(shapes, engine="polars")
+df.shacl.report(violations)
+df.sparql.query("SELECT ?s WHERE { ?s a cim:Substation }", engine="qlever")
+```
 
 ### Function naming (post-vision addition)
 
@@ -325,8 +348,9 @@ triplets.cgmes_tools.get_loaded_models(data)        # pandas, polars, arrow, or 
 triplets.cgmes_tools.draw_relations(data, uuid)     # self-contained offline HTML graph
 
 # ── 🚧 Roadmap ──
-# violations = data.triplets.validate(shapes)                       # SHACL
-# result = data.triplets.sparql("SELECT ?s WHERE { ?s a cim:Substation }")
+# violations = data.shacl.validate(shapes)                  # own engine: pandas/polars(lazy)/duckdb
+# violations = data.shacl.validate(shapes, engine="pyshacl")  # rdflib reference cross-check
+# result = data.sparql.query("SELECT ?s WHERE { ?s a cim:Substation }")  # rdflib or qlever
 ```
 
 ---
@@ -403,6 +427,6 @@ with `importorskip`/skip markers, plus benchmarks.
 | Uniform naming | files + `<action>_<format>_<qualifier>` functions | ✅ |
 | pixi for builds | + cibuildwheel wheels on PyPI | ✅ |
 | Gradual migration | rdf_parser.py shim → warnings → 0.2 removal | ✅ |
-| **SHACL under validation/** | port prototypes from this branch | 🚧 issue #16 |
-| **SPARQL under tools/** | oxigraph + libqlever (benchmarked 3.5-216x) | 🚧 issue #5 |
-| Keep pyshacl | `engine="pyshacl"`, explicit only | 🚧 with validation/ |
+| **SHACL under validation/** | own engine: pandas / polars (lazy) / duckdb, `df.shacl.*` accessor | 🚧 issue #16 |
+| **SPARQL under tools/** | rdflib + libqlever (no oxigraph — Rust stack, slower than qlever), `df.sparql.*` accessor, fed via N-Quads | 🚧 issue #5 |
+| Keep pyshacl | `engine="pyshacl"`, explicit reference cross-check | 🚧 with validation/ |
