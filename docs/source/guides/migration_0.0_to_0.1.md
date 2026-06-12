@@ -86,8 +86,8 @@ Old names keep working but emit `DeprecationWarning`; they will be removed in 0.
 |-----------|-----------|
 | `filter_by_type` | `filter_triplets_by_type` |
 | `filter_by_triplet` | `filter_triplets_by_triplets` |
-| `set_VALUE_at_KEY` | `set_triplets_value_at_key` |
-| `set_VALUE_at_KEY_and_ID` | `set_triplets_value_at_key_and_id` |
+| `set_VALUE_at_KEY` | `set_value_at_key` |
+| `set_VALUE_at_KEY_and_ID` | `set_value_at_key_and_id` |
 | `update_triplet_from_triplet` | `update_triplets_from_triplets` |
 | `update_triplet_from_tableview` | `update_triplets_from_tableview` |
 | `remove_triplet_from_triplet` | `remove_triplets_from_triplets` |
@@ -98,9 +98,8 @@ Old names keep working but emit `DeprecationWarning`; they will be removed in 0.
 | `diff_between_INSTANCE` | `diff_triplets_by_instance` |
 | `print_triplet_diff` | `print_triplets_diff` |
 
-> Note: 0.1.0rc4 briefly shipped these two as `set_triplets_value_by_key(_and_id)`;
-> corrected to `_at_` before 0.1.0. The `_by_` spellings keep working with a
-> `DeprecationWarning`.
+> Note: 0.1.0rc4 briefly misnamed these two as `set_triplets_value_by_key(_and_id)`;
+> corrected before 0.1.0 — treated as an rc-only bug, no compatibility aliases.
 
 The renames apply to `triplets.tools.*`, the DataFrame methods, and the
 `df.triplets.*` accessor alike.
@@ -125,7 +124,7 @@ nulls — never raw numbers or other objects:
   returns a nullable `string` dtype: numbers from `string_to_number=True`
   tableviews become text, and empty tableview cells stay **null** — previously
   they became literal `"nan"` strings.
-- `set_triplets_value_at_key` / `set_triplets_value_at_key_and_id` normalize
+- `set_value_at_key` / `set_value_at_key_and_id` normalize
   values with `str()`; `None` stays null (previously polars stored the literal
   string `"None"`, and pandas let raw ints into `VALUE` — which crashed the
   compiled CIM XML export with `Expected bytes, got a 'int' object`).
