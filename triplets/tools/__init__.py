@@ -50,11 +50,11 @@ def _get_engine(engine, data=None):
 def type_tableview(data, type_name, string_to_number=True, type_key="Type", multivalue=False, engine="auto"):
     return _get_engine(engine, data).type_tableview(data, type_name, string_to_number=string_to_number, type_key=type_key, multivalue=multivalue)
 
-def key_tableview(data, key, string_to_number=True, engine="auto"):
-    return _get_engine(engine, data).key_tableview(data, key, string_to_number=string_to_number)
+def key_tableview(data, key, string_to_number=True, multivalue=False, engine="auto"):
+    return _get_engine(engine, data).key_tableview(data, key, string_to_number=string_to_number, multivalue=multivalue)
 
-def id_tableview(data, id, string_to_number=True, engine="auto"):
-    return _get_engine(engine, data).id_tableview(data, id, string_to_number=string_to_number)
+def id_tableview(data, id, string_to_number=True, multivalue=False, engine="auto"):
+    return _get_engine(engine, data).id_tableview(data, id, string_to_number=string_to_number, multivalue=multivalue)
 
 def types_dict(data, engine="auto"):
     return _get_engine(engine, data).types_dict(data)

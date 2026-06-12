@@ -74,6 +74,42 @@ def get_namespace_map(data: pandas.DataFrame):
     return namespace_map, xml_base
 
 
+def _numeric_columns(data_view):
+    """Convert columns that contain only numbers to numeric dtypes."""
+    for column in data_view.columns:
+        try:
+            data_view[column] = pandas.to_numeric(data_view[column], errors="raise")
+        except (ValueError, TypeError):
+            pass
+    return data_view
+
+
+def _tableview(rows, data, string_to_number, multivalue, label):
+    """Shared pivot core for the three tableview functions.
+
+    rows: triplet rows whose IDs select the objects; data: full dataset
+    providing all triplets of the selected objects.
+    """
+    if rows.empty:
+        logger.warning(f'No data available for {label}')
+        return None
+
+    object_data = pandas.merge(rows[["ID"]].drop_duplicates(), data, on="ID")
+
+    if multivalue:
+        def _aggregate(x):
+            x_list = list(x)
+            if len(x_list) == 1:
+                return x_list[0]
+            return x_list
+
+        data_view = object_data.pivot_table(index="ID", columns="KEY", values="VALUE", aggfunc=_aggregate)
+    else:
+        data_view = object_data.drop_duplicates(["ID", "KEY"]).pivot(index="ID", columns="KEY")["VALUE"]
+
+    return _numeric_columns(data_view) if string_to_number else data_view
+
+
 def type_tableview(data, type_name, string_to_number=True, type_key="Type", multivalue=False):
     """Create a table view of all objects of a specified type.
 
@@ -99,40 +135,11 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type", mult
     --------
     >>> table = data.type_tableview("ACLineSegment", multivalue=True)
     """
-    # Get all ID-s of rows where Type == type_name
-    type_id = data[(data["VALUE"] == type_name) & (data["KEY"] == type_key)]
-
-    if type_id.empty:
-        logger.warning(f'No data available for {type_name}')
-        return None
-
-    # Filter original data by found type_id data
-    type_data = pandas.merge(type_id[["ID"]], data, on="ID")
-
-    # Convert from triplets to a table view of all objects of same type
-    if multivalue:
-        def _aggregate(x):
-            x_list = list(x)
-            if len(x_list) == 1:
-                return x_list[0]
-            return x_list
-
-        data_view = type_data.pivot_table(index="ID", columns="KEY", values="VALUE", aggfunc=_aggregate)
-    else:
-        type_data = type_data.drop_duplicates(["ID", "KEY"])
-        data_view = type_data.pivot(index="ID", columns="KEY")["VALUE"]
-
-    if string_to_number:
-        for column in data_view.columns:
-            try:
-                data_view[column] = pandas.to_numeric(data_view[column], errors="raise")
-            except (ValueError, TypeError):
-                pass
-
-    return data_view
+    rows = data[(data["VALUE"] == type_name) & (data["KEY"] == type_key)]
+    return _tableview(rows, data, string_to_number, multivalue, type_name)
 
 
-def key_tableview(data, key, string_to_number=True):
+def key_tableview(data, key, string_to_number=True, multivalue=False):
     """Create a table view of all objects with a specified key.
 
     Parameters
@@ -143,6 +150,8 @@ def key_tableview(data, key, string_to_number=True):
         The key to filter objects by (e.g., 'GeneratingUnit.maxOperatingP').
     string_to_number : bool, optional
         If True, convert columns containing numbers to numeric types (default is True).
+    multivalue : bool, optional
+        If True, aggregate duplicate (ID, KEY) pairs into lists (default is False).
 
     Returns
     -------
@@ -153,32 +162,11 @@ def key_tableview(data, key, string_to_number=True):
     --------
     >>> table = data.key_tableview("GeneratingUnit.maxOperatingP")
     """
-    # Get all ID-s of rows where KEY == key_name
-    key_id = data[data["KEY"] == key]
-
-    if key_id.empty:
-        logger.warning(f'No data available for {key}')
-        return None
-
-    # Filter original data by found key_id data
-    # There can't be duplicate ID and KEY pairs for pivot, but this will lose data on full model DependantOn and other info, solution would be to use pivot table function.
-    type_data = pandas.merge(key_id[["ID"]], data, on="ID").drop_duplicates(["ID", "KEY"])
-
-    # Convert form triplets to a table view all objects of same type
-    data_view = type_data.pivot(index="ID", columns="KEY")["VALUE"]
-
-    if string_to_number:
-        # Convert to data type to numeric in columns that contain only numbers (for easier data usage later on)
-        for column in data_view.columns:
-            try:
-                data_view[column] = pandas.to_numeric(data_view[column], errors="raise")
-            except (ValueError, TypeError):
-                pass
-
-    return data_view
+    rows = data[data["KEY"] == key]
+    return _tableview(rows, data, string_to_number, multivalue, key)
 
 
-def id_tableview(data, id, string_to_number=True):
+def id_tableview(data, id, string_to_number=True, multivalue=False):
     """Create a tabular view of a CGMES triplet dataset filtered by ID-s.
 
     Parameters
@@ -186,45 +174,30 @@ def id_tableview(data, id, string_to_number=True):
     data : pandas.DataFrame
         Triplet dataset containing CGMES data.
     id : str or list or pandas.DataFrame
-        DataFrame containing IDs to filter by.
+        ID(s) to filter by (single ID, list of IDs, or DataFrame with an ID column).
     string_to_number : bool, optional
         If True, convert columns containing numbers to numeric types (default is True).
-
+    multivalue : bool, optional
+        If True, aggregate duplicate (ID, KEY) pairs into lists (default is False).
 
     Returns
     -------
-    pandas.DataFrame
+    pandas.DataFrame or None
         Pivoted DataFrame with IDs as index and KEYs as columns.
 
     Examples
     --------
     >>> table = id_tableview(data, 'UUID')
     >>> table = id_tableview(data, ['UUID_1', 'UUID_2'])
-    >>> table = id_tableview(data, pandas.DataFrame({"ID":['UUID_1', 'UUID_2']})
+    >>> table = id_tableview(data, pandas.DataFrame({"ID": ['UUID_1', 'UUID_2']}))
     """
     if isinstance(id, str):
         id = [id]
-
     if isinstance(id, list):
         id = pandas.DataFrame({"ID": id})
 
-    id_data = filter_triplets_by_triplets(data, id)
-
-    if id_data.empty:
-        logger.warning(f'No data available for {id}')
-        return None
-
-    data_view = id_data.drop_duplicates(["ID", "KEY"]).pivot(index="ID", columns ="KEY")["VALUE"]
-
-    if string_to_number:
-        # Convert to data type to numeric in columns that contain only numbers (for easier data usage later on)
-        for column in data_view.columns:
-            try:
-                data_view[column] = pandas.to_numeric(data_view[column], errors="raise")
-            except (ValueError, TypeError):
-                pass
-
-    return data_view
+    rows = data[data["ID"].isin(id["ID"])]
+    return _tableview(rows, data, string_to_number, multivalue, list(id["ID"]))
 
 
 def references_to_simple(data, reference, columns=["Type"]):
