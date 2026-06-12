@@ -2,9 +2,15 @@
 
 Best known target state for the triplets library.
 
+**Status (updated 2026-06, after 0.1.0rc4):** the core architecture is implemented
+on `main` — parser/tools/export engine dispatch, accessors, DuckDB support,
+packaging, CI wheels, PyPI releases. The remaining unbuilt pieces are
+**SHACL validation** and **SPARQL query** (prototypes live on this branch).
+Sections are marked ✅ implemented / 🔀 implemented differently / 🚧 roadmap.
+
 ---
 
-## Engine Fallback Pattern
+## Engine Fallback Pattern ✅
 
 Every submodule with multiple engines follows the same logic — try fastest
 available, fall back to simplest:
@@ -30,6 +36,16 @@ Engines live inside their own submodule. If a compiled `.so` or optional
 dependency isn't present, the import fails silently and the dispatcher
 picks the next engine down the chain.
 
+Implementation improved on the original sketch: dispatchers are
+**registry-driven** (name → module dict + `importlib`, alias dict, loaded-module
+cache) instead of per-engine if-chains. See `parser/__init__.py` and
+`export/__init__.py` (`get_engine` / `get_cimxml_engine`).
+
+A fourth engine family emerged that the original vision missed: **DuckDB**
+(`tools/duckdb_engine.py`) — tools and exports patched directly onto
+`duckdb.DuckDBPyConnection`, fed zero-copy via Arrow. Useful for
+out-of-memory datasets and SQL access to the triplets table.
+
 ---
 
 ## Module Map
@@ -37,529 +53,356 @@ picks the next engine down the chain.
 ```mermaid
 graph TB
     subgraph "User API"
-        A["pd.read_RDF()"] --> P
-        B["df.cim.type_tableview()"] --> Q
-        C["df.shacl.validate()"] --> V
-        D["df.sparql.query()"] --> Q
-        E["df.cim.to_excel()"] --> X
+        A["pd.read_RDF() / pl.read_rdf() / con.read_rdf()"] --> P
+        B["df.triplets.tableview_by_type()"] --> Q
+        C["df.triplets.validate() 🚧"] --> V
+        D["df.triplets.sparql() 🚧"] --> Q
+        E["df.triplets.export_to_cimxml()"] --> X
     end
 
     subgraph "triplets"
-        P["parser/"]
-        Q["query/"]
-        V["validation/"]
-        X["export/"]
-        CG["cgmes/"]
+        P["parser/ ✅"]
+        Q["tools/ ✅"]
+        V["validation/ 🚧"]
+        X["export/ ✅"]
+        CG["cgmes_tools/ ✅"]
     end
 
-    subgraph "parser/ engines"
+    subgraph "parser/ engines ✅"
         P --> P1["python_lxml_pandas.py ✅"]
         P --> P2["python_lxml_arrow.py 📦"]
         P --> P3["cython_pugixml_arrow.pyx 🔧"]
     end
 
-    subgraph "export/ engines"
-        X --> X1["lxml_cimxml.py ✅"]
-        X --> X2["polars_cimxml.py 📦"]
-        X --> X3["arrow_pugixml_cimxml.pyx 🔧"]
+    subgraph "export/ engines ✅"
+        X --> X1["cimxml_pandas.py ✅"]
+        X --> X2["cimxml_pugixml.py 🔧"]
+        X --> X3["csv/nquads: pandas ✅ + polars 📦"]
     end
 
-    subgraph "query/ engines"
+    subgraph "tools/ engines ✅"
         Q --> Q1["pandas_engine.py ✅"]
         Q --> Q2["polars_engine.py 📦"]
-        Q --> Q3["sparql_oxigraph.py 📦"]
-        Q --> Q4["sparql_qlever.pyx 🔧"]
+        Q --> Q3["duckdb_engine.py 📦"]
+        Q --> Q4["sparql_oxigraph.py 📦 🚧"]
+        Q --> Q5["sparql_qlever 🔧 🚧"]
     end
 
-    subgraph "validation/ engines"
-        V --> V1["pandas_shacl.py ✅"]
-        V --> V2["polars_shacl.py 📦"]
-        V --> V3["pyshacl_engine.py 📦"]
+    subgraph "validation/ engines 🚧"
+        V --> V1["pandas_shacl.py"]
+        V --> V2["polars_shacl.py"]
+        V --> V3["pyshacl_engine.py"]
     end
 ```
 
-✅ always available &nbsp; 📦 optional pip dependency &nbsp; 🔧 requires C/C++ build
+✅ always available &nbsp; 📦 optional pip dependency &nbsp; 🔧 requires C/C++ build &nbsp; 🚧 roadmap
 
 ---
 
 ## Filesystem
 
+Current state on `main` (🚧 = planned addition):
+
 ```
 triplets/
-├── __init__.py                  # version, top-level imports, pd.read_RDF
-├── _accessor.py                 # three namespaces: df.cim.*, df.shacl.*, df.sparql.*
+├── __init__.py                  # pd.read_RDF / pl.read_rdf / con.read_rdf registration
+├── _accessor.py                 # df.triplets.* namespace (pandas + polars), DuckDB patches
+│                                #   registry-driven: method-name lists + one _delegate()
 │
 ├── parser/
-│   ├── __init__.py              # parse() dispatcher, find_all_xml, clean_ID, get_namespace_map
-│   ├── utils.py                 # shared: RDF constants, clean_ID, find_all_xml, _split_prefixed_name
-│   ├── python_lxml_pandas.py    # engine: lxml → list → pandas DataFrame (default, no extra deps)
+│   ├── __init__.py              # parse() dispatcher, engine registry, find_all_xml
+│   ├── utils.py                 # shared: RDF constants, clean_ID, find_all_xml
+│   ├── python_lxml_pandas.py    # engine: lxml → list → pandas DataFrame (default)
 │   ├── python_lxml_arrow.py     # engine: lxml → Arrow RecordBatch (needs pyarrow)
-│   ├── cython_pugixml_arrow.pyx # engine: pugixml C++ → Arrow RecordBatch (needs C++ build + pyarrow)
-│   └── vendor/
-│       └── pugixml/             # vendored pugixml source (MIT, ~300KB)
+│   └── cython_pugixml_arrow.pyx # engine: pugixml C++ → Arrow RecordBatch (needs build)
 │
-├── query/
-│   ├── __init__.py              # dispatchers for tableview/references/filter + sparql
+├── tools/                       # (the doc formerly called this query/)
+│   ├── __init__.py              # dispatchers, DEPRECATED_ALIASES, ALIASES, DataFrame patches
 │   ├── pandas_engine.py         # engine: pure pandas (default)
 │   ├── polars_engine.py         # engine: polars (4-29x)
-│   ├── sparql_oxigraph.py       # engine: oxigraph via oxrdflib
-│   └── sparql_qlever.pyx        # engine: libqlever (14-240x)
-│       qlever_wrapper.h         # C++ glue for libqlever
-│       qlever_wrapper.cpp
+│   ├── duckdb_engine.py         # engine: duckdb connection (SQL on triplets table)
+│   ├── sparql_oxigraph.py       # 🚧 engine: oxigraph via oxrdflib
+│   └── sparql_qlever.pyx        # 🚧 engine: libqlever (3.5-216x vs oxigraph, benchmarked)
 │
-├── validation/
+├── validation/                  # 🚧 SHACL — prototypes on dev_shacl to be ported
 │   ├── __init__.py              # validate() dispatcher
 │   ├── pandas_shacl.py          # engine: pandas (default)
 │   ├── polars_shacl.py          # engine: polars (2.4x)
-│   ├── pyshacl_engine.py        # engine: pyshacl (external reference impl)
-│   ├── rdflib_shacl_parser.py   # parse SHACL constraints from RDF/XML via rdflib
-│   ├── triplets_shacl_parser.py # parse SHACL constraints from triplet DataFrames
+│   ├── pyshacl_engine.py        # engine: pyshacl (external reference, explicit only)
+│   ├── rdflib_shacl_parser.py   # parse SHACL shapes via rdflib
+│   ├── triplets_shacl_parser.py # parse SHACL shapes from triplet DataFrames (no rdflib)
 │   └── shacl_report.py          # SHACL validation report generation
 │
-├── export/
-│   ├── __init__.py
-│   ├── excel.py                 # export_to_excel
-│   ├── cimxml.py                # export_to_cimxml, generate_xml
-│   └── networkx.py              # export_to_networkx
+├── export/                      # {format}_{engine}.py naming
+│   ├── __init__.py              # dispatchers: cimxml engine registry, csv/nquads auto-detect,
+│   │                            #   ExportType, column checks
+│   ├── cimxml_utils.py          # shared per-instance config resolution
+│   ├── cimxml_pandas.py         # engine: lxml (default)
+│   ├── cimxml_pugixml.py        # engine wrapper: compiled extension (11.5x)
+│   ├── cimxml_cython_pugixml.pyx# Arrow → pugixml C++ → XML bytes
+│   ├── csv_pandas.py / csv_polars.py
+│   ├── nquads_utils.py          # shared: schema metadata incl. xsd datatypes
+│   ├── nquads_pandas.py / nquads_polars.py
+│   ├── excel_pandas.py
+│   └── networkx_pandas.py
 │
-├── cgmes/
-│   ├── __init__.py
-│   └── tools.py                 # CGMES metadata, filename, FullModel utilities
+├── cgmes_tools/
+│   ├── __init__.py              # input-flavor boundary: polars/arrow/duckdb → pandas,
+│   │                            #   results converted back to input flavor
+│   ├── pandas_engine.py         # metadata, model inventory, draw_relations_* (vis-network)
+│   └── static/                  # vendored vis-network.min.js + graph template (offline HTML)
 │
 ├── export_schema/               # ENTSO-E JSON schema files (package data)
-│   └── *.json
-│
 ├── rdfs_tools/                  # RDF Schema utilities
-│   └── *.py
-│
-└── rdf_parser.py                # backwards-compatible re-export shim (deprecated)
+└── rdf_parser.py                # deprecated re-export shim (warns, removal in 0.2)
 
-tests/
-├── conftest.py                  # fixtures, markers, skip logic
-├── data/
-│   ├── tiny_eq.xml              # <20 triples, committed
-│   └── tiny_shacl.xml           # minimal SHACL shapes
-├── test_parser.py               # python_lxml_pandas + python_lxml_arrow + cython_pugixml_arrow engines
-├── test_query.py                # pandas + polars + sparql engines
-├── test_validation.py           # pandas + polars + pyshacl engines
-├── test_export.py               # excel, cimxml roundtrip
-├── test_cgmes.py                # metadata, filenames
-├── test_accessor.py             # df.cim.*, df.shacl.*, df.sparql.* namespaces
-├── integration/
-│   └── test_realgrid.py         # full CGMES dataset
-└── benchmarks/
-    ├── bench_parser.py
-    ├── bench_query.py
-    └── bench_sparql.py
-
-docs/
-├── benchmarks/
-│   ├── parsing.md
-│   ├── queries.md
-│   ├── shacl.md
-│   └── sparql_engines.md
-└── guides/
-    └── shacl_quickstart.md
-
-pixi.toml
+vendor/pugixml/                  # vendored pugixml (git submodule) — shared by both extensions
 ```
 
 ---
 
 ## Engine Tables
 
-### parser/
+### parser/ ✅
 
-| Engine | File | Requires | Speed |
-|--------|------|----------|-------|
-| `python_lxml_pandas` | `python_lxml_pandas.py` | lxml + pandas (core deps) | 1x baseline, **always works** |
-| `python_lxml_arrow` | `python_lxml_arrow.py` | lxml + pyarrow (`pip install triplets[arrow]`) | ~1x parse, better interop |
-| `cython_pugixml_arrow` | `cython_pugixml_arrow.pyx` | C++ build + pugixml + pyarrow | 12.9x |
-
-`python_lxml_pandas` is the old proven lxml → list-of-tuples → `pd.DataFrame()` path, restored
-as the default so the core package has **zero dependencies beyond lxml + pandas**.
-
-`python_lxml_arrow` uses lxml for XML parsing but streams to Arrow `StringBuilder` builders
-instead of Python lists, producing `pa.RecordBatch`. Better for polars interop and
-dictionary-encoding (categorical columns). Requires pyarrow.
-
-`cython_pugixml_arrow` does everything in C++ (pugixml parse + Arrow C++ builders via Cython).
-Fastest path. Supports mmap for local files.
-
-See `CYTHON_PERFORMANCE_IDEAS.md` (in this directory) for additional optimization opportunities
-beyond mmap (in-builder dictionary encoding for KEY/INSTANCE_ID, single-pass attribute walking,
-nogil for the hot loop, builder Reserve, etc.).
+| Engine | Requires | Speed | Peak Memory (RealGrid) |
+|--------|----------|-------|------------------------|
+| `python_lxml_pandas` | lxml + pandas (core) | 1x, **always works** | 314 MB |
+| `python_lxml_arrow` | + pyarrow | ~1x parse, better interop | 145 MB |
+| `cython_pugixml_arrow` | + C++ build | 9.8–12.9x | 145 MB |
 
 Fallback: `cython_pugixml_arrow` → `python_lxml_arrow` → `python_lxml_pandas`
+Aliases: `performance`/`pugixml` → cython, `native` → python_lxml_pandas
 
-### query/
+See `CYTHON_PERFORMANCE_IDEAS.md` for remaining optimization ideas
+(in-builder dictionary encoding, nogil hot loop, builder Reserve, string_view
+end-to-end — see also issue #34).
 
-| Engine | File | Requires | Speed | Query type |
-|--------|------|----------|-------|------------|
-| `pandas` | `pandas_engine.py` | pandas (core dep) | 1x, **always works** | DataFrame |
-| `polars` | `polars_engine.py` | `pip install triplets[polars]` | 4-29x | DataFrame |
-| `sparql_oxigraph` | `sparql_oxigraph.py` | `pip install triplets[sparql]` | 1x | SPARQL |
-| `sparql_qlever` | `sparql_qlever.pyx` | C++ build + libqlever | 14-240x | SPARQL |
+### tools/ ✅ (DataFrame) + 🚧 (SPARQL)
 
-Fallback (DataFrame queries): `polars` → `pandas`
-Fallback (SPARQL queries): `sparql_qlever` → `sparql_oxigraph`
+| Engine | Requires | Speed | Query type | Status |
+|--------|----------|-------|------------|--------|
+| `pandas` | core | 1x, **always works** | DataFrame | ✅ |
+| `polars` | `triplets[polars]` | 4-29x | DataFrame | ✅ |
+| `duckdb` | `triplets[duckdb]` | between pandas and polars | SQL / DataFrame | ✅ |
+| `sparql_oxigraph` | `triplets[sparql]` | 1x | SPARQL | 🚧 |
+| `sparql_qlever` | C++ build (libqlever) | 3.5-216x vs oxigraph (benchmarked 2026-04) | SPARQL | 🚧 |
 
-Future: `mql_engine.py` (CIMdesk Model Query Language), other graph query engines.
+Fallback (DataFrame): auto-detect from input type (polars in → polars engine, else pandas)
+Fallback (SPARQL): `sparql_qlever` → `sparql_oxigraph`
 
-### export/
+Future idea kept: `mql_engine.py` (CIMdesk Model Query Language) — issue #4.
 
-| Engine | File | Requires | Speed |
-|--------|------|----------|-------|
-| `lxml` | `lxml_cimxml.py` | lxml (core dep) | 1x baseline, **always works** |
-| `polars` | `polars_cimxml.py` | `pip install triplets[polars]` | 6.4x |
-| `arrow_pugixml` | `arrow_pugixml_cimxml.pyx` | C++ build + pugixml + pyarrow | 11x |
+### export/ ✅
 
-Fallback: `arrow_pugixml` → `polars` → `lxml`
+| Format | Engines | Selection |
+|--------|---------|-----------|
+| CIM XML | `cython_pugixml` (11.5x), `python_lxml` | `engine=` param, auto = fastest available |
+| N-Quads | polars, pandas — **schema xsd datatype annotations** | by input DataFrame type |
+| CSV | polars, pandas | by input DataFrame type |
+| Excel, NetworkX | pandas | — |
 
-### validation/
+The originally-planned `polars_cimxml.py` (6.4x) was dropped — the compiled
+engine (11.5x) covers the performance case; a middle engine wasn't worth the
+maintenance.
 
-| Engine | File | Requires | Speed |
-|--------|------|----------|-------|
-| `pandas` | `pandas_shacl.py` | pandas (core dep) | 1x, **always works** |
-| `polars` | `polars_shacl.py` | `pip install triplets[polars]` | 2.4x |
-| `pyshacl` | `pyshacl_engine.py` | `pip install triplets[pyshacl]` | external reference |
+N-Quads (not in the original vision) emerged as the fast input path for
+SPARQL engines (qlever) and carries literal datatypes from the export schema
+(`"44.84"^^<xsd:float>`, enums get namespaces, UUIDs get `urn:uuid:`).
 
-Fallback: `polars` → `pandas`
-`pyshacl` is explicit only (`engine="pyshacl"`) — not in auto fallback chain.
+### validation/ 🚧
+
+| Engine | Requires | Speed (prototype) |
+|--------|----------|-------------------|
+| `pandas` | core | 1x, always works |
+| `polars` | `triplets[polars]` | 2.4x |
+| `pyshacl` | `triplets[pyshacl]` | external reference impl |
+
+Fallback: `polars` → `pandas`; `pyshacl` explicit only (`engine="pyshacl"`).
+Prototypes: `test_shacl_*.py` on this branch. Issue #16.
 
 ---
 
-## Dispatcher Pattern
+## Dispatcher Pattern ✅
 
-Same structure in every submodule `__init__.py`:
+Registry-driven (implemented, supersedes the original if-chain sketch):
 
 ```python
 # parser/__init__.py
+_ENGINE_MODULES = {
+    "cython_pugixml_arrow": ".cython_pugixml_arrow",  # fastest, needs build
+    "python_lxml_arrow": ".python_lxml_arrow",        # needs pyarrow
+    "python_lxml_pandas": ".python_lxml_pandas",      # always available
+}
+_ENGINE_ALIASES = {"performance": "cython_pugixml_arrow", ...}
+_ENGINES = {}  # loaded-module cache
 
-def _auto_engine():
-    """Pick best available parser engine (fastest first)."""
-    try:
-        from .cython_pugixml_arrow import load_rdf_to_arrow  # noqa: F401
-        return "cython_pugixml_arrow"
-    except ImportError:
-        pass
-    try:
-        from .python_lxml_arrow import load_rdf_to_arrow  # noqa: F401
-        return "python_lxml_arrow"
-    except ImportError:
-        pass
-    return "python_lxml_pandas"
+def _load_engine(name):
+    if name not in _ENGINES:
+        _ENGINES[name] = import_module(_ENGINE_MODULES[name], __package__)
+    return _ENGINES[name]
 
-def parse(sources, engine="auto", return_type="pandas", **kwargs):
-    if engine == "auto":
-        engine = _auto_engine()
-    if engine == "cython_pugixml_arrow":
-        from .cython_pugixml_arrow import load_rdf_to_arrow as fn
-    elif engine == "python_lxml_arrow":
-        from .python_lxml_arrow import load_rdf_to_arrow as fn
-    else:
-        from .python_lxml_pandas import load_rdf_to_dataframe as fn
-    # ... dispatch to fn, handle batching, return_type conversion
+def get_engine(name="auto"):
+    if name == "auto":
+        for candidate in _ENGINE_MODULES:        # first importable wins
+            try:
+                return candidate, _load_engine(candidate)
+            except ImportError:
+                continue
+    resolved = _ENGINE_ALIASES.get(name, name)
+    return resolved, _load_engine(resolved)
 ```
 
-```python
-# query/__init__.py  (same pattern, different engines)
-
-def _auto_engine(df):
-    """Pick best available engine for the given DataFrame."""
-    if "polars" in type(df).__module__:
-        return "polars"
-    try:
-        import polars
-        return "polars"
-    except ImportError:
-        return "pandas"
-
-def type_tableview(df, *args, engine="auto", **kwargs):
-    if engine == "auto":
-        engine = _auto_engine(df)
-    if engine == "polars":
-        from .polars_engine import type_tableview as fn
-    else:
-        from .pandas_engine import type_tableview as fn
-    return fn(df, *args, **kwargs)
-
-# ... same pattern for every function
-```
+Engine selection is logged at DEBUG level; `parse()` auto-enables debug output
+when the logger is at DEBUG level.
 
 ---
 
-## Three Accessors
+## Accessor 🔀 (one namespace, not three)
 
-Three separate namespaces, each focused on its domain:
+The original vision had three namespaces (`df.cim.*`, `df.shacl.*`,
+`df.sparql.*`). Implemented as **one**: `df.triplets.*` on pandas and polars,
+plus methods patched directly onto DuckDB connections. Registry-driven —
+method-name lists + a single `_delegate()` helper (see `_accessor.py`).
 
 ```python
-# _accessor.py
-import pandas as pd
-from . import query, validation, export
-
-# ── df.cim.* — CIM data query & export ──
-@pd.api.extensions.register_dataframe_accessor("cim")
-class CimAccessor:
-    def __init__(self, df):
-        self._df = df
-
-    # Query
-    def type_tableview(self, *a, **kw):     return query.type_tableview(self._df, *a, **kw)
-    def key_tableview(self, *a, **kw):      return query.key_tableview(self._df, *a, **kw)
-    def id_tableview(self, *a, **kw):       return query.id_tableview(self._df, *a, **kw)
-    def references_to(self, *a, **kw):      return query.references_to(self._df, *a, **kw)
-    def references_from(self, *a, **kw):    return query.references_from(self._df, *a, **kw)
-    def references(self, *a, **kw):         return query.references(self._df, *a, **kw)
-    def filter_by_type(self, *a, **kw):     return query.filter_by_type(self._df, *a, **kw)
-    def types_dict(self, **kw):             return query.types_dict(self._df, **kw)
-
-    # Export
-    def to_excel(self, path, **kw):         return export.to_excel(self._df, path, **kw)
-    def to_cimxml(self, path, **kw):        return export.to_cimxml(self._df, path, **kw)
-
-# ── df.shacl.* — SHACL validation ──
-@pd.api.extensions.register_dataframe_accessor("shacl")
-class ShaclAccessor:
-    def __init__(self, df):
-        self._df = df
-
-    def validate(self, rules, **kw):        return validation.validate(self._df, rules, **kw)
-    def parse_shapes(self, path, **kw):     return validation.parse_shacl(path, **kw)
-    def report(self, violations, **kw):     return validation.report(violations, **kw)
-
-# ── df.sparql.* — SPARQL queries ──
-@pd.api.extensions.register_dataframe_accessor("sparql")
-class SparqlAccessor:
-    def __init__(self, df):
-        self._df = df
-
-    def query(self, query_str, **kw):       return query.sparql(self._df, query_str, **kw)
-
-# ── Polars: same three namespaces ──
-try:
-    import polars as pl
-
-    @pl.api.register_dataframe_namespace("cim")
-    class PolarsCimAccessor:
-        def __init__(self, df): self._df = df
-        def type_tableview(self, *a, **kw): return query.type_tableview(self._df, *a, **kw)
-        # ... same methods
-
-    @pl.api.register_dataframe_namespace("shacl")
-    class PolarsShaclAccessor:
-        def __init__(self, df): self._df = df
-        def validate(self, rules, **kw):    return validation.validate(self._df, rules, **kw)
-
-    @pl.api.register_dataframe_namespace("sparql")
-    class PolarsSparqlAccessor:
-        def __init__(self, df): self._df = df
-        def query(self, query_str, **kw):   return query.sparql(self._df, query_str, **kw)
-
-except ImportError:
-    pass
+PANDAS_TOOL_METHODS = [...]     # full set
+POLARS_TOOL_METHODS = [...]     # polars-engine subset
+DUCKDB_TOOL_METHODS = [...]     # connection subset
+EXPORT_METHODS = [...]
 ```
+
+When validation/SPARQL land, the open design choice is:
+`df.triplets.validate(...)` / `df.triplets.sparql(...)` methods (consistent
+with the single namespace) vs separate `df.shacl.*` / `df.sparql.*`
+namespaces (original idea, better autocomplete grouping). Decide at port time.
+
+### Function naming (post-vision addition)
+
+`<action>_<format>_<qualifier>` — format token (`triplets`/`tableview`) only
+where it disambiguates: `filter_triplets_by_type`, `triplets_to_tableviews`,
+`update_triplets_from_tableview`, but `set_value_at_key` (column names speak
+for themselves). First-class autocomplete aliases group by prefix:
+`get_types_count`, `tableview_by_type/key/id`. 0.0 names keep
+`DeprecationWarning` aliases until 0.2; rc-only missteps get no aliases.
+
+### Data contract (post-vision addition)
+
+`ID`/`KEY`/`VALUE` are **always strings or null** — never raw numbers.
+Producers enforce it (`tableview_to_triplets` → nullable string dtype,
+`set_value_at_key` normalizes); the compiled export tolerates violations
+anyway by casting at its boundary.
 
 ---
 
-## Usage
+## Usage ✅
 
 ```python
-import triplets
+import pandas, polars, duckdb, triplets
+from triplets.export_schema import schemas
 
 # ── Parse ──
-df = triplets.parser.parse(["grid_EQ.xml"])                                      # auto (best available)
-df = triplets.parser.parse(["grid_EQ.xml"], engine="python_lxml_pandas")         # explicit: no pyarrow needed
-df = triplets.parser.parse(["grid_EQ.xml"], engine="python_lxml_arrow")          # explicit: arrow intermediate
-df = triplets.parser.parse(["grid_EQ.xml"], engine="cython_pugixml_arrow")       # explicit: fastest
-df = pd.read_RDF(["grid_EQ.xml"])                                                # convenience
+data = pandas.read_RDF(["grid_EQ.xml", "data.zip"])          # auto engine
+data = polars.read_rdf(["grid_EQ.xml"])                      # polars out
+con = duckdb.connect(); con.read_rdf(["grid_EQ.xml"])        # into duckdb table
+table = triplets.parser.parse(path, return_type="arrow")     # Arrow out
+data = pandas.read_RDF(path, engine="cython_pugixml_arrow")  # explicit engine
 
-# ── CIM query (df.cim.*) ──
-df.cim.type_tableview("ACLineSegment")
-df.cim.type_tableview("ACLineSegment", engine="polars")
-df.cim.references_to("some-uuid")
-df.cim.types_dict()
+# ── Query (df.triplets.* / DataFrame methods / connection methods) ──
+data.triplets.tableview_by_type("ACLineSegment")
+data.triplets.get_types_count()
+data.triplets.filter_triplets(KEY="Type", VALUE=".*Generator.*", regex=True)
+data.triplets.references_to("some-uuid")
+con.tableview_by_type("ACLineSegment").pl()
 
-# ── SPARQL query (df.sparql.*) ──
-df.sparql.query("SELECT ?s WHERE { ?s a cim:Substation }")
-df.sparql.query("...", engine="sparql_qlever")
+# ── Export ──
+data.triplets.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)   # auto: 11.5x engine
+data.triplets.export_to_nquads("grid.nq", rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+con.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
 
-# ── SHACL validation (df.shacl.*) ──
-rules = df.shacl.parse_shapes("shapes.xml")
-violations = df.shacl.validate(rules)
-violations = df.shacl.validate(rules, engine="polars")
-violations = df.shacl.validate(rules, engine="pyshacl")
+# ── CGMES utilities (any input flavor) ──
+triplets.cgmes_tools.get_loaded_models(data)        # pandas, polars, arrow, or duckdb con
+triplets.cgmes_tools.draw_relations(data, uuid)     # self-contained offline HTML graph
 
-# ── Export (df.cim.*) ──
-df.cim.to_excel("output.xlsx")
-df.cim.to_cimxml("output.zip")
-
-# ── Direct calls (same API, no accessor needed) ──
-triplets.query.type_tableview(df, "ACLineSegment", engine="polars")
-triplets.query.sparql(df, "SELECT ...", engine="sparql_qlever")
-triplets.validation.validate(df, rules, engine="pyshacl")
+# ── 🚧 Roadmap ──
+# violations = data.triplets.validate(shapes)                       # SHACL
+# result = data.triplets.sparql("SELECT ?s WHERE { ?s a cim:Substation }")
 ```
 
 ---
 
-## rdf_parser.py Migration
+## rdf_parser.py Migration ✅ DONE
 
-Current `rdf_parser.py` (2137 lines, 33 functions) → decomposed into modules:
-
-| Functions | New home |
-|---|---|
-| `load_RDF_*`, `find_all_xml`, `clean_ID`, `get_namespace_map` | `parser/` |
-| `type_tableview`, `key_tableview`, `id_tableview`, `references_*`, `filter_by_*`, `types_dict`, `get_object_data`, `update_*`, `remove_*`, `set_VALUE_*`, `diff_*`, `tableview_to_triplet` | `query/` |
-| `export_to_excel` | `export/excel.py` |
-| `export_to_cimxml`, `generate_xml` | `export/cimxml.py` |
-| `export_to_networkx` | `export/networkx.py` |
-
-`rdf_parser.py` becomes a thin re-export shim → deprecation warnings → removal.
+`rdf_parser.py` (2137 lines, 33 functions) was decomposed into
+`parser/`, `tools/`, `export/` in the 0.1 refactor. It remains as a thin
+re-export shim emitting `DeprecationWarning`s; removal planned for 0.2.
+See `docs/migration_0.0_to_0.1.md` for the full old→new mapping.
 
 ---
 
-## pixi.toml
+## Packaging & CI ✅ (diverged from original plan in places)
 
-```toml
-[project]
-name = "triplets"
-version = "0.1.0"
-description = "RDF/XML toolkit for ENTSO-E/CGMES power grid data"
-channels = ["conda-forge"]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-
-[dependencies]
-python = ">=3.10"
-pandas = ">=2.0"
-lxml = ">=4.9"
-aniso8601 = "*"
-
-[feature.arrow.dependencies]
-pyarrow = ">=14.0.0"
-
-[feature.polars.dependencies]
-polars = ">=1.0.0"
-pyarrow = ">=14.0.0"
-
-[feature.validation.dependencies]
-rdflib = ">=6.0"
-
-[feature.pyshacl.dependencies]
-rdflib = ">=6.0"
-[feature.pyshacl.pypi-dependencies]
-pyshacl = ">=0.24.1"
-
-[feature.sparql.pypi-dependencies]
-oxrdflib = ">=0.5.0"
-
-[feature.build.dependencies]
-cython = ">=3.0"
-cmake = ">=3.27"
-boost = ">=1.83"
-icu = ">=70"
-openssl = "*"
-zstd = "*"
-jemalloc = "*"
-
-[feature.excel.dependencies]
-openpyxl = ">=3.1.5"
-
-[feature.dev.dependencies]
-pytest = ">=7.0"
-
-[environments]
-default = { features = ["validation", "arrow", "polars", "excel"] }
-full = { features = ["validation", "arrow", "polars", "sparql", "pyshacl", "excel"] }
-build = { features = ["validation", "arrow", "polars", "sparql", "pyshacl", "excel", "build"] }
-dev = { features = ["validation", "arrow", "polars", "sparql", "pyshacl", "excel", "build", "dev"] }
-
-[tasks]
-test = "pytest tests/"
-test-unit = "pytest tests/ -m 'not integration and not benchmark'"
-test-integration = "pytest tests/ -m integration"
-bench = "pytest tests/benchmarks/"
-build-cython-pugixml-arrow = "python setup_cython_parser.py build_ext --inplace"
-build-qlever = "cd triplets/query && cmake ..."
-```
+- **versioneer kept** (not setuptools-scm as once planned) — tag-driven
+  versions; lesson learned: never commit generated files (`.pyc`, cython
+  `.cpp`) — a dirty CI checkout produces local versions PyPI rejects.
+- `pyproject.toml` extras: `arrow`, `polars`, `duckdb`, `excel`, `networkx`,
+  `visualization`, `docs`, `dev`. 🚧 to add with the roadmap: `validation`,
+  `pyshacl`, `sparql`.
+- **pandas `>=2.0,!=2.2.*`** — buggy upstream versions are excluded in
+  metadata, not worked around in code.
+- Python ≥3.11 (StrEnum), not the once-planned 3.10.
+- **cibuildwheel** ships compiled wheels (linux x86_64, macOS arm64, windows;
+  aarch64 disabled — QEMU build dominated release time). sdist always works.
+- PyPI publish on GitHub release with `skip-existing` (partial publishes are
+  re-runnable). Released: 0.1.0rc1–rc4.
+- Docs: sphinx-multiversion per tag, guides for parser + export architecture.
 
 ---
 
-## Test Harness
+## Test Harness ✅
 
-Each test file tests **all engines** for its module, skipping when deps are missing:
+Implemented essentially as envisioned: each module's tests cover all engines
+with `importorskip`/skip markers, plus benchmarks.
 
-```python
-# test_query.py
-import pytest
-import triplets
-
-HAS_POLARS = importlib.util.find_spec("polars") is not None
-HAS_OXRDFLIB = importlib.util.find_spec("oxrdflib") is not None
-
-class TestPandasEngine:
-    def test_type_tableview(self, small_df):
-        result = triplets.query.type_tableview(small_df, "Substation", engine="pandas")
-        assert len(result) > 0
-
-class TestPolarsEngine:
-    pytestmark = pytest.mark.skipif(not HAS_POLARS, reason="polars not installed")
-
-    def test_type_tableview(self, small_df):
-        result = triplets.query.type_tableview(small_df, "Substation", engine="polars")
-        assert len(result) > 0
-
-class TestSparqlOxigraph:
-    pytestmark = pytest.mark.skipif(not HAS_OXRDFLIB, reason="oxrdflib not installed")
-
-    def test_count_query(self, small_df):
-        result = triplets.query.sparql(small_df, "SELECT (COUNT(*) AS ?c) WHERE { ?s ?p ?o }")
-        assert len(result) > 0
-
-class TestSparqlQlever:
-    pytestmark = pytest.mark.native
-
-    def test_count_query(self, small_df):
-        result = triplets.query.sparql(small_df, "SELECT ...", engine="sparql_qlever")
-        assert len(result) > 0
-```
-
-pytest markers:
-- `@pytest.mark.integration` — needs `test_data/` submodules
-- `@pytest.mark.benchmark` — slow, performance measurement
-- `@pytest.mark.native` — needs compiled Cython extensions
+- `tests/test_parser.py` — all three engines, parity tests, dtype contracts
+- `tests/test_tools.py` — pandas/polars/duckdb engines, benchmarks, deprecated
+  alias tests, string-invariant tests, export roundtrips (cimxml both engines,
+  data-equivalence between engines, nquads incl. **rdflib validation** with
+  referential-integrity cross-check against `get_dangling_references`)
+- `tests/test_cgmes_tools.py` — incl. input-flavor boundary tests
+- `tests/test_benchmarks_realgrid.py` — full CGMES dataset (1.14M rows)
+- markers: `performance`, `requires_perf_backend`
+- 🚧 to add with validation/: `test_validation.py` per the same pattern,
+  `tests/data/tiny_shacl.xml` minimal shapes fixture
 
 ---
 
-## Naming Convention
+## Naming Convention ✅
 
 | Pattern | Example | Meaning |
 |---|---|---|
-| `{runtime}_{lib}_{output}.py` | `python_lxml_pandas.py` | Python + lxml, produces pandas DataFrame |
-| `{runtime}_{lib}_{output}.py` | `python_lxml_arrow.py` | Python + lxml, produces Arrow tables |
-| `{runtime}_{lib}_{output}.pyx` | `cython_pugixml_arrow.pyx` | Cython + pugixml, produces Arrow tables |
-| `{framework}_engine.py` | `pandas_engine.py` | query engine using pandas |
-| `{framework}_shacl.py` | `polars_shacl.py` | SHACL validation using polars |
-| `{tool}_engine.py` | `pyshacl_engine.py` | validation engine wrapping pyshacl |
-| `sparql_{backend}.py` | `sparql_oxigraph.py` | SPARQL query via oxigraph |
-| `{source}_shacl_parser.py` | `rdflib_shacl_parser.py` | parse SHACL shapes via rdflib |
-
-For **parser/ engines**, the three-part `{runtime}_{lib}_{output}` convention makes clear:
-- **runtime**: `python` (pure Python) or `cython` (compiled)
-- **lib**: which XML library (`lxml`, `pugixml`)
-- **output**: what it produces (`pandas` DataFrame or `arrow` RecordBatch)
+| `{runtime}_{lib}_{output}.py(x)` | `python_lxml_pandas.py`, `cython_pugixml_arrow.pyx` | parser engines |
+| `{framework}_engine.py` | `polars_engine.py`, `duckdb_engine.py` | tools engines |
+| `{format}_{engine}.py` | `cimxml_pugixml.py`, `nquads_polars.py` | export engines (format first — groups by what is produced) |
+| `{format}_utils.py` | `cimxml_utils.py`, `nquads_utils.py` | shared format helpers |
+| 🚧 `{framework}_shacl.py` | `polars_shacl.py` | validation engines |
+| 🚧 `sparql_{backend}.py` | `sparql_oxigraph.py` | SPARQL engines |
 
 ---
 
 ## Summary
 
-| Principle | Implementation |
-|---|---|
-| **Engines inside submodules** | `parser/python_lxml_pandas.py`, `parser/cython_pugixml_arrow.pyx`, `query/sparql_qlever.pyx` |
-| **Fallback to simplest** | Auto-detect fastest available, always fall back to pure pandas/lxml |
-| **`engine=` everywhere** | Every public function accepts `engine=` parameter |
-| **SPARQL under query** | `query/sparql_oxigraph.py`, `query/sparql_qlever.pyx` — alongside pandas/polars |
-| **Three accessors** | `df.cim.*` (query/export), `df.shacl.*` (validation), `df.sparql.*` (SPARQL) |
-| **Keep pyshacl** | `engine="pyshacl"` in validation |
-| **Uniform naming** | `{runtime}_{lib}_{output}.py` for parser, `{framework}_{purpose}.py` elsewhere |
-| **pixi for builds** | C/C++ deps managed alongside Python |
-| **Gradual migration** | `rdf_parser.py` → re-export shim → deprecation → removal |
+| Principle | Implementation | Status |
+|---|---|---|
+| Engines inside submodules | parser/, tools/, export/ | ✅ |
+| Fallback to simplest | registry dispatchers, auto = first importable | ✅ |
+| `engine=` everywhere | parse, tools dispatchers, export_to_cimxml | ✅ |
+| Accessor namespace | **one** `df.triplets.*` (+ DuckDB connection methods) | ✅ (diverged from 3-namespace idea) |
+| DuckDB engine family | tools + exports on the connection | ✅ (not in original vision) |
+| N-Quads + datatypes | fast SPARQL-engine input | ✅ (not in original vision) |
+| Uniform naming | files + `<action>_<format>_<qualifier>` functions | ✅ |
+| pixi for builds | + cibuildwheel wheels on PyPI | ✅ |
+| Gradual migration | rdf_parser.py shim → warnings → 0.2 removal | ✅ |
+| **SHACL under validation/** | port prototypes from this branch | 🚧 issue #16 |
+| **SPARQL under tools/** | oxigraph + libqlever (benchmarked 3.5-216x) | 🚧 issue #5 |
+| Keep pyshacl | `engine="pyshacl"`, explicit only | 🚧 with validation/ |

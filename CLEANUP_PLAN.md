@@ -6,7 +6,30 @@ The `triplets` repo started as an RDF/XML parser for ENTSO-E/CGMES data but expa
 
 ---
 
-## Phase 1: Clean Up the Working Tree
+## Status (updated 2026-06, after 0.1.0rc4)
+
+The plan below is kept for history; execution diverged in one major way:
+instead of cleaning `dev_shacl` in place, the production package was rebuilt
+fresh on `main` (the cimxml-refactor line) and released as 0.1.0rc1–rc4 on
+PyPI. `dev_shacl` now only matters as the **source for the SHACL/SPARQL port**.
+
+| Phase | Plan | Outcome |
+|-------|------|---------|
+| 1 — Clean up working tree | clean dev_shacl in place | 🔀 superseded — main rebuilt fresh; dev_shacl left as-is. Still relevant: salvage `validation/` + SHACL parsers + `shacl/validators.py` style when porting (issue #16) |
+| 2 — Engine abstraction | conditional imports, opt-in fast_queries | ✅ done better on main: registry dispatchers with `engine=` everywhere, `df.triplets.*` accessor instead of monkey-patch opt-in |
+| 3 — Modern packaging + v0.1.0 | setuptools-scm, rdflib out of core | ✅ done with divergences: **versioneer kept**, extras done (`arrow/polars/duckdb/excel/...`), python ≥3.11, pandas `!=2.2.*`, released 0.1.0rc1–rc4 |
+| 4 — Cython build | `_native/` + env-gated build | ✅ done differently: extensions live in-tree (`parser/`, `export/`), built via pixi / `setup_cython_parser.py`, **prebuilt wheels via cibuildwheel** — users don't build at all |
+| 5 — SPARQL/qlever | `sparql/` module + benchmark | 🚧 **remaining** — benchmark done (qlever 3.5–216x vs oxigraph, 2026-04); module structure goes under `tools/` per TARGET_ARCHITECTURE.md (issue #5) |
+| 6 — CI/CD & wheels | test matrix + publish | ✅ done: cibuildwheel matrix (linux x86_64, macOS arm64, windows; aarch64 disabled), PyPI publish on release with `skip-existing`, versioned docs deploy |
+
+**What remains on this branch to port to main** (the real successor of this plan):
+1. `validation/` — SHACL engines (pandas/polars/pyshacl), shape parsers, report (Phase 1.6/1.7 + TARGET_ARCHITECTURE.md validation/ section, issue #16)
+2. SPARQL engines under `tools/` (Phase 5, issue #5)
+3. N-Quads literal datatypes are already on main (#46) — the dev_shacl nquads converter is superseded
+
+---
+
+## Phase 1: Clean Up the Working Tree — 🔀 superseded (main rebuilt fresh)
 
 **Branch:** `cleanup/phase1` (from `dev_shacl`)
 
@@ -91,7 +114,7 @@ shacl_report_*.xml
 
 ---
 
-## Phase 2: Engine Abstraction & Code Quality
+## Phase 2: Engine Abstraction & Code Quality — ✅ done on main (registry dispatchers)
 
 **Branch:** `feature/engine-abstraction` (from Phase 1 result)
 
@@ -127,7 +150,7 @@ Change from auto-monkey-patching on import to requiring `triplets.fast_queries.i
 
 ---
 
-## Phase 3: Packaging Modernization — First Publishable Release
+## Phase 3: Packaging Modernization — ✅ done (versioneer kept, 0.1.0rc1–rc4 on PyPI)
 
 **Branch:** `feature/modern-packaging` (from Phase 2 result)
 
@@ -186,7 +209,7 @@ This is the **first modern release** with SHACL validation support.
 
 ---
 
-## Phase 4: Cython Fast Engine (Optional Build)
+## Phase 4: Cython Fast Engine — ✅ done (in-tree extensions, prebuilt wheels)
 
 **Branch:** `feature/cython-build` (from Phase 3 result)
 
@@ -226,7 +249,7 @@ Users build with: `TRIPLETS_BUILD_NATIVE=1 uv pip install .`
 
 ---
 
-## Phase 5: SPARQL — qlever Evaluation & Structure
+## Phase 5: SPARQL — qlever Evaluation & Structure — 🚧 remaining (benchmark done)
 
 **Branch:** `feature/sparql` (from Phase 3 — independent of Phase 4)
 
@@ -254,7 +277,7 @@ sparql-qlever = ["sparqlwrapper>=2.0"]
 
 ---
 
-## Phase 6: CI/CD & Platform Wheels (Future)
+## Phase 6: CI/CD & Platform Wheels — ✅ done
 
 ### 6.1 GitHub Actions: test matrix
 - Python 3.10-3.13 on ubuntu-latest
