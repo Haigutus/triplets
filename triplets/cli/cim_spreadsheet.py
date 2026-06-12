@@ -361,9 +361,9 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
     version = get_versions()['version']
     tool_version = f"triplets-{version}"
     # Old header (md:FullModel) uses Model.applicationSoftware
-    data.set_triplets_value_at_key("Model.applicationSoftware", tool_version)
+    data.set_value_at_key("Model.applicationSoftware", tool_version)
     # New header (dcat:Dataset) uses applicationSoftware (eumd namespace)
-    data.set_triplets_value_at_key("applicationSoftware", tool_version)
+    data.set_value_at_key("applicationSoftware", tool_version)
 
     if "INSTANCE_ID" not in data.columns or data["INSTANCE_ID"].isna().all():
         data["INSTANCE_ID"] = str(uuid4())

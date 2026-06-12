@@ -283,7 +283,7 @@ def _value_literal(value):
     return pl.lit(None, dtype=pl.Utf8) if value is None else pl.lit(str(value))
 
 
-def set_triplets_value_at_key(data, key, value):
+def set_value_at_key(data, key, value):
     """Set VALUE for all rows with a given KEY (in-place mutation via reassignment)."""
     return data.with_columns(
         pl.when(pl.col("KEY") == key)
@@ -293,7 +293,7 @@ def set_triplets_value_at_key(data, key, value):
     )
 
 
-def set_triplets_value_at_key_and_id(data, key, value, id):
+def set_value_at_key_and_id(data, key, value, id):
     """Set VALUE for a specific KEY and ID combination."""
     return data.with_columns(
         pl.when((pl.col("KEY") == key) & (pl.col("ID") == id))

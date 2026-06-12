@@ -48,7 +48,7 @@ PANDAS_TOOL_METHODS = [
     # filter
     "filter_triplets_by_type", "filter_triplets_by_triplets", "filter_triplets",
     # mutate
-    "set_triplets_value_at_key", "set_triplets_value_at_key_and_id",
+    "set_value_at_key", "set_value_at_key_and_id",
     "update_triplets_from_triplets", "update_triplets_from_tableview",
     # transform
     "triplets_to_tableviews", "tableview_to_triplets",
