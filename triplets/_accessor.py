@@ -83,7 +83,7 @@ DUCKDB_TOOL_METHODS = [
     "references_to", "references_from",
 ]
 
-DUCKDB_EXPORT_METHODS = ["export_to_excel", "export_to_csv", "export_to_nquads"]
+DUCKDB_EXPORT_METHODS = ["export_to_excel", "export_to_csv", "export_to_nquads", "export_to_cimxml"]
 
 
 def _delegate(module, name):
