@@ -10,27 +10,35 @@ import polars as pl
 logger = logging.getLogger(__name__)
 
 
-def type_tableview(data, type_name, string_to_number=True, type_key="Type", multivalue=False):
-    """Create a table view of all objects of a specified type using polars pivot."""
-    type_ids = data.filter(
-        (pl.col("VALUE") == type_name) & (pl.col("KEY") == type_key)
-    ).select("ID")
+def _numeric_columns(data_view):
+    """Cast columns that contain only numbers to Float64."""
+    for col in data_view.columns:
+        if col == "ID":
+            continue
+        try:
+            data_view = data_view.with_columns(pl.col(col).cast(pl.Float64, strict=True))
+        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
+            pass
+    return data_view
 
-    if type_ids.is_empty():
-        logger.warning(f'No data available for {type_name}')
+
+def _tableview(ids, data, string_to_number, multivalue, label):
+    """Shared pivot core for the three tableview functions.
+
+    ids: polars DataFrame with an ID column selecting the objects.
+    """
+    if ids.is_empty():
+        logger.warning(f'No data available for {label}')
         return None
 
-    type_data = type_ids.join(data, on="ID", how="inner")
+    object_data = ids.select("ID").unique().join(data, on="ID", how="inner")
 
     if multivalue:
         # Aggregate all values per (ID, KEY) into lists, then pivot.
-        # After pivot, convert single-element lists back to scalars.
-        agg = type_data.group_by(["ID", "KEY"]).agg(
-            pl.col("VALUE").alias("VALUE")
-        )
+        agg = object_data.group_by(["ID", "KEY"]).agg(pl.col("VALUE").alias("VALUE"))
         data_view = agg.pivot(on="KEY", index="ID", values="VALUE")
         # Unwrap single-element lists to scalars for cleaner output.
-        # Multi-element lists stay as lists (matching pandas multivalue behavior).
+        # Multi-element lists stay joined (matching pandas multivalue behavior).
         for col in data_view.columns:
             if col == "ID":
                 continue
@@ -43,66 +51,32 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type", mult
                     .alias(col)
                 )
     else:
-        type_data = type_data.unique(subset=["ID", "KEY"], keep="first")
-        data_view = type_data.pivot(on="KEY", index="ID", values="VALUE")
+        data_view = object_data.unique(subset=["ID", "KEY"], keep="first").pivot(on="KEY", index="ID", values="VALUE")
 
-    if string_to_number:
-        for col in data_view.columns:
-            if col == "ID":
-                continue
-            try:
-                data_view = data_view.with_columns(
-                    pl.col(col).cast(pl.Float64, strict=True)
-                )
-            except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
-                pass
-
-    return data_view
+    return _numeric_columns(data_view) if string_to_number else data_view
 
 
-def key_tableview(data, key, string_to_number=True):
+def type_tableview(data, type_name, string_to_number=True, type_key="Type", multivalue=False):
+    """Create a table view of all objects of a specified type using polars pivot."""
+    ids = data.filter((pl.col("VALUE") == type_name) & (pl.col("KEY") == type_key))
+    return _tableview(ids, data, string_to_number, multivalue, type_name)
+
+
+def key_tableview(data, key, string_to_number=True, multivalue=False):
     """Create a table view of all objects with a specified key."""
-    key_ids = data.filter(pl.col("KEY") == key).select("ID")
-
-    if key_ids.is_empty():
-        logger.warning(f'No data available for key: {key}')
-        return None
-
-    key_data = key_ids.join(data, on="ID", how="inner").unique(subset=["ID", "KEY"], keep="first")
-    data_view = key_data.pivot(on="KEY", index="ID", values="VALUE")
-
-    if string_to_number:
-        for col in data_view.columns:
-            if col == "ID":
-                continue
-            try:
-                data_view = data_view.with_columns(pl.col(col).cast(pl.Float64, strict=True))
-            except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
-                pass
-
-    return data_view
+    ids = data.filter(pl.col("KEY") == key)
+    return _tableview(ids, data, string_to_number, multivalue, key)
 
 
-def id_tableview(data, id, string_to_number=True):
-    """Create a table view of a specific object by ID."""
-    obj_data = data.filter(pl.col("ID") == id).unique(subset=["ID", "KEY"], keep="first")
+def id_tableview(data, id, string_to_number=True, multivalue=False):
+    """Create a table view of objects by ID (single ID, list of IDs, or DataFrame with ID column)."""
+    if isinstance(id, str):
+        id = [id]
+    if isinstance(id, list):
+        id = pl.DataFrame({"ID": id})
 
-    if obj_data.is_empty():
-        logger.warning(f'No data available for ID: {id}')
-        return None
-
-    data_view = obj_data.pivot(on="KEY", index="ID", values="VALUE")
-
-    if string_to_number:
-        for col in data_view.columns:
-            if col == "ID":
-                continue
-            try:
-                data_view = data_view.with_columns(pl.col(col).cast(pl.Float64, strict=True))
-            except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
-                pass
-
-    return data_view
+    ids = data.join(id.select("ID"), on="ID", how="semi")
+    return _tableview(ids, data, string_to_number, multivalue, id["ID"].to_list())
 
 
 def types_dict(data):

@@ -89,6 +89,19 @@ class TestKeyTableview:
         tv = svedala_data.key_tableview("NonExistent.key")
         assert tv is None
 
+    def test_multivalue(self, svedala_data):
+        # FullModel has multiple Model.DependentOn values per ID
+        tv = svedala_data.key_tableview("Model.DependentOn", multivalue=True, string_to_number=False)
+        assert tv is not None
+        assert any(isinstance(v, list) for v in tv["Model.DependentOn"])
+
+    def test_multivalue_polars_parity(self, svedala_data):
+        polars = pytest.importorskip("polars")
+        pd_tv = svedala_data.key_tableview("Model.DependentOn", multivalue=True, string_to_number=False)
+        pl_tv = triplets.tools.key_tableview(
+            polars.from_pandas(svedala_data), "Model.DependentOn", multivalue=True, string_to_number=False)
+        assert len(pd_tv) == len(pl_tv)
+
 
 class TestIdTableview:
     def test_returns_dataframe(self, svedala_data):
@@ -98,6 +111,20 @@ class TestIdTableview:
         tv = triplets.rdf_parser.id_tableview(svedala_data, sub_id)
         assert isinstance(tv, pandas.DataFrame)
         assert len(tv) > 0
+
+    def test_list_input_and_multivalue(self, svedala_data):
+        subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]
+        ids = list(subs["ID"].iloc[:3])
+        tv = svedala_data.id_tableview(ids, multivalue=True, string_to_number=False)
+        assert len(tv) == 3
+
+    def test_list_input_polars_parity(self, svedala_data):
+        polars = pytest.importorskip("polars")
+        subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]
+        ids = list(subs["ID"].iloc[:3])
+        pd_tv = svedala_data.id_tableview(ids, string_to_number=False)
+        pl_tv = triplets.tools.id_tableview(polars.from_pandas(svedala_data), ids, string_to_number=False)
+        assert len(pd_tv) == len(pl_tv) == 3
 
 
 class TestTypesDict:
