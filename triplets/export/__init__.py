@@ -32,6 +32,17 @@ def _is_polars(data):
     return hasattr(data, '__module__') and 'polars' in type(data).__module__
 
 
+REQUIRED_COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
+
+
+def _check_columns(data):
+    """Fail early with a clear message when the input is not a triplets dataset."""
+    missing = [column for column in REQUIRED_COLUMNS if column not in data.columns]
+    if missing:
+        raise ValueError(f"Not a triplets dataset — missing columns {missing}, "
+                         f"expected {list(REQUIRED_COLUMNS)}, got {list(data.columns)}")
+
+
 def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):
     """Export triplet DataFrame to CSV files.
 
@@ -55,6 +66,7 @@ def export_to_nquads(data, path, rdf_map=None):
     rdf_map : dict or str, optional
         Export schema for proper enum detection. If None, enums exported as literals.
     """
+    _check_columns(data)
     if _is_polars(data):
         logger.debug("format=nquads, engine=polars (auto-detected)")
         from .nquads_polars import export_to_nquads as _fn
@@ -191,6 +203,7 @@ def export_to_cimxml(data,
         start_time = datetime.datetime.now()
         init_time = start_time
 
+    _check_columns(data)
     engine_name, engine_module = get_cimxml_engine(engine)
     generate = engine_module.generate_xml
 
