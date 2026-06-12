@@ -126,15 +126,16 @@ triplets/
 │   └── sparql_qlever.pyx        # 🚧 engine: libqlever — the performance option
 │                                #     (fed via N-Quads export; 3.5-216x in 2026-04 benchmark)
 │
-├── validation/                  # 🚧 SHACL — prototypes on dev_shacl to be ported
-│   ├── __init__.py              # validate() dispatcher
-│   ├── pandas_shacl.py          # engine: pandas (default)
-│   ├── polars_shacl.py          # engine: polars, lazy evaluation (performance option)
-│   ├── duckdb_shacl.py          # engine: duckdb (SQL constraints, out-of-memory datasets)
-│   ├── pyshacl_engine.py        # engine: rdflib/pyshacl (external reference, explicit only)
-│   ├── rdflib_shacl_parser.py   # parse SHACL shapes via rdflib
-│   ├── triplets_shacl_parser.py # parse SHACL shapes from triplet DataFrames (no rdflib)
-│   └── shacl_report.py          # SHACL validation report generation
+├── validation/                  # 🚧 SHACL — compile once, execute per engine
+│   ├── __init__.py              # validate() dispatcher (engine auto-detect from input flavor)
+│   ├── shapes_compiler.py       # shapes.ttl → rdflib → CONSTRAINT TABLE (the IR, a DataFrame):
+│   │                            #   one row per shape × path × constraint kind + params;
+│   │                            #   cached by shapes content hash
+│   ├── pandas_shacl.py          # executor: pandas (reference, always works)
+│   ├── polars_shacl.py          # executor: compiles IR → one lazy plan per shape (performance)
+│   ├── duckdb_shacl.py          # executor: compiles IR → SQL (out-of-memory datasets)
+│   ├── pyshacl_engine.py        # rdflib/pyshacl reference impl — cross-check only, explicit
+│   └── shacl_report.py          # sh:ValidationReport as triplets DataFrame (exportable)
 │
 ├── export/                      # {format}_{engine}.py naming
 │   ├── __init__.py              # dispatchers: cimxml engine registry, csv/nquads auto-detect,
@@ -194,14 +195,29 @@ end-to-end — see also issue #34).
 Fallback (DataFrame): auto-detect from input type (polars in → polars engine, else pandas)
 Fallback (SPARQL): `sparql_qlever` → `sparql_rdflib`
 
+**Scope:** pure SPARQL queries plus the `sh:sparql` SHACL constraints —
+nothing more. No plan to emulate SPARQL on polars.
+
 SPARQL engines are fed through the **N-Quads export** (datatype-annotated,
 fast to write and to load) — triplets → .nq → engine, no per-triple API calls.
+**Index lifecycle:** a qlever index is valid as long as the data is
+unchanged — key the index/cache directory by the **content hash of the
+triplets table** (cheap over Arrow buffers); rebuild on miss. Same hash
+mechanism caches compiled SHACL constraint tables.
 
 **Design decision — no oxigraph engine.** Our native tooling is built on
 C/C++ via Cython (pugixml, Arrow, libqlever); oxigraph is a Rust stack and
 benchmarked 3.5–216x slower than qlever on CGMES data (2026-04). Interfacing
 a second, slower native runtime buys nothing: rdflib covers the no-build
 case, qlever covers performance.
+
+**Exploration — SPARQL→SQL on DuckDB (spike before binding libqlever):**
+basic graph patterns are self-joins on the triplets table; FILTER → WHERE,
+OPTIONAL → LEFT JOIN, simple aggregates map directly. Full SPARQL 1.1 is a
+compiler project — but if the *actual* `sh:sparql` constraints in the
+ENTSO-E shapes fit that subset (measure first), DuckDB runs them without
+qlever and without a C++ build, unifying with `duckdb_shacl`. The outcome
+decides how much effort the libqlever binding deserves.
 
 Future idea kept: `mql_engine.py` (CIMdesk Model Query Language) — issue #4.
 
@@ -224,18 +240,36 @@ SPARQL engines (qlever) and carries literal datatypes from the export schema
 
 ### validation/ 🚧
 
-Own SHACL engine over triplet DataFrames, same engine family as tools/:
+**Design: validations are compiled queries.** Shapes are maintained in TTL
+(no RDF/XML serialization planned), so rdflib is *the* shapes parser — it
+moves into the `validation` extra. The shapes graph is walked **once** by
+`shapes_compiler.py` into a flat **constraint table** (the IR — itself a
+DataFrame: one row per shape × path × constraint kind with params, cached by
+shapes content hash). Executors never touch rdflib:
+
+```
+shapes.ttl ──rdflib──► constraint table (IR, DataFrame)
+                              │
+              ┌───────────────┼────────────────┐
+        polars compiler   duckdb compiler   pandas executor
+        (one LazyFrame    (generated SQL    (reference,
+         plan per shape,   per shape)        always works)
+         optimized + run
+         as a single query)
+```
 
 | Engine | Requires | Notes |
 |--------|----------|-------|
-| `pandas` | core | 1x, always works |
-| `polars` | `triplets[polars]` | lazy evaluation — the performance option (2.4x in eager prototype, lazy TBD) |
-| `duckdb` | `triplets[duckdb]` | SQL constraint evaluation, out-of-memory datasets |
-| `pyshacl` | `triplets[pyshacl]` (rdflib) | external reference implementation, explicit only |
+| `pandas` | core | reference executor, always works |
+| `polars` | `triplets[polars]` | IR → lazy plans — the performance option (2.4x already in the eager prototype) |
+| `duckdb` | `triplets[duckdb]` | IR → SQL; out-of-memory datasets; may also run the `sh:sparql` constraints (see SPARQL spike below) |
+| `pyshacl` | `triplets[pyshacl]` (rdflib) | external reference implementation — cross-check only, explicit |
 
-Fallback: auto-detect from input flavor (like tools/); `pyshacl` explicit
-only (`engine="pyshacl"`) — used to cross-check our engines, not in the
-auto chain.
+Fallback: auto-detect from input flavor (like tools/); `pyshacl` never in
+the auto chain. Supported constraint subset = what the ENTSO-E RDFS→SHACL
+profiles actually emit (measure from the real shape files, not the spec).
+The validation report is itself a triplets DataFrame (`sh:ValidationReport`
+vocabulary) — exportable via nquads/excel like any other data.
 Prototypes: `test_shacl_*.py` on this branch. Issue #16.
 
 ---
