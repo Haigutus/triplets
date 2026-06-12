@@ -16,6 +16,7 @@ Usage:
 """
 
 import logging
+import re  # security: used to validate table_name in DuckDB export methods
 import pandas
 
 from . import tools, export
@@ -149,7 +150,11 @@ if duckdb:
         """Make a connection method: fetch the triplets table, run the pandas export."""
         function = getattr(export, name)
 
+        # Security fix: validate table_name to prevent SQL injection
+        # Only allow alphanumeric characters and underscores, must start with letter or underscore
         def method(connection, *args, table_name="triplets", **kwargs):
+            if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
+                raise ValueError(f"Invalid table name: {table_name}")
             df = connection.execute(f"SELECT * FROM {table_name}").df()
             return function(df, *args, **kwargs)
 

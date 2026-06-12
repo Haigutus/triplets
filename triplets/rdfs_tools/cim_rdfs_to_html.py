@@ -114,7 +114,12 @@ def export_to_html(folder_path=r"../../rdfs/ENTSOE_CGMES_2.4.15", file_extension
         #print(filename)
 
         if "entsoeUML" in  metadata.keys():
-            folder = os.path.join(metadata["entsoeUML"], metadata["shortName"], "_".join(entsoeURI_list))
+            # Sanitize metadata values to prevent path traversal
+            safe_entsoeUML = os.path.basename(metadata["entsoeUML"])
+            safe_shortName = os.path.basename(metadata["shortName"])
+            safe_entsoeURI_list = [os.path.basename(uri) for uri in entsoeURI_list]
+            
+            folder = os.path.join(safe_entsoeUML, safe_shortName, "_".join(safe_entsoeURI_list))
             if not os.path.exists(folder):
                 os.makedirs(folder)
 

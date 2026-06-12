@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <title>$title</title>
 <script>$vis_js</script>
+<!-- Include DOMPurify for XSS prevention -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 <style>
     html, body { margin: 0; height: 100%; font-family: sans-serif; }
     #graph { width: 100%; height: 100%; }
@@ -50,7 +52,8 @@
     network.on("selectNode", function (params) {
         const node = nodes.get(params.nodes[0]);
         panelTitle.textContent = node.label;
-        panelContent.innerHTML = node.objectTable || "";
+        // Sanitize HTML to prevent XSS
+        panelContent.innerHTML = DOMPurify.sanitize(node.objectTable || "");
         panel.style.display = "flex";
     });
     network.on("deselectNode", function () { panel.style.display = "none"; });

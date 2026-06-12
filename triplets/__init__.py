@@ -47,11 +47,16 @@ except ImportError:
 try:
     import duckdb as _duckdb
     import logging as _logging
+    import re as _re  # for table name validation (SQL injection prevention)
 
     _duckdb_logger = _logging.getLogger(__name__)
 
     def _duckdb_read_rdf(self, paths, table_name="triplets", **kwargs):
         """Parse RDF/XML files and load into DuckDB table via Arrow (zero-copy)."""
+        # SECURITY: validate table_name to prevent SQL injection
+        #   allow only safe identifier characters: alphanumeric, underscore, starting with letter/underscore
+        if not _re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
+            raise ValueError(f"Invalid table name: {table_name}")
         arrow_table = parse(paths, return_type="arrow", **kwargs)
         self.register("_arrow_import", arrow_table)
         self.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM _arrow_import")
@@ -65,4 +70,3 @@ try:
 except ImportError:
     logging.getLogger(__name__).debug("duckdb not installed, skipping read_rdf registration")
     pass
-
