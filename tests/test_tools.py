@@ -565,6 +565,37 @@ class TestExportToCimxml:
         reimported = pandas.read_RDF([result[0]])
         assert reimported.get_types_count()["ACLineSegment"] == svedala_eq.get_types_count()["ACLineSegment"]
 
+    def test_datatypes_flag(self, svedala_eq):
+        """datatypes=True annotates literals with rdf:datatype like the nquads export."""
+        from triplets.export_schema import schemas
+        result = svedala_eq.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1,
+            export_type="xml_per_instance",
+            export_to_memory=True,
+            datatypes=True,  # engine=auto must steer to python_lxml
+        )
+        xml = result[0].getvalue().decode()
+        assert 'rdf:datatype="http://www.w3.org/2001/XMLSchema#float"' in xml
+        # xsd:string keys stay unannotated (RDF 1.1 default)
+        assert 'IdentifiedObject.name rdf:datatype' not in xml
+
+        # typed output still reimports identically
+        result[0].seek(0)
+        reimported = pandas.read_RDF([result[0]])
+        assert reimported.get_types_count()["ACLineSegment"] == svedala_eq.get_types_count()["ACLineSegment"]
+
+    def test_datatypes_unsupported_on_cython(self, svedala_eq):
+        require_cimxml_engine("cython_pugixml")
+        from triplets.export_schema import schemas
+        with pytest.raises(NotImplementedError, match="python_lxml"):
+            svedala_eq.export_to_cimxml(
+                rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1,
+                export_type="xml_per_instance",
+                export_to_memory=True,
+                engine="cython_pugixml",
+                datatypes=True,
+            )
+
     def test_engines_produce_identical_output(self, svedala_eq):
         require_cimxml_engine("cython_pugixml")
         from triplets.export_schema import schemas

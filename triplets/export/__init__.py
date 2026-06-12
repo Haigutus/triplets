@@ -134,7 +134,8 @@ def export_to_cimxml(data,
                      export_base_path="",
                      comment=None,
                      max_workers=None,
-                     engine="auto"):
+                     engine="auto",
+                     datatypes=False):
     """Export a full triplet dataset to CIM RDF XML files or ZIP archives.
 
     Processes all instances (grouped by ``INSTANCE_ID``) and exports them according to the
@@ -173,6 +174,10 @@ def export_to_cimxml(data,
         XML generation engine. "auto" picks best available.
         Options: "python_lxml" (lxml, always available), "cython_pugixml" (compiled, fastest).
         Aliases: "performance"/"pugixml" → cython_pugixml, "lxml"/"pandas" → python_lxml.
+    datatypes : bool, default False
+        If True, annotate literal elements with rdf:datatype from the schema's
+        xsd:type, like the N-Quads export ("44.84" → rdf:datatype xsd#float;
+        xsd:string stays plain). Currently python_lxml only — "auto" picks it.
 
     Returns
     -------
@@ -208,6 +213,9 @@ def export_to_cimxml(data,
         # the per-instance pipeline is pandas (groupby + engine contract)
         logger.debug("format=cimxml: polars input → pandas")
         data = data.to_pandas(use_pyarrow_extension_array=True)
+    if datatypes and engine == "auto":
+        logger.debug("cimxml engine set: python_lxml (datatypes=True not yet in cython engine)")
+        engine = "python_lxml"
     engine_name, engine_module = get_cimxml_engine(engine)
     generate = engine_module.generate_xml
 
@@ -221,13 +229,13 @@ def export_to_cimxml(data,
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(generate, instance, rdf_map, namespace_map,
                                        class_KEY=class_KEY, export_undefined=export_undefined,
-                                       comment=comment, debug=debug)
+                                       comment=comment, debug=debug, datatypes=datatypes)
                        for _, instance in instances]
             xml_documents = [future.result() for future in futures]
     else:
         xml_documents = [generate(instance, rdf_map, namespace_map,
                                   class_KEY=class_KEY, export_undefined=export_undefined,
-                                  comment=comment, debug=debug)
+                                  comment=comment, debug=debug, datatypes=datatypes)
                          for _, instance in instances]
 
     # generate returns None for instances skipped due to missing mapping

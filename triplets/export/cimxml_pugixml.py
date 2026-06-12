@@ -40,7 +40,8 @@ def generate_xml(instance_data,
                  class_KEY="Type",
                  export_undefined=True,
                  comment=None,
-                 debug=False):
+                 debug=False,
+                 datatypes=False):
     """Generate an RDF XML file from a triplet dataset instance.
 
     Same parameters and return value as :func:`cimxml_pandas.generate_xml`;
@@ -51,6 +52,10 @@ def generate_xml(instance_data,
     dict
         {'filename': str, 'file': bytes (UTF-8 XML)}
     """
+    if datatypes:
+        raise NotImplementedError(
+            "rdf:datatype annotations are not implemented in the cython_pugixml engine yet — "
+            "use engine='python_lxml' (engine='auto' picks it automatically when datatypes=True)")
     rdf_map = load_rdf_map(rdf_map)
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
 
