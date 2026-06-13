@@ -105,7 +105,7 @@ def get_metadata_from_filename(file_name):
         file_metadata["Model.version"] = file_meta_list
         file_metadata["Model.processType"] = ""
 
-        print("Warning - only 4 meta elements found, expecting 5, setting Model.processType to empty string")
+        logger.warning("Only 4 meta elements found, expecting 5, setting Model.processType to empty string")
 
     # Naming after QoDC 2.1, always 5 positions
     elif len(file_meta_list) == 5:
@@ -117,7 +117,7 @@ def get_metadata_from_filename(file_name):
         file_metadata["Model.version"] = file_meta_list
 
     else:
-        print("Non CGMES file {}".format(file_name))
+        logger.warning("Non CGMES file {}".format(file_name))
 
     if file_metadata.get("Model.modelingEntity", False):
 
