@@ -143,7 +143,7 @@ def export_to_cimxml(data,
                      rdf_map=None,
                      namespace_map=None,
                      class_KEY="Type",
-                     export_undefined=True,
+                     export_undefined=False,
                      export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
                      global_zip_filename="Export.zip",
                      debug=False,
@@ -168,8 +168,11 @@ def export_to_cimxml(data,
         Namespace prefix-to-URI mapping (see :func:`generate_xml`).
     class_KEY : str, default "Type"
         Key identifying object types in triplet data.
-    export_undefined : bool, default True
-        Export unmapped classes/attributes with default RDF syntax.
+    export_undefined : bool, default False
+        If True, also export classes/attributes without a schema definition
+        (internal structures like Distribution/NamespaceMap) under the
+        http://triplets# namespace. Normal exports carry only schema-defined
+        content. (The cython engine emits undefined elements un-namespaced.)
     export_type : ExportType or str, default ExportType.XML_PER_INSTANCE_ZIP_PER_XML
         Export format:
         - ``XML_PER_INSTANCE``: One XML file per instance.

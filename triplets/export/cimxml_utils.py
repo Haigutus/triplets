@@ -10,9 +10,9 @@ from triplets.tools import get_namespace_map
 
 logger = logging.getLogger(__name__)
 
-# Maps a substring of the Model.profile URL to the export schema sub-key.
-# Used when the instance header has no Model.messageType (e.g. CGMES 3.0).
-# TODO - needs to be extended and made more intelligent, maybe scan profile?
+# Legacy fallback only: maps a substring of old-style (CGMES 2.4.15)
+# Model.profile URLs to the schema section. Modern schemas resolve via their
+# embedded ProfileMetadata (keyword / versionIRI / conformsTo) instead.
 PROFILE_URL_MAP = {
     "EquipmentCore": "EQ",
     "SteadyState": "SSH",
@@ -22,6 +22,9 @@ PROFILE_URL_MAP = {
     "TopologyBoundary": "TPBD",
 }
 
+# Namespace for internal/undefined structures when export_undefined=True
+TRIPLETS_NS = "http://triplets#"
+
 
 def load_rdf_map(rdf_map):
     """Return the export schema as a dict; load from JSON file path if needed."""
@@ -29,6 +32,38 @@ def load_rdf_map(rdf_map):
         return rdf_map
     with open(rdf_map, "r") as conf_file:
         return json.load(conf_file)
+
+
+def _profile_identity_index(rdf_map):
+    """Map every identifier a schema section declares to the section name.
+
+    Sections identify themselves via their key ("EQ") and the ProfileMetadata
+    entry: keyword ("EQ"), versionIRI (the profile URI, matches old-header
+    Model.profile), conformsTo. The schema defines what to match — no
+    hardcoded knowledge per CGMES generation.
+    """
+    index = {}
+    for section_name, section in rdf_map.items():
+        if not isinstance(section, dict):
+            continue
+        metadata = section.get("ProfileMetadata", {})
+        identifiers = [section_name, metadata.get("keyword"),
+                       metadata.get("versionIRI"), metadata.get("conformsTo")]
+        for identifier in identifiers:
+            if isinstance(identifier, str) and identifier:
+                index.setdefault(identifier, section_name)
+    return index
+
+
+def _instance_profile_hints(instance_data):
+    """Profile references the instance header may carry, in priority order:
+    old header messageType, new dcat:Dataset keyword, then the URI fields
+    (both can repeat — e.g. multiple Model.profile rows)."""
+    hints = []
+    for key in ("Model.messageType", "keyword", "Model.profile", "conformsTo"):
+        rows = instance_data[instance_data["KEY"] == key]
+        hints.extend(str(value) for value in rows["VALUE"] if value is not None)
+    return hints
 
 
 def _first_value(instance_data, key):
@@ -47,8 +82,11 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
     tuple (file_name, namespace_map, instance_rdf_map)
         file_name : from the instance 'label' (source filename) or a new UUID
         namespace_map : given > instance NamespaceMap > schema ProfileNamespaceMap
-        instance_rdf_map : profile sub-schema (via Model.messageType or
-            Model.profile URL) or the schema root when no profile matches
+        instance_rdf_map : profile section matched by the schema's own identity
+            metadata (section key / keyword / versionIRI / conformsTo) against
+            the instance header (Model.messageType, keyword, Model.profile,
+            conformsTo); legacy URL-substring fallback for 2.4.15-era URLs;
+            schema root when nothing matches
     """
     if not namespace_map:
         namespace_map, xml_base = get_namespace_map(instance_data)
@@ -56,22 +94,26 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
     # Filename is kept under label
     file_name = _first_value(instance_data, "label") or f"{uuid.uuid4()}.xml"
 
-    # Find schema reference to be used for export
-    # TODO remove dependency on this header field, which might not be present
-    # TODO: Refactor this, if schema is provided, the information how to pick it up should be in the schema
-    instance_type = _first_value(instance_data, "Model.messageType")
-
-    if not instance_type:
-        profile_url = _first_value(instance_data, "Model.profile")
-        if profile_url:
-            for url_part, profile in PROFILE_URL_MAP.items():
-                if url_part in profile_url:
-                    instance_type = profile
+    identity_index = _profile_identity_index(rdf_map)
+    instance_section = None
+    hints = _instance_profile_hints(instance_data)
+    for hint in hints:
+        if hint in identity_index:
+            instance_section = identity_index[hint]
+            break
+    if instance_section is None:
+        # legacy 2.4.15 profile URLs carry no exact schema identity — substring map
+        for hint in hints:
+            for url_part, section in PROFILE_URL_MAP.items():
+                if url_part in hint:
+                    instance_section = section
                     break
+            if instance_section:
+                break
+    if instance_section is None and hints:
+        logger.warning("No schema profile matched instance header hints %s — using schema root", hints[:4])
 
-    # If there is sub structure available in schema get it, otherwise use root definitions
-    # TODO - needs revision, add support both for md:FullModel, dcat:DataSet and without profile definiton
-    instance_rdf_map = rdf_map.get(instance_type, rdf_map)
+    instance_rdf_map = rdf_map.get(instance_section, rdf_map)
 
     # No map in function call, nor in instance data, use profile map
     if not namespace_map and instance_rdf_map:

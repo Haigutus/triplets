@@ -569,7 +569,7 @@ class TestExportToCimxml:
         """datatypes=True annotates literals with rdf:datatype like the nquads export."""
         from triplets.export_schema import schemas
         result = svedala_eq.export_to_cimxml(
-            rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1,
+            rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
             export_type="xml_per_instance",
             export_to_memory=True,
             datatypes=True,  # engine=auto must steer to python_lxml
