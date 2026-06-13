@@ -15,7 +15,6 @@ import os
 import webbrowser
 import pandas
 import math
-import aniso8601
 
 from uuid import uuid4
 from lxml import etree
@@ -186,7 +185,7 @@ def get_filename_from_metadata(meta_data, file_type="xml", filename_mask=default
     # DateTime fields from text to DateTime
     DateTime_fields = ["scenarioTime"]#, 'created']
     for field in DateTime_fields:
-        meta_data[field] = aniso8601.parse_datetime(meta_data[field])
+        meta_data[field] = pandas.Timestamp(meta_data[field])  # lenient ISO parsing, pandas is a core dep
 
     # Integers to integers
     meta_data["version"] = int(meta_data["version"])

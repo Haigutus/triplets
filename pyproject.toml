@@ -8,7 +8,6 @@ dependencies = [
     # "'Series' object has no attribute '_pa_array'" (fixed upstream in 2.3)
     "pandas>=2.0,!=2.2.*",
     "lxml>=4.9",
-    "aniso8601",
 ]
 
 [project.scripts]
