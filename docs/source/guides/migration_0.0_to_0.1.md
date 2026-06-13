@@ -133,6 +133,21 @@ If your code built triplet rows with numeric `VALUE`s by hand, the exports now
 tolerate them, but converting with `data["VALUE"].astype(str)` keeps your data
 within the contract.
 
+### `export_to_cimxml` exports schema-defined content only by default
+
+`export_undefined` now defaults to **False**: internal structures
+(`Distribution`, `NamespaceMap` and any class/attribute without a schema
+definition) are no longer written into CIM XML exports. Pass
+`export_undefined=True` to include them — they are emitted under the
+`http://triplets#` namespace (making the output valid, strict-parser-safe
+RDF/XML; previously they were non-namespaced elements).
+
+Profile resolution is schema-driven now: the schema's own `ProfileMetadata`
+(`keyword`, `versionIRI`, `conformsTo`) is matched against the instance
+header (`Model.messageType`, `keyword`, `Model.profile`, `conformsTo`), so
+CGMES 2.4.15, CGMES 3.0 and NetworkCode headers all resolve to the right
+profile section.
+
 ### DataFrame methods
 
 The old monkey-patched methods (`data.type_tableview(...)`) still work but the recommended

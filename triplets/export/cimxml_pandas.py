@@ -11,7 +11,7 @@ from lxml import etree
 from lxml.builder import ElementMaker
 from lxml.etree import QName
 
-from .cimxml_utils import load_rdf_map, resolve_instance_config
+from .cimxml_utils import TRIPLETS_NS, load_rdf_map, resolve_instance_config
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def generate_xml(instance_data,
                  rdf_map=None,
                  namespace_map=None,
                  class_KEY="Type",
-                 export_undefined=True,
+                 export_undefined=False,
                  comment=None,
                  debug=False,
                  datatypes=False):
@@ -94,9 +94,11 @@ def generate_xml(instance_data,
             Must include ``"rdf"`` namespace. If ``None``, inferred from ``rdf_map`` or instance.
         class_KEY : str, default "Type"
             Column key used to identify object class/type in the triplet data.
-        export_undefined : bool, default True
-            If True, export classes and attributes without explicit mapping using default RDF settings.
-            If False, skip unmapped elements with a warning.
+        export_undefined : bool, default False
+            If True, also export classes and attributes without a schema definition
+            (internal structures like Distribution/NamespaceMap) under the
+            http://triplets# namespace. Off by default — normal exports carry
+            only schema-defined content.
         comment : str, optional
             Optional comment to insert at the top of the XML output (as XML comment).
         datatypes : bool, default False
@@ -156,6 +158,9 @@ def generate_xml(instance_data,
             logger.warning("File not created for {}".format(file_name))
             return
 
+    if export_undefined:
+        namespace_map = {**namespace_map, "triplets": TRIPLETS_NS}
+
     # Create element builder
     E = ElementMaker(nsmap=namespace_map)
 
@@ -193,7 +198,7 @@ def generate_xml(instance_data,
             logger.debug("Definition missing for class: {} with {}: ".format(class_name, ID))
 
             if export_undefined:
-                class_namespace = None
+                class_namespace = TRIPLETS_NS
                 id_name = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about"
                 id_value_prefix = "urn:uuid:"
             else:
@@ -258,7 +263,7 @@ def generate_xml(instance_data,
                 logger.debug("Definition missing for tag: " + KEY)
 
                 if export_undefined:
-                    tag = E(KEY)
+                    tag = E(_get_qname(TRIPLETS_NS, KEY))
                     tag.text = str(VALUE)
                     # key_datatypes spans all schema profiles, so annotation works
                     # even when instance profile resolution fell through

@@ -38,7 +38,7 @@ def generate_xml(instance_data,
                  rdf_map=None,
                  namespace_map=None,
                  class_KEY="Type",
-                 export_undefined=True,
+                 export_undefined=False,
                  comment=None,
                  debug=False,
                  datatypes=False):
