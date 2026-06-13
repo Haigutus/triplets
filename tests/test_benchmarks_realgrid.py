@@ -178,8 +178,15 @@ def realgrid_serializations(tmp_path_factory):
 
     data = parse(REALGRID_ZIP, return_type="pandas")
     base = tmp_path_factory.mktemp("rdflib_load")
-    paths = {"untyped": [], "typed": []}
-    for kind, kwargs in (("untyped", {}), ("typed", {"datatypes": True})):
+    paths = {}
+    for kind, kwargs in (
+        ("untyped", {}),
+        ("typed", {"datatypes": True}),
+        # strict: no non-namespaced meta-object elements — required by pyoxigraph's parser
+        ("untyped-strict", {"export_undefined": False}),
+        ("typed-strict", {"datatypes": True, "export_undefined": False}),
+    ):
+        paths[kind] = []
         files = data.export_to_cimxml(
             rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED2,
             export_type="xml_per_instance", export_to_memory=True, **kwargs)
@@ -213,3 +220,49 @@ def test_rdflib_load(benchmark, realgrid_serializations, kind):
     benchmark.extra_info.update({"serialization": kind})
     graph = benchmark.pedantic(load, rounds=1, iterations=1)
     assert len(graph) > 1_000_000
+
+
+@pytest.mark.benchmark(group="rdflib-load")
+@pytest.mark.parametrize("kind", ["untyped", "typed", "nquads"])
+def test_oxrdflib_load(benchmark, realgrid_serializations, kind):
+    """rdflib API with the oxigraph (Rust) storage backend — parsing still
+    happens in rdflib's Python parsers, so gains are modest (~10-15%)."""
+    pytest.importorskip("oxrdflib")
+    import rdflib
+
+    def load():
+        if kind == "nquads":
+            graph = rdflib.Dataset(store="Oxigraph")
+            graph.parse(realgrid_serializations[kind][0], format="nquads")
+        else:
+            graph = rdflib.Graph(store="Oxigraph")
+            for path in realgrid_serializations[kind]:
+                graph.parse(path, format="xml")
+        return graph
+
+    benchmark.extra_info.update({"serialization": kind, "store": "oxigraph"})
+    graph = benchmark.pedantic(load, rounds=1, iterations=1)
+    assert len(graph) > 1_000_000
+
+
+@pytest.mark.benchmark(group="rdflib-load")
+@pytest.mark.parametrize("kind", ["untyped-strict", "typed-strict", "nquads"])
+def test_pyoxigraph_bulk_load(benchmark, realgrid_serializations, kind):
+    """Pure pyoxigraph bulk_load — Rust parser end to end, ~10x faster than
+    any rdflib-API load. XML works only with export_undefined=False:
+    pyoxigraph's strict parser rejects the non-namespaced meta-object
+    elements the lax export contains (rdflib tolerates them)."""
+    pyoxigraph = pytest.importorskip("pyoxigraph")
+
+    def load():
+        store = pyoxigraph.Store()
+        if kind == "nquads":
+            store.bulk_load(path=realgrid_serializations[kind][0], format=pyoxigraph.RdfFormat.N_QUADS)
+        else:
+            for path in realgrid_serializations[kind]:
+                store.bulk_load(path=path, format=pyoxigraph.RdfFormat.RDF_XML)
+        return store
+
+    benchmark.extra_info.update({"serialization": kind, "store": "pyoxigraph"})
+    store = benchmark.pedantic(load, rounds=1, iterations=1)
+    assert len(store) > 1_000_000
