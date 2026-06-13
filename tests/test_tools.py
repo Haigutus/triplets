@@ -797,14 +797,16 @@ class TestNquadsDatatypes:
             content = f.read()
         assert "^^<" not in content
 
-    def test_polars_engine_matches_pandas(self, svedala_eq, tmp_path, nquads_lines):
-        polars = pytest.importorskip("polars")
+    def test_polars_engine_matches_pandas(self, svedala_eq, tmp_path):
+        pytest.importorskip("polars")
         from triplets.export_schema import schemas
-        output = str(tmp_path / "typed_pl.nq")
-        triplets.export.export_to_nquads(polars.from_pandas(svedala_eq), output, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
-        with open(output) as f:
-            pl_lines = f.readlines()
-        assert sorted(pl_lines) == sorted(nquads_lines)
+        outputs = {}
+        for engine in ("pandas", "polars"):
+            output = str(tmp_path / f"typed_{engine}.nq")
+            triplets.export.export_to_nquads(svedala_eq, output, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine=engine)
+            with open(output) as f:
+                outputs[engine] = sorted(f.readlines())
+        assert outputs["pandas"] == outputs["polars"]
 
 
 # ── Roundtrip test (export CIM XML → reimport → compare) ────────────────────
