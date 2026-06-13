@@ -46,6 +46,16 @@ A fourth engine family emerged that the original vision missed: **DuckDB**
 `duckdb.DuckDBPyConnection`, fed zero-copy via Arrow. Useful for
 out-of-memory datasets and SQL access to the triplets table.
 
+**Exploration — streaming parse into DuckDB (true memory-to-disk
+overflow).** Today `con.read_rdf()` materializes the full Arrow table in
+memory before DuckDB ingests it, so peak memory is bounded by the dataset,
+not by DuckDB. The parser engines could instead yield **RecordBatches per
+file (or per N rows) streamed into the DuckDB table** as they are produced —
+then DuckDB's native spilling provides real larger-than-RAM support and the
+parse pipeline never holds more than one batch. Pairs with the
+string_view/arrow work (#34); the cython engine already produces one batch
+per file, so the plumbing is mostly in `parse()`/`read_rdf`.
+
 ---
 
 ## Module Map
