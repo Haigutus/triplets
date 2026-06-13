@@ -162,3 +162,54 @@ def test_types_dict_duckdb(benchmark):
     benchmark.extra_info.update({"engine": "duckdb"})
     result = benchmark(lambda: data.types_dict())
     assert len(result) > 0
+
+
+# ── rdflib load: which serialization feeds rdflib fastest? ──────────────────
+# Exports RealGrid as untyped CIM XML, typed CIM XML (rdf:datatype), and
+# N-Quads (552 ED2 schema), then parses each with rdflib. Single round —
+# each load takes ~20s on 1.08M triples.
+
+@pytest.fixture(scope="module")
+def realgrid_serializations(tmp_path_factory):
+    rdflib = pytest.importorskip("rdflib")  # noqa: F841
+    import os
+    import triplets  # noqa: F401  (registers exports)
+    from triplets.export_schema import schemas
+
+    data = parse(REALGRID_ZIP, return_type="pandas")
+    base = tmp_path_factory.mktemp("rdflib_load")
+    paths = {"untyped": [], "typed": []}
+    for kind, kwargs in (("untyped", {}), ("typed", {"datatypes": True})):
+        files = data.export_to_cimxml(
+            rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED2,
+            export_type="xml_per_instance", export_to_memory=True, **kwargs)
+        for f in files:
+            target = base / kind / os.path.basename(f.name)
+            target.parent.mkdir(exist_ok=True)
+            f.seek(0)
+            target.write_bytes(f.read())
+            paths[kind].append(str(target))
+    nq = base / "realgrid.nq"
+    data.export_to_nquads(str(nq), rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED2)
+    paths["nquads"] = [str(nq)]
+    return paths
+
+
+@pytest.mark.benchmark(group="rdflib-load")
+@pytest.mark.parametrize("kind", ["untyped", "typed", "nquads"])
+def test_rdflib_load(benchmark, realgrid_serializations, kind):
+    import rdflib
+
+    def load():
+        if kind == "nquads":
+            graph = rdflib.ConjunctiveGraph()
+            graph.parse(realgrid_serializations[kind][0], format="nquads")
+        else:
+            graph = rdflib.Graph()
+            for path in realgrid_serializations[kind]:
+                graph.parse(path, format="xml")
+        return graph
+
+    benchmark.extra_info.update({"serialization": kind})
+    graph = benchmark.pedantic(load, rounds=1, iterations=1)
+    assert len(graph) > 1_000_000
