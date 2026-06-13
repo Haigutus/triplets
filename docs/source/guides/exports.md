@@ -8,7 +8,7 @@ Each format has its own `{format}_{engine}.py` file. The dispatcher in
 | Format | Function | Engines | Selection |
 |--------|----------|---------|-----------|
 | CIM XML | `export_to_cimxml` | `cython_pugixml`, `python_lxml` | `engine` parameter, auto = fastest available |
-| N-Quads | `export_to_nquads` | polars, pandas | by input DataFrame type |
+| N-Quads | `export_to_nquads` | polars (lazy plan, ~4x), pandas | `engine` parameter, auto = polars when installed |
 | CSV | `export_to_csv` | polars, pandas | by input DataFrame type |
 | Excel | `export_to_excel` | pandas | — |
 | NetworkX | `export_to_networkx` | pandas | — |
