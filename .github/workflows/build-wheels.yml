@@ -31,7 +31,7 @@ jobs:
       - run: pip install build
       - run: python -m build --sdist
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: dist/*.tar.gz
@@ -102,7 +102,7 @@ jobs:
           CIBW_TEST_REQUIRES: "pytest pyarrow>=14.0"
           CIBW_TEST_COMMAND: "pytest {project}/tests/test_parser.py -q --tb=short -k \"not realgrid\""
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/*.whl
@@ -119,7 +119,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
