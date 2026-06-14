@@ -6,7 +6,9 @@ from . import rdfs_tools
 from . import cli
 from . import tools
 from . import export
-from . import _accessor  # registers df.triplets.* namespace  # noqa: F401
+from . import sparql  # noqa: F401  (df.sparql.* namespace; rdflib lazy-loaded per call)
+from . import validation  # noqa: F401  (df.shacl.* namespace; pyshacl lazy-loaded per call)
+from . import _accessor  # registers df.triplets.* / df.sparql.* / df.shacl.* namespaces  # noqa: F401
 
 __all__ = [
     'cgmes_tools',
@@ -14,6 +16,8 @@ __all__ = [
     'export_schema',
     'rdfs_tools',
     'cli',
+    'sparql',
+    'validation',
 ]
 
 from ._version import get_versions

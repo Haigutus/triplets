@@ -18,7 +18,7 @@ Usage:
 import logging
 import pandas
 
-from . import tools, export
+from . import tools, export, sparql, validation
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +139,31 @@ if polars:
     logger.debug("Registered polars triplets namespace accessor")
 else:
     logger.debug("polars not installed, skipping triplets namespace accessor")
+
+
+# ── df.sparql.* / df.shacl.* (separate root accessors) ──────────────────────
+# These take triplet data in any flavor; the engines load it into rdflib.
+# (DuckDB connections already have a native .query() — call
+# triplets.sparql.query(connection, ...) directly instead of a method.)
+
+def _register_root_accessor(name, methods):
+    """Register one extra root accessor (df.<name>.<method>) on pandas + polars."""
+    class _Accessor:
+        def __init__(self, df):
+            self._df = df
+
+    _Accessor.__name__ = f"{name.capitalize()}Accessor"
+    for module, method in methods:
+        setattr(_Accessor, method, _delegate(module, method))
+
+    pandas.api.extensions.register_dataframe_accessor(name)(_Accessor)
+    if polars:
+        polars.api.register_dataframe_namespace(name)(type(f"Polars{_Accessor.__name__}", (_Accessor,), {}))
+    logger.debug("Registered df.%s accessor", name)
+
+
+_register_root_accessor("sparql", [(sparql, "query")])
+_register_root_accessor("shacl", [(validation, "validate")])
 
 
 # ── DuckDB ────────────────────────────────────────────────────────────────────
