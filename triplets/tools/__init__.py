@@ -107,7 +107,7 @@ def triplets_to_tableviews(triplet_df, multivalue=False, engine="auto"):
 def tableviews_to_triplets(tableviews, multivalue=False, engine="auto"):
     # tableviews is a dict — detect engine from first value if available
     data = next(iter(tableviews.values()), None) if tableviews else None
-    return _get_engine(engine, data).tableviews_to_triplets(tableviews, multivalue=multivalue)
+    return _get_engine(engine, data)._tableviews_to_triplets(tableviews, multivalue=multivalue)
 
 def tableview_to_triplets(data, multivalue=False, engine="auto"):
     return _get_engine(engine, data).tableview_to_triplets(data, multivalue=multivalue)
@@ -183,20 +183,22 @@ for _old, _new in DEPRECATED_ALIASES.items():
     globals()[_old] = _deprecated_alias(_old, _new)
 
 
-# ── Register on pandas DataFrames (backwards compat) ────────────────────────
-# New names delegate directly; deprecated old names go through the warning alias.
-DATAFRAME_METHODS = [
-    "type_tableview", "key_tableview", "id_tableview", "types_dict",
-    "get_object_data",
-    "references_to_simple", "references_to", "references_from_simple",
-    "references_from", "references_all", "references_simple", "references",
-    "filter_triplets_by_type", "filter_triplets_by_triplets", "filter_triplets",
-    "set_value_at_key", "set_value_at_key_and_id",
-    "tableview_to_triplets", "update_triplets_from_triplets",
-    "update_triplets_from_tableview", "diff_triplets_by_instance",
-]
-
+# ── Auto-registration on objects ────────────────────────────────────────────
+import inspect
 import pandas
+
+from . import pandas_engine
+
+
+def _engine_functions(module):
+    """Public functions defined in *module* — each takes the df/connection first.
+
+    The registered method surface is derived from this instead of a hand-kept list,
+    so it tracks the engine module automatically. `_`-prefixed helpers (e.g.
+    `_tableviews_to_triplets`, which takes a dict, not a DataFrame) are excluded.
+    """
+    return {name: obj for name, obj in inspect.getmembers(module, inspect.isfunction)
+            if not name.startswith("_") and obj.__module__ == module.__name__}
 
 
 def _dataframe_method(function):
@@ -205,5 +207,31 @@ def _dataframe_method(function):
     return method
 
 
-for _name in DATAFRAME_METHODS + list(ALIASES) + list(DEPRECATED_ALIASES):
-    setattr(pandas.DataFrame, _name, _dataframe_method(globals()[_name]))
+def _is_native(target_class, name):
+    """True if *name* is already a non-triplets (native) attribute of target_class."""
+    existing = getattr(target_class, name, None)
+    return existing is not None and not getattr(existing, "__module__", "").startswith("triplets")
+
+
+def _register_root(target_class, names):
+    """Monkey-patch each name (resolved in this module's namespace) onto target_class.
+
+    Skips names that are native attributes so we never clobber them, but still lets
+    the current implementation supersede triplets' own legacy patches (e.g. the
+    deprecated rdf_parser monkey-patches applied earlier at import time).
+    """
+    for name in names:
+        if _is_native(target_class, name):
+            logger.debug("skip %s.%s — native attribute present", target_class.__name__, name)
+            continue
+        setattr(target_class, name, _dataframe_method(globals()[name]))
+
+
+# ── Register on pandas DataFrames (backwards compat) ────────────────────────
+# Primary methods auto-derived from the pandas engine; alias / deprecated names
+# register only when their target is one of those methods.
+DATAFRAME_METHODS = sorted(_engine_functions(pandas_engine))
+
+_register_root(pandas.DataFrame, DATAFRAME_METHODS)
+_register_root(pandas.DataFrame, [a for a, target in ALIASES.items() if target in DATAFRAME_METHODS])
+_register_root(pandas.DataFrame, [a for a, target in DEPRECATED_ALIASES.items() if target in DATAFRAME_METHODS])

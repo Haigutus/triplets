@@ -34,53 +34,16 @@ except ImportError:
 
 
 # ── Method registries ────────────────────────────────────────────────────────
-# Each name maps 1:1 to a function in tools/ or export/ that takes the
-# DataFrame as its first argument. The accessor classes below are generated
-# from these lists.
+# Tool methods are auto-derived from each engine module (every public function
+# there takes the DataFrame/connection as its first argument). Export methods
+# live in export/ — not the engine modules — so they stay listed explicitly.
+from .tools import _engine_functions, pandas_engine
 
-PANDAS_TOOL_METHODS = [
-    # query
-    "type_tableview", "key_tableview", "id_tableview", "types_dict",
-    "get_object_data", "get_namespace_map",
-    # references
-    "references_to_simple", "references_to", "references_from_simple",
-    "references_from", "references_all", "references_simple", "references",
-    # filter
-    "filter_triplets_by_type", "filter_triplets_by_triplets", "filter_triplets",
-    # mutate
-    "set_value_at_key", "set_value_at_key_and_id",
-    "update_triplets_from_triplets", "update_triplets_from_tableview",
-    # transform
-    "triplets_to_tableviews", "tableview_to_triplets",
-    # diff
-    "diff_triplets_by_instance",
-]
-
-# Subset of tools currently implemented by the polars engine
-POLARS_TOOL_METHODS = [
-    # query
-    "type_tableview", "key_tableview", "id_tableview", "types_dict",
-    "get_object_data", "get_namespace_map",
-    # references
-    "references_to", "references_from", "references",
-    # filter
-    "filter_triplets_by_type", "filter_triplets",
-    # transform
-    "triplets_to_tableviews", "tableview_to_triplets",
-    # diff
-    "diff_triplets_by_instance",
-]
+PANDAS_TOOL_METHODS = sorted(_engine_functions(pandas_engine))
 
 EXPORT_METHODS = [
     "export_to_excel", "export_to_csv", "export_to_cimxml",
     "export_to_nquads", "export_to_networkx",
-]
-
-# Subset of tools implemented by the duckdb engine (patched onto the
-# connection object directly, the connection holds the triplets table)
-DUCKDB_TOOL_METHODS = [
-    "types_dict", "type_tableview", "filter_triplets", "filter_triplets_by_type",
-    "references_to", "references_from",
 ]
 
 DUCKDB_EXPORT_METHODS = ["export_to_excel", "export_to_csv", "export_to_nquads", "export_to_cimxml"]
@@ -128,6 +91,10 @@ logger.debug("Registered pandas triplets accessor")
 
 # ── polars ────────────────────────────────────────────────────────────────────
 if polars:
+    from .tools import polars_engine, _register_root
+
+    POLARS_TOOL_METHODS = sorted(_engine_functions(polars_engine))
+
     @polars.api.register_dataframe_namespace("triplets")
     class PolarsTripletsAccessor:
         """Triplet operations on polars DataFrames via df.triplets.* namespace."""
@@ -136,7 +103,14 @@ if polars:
             self._df = df
 
     _add_methods(PolarsTripletsAccessor, POLARS_TOOL_METHODS)
-    logger.debug("Registered polars triplets namespace accessor")
+
+    # Root symmetry with pandas: pl_df.type_tableview(...) works like the accessor.
+    # The tools dispatcher auto-detects polars from the DataFrame. None of the names
+    # is "triplets", so the namespace registered above is left intact.
+    _register_root(polars.DataFrame, POLARS_TOOL_METHODS)
+    _register_root(polars.DataFrame, [a for a, t in tools.ALIASES.items() if t in POLARS_TOOL_METHODS])
+    _register_root(polars.DataFrame, [a for a, t in tools.DEPRECATED_ALIASES.items() if t in POLARS_TOOL_METHODS])
+    logger.debug("Registered polars triplets namespace accessor + root methods")
 else:
     logger.debug("polars not installed, skipping triplets namespace accessor")
 
@@ -145,25 +119,54 @@ else:
 if duckdb:
     from .tools import duckdb_engine
 
-    def _duckdb_export(name):
-        """Make a connection method: fetch the triplets table, run the pandas export."""
+    DUCKDB_TOOL_METHODS = sorted(_engine_functions(duckdb_engine))
+
+    def _duckdb_export_fn(name):
+        """A connection-first export callable: fetch the triplets table, run the export."""
         function = getattr(export, name)
 
-        def method(connection, *args, table_name="triplets", **kwargs):
+        def fn(connection, *args, table_name="triplets", **kwargs):
             df = connection.execute(f"SELECT * FROM {table_name}").df()
             return function(df, *args, **kwargs)
 
-        method.__name__ = name
-        method.__doc__ = function.__doc__
+        fn.__name__ = name
+        fn.__doc__ = function.__doc__
+        return fn
+
+    # All connection-first callables to expose: engine tools + aliases + exports.
+    _duckdb_methods = {name: getattr(duckdb_engine, name) for name in DUCKDB_TOOL_METHODS}
+    _duckdb_methods.update({alias: getattr(duckdb_engine, target)
+                            for alias, target in tools.ALIASES.items() if target in DUCKDB_TOOL_METHODS})
+    _duckdb_methods.update({name: _duckdb_export_fn(name) for name in DUCKDB_EXPORT_METHODS})
+
+    # Root: the connection is `self`. Skip native attributes so we never clobber a
+    # built-in connection method (none of our names collide today).
+    for _name, _fn in _duckdb_methods.items():
+        if tools._is_native(duckdb.DuckDBPyConnection, _name):
+            logger.debug("skip DuckDBPyConnection.%s — native attribute present", _name)
+            continue
+        setattr(duckdb.DuckDBPyConnection, _name, _fn)
+
+    # Namespace: con.triplets.* — duckdb has no register_*_namespace API, so expose an
+    # accessor via a property (accepted on the C-extension type). None of the method
+    # names is "triplets", so the property does not collide with them.
+    class DuckDBTripletsAccessor:
+        """Triplet operations on a DuckDB connection via con.triplets.* namespace."""
+
+        def __init__(self, connection):
+            self._df = connection
+
+    def _duckdb_accessor_method(fn):
+        def method(self, *args, **kwargs):
+            return fn(self._df, *args, **kwargs)
+        method.__name__ = getattr(fn, "__name__", "method")
+        method.__doc__ = getattr(fn, "__doc__", None)
         return method
 
-    for name in DUCKDB_TOOL_METHODS:
-        setattr(duckdb.DuckDBPyConnection, name, getattr(duckdb_engine, name))
-    for alias, target in tools.ALIASES.items():
-        if target in DUCKDB_TOOL_METHODS:
-            setattr(duckdb.DuckDBPyConnection, alias, getattr(duckdb_engine, target))
-    for name in DUCKDB_EXPORT_METHODS:
-        setattr(duckdb.DuckDBPyConnection, name, _duckdb_export(name))
-    logger.debug("Registered DuckDB connection tools + export helpers")
+    for _name, _fn in _duckdb_methods.items():
+        setattr(DuckDBTripletsAccessor, _name, _duckdb_accessor_method(_fn))
+    setattr(duckdb.DuckDBPyConnection, "triplets",
+            property(lambda self: DuckDBTripletsAccessor(self)))
+    logger.debug("Registered DuckDB connection tools + exports (root + namespace)")
 else:
     logger.debug("duckdb not installed, skipping DuckDB tools/export patches")

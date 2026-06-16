@@ -288,7 +288,7 @@ def triplets_to_tableviews(triplet_df, multivalue=False):
     return tableviews
 
 
-def tableviews_to_triplets(tableviews, multivalue=False):
+def _tableviews_to_triplets(tableviews, multivalue=False):
     """Convert dict of tableview DataFrames to triplet DataFrame."""
     all_triplets = []
     for class_name, df in tableviews.items():
