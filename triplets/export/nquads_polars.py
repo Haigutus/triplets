@@ -1,6 +1,7 @@
 """N-Quads export using polars — lazy expression plan, fully vectorized."""
 
 import logging
+from io import BytesIO
 
 import polars as pl
 
@@ -19,18 +20,20 @@ def _iri_or_uuid(column):
             .otherwise(pl.format("<urn:uuid:{}>", pl.col(column))))
 
 
-def export_to_nquads(data, path, rdf_map=None):
+def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     """Export triplet DataFrame to N-Quads file.
 
     Parameters
     ----------
     data : polars.DataFrame
         Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
-    path : str
-        Output file path (.nq).
+    path : str, optional
+        Output file path (.nq). Ignored when export_to_memory=True.
     rdf_map : dict or str, optional
         Export schema for proper enum/association detection and literal
         datatype annotations ("400"^^<...XMLSchema#float>).
+    export_to_memory : bool, default False
+        If True, return an in-memory BytesIO (with .name) instead of writing to disk.
     """
     enum_keys, key_namespaces, key_datatypes = build_key_metadata(rdf_map) if rdf_map else (set(), {}, {})
 
@@ -85,4 +88,11 @@ def export_to_nquads(data, path, rdf_map=None):
     # materialization, no outer pl.format (~2.3x faster than collect → to_list
     # → "\n".join). quote_style="never" keeps each term verbatim (literals
     # carry their own quotes / internal spaces, no CSV escaping wanted).
+    if export_to_memory:
+        buffer = BytesIO()
+        quads.write_csv(buffer, include_header=False, quote_style="never", separator=" ")
+        buffer.name = "export.nq"
+        buffer.seek(0)
+        return buffer
+
     quads.write_csv(path, include_header=False, quote_style="never", separator=" ")

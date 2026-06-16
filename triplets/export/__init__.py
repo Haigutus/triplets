@@ -58,11 +58,13 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
                single_file=single_file, base_filename=base_filename)
 
 
-def export_to_nquads(data, path, rdf_map=None, engine="auto"):
+def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_memory=False):
     """Export triplet DataFrame to N-Quads file.
 
     Parameters
     ----------
+    path : str, optional
+        Output file path (.nq). Ignored when export_to_memory=True.
     rdf_map : dict or str, optional
         Export schema for proper enum detection and literal datatype
         annotations. If None, enums exported as literals.
@@ -70,6 +72,9 @@ def export_to_nquads(data, path, rdf_map=None, engine="auto"):
         "polars" (lazy expression plan, ~4x faster) or "pandas".
         "auto" picks polars when installed, converting pandas input
         (~17 ms per million rows); falls back to pandas otherwise.
+    export_to_memory : bool, default False
+        If True, return an in-memory BytesIO (with .name) instead of
+        writing to disk — same convention as export_to_csv / export_to_cimxml.
     """
     _check_columns(data)
     if engine == "auto":
@@ -85,12 +90,12 @@ def export_to_nquads(data, path, rdf_map=None, engine="auto"):
         from .nquads_polars import export_to_nquads as _fn
         if not _is_polars(data):
             data = polars.from_pandas(data)
-        return _fn(data, path, rdf_map=rdf_map)
+        return _fn(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory)
 
     from .nquads_pandas import export_to_nquads as _fn
     if _is_polars(data):
         data = data.to_pandas(use_pyarrow_extension_array=True)
-    return _fn(data, path, rdf_map=rdf_map)
+    return _fn(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory)
 
 
 # ── CIM XML engine dispatch ──────────────────────────────────────────────────

@@ -1,5 +1,7 @@
 """N-Quads export using pandas — schema-aware value classification."""
 
+from io import BytesIO
+
 import pandas
 
 from .nquads_utils import (
@@ -8,19 +10,21 @@ from .nquads_utils import (
 )
 
 
-def export_to_nquads(data, path, rdf_map=None):
+def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     """Export triplet DataFrame to N-Quads file.
 
     Parameters
     ----------
     data : pandas.DataFrame
         Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
-    path : str
-        Output file path (.nq).
+    path : str, optional
+        Output file path (.nq). Ignored when export_to_memory=True.
     rdf_map : dict or str, optional
         Export schema for proper enum/association detection and literal
         datatype annotations ("400"^^<...XMLSchema#float>). If None,
         enumerations won't get namespace and literals stay untyped.
+    export_to_memory : bool, default False
+        If True, return an in-memory BytesIO (with .name) instead of writing to disk.
     """
     enum_keys, key_namespaces, key_datatypes = build_key_metadata(rdf_map) if rdf_map else (set(), {}, {})
 
@@ -40,6 +44,12 @@ def export_to_nquads(data, path, rdf_map=None):
     graphs = inst_col.apply(make_graph)
 
     quads = subjects + " " + predicates + " " + objects + " " + graphs + " ."
+    content = "\n".join(quads.values) + "\n"
+
+    if export_to_memory:
+        buffer = BytesIO(content.encode("utf-8"))
+        buffer.name = "export.nq"
+        return buffer
 
     with open(path, "w") as f:
-        f.write("\n".join(quads.values) + "\n")
+        f.write(content)
