@@ -116,8 +116,10 @@ CALL_SPECS = {
     "diff_triplets": lambda e, d, c: d.diff_triplets(_to_engine(e, c["new_data"])),
     "diff_triplets_by_instance": lambda e, d, c: d.diff_triplets_by_instance(c["instances"][0], c["instances"][1]),
     "print_triplets_diff": lambda e, d, c: d.print_triplets_diff(_to_engine(e, c["new_data"])),
+    # tableview_to_triplets operates on a *tableview*, so call it on the tableview
+    # object (duckdb has no relation method — it unpivots a wide table by name).
     "tableview_to_triplets": lambda e, d, c: (_duckdb_wide_table(d, c) if e == "duckdb"
-                                              else d.tableview_to_triplets(d.type_tableview(c["type"]))),
+                                              else d.type_tableview(c["type"]).tableview_to_triplets()),
     "set_value_at_key": lambda e, d, c: _result(e, d, d.set_value_at_key(c["key"], "X")),
     "set_value_at_key_and_id": lambda e, d, c: _result(e, d, d.set_value_at_key_and_id(c["key"], "X", c["id"])),
     "update_triplets_from_triplets": lambda e, d, c: _result(e, d, d.update_triplets_from_triplets(_to_engine(e, c["update_data"]))),

@@ -500,7 +500,11 @@ def types_dict(data):
     >>> print(types)
     {'ACLineSegment': 10, 'PowerTransformer': 5, ...}
     """
-    types_dictionary = data[(data.KEY == "Type")]["VALUE"].value_counts().to_dict()
+    # Count distinct objects per type, not Type-declaration rows: an object
+    # re-declared across instances (EQ/SSH/TP/SV) must count once. Matches the
+    # polars (n_unique) and duckdb (COUNT DISTINCT) engines.
+    type_rows = data[data.KEY == "Type"].drop_duplicates(subset=["ID", "VALUE"])
+    types_dictionary = type_rows["VALUE"].value_counts().to_dict()
 
     return types_dictionary
 
