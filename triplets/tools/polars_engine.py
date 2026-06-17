@@ -97,15 +97,20 @@ def get_object_data(data, object_UUID):
 
 
 def get_namespace_map(data):
-    """Extract namespace map from triplet data."""
+    """Extract namespace map from triplet data.
+
+    Returns ``(namespace_map dict, xml_base)`` — same contract as the pandas engine.
+    """
     nsmap_ids = data.filter(
         (pl.col("KEY") == "Type") & (pl.col("VALUE") == "NamespaceMap")
     ).select("ID")
     if nsmap_ids.is_empty():
-        return pl.DataFrame()
-    nsmap_data = nsmap_ids.join(data, on="ID", how="inner")
-    nsmap_data = nsmap_data.filter(pl.col("KEY") != "Type")
-    return nsmap_data
+        return {}, ""
+    nsmap_data = nsmap_ids.join(data, on="ID", how="inner").filter(pl.col("KEY") != "Type")
+    namespace_map = dict(zip(nsmap_data["KEY"].cast(pl.Utf8).to_list(),
+                             nsmap_data["VALUE"].cast(pl.Utf8).to_list()))
+    xml_base = namespace_map.pop("xml_base", "")
+    return namespace_map, xml_base
 
 
 def references_to_simple(data, reference, columns=["Type"]):
@@ -221,8 +226,8 @@ def filter_triplets_by_type(data, type_name, type_key="Type"):
 
 
 def filter_triplets_by_triplets(data, filter_triplet):
-    """Filter data to rows matching the filter triplet."""
-    return data.join(filter_triplet.select(["ID", "KEY", "VALUE"]), on=["ID", "KEY", "VALUE"], how="semi")
+    """Return all triplets whose ID appears in filter_triplet (matches pandas: merge on ID)."""
+    return filter_triplet.select("ID").unique().join(data, on="ID", how="inner")
 
 
 def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex=False):
@@ -327,16 +332,28 @@ def tableview_to_triplets(data, multivalue=False):
 
 
 def update_triplets_from_triplets(data, update_data, update=True, add=True):
-    """Update triplet data with values from another triplet dataset."""
+    """Update existing and/or add new rows from another triplet dataset.
+
+    Merge keys are ID+KEY (plus INSTANCE_ID when update_data carries it), matching
+    the pandas engine. Join keys are cast to Utf8 so a Categorical KEY in `data`
+    joins cleanly with a string KEY in `update_data`.
+    """
+    merge_cols = ["ID", "KEY"]
+    if "INSTANCE_ID" in update_data.columns:
+        merge_cols = ["ID", "KEY", "INSTANCE_ID"]
+    data = data.with_columns([pl.col(c).cast(pl.Utf8) for c in merge_cols])
+    update_data = update_data.with_columns([pl.col(c).cast(pl.Utf8) for c in merge_cols])
+
     if update:
-        # Anti-join to remove old values, then concat new ones
-        data = data.join(
-            update_data.select(["ID", "KEY"]),
-            on=["ID", "KEY"],
-            how="anti",
-        )
-    if add or update:
-        data = pl.concat([data, update_data])
+        # overwrite only VALUE on matched (ID,KEY[,INSTANCE_ID]); keep other columns
+        # (e.g. INSTANCE_ID) of the original row, matching the pandas engine.
+        new_value = update_data.select(merge_cols + ["VALUE"]).rename({"VALUE": "_new_value"})
+        data = (data.join(new_value, on=merge_cols, how="left")
+                .with_columns(pl.coalesce(["_new_value", "VALUE"]).alias("VALUE"))
+                .drop("_new_value"))
+    if add:
+        new = update_data.join(data.select(merge_cols), on=merge_cols, how="anti")
+        data = pl.concat([data, new], how="diagonal_relaxed")
     return data
 
 
@@ -354,29 +371,25 @@ def remove_triplets_from_triplets(from_triplet, what_triplet, columns=["ID", "KE
 
 
 def diff_triplets(old_data, new_data):
-    """Find differences between two triplet datasets."""
-    # Rows in old but not in new
-    removed = old_data.join(
-        new_data.select(["ID", "KEY", "VALUE"]),
-        on=["ID", "KEY", "VALUE"],
-        how="anti",
-    ).with_columns(pl.lit("-").alias("_merge"))
-
-    # Rows in new but not in old
-    added = new_data.join(
-        old_data.select(["ID", "KEY", "VALUE"]),
-        on=["ID", "KEY", "VALUE"],
-        how="anti",
-    ).with_columns(pl.lit("+").alias("_merge"))
-
-    return pl.concat([removed, added])
+    """Rows unique to old (left_only) or new (right_only), matching the pandas
+    outer-merge shape: columns [ID, KEY, VALUE, INSTANCE_ID_OLD, INSTANCE_ID_NEW, _merge]."""
+    old = old_data.with_columns(pl.lit(True).alias("_in_old"))
+    new = new_data.with_columns(pl.lit(True).alias("_in_new"))
+    merged = old.join(new, on=["ID", "KEY", "VALUE"], how="full", suffix="_NEW", coalesce=True)
+    merged = merged.with_columns(
+        pl.when(pl.col("_in_old").is_null()).then(pl.lit("right_only"))
+        .when(pl.col("_in_new").is_null()).then(pl.lit("left_only"))
+        .otherwise(pl.lit("both")).alias("_merge")
+    ).filter(pl.col("_merge") != "both")
+    merged = merged.rename({"INSTANCE_ID": "INSTANCE_ID_OLD"})
+    return merged.select(["ID", "KEY", "VALUE", "INSTANCE_ID_OLD", "INSTANCE_ID_NEW", "_merge"])
 
 
 def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
-    """Find differences between two instances in the same dataset."""
-    data1 = data.filter(pl.col("INSTANCE_ID") == INSTANCE_ID_1)
-    data2 = data.filter(pl.col("INSTANCE_ID") == INSTANCE_ID_2)
-    return diff_triplets(data1, data2)
+    """Triplets that differ between two instances in the dataset (symmetric difference
+    on ID/KEY/VALUE), matching pandas drop_duplicates(keep=False)."""
+    scope = data.filter(pl.col("INSTANCE_ID").is_in([INSTANCE_ID_1, INSTANCE_ID_2]))
+    return scope.filter(pl.len().over(["ID", "KEY", "VALUE"]) == 1)
 
 
 def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None):
