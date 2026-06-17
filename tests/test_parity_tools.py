@@ -1,55 +1,35 @@
-"""Cross-engine parity + timing for the triplet tools.
+"""Cross-engine parity + timing for the triplet TOOLS (pandas/polars/duckdb).
 
-Functions are discovered dynamically (same inspection as test_api_surface.py). For
-every tool, each engine's output is normalised to the *pandas output's data type* and
-compared — pandas is the reference. There are intentionally **no xfails**: the target is
-full parity, so current divergences (polars bugs, references_*/diff_triplets/types_dict
-differences, and the pandas tableview_to_triplets regression) show up as real failures
-to be fixed later.
+Tool functions are discovered dynamically; each engine's output is normalised to the
+pandas output's data type and compared — pandas is the reference. **No xfails**: the
+target is full parity, so any divergence is a real failure. Parity runs on the Svedala
+IGM model; the ``-m performance`` timing test runs on RealGrid (~1.14M rows).
 
-Parity runs on the Svedala IGM model (correctness). The timing test
-(``-m performance``) runs on RealGrid (~1.14M rows), where engine differences matter.
+Shared discovery/normalisation/comparison helpers live in ``tests/_parity.py``.
 """
-import contextlib
-import inspect
-import io
-from pathlib import Path
-
 import pandas
 import pytest
 
 import triplets  # noqa: F401 — registers engines/accessors
 from triplets.tools import duckdb_engine, pandas_engine, polars_engine
 
-# ── dynamic discovery (mirrors tests/test_api_surface.py) ─────────────────────
+from _parity import (
+    SKIP_REASON, SVEDALA_DIR, SVEDALA_FILES,
+    build_engine, implemented, parity, run_quiet, shape, to_pandas,
+)
+
+# ── dynamic discovery ─────────────────────────────────────────────────────────
 ENGINE_MODULES = {"pandas": pandas_engine, "polars": polars_engine, "duckdb": duckdb_engine}
-
-
-def implemented(module) -> set[str]:
-    return {n for n, o in inspect.getmembers(module, inspect.isfunction)
-            if not n.startswith("_") and o.__module__ == module.__name__}
-
-
 ALL_FUNCTIONS = set().union(*(implemented(m) for m in ENGINE_MODULES.values()))
 MUTATING = {"set_value_at_key", "set_value_at_key_and_id", "update_triplets_from_triplets",
             "update_triplets_from_tableview", "remove_triplets_from_triplets"}
-
-SVEDALA_DIR = Path("test_data/relicapgrid/Instance/Grid/IGM_Svedala")
-SVEDALA_FILES = [
-    str(SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"),
-    str(SVEDALA_DIR / "20220615T2230Z_2D_Svedala_SSH_1.xml"),
-    str(SVEDALA_DIR / "20220615T2230Z_2D_Svedala_TP_1.xml"),
-    str(SVEDALA_DIR / "20220615T2230Z_2D_Svedala_SV_1.xml"),
-]
-SKIP_REASON = "Svedala test data not available (needs git submodule)"
 
 
 # ── dataset-derived call args (works on Svedala and RealGrid) ─────────────────
 def make_context(df: pandas.DataFrame) -> dict:
     type_counts = df[df["KEY"] == "Type"]["VALUE"].value_counts()
     type_name = "ACLineSegment" if "ACLineSegment" in type_counts.index else str(type_counts.index[0])
-    type_ids = df[(df["KEY"] == "Type") & (df["VALUE"] == type_name)]["ID"]
-    reference = str(type_ids.iloc[0])
+    reference = str(df[(df["KEY"] == "Type") & (df["VALUE"] == type_name)]["ID"].iloc[0])
     key = "IdentifiedObject.name" if (df["KEY"] == "IdentifiedObject.name").any() else str(df["KEY"].iloc[0])
     instances = list(df["INSTANCE_ID"].astype(str).unique())
     subset = df[(df["KEY"] == "Type") & (df["VALUE"] == type_name)][["ID", "KEY", "VALUE"]]
@@ -90,11 +70,11 @@ def _duckdb_wide_table(data, ctx):
     return data.tableview_to_triplets(table_name="_tv")
 
 
-# ── call specs: name -> fn(engine, data, ctx) -> raw output ───────────────────
 def _tv_kwargs(engine):
     return {} if engine == "duckdb" else {"string_to_number": False}
 
 
+# ── call specs: name -> fn(engine, data, ctx) -> raw output ───────────────────
 CALL_SPECS = {
     "type_tableview": lambda e, d, c: d.type_tableview(c["type"], **_tv_kwargs(e)),
     "key_tableview": lambda e, d, c: d.key_tableview(c["key"], **_tv_kwargs(e)),
@@ -116,8 +96,8 @@ CALL_SPECS = {
     "diff_triplets": lambda e, d, c: d.diff_triplets(_to_engine(e, c["new_data"])),
     "diff_triplets_by_instance": lambda e, d, c: d.diff_triplets_by_instance(c["instances"][0], c["instances"][1]),
     "print_triplets_diff": lambda e, d, c: d.print_triplets_diff(_to_engine(e, c["new_data"])),
-    # tableview_to_triplets operates on a *tableview*, so call it on the tableview
-    # object (duckdb has no relation method — it unpivots a wide table by name).
+    # tableview_to_triplets operates on a *tableview*, so call it on the tableview object
+    # (duckdb has no relation method — it unpivots a wide table by name).
     "tableview_to_triplets": lambda e, d, c: (_duckdb_wide_table(d, c) if e == "duckdb"
                                               else d.type_tableview(c["type"]).tableview_to_triplets()),
     "set_value_at_key": lambda e, d, c: _result(e, d, d.set_value_at_key(c["key"], "X")),
@@ -126,84 +106,6 @@ CALL_SPECS = {
     "update_triplets_from_tableview": lambda e, d, c: _result(e, d, d.update_triplets_from_tableview(_tableview_arg(e, d, c))),
     "remove_triplets_from_triplets": lambda e, d, c: _result(e, d, d.remove_triplets_from_triplets(_to_engine(e, c["subset"]))),
 }
-
-
-# ── normalise to the pandas output's data type, then compare ──────────────────
-def _to_pandas(obj):
-    if obj is None:
-        return None
-    if type(obj).__name__ == "DuckDBPyRelation":
-        return obj.df()
-    if type(obj).__module__.startswith("polars"):
-        return obj.to_pandas()
-    if isinstance(obj, pandas.Series):
-        return obj.rename("VALUE").rename_axis("KEY").reset_index()
-    if isinstance(obj, pandas.DataFrame):
-        return obj
-    return None
-
-
-def _is_frame_like(v):
-    return (isinstance(v, (pandas.DataFrame, pandas.Series))
-            or type(v).__module__.startswith("polars")
-            or type(v).__name__ == "DuckDBPyRelation")
-
-
-def _num_cell(v):
-    """Canonicalise a numeric value to one float repr so e.g. '1', '1.0',
-    '1e-6' and '0.000001' compare equal across engines (pandas int/float dtypes,
-    duckdb VARCHAR, polars Float64). Non-numeric strings (UUIDs, names) pass through.
-    Per-cell because the VALUE column mixes numeric and text values."""
-    if v == "":
-        return v
-    try:
-        return repr(float(v))
-    except (ValueError, TypeError):
-        return v
-
-
-def _canon_frame(obj):
-    df = _to_pandas(obj)
-    if df is None:
-        return None
-    df = df.copy()
-    df = df.reset_index() if df.index.name is not None else df.reset_index(drop=True)
-    df.columns = [str(c) for c in df.columns]
-    df = df.astype(str).replace({"nan": "", "None": "", "<NA>": "", "NaN": "", "NaT": ""})
-    # numeric-aware comparison (per cell): compare numbers by value, not string repr
-    for c in df.columns:
-        df[c] = df[c].map(_num_cell)
-    # engines differ on emitting null-VALUE triplets (pandas keeps, others filter);
-    # a triplet with no value is effectively absent — drop for comparison
-    if "VALUE" in df.columns:
-        df = df[df["VALUE"] != ""]
-    df = df.reindex(sorted(df.columns), axis=1)
-    return df.sort_values(by=list(df.columns)).reset_index(drop=True)
-
-
-def _frames_equal(a, b):
-    fa, fb = _canon_frame(a), _canon_frame(b)
-    if fa is None or fb is None:
-        return fa is None and fb is None
-    return list(fa.columns) == list(fb.columns) and fa.equals(fb)
-
-
-def parity(ref, other) -> bool:
-    """Is *other* equal to the pandas reference, compared in the reference's data type?"""
-    if isinstance(ref, dict):
-        if not isinstance(other, dict) or set(ref) != set(other):
-            return False
-        if ref and all(_is_frame_like(v) for v in ref.values()):
-            return all(_frames_equal(ref[k], other[k]) for k in ref)
-        return {str(k): str(v) for k, v in ref.items()} == {str(k): str(v) for k, v in other.items()}
-    if isinstance(ref, tuple):
-        return isinstance(other, tuple) and len(ref) == len(other) and all(parity(r, o) for r, o in zip(ref, other))
-    return _frames_equal(ref, other)
-
-
-def _run(spec, engine, data, ctx):
-    with contextlib.redirect_stdout(io.StringIO()):       # mute print_triplets_diff
-        return spec(engine, data, ctx)
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -217,25 +119,6 @@ def svedala_pandas():
 @pytest.fixture(scope="module")
 def svedala_ctx(svedala_pandas):
     return make_context(svedala_pandas)
-
-
-def _make_duckdb(df):
-    duckdb = pytest.importorskip("duckdb")
-    import triplets  # noqa: F401
-    con = duckdb.connect()
-    con.register("_src", df)
-    con.execute("CREATE TABLE triplets AS SELECT * FROM _src")
-    con.unregister("_src")
-    return con
-
-
-def _build(engine, base):
-    if engine == "pandas":
-        return base.copy()
-    if engine == "polars":
-        polars = pytest.importorskip("polars")
-        return polars.from_pandas(base)
-    return _make_duckdb(base)
 
 
 # ── coverage guard: every discovered function has a call spec ─────────────────
@@ -256,28 +139,19 @@ def test_parity(svedala_pandas, svedala_ctx, func, engine):
     spec = CALL_SPECS[func]
 
     try:
-        ref = _run(spec, "pandas", svedala_pandas.copy(), svedala_ctx)
+        ref = run_quiet(spec, "pandas", svedala_pandas.copy(), svedala_ctx)
     except Exception as exc:                              # noqa: BLE001
         pytest.fail(f"pandas reference raised for {func}: {type(exc).__name__}: {exc}")
 
     try:
-        out = _run(spec, engine, _build(engine, svedala_pandas), svedala_ctx)
+        out = run_quiet(spec, engine, build_engine(engine, svedala_pandas), svedala_ctx)
     except Exception as exc:                              # noqa: BLE001
         pytest.fail(f"{engine}.{func} raised: {type(exc).__name__}: {exc}")
 
     assert parity(ref, out), (
         f"{engine}.{func} output differs from pandas\n"
-        f"  pandas: {type(ref).__name__} {_shape(ref)}\n"
-        f"  {engine}: {type(out).__name__} {_shape(out)}")
-
-
-def _shape(obj):
-    df = _to_pandas(obj)
-    if df is not None:
-        return f"{df.shape} cols={sorted(str(c) for c in df.columns)[:8]}"
-    if isinstance(obj, dict):
-        return f"dict(n={len(obj)})"
-    return repr(obj)[:80]
+        f"  pandas: {type(ref).__name__} {shape(ref)}\n"
+        f"  {engine}: {type(out).__name__} {shape(out)}")
 
 
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
@@ -295,18 +169,18 @@ def test_benchmark(benchmark, realgrid_data, func, engine):
 
     # skip cells that crash on this engine — timing can't measure a crash
     try:
-        _run(spec, engine, _build(engine, realgrid_data), ctx)
+        run_quiet(spec, engine, build_engine(engine, realgrid_data), ctx)
     except Exception as exc:                              # noqa: BLE001
         pytest.skip(f"{engine}.{func} errors: {type(exc).__name__}")
 
     benchmark.extra_info.update({"engine": engine, "function": func})
 
     def realise(data):
-        _to_pandas(_run(spec, engine, data, ctx))         # force lazy compute
+        to_pandas(run_quiet(lambda: spec(engine, data, ctx)))   # force lazy compute (+ mute stdout)
 
     if func in MUTATING:
-        benchmark.pedantic(realise, setup=lambda: ((_build(engine, realgrid_data),), {}),
+        benchmark.pedantic(realise, setup=lambda: ((build_engine(engine, realgrid_data),), {}),
                            rounds=3, iterations=1)
     else:
-        data = _build(engine, realgrid_data)
+        data = build_engine(engine, realgrid_data)
         benchmark(lambda: realise(data))
