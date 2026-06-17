@@ -59,8 +59,11 @@ def _pivot_view(self, view_name, id_predicate, table_name):
     if not keys:
         return _create_view(self, view_name, f"SELECT ID FROM {table_name} WHERE ID IN ({id_predicate})")
     in_list = ", ".join(_lit(k) for k in keys)
+    # Multi-valued keys take the load-order-first value (arg_min by rowid) so the
+    # single-value pick matches pandas/polars; this also makes the view deterministic.
     return _create_view(self, view_name, f"""
-        WITH d AS (SELECT ID, KEY, VALUE FROM {table_name} WHERE ID IN ({id_predicate}))
+        WITH d AS (SELECT ID, KEY, arg_min(VALUE, rowid) AS VALUE FROM {table_name}
+                   WHERE ID IN ({id_predicate}) GROUP BY ID, KEY)
         PIVOT d ON KEY IN ({in_list}) USING FIRST(VALUE) GROUP BY ID
     """)
 
@@ -109,26 +112,64 @@ def filter_triplets_by_type(self, type_name, table_name=TABLE_NAME):
     """)
 
 
-def references_to(self, reference_id, table_name=TABLE_NAME):
-    """Find objects that reference the given ID. Returns DuckDBPyRelation (lazy)."""
-    return self.sql(f"""
-        SELECT d.* FROM {table_name} d
-        WHERE d.ID IN (
-            SELECT ID FROM {table_name}
-            WHERE VALUE = '{reference_id}'
+def _refs_to_sql(reference, levels, table_name):
+    """SQL for references_to: object (level 0) + multi-level referrers, with
+    level/ID_TO/ID_FROM — matches the pandas engine."""
+    return f"""
+        WITH RECURSIVE nodes(node, lvl, id_to, id_from) AS (
+            SELECT {_lit(reference)}, 0, CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)
+            UNION
+            SELECT t.ID, n.lvl + 1, n.node, t.ID
+            FROM {table_name} t JOIN nodes n ON t.VALUE = n.node
+            WHERE n.lvl < {int(levels)}
         )
-    """)
+        SELECT t.ID, t.KEY, t.VALUE, t.INSTANCE_ID, n.lvl AS level,
+               n.id_to AS ID_TO, n.id_from AS ID_FROM, t.rowid AS _ord
+        FROM nodes n JOIN {table_name} t ON t.ID = n.node
+    """
 
 
-def references_from(self, reference_id, table_name=TABLE_NAME):
-    """Find objects referenced BY the given ID. Returns DuckDBPyRelation (lazy)."""
-    return self.sql(f"""
-        SELECT d.* FROM {table_name} d
-        WHERE d.ID IN (
-            SELECT VALUE FROM {table_name}
-            WHERE ID = '{reference_id}' AND KEY != 'Type'
+def _refs_from_sql(reference, levels, table_name):
+    """SQL for references_from: object (level 0) + multi-level referenced objects."""
+    return f"""
+        WITH RECURSIVE nodes(node, lvl, id_to, id_from) AS (
+            SELECT {_lit(reference)}, 0, CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)
+            UNION
+            SELECT t.VALUE, n.lvl + 1, t.VALUE, n.node
+            FROM {table_name} t JOIN nodes n ON t.ID = n.node
+            WHERE n.lvl < {int(levels)} AND t.VALUE IN (SELECT ID FROM {table_name})
         )
-    """)
+        SELECT t.ID, t.KEY, t.VALUE, t.INSTANCE_ID, n.lvl AS level,
+               n.id_to AS ID_TO, n.id_from AS ID_FROM, t.rowid AS _ord
+        FROM nodes n JOIN {table_name} t ON t.ID = n.node
+    """
+
+
+def _references_sql(reference, levels, table_name, keep_ord=False):
+    """references_from + references_to, deduped on (ID,KEY,VALUE,INSTANCE_ID)
+    keeping the FROM side first — matches pandas concat+drop_duplicates. _ord is
+    the base-table load order (kept only when a downstream pivot needs it)."""
+    drop = "_src, _rn" if keep_ord else "_src, _rn, _ord"
+    return f"""
+        SELECT * EXCLUDE ({drop}) FROM (
+            SELECT *, row_number() OVER (PARTITION BY ID, KEY, VALUE, INSTANCE_ID ORDER BY _src, _ord) AS _rn
+            FROM (
+                SELECT *, 0 AS _src FROM ({_refs_from_sql(reference, levels, table_name)})
+                UNION ALL
+                SELECT *, 1 AS _src FROM ({_refs_to_sql(reference, levels, table_name)})
+            )
+        ) WHERE _rn = 1
+    """
+
+
+def references_to(self, reference, levels=1, table_name=TABLE_NAME):
+    """Objects that reference the given ID, multi-level. Returns DuckDBPyRelation."""
+    return self.sql(f"SELECT * EXCLUDE (_ord) FROM ({_refs_to_sql(reference, levels, table_name)})")
+
+
+def references_from(self, reference, levels=1, table_name=TABLE_NAME):
+    """Objects referenced BY the given ID, multi-level. Returns DuckDBPyRelation."""
+    return self.sql(f"SELECT * EXCLUDE (_ord) FROM ({_refs_from_sql(reference, levels, table_name)})")
 
 
 # ── Query / view ─────────────────────────────────────────────────────────────
@@ -176,55 +217,55 @@ def triplets_to_tableviews(self, table_name=TABLE_NAME):
 
 # ── References ───────────────────────────────────────────────────────────────
 
-def _pivot_ids(self, id_query, columns=None, table_name=TABLE_NAME):
-    """Pivot the triplets of the IDs produced by id_query; optionally keep columns."""
-    relation = self.sql(f"""
-        WITH ids AS ({id_query}),
-        d AS (SELECT t.ID, t.KEY, t.VALUE FROM {table_name} t JOIN ids ON t.ID = ids.ID)
-        PIVOT d ON KEY USING FIRST(VALUE) GROUP BY ID
+def references(self, ID, levels=1, table_name=TABLE_NAME):
+    """All references to and from an object (both directions). Returns DuckDBPyRelation."""
+    return self.sql(_references_sql(ID, levels, table_name))
+
+
+def _pivot_refs(self, refs_sql, index, columns):
+    """Pivot a references query (carrying _ord) on KEY, indexed by `index`
+    (ID_FROM/ID_TO/ID). Multi-valued keys take the load-order-first value
+    (arg_min by _ord) so the pick matches pandas/polars; keep only `columns`."""
+    pivoted = self.sql(f"""
+        PIVOT (SELECT {index}, KEY, arg_min(VALUE, _ord) AS VALUE
+               FROM ({refs_sql}) GROUP BY {index}, KEY)
+        ON KEY USING FIRST(VALUE) GROUP BY {index}
     """)
-    if columns is None:
-        return relation
-    keep = ["ID"] + [c for c in columns if c in relation.columns]
-    return relation.select(", ".join(f'"{c}"' for c in keep))
+    keep = [index] + [c for c in (columns or []) if c in pivoted.columns]
+    return pivoted.select(", ".join(f'"{c}"' for c in keep))
 
 
 def references_to_simple(self, reference, columns=["Type"], table_name=TABLE_NAME):
-    """Pivot of objects that reference `reference`, limited to `columns`."""
-    return _pivot_ids(self, f"SELECT DISTINCT ID FROM {table_name} WHERE VALUE = {_lit(reference)}",
-                      columns=columns, table_name=table_name)
+    """Pivot of objects referencing `reference` (index ID_FROM), limited to `columns`."""
+    return _pivot_refs(self, _refs_to_sql(reference, 1, table_name), "ID_FROM", columns)
 
 
 def references_from_simple(self, reference, columns=["Type"], table_name=TABLE_NAME):
-    """Pivot of objects referenced BY `reference`, limited to `columns`."""
-    return _pivot_ids(self, f"SELECT DISTINCT VALUE AS ID FROM {table_name} "
-                            f"WHERE ID = {_lit(reference)} AND KEY != 'Type'",
-                      columns=columns, table_name=table_name)
-
-
-def references(self, ID, levels=1, table_name=TABLE_NAME):
-    """All triplets of the object plus objects linked to/from it (single level)."""
-    return self.sql(f"""
-        SELECT d.* FROM {table_name} d
-        WHERE d.ID = {_lit(ID)}
-           OR d.ID IN (SELECT ID FROM {table_name} WHERE VALUE = {_lit(ID)})
-           OR d.ID IN (SELECT VALUE FROM {table_name} WHERE ID = {_lit(ID)} AND KEY != 'Type')
-    """)
+    """Pivot of objects referenced BY `reference` (index ID_TO), limited to `columns`."""
+    return _pivot_refs(self, _refs_from_sql(reference, 1, table_name), "ID_TO", columns)
 
 
 def references_simple(self, reference, columns=None, levels=1, table_name=TABLE_NAME):
-    """Pivot of the object and everything linked to/from it. Defaults to keeping
-    Type and IdentifiedObject.name when present."""
-    id_query = f"""
-        SELECT {_lit(reference)} AS ID
-        UNION SELECT ID FROM {table_name} WHERE VALUE = {_lit(reference)}
-        UNION SELECT VALUE FROM {table_name} WHERE ID = {_lit(reference)} AND KEY != 'Type'
-    """
-    relation = _pivot_ids(self, id_query, columns=None, table_name=table_name)
+    """Pivot of the object and everything linked to/from it (index ID), with the
+    level/ID_FROM/ID_TO metadata merged back, matching pandas."""
+    refs_sql = _references_sql(reference, levels, table_name, keep_ord=True)
+    pivoted = self.sql(f"""PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE
+                                  FROM ({refs_sql}) GROUP BY ID, KEY)
+                           ON KEY USING FIRST(VALUE) GROUP BY ID""")
     if columns is None:
-        columns = [c for c in ("Type", "IdentifiedObject.name") if c in relation.columns]
-    keep = ["ID"] + [c for c in columns if c in relation.columns]
-    return relation.select(", ".join(f'"{c}"' for c in keep))
+        columns = [c for c in ("Type", "IdentifiedObject.name") if c in pivoted.columns]
+    keep = [c for c in columns if c in pivoted.columns]
+    sel = "".join(f', p."{c}"' for c in keep)
+    return self.sql(f"""
+        WITH refs AS ({refs_sql}),
+        p AS (PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE FROM refs GROUP BY ID, KEY)
+              ON KEY USING FIRST(VALUE) GROUP BY ID),
+        m AS (SELECT ID, ANY_VALUE(level) AS level, ANY_VALUE(ID_FROM) AS ID_FROM,
+                     ANY_VALUE(ID_TO) AS ID_TO FROM refs GROUP BY ID)
+        SELECT p.ID{sel}, m.level, m.ID_FROM, m.ID_TO
+        FROM p LEFT JOIN m ON p.ID = m.ID
+        ORDER BY m.level
+    """)
 
 
 def references_all(self, table_name=TABLE_NAME):
