@@ -113,108 +113,95 @@ def get_namespace_map(data):
     return namespace_map, xml_base
 
 
-def references_to_simple(data, reference, columns=["Type"]):
-    """Find objects that reference the given ID (simple, one level)."""
-    # Find rows where VALUE == reference (these are references TO the object)
-    refs = data.filter(pl.col("VALUE") == reference).select("ID").unique()
-    if refs.is_empty():
-        return pl.DataFrame(schema={"ID": pl.Utf8, "KEY": pl.Utf8, "VALUE": pl.Utf8})
-    ref_data = refs.join(data, on="ID", how="inner")
-    if columns:
-        ref_data = ref_data.filter(pl.col("KEY").is_in(columns))
-    return ref_data
+def _u(data):
+    """Cast the triplet columns to Utf8 (avoids Categorical join/is_in pitfalls)."""
+    cols = [c for c in ("ID", "KEY", "VALUE", "INSTANCE_ID") if c in data.columns]
+    return data.with_columns([pl.col(c).cast(pl.Utf8) for c in cols])
 
 
 def references_to(data, reference, levels=1):
-    """Find objects that reference the given ID, traversing multiple levels."""
-    result = references_to_simple(data, reference)
-    seen_ids = set(result["ID"].to_list()) if not result.is_empty() else set()
-
-    for _ in range(levels - 1):
-        new_refs = []
-        for ref_id in seen_ids.copy():
-            level_refs = references_to_simple(data, ref_id)
-            if not level_refs.is_empty():
-                new_ids = set(level_refs["ID"].to_list()) - seen_ids
-                if new_ids:
-                    seen_ids.update(new_ids)
-                    new_refs.append(level_refs)
-        if not new_refs:
+    """Objects that reference `reference`, traversing up to `levels`. Matches the
+    pandas engine: level 0 is the object itself; level N rows carry level/ID_TO/ID_FROM."""
+    data = _u(data)
+    base = data.filter(pl.col("ID") == reference).with_columns(pl.lit(0, dtype=pl.Int64).alias("level"))
+    parts, frontier = [base], base
+    for level in range(1, levels + 1):
+        to_ids = frontier.select("ID").unique().to_series().to_list()
+        links = (data.filter(pl.col("VALUE").is_in(to_ids))
+                 .select(pl.col("ID").alias("ID_FROM"), pl.col("VALUE").alias("ID_TO"))
+                 .unique(subset="ID_FROM", keep="first"))
+        if links.is_empty():
             break
-        result = pl.concat([result] + new_refs)
-
-    return result
-
-
-def references_from_simple(data, reference, columns=["Type"]):
-    """Find objects referenced BY the given ID (simple, one level)."""
-    ref_values = data.filter(
-        (pl.col("ID") == reference) & (pl.col("KEY") != "Type")
-    ).select("VALUE").unique()
-
-    if ref_values.is_empty():
-        return pl.DataFrame(schema={"ID": pl.Utf8, "KEY": pl.Utf8, "VALUE": pl.Utf8})
-
-    ref_ids = ref_values.rename({"VALUE": "ID"})
-    ref_data = ref_ids.join(data, on="ID", how="inner")
-    if columns:
-        ref_data = ref_data.filter(pl.col("KEY").is_in(columns))
-    return ref_data
+        objs = (data.join(links, left_on="ID", right_on="ID_FROM", how="inner")
+                .with_columns(pl.col("ID").alias("ID_FROM"), pl.lit(level, dtype=pl.Int64).alias("level")))
+        parts.append(objs)
+        frontier = objs
+    return pl.concat(parts, how="diagonal_relaxed")
 
 
 def references_from(data, reference, levels=1):
-    """Find objects referenced BY the given ID, traversing multiple levels."""
-    result = references_from_simple(data, reference)
-    seen_ids = set(result["ID"].to_list()) if not result.is_empty() else set()
-
-    for _ in range(levels - 1):
-        new_refs = []
-        for ref_id in seen_ids.copy():
-            level_refs = references_from_simple(data, ref_id)
-            if not level_refs.is_empty():
-                new_ids = set(level_refs["ID"].to_list()) - seen_ids
-                if new_ids:
-                    seen_ids.update(new_ids)
-                    new_refs.append(level_refs)
-        if not new_refs:
+    """Objects referenced BY `reference`, traversing up to `levels`. Matches pandas:
+    level 0 is the object itself; level N rows carry level/ID_TO/ID_FROM."""
+    data = _u(data)
+    base = data.filter(pl.col("ID") == reference).with_columns(pl.lit(0, dtype=pl.Int64).alias("level"))
+    parts, frontier = [base], base
+    for level in range(1, levels + 1):
+        edges = frontier.select(pl.col("ID").alias("ID_FROM"), pl.col("VALUE").alias("ID_TO"))
+        objs = (edges.join(data, left_on="ID_TO", right_on="ID", how="inner")
+                .with_columns(pl.col("ID_TO").alias("ID"), pl.lit(level, dtype=pl.Int64).alias("level")))
+        if objs.is_empty():
             break
-        result = pl.concat([result] + new_refs)
-
-    return result
-
-
-def references_all(data):
-    """Find all reference pairs in the dataset."""
-    # References are rows where VALUE matches another object's ID
-    all_ids = data.select("ID").unique()
-    refs = data.join(all_ids.rename({"ID": "VALUE"}), on="VALUE", how="semi")
-    refs = refs.filter(pl.col("KEY") != "Type")
-    return refs
-
-
-def references_simple(data, reference, columns=None, levels=1):
-    """Find references both to and from an object."""
-    to_refs = references_to(data, reference, levels=levels)
-    from_refs = references_from(data, reference, levels=levels)
-
-    parts = []
-    if not to_refs.is_empty():
-        parts.append(to_refs)
-    if not from_refs.is_empty():
-        parts.append(from_refs)
-
-    if not parts:
-        return pl.DataFrame(schema={"ID": pl.Utf8, "KEY": pl.Utf8, "VALUE": pl.Utf8})
-
-    result = pl.concat(parts).unique()
-    if columns:
-        result = result.filter(pl.col("KEY").is_in(columns))
-    return result
+        parts.append(objs)
+        frontier = objs
+    return pl.concat(parts, how="diagonal_relaxed")
 
 
 def references(data, ID, levels=1):
-    """Find all references for an object (both directions)."""
-    return references_simple(data, ID, levels=levels)
+    """All references to and from an object (both directions), matching pandas."""
+    FROM = references_from(data, ID, levels)
+    TO = references_to(data, ID, levels)
+    return pl.concat([FROM, TO], how="diagonal_relaxed").unique(
+        subset=["ID", "KEY", "VALUE", "INSTANCE_ID"], keep="first", maintain_order=True)
+
+
+def references_all(data):
+    """All reference links as (ID_FROM, KEY, ID_TO), matching pandas."""
+    data = _u(data)
+    triples = data.select("ID", "KEY", "VALUE").unique()
+    ids = data.select("ID").unique().to_series().to_list()
+    return (triples.filter(pl.col("VALUE").is_in(ids))
+            .select(pl.col("ID").alias("ID_FROM"), pl.col("KEY"), pl.col("VALUE").alias("ID_TO")))
+
+
+def references_to_simple(data, reference, columns=["Type"]):
+    """Pivot of objects referencing `reference` (index ID_FROM), limited to `columns`."""
+    refs = references_to(data, reference, levels=1).unique(subset=["ID_FROM", "KEY"], keep="first")
+    view = refs.pivot(on="KEY", index="ID_FROM", values="VALUE")
+    keep = [c for c in (columns or []) if c in view.columns]
+    return view.select(["ID_FROM", *keep])
+
+
+def references_from_simple(data, reference, columns=["Type"]):
+    """Pivot of objects referenced BY `reference` (index ID_TO), limited to `columns`."""
+    refs = references_from(data, reference, levels=1).unique(subset=["ID_TO", "KEY"], keep="first")
+    view = refs.pivot(on="KEY", index="ID_TO", values="VALUE")
+    keep = [c for c in (columns or []) if c in view.columns]
+    return view.select(["ID_TO", *keep])
+
+
+def references_simple(data, reference, columns=None, levels=1):
+    """Pivot of the object and everything linked to/from it (index ID), with the
+    level/ID_FROM/ID_TO metadata merged back, matching pandas."""
+    ref = references(data, reference, levels=levels).unique(subset=["ID", "KEY"], keep="first")
+    view = ref.select("ID", "KEY", "VALUE").pivot(on="KEY", index="ID", values="VALUE")
+    if not columns:
+        columns = [c for c in ("Type", "IdentifiedObject.name") if c in view.columns]
+    keep = [c for c in columns if c in view.columns]
+    meta = ref.select("ID", "level", "ID_FROM", "ID_TO")
+    return (view.select(["ID", *keep])
+            .join(meta, on="ID", how="left")
+            .unique(subset="ID", keep="first", maintain_order=True)
+            .sort("level"))
 
 
 def filter_triplets_by_type(data, type_name, type_key="Type"):
