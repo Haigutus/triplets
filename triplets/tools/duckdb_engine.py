@@ -275,22 +275,23 @@ def set_value_at_key_and_id(self, key, value, id, table_name=TABLE_NAME):
 
 def _apply_update(self, has_instance, update, add, table_name):
     """Merge the normalized TEMP TABLE _update_data (ID, KEY, VALUE, INSTANCE_ID)
-    into table_name. Merge keys are ID+KEY, plus INSTANCE_ID when has_instance."""
-    on = "u.ID = t.ID AND u.KEY = t.KEY" + (" AND u.INSTANCE_ID = t.INSTANCE_ID" if has_instance else "")
-    kept = (f"SELECT t.* FROM {table_name} t "
-            f"WHERE NOT EXISTS (SELECT 1 FROM _update_data u WHERE {on})")
-    if update and add:
-        new_table = f"{kept} UNION ALL BY NAME SELECT * FROM _update_data"
-    elif update:  # replace matches only — no brand-new rows
-        new_table = (f"{kept} UNION ALL BY NAME SELECT u.* FROM _update_data u "
-                     f"WHERE EXISTS (SELECT 1 FROM {table_name} t WHERE {on})")
-    elif add:  # keep table untouched, append only rows with no existing match
-        new_table = (f"SELECT * FROM {table_name} "
-                     f"UNION ALL BY NAME SELECT u.* FROM _update_data u "
-                     f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} t WHERE {on})")
-    else:
+    into table_name. Merge keys are ID+KEY, plus INSTANCE_ID when has_instance.
+
+    Like pandas, update overwrites only VALUE on matched rows (preserving their
+    original INSTANCE_ID); add appends rows with no existing match.
+    """
+    if not update and not add:
         return self
-    self.execute(f"CREATE OR REPLACE TABLE {table_name} AS {new_table}")
+    on = "u.ID = t.ID AND u.KEY = t.KEY" + (" AND u.INSTANCE_ID = t.INSTANCE_ID" if has_instance else "")
+    if update:
+        base = (f"SELECT t.ID, t.KEY, COALESCE(u.VALUE, t.VALUE) AS VALUE, t.INSTANCE_ID "
+                f"FROM {table_name} t LEFT JOIN _update_data u ON {on}")
+    else:
+        base = f"SELECT * FROM {table_name}"
+    addition = ("" if not add else
+                f" UNION ALL BY NAME SELECT u.ID, u.KEY, u.VALUE, u.INSTANCE_ID FROM _update_data u "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} t WHERE {on})")
+    self.execute(f"CREATE OR REPLACE TABLE {table_name} AS {base}{addition}")
     return self
 
 
@@ -345,10 +346,14 @@ def diff_triplets(self, new_data, table_name=TABLE_NAME):
     _merge column. Returns DuckDBPyRelation."""
     _materialize(self, new_data, "_new_data")
     return self.sql(f"""
-        SELECT *, 'left_only' AS _merge FROM {table_name}
+        SELECT ID, KEY, VALUE, INSTANCE_ID AS INSTANCE_ID_OLD, NULL AS INSTANCE_ID_NEW,
+               'left_only' AS _merge
+        FROM {table_name}
         WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _new_data)
         UNION ALL BY NAME
-        SELECT *, 'right_only' AS _merge FROM _new_data
+        SELECT ID, KEY, VALUE, NULL AS INSTANCE_ID_OLD, INSTANCE_ID AS INSTANCE_ID_NEW,
+               'right_only' AS _merge
+        FROM _new_data
         WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM {table_name})
     """)
 
