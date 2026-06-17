@@ -926,3 +926,124 @@ class TestDuckdbTools:
         sub_id = db.filter_triplets(KEY="Type", VALUE="Substation").df()["ID"].iloc[0]
         df = db.references_to(sub_id).df()
         assert isinstance(df, pandas.DataFrame)
+
+    # ── newly added tools ──────────────────────────────────────────────────
+
+    @pytest.fixture
+    def fresh_db(self):
+        """Function-scoped connection — safe for the mutating tools."""
+        duckdb = pytest.importorskip("duckdb")
+        import triplets  # noqa: F401
+        if not SVEDALA_DIR.exists():
+            pytest.skip(SKIP_REASON)
+        con = duckdb.connect()
+        con.read_rdf(SVEDALA_FILES)
+        return con
+
+    def _acls_id(self, db):
+        return db.filter_triplets(KEY="Type", VALUE="ACLineSegment").df()["ID"].iloc[0]
+
+    def test_key_tableview(self, db):
+        tv = db.key_tableview("IdentifiedObject.name").df()
+        assert len(tv) > 0
+        assert "IdentifiedObject.name" in tv.columns
+
+    def test_id_tableview(self, db):
+        tv = db.id_tableview(self._acls_id(db)).df()
+        assert len(tv) == 1
+
+    def test_get_object_data(self, db):
+        df = db.get_object_data(self._acls_id(db)).df()
+        assert set(df.columns) == {"KEY", "VALUE"}
+        assert (df["KEY"] == "Type").any()
+
+    def test_get_namespace_map(self, db):
+        namespace_map, xml_base = db.get_namespace_map()
+        assert isinstance(namespace_map, dict)
+        assert "Type" not in namespace_map
+
+    def test_triplets_to_tableviews(self, db):
+        views = db.triplets_to_tableviews()
+        assert isinstance(views, dict)
+        assert "ACLineSegment" in views
+        assert len(views["ACLineSegment"].df()) > 0
+
+    def test_references_from(self, db):
+        df = db.references_from(self._acls_id(db)).df()
+        assert isinstance(df, pandas.DataFrame)
+
+    def test_references_simple_and_directional(self, db):
+        ref = self._acls_id(db)
+        assert "Type" in db.references_to_simple(ref).df().columns
+        assert "Type" in db.references_from_simple(ref).df().columns
+        assert len(db.references(ref).df()) > 0
+        assert "ID" in db.references_simple(ref).df().columns
+
+    def test_references_all(self, db):
+        df = db.references_all().df()
+        assert list(df.columns) == ["ID_FROM", "KEY", "ID_TO"]
+        assert len(df) > 0
+
+    def test_filter_triplets_by_triplets(self, db):
+        acls = db.filter_triplets(KEY="Type", VALUE="ACLineSegment").df()
+        df = db.filter_triplets_by_triplets(acls).df()
+        assert set(df["ID"]) == set(acls["ID"])
+
+    def test_diff_triplets(self, fresh_db):
+        full = fresh_db.filter_triplets().df()
+        diff = fresh_db.diff_triplets(full.head(50)).df()
+        # identical-minus-subset → only left_only rows, count = total - 50
+        assert (diff["_merge"] == "left_only").all()
+        assert len(diff) == len(full) - 50
+
+    def test_diff_triplets_by_instance(self, db):
+        instances = db.filter_triplets().df()["INSTANCE_ID"].unique()
+        df = db.diff_triplets_by_instance(instances[0], instances[1]).df()
+        assert isinstance(df, pandas.DataFrame)
+
+    def test_set_value_at_key_mutates_and_chains(self, fresh_db):
+        ret = fresh_db.set_value_at_key("IdentifiedObject.name", "ZZZ")
+        assert ret is fresh_db  # returns self for chaining
+        names = fresh_db.filter_triplets(KEY="IdentifiedObject.name").df()["VALUE"].unique()
+        assert list(names) == ["ZZZ"]
+
+    def test_set_value_at_key_and_id(self, fresh_db):
+        acls = self._acls_id(fresh_db)
+        fresh_db.set_value_at_key_and_id("IdentifiedObject.name", "ONLY", acls)
+        changed = fresh_db.filter_triplets(KEY="IdentifiedObject.name", VALUE="ONLY").df()
+        assert len(changed) == 1 and changed["ID"].iloc[0] == acls
+
+    def test_update_triplets_from_triplets(self, fresh_db):
+        acls = self._acls_id(fresh_db)
+        upd = pandas.DataFrame({"ID": [acls, "NEWID"],
+                                "KEY": ["IdentifiedObject.name", "Type"],
+                                "VALUE": ["UPDATED", "NewClass"]})
+        fresh_db.update_triplets_from_triplets(upd)
+        got = fresh_db.filter_triplets(ID=acls, KEY="IdentifiedObject.name").df()["VALUE"].iloc[0]
+        assert got == "UPDATED"
+        assert len(fresh_db.filter_triplets(ID="NEWID").df()) == 1
+
+    def test_update_triplets_from_tableview(self, fresh_db):
+        acls = self._acls_id(fresh_db)
+        tv = fresh_db.type_tableview("ACLineSegment").df()
+        tv["IdentifiedObject.name"] = "FROM_TV"
+        fresh_db.update_triplets_from_tableview(tv)
+        got = fresh_db.filter_triplets(ID=acls, KEY="IdentifiedObject.name").df()["VALUE"].iloc[0]
+        assert got == "FROM_TV"
+
+    def test_remove_triplets_from_triplets(self, fresh_db):
+        before = len(fresh_db.filter_triplets().df())
+        to_remove = fresh_db.filter_triplets(KEY="Type", VALUE="ACLineSegment").df()[["ID", "KEY", "VALUE"]]
+        fresh_db.remove_triplets_from_triplets(to_remove)
+        after = len(fresh_db.filter_triplets().df())
+        assert before - after == len(to_remove)
+
+    def test_tableview_to_triplets(self, fresh_db):
+        fresh_db.execute(
+            "CREATE TABLE tv AS SELECT * FROM ("
+            "  PIVOT (SELECT d.ID, d.KEY, d.VALUE FROM triplets d "
+            "         JOIN (SELECT DISTINCT ID FROM triplets WHERE KEY='Type' AND VALUE='ACLineSegment') t "
+            "         ON d.ID = t.ID) ON KEY USING FIRST(VALUE) GROUP BY ID)")
+        trip = fresh_db.tableview_to_triplets(table_name="tv").df()
+        assert list(trip.columns) == ["ID", "KEY", "VALUE"]
+        assert (trip["KEY"] == "Type").any()
