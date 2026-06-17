@@ -23,6 +23,9 @@ SVEDALA_FILES = [str(SVEDALA_DIR / name) for name in (
 )]
 SKIP_REASON = "Svedala test data not available (needs git submodule)"
 
+REALGRID_ZIP = "test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"
+REALGRID_SKIP_REASON = "RealGrid test data not available"
+
 
 # ── dynamic discovery (mirrors tests/test_api_surface.py) ─────────────────────
 def implemented(module) -> set[str]:
@@ -38,6 +41,8 @@ def to_pandas(obj):
     if type(obj).__name__ == "DuckDBPyRelation":
         return obj.df()
     if type(obj).__module__.startswith("polars"):
+        return obj.to_pandas()
+    if type(obj).__module__.startswith("pyarrow"):
         return obj.to_pandas()
     if isinstance(obj, pandas.Series):
         return obj.rename("VALUE").rename_axis("KEY").reset_index()
