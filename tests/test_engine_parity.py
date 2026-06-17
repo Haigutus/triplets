@@ -149,6 +149,19 @@ def _is_frame_like(v):
             or type(v).__name__ == "DuckDBPyRelation")
 
 
+def _num_cell(v):
+    """Canonicalise a numeric value to one float repr so e.g. '1', '1.0',
+    '1e-6' and '0.000001' compare equal across engines (pandas int/float dtypes,
+    duckdb VARCHAR, polars Float64). Non-numeric strings (UUIDs, names) pass through.
+    Per-cell because the VALUE column mixes numeric and text values."""
+    if v == "":
+        return v
+    try:
+        return repr(float(v))
+    except (ValueError, TypeError):
+        return v
+
+
 def _canon_frame(obj):
     df = _to_pandas(obj)
     if df is None:
@@ -157,6 +170,13 @@ def _canon_frame(obj):
     df = df.reset_index() if df.index.name is not None else df.reset_index(drop=True)
     df.columns = [str(c) for c in df.columns]
     df = df.astype(str).replace({"nan": "", "None": "", "<NA>": "", "NaN": "", "NaT": ""})
+    # numeric-aware comparison (per cell): compare numbers by value, not string repr
+    for c in df.columns:
+        df[c] = df[c].map(_num_cell)
+    # engines differ on emitting null-VALUE triplets (pandas keeps, others filter);
+    # a triplet with no value is effectively absent — drop for comparison
+    if "VALUE" in df.columns:
+        df = df[df["VALUE"] != ""]
     df = df.reindex(sorted(df.columns), axis=1)
     return df.sort_values(by=list(df.columns)).reset_index(drop=True)
 
