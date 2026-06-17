@@ -943,6 +943,26 @@ class TestDuckdbTools:
     def _acls_id(self, db):
         return db.filter_triplets(KEY="Type", VALUE="ACLineSegment").df()["ID"].iloc[0]
 
+    def test_type_tableview_creates_named_view(self, fresh_db):
+        # default view name == type name, re-queryable by name from the catalog
+        rel = fresh_db.type_tableview("ACLineSegment")
+        by_name = fresh_db.sql('SELECT COUNT(*) AS n FROM "ACLineSegment"').df()["n"].iloc[0]
+        assert by_name == len(rel.df())
+        views = [r[0] for r in fresh_db.execute(
+            "SELECT view_name FROM duckdb_views() WHERE NOT internal").fetchall()]
+        assert "ACLineSegment" in views
+        # custom view name
+        fresh_db.type_tableview("ACLineSegment", view_name="acls_view")
+        assert fresh_db.sql("SELECT COUNT(*) AS n FROM acls_view").df()["n"].iloc[0] == by_name
+
+    def test_tableview_view_reflects_base_mutation(self, fresh_db):
+        # the view is lazy: mutating the base table shows through (and the
+        # CREATE OR REPLACE TABLE mutation is not blocked by the dependent view)
+        fresh_db.type_tableview("ACLineSegment")
+        fresh_db.set_value_at_key("IdentifiedObject.name", "ZZZ")
+        names = fresh_db.sql('SELECT DISTINCT "IdentifiedObject.name" AS n FROM "ACLineSegment"').df()["n"].tolist()
+        assert names == ["ZZZ"]
+
     def test_key_tableview(self, db):
         tv = db.key_tableview("IdentifiedObject.name").df()
         assert len(tv) > 0

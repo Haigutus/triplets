@@ -1,8 +1,10 @@
 """DuckDB SQL-based implementation of triplet tools.
 
 Functions are monkey-patched onto duckdb.DuckDBPyConnection.
-Query/view/reference helpers return DuckDBPyRelation (lazy); types_dict and
-get_namespace_map return python values; triplets_to_tableviews returns a dict.
+The *_tableview helpers create a named SQL view and return a relation over it
+(named/re-queryable, still lazy); other query/reference helpers return a
+DuckDBPyRelation; types_dict and get_namespace_map return python values;
+triplets_to_tableviews returns a dict.
 
 The connection holds the whole dataset in a single ``triplets`` table, so the
 mutating helpers (set_value_at_key, update_*, remove_*) rewrite that table in
@@ -34,6 +36,35 @@ def _materialize(self, data, name):
     self.unregister(f"_reg_{name}")
 
 
+def _create_view(self, view_name, query):
+    """Create (or replace) a named SQL view and return a relation over it.
+
+    The view is named and re-queryable (SELECT * FROM "<view_name>") and stays
+    lazy — it reflects later changes to the underlying triplets table.
+    """
+    safe = view_name.replace('"', '""')
+    self.execute(f'CREATE OR REPLACE VIEW "{safe}" AS {query}')
+    return self.sql(f'SELECT * FROM "{safe}"')
+
+
+def _pivot_view(self, view_name, id_predicate, table_name):
+    """Create a named view pivoting the triplets of the IDs selected by
+    id_predicate (a subquery or literal list usable inside ``ID IN (...)``).
+
+    PIVOT inside a view needs explicit columns, so the distinct KEYs are resolved
+    up front: the column set is fixed at creation time, while the values stay lazy.
+    """
+    keys = [row[0] for row in self.execute(
+        f"SELECT DISTINCT KEY FROM {table_name} WHERE ID IN ({id_predicate})").fetchall()]
+    if not keys:
+        return _create_view(self, view_name, f"SELECT ID FROM {table_name} WHERE ID IN ({id_predicate})")
+    in_list = ", ".join(_lit(k) for k in keys)
+    return _create_view(self, view_name, f"""
+        WITH d AS (SELECT ID, KEY, VALUE FROM {table_name} WHERE ID IN ({id_predicate}))
+        PIVOT d ON KEY IN ({in_list}) USING FIRST(VALUE) GROUP BY ID
+    """)
+
+
 def types_dict(self, table_name=TABLE_NAME):
     """Return dict of {type_name: count}."""
     rows = self.execute(f"""
@@ -46,20 +77,11 @@ def types_dict(self, table_name=TABLE_NAME):
     return dict(rows)
 
 
-def type_tableview(self, type_name, table_name=TABLE_NAME):
-    """Create a pivoted table view. Returns DuckDBPyRelation (lazy)."""
-    return self.sql(f"""
-        WITH type_ids AS (
-            SELECT DISTINCT ID FROM {table_name}
-            WHERE KEY = 'Type' AND VALUE = '{type_name}'
-        ),
-        type_data AS (
-            SELECT d.ID, d.KEY, d.VALUE
-            FROM {table_name} d
-            JOIN type_ids t ON d.ID = t.ID
-        )
-        PIVOT type_data ON KEY USING FIRST(VALUE) GROUP BY ID
-    """)
+def type_tableview(self, type_name, table_name=TABLE_NAME, view_name=None):
+    """Create a named SQL view pivoting all objects of a type; return a relation
+    over it. The view defaults to the type name (override with view_name)."""
+    ids = f"SELECT DISTINCT ID FROM {table_name} WHERE KEY = 'Type' AND VALUE = {_lit(type_name)}"
+    return _pivot_view(self, view_name or type_name, ids, table_name)
 
 
 def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
@@ -111,28 +133,21 @@ def references_from(self, reference_id, table_name=TABLE_NAME):
 
 # ── Query / view ─────────────────────────────────────────────────────────────
 
-def key_tableview(self, key, table_name=TABLE_NAME):
-    """Pivot all objects carrying a given KEY. Returns DuckDBPyRelation (lazy)."""
-    return self.sql(f"""
-        WITH key_ids AS (SELECT DISTINCT ID FROM {table_name} WHERE KEY = {_lit(key)}),
-        key_data AS (
-            SELECT d.ID, d.KEY, d.VALUE FROM {table_name} d
-            JOIN key_ids k ON d.ID = k.ID
-        )
-        PIVOT key_data ON KEY USING FIRST(VALUE) GROUP BY ID
-    """)
+def key_tableview(self, key, table_name=TABLE_NAME, view_name=None):
+    """Create a named SQL view pivoting objects carrying a given KEY; return a
+    relation over it. The view defaults to the key name (override with view_name)."""
+    ids = f"SELECT DISTINCT ID FROM {table_name} WHERE KEY = {_lit(key)}"
+    return _pivot_view(self, view_name or key, ids, table_name)
 
 
-def id_tableview(self, id, table_name=TABLE_NAME):
-    """Pivot the given ID(s) — a single id or an iterable. Returns DuckDBPyRelation."""
+def id_tableview(self, id, table_name=TABLE_NAME, view_name=None):
+    """Create a named SQL view pivoting the given ID(s) — a single id or an
+    iterable — and return a relation over it. The view defaults to the id when a
+    single one is given, else 'id_tableview' (override with view_name)."""
     ids = [id] if isinstance(id, str) else list(id)
-    return self.sql(f"""
-        WITH id_data AS (
-            SELECT d.ID, d.KEY, d.VALUE FROM {table_name} d
-            WHERE d.ID IN ({_in_list(ids)})
-        )
-        PIVOT id_data ON KEY USING FIRST(VALUE) GROUP BY ID
-    """)
+    if view_name is None:
+        view_name = ids[0] if len(ids) == 1 else "id_tableview"
+    return _pivot_view(self, view_name, _in_list(ids), table_name)
 
 
 def get_object_data(self, object_UUID, table_name=TABLE_NAME):
