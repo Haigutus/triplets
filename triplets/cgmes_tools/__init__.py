@@ -55,16 +55,24 @@ DEPRECATED_ALIASES = {
 
 
 def _to_pandas(data):
-    """Triplet data in any supported flavor → pandas DataFrame."""
+    """Triplet data in any supported flavor → standard (numpy/category-backed) pandas
+    DataFrame, matching ``pandas.read_RDF`` dtypes. ArrowDtype-backed frames are avoided:
+    the pandas engine mutates VALUE in place (``.loc[...] = value``), which pyarrow
+    dictionary columns reject (ArrowNotImplementedError)."""
     if isinstance(data, pandas.DataFrame):
         return data
     module = type(data).__module__
     if module.startswith("polars"):
         logger.debug("cgmes_tools input: polars → pandas")
-        return data.to_pandas(use_pyarrow_extension_array=True)
+        return data.to_pandas()
     if module.startswith("pyarrow"):
         logger.debug("cgmes_tools input: pyarrow → pandas")
-        return data.to_pandas(types_mapper=pandas.ArrowDtype)
+        # Drop pandas metadata first: it may record ArrowDtype dtypes (e.g.
+        # dictionary<…>[pyarrow]) that to_pandas() can't reconstruct, and we want
+        # plain numpy/category columns the engine can mutate anyway.
+        if hasattr(data, "replace_schema_metadata"):
+            data = data.replace_schema_metadata(None)
+        return data.to_pandas()
     if module.startswith(("duckdb", "_duckdb")):
         logger.debug("cgmes_tools input: duckdb triplets table → pandas")
         return data.execute("SELECT * FROM triplets").df()

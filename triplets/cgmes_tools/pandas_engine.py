@@ -988,8 +988,11 @@ def get_dangling_references(data, detailed=False):
     >>> dangling = get_dangling_references(data, detailed=True)
     """
     cgmes_reference_pattern = r"\.[A-Z]"
-    # Convert KEY to string first to handle pyarrow-backed dictionary dtypes
-    references = data[data["KEY"].astype(str).str.contains(cgmes_reference_pattern)]
+    # Cast to str so KEY pattern-match and the ID==VALUE merge are robust to the column
+    # backing (category / pyarrow dictionary). Without casting the merge keys, a dtype
+    # mismatch makes every reference look dangling.
+    data = data.astype({"ID": str, "KEY": str, "VALUE": str})
+    references = data[data["KEY"].str.contains(cgmes_reference_pattern)]
     dangling_references = data.query("KEY == 'Type'").merge(references, left_on="ID", right_on="VALUE", indicator=True, how="right", suffixes=("_TO", "_FROM")).query("_merge != 'both'")
 
     if detailed:
