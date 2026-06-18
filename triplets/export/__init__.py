@@ -21,15 +21,35 @@ from concurrent.futures import ProcessPoolExecutor
 
 import pandas
 
-from .excel_pandas import export_to_excel
+from .excel_pandas import export_to_excel as _export_to_excel
 from .cimxml_pandas import generate_xml, _get_qname
-from .networkx_pandas import export_to_networkx
+from .networkx_pandas import export_to_networkx as _export_to_networkx
 
 logger = logging.getLogger(__name__)
 
 
 def _is_polars(data):
     return hasattr(data, '__module__') and 'polars' in type(data).__module__
+
+
+def _to_pandas_input(data):
+    """The Excel/NetworkX exporters are pandas-only; accept any flavor by converting
+    first (like export_to_cimxml does for polars input)."""
+    if _is_polars(data):
+        return data.to_pandas()
+    return data
+
+
+def export_to_excel(data, *args, **kwargs):
+    return _export_to_excel(_to_pandas_input(data), *args, **kwargs)
+
+
+def export_to_networkx(data, *args, **kwargs):
+    return _export_to_networkx(_to_pandas_input(data), *args, **kwargs)
+
+
+export_to_excel.__doc__ = _export_to_excel.__doc__
+export_to_networkx.__doc__ = _export_to_networkx.__doc__
 
 
 REQUIRED_COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")

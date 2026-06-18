@@ -112,9 +112,6 @@ def tableviews_to_triplets(tableviews, multivalue=False, engine="auto"):
 def tableview_to_triplets(data, multivalue=False, engine="auto"):
     return _get_engine(engine, data).tableview_to_triplets(data, multivalue=multivalue)
 
-def get_object_data(data, object_UUID, engine="auto"):
-    return _get_engine(engine, data).get_object_data(data, object_UUID)
-
 def update_triplets_from_triplets(data, update_data, update=True, add=True, engine="auto"):
     return _get_engine(engine, data).update_triplets_from_triplets(data, update_data, update=update, add=add)
 
