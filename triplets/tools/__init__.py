@@ -117,8 +117,8 @@ def tableviews_to_triplets(tableviews, multivalue=False, engine="auto"):
     data = next(iter(tableviews.values()), None) if tableviews else None
     return _get_engine(engine, data)._tableviews_to_triplets(tableviews, multivalue=multivalue)
 
-def tableview_to_triplets(data, multivalue=False, engine="auto"):
-    return _get_engine(engine, data).tableview_to_triplets(data, multivalue=multivalue)
+def tableview_to_triplets(data, multivalue=False, instance_id=None, engine="auto"):
+    return _get_engine(engine, data).tableview_to_triplets(data, multivalue=multivalue, instance_id=instance_id)
 
 def update_triplets_from_triplets(data, update_data, update=True, add=True, engine="auto"):
     return _get_engine(engine, data).update_triplets_from_triplets(data, update_data, update=update, add=add)

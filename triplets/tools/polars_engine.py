@@ -296,8 +296,13 @@ def _tableviews_to_triplets(tableviews, multivalue=False):
     return pl.concat(all_triplets)
 
 
-def tableview_to_triplets(data, multivalue=False):
-    """Convert a table view back to triplet format."""
+def tableview_to_triplets(data, multivalue=False, instance_id=None):
+    """Convert a table view back to triplet format.
+
+    An empty tableview cell is not a triplet — those holes are dropped (matches the
+    pandas and duckdb engines). Pass ``instance_id`` to stamp an ``INSTANCE_ID``
+    column, the same way ``update_triplets_from_tableview`` does.
+    """
     # polars melt (unpivot)
     id_col = "ID" if "ID" in data.columns else data.columns[0]
     value_cols = [c for c in data.columns if c != id_col]
@@ -317,7 +322,12 @@ def tableview_to_triplets(data, multivalue=False):
             )
         ).explode("VALUE")
 
-    return triplet_df.cast({"VALUE": pl.Utf8, "KEY": pl.Utf8, "ID": pl.Utf8})
+    triplet_df = triplet_df.cast({"VALUE": pl.Utf8, "KEY": pl.Utf8, "ID": pl.Utf8})
+    # an empty tableview cell is not a triplet — drop the holes
+    triplet_df = triplet_df.filter(pl.col("VALUE").is_not_null())
+    if instance_id is not None:
+        triplet_df = triplet_df.with_columns(pl.lit(instance_id).alias("INSTANCE_ID"))
+    return triplet_df
 
 
 def update_triplets_from_triplets(data, update_data, update=True, add=True):
@@ -348,9 +358,7 @@ def update_triplets_from_triplets(data, update_data, update=True, add=True):
 
 def update_triplets_from_tableview(data, tableview, update=True, add=True, instance_id=None):
     """Update triplet data from a tableview DataFrame."""
-    triplet = tableview_to_triplets(tableview)
-    if instance_id:
-        triplet = triplet.with_columns(pl.lit(instance_id).alias("INSTANCE_ID"))
+    triplet = tableview_to_triplets(tableview, instance_id=instance_id)
     return update_triplets_from_triplets(data, triplet, update=update, add=add)
 
 

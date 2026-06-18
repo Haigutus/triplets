@@ -632,7 +632,7 @@ def get_object_data(data, object_UUID):
     return data.query("ID == '{}'".format(object_UUID)).set_index("KEY")["VALUE"]
 
 
-def tableview_to_triplets(data, multivalue=False):
+def tableview_to_triplets(data, multivalue=False, instance_id=None):
     """Convert a table view back to a triplet format.
 
     Parameters
@@ -641,11 +641,22 @@ def tableview_to_triplets(data, multivalue=False):
         Pivoted DataFrame (table view) to convert.
     multivalue : bool, optional
         If True, unpack list values into separate triplets (default is False).
+    instance_id : str, optional
+        If given, stamp an ``INSTANCE_ID`` column on the result (default None).
 
     Returns
     -------
     pandas.DataFrame
-        Triplet DataFrame with columns ['ID', 'KEY', 'VALUE'].
+        Triplet DataFrame with columns ['ID', 'KEY', 'VALUE'] (plus 'INSTANCE_ID'
+        when ``instance_id`` is given).
+
+    Notes
+    -----
+    An empty tableview cell is not a triplet — those holes are dropped so this is a
+    faithful inverse of the tableview build (matches the duckdb engine's
+    ``WHERE VALUE IS NOT NULL``). ``INSTANCE_ID`` is not carried by a tableview;
+    pass ``instance_id`` to stamp it, the same way ``update_triplets_from_tableview``
+    does.
     """
     triplet_df = data.reset_index().melt(id_vars="ID", value_name="VALUE", var_name="KEY")
 
@@ -666,7 +677,12 @@ def tableview_to_triplets(data, multivalue=False):
 
     # nullable string dtype: numbers become text, melt's NaN holes stay null
     # (plain astype(str) made them literal "nan" strings / mixed nan objects)
-    return triplet_df.astype("string")
+    triplet_df = triplet_df.astype("string")
+    # an empty tableview cell is not a triplet — drop the holes
+    triplet_df = triplet_df.dropna(subset=["VALUE"]).reset_index(drop=True)
+    if instance_id is not None:
+        triplet_df["INSTANCE_ID"] = instance_id
+    return triplet_df
 
 
 def update_triplets_from_triplets(data, update_data, update=True, add=True):
@@ -748,11 +764,7 @@ def update_triplets_from_tableview(data, tableview, update=True, add=True, insta
     --------
     >>> updated_data = data.update_triplets_from_tableview(table_view, instance_id="uuid1")
     """
-    update_triplet = tableview_to_triplets(tableview)
-
-    if instance_id:
-        update_triplet["INSTANCE_ID"] = instance_id
-
+    update_triplet = tableview_to_triplets(tableview, instance_id=instance_id)
     return update_triplets_from_triplets(data, update_triplet, update, add)
 
 

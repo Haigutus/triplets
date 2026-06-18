@@ -378,15 +378,24 @@ class TestToolsDeprecatedAliases:
 class TestTripletsStringInvariant:
     """ID/KEY/VALUE are always strings or null — never mixed with numbers (issue #55)."""
 
-    def test_pandas_roundtrip_keeps_nulls_null(self):
+    def test_pandas_roundtrip_drops_empty_cells(self):
+        """An empty tableview cell yields no triplet (faithful inverse), never a 'nan' string."""
         tableview = pandas.DataFrame(
             {"ID": ["a", "b"], "Type": ["T", "T"], "x.y": ["1", None]}
         ).set_index("ID")
         trip = triplets.tools.tableview_to_triplets(tableview, engine="pandas")
-        hole = trip[(trip["ID"] == "b") & (trip["KEY"] == "x.y")]["VALUE"]
-        assert hole.isna().all()                      # null stays null, not "nan"
-        non_null = trip["VALUE"].dropna()
-        assert all(isinstance(v, str) for v in non_null)
+        hole = trip[(trip["ID"] == "b") & (trip["KEY"] == "x.y")]
+        assert hole.empty                             # empty cell -> no triplet, not a "nan" row
+        assert all(isinstance(v, str) for v in trip["VALUE"])   # every VALUE present and a string
+        assert "nan" not in set(trip["VALUE"])
+
+    def test_instance_id_stamped(self):
+        """instance_id stamps an INSTANCE_ID column, mirroring update_triplets_from_tableview."""
+        tableview = pandas.DataFrame(
+            {"ID": ["a"], "Type": ["T"], "x.y": ["1"]}
+        ).set_index("ID")
+        trip = triplets.tools.tableview_to_triplets(tableview, instance_id="inst-1", engine="pandas")
+        assert (trip["INSTANCE_ID"] == "inst-1").all()
 
     def test_pandas_roundtrip_stringifies_numbers(self, svedala_eq):
         tableview = svedala_eq.tableview_by_type("ACLineSegment", string_to_number=True)

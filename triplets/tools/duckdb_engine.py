@@ -426,14 +426,17 @@ def print_triplets_diff(self, new_data, file_id_object="Distribution", file_id_k
 
 # ── Transform ────────────────────────────────────────────────────────────────
 
-def tableview_to_triplets(self, table_name=TABLE_NAME, multivalue=False):
+def tableview_to_triplets(self, table_name=TABLE_NAME, multivalue=False, instance_id=None):
     """Unpivot a *wide tableview* table back to triplets (ID, KEY, VALUE).
 
     Point ``table_name`` at a tableview table (the default ``triplets`` table is
-    already long-form). Returns DuckDBPyRelation.
+    already long-form). Empty cells (NULL VALUE) are dropped — not real triplets.
+    Pass ``instance_id`` to stamp an ``INSTANCE_ID`` column, the same way
+    ``update_triplets_from_tableview`` does. Returns DuckDBPyRelation.
     """
+    instance_col = f", {_lit(instance_id)} AS INSTANCE_ID" if instance_id is not None else ""
     return self.sql(f"""
-        SELECT ID, KEY, VALUE FROM (
+        SELECT ID, KEY, VALUE{instance_col} FROM (
             UNPIVOT {table_name} ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE
         ) WHERE VALUE IS NOT NULL
     """)
