@@ -122,7 +122,11 @@ if duckdb:
     DUCKDB_TOOL_METHODS = sorted(_engine_functions(duckdb_engine))
 
     def _duckdb_export_fn(name):
-        """A connection-first export callable: fetch the triplets table, run the export."""
+        """A connection-first export callable: fetch the triplets table, run the export.
+
+        Note: this materialises the whole `triplets` table into a pandas DataFrame
+        (``SELECT * FROM triplets``) before exporting — a memory spike for large grids.
+        """
         function = getattr(export, name)
 
         def fn(connection, *args, table_name="triplets", **kwargs):

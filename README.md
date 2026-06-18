@@ -103,11 +103,16 @@ data.export_to_nquads("/tmp/output.nq")
 
 # Direct SQL (full DuckDB SQL on the triplets table)
 data.sql("SELECT VALUE, COUNT(*) FROM triplets WHERE KEY = 'Type' GROUP BY VALUE").df()
+
+# The same tools are also on the `.triplets` namespace (parity with pandas/polars)
+data.triplets.tableview_by_type("ACLineSegment").df()
+data.triplets.get_types_count()
 ```
 
 ## Accessor namespace
 
-All engines share the same `df.triplets.*` accessor:
+All engines — including a DuckDB connection (`con.triplets.*`) — share the same
+`df.triplets.*` accessor:
 
 ```python
 data.triplets.tableview_by_type("ACLineSegment")

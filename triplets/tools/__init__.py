@@ -15,28 +15,36 @@ import logging
 import functools
 import warnings
 
+from .._engine_detect import is_polars
+
 logger = logging.getLogger(__name__)
 
 
 def _auto_engine(data):
     """Pick engine based on DataFrame type."""
-    if hasattr(data, '__module__') and 'polars' in type(data).__module__:
-        try:
-            from . import polars_engine
-            logger.debug(f"engine auto-selected: polars (input is polars DataFrame)")
-            return "polars"
-        except ImportError:
-            pass
-    logger.debug(f"engine auto-selected: pandas")
+    if is_polars(data):
+        logger.debug("engine auto-selected: polars (input is polars DataFrame)")
+        return "polars"
+    logger.debug("engine auto-selected: pandas")
     return "pandas"
 
 
 def _get_engine(engine, data=None):
-    """Resolve engine name and return the module."""
+    """Resolve engine name and return the module.
+
+    With ``engine="auto"`` the engine is picked from the input type. With an explicit
+    engine, the input type is validated so a mismatch fails clearly at the boundary
+    rather than deep inside the engine.
+    """
     if engine == "auto":
         engine = _auto_engine(data) if data is not None else "pandas"
     else:
         logger.debug(f"engine set: {engine}")
+        if data is not None:
+            if engine == "polars" and not is_polars(data):
+                raise TypeError("engine='polars' but the input is not a polars DataFrame")
+            if engine == "pandas" and is_polars(data):
+                raise TypeError("engine='pandas' but the input is a polars DataFrame")
     if engine == "polars":
         from . import polars_engine
         return polars_engine

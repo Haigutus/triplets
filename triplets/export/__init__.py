@@ -7,6 +7,12 @@ CIM XML engines (mirrors triplets.parser engine setup):
 - python_lxml    (pure Python + lxml, always available)
 - cython_pugixml (compiled Arrow → pugixml extension, fastest)
 Fallback: cython_pugixml → python_lxml
+
+Engine auto-selection differs by format (by design):
+- CSV: by input type — a polars DataFrame uses the polars engine, else pandas.
+- N-Quads: polars when installed (pandas input is converted), else pandas.
+- CIM XML: the fastest available compiled engine (cython_pugixml → python_lxml).
+- Excel / NetworkX: pandas only — polars input is converted to pandas first.
 """
 
 import os
@@ -28,8 +34,7 @@ from .networkx_pandas import export_to_networkx as _export_to_networkx
 logger = logging.getLogger(__name__)
 
 
-def _is_polars(data):
-    return hasattr(data, '__module__') and 'polars' in type(data).__module__
+from .._engine_detect import is_polars as _is_polars
 
 
 def _to_pandas_input(data):
