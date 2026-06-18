@@ -28,6 +28,13 @@ excel = [
 networkx = [
     "networkx>=3.0",
 ]
+sparql = [
+    "rdflib>=7.6.0",
+]
+validation = [
+    "pyshacl>=0.30",
+    "rdflib>=7.6.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-xdist",
@@ -36,6 +43,7 @@ dev = [
     "networkx>=3.0",
     "openpyxl>=3.1.5",
     "rdflib>=7.6.0",
+    "pyshacl>=0.30",
 ]
 # vis-network JS is vendored in triplets/cgmes_tools/static — graph drawing needs no extra deps
 visualization = [
