@@ -34,11 +34,13 @@ def _tableview(ids, data, string_to_number, multivalue, label):
     object_data = ids.select("ID").unique().join(data, on="ID", how="inner")
 
     if multivalue:
-        # Aggregate all values per (ID, KEY) into lists, then pivot.
-        agg = object_data.group_by(["ID", "KEY"]).agg(pl.col("VALUE").alias("VALUE"))
+        # Aggregate all values per (ID, KEY) into lists, then pivot (maintain_order so
+        # the list element order matches the pandas engine's row order).
+        agg = object_data.group_by(["ID", "KEY"], maintain_order=True).agg(pl.col("VALUE").alias("VALUE"))
         data_view = agg.pivot(on="KEY", index="ID", values="VALUE")
-        # Unwrap single-element lists to scalars for cleaner output.
-        # Multi-element lists stay joined (matching pandas multivalue behavior).
+        # Match pandas multivalue: single-element lists collapse to the scalar, multi-element
+        # lists render as the Python list repr (e.g. "['a', 'b']") — pandas keeps a list object
+        # in the cell, which str()/to_csv renders that way.
         for col in data_view.columns:
             if col == "ID":
                 continue
@@ -47,7 +49,7 @@ def _tableview(ids, data, string_to_number, multivalue, label):
                 data_view = data_view.with_columns(
                     pl.when(pl.col(col).list.len() == 1)
                     .then(pl.col(col).list.first())
-                    .otherwise(pl.col(col).list.join(", "))
+                    .otherwise(pl.format("['{}']", pl.col(col).list.join("', '")))
                     .alias(col)
                 )
     else:
