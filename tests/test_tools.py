@@ -322,6 +322,25 @@ class TestTableviewToTriplet:
         result = tv.tableview_to_triplets(multivalue=True)
         assert isinstance(result, pandas.DataFrame)
 
+    def test_polars_multivalue_roundtrip(self):
+        """Polars multivalue decode: "['a', 'b']" cells explode back to one row each.
+
+        Exercises the native (non-eval) list decoder, tolerant of spacing variation.
+        """
+        polars = pytest.importorskip("polars")
+        from triplets.tools import polars_engine as pe
+        # object 'm' has two 'tag' values (multi), 's' has one (collapses to a bare scalar)
+        trip = polars.DataFrame({
+            "ID":    ["m", "s", "m", "m", "s"],
+            "KEY":   ["Type", "Type", "tag", "tag", "tag"],
+            "VALUE": ["T", "T", "alpha", "beta", "solo"],
+            "INSTANCE_ID": ["i"] * 5,
+        })
+        tv = pe.type_tableview(trip, "T", string_to_number=False, multivalue=True)
+        back = pe.tableview_to_triplets(tv, multivalue=True)
+        tags = back.filter(polars.col("KEY") == "tag").sort(["ID", "VALUE"])
+        assert tags["VALUE"].to_list() == ["alpha", "beta", "solo"]
+
 
 # ── Diff functions ──────────────────────────────────────────────────────────
 

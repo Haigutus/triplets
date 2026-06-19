@@ -314,13 +314,22 @@ def tableview_to_triplets(data, multivalue=False, instance_id=None):
     )
 
     if multivalue:
-        # Explode list values
-        triplet_df = triplet_df.with_columns(
-            pl.col("VALUE").map_elements(
-                lambda v: v if not isinstance(v, str) or not v.startswith("[") else eval(v),
-                return_dtype=pl.Object,
-            )
-        ).explode("VALUE")
+        # Invert the multivalue encoding (see _tableview): multi-element lists render as
+        # "['a', 'b']", single values stay bare, holes are null. Decode with native string
+        # expressions (vectorised, Rust): a cell is a list only if it starts with "[" and
+        # ends with "]" (after trimming outer whitespace) — then strip the brackets, split
+        # on comma, and strip surrounding whitespace + quotes per element. Tolerant of
+        # spacing/quote-style variation, unlike a fixed "', '" split. (map_elements + eval
+        # was unsafe and slow, and explode no longer accepts the resulting Object dtype.)
+        v = pl.col("VALUE").str.strip_chars()
+        is_list = v.str.starts_with("[") & v.str.ends_with("]")
+        as_list = (
+            pl.when(is_list)
+            .then(v.str.strip_chars("[]").str.split(",")
+                  .list.eval(pl.element().str.strip_chars().str.strip_chars("'\"")))
+            .otherwise(pl.concat_list("VALUE"))
+        )
+        triplet_df = triplet_df.with_columns(as_list.alias("VALUE")).explode("VALUE")
 
     triplet_df = triplet_df.cast({"VALUE": pl.Utf8, "KEY": pl.Utf8, "ID": pl.Utf8})
     # an empty tableview cell is not a triplet — drop the holes
