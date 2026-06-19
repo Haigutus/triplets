@@ -1,11 +1,16 @@
 """CGMES tools — metadata, visualization, and data quality utilities.
 
-The implementations are pandas-based (pandas_engine.py), but the functions
-accept triplet data in any supported flavor: pandas, polars, pyarrow
-Table/RecordBatch, or a DuckDB connection holding a `triplets` table.
-Non-pandas input is converted at this boundary (Arrow-backed, ~10 ms per
-million rows), and DataFrame results are converted back to the input flavor
-(DuckDB input returns pandas).
+Functions accept triplet data in any supported flavor: pandas, polars, pyarrow
+Table/RecordBatch, or a DuckDB connection holding a `triplets` table. A dispatcher
+routes each call by input type:
+
+- polars input → native polars engine (polars_engine.py), no pandas round-trip;
+- pandas input → pandas engine (pandas_engine.py);
+- pyarrow / DuckDB input → converted to pandas at the boundary (Arrow-backed,
+  ~10 ms per million rows), run on the pandas engine, result converted back.
+
+Functions without a polars implementation (the draw_* visualizers) always take the
+pandas-boundary path.
 """
 import functools
 import logging
@@ -14,6 +19,7 @@ import warnings
 import pandas
 
 from . import pandas_engine
+from .._engine_detect import is_polars
 from .pandas_engine import (  # noqa: F401 — no triplet-data argument, re-exported as-is
     dependencies,
     default_filename_mask,
@@ -22,6 +28,11 @@ from .pandas_engine import (  # noqa: F401 — no triplet-data argument, re-expo
     get_filename_from_metadata,
     get_metadata_from_xml,
 )
+
+try:
+    from . import polars_engine
+except ImportError:                                   # polars not installed
+    polars_engine = None
 
 logger = logging.getLogger(__name__)
 
@@ -92,11 +103,31 @@ def _match_input_flavor(result, data):
     return result  # pandas in (and duckdb in) → pandas out
 
 
-def _pandas_boundary(function):
-    @functools.wraps(function)
-    def wrapper(data, *args, **kwargs):
-        result = function(_to_pandas(data), *args, **kwargs)
-        return _match_input_flavor(result, data)
+def _resolve_engine(engine, data):
+    if engine != "auto":
+        return engine
+    if is_polars(data):
+        return "polars"
+    if isinstance(data, pandas.DataFrame):
+        return "pandas"
+    return "other"                                    # pyarrow / duckdb → pandas boundary
+
+
+def _data_dispatch(name):
+    """Route a cgmes data function by input flavor: native polars when the input is a
+    polars DataFrame and a polars implementation exists; native pandas for pandas input;
+    otherwise the pandas boundary (pyarrow / DuckDB input, or functions with no polars
+    engine, e.g. the draw_* visualizers)."""
+    pandas_fn = getattr(pandas_engine, name)
+
+    @functools.wraps(pandas_fn)
+    def wrapper(data, *args, engine="auto", **kwargs):
+        eng = _resolve_engine(engine, data)
+        if eng == "polars" and polars_engine is not None and hasattr(polars_engine, name):
+            return getattr(polars_engine, name)(data, *args, **kwargs)
+        if eng == "pandas":
+            return pandas_fn(data, *args, **kwargs)
+        return _match_input_flavor(pandas_fn(_to_pandas(data), *args, **kwargs), data)
     return wrapper
 
 
@@ -113,7 +144,7 @@ def _deprecated_alias(old_name, new_name):
 
 
 for _name in DATA_FUNCTIONS:
-    globals()[_name] = _pandas_boundary(getattr(pandas_engine, _name))
+    globals()[_name] = _data_dispatch(_name)
 
 for _old, _new in DEPRECATED_ALIASES.items():
     globals()[_old] = _deprecated_alias(_old, _new)

@@ -101,6 +101,25 @@ def test_parity(svedala_pandas, svedala_ctx, func, flavor):
         f"  {flavor}: {type(out).__name__} {shape(out)}")
 
 
+# ── Test 1b: native-path guard — polars input must NOT hit the pandas boundary ─
+# Without this, a missing/buggy polars impl would silently fall back to _to_pandas
+# and still pass test_parity, hiding that the native engine never ran.
+@pytest.mark.parametrize("func", sorted(DATA_FUNCTIONS))
+def test_polars_uses_native_engine(svedala_pandas, svedala_ctx, monkeypatch, func):
+    pytest.importorskip("polars")
+    spec = CALL_SPECS[func]
+    try:
+        run_quiet(spec, svedala_pandas.copy(), svedala_ctx)
+    except Exception as exc:                              # noqa: BLE001 — unmet precondition
+        pytest.skip(f"pandas reference can't run {func}: {type(exc).__name__}")
+
+    calls = []
+    real_to_pandas = cgmes._to_pandas
+    monkeypatch.setattr(cgmes, "_to_pandas", lambda d: (calls.append(1), real_to_pandas(d))[1])
+    run_quiet(spec, build_engine("polars", svedala_pandas), svedala_ctx)
+    assert not calls, f"{func} on polars input fell back to the pandas boundary (_to_pandas called {len(calls)}x)"
+
+
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(f, flavor, id=f"{f}-{flavor}")
                  for f in sorted(DATA_FUNCTIONS) for flavor in ("pandas", "polars", "duckdb")]
