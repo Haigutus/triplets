@@ -41,13 +41,11 @@ DATA_FUNCTIONS = [
     # data quality
     "get_dangling_references",
     # visualization
-    "draw_relations_graph", "draw_relations_to", "draw_relations_from",
-    "draw_relations",
+    "draw_relations_to", "draw_relations_from", "draw_relations",
 ]
 
 # Old name → new name; old names keep working but emit DeprecationWarning
 DEPRECATED_ALIASES = {
-    "darw_relations_graph": "draw_relations_graph",            # typo
     "statistics_GeneratingUnit_types": "count_GeneratingUnit_types",
     "generate_instances_ID": "generate_instance_ids",
     "get_model_data": "get_model_triplets",

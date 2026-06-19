@@ -124,11 +124,13 @@ class TestDeprecatedAliases:
             result = cgmes_tools.statistics_GeneratingUnit_types(svedala_data)
         assert result is not None
 
-    def test_typo_alias_darw(self, svedala_data):
+
+# ── Visualization (public draw_relations_* render via _draw_relations_graph) ─
+
+class TestDrawRelations:
+    def test_draw_relations_to_renders_html(self, svedala_data):
         subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
-        reference_data = svedala_data.references_to(subs, levels=1)
-        with pytest.warns(DeprecationWarning, match="draw_relations_graph"):
-            result = cgmes_tools.darw_relations_graph(reference_data, notebook=True)
+        result = cgmes_tools.draw_relations_to(svedala_data, subs, notebook=True)
         assert "new vis.Network" in result
 
 

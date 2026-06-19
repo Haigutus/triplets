@@ -676,7 +676,7 @@ def _instance_filenames(data):
     return {instance_id: os.path.basename(str(path)) for instance_id, path in zip(labels["INSTANCE_ID"], labels["VALUE"])}
 
 
-def draw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False, open_browser=True, instance_labels=None):
+def _draw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False, open_browser=True, instance_labels=None):
     """Create a temporary HTML file to visualize relations in a CGMES dataset.
 
     Parameters
@@ -708,7 +708,7 @@ def draw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False, open_br
 
     Examples
     --------
-    >>> file_path = draw_relations_graph(data, 'ID')
+    >>> file_path = _draw_relations_graph(data, 'ID')
     """
 
     pivot = reference_data.drop_duplicates([ID_COLUMN, "KEY"]).pivot(index=ID_COLUMN, columns="KEY")["VALUE"].reset_index()
@@ -794,7 +794,7 @@ def draw_relations_to(data, UUID, notebook=False, open_browser=True):
 
     ID_COLUMN = "ID"
 
-    return draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
+    return _draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
 
 
 def draw_relations_from(data, UUID, notebook=False, open_browser=True):
@@ -823,7 +823,7 @@ def draw_relations_from(data, UUID, notebook=False, open_browser=True):
 
     ID_COLUMN = "ID"
 
-    return draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
+    return _draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
 
 
 def draw_relations(data, UUID, notebook=False, levels=2, open_browser=True):
@@ -854,7 +854,7 @@ def draw_relations(data, UUID, notebook=False, levels=2, open_browser=True):
 
     ID_COLUMN = "ID"
 
-    return draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
+    return _draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
 
 
 def scale_load(data, load_setpoint, cos_f=None):
