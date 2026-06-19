@@ -120,6 +120,50 @@ def test_polars_uses_native_engine(svedala_pandas, svedala_ctx, monkeypatch, fun
     assert not calls, f"{func} on polars input fell back to the pandas boundary (_to_pandas called {len(calls)}x)"
 
 
+# ── Test 1c: synthetic parity for functions Svedala can't exercise ────────────
+# scale_load (needs ConformLoad), the filename round-trips (need CGMES-named labels)
+# and get_model_triplets (the shared spec passes a dict) all skip on Svedala — cover
+# them on a small hand-built dataset so the polars port can't silently regress.
+@pytest.fixture
+def synthetic_pandas():
+    rows = []
+    def add(i, k, v, inst): rows.append({"ID": i, "KEY": k, "VALUE": v, "INSTANCE_ID": inst})
+    add("fm", "Type", "FullModel", "eq")
+    for k, v in [("Model.scenarioTime", "20230101T0000Z"), ("Model.processType", "1D"),
+                 ("Model.modelingEntity", "ENTSOE"), ("Model.messageType", "EQ"), ("Model.version", "1")]:
+        add("fm", k, v, "eq")
+    add("dist", "Type", "Distribution", "eq")
+    add("dist", "label", "20230101T0000Z_1D_ENTSOE_EQ_001.xml", "eq")
+    for cid, p, q in [("c1", "10", "5"), ("c2", "20", "8")]:
+        add(cid, "Type", "ConformLoad", "ssh"); add(cid, "EnergyConsumer.p", p, "ssh"); add(cid, "EnergyConsumer.q", q, "ssh")
+    add("n1", "Type", "NonConformLoad", "ssh"); add("n1", "EnergyConsumer.p", "3", "ssh"); add("n1", "EnergyConsumer.q", "1", "ssh")
+    return pandas.DataFrame(rows)
+
+
+SYNTHETIC_CALLS = {
+    "scale_load": lambda d: cgmes.scale_load(d, 100.0),
+    "update_FullModel_from_filename": lambda d: cgmes.update_FullModel_from_filename(d),
+    "update_filename_from_FullModel": lambda d: cgmes.update_filename_from_FullModel(d),
+}
+
+
+@pytest.mark.parametrize("func", sorted(SYNTHETIC_CALLS))
+def test_polars_parity_synthetic(synthetic_pandas, func):
+    pytest.importorskip("polars")
+    call = SYNTHETIC_CALLS[func]
+    ref = run_quiet(call, synthetic_pandas.copy())
+    out = run_quiet(call, build_engine("polars", synthetic_pandas))
+    assert parity(ref, out), f"polars {func} differs from pandas on synthetic data"
+
+
+def test_polars_parity_get_model_triplets(synthetic_pandas):
+    polars = pytest.importorskip("polars")
+    inst = pandas.DataFrame({"INSTANCE_ID": ["ssh"]})
+    ref = cgmes.get_model_triplets(synthetic_pandas.copy(), inst)
+    out = cgmes.get_model_triplets(build_engine("polars", synthetic_pandas), polars.from_pandas(inst))
+    assert parity(ref, out), "polars get_model_triplets differs from pandas on synthetic data"
+
+
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(f, flavor, id=f"{f}-{flavor}")
                  for f in sorted(DATA_FUNCTIONS) for flavor in ("pandas", "polars", "duckdb")]
