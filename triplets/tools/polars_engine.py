@@ -115,8 +115,8 @@ def get_namespace_map(data):
     return namespace_map, xml_base
 
 
-def _u(data):
-    """Cast the triplet columns to Utf8 (avoids Categorical join/is_in pitfalls)."""
+def _cast_columns_to_string(data):
+    """Cast the triplet columns to Utf8 stringfs (avoids Categorical join/is_in pitfalls)."""
     cols = [c for c in ("ID", "KEY", "VALUE", "INSTANCE_ID") if c in data.columns]
     return data.with_columns([pl.col(c).cast(pl.Utf8) for c in cols])
 
@@ -124,7 +124,7 @@ def _u(data):
 def references_to(data, reference, levels=1):
     """Objects that reference `reference`, traversing up to `levels`. Matches the
     pandas engine: level 0 is the object itself; level N rows carry level/ID_TO/ID_FROM."""
-    data = _u(data)
+    data = _cast_columns_to_string(data)
     base = data.filter(pl.col("ID") == reference).with_columns(pl.lit(0, dtype=pl.Int64).alias("level"))
     parts, frontier = [base], base
     for level in range(1, levels + 1):
@@ -144,7 +144,7 @@ def references_to(data, reference, levels=1):
 def references_from(data, reference, levels=1):
     """Objects referenced BY `reference`, traversing up to `levels`. Matches pandas:
     level 0 is the object itself; level N rows carry level/ID_TO/ID_FROM."""
-    data = _u(data)
+    data = _cast_columns_to_string(data)
     base = data.filter(pl.col("ID") == reference).with_columns(pl.lit(0, dtype=pl.Int64).alias("level"))
     parts, frontier = [base], base
     for level in range(1, levels + 1):
@@ -168,7 +168,7 @@ def references(data, ID, levels=1):
 
 def references_all(data):
     """All reference links as (ID_FROM, KEY, ID_TO), matching pandas."""
-    data = _u(data)
+    data = _cast_columns_to_string(data)
     triples = data.select("ID", "KEY", "VALUE").unique()
     ids = data.select("ID").unique().to_series().to_list()
     return (triples.filter(pl.col("VALUE").is_in(ids))

@@ -125,13 +125,18 @@ class TestDeprecatedAliases:
         assert result is not None
 
 
-# ── Visualization (public draw_relations_* render via _draw_relations_graph) ─
+# ── Visualization (draw_references_* render via _draw_references_graph) ─────────
 
-class TestDrawRelations:
-    def test_draw_relations_to_renders_html(self, svedala_data):
+class TestDrawReferences:
+    def test_draw_references_to_renders_html(self, svedala_data):
         subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
-        result = cgmes_tools.draw_relations_to(svedala_data, subs, notebook=True)
+        result = cgmes_tools.draw_references_to(svedala_data, subs, notebook=True)
         assert "new vis.Network" in result
+
+    def test_draw_relations_aliases_warn(self, svedala_data):
+        subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
+        with pytest.warns(DeprecationWarning, match="draw_references_to"):
+            cgmes_tools.draw_relations_to(svedala_data, subs, notebook=True)
 
 
 # ── Input flavors (polars / arrow / duckdb converted at the boundary) ───────
@@ -196,32 +201,38 @@ class TestGetDanglingReferences:
 # ── Visualization (vis-network) ────────────────────────────────────────────
 
 class TestVisualization:
-    def test_draw_relations_to_notebook(self, svedala_data):
+    def test_draw_references_to_notebook(self, svedala_data):
         subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
-        result = cgmes_tools.draw_relations_to(svedala_data, subs, notebook=True)
+        result = cgmes_tools.draw_references_to(svedala_data, subs, notebook=True)
         assert isinstance(result, str)
         assert "new vis.Network" in result
         assert hasattr(result, "_repr_html_")  # displays inline in Jupyter
 
-    def test_draw_relations_from_notebook(self, svedala_data):
+    def test_draw_references_from_notebook(self, svedala_data):
         subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
-        result = cgmes_tools.draw_relations_from(svedala_data, subs, notebook=True)
+        result = cgmes_tools.draw_references_from(svedala_data, subs, notebook=True)
         assert isinstance(result, str)
         assert "new vis.Network" in result
 
-    def test_draw_relations_notebook(self, svedala_data):
+    def test_draw_references_notebook(self, svedala_data):
         subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
-        result = cgmes_tools.draw_relations(svedala_data, subs, notebook=True, levels=1)
+        result = cgmes_tools.draw_references(svedala_data, subs, notebook=True, levels=1)
         assert isinstance(result, str)
         assert "new vis.Network" in result
 
-    def test_draw_relations_to_file(self, svedala_data):
+    def test_draw_references_polars(self, svedala_data):
+        polars = pytest.importorskip("polars")
+        subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
+        result = cgmes_tools.draw_references_to(polars.from_pandas(svedala_data), subs, notebook=True)
+        assert "new vis.Network" in result
+
+    def test_draw_references_to_file(self, svedala_data):
         subs = svedala_data[(svedala_data["KEY"] == "Type") & (svedala_data["VALUE"] == "Substation")]["ID"].iloc[0]
         with tempfile.TemporaryDirectory() as tmpdir:
             orig_cwd = os.getcwd()
             os.chdir(tmpdir)
             try:
-                result = cgmes_tools.draw_relations_to(svedala_data, subs, notebook=False, open_browser=False)
+                result = cgmes_tools.draw_references_to(svedala_data, subs, notebook=False, open_browser=False)
                 assert os.path.exists(result)
                 assert os.path.getsize(result) > 0
                 with open(result, encoding="utf-8") as f:

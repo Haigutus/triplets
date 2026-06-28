@@ -118,7 +118,7 @@ def shape(obj):
 
 
 def run_quiet(fn, *args, **kwargs):
-    """Run fn muting stdout (e.g. print_triplets_diff / draw_relations)."""
+    """Run fn muting stdout (e.g. print_triplets_diff / draw_references)."""
     with contextlib.redirect_stdout(io.StringIO()):
         return fn(*args, **kwargs)
 

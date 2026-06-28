@@ -111,6 +111,9 @@ Old names keep working in 0.1 but emit `DeprecationWarning`; they will be remove
 | Old (0.0.x) | New (0.1) |
 |-----------|-----------|
 | `cgmes_tools.darw_relations_graph` | `cgmes_tools.draw_relations_graph` (typo fix) |
+| `cgmes_tools.draw_relations_to` | `cgmes_tools.draw_references_to` |
+| `cgmes_tools.draw_relations_from` | `cgmes_tools.draw_references_from` |
+| `cgmes_tools.draw_relations` | `cgmes_tools.draw_references` |
 | `cgmes_tools.statistics_GeneratingUnit_types` | `cgmes_tools.count_GeneratingUnit_types` |
 | `cgmes_tools.generate_instances_ID` | `cgmes_tools.generate_instance_ids` |
 | `cgmes_tools.get_model_data` | `cgmes_tools.get_model_triplets` |

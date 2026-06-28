@@ -234,3 +234,28 @@ def get_dangling_references(data, detailed=False):
     # default: value_counts of the dangling reference keys → [KEY, VALUE] (matches the
     # pandas Series once canonicalised: index=KEY, value=count).
     return dangling.group_by("KEY").len().rename({"len": "VALUE"}).select(["KEY", "VALUE"])
+
+
+# ── visualization (graph rendering is pandas-based) ───────────────────────────
+
+def _draw_reference_graph(data, reference_data, notebook, open_browser):
+    from .pandas_engine import _draw_references_graph, _instance_filenames
+    return _draw_references_graph(
+        reference_data.to_pandas(), "ID", notebook, open_browser=open_browser,
+        instance_labels=_instance_filenames(data.to_pandas()),
+    )
+
+
+def draw_references_to(data, UUID, notebook=False, open_browser=True):
+    """Visualize references pointing to *UUID* (uses tools.references_to)."""
+    return _draw_reference_graph(data, data.references_to(UUID, levels=99), notebook, open_browser)
+
+
+def draw_references_from(data, UUID, notebook=False, open_browser=True):
+    """Visualize references originating from *UUID* (uses tools.references_from)."""
+    return _draw_reference_graph(data, data.references_from(UUID, levels=99), notebook, open_browser)
+
+
+def draw_references(data, UUID, notebook=False, levels=2, open_browser=True):
+    """Visualize all references for *UUID* (uses tools.references)."""
+    return _draw_reference_graph(data, data.references(UUID, levels=levels), notebook, open_browser)

@@ -79,8 +79,7 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
     else:
         logger.debug("format=csv, engine=pandas (auto-detected)")
         from .csv_pandas import export_to_csv as _fn
-    return _fn(data, path=path, multivalue=multivalue, export_to_memory=export_to_memory,
-               single_file=single_file, base_filename=base_filename)
+    return _fn(data, path=path, multivalue=multivalue, export_to_memory=export_to_memory, single_file=single_file, base_filename=base_filename)
 
 
 def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_memory=False):

@@ -9,8 +9,9 @@ routes each call by input type:
 - pyarrow / DuckDB input → converted to pandas at the boundary (Arrow-backed,
   ~10 ms per million rows), run on the pandas engine, result converted back.
 
-Functions without a polars implementation (the draw_* visualizers) always take the
-pandas-boundary path.
+Functions without a polars implementation always take the pandas-boundary path;
+the draw_references_* visualizers have native polars engines that query references
+in polars and render via the shared pandas graph helper.
 """
 import functools
 import logging
@@ -51,8 +52,8 @@ DATA_FUNCTIONS = [
     "scale_load", "switch_equipment_terminals",
     # data quality
     "get_dangling_references",
-    # visualization
-    "draw_relations_to", "draw_relations_from", "draw_relations",
+    # visualization (aligned with tools.references_*)
+    "draw_references_to", "draw_references_from", "draw_references",
 ]
 
 # Old name → new name; old names keep working but emit DeprecationWarning
@@ -60,6 +61,9 @@ DEPRECATED_ALIASES = {
     "statistics_GeneratingUnit_types": "count_GeneratingUnit_types",
     "generate_instances_ID": "generate_instance_ids",
     "get_model_data": "get_model_triplets",
+    "draw_relations_to": "draw_references_to",
+    "draw_relations_from": "draw_references_from",
+    "draw_relations": "draw_references",
 }
 
 
@@ -117,7 +121,7 @@ def _data_dispatch(name):
     """Route a cgmes data function by input flavor: native polars when the input is a
     polars DataFrame and a polars implementation exists; native pandas for pandas input;
     otherwise the pandas boundary (pyarrow / DuckDB input, or functions with no polars
-    engine, e.g. the draw_* visualizers)."""
+    engine)."""
     pandas_fn = getattr(pandas_engine, name)
 
     @functools.wraps(pandas_fn)

@@ -676,8 +676,8 @@ def _instance_filenames(data):
     return {instance_id: os.path.basename(str(path)) for instance_id, path in zip(labels["INSTANCE_ID"], labels["VALUE"])}
 
 
-def _draw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False, open_browser=True, instance_labels=None):
-    """Create a temporary HTML file to visualize relations in a CGMES dataset.
+def _draw_references_graph(reference_data, ID_COLUMN="ID", notebook=False, open_browser=True, instance_labels=None):
+    """Create a temporary HTML file to visualize references in a CGMES dataset.
 
     Parameters
     ----------
@@ -708,7 +708,7 @@ def _draw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False, open_b
 
     Examples
     --------
-    >>> file_path = _draw_relations_graph(data, 'ID')
+    >>> file_path = _draw_references_graph(data, 'ID')
     """
 
     pivot = reference_data.drop_duplicates([ID_COLUMN, "KEY"]).pivot(index=ID_COLUMN, columns="KEY")["VALUE"].reset_index()
@@ -768,15 +768,15 @@ def _draw_relations_graph(reference_data, ID_COLUMN="ID", notebook=False, open_b
 
 
 
-def draw_relations_to(data, UUID, notebook=False, open_browser=True):
-    """Visualize relations pointing to a specific UUID in a CGMES dataset.
+def draw_references_to(data, UUID, notebook=False, open_browser=True):
+    """Visualize references pointing to a specific UUID in a CGMES dataset.
 
     Parameters
     ----------
     data : pandas.DataFrame
         Triplet dataset containing CGMES data.
     UUID : str
-        UUID of the object to visualize incoming relations for.
+        UUID of the object to visualize incoming references for.
     notebook : bool, optional
         If True, render the graph for Jupyter notebook (default is False).
 
@@ -788,24 +788,22 @@ def draw_relations_to(data, UUID, notebook=False, open_browser=True):
 
     Examples
     --------
-    >>> file_path = draw_relations_to(data, 'uuid1')
+    >>> file_path = draw_references_to(data, 'uuid1')
     """
     reference_data = data.references_to(UUID, levels=99)
-
-    ID_COLUMN = "ID"
-
-    return _draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
+    return _draw_references_graph(reference_data, "ID", notebook, open_browser=open_browser,
+                                instance_labels=_instance_filenames(data))
 
 
-def draw_relations_from(data, UUID, notebook=False, open_browser=True):
-    """Visualize relations originating from a specific UUID in a CGMES dataset.
+def draw_references_from(data, UUID, notebook=False, open_browser=True):
+    """Visualize references originating from a specific UUID in a CGMES dataset.
 
     Parameters
     ----------
     data : pandas.DataFrame
         Triplet dataset containing CGMES data.
     UUID : str
-        UUID of the object to visualize outgoing relations for.
+        UUID of the object to visualize outgoing references for.
     notebook : bool, optional
         If True, render the graph for Jupyter notebook (default is False).
 
@@ -817,28 +815,26 @@ def draw_relations_from(data, UUID, notebook=False, open_browser=True):
 
     Examples
     --------
-    >>> file_path = draw_relations_from(data, 'uuid1')
+    >>> file_path = draw_references_from(data, 'uuid1')
     """
     reference_data = data.references_from(UUID, levels=99)
-
-    ID_COLUMN = "ID"
-
-    return _draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
+    return _draw_references_graph(reference_data, "ID", notebook, open_browser=open_browser,
+                                instance_labels=_instance_filenames(data))
 
 
-def draw_relations(data, UUID, notebook=False, levels=2, open_browser=True):
-    """Visualize all relations (incoming and outgoing) for a specific UUID in a CGMES dataset.
+def draw_references(data, UUID, notebook=False, levels=2, open_browser=True):
+    """Visualize all references (incoming and outgoing) for a specific UUID.
 
     Parameters
     ----------
     data : pandas.DataFrame
         Triplet dataset containing CGMES data.
     UUID : str
-        UUID of the object to visualize relations for.
+        UUID of the object to visualize references for.
     notebook : bool, optional
         If True, render the graph for Jupyter notebook (default is False).
     levels : int, optional
-        Number of levels to traverse for relations (default is 2).
+        Number of levels to traverse (default is 2).
 
     Returns
     -------
@@ -848,13 +844,11 @@ def draw_relations(data, UUID, notebook=False, levels=2, open_browser=True):
 
     Examples
     --------
-    >>> file_path = draw_relations(data, 'uuid1', levels=3)
+    >>> file_path = draw_references(data, 'uuid1', levels=3)
     """
     reference_data = data.references(UUID, levels=levels)
-
-    ID_COLUMN = "ID"
-
-    return _draw_relations_graph(reference_data, ID_COLUMN, notebook, open_browser=open_browser, instance_labels=_instance_filenames(data))
+    return _draw_references_graph(reference_data, "ID", notebook, open_browser=open_browser,
+                                instance_labels=_instance_filenames(data))
 
 
 def scale_load(data, load_setpoint, cos_f=None):
@@ -1011,9 +1005,9 @@ if __name__ == '__main__':
 
     object_UUID = "99722373_VL_TN1"
 
-    draw_relations_from(data, object_UUID)
-    draw_relations_to(data, object_UUID)
-    draw_relations(data, object_UUID)
+    draw_references_from(data, object_UUID)
+    draw_references_to(data, object_UUID)
+    draw_references(data, object_UUID)
 
 
 
