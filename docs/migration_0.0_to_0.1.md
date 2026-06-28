@@ -1,5 +1,8 @@
 # Migration: 0.0 → 0.1
 
+> **Single source of truth:** edit this file only. The published docs include it
+> from `docs/source/guides/migration_0.0_to_0.1.md` via MyST `{include}`.
+
 ## Breaking changes
 
 #### Python 3.11 minimum
@@ -68,13 +71,16 @@ They will be removed in 0.2.
 | `triplets.rdf_parser.type_tableview` | `triplets.tools.type_tableview` |
 | `triplets.rdf_parser.key_tableview` | `triplets.tools.key_tableview` |
 | `triplets.rdf_parser.types_dict` | `triplets.tools.types_dict` |
-| `triplets.rdf_parser.filter_by_type` | `triplets.tools.filter_by_type` |
+| `triplets.rdf_parser.filter_by_type` | `triplets.tools.filter_triplets_by_type` |
 | `triplets.rdf_parser.references_to` | `triplets.tools.references_to` |
 | `triplets.rdf_parser.export_to_excel` | `triplets.export.export_to_excel` |
 | `triplets.rdf_parser.export_to_csv` | `triplets.export.export_to_csv` |
 | `triplets.rdf_parser.export_to_cimxml` | `triplets.export.export_to_cimxml` |
 | `triplets.rdf_parser.export_to_networkx` | `triplets.export.export_to_networkx` |
 | All other `rdf_parser.*` query/filter/diff functions | `triplets.tools.*` |
+
+The old `filter_by_type` name (and other pre-0.1 tool names below) still work via
+compatibility aliases but emit `DeprecationWarning`.
 
 ### tools renames
 
@@ -101,8 +107,8 @@ Old names keep working but emit `DeprecationWarning`; they will be removed in 0.
 > Note: 0.1.0rc4 briefly misnamed these two as `set_triplets_value_by_key(_and_id)`;
 > corrected before 0.1.0 — treated as an rc-only bug, no compatibility aliases.
 
-The renames apply to `triplets.tools.*`, the DataFrame methods, and the
-`df.triplets.*` accessor alike.
+The renames apply to `triplets.tools.*`, root methods on DataFrames/connections, and the
+`.triplets` accessor namespace (pandas, polars, and DuckDB).
 
 ### cgmes_tools renames
 
@@ -110,13 +116,16 @@ Old names keep working in 0.1 but emit `DeprecationWarning`; they will be remove
 
 | Old (0.0) | New (0.1) |
 |-----------|-----------|
-| `cgmes_tools.darw_relations_graph` | `cgmes_tools.draw_relations_graph` (typo fix) |
 | `cgmes_tools.draw_relations_to` | `cgmes_tools.draw_references_to` |
 | `cgmes_tools.draw_relations_from` | `cgmes_tools.draw_references_from` |
 | `cgmes_tools.draw_relations` | `cgmes_tools.draw_references` |
 | `cgmes_tools.statistics_GeneratingUnit_types` | `cgmes_tools.count_GeneratingUnit_types` |
 | `cgmes_tools.generate_instances_ID` | `cgmes_tools.generate_instance_ids` |
 | `cgmes_tools.get_model_data` | `cgmes_tools.get_model_triplets` |
+
+Visualization helpers were renamed from `draw_relations_*` to `draw_references_*` so they
+align with `tools.references_*`. The graph renderer is internal (`_draw_references_graph`);
+there is no public `draw_relations_graph` API in 0.1.
 
 ### Triplets are always strings (or null)
 
@@ -151,32 +160,35 @@ header (`Model.messageType`, `keyword`, `Model.profile`, `conformsTo`), so
 CGMES 2.4.15, CGMES 3.0 and NetworkCode headers all resolve to the right
 profile section.
 
-### DataFrame methods
+### Accessor namespace
 
-The old monkey-patched methods (`data.type_tableview(...)`) still work but the recommended
-approach is the accessor namespace:
+The old monkey-patched root methods (`data.type_tableview(...)`) still work but the
+recommended approach is the `.triplets` namespace:
 
 ```python
-# Old (monkey-patch, still works)
-data.type_tableview("ACLineSegment")
+# pandas / polars — recommended
+df.triplets.type_tableview("ACLineSegment")
 
-# New (accessor namespace)
-data.triplets.type_tableview("ACLineSegment")
+# DuckDB connection — same method names, different object
+con.triplets.type_tableview("ACLineSegment").df()
 ```
 
-Both call the same underlying function. The accessor namespace works for both pandas and polars.
+All three backends expose the same tool and export names on `.triplets`. DuckDB
+results are relations — call `.df()` or `.pl()` when you need a DataFrame.
+Root-level methods remain on pandas/polars DataFrames and DuckDB connections for
+backwards compatibility.
 
 ## New module structure
 
 ```
 triplets/
 ├── parser/          # parse XML to DataFrames (3 engines)
-├── tools/           # query, filter, diff, transform (pandas + polars engines)
-├── export/          # Excel, CSV, CIM XML, NetworkX (pandas engine)
+├── tools/           # query, filter, diff, transform (pandas + polars + duckdb)
+├── export/          # Excel, CSV, CIM XML, N-Quads, NetworkX
 ├── cli/             # cim-spreadsheet, cim-diff CLI tools
 ├── cgmes_tools/     # CGMES metadata, visualization, data quality
 ├── rdfs_tools/      # RDF Schema utilities
 ├── export_schema/   # ENTSO-E JSON schema files
-├── _accessor.py     # df.triplets.* namespace registration
+├── _accessor.py     # .triplets namespace registration
 └── rdf_parser.py    # deprecated shim (will be removed in 0.2)
 ```

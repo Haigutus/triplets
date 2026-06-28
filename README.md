@@ -8,6 +8,8 @@
 ### Documentation:
 https://haigutus.github.io/triplets
 
+Upgrading from 0.0.x? See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md).
+
 ### To get started:
 
 ```shell
@@ -111,16 +113,22 @@ data.triplets.get_types_count()
 
 ## Accessor namespace
 
-All engines — including a DuckDB connection (`con.triplets.*`) — share the same
-`df.triplets.*` accessor:
+pandas and polars DataFrames use `df.triplets.*`; a DuckDB connection uses
+`con.triplets.*`. The same method names are available on both (DuckDB returns
+relations — add `.df()` or `.pl()` when needed):
 
 ```python
-data.triplets.tableview_by_type("ACLineSegment")
-data.triplets.get_types_count()
-data.triplets.filter_triplets(KEY="Type")
-data.triplets.export_to_excel(export_to_memory=True)
-data.triplets.export_to_nquads("/tmp/output.nq")
+# pandas / polars
+df.triplets.tableview_by_type("ACLineSegment")
+df.triplets.export_to_nquads("/tmp/output.nq")
+
+# DuckDB
+con.triplets.tableview_by_type("ACLineSegment").df()
+con.triplets.get_types_count()
 ```
+
+Root-level methods (`df.type_tableview(...)`, `con.filter_triplets(...)`) still
+work for backwards compatibility.
 
 ## CLI tools
 
@@ -139,3 +147,4 @@ cim-diff original.xml modified.xml
 | get_types_count | 21ms | **11ms** | 18ms |
 
 The old `rdf_parser.py` functions still work but emit deprecation warnings.
+See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for renames and breaking changes.
