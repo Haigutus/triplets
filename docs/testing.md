@@ -1,5 +1,8 @@
 # Testing
 
+> **Single source of truth:** edit this file only. The published docs include it
+> from `docs/source/guides/testing.md` via MyST `{include}`.
+
 ## Quick Start
 
 ```shell
@@ -78,7 +81,7 @@ pytest tests/test_benchmarks_realgrid.py --benchmark-only -k "tableview" -v
 
 # save results to JSON
 pytest tests/test_benchmarks_realgrid.py --benchmark-only \
-  --benchmark-json=documents/parsers_performance.json -k "parse"
+  --benchmark-json=tests/performance_results/parsers_performance.json -k "parse"
 ```
 
 ## pixi Tasks

@@ -1,5 +1,8 @@
 # Building
 
+> **Single source of truth:** edit this file only. The published docs include it
+> from `docs/source/guides/building.md` via MyST `{include}`.
+
 ## Local Development Build
 
 Build the cython extension for local development:
