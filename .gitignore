@@ -14,3 +14,5 @@ triplets/export/cimxml_cython_pugixml.cpp
 *.egg-info/
 # IDE
 /.idea/
+# uv lockfile (dev-only; not part of the published package)
+uv.lock

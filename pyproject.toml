@@ -1,14 +1,39 @@
 [project]
 name = "triplets"
 dynamic = ["version"]
+description = "Parse, query and export CIM RDF/XML power-grid data as triplet DataFrames (pandas, polars, DuckDB)"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Kristjan Vilgo", email = "kristjan.vilgo@gmail.com" },
+]
+keywords = ["CIM", "CGMES", "RDF", "XML", "power-grid", "triplets", "pandas", "polars", "duckdb"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     # pandas 2.2.x excluded: pivot() on ArrowDtype dictionary columns crashes with
     # "'Series' object has no attribute '_pa_array'" (fixed upstream in 2.3)
     "pandas>=2.0,!=2.2.*",
     "lxml>=4.9",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Haigutus/triplets"
+Documentation = "https://haigutus.github.io/triplets"
+Repository = "https://github.com/Haigutus/triplets"
+Issues = "https://github.com/Haigutus/triplets/issues"
 
 [project.scripts]
 cim-spreadsheet = "triplets.cli.cim_spreadsheet:main"
@@ -63,7 +88,7 @@ exclude-newer = "P14D"
 
 [build-system]
 requires = [
-    "setuptools>=61",
+    "setuptools>=77",
     "wheel",
     "versioneer",
     "Cython>=3.0; platform_system != 'Emscripten'",
