@@ -62,6 +62,18 @@ def _accessor_method(function):
     return method
 
 
+def _namespace(methods, attach_namespace, doc=None):
+    """Build an accessor class delegating each method to function(self._obj, ...) and attach it."""
+    class Accessor:
+        def __init__(self, obj):
+            self._obj = obj
+
+    Accessor.__doc__ = doc
+    for name, function in methods.items():
+        setattr(Accessor, name, _accessor_method(function))
+    attach_namespace(Accessor)
+
+
 def _register(target_class, methods, attach_namespace):
     """Bind each callable onto the class root and attach the set as a `triplets` namespace.
 
@@ -76,15 +88,7 @@ def _register(target_class, methods, attach_namespace):
             continue
         setattr(target_class, name, function)
 
-    class TripletsAccessor:
-        """Triplet operations via the `triplets` namespace."""
-
-        def __init__(self, obj):
-            self._obj = obj
-
-    for name, function in methods.items():
-        setattr(TripletsAccessor, name, _accessor_method(function))
-    attach_namespace(TripletsAccessor)
+    _namespace(methods, attach_namespace, doc="Triplet operations via the `triplets` namespace.")
     logger.debug("Registered %d triplets methods on %s (root + namespace)",
                  len(methods), target_class.__name__)
 
@@ -138,3 +142,25 @@ if duckdb:
               lambda accessor: setattr(duckdb.DuckDBPyConnection, "triplets", property(accessor)))
 else:
     logger.debug("duckdb not installed, skipping DuckDB tools/export patches")
+
+
+# ── SPARQL / SHACL namespaces ────────────────────────────────────────────────
+# Namespace-only (no root monkey-patches): "query" and "validate" are too
+# generic to claim on DataFrame/connection classes. The dispatchers auto-detect
+# the input flavor, so the same function backs all three namespaces.
+from . import sparql, validation
+
+_QUERY_NAMESPACES = {
+    "sparql": ({"query": sparql.query}, "SPARQL queries via the `sparql` namespace."),
+    "shacl": ({"validate": validation.validate}, "SHACL validation via the `shacl` namespace."),
+}
+
+for _name, (_ns_methods, _doc) in _QUERY_NAMESPACES.items():
+    _namespace(_ns_methods, pandas.api.extensions.register_dataframe_accessor(_name), doc=_doc)
+    if polars:
+        _namespace(_ns_methods, polars.api.register_dataframe_namespace(_name), doc=_doc)
+    if duckdb:
+        _namespace(_ns_methods,
+                   lambda accessor, name=_name: setattr(duckdb.DuckDBPyConnection, name, property(accessor)),
+                   doc=_doc)
+logger.debug("Registered sparql + shacl namespaces")
