@@ -481,13 +481,17 @@ def references(data, ID, levels=1):
     return pandas.concat([FROM, TO]).drop_duplicates(["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
 
-def types_dict(data):
+def types_dict(data, contains=None, case_insensitive=True):
     """Return a dictionary of object types and their occurrence counts.
 
     Parameters
     ----------
     data : pandas.DataFrame
         Triplet dataset containing RDF data.
+    contains : str, optional
+        If given, keep only types whose name contains this substring.
+    case_insensitive : bool, default True
+        If True, the ``contains`` match ignores letter case.
 
     Returns
     -------
@@ -499,6 +503,8 @@ def types_dict(data):
     >>> types = data.types_dict()
     >>> print(types)
     {'ACLineSegment': 10, 'PowerTransformer': 5, ...}
+    >>> data.types_dict(contains="Settlement")
+    {'MarketEvaluationPoint': 3, ...}
     """
     # Count distinct objects per type, not Type-declaration rows: an object
     # re-declared across instances (EQ/SSH/TP/SV) must count once. Matches the
@@ -506,7 +512,11 @@ def types_dict(data):
     type_rows = data[data.KEY == "Type"].drop_duplicates(subset=["ID", "VALUE"])
     types_dictionary = type_rows["VALUE"].value_counts().to_dict()
 
-    return types_dictionary
+    if contains is None:
+        return types_dictionary
+    needle = contains.casefold() if case_insensitive else contains
+    key = (lambda t: t.casefold()) if case_insensitive else (lambda t: t)
+    return {t: n for t, n in types_dictionary.items() if needle in key(t)}
 
 
 def _string_or_none(value):
@@ -871,6 +881,51 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
             else:
                 mask = mask & (data[col].astype(str) == val)
     return data[mask]
+
+
+def filter_triplets_by_value(data, VALUE, detailed=False, type_key="Type", regex=False):
+    """Filter to objects that have any triplet matching VALUE.
+
+    Selects every object (ID) with at least one triplet whose VALUE matches
+    `VALUE`, then summarizes those objects.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
+    VALUE : str
+        Value to match. Exact match by default; regex pattern if regex=True.
+    detailed : bool, default False
+        If True, return all triplets of the matched objects. If False, return
+        only the matching rows plus each matched object's `type_key` row, sorted
+        by ID with the type row first within each ID group.
+    type_key : str
+        Key identifying each object's type row, by default "Type".
+    regex : bool, default False
+        If True, use regex matching (re.search). If False, exact match.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Filtered triplet dataset.
+
+    Examples
+    --------
+    >>> filter_triplets_by_value(data, "DOWGEN_LD1", regex=True)
+    """
+    probe = filter_triplets(data, VALUE=VALUE, regex=regex)
+    detailed_data = filter_triplets_by_triplets(data, probe)
+
+    if detailed:
+        return detailed_data
+
+    type_data = detailed_data[detailed_data.KEY == type_key]
+    combined = pandas.concat([probe, type_data]).drop_duplicates()
+    return (combined
+            .assign(_type_first=combined.KEY != type_key)
+            .sort_values(["ID", "_type_first"], kind="stable")
+            .drop(columns="_type_first")
+            .reset_index(drop=True))
 
 
 def diff_triplets(old_data, new_data):

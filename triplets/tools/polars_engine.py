@@ -81,12 +81,22 @@ def id_tableview(data, id, string_to_number=True, multivalue=False):
     return _tableview(ids, data, string_to_number, multivalue, id["ID"].to_list())
 
 
-def types_dict(data):
-    """Return dict of {type_name: count}."""
+def types_dict(data, contains=None, case_insensitive=True):
+    """Return dict of {type_name: count}.
+
+    With ``contains``, keep only types whose name contains that substring
+    (case-insensitive unless ``case_insensitive=False``).
+    """
     types = data.filter(pl.col("KEY") == "Type").group_by("VALUE").agg(
         pl.col("ID").n_unique().alias("count")
     )
-    return dict(zip(types["VALUE"].to_list(), types["count"].to_list()))
+    types_dictionary = dict(zip(types["VALUE"].to_list(), types["count"].to_list()))
+
+    if contains is None:
+        return types_dictionary
+    needle = contains.casefold() if case_insensitive else contains
+    key = (lambda t: t.casefold()) if case_insensitive else (lambda t: t)
+    return {t: n for t, n in types_dictionary.items() if needle in key(t)}
 
 
 def get_object_data(data, object_UUID):
@@ -244,6 +254,50 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
             else:
                 expr = expr & (pl.col(col).cast(pl.Utf8) == val)
     return data.filter(expr)
+
+
+def filter_triplets_by_value(data, VALUE, detailed=False, type_key="Type", regex=False):
+    """Filter to objects that have any triplet matching VALUE.
+
+    Selects every object (ID) with at least one triplet whose VALUE matches
+    `VALUE`, then summarizes those objects.
+
+    Parameters
+    ----------
+    data : polars.DataFrame
+        Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
+    VALUE : str
+        Value to match. Exact match by default; regex pattern if regex=True.
+    detailed : bool, default False
+        If True, return all triplets of the matched objects. If False, return
+        only the matching rows plus each matched object's `type_key` row, sorted
+        by ID with the type row first within each ID group.
+    type_key : str, default "Type"
+        KEY identifying each object's type row.
+    regex : bool, default False
+        If True, match VALUE as a regex (str.contains). If False, exact match.
+
+    Returns
+    -------
+    polars.DataFrame
+        Filtered triplet dataset.
+
+    Examples
+    --------
+    >>> filter_triplets_by_value(data, "DOWGEN_LD1", regex=True)
+    """
+    probe = filter_triplets(data, VALUE=VALUE, regex=regex)
+    detailed_data = filter_triplets_by_triplets(data, probe)
+
+    if detailed:
+        return detailed_data
+
+    type_data = detailed_data.filter(pl.col("KEY") == type_key)
+    return (
+        pl.concat([probe, type_data])
+        .unique()
+        .sort(by=["ID", pl.col("KEY") == type_key], descending=[False, True])
+    )
 
 
 def _value_literal(value):

@@ -64,8 +64,8 @@ def key_tableview(data, key, string_to_number=True, multivalue=False, engine="au
 def id_tableview(data, id, string_to_number=True, multivalue=False, engine="auto"):
     return _get_engine(engine, data).id_tableview(data, id, string_to_number=string_to_number, multivalue=multivalue)
 
-def types_dict(data, engine="auto"):
-    return _get_engine(engine, data).types_dict(data)
+def types_dict(data, contains=None, case_insensitive=True, engine="auto"):
+    return _get_engine(engine, data).types_dict(data, contains=contains, case_insensitive=case_insensitive)
 
 def get_object_data(data, object_UUID, engine="auto"):
     return _get_engine(engine, data).get_object_data(data, object_UUID)
@@ -102,6 +102,9 @@ def filter_triplets_by_triplets(data, filter_triplet, engine="auto"):
 
 def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex=False, engine="auto"):
     return _get_engine(engine, data).filter_triplets(data, ID=ID, KEY=KEY, VALUE=VALUE, INSTANCE_ID=INSTANCE_ID, regex=regex)
+
+def filter_triplets_by_value(data, VALUE, detailed=False, type_key="Type", regex=False, engine="auto"):
+    return _get_engine(engine, data).filter_triplets_by_value(data, VALUE, detailed=detailed, type_key=type_key, regex=regex)
 
 def set_value_at_key(data, key, value, engine="auto"):
     return _get_engine(engine, data).set_value_at_key(data, key, value)

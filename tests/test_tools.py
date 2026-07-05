@@ -140,6 +140,32 @@ class TestTypesDict:
         assert td["ACLineSegment"] == 97
         assert td["Substation"] == 56
 
+    def test_contains_is_a_subset_with_unchanged_counts(self, svedala_data):
+        full = svedala_data.types_dict()
+        subset = svedala_data.types_dict(contains="line")
+        assert set(subset).issubset(full)
+        assert all(full[t] == subset[t] for t in subset)                 # counts unchanged
+        assert all("line" in t.casefold() for t in subset)               # case-insensitive default
+        assert "ACLineSegment" in subset                                 # matched despite capital L
+
+    def test_contains_case_sensitive(self, svedala_data):
+        assert "ACLineSegment" not in svedala_data.types_dict(contains="line", case_insensitive=False)
+        assert "ACLineSegment" in svedala_data.types_dict(contains="Line", case_insensitive=False)
+
+    def test_contains_no_match_returns_empty(self, svedala_data):
+        assert svedala_data.types_dict(contains="NoSuchType__zzz") == {}
+
+    def test_contains_engine_parity(self, svedala_data):
+        polars = pytest.importorskip("polars")
+        duckdb = pytest.importorskip("duckdb")
+        pd_out = svedala_data.types_dict(contains="line")
+        pl_out = polars.from_pandas(svedala_data).types_dict(contains="line")
+        con = duckdb.connect()
+        con.register("_src", svedala_data)
+        con.execute("CREATE TABLE triplets AS SELECT * FROM _src")
+        db_out = con.types_dict(contains="line")
+        assert pd_out == pl_out == db_out
+
     @pytest.mark.benchmark(group="tools-query")
     def test_benchmark(self, benchmark, svedala_data):
         benchmark(svedala_data.types_dict)
@@ -231,6 +257,35 @@ class TestFilterByTriplet:
         filtered = triplets.rdf_parser.filter_by_triplet(svedala_data, filter_df)
         assert isinstance(filtered, pandas.DataFrame)
         assert len(filtered) > 0
+
+
+class TestFilterByValue:
+    def test_summary_has_match_and_type(self, svedala_data):
+        # match on an object's name; summary = the match row + that object's Type row
+        name = svedala_data[svedala_data["KEY"] == "IdentifiedObject.name"]["VALUE"].iloc[0]
+        out = svedala_data.filter_triplets_by_value(name)
+        matched_ids = set(svedala_data[svedala_data["VALUE"] == name]["ID"])
+        assert set(out["ID"].unique()).issubset(matched_ids)
+        assert set(out["KEY"]) >= {"IdentifiedObject.name", "Type"}
+
+    def test_type_row_sorts_first_within_id(self, svedala_data):
+        name = svedala_data[svedala_data["KEY"] == "IdentifiedObject.name"]["VALUE"].iloc[0]
+        out = svedala_data.filter_triplets_by_value(name)
+        for _id, group in out.groupby("ID", sort=False):
+            assert group["KEY"].iloc[0] == "Type"
+
+    def test_detailed_returns_all_triplets_of_matched_objects(self, svedala_data):
+        name = svedala_data[svedala_data["KEY"] == "IdentifiedObject.name"]["VALUE"].iloc[0]
+        matched_ids = set(svedala_data[svedala_data["VALUE"] == name]["ID"])
+        out = svedala_data.filter_triplets_by_value(name, detailed=True)
+        expected = svedala_data[svedala_data["ID"].isin(matched_ids)]
+        assert len(out) == len(expected)
+        assert set(out["ID"].unique()) == matched_ids
+
+    def test_no_match_returns_empty(self, svedala_data):
+        out = svedala_data.filter_triplets_by_value("NoSuchValue__zzz")
+        assert isinstance(out, pandas.DataFrame)
+        assert len(out) == 0
 
 
 # ── Mutate functions ────────────────────────────────────────────────────────

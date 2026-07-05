@@ -31,11 +31,12 @@ def make_context(df: pandas.DataFrame) -> dict:
     type_name = "ACLineSegment" if "ACLineSegment" in type_counts.index else str(type_counts.index[0])
     reference = str(df[(df["KEY"] == "Type") & (df["VALUE"] == type_name)]["ID"].iloc[0])
     key = "IdentifiedObject.name" if (df["KEY"] == "IdentifiedObject.name").any() else str(df["KEY"].iloc[0])
+    name = str(df[df["KEY"] == key]["VALUE"].iloc[0])
     instances = list(df["INSTANCE_ID"].astype(str).unique())
     subset = df[(df["KEY"] == "Type") & (df["VALUE"] == type_name)][["ID", "KEY", "VALUE"]]
     update_data = pandas.DataFrame({"ID": [reference, "NEWID"], "KEY": [key, "Type"],
                                     "VALUE": ["UPDATED", "NewClass"]})
-    return {"type": type_name, "key": key, "id": reference, "reference": reference,
+    return {"type": type_name, "key": key, "name": name, "id": reference, "reference": reference,
             "instances": instances, "subset": subset, "update_data": update_data,
             "new_data": df.iloc[100:]}
 
@@ -86,6 +87,7 @@ CALL_SPECS = {
     "filter_triplets": lambda e, d, c: d.filter_triplets(KEY="Type", VALUE=c["type"]),
     "filter_triplets_by_type": lambda e, d, c: d.filter_triplets_by_type(c["type"]),
     "filter_triplets_by_triplets": lambda e, d, c: d.filter_triplets_by_triplets(_to_engine(e, c["subset"])),
+    "filter_triplets_by_value": lambda e, d, c: d.filter_triplets_by_value(c["name"]),
     "references_to": lambda e, d, c: d.references_to(c["reference"]),
     "references_from": lambda e, d, c: d.references_from(c["reference"]),
     "references": lambda e, d, c: d.references(c["reference"]),

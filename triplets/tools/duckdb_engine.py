@@ -68,8 +68,12 @@ def _pivot_view(self, view_name, id_predicate, table_name):
     """)
 
 
-def types_dict(self, table_name=TABLE_NAME):
-    """Return dict of {type_name: count}."""
+def types_dict(self, contains=None, case_insensitive=True, table_name=TABLE_NAME):
+    """Return dict of {type_name: count}.
+
+    With ``contains``, keep only types whose name contains that substring
+    (case-insensitive unless ``case_insensitive=False``).
+    """
     rows = self.execute(f"""
         SELECT VALUE, COUNT(DISTINCT ID) as count
         FROM {table_name}
@@ -77,7 +81,13 @@ def types_dict(self, table_name=TABLE_NAME):
         GROUP BY VALUE
         ORDER BY count DESC
     """).fetchall()
-    return dict(rows)
+    types_dictionary = dict(rows)
+
+    if contains is None:
+        return types_dictionary
+    needle = contains.casefold() if case_insensitive else contains
+    key = (lambda t: t.casefold()) if case_insensitive else (lambda t: t)
+    return {t: n for t, n in types_dictionary.items() if needle in key(t)}
 
 
 def type_tableview(self, type_name, table_name=TABLE_NAME, view_name=None):
@@ -109,6 +119,28 @@ def filter_triplets_by_type(self, type_name, table_name=TABLE_NAME):
             SELECT ID FROM {table_name}
             WHERE KEY = 'Type' AND VALUE = '{type_name}'
         )
+    """)
+
+
+def filter_triplets_by_value(self, VALUE, detailed=False, type_key="Type",
+                             regex=False, table_name=TABLE_NAME):
+    """Filter to objects that have any triplet matching VALUE. Returns DuckDBPyRelation.
+
+    Selects every object (ID) with at least one triplet whose VALUE matches
+    `VALUE`. With detailed=True, returns all their triplets; otherwise the matching
+    rows plus each matched object's `type_key` row, type row first within each ID.
+    """
+    match = f"VALUE SIMILAR TO {_lit(VALUE)}" if regex else f"VALUE = {_lit(VALUE)}"
+    probe_ids = f"SELECT DISTINCT ID FROM {table_name} WHERE {match}"
+    if detailed:
+        return self.sql(f"SELECT * FROM {table_name} WHERE ID IN ({probe_ids})")
+    return self.sql(f"""
+        SELECT * FROM (
+            SELECT * FROM {table_name} WHERE {match}
+            UNION
+            SELECT * FROM {table_name} WHERE ID IN ({probe_ids}) AND KEY = {_lit(type_key)}
+        )
+        ORDER BY ID, (KEY = {_lit(type_key)}) DESC
     """)
 
 
