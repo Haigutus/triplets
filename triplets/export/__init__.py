@@ -383,10 +383,3 @@ __all__ = [
     "ExportType",
     "_get_qname",
 ]
-
-# Register monkey-patches on pandas.DataFrame
-pandas.DataFrame.export_to_excel = export_to_excel
-pandas.DataFrame.export_to_csv = export_to_csv
-pandas.DataFrame.export_to_cimxml = export_to_cimxml
-pandas.DataFrame.export_to_nquads = export_to_nquads
-pandas.DataFrame.export_to_networkx = export_to_networkx

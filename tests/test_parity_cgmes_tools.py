@@ -1,11 +1,13 @@
 """Input-flavor parity (and timing) for cgmes_tools.
 
-cgmes_tools is a single pandas implementation behind a ``@_pandas_boundary`` wrapper that
-accepts any flavor (pandas / polars / pyarrow / duckdb) and converts the result back. So
-"parity" here is **input-flavor invariance**: calling each data-function with pandas, polars
-or duckdb input must give the same result. **No xfails** — a flavor crashing/differing where
-pandas works is a boundary bug. If the pandas reference itself can't run on the data (an
-unmet precondition, e.g. no ConformLoad for scale_load), the cell is skipped.
+cgmes_tools dispatches each data function by input flavor (``_data_dispatch``): native
+polars engine for polars input, native pandas for pandas input, and a pandas boundary
+(convert in, convert the result back) for pyarrow / duckdb input or functions without a
+polars implementation. So "parity" here is **input-flavor invariance**: calling each
+data-function with pandas, polars or duckdb input must give the same result. **No
+xfails** — a flavor crashing/differing where pandas works is a dispatch/engine bug. If
+the pandas reference itself can't run on the data (an unmet precondition, e.g. no
+ConformLoad for scale_load), the cell is skipped.
 
 Shared helpers live in ``tests/_parity.py``.
 """
@@ -118,6 +120,24 @@ def test_polars_uses_native_engine(svedala_pandas, svedala_ctx, monkeypatch, fun
     monkeypatch.setattr(cgmes, "_to_pandas", lambda d: (calls.append(1), real_to_pandas(d))[1])
     run_quiet(spec, build_engine("polars", svedala_pandas), svedala_ctx)
     assert not calls, f"{func} on polars input fell back to the pandas boundary (_to_pandas called {len(calls)}x)"
+
+
+# draw_* have no CALL_SPECS (they render a graph) — guard their native path separately,
+# with the shared renderer stubbed so no HTML file is written / browser opened.
+@pytest.mark.parametrize("func", sorted(f for f in cgmes.DATA_FUNCTIONS if f.startswith("draw_")))
+def test_polars_draw_uses_native_engine(svedala_pandas, svedala_ctx, monkeypatch, func):
+    pytest.importorskip("polars")
+    rendered = []
+    monkeypatch.setattr(cgmes.pandas_engine, "_draw_references_graph",
+                        lambda *args, **kwargs: rendered.append(1))
+    boundary = []
+    real_to_pandas = cgmes._to_pandas
+    monkeypatch.setattr(cgmes, "_to_pandas", lambda d: (boundary.append(1), real_to_pandas(d))[1])
+
+    getattr(cgmes, func)(build_engine("polars", svedala_pandas), svedala_ctx["equipment_id"])
+
+    assert rendered, f"{func} never reached the graph renderer"
+    assert not boundary, f"{func} on polars input fell back to the pandas boundary"
 
 
 # ── Test 1c: synthetic parity for functions Svedala can't exercise ────────────

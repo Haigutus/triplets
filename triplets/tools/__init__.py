@@ -6,18 +6,34 @@ DataFrames ([ID, KEY, VALUE, INSTANCE_ID]).
 Engines:
 - pandas_engine (default, always available)
 - polars_engine (optional, uses polars-native operations for speed)
+- duckdb_engine (optional, connection-first; bound to connections by _accessor)
 
-The engine is auto-detected from the input DataFrame type, or can be
-specified explicitly with engine="pandas" or engine="polars".
+Every public function here dispatches by the input DataFrame type, or by an
+explicit engine="pandas" / engine="polars". Methods registered on DataFrames
+and connections (see triplets._accessor) bind the engine functions directly —
+the object a method is called on already determines the engine.
 """
 
 import logging
+import inspect
 import functools
 import warnings
 
 from .._engine_detect import is_polars
 
 logger = logging.getLogger(__name__)
+
+
+def _engine_functions(module):
+    """Public functions defined in *module* — each takes the df/connection first.
+
+    The dispatched/registered method surface is derived from this instead of a
+    hand-kept list, so it tracks the engine module automatically. `_`-prefixed
+    helpers (e.g. `_tableviews_to_triplets`, which takes a dict, not a DataFrame)
+    are excluded.
+    """
+    return {name: obj for name, obj in inspect.getmembers(module, inspect.isfunction)
+            if not name.startswith("_") and obj.__module__ == module.__name__}
 
 
 def _auto_engine(data):
@@ -36,6 +52,8 @@ def _get_engine(engine, data=None):
     engine, the input type is validated so a mismatch fails clearly at the boundary
     rather than deep inside the engine.
     """
+    if isinstance(data, dict):  # tableviews: detect/validate from the first frame
+        data = next(iter(data.values()), None)
     if engine == "auto":
         engine = _auto_engine(data) if data is not None else "pandas"
     else:
@@ -52,94 +70,36 @@ def _get_engine(engine, data=None):
     return pandas_engine
 
 
-# ── Dispatcher functions ────────────────────────────────────────────────────
-# Each function delegates to the appropriate engine based on input type.
+# ── Dispatchers ──────────────────────────────────────────────────────────────
+# One dispatcher per engine function, generated from the pandas engine (the
+# reference surface — polars_engine is optional so it stays a lazy import).
+# Each carries the engine function's signature/doc plus keyword-only engine="auto".
+from . import pandas_engine
 
-def type_tableview(data, type_name, string_to_number=True, type_key="Type", multivalue=False, engine="auto"):
-    return _get_engine(engine, data).type_tableview(data, type_name, string_to_number=string_to_number, type_key=type_key, multivalue=multivalue)
 
-def key_tableview(data, key, string_to_number=True, multivalue=False, engine="auto"):
-    return _get_engine(engine, data).key_tableview(data, key, string_to_number=string_to_number, multivalue=multivalue)
+def _dispatcher(name, target, reference):
+    first_param = next(iter(inspect.signature(reference).parameters))
 
-def id_tableview(data, id, string_to_number=True, multivalue=False, engine="auto"):
-    return _get_engine(engine, data).id_tableview(data, id, string_to_number=string_to_number, multivalue=multivalue)
+    @functools.wraps(reference)
+    def dispatcher(*args, engine="auto", **kwargs):
+        data = args[0] if args else kwargs.get(first_param)
+        return getattr(_get_engine(engine, data), target)(*args, **kwargs)
 
-def types_dict(data, contains=None, case_insensitive=True, engine="auto"):
-    return _get_engine(engine, data).types_dict(data, contains=contains, case_insensitive=case_insensitive)
+    dispatcher.__name__ = dispatcher.__qualname__ = name
+    dispatcher.__module__ = __name__  # else pydoc/Sphinx hide it as an imported name
+    signature = inspect.signature(reference)
+    dispatcher.__signature__ = signature.replace(parameters=[
+        *signature.parameters.values(),
+        inspect.Parameter("engine", inspect.Parameter.KEYWORD_ONLY, default="auto")])
+    return dispatcher
 
-def get_object_data(data, object_UUID, engine="auto"):
-    return _get_engine(engine, data).get_object_data(data, object_UUID)
 
-def get_namespace_map(data, engine="auto"):
-    return _get_engine(engine, data).get_namespace_map(data)
+# public name -> engine-module attribute; special cases are registry entries
+DISPATCHED = {name: name for name in _engine_functions(pandas_engine)}
+DISPATCHED["tableviews_to_triplets"] = "_tableviews_to_triplets"  # dict-first, private in engines
 
-def references_to_simple(data, reference, columns=["Type"], engine="auto"):
-    return _get_engine(engine, data).references_to_simple(data, reference, columns=columns)
-
-def references_to(data, reference, levels=1, engine="auto"):
-    return _get_engine(engine, data).references_to(data, reference, levels=levels)
-
-def references_from_simple(data, reference, columns=["Type"], engine="auto"):
-    return _get_engine(engine, data).references_from_simple(data, reference, columns=columns)
-
-def references_from(data, reference, levels=1, engine="auto"):
-    return _get_engine(engine, data).references_from(data, reference, levels=levels)
-
-def references_all(data, engine="auto"):
-    return _get_engine(engine, data).references_all(data)
-
-def references_simple(data, reference, columns=None, levels=1, engine="auto"):
-    return _get_engine(engine, data).references_simple(data, reference, columns=columns, levels=levels)
-
-def references(data, ID, levels=1, engine="auto"):
-    return _get_engine(engine, data).references(data, ID, levels=levels)
-
-def filter_triplets_by_type(data, type_name, type_key="Type", engine="auto"):
-    return _get_engine(engine, data).filter_triplets_by_type(data, type_name, type_key=type_key)
-
-def filter_triplets_by_triplets(data, filter_triplet, engine="auto"):
-    return _get_engine(engine, data).filter_triplets_by_triplets(data, filter_triplet)
-
-def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex=False, engine="auto"):
-    return _get_engine(engine, data).filter_triplets(data, ID=ID, KEY=KEY, VALUE=VALUE, INSTANCE_ID=INSTANCE_ID, regex=regex)
-
-def filter_triplets_by_value(data, VALUE, detailed=False, type_key="Type", regex=False, engine="auto"):
-    return _get_engine(engine, data).filter_triplets_by_value(data, VALUE, detailed=detailed, type_key=type_key, regex=regex)
-
-def set_value_at_key(data, key, value, engine="auto"):
-    return _get_engine(engine, data).set_value_at_key(data, key, value)
-
-def set_value_at_key_and_id(data, key, value, id, engine="auto"):
-    return _get_engine(engine, data).set_value_at_key_and_id(data, key, value, id)
-
-def triplets_to_tableviews(triplet_df, multivalue=False, engine="auto"):
-    return _get_engine(engine, triplet_df).triplets_to_tableviews(triplet_df, multivalue=multivalue)
-
-def tableviews_to_triplets(tableviews, multivalue=False, engine="auto"):
-    # tableviews is a dict — detect engine from first value if available
-    data = next(iter(tableviews.values()), None) if tableviews else None
-    return _get_engine(engine, data)._tableviews_to_triplets(tableviews, multivalue=multivalue)
-
-def tableview_to_triplets(data, multivalue=False, instance_id=None, engine="auto"):
-    return _get_engine(engine, data).tableview_to_triplets(data, multivalue=multivalue, instance_id=instance_id)
-
-def update_triplets_from_triplets(data, update_data, update=True, add=True, engine="auto"):
-    return _get_engine(engine, data).update_triplets_from_triplets(data, update_data, update=update, add=add)
-
-def update_triplets_from_tableview(data, tableview, update=True, add=True, instance_id=None, engine="auto"):
-    return _get_engine(engine, data).update_triplets_from_tableview(data, tableview, update=update, add=add, instance_id=instance_id)
-
-def remove_triplets_from_triplets(from_triplet, what_triplet, columns=["ID", "KEY", "VALUE"], engine="auto"):
-    return _get_engine(engine, from_triplet).remove_triplets_from_triplets(from_triplet, what_triplet, columns=columns)
-
-def diff_triplets(old_data, new_data, engine="auto"):
-    return _get_engine(engine, old_data).diff_triplets(old_data, new_data)
-
-def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2, engine="auto"):
-    return _get_engine(engine, data).diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2)
-
-def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None, engine="auto"):
-    return _get_engine(engine, old_data).print_triplets_diff(old_data, new_data, file_id_object=file_id_object, file_id_key=file_id_key, exclude_objects=exclude_objects)
+for _name, _target in DISPATCHED.items():
+    globals()[_name] = _dispatcher(_name, _target, getattr(pandas_engine, _target))
 
 
 # ── Convenience aliases (not deprecated — both names are first-class) ───────
@@ -175,12 +135,10 @@ DEPRECATED_ALIASES = {
 }
 
 
-def _deprecated_alias(old_name, new_name):
-    new_function = globals()[new_name]
-
+def _deprecated_alias(old_name, new_name, new_function):
     @functools.wraps(new_function)
     def wrapper(*args, **kwargs):
-        warnings.warn(f"tools.{old_name} is deprecated, use tools.{new_name}()",
+        warnings.warn(f"{old_name} is deprecated, use {new_name}()",
                       DeprecationWarning, stacklevel=2)
         return new_function(*args, **kwargs)
 
@@ -188,58 +146,4 @@ def _deprecated_alias(old_name, new_name):
 
 
 for _old, _new in DEPRECATED_ALIASES.items():
-    globals()[_old] = _deprecated_alias(_old, _new)
-
-
-# ── Auto-registration on objects ────────────────────────────────────────────
-import inspect
-import pandas
-
-from . import pandas_engine
-
-
-def _engine_functions(module):
-    """Public functions defined in *module* — each takes the df/connection first.
-
-    The registered method surface is derived from this instead of a hand-kept list,
-    so it tracks the engine module automatically. `_`-prefixed helpers (e.g.
-    `_tableviews_to_triplets`, which takes a dict, not a DataFrame) are excluded.
-    """
-    return {name: obj for name, obj in inspect.getmembers(module, inspect.isfunction)
-            if not name.startswith("_") and obj.__module__ == module.__name__}
-
-
-def _dataframe_method(function):
-    def method(self, *args, **kwargs):
-        return function(self, *args, **kwargs)
-    return method
-
-
-def _is_native(target_class, name):
-    """True if *name* is already a non-triplets (native) attribute of target_class."""
-    existing = getattr(target_class, name, None)
-    return existing is not None and not getattr(existing, "__module__", "").startswith("triplets")
-
-
-def _register_root(target_class, names):
-    """Monkey-patch each name (resolved in this module's namespace) onto target_class.
-
-    Skips names that are native attributes so we never clobber them, but still lets
-    the current implementation supersede triplets' own legacy patches (e.g. the
-    deprecated rdf_parser monkey-patches applied earlier at import time).
-    """
-    for name in names:
-        if _is_native(target_class, name):
-            logger.debug("skip %s.%s — native attribute present", target_class.__name__, name)
-            continue
-        setattr(target_class, name, _dataframe_method(globals()[name]))
-
-
-# ── Register on pandas DataFrames (backwards compat) ────────────────────────
-# Primary methods auto-derived from the pandas engine; alias / deprecated names
-# register only when their target is one of those methods.
-DATAFRAME_METHODS = sorted(_engine_functions(pandas_engine))
-
-_register_root(pandas.DataFrame, DATAFRAME_METHODS)
-_register_root(pandas.DataFrame, [a for a, target in ALIASES.items() if target in DATAFRAME_METHODS])
-_register_root(pandas.DataFrame, [a for a, target in DEPRECATED_ALIASES.items() if target in DATAFRAME_METHODS])
+    globals()[_old] = _deprecated_alias(_old, _new, globals()[_new])
