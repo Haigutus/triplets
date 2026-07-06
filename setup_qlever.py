@@ -2,18 +2,17 @@
 
 The extension links qlever's official embedding facade (src/libqlever) — the
 purpose-built boundary for using the engine without the HTTP server. The
-supported build path is the pixi `qlever` environment, which provides the
-whole C++ toolchain and dependencies (boost, icu, openssl, zstd, jemalloc)
-pinned from conda-forge:
+supported build path mirrors the pugixml pattern (pinned vendor submodule +
+pixi-provided toolchain): the `qlever` pixi environment carries cmake, ninja,
+compilers and the C++ deps (boost, icu, openssl, zstd) pinned from conda-forge:
 
-    git clone --recursive https://github.com/ad-freiburg/qlever ../qlever
+    git submodule update --init --checkout vendor/qlever   # once (update=none)
     pixi run -e qlever build-qlever-lib     # one-time qlever compile (PIC)
     pixi run -e qlever build-qlever         # this extension
 
-Manual invocation works too — point QLEVER_SRC_DIR / QLEVER_BUILD_DIR at a
-qlever checkout compiled with -DCMAKE_POSITION_INDEPENDENT_CODE=ON. Without
-the extension, triplets.sparql simply keeps using the rdflib engine
-(auto-detection by import).
+QLEVER_SRC_DIR / QLEVER_BUILD_DIR override the vendor submodule (e.g. to an
+external checkout). Without the extension, triplets.sparql simply keeps using
+the rdflib engine (auto-detection by import).
 """
 import glob
 import os
@@ -21,13 +20,9 @@ import os
 from setuptools import setup, Extension
 from Cython.Build import cythonize
 
-QLEVER_SRC = os.path.expanduser(os.environ.get("QLEVER_SRC_DIR", os.path.join("..", "qlever")))
-QLEVER_BUILD = os.path.expanduser(os.environ.get("QLEVER_BUILD_DIR", os.path.join(QLEVER_SRC, "build-pic")))
+from setup_qlever_lib import resolve_qlever_dirs
 
-if not os.path.exists(os.path.join(QLEVER_SRC, "src", "libqlever", "Qlever.h")):
-    raise RuntimeError(
-        f"qlever sources not found at {QLEVER_SRC} (need src/libqlever/Qlever.h). "
-        "Clone https://github.com/ad-freiburg/qlever and set QLEVER_SRC_DIR.")
+QLEVER_SRC, QLEVER_BUILD = resolve_qlever_dirs()
 
 lib_dir = os.path.join(QLEVER_BUILD, "lib")
 static_libs = sorted(glob.glob(os.path.join(lib_dir, "*.a")))

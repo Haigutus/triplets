@@ -4,3 +4,8 @@
 [submodule "vendor/pugixml"]
 	path = vendor/pugixml
 	url = https://github.com/zeux/pugixml.git
+[submodule "vendor/qlever"]
+	path = vendor/qlever
+	url = https://github.com/ad-freiburg/qlever.git
+	update = none
+	shallow = true

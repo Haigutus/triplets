@@ -1,0 +1,66 @@
+# Build-verify the embedded qlever SPARQL engine (triplets.sparql._qlever).
+#
+# Mirrors the pugixml pattern one level up: qlever is a pinned vendor submodule
+# (update=none, so ordinary checkouts skip it) compiled once inside the pixi
+# `qlever` environment; the heavy compile (~40-60 min) is cached on the
+# submodule SHA + pixi.lock, so subsequent runs only relink the extension and
+# run the parity tests. Distribution wheels are a separate follow-up (TODO.md) —
+# this workflow guarantees the qlever-enriched build stays green.
+name: Build qlever engine
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "setup_qlever.py"
+      - "setup_qlever_lib.py"
+      - "triplets/sparql/_qlever*"
+      - "triplets/sparql/sparql_qlever.py"
+      - "tests/test_sparql_qlever.py"
+      - "pixi.toml"
+      - "pixi.lock"
+      - ".gitmodules"
+      - ".github/workflows/build-qlever.yml"
+
+concurrency:
+  group: qlever-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-qlever:
+    name: Compile qlever + extension + parity tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v5
+        # no submodules: true — vendor/qlever is update=none, and we init
+        # exactly what this job needs below
+
+      - name: Init submodules (qlever sources + Svedala test data)
+        run: |
+          git submodule update --init --checkout vendor/qlever
+          git submodule update --init test_data/relicapgrid
+
+      - uses: prefix-dev/setup-pixi@v0.9.4
+        with:
+          environments: qlever
+          cache: true
+
+      - name: Resolve qlever submodule SHA
+        id: qlever-sha
+        run: echo "sha=$(git rev-parse HEAD:vendor/qlever)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache qlever build
+        uses: actions/cache@v5
+        with:
+          path: vendor/qlever/build-pic
+          key: qlever-build-pic-${{ runner.os }}-${{ steps.qlever-sha.outputs.sha }}-${{ hashFiles('pixi.lock') }}
+
+      - name: Compile qlever (PIC static libraries, cached)
+        run: pixi run -e qlever build-qlever-lib
+
+      - name: Build the triplets.sparql._qlever extension
+        run: pixi run -e qlever build-qlever
+
+      - name: Run qlever engine parity tests
+        run: pixi run -e qlever test-qlever

@@ -41,13 +41,14 @@ icu = "*"
 openssl = "*"
 zstd = "*"
 jemalloc = "*"
+rdflib = ">=7.6"    # sparql extra + parity tests against the rdflib engine
+pyshacl = ">=0.30"  # sh:sparql delegation test
 
 [feature.qlever.tasks]
-# one-time: compile qlever with PIC (required for linking into a Python extension)
-# -fno-semantic-interposition: gcc refuses always_inline under plain -fPIC
-build-qlever-lib = { cmd = "cmake -S $QLEVER_SRC_DIR -B $QLEVER_SRC_DIR/build-pic -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_CXX_FLAGS=-fno-semantic-interposition && cmake --build $QLEVER_SRC_DIR/build-pic --target qlever", env = { QLEVER_SRC_DIR = "../qlever" } }
-# build the triplets.sparql._qlever extension against it
-build-qlever = { cmd = "python setup_qlever.py build_ext --inplace", env = { QLEVER_SRC_DIR = "../qlever", QLEVER_BUILD_DIR = "../qlever/build-pic" } }
+# source resolution ($QLEVER_SRC_DIR → vendor/qlever → ../qlever) lives in the scripts
+build-qlever-lib = "python setup_qlever_lib.py"                  # one-time qlever compile (PIC)
+build-qlever = "python setup_qlever.py build_ext --inplace"      # the triplets.sparql._qlever extension
+test-qlever = "pytest tests/test_sparql_qlever.py -q"
 
 [environments]
 default = { features = ["test"] }
