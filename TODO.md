@@ -21,13 +21,26 @@ Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, spee
 
 ## Build / packaging / CI
 
-- [ ] **Distribution wheels for the qlever extension.** `build-qlever.yml`
-  build-verifies on a plain runner (apt deps, compile cached on the `vendor/qlever`
-  SHA — no pixi in CI, matching build-wheels.yml philosophy), but the built .so links
-  the runner's shared libs — not relocatable. A shippable wheel = fold the qlever
-  compile into build-wheels.yml's cibuildwheel via `CIBW_BEFORE_ALL` (boost ≥ 1.81
-  must be built in the manylinux container; its repos ship ≤ 1.75) + `auditwheel
-  repair` grafting boost/icu/zstd — after which pugixml and qlever share one pipeline.
+- [ ] **Distribution wheels for the qlever extension — packaging decision pending.**
+  Measured (2026-07-06): `_qlever.so` 53 MB (37.5 MB stripped, ~10 MB compressed);
+  auditwheel graft closure 48.9 MB, dominated by `libicudata` 31.6 MB → a
+  qlever-enriched linux wheel ≈ **30–35 MB compressed vs ≈ 3–4 MB today** (~10x).
+  ICU analysis: qlever uses ICU only for vocabulary collation
+  (`src/index/StringSortComparator.h`), one configurable locale (default en_US) —
+  a filtered ICU data build (`ICU_DATA_FILTER_FILE`, Node small-icu style) cuts
+  icudata to ~2–4 MB → wheel ≈ 18–20 MB. libssl/libcrypto (8 MB) are referenced
+  only via qlever's HTTP/websocket code the embedded facade never runs — possibly
+  excludable from the link (experiment). Options:
+  1. bundle into the single per-OS wheel — rejected on size (every parser/export
+     user pays ~10x download for an engine they may not use);
+  2. separate `triplets-qlever` distribution on PyPI (wheel = just the extension,
+     importable as `triplets_qlever`) + extra `qlever = ["triplets-qlever"]` so
+     `pip install triplets[qlever]` pulls it; engine import falls back
+     in-package → companion; heavy wheel re-releases only on qlever bumps;
+  3. status quo — source build only (pixi locally, build-qlever.yml in CI).
+  Build mechanics whichever way: cibuildwheel `CIBW_BEFORE_ALL` qlever compile
+  (boost ≥ 1.81 must be built in the manylinux container; repos ship ≤ 1.75),
+  strip before `auditwheel repair`.
 - [ ] macOS: the pixi `qlever` env claims `osx-arm64` but the qlever compile and the
   extension link flags are untested off Linux.
 - [ ] qlever index cache (`$TMPDIR/triplets-qlever/<hash>/`) has no eviction — one index
