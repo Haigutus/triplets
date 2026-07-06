@@ -28,11 +28,33 @@ numpy = "*"  # for pyarrow numpy_interop headers in some builds
 compilers = "*"
 pyarrow = "*"
 
+# C++ toolchain + deps for the embedded qlever SPARQL engine (setup_qlever.py).
+# qlever itself is compiled once from a separate checkout (QLEVER_SRC_DIR)
+# inside this environment, so all libraries share one ABI and pixi.lock pins
+# them. python is pinned to the interpreter ABI the extension is used with.
+[feature.qlever.dependencies]
+python = ">=3.13,<3.14"
+cmake = ">=3.28"
+ninja = "*"
+libboost-devel = ">=1.81"
+icu = "*"
+openssl = "*"
+zstd = "*"
+jemalloc = "*"
+
+[feature.qlever.tasks]
+# one-time: compile qlever with PIC (required for linking into a Python extension)
+# -fno-semantic-interposition: gcc refuses always_inline under plain -fPIC
+build-qlever-lib = { cmd = "cmake -S $QLEVER_SRC_DIR -B $QLEVER_SRC_DIR/build-pic -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_CXX_FLAGS=-fno-semantic-interposition && cmake --build $QLEVER_SRC_DIR/build-pic --target qlever", env = { QLEVER_SRC_DIR = "../qlever" } }
+# build the triplets.sparql._qlever extension against it
+build-qlever = { cmd = "python setup_qlever.py build_ext --inplace", env = { QLEVER_SRC_DIR = "../qlever", QLEVER_BUILD_DIR = "../qlever/build-pic" } }
+
 [environments]
 default = { features = ["test"] }
 arrow = { features = ["test", "arrow"] }
 build = { features = ["build", "test", "arrow", "polars"] }
 dev = { features = ["build", "test", "arrow", "polars"] }
+qlever = { features = ["build", "test", "arrow", "polars", "qlever"] }
 
 [tasks]
 build-cython-pugixml-arrow = "python setup_cython_parser.py build_ext --inplace"

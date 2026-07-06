@@ -1,8 +1,9 @@
 """SPARQL querying over triplet data.
 
 Engines (registry dispatch, mirroring triplets.parser):
+- qlever  — performance (embedded C++ via the official libqlever facade; needs
+  the compiled extension, see setup_qlever.py; takes auto priority when built)
 - rdflib  — reference, built-in SPARQL 1.1, always available with the `sparql` extra
-- (future) qlever — performance option (C++); would take auto priority once added
 
 Data is loaded via the N-Quads export into an rdflib Dataset (INSTANCE_ID as
 named graph). No oxigraph engine: our native tooling is C/C++/Cython and qlever
@@ -16,12 +17,16 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Engine name → module (lazy import). Auto preference: first importable.
+# Engine name → module (lazy import). Auto preference: first importable —
+# qlever (embedded C++, needs the compiled extension: setup_qlever.py) wins
+# over rdflib (reference, always available with the sparql extra).
 _ENGINE_MODULES = {
+    "qlever": ".sparql_qlever",
     "rdflib": ".sparql_rdflib",
 }
 _ENGINE_ALIASES = {
     "reference": "rdflib",
+    "performance": "qlever",
 }
 _ENGINES: dict[str, Any] = {}  # loaded-module cache
 
@@ -74,7 +79,8 @@ def query(data, query_string, rdf_map=None, scope=None, engine="auto", return_ty
         Restrict the queried data to these instances' named graphs; all data
         stays loaded for reference resolution. None = full union.
     engine : str, default "auto"
-        "rdflib" (reference). "auto" picks the best available.
+        "qlever" (performance, embedded C++) or "rdflib" (reference).
+        "auto" picks qlever when its extension is built, else rdflib.
     """
     engine_name, engine_mod = get_engine(engine)
     return engine_mod.query(data, query_string, rdf_map=rdf_map, scope=scope, return_type=return_type)

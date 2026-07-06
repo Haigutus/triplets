@@ -16,3 +16,4 @@ triplets/export/cimxml_cython_pugixml.cpp
 /.idea/
 # uv lockfile (dev-only; not part of the published package)
 uv.lock
+triplets/sparql/_qlever.cpp

@@ -35,6 +35,7 @@ import logging
 import multiprocessing
 
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from types import SimpleNamespace
 
 import numpy
@@ -395,7 +396,18 @@ def _sparql(context, rule):
     focus_ids = context.focus(rule)
     if not len(focus_ids):
         return _empty()
-    result = sparql.query(context.dataset(), _sparql_query_text(rule, focus_ids))
+    # rdflib queries the shared pre-loaded dataset; other engines (qlever) take
+    # the raw frame and manage their own index cache (one build, content-hashed)
+    query_text = _sparql_query_text(rule, focus_ids)
+    if sparql.get_engine("auto")[0] == "rdflib":
+        result = sparql.query(context.dataset(), query_text)
+    else:
+        try:
+            result = sparql.query(context.data, query_text, rdf_map=context.rdf_map)
+        except Exception as error:                        # noqa: BLE001 — engine strictness
+            logger.warning("sh:sparql via %s failed (%s) — retrying with rdflib (%s)",
+                           sparql.get_engine("auto")[0], error, rule.shape_id)
+            result = sparql.query(context.dataset(), query_text, engine="rdflib")
     return _sparql_violations(rule, result)
 
 
@@ -413,8 +425,15 @@ def _sparql_parallel(context, rules, max_workers):
 
     rdflib query evaluation is GIL-bound pure Python, so threads don't help;
     fork gives copy-on-write sharing of the loaded dataset (Linux). One task
-    per constraint query.
+    per constraint query. Only applies to the rdflib engine — the embedded
+    qlever engine is orders of magnitude faster and must not be forked
+    (C++ state), so it runs the queries sequentially.
     """
+    from .. import sparql
+    if sparql.get_engine("auto")[0] != "rdflib":
+        logger.debug("sparql auto engine is not rdflib — max_workers ignored (sequential)")
+        return [_sparql(context, rule) for rule in rules]
+
     global _FORK_DATASET
     tasks = [(rule, _sparql_query_text(rule, context.focus(rule)))
              for rule in rules if len(context.focus(rule))]
@@ -425,6 +444,11 @@ def _sparql_parallel(context, rules, max_workers):
         with ProcessPoolExecutor(max_workers=max_workers,
                                  mp_context=multiprocessing.get_context("fork")) as pool:
             results = list(pool.map(_sparql_worker, [text for _, text in tasks]))
+    except (BrokenProcessPool, OSError) as error:
+        # fork from a thread-heavy process (polars/duckdb pools, pytest) can kill
+        # workers — degrade to sequential instead of failing the validation
+        logger.warning("sh:sparql process pool failed (%s) — running sequentially", error)
+        return [_sparql(context, rule) for rule in rules]
     finally:
         _FORK_DATASET = None
     return [_sparql_violations(rule, result) for (rule, _), result in zip(tasks, results)]

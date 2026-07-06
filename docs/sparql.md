@@ -2,33 +2,60 @@
 
 ## Engines
 
-One reference engine today, with registry dispatch (mirroring the parser) so a
-performance engine plugs in without touching the public API:
+Registry dispatch (mirroring the parser), auto = first importable:
 
 | Engine | File | Requires | Role |
 |--------|------|----------|------|
-| `rdflib` | `sparql/sparql_rdflib.py` | rdflib (`pip install triplets[sparql]`) | reference, built-in SPARQL 1.1, **always available with the extra** |
-| `qlever` (future) | — | C++ build | performance option; would take auto priority once added |
+| `qlever` | `sparql/sparql_qlever.py` | compiled extension (`pixi run -e qlever build-qlever`) | **performance** — embedded C++ engine, in-process, no server; auto-preferred when built |
+| `rdflib` | `sparql/sparql_rdflib.py` | rdflib (`pip install triplets[sparql]`) | **reference** — built-in SPARQL 1.1, always available with the extra |
 
-Fallback order: auto = first importable engine.
-
-Engine aliases: `reference` -> `rdflib`
+Engine aliases: `reference` → `rdflib`, `performance` → `qlever`.
 
 No oxigraph engine: the native tooling is C/C++/Cython and qlever is the chosen
-performance path (benchmarked 3.5–216x faster than oxigraph on CGMES data).
+performance path (benchmarked 3.5–216x faster than oxigraph on CGMES data;
+index build ~2.3 s per 892k triples, index load from disk ~4 ms).
 
-**Engine lifecycle seam (qlever-ready).** The dispatcher contract is just
-`query(data, query_string, rdf_map=None, scope=None, return_type="pandas")`.
-Engines with expensive setup own their lifecycle internally: qlever will cache
-its index keyed by data content, exactly like the SHACL engines cache compiled
-plans in `CompiledShapes.plans` — nothing in the dispatcher changes when it
-lands. Custom engines register via `triplets.sparql.register_engine(name, module)`.
+## The qlever C++ Boundary
+
+qlever natively ships a server (SPARQL-over-HTTP + UI); we use the **engine**.
+The boundary is qlever's official embedding facade — `src/libqlever`
+(`qlever::Qlever`, "use QLever as an embedded database, without the HTTP
+server"), which upstream maintains and CI-tests. Everything crosses it as
+strings: SPARQL text in, spec-stable serializations out (SPARQL 1.1 JSON for
+SELECT/ASK, Turtle for CONSTRUCT/DESCRIBE). qlever's internal API churn is
+absorbed upstream by the facade; what remains is absorbed by a ~50-line shim:
+
+```
+triplets/sparql/
+|-- _qlever_wrapper.h/.cpp   # ~50-line shim: build_index(), query(text, media_type)
+|-- _qlever.pyx              # dumb Cython binding (strings across, GIL released)
+'-- sparql_qlever.py         # engine: index cache, result shaping, scope
+```
+
+Build (one-time; the pixi `qlever` environment pins the whole toolchain —
+compilers, cmake, boost, icu, openssl, zstd, jemalloc — via pixi.lock):
+
+```bash
+git clone --recursive https://github.com/ad-freiburg/qlever ../qlever
+pixi run -e qlever build-qlever-lib   # compile qlever with PIC (long, once)
+pixi run -e qlever build-qlever       # build triplets.sparql._qlever
+```
+
+Without the extension nothing changes — auto falls back to rdflib.
+
+**Index lifecycle.** The engine owns it internally: the data is exported to
+N-Quads, content-hashed, and indexed on disk under the temp dir keyed by that
+hash — re-querying the same data (or re-running a validation) loads the index
+in milliseconds instead of rebuilding. Loaded engines are additionally cached
+in-process. `scope` filters the data before export (each scope = its own
+index). Custom engines register via `triplets.sparql.register_engine(name, module)`.
 
 **Parallelism.** rdflib query evaluation is GIL-bound pure Python, so threads
-don't help. Batch workloads (e.g. the sh:sparql constraints the future SHACL
-engines delegate here) use `ProcessPoolExecutor(max_workers=...)` following the
-`export_to_cimxml` pattern — fork gives copy-on-write graph sharing on Linux.
-qlever handles concurrent queries natively.
+don't help — batch workloads (the sh:sparql constraints the SHACL engines
+delegate here) use `ProcessPoolExecutor` fork on the rdflib path. The qlever
+binding releases the GIL during queries, so plain threads parallelize; the
+SHACL engines skip the fork pool automatically when qlever is the auto engine
+(it is orders of magnitude faster sequentially anyway).
 
 ## Shared Loading (`_rdflib_loader.py`)
 
