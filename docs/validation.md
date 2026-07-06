@@ -74,9 +74,13 @@ validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) →
   gives copy-on-write sharing of the dataset; threads don't help rdflib — it
   is GIL-bound pure Python; qlever handles concurrency natively).
   Real-profile scale (Svedala EQ, 48k triples, Simple+Complex Equipment SHACL
-  = 4,857 IR rows of which 148 sh:sparql): vectorized components ~24 s;
-  the sparql queries ~3.5 min with `max_workers=8` vs ~25 min sequential —
-  always pass `max_workers` for sh:sparql-heavy profiles until qlever lands.
+  = 4,857 IR rows of which 148 sh:sparql): with the embedded **qlever** engine
+  built, the 148 constraint queries run in **~7 s** (one content-hashed index,
+  built once in ~2 s and cached on disk) and the **complete validation —
+  polars + qlever — takes ~9 s**. On the rdflib fallback the same queries cost
+  ~3.5 min with `max_workers=8` (fork pool; degrades to sequential
+  automatically if forking fails) vs ~25 min sequential — build the qlever
+  extension for sh:sparql-heavy profiles.
 
 ## The Lexical-Form Datatype Deviation
 
