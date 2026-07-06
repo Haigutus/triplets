@@ -3,12 +3,13 @@
 Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
 - pyshacl — reference, spec-complete, rdflib-based; always available with the
   `validation` extra
-- pandas — compiled-IR executor (debugging; complete constraint registry.
-  sh:sparql delegates to triplets.sparql with optional max_workers; sh:node
-  runs the compile-time-expanded referenced shape against the value nodes;
-  sh:nodeKind is decided by the rdf_map schema, value form when schema is
-  silent. Explicit engine="pandas")
-- (future) polars / duckdb — compiled-IR executors for speed / larger-than-memory
+- polars — compiled-IR executor (performance; one lazy plan per constraint,
+  single collect_all; auto-preferred when polars is installed)
+- pandas — compiled-IR executor (debugging; same complete registry and
+  semantics, eager. sh:sparql delegates to triplets.sparql with optional
+  max_workers; sh:node runs the compile-time-expanded referenced shape against
+  the value nodes; sh:nodeKind is decided by the rdf_map schema)
+- (future) duckdb — compiled-IR executor for larger-than-memory data
 
 Compile once: ``compile(shapes)`` parses the shapes with rdflib exactly once
 into ``CompiledShapes`` (shapes graph + flat constraint table, cached by
@@ -18,8 +19,8 @@ content hash). Engines receive the compiled object:
 
 pyshacl consumes the graph; the vectorized engines consume the IR (and cache
 their own plan per engine in ``CompiledShapes.plans``) — they never touch
-rdflib. sh:sparql IR rows are delegated to triplets.sparql by future engines
-(pyshacl evaluates them itself via advanced=True).
+rdflib. sh:sparql IR rows are delegated to triplets.sparql by the vectorized
+engines (pyshacl evaluates them itself via advanced=True).
 
 One deliberate deviation from pyshacl: the datatype check inspects the raw
 lexical form of VALUE (see shacl_pandas) — with ``lexical=True`` (default)
@@ -40,18 +41,20 @@ logger = logging.getLogger(__name__)
 
 # Engine name → module (lazy import).
 _ENGINE_MODULES = {
-    "pyshacl": ".shacl_pyshacl",
+    "polars": ".shacl_polars",
     "pandas": ".shacl_pandas",
+    "pyshacl": ".shacl_pyshacl",
 }
 _ENGINE_ALIASES = {
     "reference": "pyshacl",
 }
-# Auto preference: reference-first — auto is pyshacl until the polars engine
-# lands, then the vectorized engines take priority (polars → pandas → pyshacl).
-# The pandas engine is complete for the ENTSO-E constraint subset but stays
-# explicit (its nodeKind inference and lexical datatype semantics deliberately
-# differ from the spec reference).
-_AUTO_ORDER = ["pyshacl"]
+# Auto preference: first importable — polars (lazy, fast) → pandas (same
+# semantics, eager) → pyshacl (spec reference). The vectorized engines share
+# the IR and the deliberate deviations (lexical datatype, schema-driven
+# nodeKind); engine="reference" always gives the pure pyshacl view.
+_AUTO_ORDER = ["polars", "pandas", "pyshacl"]
+# engines whose datatype check already emits the lexical findings itself
+_LEXICAL_BUILTIN = {"polars", "pandas"}
 _ENGINES: dict[str, Any] = {}  # loaded-module cache
 
 
@@ -103,7 +106,8 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         Validate only these instances' named graphs; all data stays loaded for
         reference resolution. None = full union.
     engine : str, default "auto"
-        "pyshacl" (reference) or "pandas" (partial). "auto" picks the best available.
+        "polars" (performance), "pandas" (debugging) or "pyshacl" (reference).
+        "auto" picks the first available in that order.
     lexical : bool, default True
         Append the lexical-form datatype findings (the deliberate deviation
         from pyshacl — see shacl_pandas) to the engine's report.
@@ -112,7 +116,7 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     engine_name, engine_mod = get_engine(engine)
     violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, scope=scope, **kwargs)
 
-    if lexical and engine_name != "pandas":
+    if lexical and engine_name not in _LEXICAL_BUILTIN:
         from . import shacl_pandas
         supplement = shacl_pandas.validate(data, compiled, scope=scope, components=("sh:datatype",))
         violations = (pandas.concat([violations, supplement], ignore_index=True)

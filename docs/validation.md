@@ -9,12 +9,13 @@ touching the public API:
 |--------|------|----------|------|
 | `pyshacl` | `validation/shacl_pyshacl.py` | pyshacl + rdflib (`pip install triplets[validation]`) | **reference** — spec-complete, rdflib-based |
 | `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; **complete registry** — `sh:sparql` delegated to `triplets.sparql` (`max_workers` parallelizes those queries), `sh:node` expanded at compile time and run against the referenced value nodes, `sh:nodeKind` decided by the rdf_map schema (value form when schema is silent). Explicit `engine="pandas"` |
-| `polars` (future) | — | polars | compiled-IR executor for performance (lazy plans, one `collect_all`) |
+| `polars` | `validation/shacl_polars.py` | polars | compiled-IR executor for performance: one LazyFrame plan per constraint, single `polars.collect_all` (parallel, common subplans eliminated). Same semantics as pandas; nested/query components delegate to the pandas implementations. Real Equipment profiles on Svedala EQ: **1.9 s vs pandas 22.6 s vs pyshacl minutes** |
 | `duckdb` (future) | — | duckdb | compiled-IR executor for larger-than-memory data |
 
-Auto order: `pyshacl` only, until a vectorized engine is complete — then
-`polars → pandas → pyshacl`. Aliases: `reference → pyshacl`. Custom engines via
-`triplets.validation.register_engine(name, module)`.
+Auto order: `polars → pandas → pyshacl` (first importable). The vectorized
+engines share the deliberate deviations (lexical datatype, schema-driven
+nodeKind); `engine="reference"` always gives the pure pyshacl view. Custom
+engines via `triplets.validation.register_engine(name, module)`.
 
 ## Compile Once (`shacl_ir.py`)
 
@@ -171,7 +172,8 @@ triplets/
     |-- __init__.py          # validate() + compile() dispatcher, engine registry
     |-- shacl_ir.py          # shapes -> CompiledShapes (IR compiler, content-hash cache)
     |-- shacl_pyshacl.py     # reference engine: data + compiled.graph -> report
-    |-- shacl_pandas.py      # compiled-IR executor (full registry; polars/duckdb template)
+    |-- shacl_pandas.py      # compiled-IR executor (full registry; eager, debugging)
+    |-- shacl_polars.py      # compiled-IR executor (lazy plans + collect_all, performance)
     '-- shacl_report.py      # ValidationReport graph -> violations DataFrame
 ```
 

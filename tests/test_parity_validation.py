@@ -149,8 +149,11 @@ cim:ACLineSegmentShape a sh:NodeShape ;
 """
 
 
+@pytest.mark.parametrize("engine", ["pandas", "polars"])
 @pytest.mark.parametrize("component", sorted(COMPONENT_CASES))
-def test_component_parity(component, tmp_path):
+def test_component_parity(component, engine, tmp_path):
+    if engine == "polars":
+        pytest.importorskip("polars")
     from triplets.export_schema import schemas
     body, rows, expected = COMPONENT_CASES[component]
 
@@ -161,10 +164,10 @@ def test_component_parity(component, tmp_path):
     reference = triplets.validation.validate(data, str(shape), engine="pyshacl",
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
                                              lexical=False)
-    ours = triplets.validation.validate(data, str(shape), engine="pandas")
+    ours = triplets.validation.validate(data, str(shape), engine=engine)
 
     assert set(reference.loc[reference["VIOLATION_TYPE"] == component, "ID"]) == expected, "pyshacl disagrees"
-    assert set(ours.loc[ours["VIOLATION_TYPE"] == component, "ID"]) == expected, "pandas engine disagrees"
+    assert set(ours.loc[ours["VIOLATION_TYPE"] == component, "ID"]) == expected, f"{engine} engine disagrees"
 
 
 def test_node_parity(tmp_path):
@@ -194,9 +197,10 @@ cim:VoltageLevelShape a sh:NodeShape ;
     reference = triplets.validation.validate(data, str(shape), engine="pyshacl",
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
                                              lexical=False)
-    ours = triplets.validation.validate(data, str(shape), engine="pandas")
+    for engine in ("pandas", "polars"):
+        ours = triplets.validation.validate(data, str(shape), engine=engine)
+        assert set(ours.loc[ours["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, f"{engine} engine disagrees"
     assert set(reference.loc[reference["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, "pyshacl disagrees"
-    assert set(ours.loc[ours["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, "pandas engine disagrees"
 
 
 # ── timing: cross-engine + compile + real-profile (phase C baseline) ──────────
@@ -236,7 +240,7 @@ def timing_shape(tmp_path_factory):
 
 @pytest.mark.performance
 @pytest.mark.benchmark(group="shacl-engines")
-@pytest.mark.parametrize("engine", ["pyshacl", "pandas"])
+@pytest.mark.parametrize("engine", ["pyshacl", "pandas", "polars"])
 def test_benchmark_engines(benchmark, svedala_eq, timing_shape, engine):
     """Same shape + data per engine — pyshacl (reference) vs pandas (compiled IR)."""
     from triplets.export_schema import schemas
@@ -263,16 +267,19 @@ def test_benchmark_compile(benchmark):
 @pytest.mark.benchmark(group="shacl-real-profile")
 @pytest.mark.skipif(not all(f.exists() for f in CGMES_EQ_SHACL_FILES),
                     reason="external CGMES SHACL shapes not available")
-def test_benchmark_real_profile_vectorized(benchmark, svedala_eq):
-    """pandas engine, real Simple+Complex Equipment profiles, sh:sparql excluded
-    (rdflib sparql is minutes-scale — measured separately, and it's the qlever
-    motivation, not a vectorization target)."""
+@pytest.mark.parametrize("engine", ["pandas", "polars"])
+def test_benchmark_real_profile_vectorized(benchmark, svedala_eq, engine):
+    """Vectorized engines, real Simple+Complex Equipment profiles, sh:sparql
+    excluded (rdflib sparql is minutes-scale — measured separately, and it's
+    the qlever motivation, not a vectorization target)."""
+    if engine == "polars":
+        pytest.importorskip("polars")
     from triplets.export_schema import schemas
     compiled = triplets.validation.compile([str(f) for f in CGMES_EQ_SHACL_FILES])
     vectorized = [c for c in compiled.ir["component"].unique() if c != "sh:sparql"]
-    benchmark.extra_info.update({"ir_rows": len(compiled.ir)})
+    benchmark.extra_info.update({"ir_rows": len(compiled.ir), "engine": engine})
     benchmark.pedantic(
-        lambda: triplets.validation.validate(svedala_eq, compiled, engine="pandas",
+        lambda: triplets.validation.validate(svedala_eq, compiled, engine=engine,
                                              components=vectorized,
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1),
         rounds=2, iterations=1)

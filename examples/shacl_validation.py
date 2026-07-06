@@ -46,14 +46,14 @@ print(f"ACLineSegment instances in the data: {n_lines}")
 
 header("2. Validate WITHOUT a schema — VALUEs are untyped strings")
 print("'cim:Conductor.length' is a plain string, so sh:datatype xsd:float fails.\n")
-violations = data.shacl.validate(shape_path, lexical=False)
+violations = data.shacl.validate(shape_path, engine="reference", lexical=False)
 print(f"Violations found: {len(violations)}")
 print(violations[["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE"]].head(10).to_string(index=False))
 
 header("3. Validate WITH a schema (rdf_map) — VALUEs get proper xsd types")
 print("Now Conductor.length is exported as xsd:float, so the datatype check passes.\n")
 violations_typed = data.shacl.validate(shape_path, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
-                                       lexical=False)
+                                       engine="reference", lexical=False)
 print(f"Violations found: {len(violations_typed)}")
 if violations_typed.empty:
     print("Data conforms to the shape.")
@@ -61,9 +61,9 @@ if violations_typed.empty:
 header("4. Scope validation to a single instance graph")
 instance = str(data["INSTANCE_ID"].astype(str).iloc[0])
 print(f"Scoping to INSTANCE_ID = {instance}")
-scoped = data.shacl.validate(shape_path, scope=[instance], lexical=False)
+scoped = data.shacl.validate(shape_path, engine="reference", scope=[instance], lexical=False)
 print(f"In-scope violations:     {len(scoped)}")
-out = data.shacl.validate(shape_path, scope=["00000000-0000-0000-0000-000000000000"], lexical=False)
+out = data.shacl.validate(shape_path, engine="reference", scope=["00000000-0000-0000-0000-000000000000"], lexical=False)
 print(f"Out-of-scope violations: {len(out)}  (no ACLineSegments target this graph)")
 
 header("5. The lexical-form check — the deliberate deviation from pyshacl")
@@ -88,4 +88,4 @@ data.shacl.validate(compiled, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)   # no
 print("\nSecond validate() against the same shapes reused the compiled IR (cache hit).")
 
 header("Done")
-print("Engines: pyshacl (reference) + pandas (lexical seed)  |  API: df.shacl.validate(shapes, rdf_map=, scope=)")
+print("Engines: polars (auto, fast) + pandas (debugging) + pyshacl (reference)  |  API: df.shacl.validate(shapes, rdf_map=, scope=)")
