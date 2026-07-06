@@ -81,6 +81,12 @@ validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) →
   ~3.5 min with `max_workers=8` (fork pool; degrades to sequential
   automatically if forking fails) vs ~25 min sequential — build the qlever
   extension for sh:sparql-heavy profiles.
+  **No query fixing**: constraint queries run exactly as authored. When the
+  strict engine rejects one (e.g. the ENTSO-E `HAVING`-without-`GROUP BY`
+  defect, upstream PR entsoe/application-profiles-library#82), the constraint
+  is still evaluated on the lenient rdflib engine and the report carries a
+  `triplets:invalidSparql` Warning row naming the shape — broken rules get
+  reported and fixed upstream, not auto-patched.
 
 ## The Lexical-Form Datatype Deviation
 
@@ -112,7 +118,7 @@ conforms** — identical across all engines:
 | `ID` | focus node (instance UUID, `urn:uuid:` stripped) |
 | `KEY` | property path (CIM short name, e.g. `IdentifiedObject.name`) |
 | `VALUE` | offending value |
-| `VIOLATION_TYPE` | constraint component (`sh:minCount`, `sh:datatype`, `triplets:lexicalForm`, ...) |
+| `VIOLATION_TYPE` | constraint component (`sh:minCount`, `sh:datatype`, `triplets:lexicalForm`, `triplets:invalidSparql`, ...) |
 | `MESSAGE` | message from the shape |
 | `SEVERITY` | `Violation` / `Warning` / `Info` |
 | `SOURCE_SHAPE` | shape URI that produced the result |

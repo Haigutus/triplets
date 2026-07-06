@@ -40,19 +40,32 @@ _QUERY_FORM = re.compile(r"\b(select|ask|construct|describe)\b", re.IGNORECASE)
 
 def query(data, query_string, rdf_map=None, scope=None, return_type="pandas"):
     """Execute query_string over data; shape the result by query type
-    (same shapes as the rdflib engine)."""
+    (same shapes as the rdflib engine).
+
+    Queries are executed exactly as given — no fixing/rewriting. qlever's
+    parser is strict; a rejected query raises ValueError carrying qlever's
+    message plus the query text, so the failure is directly actionable
+    (broken constraint queries belong upstream, see TODO.md).
+    """
     index = _index_for(data, rdf_map, scope)
-    query_string = _rewrite_bare_having(query_string)
     form = _query_form(query_string)
 
     if form in ("construct", "describe"):
-        return _turtle_to_triplets(index.query(query_string, "turtle"))
+        return _turtle_to_triplets(_run(index, query_string, "turtle"))
 
     import json
-    result = json.loads(index.query(query_string, "sparqljson"))
+    result = json.loads(_run(index, query_string, "sparqljson"))
     if form == "ask":
         return bool(result["boolean"])
     return _select_to_dataframe(result)
+
+
+def _run(index, query_string, media_type):
+    try:
+        return index.query(query_string, media_type)
+    except RuntimeError as error:                          # qlever parse/execution error
+        raise ValueError(f"qlever rejected the query: {error}\n"
+                         f"--- query ---\n{query_string.strip()[:2000]}") from error
 
 
 def _index_for(data, rdf_map, scope):
@@ -109,22 +122,6 @@ def _filter_scope(data, scope):
         from .._rdflib_loader import _to_loadable
         data = _to_loadable(data)
     return data[data["INSTANCE_ID"].astype(str).isin(instances)]
-
-
-def _rewrite_bare_having(query_string):
-    """Tolerate a trailing HAVING without GROUP BY (an ENTSO-E constraint-query
-    quirk rdflib accepts): for plain-variable conditions it is equivalent to a
-    FILTER at the end of the WHERE block, which qlever's strict parser accepts."""
-    closing = query_string.rfind("}")
-    if closing == -1:
-        return query_string
-    tail = query_string[closing + 1:]
-    if "HAVING" not in tail.upper() or "GROUP BY" in tail.upper():
-        return query_string
-    match = re.search(r"HAVING\s*(\(.*\))\s*$", tail, re.IGNORECASE | re.DOTALL)
-    if match is None:
-        return query_string
-    return query_string[:closing] + f" FILTER{match.group(1)} }}" + tail[:match.start()]
 
 
 def _query_form(query_string):

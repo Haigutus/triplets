@@ -90,6 +90,38 @@ def test_index_cache_reused(svedala):
     assert len(sparql_qlever._INDEXES) == cached
 
 
+def test_invalid_query_error_carries_query_text(svedala):
+    """No query fixing: a rejected query raises with qlever's message + the query."""
+    bad = PREFIXES + "SELECT ?s ?n WHERE { ?s rdf:type cim:Substation } HAVING(?n > 1)"
+    with pytest.raises(ValueError, match="(?s)qlever rejected the query.*HAVING"):
+        triplets.sparql.query(svedala, bad, engine="qlever")
+
+
+def test_invalid_constraint_query_reported_not_fixed(svedala):
+    """A shape with the ENTSO-E bare-HAVING defect: results stay complete via the
+    rdflib fallback, and the report carries a triplets:invalidSparql Warning row."""
+    pytest.importorskip("pyshacl")
+    import rdflib
+    shape = rdflib.Graph()
+    shape.parse(data="""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+
+cim:ACLineSegmentShape a sh:NodeShape ;
+    sh:targetClass cim:ACLineSegment ;
+    sh:property [
+        sh:path cim:IdentifiedObject.name ;
+        sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value } HAVING(?value = "no-such-name")' ] ;
+    ] .
+""", format="turtle")
+    violations = triplets.validation.validate(svedala, shape, engine="pandas")
+    flags = violations[violations["VIOLATION_TYPE"] == "triplets:invalidSparql"]
+    assert len(flags) == 1                                       # flagged once, not per fanout
+    assert flags["SEVERITY"].iloc[0] == "Warning"
+    assert "qlever rejected the query" in flags["MESSAGE"].iloc[0]
+    assert (violations["VIOLATION_TYPE"] != "sh:sparql").all()   # rdflib fallback found no hits
+
+
 def test_shacl_sparql_delegation_via_qlever(svedala):
     """sh:sparql constraints in the vectorized SHACL engines ride on qlever automatically."""
     pytest.importorskip("pyshacl")

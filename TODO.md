@@ -16,8 +16,6 @@ Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, spee
   pyshacl-only).
 - [ ] qlever SELECT typing gap: `xsd:dateTime` literals return as strings (rdflib engine
   returns `datetime`) — minor result-parity difference, untested.
-- [ ] `_rewrite_bare_having` handles only a *trailing* HAVING; `HAVING … LIMIT n` still
-  errors on qlever (per-rule rdflib fallback keeps it correct but slow).
 - [ ] `sh:nodeKind` BlankNode / `*Or*` combinations — not expressible over triplets;
   skipped with a debug log (documented, likely permanent).
 
@@ -65,10 +63,11 @@ Checked against the issue tracker on 2026-07-06:
   conforming reading (§11.4), so engines diverge (rdflib = filter, QLever = reject).
   **Reported as a comment on #70** (issuecomment-4894091376) and **fixed upstream via
   PR entsoe/application-profiles-library#82** (HAVING → FILTER, semantics-preserving).
-- [ ] Once the #82 fix ships in a release the profiles are consumed from, remove
-  `sparql_qlever._rewrite_bare_having` — per policy, broken rules get fixed upstream,
-  not auto-patched in the engine (the rewrite stays only to keep current
-  `cgmes-v3-0`-pinned users working).
+- [x] Query auto-fixing removed entirely (`_rewrite_bare_having` deleted): constraint
+  queries run exactly as authored; a rejected query is evaluated on rdflib instead and
+  flagged in the report as `triplets:invalidSparql` (Warning; Violation when every
+  engine fails), deduplicated across the sh:targetClass fanout. Direct
+  `sparql.query()` failures raise with qlever's message + the query text.
 - [ ] **Portability note**: 17 shapes use SHACL-AF `sh:SPARQLTarget` (30 shapes total
   have no `sh:targetClass`) — constraints silently vanish on core-only validators;
   related to open issues #73/#58. Mention when commenting.
