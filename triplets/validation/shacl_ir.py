@@ -123,9 +123,15 @@ def _node_rows(graph, SH, shape, target_class):
 
     closed = graph.value(shape, SH.closed)
     if closed is not None and closed.toPython() is True:
+        # params = the complete allowed list, resolved at compile time:
+        # sh:ignoredProperties + every (non-inverse) sh:property path of THIS shape
         ignored = graph.value(shape, SH.ignoredProperties)
-        rows.append({**meta, "component": "sh:closed",
-                     "params": _rdf_list(graph, ignored, _local) if ignored is not None else []})
+        allowed = _rdf_list(graph, ignored, _local) if ignored is not None else []
+        for property_shape in graph.objects(shape, SH.property):
+            path, inverse = _resolve_path(graph, SH, graph.value(property_shape, SH.path))
+            if path is not None and not inverse:
+                allowed.append(path)
+        rows.append({**meta, "component": "sh:closed", "params": allowed})
 
     rows.extend(_sparql_rows(graph, SH, shape, meta))
     for property_shape in graph.objects(shape, SH.property):
@@ -163,19 +169,30 @@ def _shape_rows(graph, SH, shape_uri, target_class):
 
 
 def _sparql_rows(graph, SH, shape_uri, meta):
-    """sh:sparql constraints; params is the SELECT text ($this/$PATH placeholders kept).
+    """sh:sparql constraints. params carries everything an engine needs to run
+    the query without rdflib:
 
-    The sparql node's own sh:message overrides the shape's. sh:prefixes stays
-    unresolved for now — pyshacl executes these natively; the vectorized
-    engines will resolve prefixes when they delegate to triplets.sparql.
+        {"select":   SELECT text ($this / $PATH placeholders kept),
+         "prefixes": resolved "PREFIX ..." header lines (sh:prefixes → sh:declare),
+         "path":     full IRI of the owning shape's sh:path, or None}
+
+    The sparql node's own sh:message overrides the shape's.
     """
     rows = []
+    path = graph.value(shape_uri, SH.path)
     for sparql in graph.objects(shape_uri, SH.sparql):
         select = graph.value(sparql, SH.select)
         if select is None:
             continue
+        prefixes = "".join(
+            f"PREFIX {graph.value(declaration, SH.prefix)}: <{graph.value(declaration, SH.namespace)}>\n"
+            for ontology in graph.objects(sparql, SH.prefixes)
+            for declaration in graph.objects(ontology, SH.declare))
         message = graph.value(sparql, SH.message)
-        row = {**meta, "component": "sh:sparql", "params": str(select)}
+        row = {**meta, "component": "sh:sparql",
+               "params": {"select": str(select), "prefixes": prefixes,
+                          # $PATH substitution needs the full IRI; only direct paths qualify
+                          "path": str(path) if type(path).__name__ == "URIRef" else None}}
         if message is not None:
             row["message"] = str(message)
         rows.append(row)

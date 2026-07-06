@@ -53,8 +53,13 @@ cim:BreakerShape a sh:NodeShape ;
                 [ sh:path cim:IdentifiedObject.name ; sh:minLength 1 ] ) ;
     ] ;
     sh:sparql [
+        sh:message "custom sparql message" ;
+        sh:prefixes <http://example.org/prefixes> ;
         sh:select "SELECT ?this WHERE { ?this ?p ?o }" ;
     ] .
+
+<http://example.org/prefixes>
+    sh:declare [ sh:prefix "cim" ; sh:namespace "http://iec.ch/TC57/CIM100#"^^xsd:anyURI ] .
 """
 
 CGMES_SHACL_DIR = Path(os.environ.get(
@@ -82,11 +87,19 @@ def test_ir_columns_and_components(shape_file):
     assert (ir["target_class"] == "Breaker").all()
 
     by_component = ir.set_index("component")
-    assert by_component.loc["sh:closed", "params"] == ["IdentifiedObject.mRID"]
+    # closed params = compile-time allowed list: ignoredProperties + this shape's
+    # DIRECT property paths (inverse paths and paths nested in sh:or don't count)
+    assert set(by_component.loc["sh:closed", "params"]) == {
+        "IdentifiedObject.mRID", "IdentifiedObject.name", "Switch.normalOpen",
+        "Equipment.EquipmentContainer"}
     assert by_component.loc["sh:in", "params"] == ["true", "false"]
     assert by_component.loc["sh:class", "params"] == "VoltageLevel"
     assert by_component.loc["sh:datatype", "params"].tolist() == ["xsd:string", "xsd:boolean"]
-    assert by_component.loc["sh:sparql", "params"].startswith("SELECT ?this")
+    sparql = by_component.loc["sh:sparql", "params"]
+    assert sparql["select"].startswith("SELECT ?this")
+    assert sparql["prefixes"] == "PREFIX cim: <http://iec.ch/TC57/CIM100#>\n"
+    assert sparql["path"] is None                       # node-level constraint has no sh:path
+    assert by_component.loc["sh:sparql", "message"] == "custom sparql message"
 
 
 def test_ir_shape_metadata(shape_file):

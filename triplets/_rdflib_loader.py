@@ -29,6 +29,9 @@ def load_dataset(data, rdf_map=None):
     import rdflib
     from .export import export_to_nquads
 
+    if isinstance(data, rdflib.Graph):  # incl. Dataset — already loaded, reuse as-is
+        return data
+
     data = _to_loadable(data)
     buffer = export_to_nquads(data, rdf_map=rdf_map, export_to_memory=True)
     buffer.seek(0)

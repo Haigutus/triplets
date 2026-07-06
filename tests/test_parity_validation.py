@@ -86,6 +86,87 @@ def test_datatype_parity_on_real_data(shape_file):
     assert _violation_set(reference) == _violation_set(ours)
 
 
+# ── component parity matrix: pandas engine vs pyshacl, per constraint ─────────
+# Real CIM keys (so rdf_map types the literals) and UUID ids (so references
+# export as urn:uuid IRIs). Expected = violating focus IDs; both engines must
+# report exactly these under the same VIOLATION_TYPE.
+def _uuid(n):
+    return f"{n:08d}-0000-0000-0000-000000000000"
+
+
+A1, A2, VL, SUB = _uuid(1), _uuid(2), _uuid(71), _uuid(72)
+
+_SEGMENT_BASE = [(A1, "Type", "ACLineSegment", "eq"), (A2, "Type", "ACLineSegment", "eq")]
+
+COMPONENT_CASES = {
+    "sh:minCount": (
+        "sh:path cim:IdentifiedObject.name ; sh:minCount 1",
+        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "L1", "eq")],
+        {A2}),
+    "sh:maxCount": (
+        "sh:path cim:IdentifiedObject.name ; sh:maxCount 1",
+        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "L1", "eq"),
+                         (A1, "IdentifiedObject.name", "L1b", "eq"),
+                         (A2, "IdentifiedObject.name", "L2", "eq")],
+        {A1}),
+    "sh:pattern": (
+        'sh:path cim:IdentifiedObject.name ; sh:pattern "^[A-Z]"',
+        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "Good", "eq"),
+                         (A2, "IdentifiedObject.name", "bad", "eq")],
+        {A2}),
+    "sh:minInclusive": (
+        "sh:path cim:Conductor.length ; sh:minInclusive 0.0",
+        _SEGMENT_BASE + [(A1, "Conductor.length", "-5.0", "eq"),
+                         (A2, "Conductor.length", "3.0", "eq")],
+        {A1}),
+    "sh:in": (
+        'sh:path cim:IdentifiedObject.name ; sh:in ( "L1" "L2" )',
+        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "L1", "eq"),
+                         (A2, "IdentifiedObject.name", "other", "eq")],
+        {A2}),
+    "sh:class": (
+        "sh:path cim:Equipment.EquipmentContainer ; sh:class cim:VoltageLevel",
+        _SEGMENT_BASE + [(VL, "Type", "VoltageLevel", "eq"), (SUB, "Type", "Substation", "eq"),
+                         (A1, "Equipment.EquipmentContainer", VL, "eq"),
+                         (A2, "Equipment.EquipmentContainer", SUB, "eq")],
+        {A2}),
+    "sh:sparql": (  # $PATH placeholder, like the real ENTSO-E constraint queries
+        """sh:path cim:IdentifiedObject.name ;
+           sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "forbidden") }' ]""",
+        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "fine", "eq"),
+                         (A2, "IdentifiedObject.name", "forbidden", "eq")],
+        {A2}),
+}
+
+_CASE_SHAPE = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+cim:ACLineSegmentShape a sh:NodeShape ;
+    sh:targetClass cim:ACLineSegment ;
+    sh:property [ {body} ] .
+"""
+
+
+@pytest.mark.parametrize("component", sorted(COMPONENT_CASES))
+def test_component_parity(component, tmp_path):
+    from triplets.export_schema import schemas
+    body, rows, expected = COMPONENT_CASES[component]
+
+    shape = tmp_path / "case.ttl"
+    shape.write_text(_CASE_SHAPE.format(body=body))
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+    reference = triplets.validation.validate(data, str(shape), engine="pyshacl",
+                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+                                             lexical=False)
+    ours = triplets.validation.validate(data, str(shape), engine="pandas")
+
+    assert set(reference.loc[reference["VIOLATION_TYPE"] == component, "ID"]) == expected, "pyshacl disagrees"
+    assert set(ours.loc[ours["VIOLATION_TYPE"] == component, "ID"]) == expected, "pandas engine disagrees"
+
+
 def test_input_flavor_parity(mixed_data, shape_file):
     """pandas engine gives identical findings for pandas / polars / duckdb input."""
     reference = triplets.validation.validate(mixed_data, shape_file, engine="pandas")

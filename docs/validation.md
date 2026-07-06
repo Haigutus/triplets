@@ -8,7 +8,7 @@ touching the public API:
 | Engine | File | Requires | Role |
 |--------|------|----------|------|
 | `pyshacl` | `validation/shacl_pyshacl.py` | pyshacl + rdflib (`pip install triplets[validation]`) | **reference** — spec-complete, rdflib-based |
-| `pandas` | `validation/shacl_pandas.py` | core | compiled-IR executor for debugging; partial (datatype/lexical only), explicit `engine="pandas"` |
+| `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; full registry — `sh:sparql` delegated to `triplets.sparql`, `max_workers` parallelizes those queries. `sh:node` not implemented (0 uses across the CGMES SHACL library; pyshacl covers it), `sh:nodeKind` inferred from string form (triplets don't store RDF term kinds). Explicit `engine="pandas"` |
 | `polars` (future) | — | polars | compiled-IR executor for performance (lazy plans, one `collect_all`) |
 | `duckdb` (future) | — | duckdb | compiled-IR executor for larger-than-memory data |
 
@@ -62,12 +62,20 @@ validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) →
 
 - **pyshacl** consumes `compiled.graph` (data goes through `_rdflib_loader`).
 - **pandas/polars/duckdb** consume `compiled.ir` — they never touch rdflib and
-  read the raw string `VALUE`s directly, so `rdf_map` is irrelevant to them.
+  read the raw string `VALUE`s directly (`rdf_map` matters only for their
+  sh:sparql delegation, where it types the queried graph).
 - **sh:sparql IR rows**: pyshacl evaluates them natively (`advanced=True`).
-  Future engines delegate them to `triplets.sparql` — evaluated with
-  `ProcessPoolExecutor(max_workers=...)` following the `export_to_cimxml`
-  pattern (fork gives copy-on-write graph sharing; threads don't help rdflib —
-  it is GIL-bound pure Python; qlever handles concurrency natively).
+  The vectorized engines delegate them to `triplets.sparql` (whichever engine
+  is available — rdflib today, qlever later): the data is loaded into one
+  dataset, each constraint runs as a single SELECT with the focus nodes bound
+  via `VALUES ?this {...}` and `$PATH` substituted from the IR, and
+  `max_workers=N` runs the constraint queries in parallel processes (fork
+  gives copy-on-write sharing of the dataset; threads don't help rdflib — it
+  is GIL-bound pure Python; qlever handles concurrency natively).
+  Real-profile scale (Svedala EQ, 48k triples, Simple+Complex Equipment SHACL
+  = 4,857 IR rows of which 148 sh:sparql): vectorized components ~24 s;
+  the sparql queries ~3.5 min with `max_workers=8` vs ~25 min sequential —
+  always pass `max_workers` for sh:sparql-heavy profiles until qlever lands.
 
 ## The Lexical-Form Datatype Deviation
 
@@ -163,7 +171,7 @@ triplets/
     |-- __init__.py          # validate() + compile() dispatcher, engine registry
     |-- shacl_ir.py          # shapes -> CompiledShapes (IR compiler, content-hash cache)
     |-- shacl_pyshacl.py     # reference engine: data + compiled.graph -> report
-    |-- shacl_pandas.py      # compiled-IR executor seed (datatype/lexical); phase B template
+    |-- shacl_pandas.py      # compiled-IR executor (full registry; polars/duckdb template)
     '-- shacl_report.py      # ValidationReport graph -> violations DataFrame
 ```
 

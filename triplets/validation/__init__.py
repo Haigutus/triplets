@@ -3,8 +3,10 @@
 Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
 - pyshacl — reference, spec-complete, rdflib-based; always available with the
   `validation` extra
-- pandas — compiled-IR executor (debugging; partial: datatype/lexical only,
-  explicit engine="pandas" — excluded from auto until complete)
+- pandas — compiled-IR executor (debugging; full constraint registry.
+  sh:sparql delegates to triplets.sparql with optional max_workers; sh:node is
+  not implemented — 0 uses across the CGMES SHACL library; sh:nodeKind is
+  inferred from the string form. Explicit engine="pandas")
 - (future) polars / duckdb — compiled-IR executors for speed / larger-than-memory
 
 Compile once: ``compile(shapes)`` parses the shapes with rdflib exactly once
@@ -43,9 +45,11 @@ _ENGINE_MODULES = {
 _ENGINE_ALIASES = {
     "reference": "pyshacl",
 }
-# Auto preference: first importable. The partial pandas engine stays explicit-only
-# until its CONSTRAINT_VALIDATORS registry is complete; completed vectorized
-# engines join in front of pyshacl (polars → pandas → pyshacl).
+# Auto preference: reference-first — auto is pyshacl until the polars engine
+# lands, then the vectorized engines take priority (polars → pandas → pyshacl).
+# The pandas engine is complete for the ENTSO-E constraint subset but stays
+# explicit (its nodeKind inference and lexical datatype semantics deliberately
+# differ from the spec reference).
 _AUTO_ORDER = ["pyshacl"]
 _ENGINES: dict[str, Any] = {}  # loaded-module cache
 
