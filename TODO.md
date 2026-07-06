@@ -58,15 +58,17 @@ Checked against the issue tracker on 2026-07-06:
   (line ~97: `.` instead of `;`, file unparseable) — filed as issue #63 and **FIXED at
   `entsoe/main` (f36bd97, which also adds riot syntax validation)**; the Haigutus fork
   is one commit behind → sync the fork, close #63.
-- [ ] **`HAVING` without `GROUP BY`** — 2 constraint queries (the PowerTransformerEnd
-  `ratedS` check in `61970-301_Equipment-AP-Con-Complex-SHACL.ttl`, and one in
-  `61970-600-2_AllProfiles-AP-Con-Complex-SolvedMAS-SHACL.ttl`), fanning out to ~54
-  constraint instances via multiple `sh:targetClass`. Invalid per SPARQL 1.1 (rdflib
-  tolerates, QLever rejects); fix = move the condition into `FILTER(...)`.
-  Verified still present at `entsoe/main` (f36bd97). Issue **#70** covers the same
-  query's other defects (fake `sh:path rdf:type`, per-instance slowness) but not
-  this — **add it as a comment on #70**. Our engine side is covered by
-  `sparql_qlever._rewrite_bare_having`.
+- [x] **`HAVING` without `GROUP BY`** — 2 constraint queries (PowerTransformerEnd
+  `ratedS` + `RegulatingControl-samePointSparql`), present on `entsoe/main` and the
+  `cgmes-v3-0` release branch. SPARQL 1.1 defines HAVING only over grouped solutions
+  (§11.3); with no aggregate and non-aggregate projection the construct has no
+  conforming reading (§11.4), so engines diverge (rdflib = filter, QLever = reject).
+  **Reported as a comment on #70** (issuecomment-4894091376) and **fixed upstream via
+  PR entsoe/application-profiles-library#82** (HAVING → FILTER, semantics-preserving).
+- [ ] Once the #82 fix ships in a release the profiles are consumed from, remove
+  `sparql_qlever._rewrite_bare_having` — per policy, broken rules get fixed upstream,
+  not auto-patched in the engine (the rewrite stays only to keep current
+  `cgmes-v3-0`-pinned users working).
 - [ ] **Portability note**: 17 shapes use SHACL-AF `sh:SPARQLTarget` (30 shapes total
   have no `sh:targetClass`) — constraints silently vanish on core-only validators;
   related to open issues #73/#58. Mention when commenting.
