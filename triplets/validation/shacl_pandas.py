@@ -25,12 +25,10 @@ VALUES, and ``max_workers`` runs the constraint queries in parallel processes
 (fork — copy-on-write shares the dataset; threads don't help GIL-bound rdflib).
 
 Known limits:
-- sh:node — nested shape references; used 0 times across the entire CGMES
-  SHACL library, so deliberately not implemented (pyshacl covers it if ever
-  encountered; an IR row is kept and logged)
-- sh:nodeKind — implemented as a heuristic: triplets store every value as a
-  string, so a value counts as reference-like (IRI) when it is a known ID, a
-  UUID, has a URI scheme, or has the enum local-name form (``PhaseCode.ABC``)
+- sh:nodeKind — triplets store every value as a string, so term kind is decided
+  like the N-Quads exporter decides it: by the schema when rdf_map names the
+  path (a datatype key is Literal even when its values look like UUIDs), by
+  value form otherwise (known ID / UUID / URI scheme / enum ``PhaseCode.ABC``)
 """
 import re
 import logging
@@ -145,14 +143,20 @@ class _Context:
             return "literal"
         return None
 
+    def focus(self, rule):
+        """The rule's focus nodes: an explicit ``focus_ids`` (set by sh:node — the
+        referenced value nodes) or all instances of the rule's target class."""
+        focus_ids = getattr(rule, "focus_ids", None)
+        return focus_ids if focus_ids is not None else self.class_ids(rule.target_class)
+
     def path_rows(self, rule):
-        """The rule's path as (FOCUS, PATH_VALUE) pairs, restricted to the target class.
+        """The rule's path as (FOCUS, PATH_VALUE) pairs, restricted to the rule's focus.
 
         Normal path:  FOCUS = row ID,   PATH_VALUE = row VALUE.
-        Inverse path: FOCUS = row VALUE (the referenced target-class object),
+        Inverse path: FOCUS = row VALUE (the referenced focus object),
                       PATH_VALUE = row ID (the referencing object).
         """
-        ids = self.class_ids(rule.target_class)
+        ids = self.focus(rule)
         rows = self.key_rows(rule.path)
         if rule.inverse:
             rows = rows[rows["VALUE"].isin(ids)]
@@ -165,7 +169,8 @@ class _Context:
     def pair_rows(self, rule, other_path):
         """FOCUS + both paths' values, for the pair constraints (equals/disjoint/lessThan)."""
         left = self.path_rows(rule)
-        other = SimpleNamespace(target_class=rule.target_class, path=other_path, inverse=False)
+        other = SimpleNamespace(target_class=rule.target_class, path=other_path, inverse=False,
+                                focus_ids=getattr(rule, "focus_ids", None))
         right = self.path_rows(other).rename(columns={"PATH_VALUE": "OTHER_VALUE"})
         return left, right
 
@@ -192,7 +197,7 @@ def _empty():
 def _counts(context, rule):
     rows = context.path_rows(rule)
     return (rows.groupby("FOCUS").size()
-            .reindex(context.class_ids(rule.target_class), fill_value=0))
+            .reindex(context.focus(rule), fill_value=0))
 
 
 def _min_count(context, rule):
@@ -281,7 +286,7 @@ def _in(context, rule):
 def _has_value(context, rule):
     rows = context.path_rows(rule)
     having = rows.loc[rows["PATH_VALUE"].astype(str) == str(rule.params), "FOCUS"]
-    missing = pandas.Index(context.class_ids(rule.target_class)).difference(having)
+    missing = pandas.Index(context.focus(rule)).difference(having)
     return _frame(rule, missing, None, f"{rule.path} does not have required value '{rule.params}'")
 
 
@@ -355,7 +360,7 @@ def _closed(context, rule):
     triplets object carries it by construction.
     """
     allowed = set(rule.params) | {"Type"}
-    ids = context.class_ids(rule.target_class)
+    ids = context.focus(rule)
     rows = context.data[context.data["ID"].isin(ids) & ~context.data["KEY"].isin(allowed)]
     frame = _frame(rule, rows["ID"], rows["VALUE"], "property is not allowed on a closed shape")
     frame["KEY"] = rows["KEY"].to_numpy()
@@ -387,7 +392,7 @@ def _sparql_violations(rule, result):
 
 def _sparql(context, rule):
     from .. import sparql
-    focus_ids = context.class_ids(rule.target_class)
+    focus_ids = context.focus(rule)
     if not len(focus_ids):
         return _empty()
     result = sparql.query(context.dataset(), _sparql_query_text(rule, focus_ids))
@@ -411,8 +416,8 @@ def _sparql_parallel(context, rules, max_workers):
     per constraint query.
     """
     global _FORK_DATASET
-    tasks = [(rule, _sparql_query_text(rule, context.class_ids(rule.target_class)))
-             for rule in rules if len(context.class_ids(rule.target_class))]
+    tasks = [(rule, _sparql_query_text(rule, context.focus(rule)))
+             for rule in rules if len(context.focus(rule))]
     if not tasks:
         return []
     _FORK_DATASET = context.dataset()
@@ -427,41 +432,63 @@ def _sparql_parallel(context, rules, max_workers):
 
 # ── logical operators (params: nested IR row-dict lists) ────────────────────
 
-def _run_nested(context, row_dicts):
-    """Validate nested IR rows; returns their concatenated violations."""
-    frames = [CONSTRAINT_VALIDATORS[row["component"]](context, SimpleNamespace(**row))
-              for row in row_dicts if row["component"] in CONSTRAINT_VALIDATORS]
+def _run_nested(context, row_dicts, focus_ids=None):
+    """Validate nested IR rows (inheriting the parent's focus override, so shapes
+    nested under sh:node keep judging the referenced value nodes)."""
+    rules = [SimpleNamespace(focus_ids=focus_ids, **row) for row in row_dicts]
+    frames = [CONSTRAINT_VALIDATORS[rule.component](context, rule)
+              for rule in rules if rule.component in CONSTRAINT_VALIDATORS]
     return pandas.concat(frames, ignore_index=True) if frames else _empty()
 
 
 def _and(context, rule):
     """sh:and — every nested shape must hold; each nested violation is reported."""
-    violations = pandas.concat([_run_nested(context, alternative) for alternative in rule.params],
-                               ignore_index=True)
+    focus_ids = getattr(rule, "focus_ids", None)
+    violations = pandas.concat([_run_nested(context, alternative, focus_ids)
+                                for alternative in rule.params], ignore_index=True)
     violations["VIOLATION_TYPE"] = "sh:and"
     return violations
 
 
 def _or(context, rule):
     """sh:or — a focus node violates only when EVERY alternative is violated."""
-    violating_sets = [set(_run_nested(context, alternative)["ID"]) for alternative in rule.params]
+    focus_ids = getattr(rule, "focus_ids", None)
+    violating_sets = [set(_run_nested(context, alternative, focus_ids)["ID"])
+                      for alternative in rule.params]
     focus = sorted(set.intersection(*violating_sets)) if violating_sets else []
     return _frame(rule, focus, None, "no sh:or alternative is satisfied")
 
 
+def _node(context, rule):
+    """sh:node — every value at the path must conform to the referenced shape.
+
+    The referenced shape was expanded into nested IR rows at compile time; here
+    they run with the referenced value nodes as focus. A value node that
+    produces any nested violation makes the referring focus node violate sh:node.
+    """
+    rows = context.path_rows(rule)
+    referenced = rows["PATH_VALUE"].unique()
+    if not len(referenced):
+        return _empty()
+    non_conforming = set(_run_nested(context, rule.params["rows"], referenced)["ID"])
+    bad = rows[rows["PATH_VALUE"].isin(non_conforming)]
+    return _frame(rule, bad["FOCUS"], bad["PATH_VALUE"],
+                  f"value does not conform to shape {rule.params['shape']}")
+
+
 def _not(context, rule):
     """sh:not — a focus node violates when it SATISFIES the negated shape."""
-    violating = set(_run_nested(context, rule.params)["ID"])
-    ids = context.class_ids(rule.target_class)
+    violating = set(_run_nested(context, rule.params, getattr(rule, "focus_ids", None))["ID"])
+    ids = context.focus(rule)
     conforming = [focus for focus in ids if focus not in violating]
     return _frame(rule, conforming, None, "node conforms to the negated shape")
 
 
-# component → validator. sh:node is intentionally absent (unused across the
-# CGMES SHACL library; pyshacl covers it). The polars and duckdb compilers
-# implement this same registry against CompiledShapes.plans.
+# component → validator. The polars and duckdb compilers implement this same
+# registry against CompiledShapes.plans.
 CONSTRAINT_VALIDATORS = {
     "sh:sparql": _sparql,
+    "sh:node": _node,
     "sh:minCount": _min_count,
     "sh:maxCount": _max_count,
     "sh:datatype": _datatype,

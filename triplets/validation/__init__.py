@@ -3,10 +3,11 @@
 Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
 - pyshacl — reference, spec-complete, rdflib-based; always available with the
   `validation` extra
-- pandas — compiled-IR executor (debugging; full constraint registry.
-  sh:sparql delegates to triplets.sparql with optional max_workers; sh:node is
-  not implemented — 0 uses across the CGMES SHACL library; sh:nodeKind is
-  inferred from the string form. Explicit engine="pandas")
+- pandas — compiled-IR executor (debugging; complete constraint registry.
+  sh:sparql delegates to triplets.sparql with optional max_workers; sh:node
+  runs the compile-time-expanded referenced shape against the value nodes;
+  sh:nodeKind is decided by the rdf_map schema, value form when schema is
+  silent. Explicit engine="pandas")
 - (future) polars / duckdb — compiled-IR executors for speed / larger-than-memory
 
 Compile once: ``compile(shapes)`` parses the shapes with rdflib exactly once

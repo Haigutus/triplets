@@ -8,7 +8,7 @@ touching the public API:
 | Engine | File | Requires | Role |
 |--------|------|----------|------|
 | `pyshacl` | `validation/shacl_pyshacl.py` | pyshacl + rdflib (`pip install triplets[validation]`) | **reference** — spec-complete, rdflib-based |
-| `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; full registry — `sh:sparql` delegated to `triplets.sparql`, `max_workers` parallelizes those queries. `sh:node` not implemented (0 uses across the CGMES SHACL library; pyshacl covers it), `sh:nodeKind` inferred from string form (triplets don't store RDF term kinds). Explicit `engine="pandas"` |
+| `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; **complete registry** — `sh:sparql` delegated to `triplets.sparql` (`max_workers` parallelizes those queries), `sh:node` expanded at compile time and run against the referenced value nodes, `sh:nodeKind` decided by the rdf_map schema (value form when schema is silent). Explicit `engine="pandas"` |
 | `polars` (future) | — | polars | compiled-IR executor for performance (lazy plans, one `collect_all`) |
 | `duckdb` (future) | — | duckdb | compiled-IR executor for larger-than-memory data |
 

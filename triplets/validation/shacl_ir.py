@@ -139,8 +139,12 @@ def _node_rows(graph, SH, shape, target_class):
     return rows
 
 
-def _shape_rows(graph, SH, shape_uri, target_class):
-    """One property shape → IR rows (one per constraint component present)."""
+def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset()):
+    """One property shape → IR rows (one per constraint component present).
+
+    *visited* tracks named shapes already expanded through sh:node, so shape
+    graphs that reference each other cannot recurse forever.
+    """
     path, inverse = _resolve_path(graph, SH, graph.value(shape_uri, SH.path))
     meta = _shape_meta(graph, SH, shape_uri, target_class, path, inverse)
     rows = []
@@ -156,15 +160,44 @@ def _shape_rows(graph, SH, shape_uri, target_class):
     for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and")):
         head = graph.value(shape_uri, term)
         if head is not None:
-            nested = [_shape_rows(graph, SH, item, target_class)
+            nested = [_shape_rows(graph, SH, item, target_class, visited)
                       for item in _rdf_list(graph, head, lambda node: node)]
             rows.append({**meta, "component": component, "params": nested})
 
     negated = graph.value(shape_uri, SH["not"])
     if negated is not None:
         rows.append({**meta, "component": "sh:not",
-                     "params": _shape_rows(graph, SH, negated, target_class)})
+                     "params": _shape_rows(graph, SH, negated, target_class, visited)})
 
+    node_shape = graph.value(shape_uri, SH.node)
+    if node_shape is not None:
+        nested = _node_expansion(graph, SH, node_shape, target_class, visited)
+        if nested is None:
+            logger.warning("sh:node cycle at %s — constraint dropped (%s)", node_shape, shape_uri)
+        else:
+            rows.append({**meta, "component": "sh:node",
+                         "params": {"shape": _local(node_shape), "rows": nested}})
+
+    return rows
+
+
+def _node_expansion(graph, SH, node_shape, target_class, visited):
+    """sh:node — expand the referenced shape into nested IR rows at compile time.
+
+    params = {"shape": local name (for messages), "rows": nested row dicts}.
+    The engines run the nested rows against the referenced value nodes.
+    Returns None on a reference cycle.
+    """
+    key = str(node_shape)
+    if key in visited:
+        return None
+    visited = visited | {key}
+
+    rows = []
+    meta = _shape_meta(graph, SH, node_shape, target_class, path=None, inverse=False)
+    rows.extend(_sparql_rows(graph, SH, node_shape, meta))
+    for property_shape in graph.objects(node_shape, SH.property):
+        rows.extend(_shape_rows(graph, SH, property_shape, target_class, visited))
     return rows
 
 
@@ -259,7 +292,6 @@ def _components(SH):
         (SH.disjoint, "sh:disjoint", lambda g, v: _local(v)),
         (SH.lessThan, "sh:lessThan", lambda g, v: _local(v)),
         (SH.lessThanOrEquals, "sh:lessThanOrEquals", lambda g, v: _local(v)),
-        (SH.node, "sh:node", lambda g, v: str(v)),
     ]
 
 

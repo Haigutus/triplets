@@ -167,6 +167,38 @@ def test_component_parity(component, tmp_path):
     assert set(ours.loc[ours["VIOLATION_TYPE"] == component, "ID"]) == expected, "pandas engine disagrees"
 
 
+def test_node_parity(tmp_path):
+    """sh:node: referenced node must conform to the referenced (target-less) shape."""
+    from triplets.export_schema import schemas
+    shape = tmp_path / "node.ttl"
+    shape.write_text("""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+
+cim:ACLineSegmentShape a sh:NodeShape ;
+    sh:targetClass cim:ACLineSegment ;
+    sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:VoltageLevelShape ] .
+
+cim:VoltageLevelShape a sh:NodeShape ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+""")
+    named_vl, bare_vl = _uuid(81), _uuid(82)
+    data = pandas.DataFrame(
+        _SEGMENT_BASE
+        + [(named_vl, "Type", "VoltageLevel", "eq"), (named_vl, "IdentifiedObject.name", "VL", "eq"),
+           (bare_vl, "Type", "VoltageLevel", "eq"),
+           (A1, "Equipment.EquipmentContainer", named_vl, "eq"),
+           (A2, "Equipment.EquipmentContainer", bare_vl, "eq")],
+        columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+    reference = triplets.validation.validate(data, str(shape), engine="pyshacl",
+                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+                                             lexical=False)
+    ours = triplets.validation.validate(data, str(shape), engine="pandas")
+    assert set(reference.loc[reference["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, "pyshacl disagrees"
+    assert set(ours.loc[ours["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, "pandas engine disagrees"
+
+
 def test_input_flavor_parity(mixed_data, shape_file):
     """pandas engine gives identical findings for pandas / polars / duckdb input."""
     reference = triplets.validation.validate(mixed_data, shape_file, engine="pandas")

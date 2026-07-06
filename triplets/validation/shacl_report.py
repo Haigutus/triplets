@@ -28,6 +28,7 @@ _COMPONENT_MAP = {
     "MinInclusiveConstraintComponent": "sh:minInclusive",
     "MaxInclusiveConstraintComponent": "sh:maxInclusive",
     "ClassConstraintComponent": "sh:class",
+    "NodeConstraintComponent": "sh:node",
     "NodeKindConstraintComponent": "sh:nodeKind",
     "InConstraintComponent": "sh:in",
     "HasValueConstraintComponent": "sh:hasValue",

@@ -227,6 +227,53 @@ def test_sparql_max_workers_matches_sequential():
     assert violating(parallel, "sh:sparql") == violating(sequential, "sh:sparql") == {("b1", "bad")}
 
 
+NODE_SHAPE = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:VoltageLevelShape ] .
+
+cim:VoltageLevelShape a sh:NodeShape ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+
+
+def test_node():
+    """sh:node — the referenced object must conform to the referenced shape."""
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "vl1"))
+            + breaker("b2", ("Equipment.EquipmentContainer", "vl2"))
+            + [("vl1", "Type", "VoltageLevel", "eq"), ("vl1", "IdentifiedObject.name", "VL1", "eq"),
+               ("vl2", "Type", "VoltageLevel", "eq")])   # vl2 has no name
+    v = run(rows, NODE_SHAPE)
+    assert violating(v, "sh:node") == {("b2", "vl2")}
+
+
+def test_node_nested_logical():
+    """Focus override propagates through logical operators inside the referenced shape."""
+    shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:ContainerShape ] .
+
+    cim:ContainerShape a sh:NodeShape ;
+        sh:property [ sh:or ( [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]
+                              [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) ] ."""
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "vl1"))
+            + breaker("b2", ("Equipment.EquipmentContainer", "vl2"))
+            + [("vl1", "Type", "VoltageLevel", "eq"), ("vl1", "IdentifiedObject.description", "d", "eq"),
+               ("vl2", "Type", "VoltageLevel", "eq")])   # vl2 has neither name nor description
+    v = run(rows, shape)
+    assert violating(v, "sh:node") == {("b2", "vl2")}
+
+
+def test_node_cycle_dropped():
+    """Mutually-referencing shapes must not recurse forever — cycle is dropped with a warning."""
+    shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:AShape ] .
+    cim:AShape a sh:NodeShape ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ;
+        sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:BShape ] .
+    cim:BShape a sh:NodeShape ;
+        sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:AShape ] ."""
+    rows = breaker("b1", ("Equipment.EquipmentContainer", "x1")) + [("x1", "Type", "Thing", "eq")]
+    v = run(rows, shape)   # compiles and runs; the A→B→A cycle is truncated
+    assert violating(v, "sh:node") == {("b1", "x1")}   # x1 has no name
+
+
 def test_target_class_isolation():
     """Constraints only apply to the target class — other types are untouched."""
     rows = breaker("b1") + [("d1", "Type", "Disconnector", "eq")]
