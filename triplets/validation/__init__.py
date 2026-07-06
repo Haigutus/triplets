@@ -9,7 +9,9 @@ Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
   semantics, eager. sh:sparql delegates to triplets.sparql with optional
   max_workers; sh:node runs the compile-time-expanded referenced shape against
   the value nodes; sh:nodeKind is decided by the rdf_map schema)
-- (future) duckdb — compiled-IR executor for larger-than-memory data
+- duckdb — compiled-IR executor for larger-than-memory data (one SQL query
+  per constraint against the triplets table, streams/spills via DuckDB;
+  explicit engine="duckdb", not in auto — polars owns the in-memory fast path)
 
 Compile once: ``compile(shapes)`` parses the shapes with rdflib exactly once
 into ``CompiledShapes`` (shapes graph + flat constraint table, cached by
@@ -43,18 +45,21 @@ logger = logging.getLogger(__name__)
 _ENGINE_MODULES = {
     "polars": ".shacl_polars",
     "pandas": ".shacl_pandas",
+    "duckdb": ".shacl_duckdb",
     "pyshacl": ".shacl_pyshacl",
 }
 _ENGINE_ALIASES = {
     "reference": "pyshacl",
 }
 # Auto preference: first importable — polars (lazy, fast) → pandas (same
-# semantics, eager) → pyshacl (spec reference). The vectorized engines share
-# the IR and the deliberate deviations (lexical datatype, schema-driven
-# nodeKind); engine="reference" always gives the pure pyshacl view.
+# semantics, eager) → pyshacl (spec reference). duckdb is deliberately NOT in
+# auto: it is the explicit choice for larger-than-memory data (polars owns the
+# in-memory fast path). The vectorized engines share the IR and the deliberate
+# deviations (lexical datatype, schema-driven nodeKind); engine="reference"
+# always gives the pure pyshacl view.
 _AUTO_ORDER = ["polars", "pandas", "pyshacl"]
 # engines whose datatype check already emits the lexical findings itself
-_LEXICAL_BUILTIN = {"polars", "pandas"}
+_LEXICAL_BUILTIN = {"polars", "pandas", "duckdb"}
 _ENGINES: dict[str, Any] = {}  # loaded-module cache
 
 
@@ -106,8 +111,9 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         Validate only these instances' named graphs; all data stays loaded for
         reference resolution. None = full union.
     engine : str, default "auto"
-        "polars" (performance), "pandas" (debugging) or "pyshacl" (reference).
-        "auto" picks the first available in that order.
+        "polars" (performance), "pandas" (debugging), "duckdb"
+        (larger-than-memory) or "pyshacl" (reference). "auto" picks
+        polars → pandas → pyshacl; duckdb is always an explicit choice.
     lexical : bool, default True
         Append the lexical-form datatype findings (the deliberate deviation
         from pyshacl — see shacl_pandas) to the engine's report.

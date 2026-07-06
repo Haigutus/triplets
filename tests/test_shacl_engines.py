@@ -12,13 +12,13 @@ pytest.importorskip("rdflib")
 import pandas
 import triplets
 
-ENGINES = ["pandas", "polars"]
+ENGINES = ["pandas", "polars", "duckdb"]
 
 
 @pytest.fixture(params=ENGINES)
 def engine(request):
-    if request.param == "polars":
-        pytest.importorskip("polars")
+    if request.param != "pandas":
+        pytest.importorskip(request.param)
     return request.param
 
 

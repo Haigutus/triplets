@@ -149,11 +149,11 @@ cim:ACLineSegmentShape a sh:NodeShape ;
 """
 
 
-@pytest.mark.parametrize("engine", ["pandas", "polars"])
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb"])
 @pytest.mark.parametrize("component", sorted(COMPONENT_CASES))
 def test_component_parity(component, engine, tmp_path):
-    if engine == "polars":
-        pytest.importorskip("polars")
+    if engine != "pandas":
+        pytest.importorskip(engine)
     from triplets.export_schema import schemas
     body, rows, expected = COMPONENT_CASES[component]
 
@@ -197,7 +197,7 @@ cim:VoltageLevelShape a sh:NodeShape ;
     reference = triplets.validation.validate(data, str(shape), engine="pyshacl",
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
                                              lexical=False)
-    for engine in ("pandas", "polars"):
+    for engine in ("pandas", "polars", "duckdb"):
         ours = triplets.validation.validate(data, str(shape), engine=engine)
         assert set(ours.loc[ours["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, f"{engine} engine disagrees"
     assert set(reference.loc[reference["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, "pyshacl disagrees"
@@ -240,7 +240,7 @@ def timing_shape(tmp_path_factory):
 
 @pytest.mark.performance
 @pytest.mark.benchmark(group="shacl-engines")
-@pytest.mark.parametrize("engine", ["pyshacl", "pandas", "polars"])
+@pytest.mark.parametrize("engine", ["pyshacl", "pandas", "polars", "duckdb"])
 def test_benchmark_engines(benchmark, svedala_eq, timing_shape, engine):
     """Same shape + data per engine — pyshacl (reference) vs pandas (compiled IR)."""
     from triplets.export_schema import schemas
@@ -267,13 +267,13 @@ def test_benchmark_compile(benchmark):
 @pytest.mark.benchmark(group="shacl-real-profile")
 @pytest.mark.skipif(not all(f.exists() for f in CGMES_EQ_SHACL_FILES),
                     reason="external CGMES SHACL shapes not available")
-@pytest.mark.parametrize("engine", ["pandas", "polars"])
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb"])
 def test_benchmark_real_profile_vectorized(benchmark, svedala_eq, engine):
     """Vectorized engines, real Simple+Complex Equipment profiles, sh:sparql
     excluded (rdflib sparql is minutes-scale — measured separately, and it's
     the qlever motivation, not a vectorization target)."""
-    if engine == "polars":
-        pytest.importorskip("polars")
+    if engine != "pandas":
+        pytest.importorskip(engine)
     from triplets.export_schema import schemas
     compiled = triplets.validation.compile([str(f) for f in CGMES_EQ_SHACL_FILES])
     vectorized = [c for c in compiled.ir["component"].unique() if c != "sh:sparql"]
@@ -300,3 +300,6 @@ def test_input_flavor_parity(mixed_data, shape_file):
     con.execute("CREATE TABLE triplets AS SELECT * FROM src")
     from_duckdb = con.shacl.validate(shape_file, engine="pandas")
     assert _violation_set(from_duckdb) == _violation_set(reference)
+
+    native_duckdb = con.shacl.validate(shape_file, engine="duckdb")   # SQL directly on the table
+    assert _violation_set(native_duckdb) == _violation_set(reference)
