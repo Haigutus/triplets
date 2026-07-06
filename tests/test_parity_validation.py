@@ -199,6 +199,85 @@ cim:VoltageLevelShape a sh:NodeShape ;
     assert set(ours.loc[ours["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, "pandas engine disagrees"
 
 
+# ── timing: cross-engine + compile + real-profile (phase C baseline) ──────────
+# Follows the test_parity_tools.py pattern: -m performance benchmarks grouped so
+# engines line up in one table. These are the numbers the polars engine (phase C)
+# must beat.
+TIMING_SHAPE = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+cim:ACLineSegmentShape a sh:NodeShape ;
+    sh:targetClass cim:ACLineSegment ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:maxCount 1 ] ;
+    sh:property [ sh:path cim:Conductor.length ; sh:datatype xsd:float ; sh:minInclusive 0.0 ] ;
+    sh:property [ sh:path cim:ACLineSegment.r ; sh:datatype xsd:float ] .
+"""
+
+CGMES_SHACL_DIR = Path("/home/kvilgo/GIT/application-profiles-library/CGMES/CurrentRelease/SHACL")
+CGMES_EQ_SHACL_FILES = [CGMES_SHACL_DIR / "61970-600-2_Equipment-AP-Con-Simple-SHACL.ttl",
+                        CGMES_SHACL_DIR / "61970-301_Equipment-AP-Con-Complex-SHACL.ttl"]
+
+
+@pytest.fixture(scope="module")
+def svedala_eq():
+    if not Path(SVEDALA_EQ).exists():
+        pytest.skip(SKIP_REASON)
+    return pandas.read_RDF([SVEDALA_EQ])
+
+
+@pytest.fixture(scope="module")
+def timing_shape(tmp_path_factory):
+    path = tmp_path_factory.mktemp("shapes") / "timing.ttl"
+    path.write_text(TIMING_SHAPE)
+    return str(path)
+
+
+@pytest.mark.performance
+@pytest.mark.benchmark(group="shacl-engines")
+@pytest.mark.parametrize("engine", ["pyshacl", "pandas"])
+def test_benchmark_engines(benchmark, svedala_eq, timing_shape, engine):
+    """Same shape + data per engine — pyshacl (reference) vs pandas (compiled IR)."""
+    from triplets.export_schema import schemas
+    compiled = triplets.validation.compile(timing_shape)
+    benchmark.extra_info.update({"engine": engine})
+    benchmark(lambda: triplets.validation.validate(
+        svedala_eq, compiled, engine=engine,
+        rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, lexical=False))
+
+
+@pytest.mark.performance
+@pytest.mark.benchmark(group="shacl-compile")
+@pytest.mark.skipif(not all(f.exists() for f in CGMES_EQ_SHACL_FILES),
+                    reason="external CGMES SHACL shapes not available")
+def test_benchmark_compile(benchmark):
+    """Shapes → IR on the real Equipment profiles (cache cleared — measures the parse)."""
+    from triplets.validation.shacl_ir import _COMPILE_CACHE
+    paths = [str(f) for f in CGMES_EQ_SHACL_FILES]
+    benchmark.pedantic(lambda: triplets.validation.compile(paths),
+                       setup=_COMPILE_CACHE.clear, rounds=3, iterations=1)
+
+
+@pytest.mark.performance
+@pytest.mark.benchmark(group="shacl-real-profile")
+@pytest.mark.skipif(not all(f.exists() for f in CGMES_EQ_SHACL_FILES),
+                    reason="external CGMES SHACL shapes not available")
+def test_benchmark_real_profile_vectorized(benchmark, svedala_eq):
+    """pandas engine, real Simple+Complex Equipment profiles, sh:sparql excluded
+    (rdflib sparql is minutes-scale — measured separately, and it's the qlever
+    motivation, not a vectorization target)."""
+    from triplets.export_schema import schemas
+    compiled = triplets.validation.compile([str(f) for f in CGMES_EQ_SHACL_FILES])
+    vectorized = [c for c in compiled.ir["component"].unique() if c != "sh:sparql"]
+    benchmark.extra_info.update({"ir_rows": len(compiled.ir)})
+    benchmark.pedantic(
+        lambda: triplets.validation.validate(svedala_eq, compiled, engine="pandas",
+                                             components=vectorized,
+                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1),
+        rounds=2, iterations=1)
+
+
 def test_input_flavor_parity(mixed_data, shape_file):
     """pandas engine gives identical findings for pandas / polars / duckdb input."""
     reference = triplets.validation.validate(mixed_data, shape_file, engine="pandas")
