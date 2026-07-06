@@ -29,6 +29,7 @@ from .shacl_polars import FALLBACK_COMPONENTS
 logger = logging.getLogger(__name__)
 
 TABLE_NAME = "triplets"
+_BATCH_SIZE = 100  # constraints per UNION ALL statement
 
 
 def _focus_sql(table):
@@ -288,12 +289,17 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         fallback = [rule for rule in fallback if rule.component in components]
 
     context = _Context(rdf_map)
+    built = [statement for rule in vectorized
+             if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]
+
+    # every builder emits the same 7-column shape, so constraints batch into
+    # UNION ALL statements — round-trip/planner overhead per rule was the
+    # dominant in-memory cost (~4,700 statements on the real profiles)
     frames = []
-    for rule in vectorized:
-        built = SQL_BUILDERS[rule.component](rule, table, context)
-        if built is None:
-            continue
-        sql, params = built
+    for start in range(0, len(built), _BATCH_SIZE):
+        batch = built[start:start + _BATCH_SIZE]
+        sql = " UNION ALL ".join(f"({statement})" for statement, _ in batch)
+        params = [parameter for _, parameters in batch for parameter in parameters]
         result = connection.execute(sql, params).df()
         if len(result):
             frames.append(result)

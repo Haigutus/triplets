@@ -23,18 +23,19 @@ Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, spee
 
 ## Build / packaging / CI
 
-- [ ] **Distribution wheels for the qlever extension.** The new
-  `.github/workflows/build-qlever.yml` build-verifies (pixi env, compile cached on the
-  `vendor/qlever` SHA) but the extension links conda-forge shared libs via rpath into
-  the pixi env — not relocatable. A shippable wheel needs a manylinux build +
-  `auditwheel repair` (grafting boost/icu/zstd), cibuildwheel-style like pugixml.
+- [ ] **Distribution wheels for the qlever extension.** `build-qlever.yml`
+  build-verifies on a plain runner (apt deps, compile cached on the `vendor/qlever`
+  SHA — no pixi in CI, matching build-wheels.yml philosophy), but the built .so links
+  the runner's shared libs — not relocatable. A shippable wheel = fold the qlever
+  compile into build-wheels.yml's cibuildwheel via `CIBW_BEFORE_ALL` (boost ≥ 1.81
+  must be built in the manylinux container; its repos ship ≤ 1.75) + `auditwheel
+  repair` grafting boost/icu/zstd — after which pugixml and qlever share one pipeline.
 - [ ] macOS: the pixi `qlever` env claims `osx-arm64` but the qlever compile and the
   extension link flags are untested off Linux.
 - [ ] qlever index cache (`$TMPDIR/triplets-qlever/<hash>/`) has no eviction — one index
   per distinct data+schema+scope, grows unboundedly.
-- [ ] duckdb engine in-memory overhead: 4,709 individual queries ≈ 28 s where polars
-  needs 2 s — batch via `UNION ALL` if it ever matters (engine exists for
-  larger-than-memory, where per-query overhead amortizes).
+- [x] duckdb engine in-memory overhead — fixed: constraints batch 100-per-`UNION ALL`
+  statement (28 s → 10 s on the real profiles; polars remains the in-memory engine).
 - [ ] No true larger-than-memory validation test for the duckdb engine (on-disk DB
   larger than RAM).
 
@@ -54,16 +55,18 @@ Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, spee
 Checked against the issue tracker on 2026-07-06:
 
 - [x] **Turtle syntax error** in `61970-600-1_AllProfiles-AP-Con-Complex-SolvedMAS-SHACL.ttl`
-  (line ~97: `.` instead of `;` after `sh:severity sh:Violation`, file unparseable) —
-  **already filed as issue #63**.
+  (line ~97: `.` instead of `;`, file unparseable) — filed as issue #63 and **FIXED at
+  `entsoe/main` (f36bd97, which also adds riot syntax validation)**; the Haigutus fork
+  is one commit behind → sync the fork, close #63.
 - [ ] **`HAVING` without `GROUP BY`** — 2 constraint queries (the PowerTransformerEnd
   `ratedS` check in `61970-301_Equipment-AP-Con-Complex-SHACL.ttl`, and one in
   `61970-600-2_AllProfiles-AP-Con-Complex-SolvedMAS-SHACL.ttl`), fanning out to ~54
   constraint instances via multiple `sh:targetClass`. Invalid per SPARQL 1.1 (rdflib
   tolerates, QLever rejects); fix = move the condition into `FILTER(...)`.
-  Issue **#70** covers the same query's other defects (fake `sh:path rdf:type`,
-  per-instance slowness) but not this — **add it as a comment on #70**. Our engine
-  side is covered by `sparql_qlever._rewrite_bare_having`.
+  Verified still present at `entsoe/main` (f36bd97). Issue **#70** covers the same
+  query's other defects (fake `sh:path rdf:type`, per-instance slowness) but not
+  this — **add it as a comment on #70**. Our engine side is covered by
+  `sparql_qlever._rewrite_bare_having`.
 - [ ] **Portability note**: 17 shapes use SHACL-AF `sh:SPARQLTarget` (30 shapes total
   have no `sh:targetClass`) — constraints silently vanish on core-only validators;
   related to open issues #73/#58. Mention when commenting.
