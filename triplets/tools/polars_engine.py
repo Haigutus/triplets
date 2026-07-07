@@ -236,8 +236,10 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     ----------
     data : polars.DataFrame
         Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
-    ID, KEY, VALUE, INSTANCE_ID : str, optional
-        Filter value. If regex=True, treated as regex pattern.
+    ID, KEY, VALUE, INSTANCE_ID : str or list of str, optional
+        Filter value. A list keeps rows matching any of its values
+        (semi-join — scales to large value sets). If regex=True, treated as
+        regex pattern (scalar only).
     regex : bool, default False
         If True, use regex matching (str.contains). If False, exact match.
 
@@ -246,14 +248,17 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     polars.DataFrame
         Filtered triplet dataset.
     """
-    expr = pl.lit(True)
     for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
-        if val is not None:
-            if regex:
-                expr = expr & pl.col(col).cast(pl.Utf8).str.contains(val)
-            else:
-                expr = expr & (pl.col(col).cast(pl.Utf8) == val)
-    return data.filter(expr)
+        if val is None:
+            continue
+        if isinstance(val, (list, tuple, set, pl.Series)):
+            values = pl.DataFrame({col: [str(v) for v in val]}).unique()
+            data = data.join(values, on=col, how="semi")
+        elif regex:
+            data = data.filter(pl.col(col).cast(pl.Utf8).str.contains(val))
+        else:
+            data = data.filter(pl.col(col).cast(pl.Utf8) == val)
+    return data
 
 
 def filter_triplets_by_value(data, VALUE, detailed=False, type_key="Type", regex=False):
@@ -479,3 +484,21 @@ def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_
         print(f"\n{id_val}:")
         for row in id_diff.iter_rows(named=True):
             print(f"  {row['_merge']} {row['KEY']}: {row['VALUE']}")
+
+
+def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),
+                 columns=("ID", "KEY", "VALUE")):
+    """Deterministic identity hash of the triplet content (sha256 hex) —
+    same digest as the pandas/duckdb engines for the same content."""
+    import hashlib
+
+    if ignore_types:
+        drop = data.filter((pl.col("KEY") == "Type")
+                           & pl.col("VALUE").is_in(list(ignore_types)))["ID"]
+        data = data.filter(~pl.col("ID").is_in(drop))
+    joined = (data.select([pl.col(column).cast(pl.Utf8).fill_null("") for column in columns])
+              .sort(list(columns))
+              .select(pl.concat_str([pl.col(column) for column in columns], separator="\x1f")
+                      .str.join("\x1e"))
+              .item() or "")
+    return hashlib.sha256(joined.encode()).hexdigest()

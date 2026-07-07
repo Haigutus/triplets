@@ -1,17 +1,29 @@
 """SPARQL performance engine — embedded qlever (C++), no server.
 
 Uses qlever's official embedding facade (src/libqlever) through the
-triplets.sparql._qlever Cython extension (build: setup_qlever.py). The data is
-exported to N-Quads, indexed once on disk — cached by content hash, so
-re-querying the same data (or re-running a validation) never rebuilds — and
-queries run in-process returning standard SPARQL 1.1 JSON (SELECT/ASK) or
-Turtle (CONSTRUCT/DESCRIBE). The GIL is released during queries: Python
-threads parallelize, no fork needed.
+triplets.sparql._qlever Cython extension (build: setup_qlever.py).
+
+Flavor-blind by construction: the input (pandas / polars DataFrame or a DuckDB
+connection) carries everything as registered methods — ``content_hash`` keys
+the engine state, ``filter_triplets`` applies scope, ``export_to_nquads``
+feeds the index build — so this module never inspects input types.
+
+Engine state = one on-disk qlever index per content key (data + rdf_map),
+loaded engines cached in-process; queries then run in-process returning
+standard SPARQL 1.1 JSON (SELECT/ASK) or Turtle (CONSTRUCT/DESCRIBE). The
+N-Quads export runs only when an index must actually be built, and streams
+through a memfd on Linux (no filesystem round-trip). The index directory is
+``$TRIPLETS_QLEVER_DIR`` (point it at /dev/shm for RAM-backed indexes) or the
+temp dir; loaded index files are memory-mapped, so hot pages live in the OS
+page cache either way. The GIL is released during queries: Python threads
+parallelize, no fork needed.
 
 Benchmarked 3.5–216x faster than the alternatives on CGMES data; index build
 ~2.3 s per 892k triples, index load from disk ~4 ms.
 """
+import os
 import re
+import json
 import logging
 import hashlib
 import tempfile
@@ -21,8 +33,6 @@ from pathlib import Path
 import pandas
 
 from . import _qlever  # ImportError here → the registry falls back to rdflib
-from .._engine_detect import is_polars
-from ..export import export_to_nquads
 
 logger = logging.getLogger(__name__)
 
@@ -69,59 +79,67 @@ def _run(index, query_string, media_type):
 
 
 def _index_for(data, rdf_map, scope):
-    """Load (or build) the on-disk index for this exact data + schema + scope.
+    """Load (or build) the engine state for this exact data + schema + scope.
 
-    Content-hash cache: the N-Quads export is hashed, the index lives under
-    the temp dir keyed by that hash, and loaded engines are reused in-process.
+    Everything goes through the flavor-registered methods: scope via
+    filter_triplets (semi-join), identity via content_hash, index input via
+    export_to_nquads — executed only on a cache miss.
     """
     if scope is not None:
-        data = _filter_scope(data, scope)
-    nquads = _to_nquads(data, rdf_map)
-    key = hashlib.sha256(nquads).hexdigest()[:24]
+        data = data.filter_triplets(INSTANCE_ID=list(scope))
+        if hasattr(data, "df"):        # duckdb relation — materialize to hash/export
+            data = data.df()
+    key = _content_key(data, rdf_map)
 
     if key in _INDEXES:
         return _INDEXES[key]
 
-    index_dir = Path(tempfile.gettempdir()) / "triplets-qlever" / key
+    index_dir = Path(os.environ.get("TRIPLETS_QLEVER_DIR", tempfile.gettempdir())) \
+        / "triplets-qlever" / key
     basename = str(index_dir / "index")
-    marker = index_dir / "build-complete"
-    if not marker.exists():
+    if not (index_dir / "build-complete").exists():
         index_dir.mkdir(parents=True, exist_ok=True)
-        source = index_dir / "data.nq"
-        source.write_bytes(nquads)
-        logger.debug("building qlever index %s (%d bytes of N-Quads)", key, len(nquads))
-        _qlever.build_index(str(source), basename, filetype="nq")
-        source.unlink()
-        marker.touch()
+        buffer = data.export_to_nquads(rdf_map=rdf_map, export_to_memory=True)
+        buffer.seek(0)
+        _build_index(buffer.read(), basename, index_dir)
+        (index_dir / "build-complete").touch()
 
     _INDEXES[key] = _qlever.QleverIndex(basename)
     return _INDEXES[key]
 
 
-def _to_nquads(data, rdf_map):
-    """Triplet data (any flavor) or an already-loaded rdflib graph → N-Quads bytes."""
-    module = type(data).__module__
-    if module.startswith("rdflib"):
-        try:
-            return data.serialize(format="nquads", encoding="utf-8")
-        except Exception:                       # plain Graph — no quad contexts
-            return data.serialize(format="nt", encoding="utf-8")
-    from .._rdflib_loader import _to_loadable
-    buffer = export_to_nquads(_to_loadable(data), rdf_map=rdf_map, export_to_memory=True)
-    buffer.seek(0)
-    return buffer.read()
+def _content_key(data, rdf_map):
+    """content_hash of exactly what gets indexed (all four columns, nothing
+    ignored — the key must match the indexed content, or queries against
+    ignored triples would answer from another dataset's index), mixed with
+    the export schema and a format-version salt."""
+    content = data.content_hash(ignore_types=(), columns=("ID", "KEY", "VALUE", "INSTANCE_ID"))
+    if isinstance(rdf_map, (str, os.PathLike)):
+        with open(rdf_map, "rb") as file:
+            schema = file.read()
+    else:
+        schema = json.dumps(rdf_map, sort_keys=True, default=str).encode() if rdf_map else b""
+    return hashlib.sha256(b"triplets-qlever-1" + content.encode() + schema).hexdigest()[:24]
 
 
-def _filter_scope(data, scope):
-    instances = [str(instance) for instance in scope]
-    if is_polars(data):
-        import polars
-        return data.filter(polars.col("INSTANCE_ID").cast(polars.Utf8).is_in(instances))
-    module = type(data).__module__
-    if module.startswith("pyarrow") or module.startswith(("duckdb", "_duckdb")):
-        from .._rdflib_loader import _to_loadable
-        data = _to_loadable(data)
-    return data[data["INSTANCE_ID"].astype(str).isin(instances)]
+def _build_index(nquads, basename, index_dir):
+    """Feed the N-Quads to qlever's index builder — via an in-memory file
+    (memfd, Linux) when possible, else a transient file in the index dir."""
+    try:
+        fd = os.memfd_create("triplets-qlever.nq")
+    except (AttributeError, OSError):
+        source = index_dir / "data.nq"
+        source.write_bytes(nquads)
+        logger.debug("building qlever index in %s (%d bytes via temp file)", index_dir, len(nquads))
+        _qlever.build_index(str(source), basename, filetype="nq")
+        source.unlink()
+        return
+    try:
+        os.write(fd, nquads)
+        logger.debug("building qlever index in %s (%d bytes via memfd)", index_dir, len(nquads))
+        _qlever.build_index(f"/proc/self/fd/{fd}", basename, filetype="nq")
+    finally:
+        os.close(fd)
 
 
 def _query_form(query_string):

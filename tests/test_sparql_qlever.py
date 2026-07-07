@@ -90,6 +90,19 @@ def test_index_cache_reused(svedala):
     assert len(sparql_qlever._INDEXES) == cached
 
 
+def test_index_shared_across_flavors(svedala):
+    """content_hash is identical across engines → pandas and polars input (even
+    row-shuffled) resolve to the same cached index."""
+    polars = pytest.importorskip("polars")
+    from triplets.sparql import sparql_qlever
+    q = PREFIXES + "ASK { ?s rdf:type cim:Substation }"
+    triplets.sparql.query(svedala, q, engine="qlever")
+    cached = len(sparql_qlever._INDEXES)
+    shuffled = svedala.sample(frac=1, random_state=3).reset_index(drop=True)
+    triplets.sparql.query(polars.from_pandas(shuffled), q, engine="qlever")
+    assert len(sparql_qlever._INDEXES) == cached
+
+
 def test_invalid_query_error_carries_query_text(svedala):
     """No query fixing: a rejected query raises with qlever's message + the query."""
     bad = PREFIXES + "SELECT ?s ?n WHERE { ?s rdf:type cim:Substation } HAVING(?n > 1)"

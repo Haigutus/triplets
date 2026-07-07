@@ -99,11 +99,16 @@ def type_tableview(self, type_name, table_name=TABLE_NAME, view_name=None):
 
 def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
                     regex=False, table_name=TABLE_NAME):
-    """Filter triplets by any combination of columns. Returns DuckDBPyRelation (lazy)."""
+    """Filter triplets by any combination of columns. Returns DuckDBPyRelation (lazy).
+
+    A list value keeps rows matching any of its values (planned as a semi-join).
+    """
     conditions = []
     for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
         if val is not None:
-            if regex:
+            if isinstance(val, (list, tuple, set)):
+                conditions.append(f"{col} IN ({_in_list(val)})")
+            elif regex:
                 conditions.append(f"{col} SIMILAR TO '{val}'")
             else:
                 conditions.append(f"{col} = '{val}'")
@@ -472,3 +477,20 @@ def tableview_to_triplets(self, table_name=TABLE_NAME, multivalue=False, instanc
             UNPIVOT {table_name} ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE
         ) WHERE VALUE IS NOT NULL
     """)
+
+
+def content_hash(self, ignore_types=("Distribution", "NamespaceMap", "FullModel"),
+                 columns=("ID", "KEY", "VALUE"), table_name=TABLE_NAME):
+    """Deterministic identity hash of the triplet content (sha256 hex) —
+    same digest as the pandas/polars engines for the same content."""
+    joined = " || chr(31) || ".join(f"coalesce(CAST({column} AS VARCHAR), '')"
+                                    for column in columns)
+    order = ", ".join(str(position + 1) for position in range(len(columns)))
+    source = f"SELECT {joined} AS row FROM {table_name}"
+    if ignore_types:
+        placeholders = ", ".join("?" for _ in ignore_types)
+        source += (f" WHERE ID NOT IN (SELECT ID FROM {table_name}"
+                   f" WHERE KEY = 'Type' AND VALUE IN ({placeholders}))")
+    sql = (f"SELECT sha256(coalesce(string_agg(row, chr(30) ORDER BY row), ''))"
+           f" FROM ({source})")
+    return self.execute(sql, list(ignore_types) if ignore_types else []).fetchone()[0]

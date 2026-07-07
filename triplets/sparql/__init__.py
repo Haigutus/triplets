@@ -69,7 +69,7 @@ def query(data, query_string, rdf_map=None, scope=None, engine="auto", return_ty
 
     Parameters
     ----------
-    data : triplet DataFrame (pandas/polars), arrow, or DuckDB connection
+    data : triplet DataFrame (pandas/polars) or DuckDB connection
     query_string : str
         SPARQL query. SELECT → DataFrame (columns = projected vars),
         ASK → bool, CONSTRUCT/DESCRIBE → triplet DataFrame.

@@ -43,12 +43,20 @@ pixi run -e qlever build-qlever       # build triplets.sparql._qlever
 
 Without the extension nothing changes — auto falls back to rdflib.
 
-**Index lifecycle.** The engine owns it internally: the data is exported to
-N-Quads, content-hashed, and indexed on disk under the temp dir keyed by that
-hash — re-querying the same data (or re-running a validation) loads the index
-in milliseconds instead of rebuilding. Loaded engines are additionally cached
-in-process. `scope` filters the data before export (each scope = its own
-index). Custom engines register via `triplets.sparql.register_engine(name, module)`.
+**Engine state lifecycle.** Flavor-blind by construction — the input (pandas /
+polars DataFrame or DuckDB connection) carries every needed capability as a
+registered method, so the engine never inspects types: `content_hash` (identical
+across flavors, row-order-invariant) keys the state, `filter_triplets`
+(semi-join) applies `scope`, and `export_to_nquads` feeds the index build —
+which runs **only on a cache miss** and streams through a memfd on Linux (no
+filesystem round-trip for the input). One on-disk index per content key
+(data + rdf_map) lives under `$TRIPLETS_QLEVER_DIR` (point it at `/dev/shm`
+for fully RAM-backed indexes) or the temp dir; index files are memory-mapped,
+so hot pages sit in the OS page cache either way, and loaded engines are
+cached in-process. Because hashes match across flavors, pandas and polars
+input of the same content share one index. pyarrow input is not supported
+(convert with `polars.from_arrow` first). Custom engines register via
+`triplets.sparql.register_engine(name, module)`.
 
 **Parallelism.** rdflib query evaluation is GIL-bound pure Python, so threads
 don't help — batch workloads (the sh:sparql constraints the SHACL engines

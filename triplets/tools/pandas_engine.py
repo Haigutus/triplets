@@ -858,8 +858,10 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     ----------
     data : pandas.DataFrame
         Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
-    ID, KEY, VALUE, INSTANCE_ID : str, optional
-        Filter value. If regex=True, treated as regex pattern.
+    ID, KEY, VALUE, INSTANCE_ID : str or list of str, optional
+        Filter value. A list keeps rows matching any of its values
+        (semi-join — scales to large value sets). If regex=True, treated as
+        regex pattern (scalar only).
     regex : bool, default False
         If True, use regex matching (re.search). If False, exact match.
 
@@ -871,16 +873,20 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     Examples
     --------
     >>> filter_triplets(data, KEY="Type", VALUE="ACLineSegment")
+    >>> filter_triplets(data, KEY=["Type", "IdentifiedObject.name"])
     >>> filter_triplets(data, VALUE=".*Substation.*", regex=True)
     """
-    mask = pandas.Series(True, index=data.index)
     for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
-        if val is not None:
-            if regex:
-                mask = mask & data[col].astype(str).str.contains(val, regex=True, na=False)
-            else:
-                mask = mask & (data[col].astype(str) == val)
-    return data[mask]
+        if val is None:
+            continue
+        if isinstance(val, (list, tuple, set, pandas.Series)):
+            values = pandas.DataFrame({col: pandas.unique(pandas.Series(list(val), dtype=str))})
+            data = data.merge(values, on=col, how="inner")   # semi-join, keeps data order
+        elif regex:
+            data = data[data[col].astype(str).str.contains(val, regex=True, na=False)]
+        else:
+            data = data[data[col].astype(str) == val]
+    return data
 
 
 def filter_triplets_by_value(data, VALUE, detailed=False, type_key="Type", regex=False):
@@ -1069,3 +1075,25 @@ def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_
                 print(change)
 
     # Nice diff viewer https://diffy.org/
+
+
+def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),
+                 columns=("ID", "KEY", "VALUE")):
+    """Deterministic identity hash of the triplet content (sha256 hex).
+
+    Engine- and row-order-independent: rows are cast to string (nulls → ""),
+    sorted, joined with unit separators and hashed — every engine produces the
+    same digest for the same content. ``ignore_types`` drops whole objects of
+    volatile metadata types (export bookkeeping like FullModel timestamps), so
+    the same grid content hashes the same across re-exports; pass ``()`` to
+    hash everything. ``columns`` excludes INSTANCE_ID by default, making the
+    hash independent of how the content is split across instances.
+    """
+    import hashlib
+
+    if ignore_types:
+        drop = data.loc[(data["KEY"] == "Type") & data["VALUE"].isin(ignore_types), "ID"]
+        data = data[~data["ID"].isin(drop)]
+    rows = data[list(columns)].astype("string").fillna("").sort_values(list(columns))
+    joined = rows[columns[0]].str.cat([rows[column] for column in columns[1:]], sep="\x1f")
+    return hashlib.sha256(("\x1e".join(joined) if len(joined) else "").encode()).hexdigest()

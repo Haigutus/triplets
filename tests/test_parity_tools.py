@@ -107,6 +107,8 @@ CALL_SPECS = {
     "update_triplets_from_triplets": lambda e, d, c: _result(e, d, d.update_triplets_from_triplets(_to_engine(e, c["update_data"]))),
     "update_triplets_from_tableview": lambda e, d, c: _result(e, d, d.update_triplets_from_tableview(_tableview_arg(e, d, c))),
     "remove_triplets_from_triplets": lambda e, d, c: _result(e, d, d.remove_triplets_from_triplets(_to_engine(e, c["subset"]))),
+    # cross-engine deterministic by design — parity IS the contract here
+    "content_hash": lambda e, d, c: d.content_hash(),
 }
 
 
