@@ -90,16 +90,16 @@ def test_index_cache_reused(svedala):
     assert len(sparql_qlever._INDEXES) == cached
 
 
-def test_index_shared_across_flavors(svedala):
-    """content_hash is identical across engines → pandas and polars input (even
-    row-shuffled) resolve to the same cached index."""
-    polars = pytest.importorskip("polars")
+def test_index_shared_across_row_order(svedala):
+    """content_hash is row-order-invariant → shuffled input of the same flavor
+    resolves to the same cached index (digests are engine-specific, so a
+    polars frame of the same content builds its own index)."""
     from triplets.sparql import sparql_qlever
     q = PREFIXES + "ASK { ?s rdf:type cim:Substation }"
     triplets.sparql.query(svedala, q, engine="qlever")
     cached = len(sparql_qlever._INDEXES)
     shuffled = svedala.sample(frac=1, random_state=3).reset_index(drop=True)
-    triplets.sparql.query(polars.from_pandas(shuffled), q, engine="qlever")
+    triplets.sparql.query(shuffled, q, engine="qlever")
     assert len(sparql_qlever._INDEXES) == cached
 
 

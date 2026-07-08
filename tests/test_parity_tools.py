@@ -75,6 +75,38 @@ def _tv_kwargs(engine):
     return {} if engine == "duckdb" else {"string_to_number": False}
 
 
+def _content_hash_spec(engine, data, ctx):
+    """Digests are engine-specific by design (each engine uses its native
+    row-hash primitive), so parity compares behaviour, not digests: shape,
+    determinism, order-invariance (default), order-sensitivity (flag) and
+    null != '' (a missing VALUE must not collide with an empty one)."""
+    if engine == "duckdb":
+        data.execute("CREATE OR REPLACE TABLE _reordered AS SELECT * FROM triplets"
+                     " ORDER BY VALUE, KEY, ID, INSTANCE_ID")
+        reordered = lambda **kw: data.content_hash(table_name="_reordered", **kw)  # noqa: E731
+        for name, value in [("_null", "CAST(NULL AS VARCHAR)"), ("_empty", "''")]:
+            data.execute(f"CREATE OR REPLACE TABLE {name} AS SELECT"
+                         f" 'a' AS ID, 'k' AS KEY, {value} AS VALUE, 'i' AS INSTANCE_ID")
+        null_vs_empty = data.content_hash(table_name="_null") != data.content_hash(table_name="_empty")
+    else:
+        if engine == "polars":
+            import polars
+            reordered = data.sample(fraction=1.0, shuffle=True, seed=1).content_hash
+            tiny = lambda v: polars.DataFrame(  # noqa: E731
+                {"ID": ["a"], "KEY": ["k"], "VALUE": [v], "INSTANCE_ID": ["i"]},
+                schema={c: polars.Utf8 for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")})
+        else:
+            reordered = data.sample(frac=1, random_state=1).content_hash
+            tiny = lambda v: pandas.DataFrame(  # noqa: E731
+                {"ID": ["a"], "KEY": ["k"], "VALUE": [v], "INSTANCE_ID": ["i"]})
+        null_vs_empty = tiny(None).content_hash() != tiny("").content_hash()
+    return (len(data.content_hash()),
+            data.content_hash() == data.content_hash(),
+            data.content_hash() == reordered(),
+            data.content_hash(order_sensitive=True) == reordered(order_sensitive=True),
+            null_vs_empty)
+
+
 # ── call specs: name -> fn(engine, data, ctx) -> raw output ───────────────────
 CALL_SPECS = {
     "type_tableview": lambda e, d, c: d.type_tableview(c["type"], **_tv_kwargs(e)),
@@ -107,8 +139,7 @@ CALL_SPECS = {
     "update_triplets_from_triplets": lambda e, d, c: _result(e, d, d.update_triplets_from_triplets(_to_engine(e, c["update_data"]))),
     "update_triplets_from_tableview": lambda e, d, c: _result(e, d, d.update_triplets_from_tableview(_tableview_arg(e, d, c))),
     "remove_triplets_from_triplets": lambda e, d, c: _result(e, d, d.remove_triplets_from_triplets(_to_engine(e, c["subset"]))),
-    # cross-engine deterministic by design — parity IS the contract here
-    "content_hash": lambda e, d, c: d.content_hash(),
+    "content_hash": _content_hash_spec,
 }
 
 

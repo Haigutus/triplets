@@ -487,18 +487,25 @@ def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_
 
 
 def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),
-                 columns=("ID", "KEY", "VALUE")):
-    """Deterministic identity hash of the triplet content (sha256 hex) —
-    same digest as the pandas/duckdb engines for the same content."""
+                 columns=("ID", "KEY", "VALUE"), order_sensitive=False):
+    """Deterministic identity hash of the triplet content (blake2b hex) —
+    row-order-invariant by default via native row hashes (hash_rows) combined
+    with commutative count/sum/xor — no sort, single pass. With
+    ``order_sensitive=True`` the row hashes are digested in row order, so the
+    same rows in a different order produce a different digest. Engine-specific:
+    not comparable across engines (see pandas_engine)."""
     import hashlib
 
+    import numpy
+
     if ignore_types:
-        drop = data.filter((pl.col("KEY") == "Type")
-                           & pl.col("VALUE").is_in(list(ignore_types)))["ID"]
-        data = data.filter(~pl.col("ID").is_in(drop))
-    joined = (data.select([pl.col(column).cast(pl.Utf8).fill_null("") for column in columns])
-              .sort(list(columns))
-              .select(pl.concat_str([pl.col(column) for column in columns], separator="\x1f")
-                      .str.join("\x1e"))
-              .item() or "")
-    return hashlib.sha256(joined.encode()).hexdigest()
+        drop = (data.filter(pl.col("KEY") == "Type")
+                .join(pl.DataFrame({"VALUE": list(ignore_types)}), on="VALUE", how="semi")
+                .select("ID").unique())
+        data = data.join(drop, on="ID", how="anti")
+    hashes = data.select(list(columns)).hash_rows().to_numpy()
+    if order_sensitive:
+        return hashlib.blake2b(hashes.tobytes(), digest_size=16).hexdigest()
+    combined = (len(hashes), int(hashes.sum(dtype=numpy.uint64)),
+                int(numpy.bitwise_xor.reduce(hashes)) if len(hashes) else 0)
+    return hashlib.blake2b(repr(combined).encode(), digest_size=16).hexdigest()

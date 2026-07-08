@@ -480,17 +480,26 @@ def tableview_to_triplets(self, table_name=TABLE_NAME, multivalue=False, instanc
 
 
 def content_hash(self, ignore_types=("Distribution", "NamespaceMap", "FullModel"),
-                 columns=("ID", "KEY", "VALUE"), table_name=TABLE_NAME):
-    """Deterministic identity hash of the triplet content (sha256 hex) —
-    same digest as the pandas/polars engines for the same content."""
-    joined = " || chr(31) || ".join(f"coalesce(CAST({column} AS VARCHAR), '')"
-                                    for column in columns)
-    order = ", ".join(str(position + 1) for position in range(len(columns)))
-    source = f"SELECT {joined} AS row FROM {table_name}"
+                 columns=("ID", "KEY", "VALUE"), order_sensitive=False,
+                 table_name=TABLE_NAME):
+    """Deterministic identity hash of the triplet content (blake2b hex) —
+    row-order-invariant by default via in-database hash() combined with
+    streaming count/sum/xor aggregates (no sort, no materialization — works
+    larger-than-memory). With ``order_sensitive=True`` each row's position
+    (insertion order via rowid) is mixed into its hash, so the same rows
+    inserted in a different order produce a different digest. Engine-specific:
+    not comparable across engines (see pandas_engine)."""
+    import hashlib
+
+    # no coalesce: hash() distinguishes NULL from '' natively — coalescing
+    # to '' would collide a missing VALUE with an empty one
+    hashed = ", ".join(f"CAST({column} AS VARCHAR)" for column in columns)
+    if order_sensitive:
+        hashed = f"row_number() OVER (ORDER BY rowid), {hashed}"
+    source = f"SELECT hash({hashed}) AS h FROM {table_name}"
     if ignore_types:
-        placeholders = ", ".join("?" for _ in ignore_types)
         source += (f" WHERE ID NOT IN (SELECT ID FROM {table_name}"
-                   f" WHERE KEY = 'Type' AND VALUE IN ({placeholders}))")
-    sql = (f"SELECT sha256(coalesce(string_agg(row, chr(30) ORDER BY row), ''))"
-           f" FROM ({source})")
-    return self.execute(sql, list(ignore_types) if ignore_types else []).fetchone()[0]
+                   f" WHERE KEY = 'Type' AND VALUE IN ({_in_list(ignore_types)}))")
+    row = self.execute(f"SELECT count(*), sum(h)::VARCHAR, bit_xor(h)::VARCHAR"
+                       f" FROM ({source})").fetchone()
+    return hashlib.blake2b(repr(row).encode(), digest_size=16).hexdigest()

@@ -1078,22 +1078,35 @@ def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_
 
 
 def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),
-                 columns=("ID", "KEY", "VALUE")):
-    """Deterministic identity hash of the triplet content (sha256 hex).
+                 columns=("ID", "KEY", "VALUE"), order_sensitive=False):
+    """Deterministic identity hash of the triplet content (blake2b hex).
 
-    Engine- and row-order-independent: rows are cast to string (nulls → ""),
-    sorted, joined with unit separators and hashed — every engine produces the
-    same digest for the same content. ``ignore_types`` drops whole objects of
-    volatile metadata types (export bookkeeping like FullModel timestamps), so
-    the same grid content hashes the same across re-exports; pass ``()`` to
-    hash everything. ``columns`` excludes INSTANCE_ID by default, making the
-    hash independent of how the content is split across instances.
+    Row-order-invariant by default: vectorized row hashes (hash_pandas_object)
+    combined with commutative count/sum/xor — no sort, single pass. With
+    ``order_sensitive=True`` the row hashes are digested in row order, so the
+    same rows in a different order produce a different digest. Engine-specific —
+    the pandas/polars/duckdb engines use their native row-hash primitives for
+    speed, so digests are stable within an engine and library version but NOT
+    comparable across engines.
+    ``ignore_types`` drops whole objects of volatile metadata types (export
+    bookkeeping like FullModel timestamps), so the same grid content hashes
+    the same across re-exports; pass ``()`` to hash everything. ``columns``
+    excludes INSTANCE_ID by default, making the hash independent of how the
+    content is split across instances.
     """
     import hashlib
 
+    import numpy
+
     if ignore_types:
+        # tiny fixed drop set (a few metadata objects): ~isin beats an anti-merge
+        # here (measured 106 vs 375 ms at 1M rows — the merge copies the frame);
+        # join-based membership is for LARGE value sets, as in filter_triplets
         drop = data.loc[(data["KEY"] == "Type") & data["VALUE"].isin(ignore_types), "ID"]
         data = data[~data["ID"].isin(drop)]
-    rows = data[list(columns)].astype("string").fillna("").sort_values(list(columns))
-    joined = rows[columns[0]].str.cat([rows[column] for column in columns[1:]], sep="\x1f")
-    return hashlib.sha256(("\x1e".join(joined) if len(joined) else "").encode()).hexdigest()
+    hashes = pandas.util.hash_pandas_object(data[list(columns)], index=False).to_numpy()
+    if order_sensitive:
+        return hashlib.blake2b(hashes.tobytes(), digest_size=16).hexdigest()
+    combined = (len(hashes), int(hashes.sum(dtype=numpy.uint64)),
+                int(numpy.bitwise_xor.reduce(hashes)) if len(hashes) else 0)
+    return hashlib.blake2b(repr(combined).encode(), digest_size=16).hexdigest()

@@ -45,17 +45,23 @@ Without the extension nothing changes — auto falls back to rdflib.
 
 **Engine state lifecycle.** Flavor-blind by construction — the input (pandas /
 polars DataFrame or DuckDB connection) carries every needed capability as a
-registered method, so the engine never inspects types: `content_hash` (identical
-across flavors, row-order-invariant) keys the state, `filter_triplets`
+registered method, so the engine never inspects types: `content_hash`
+(row-order-invariant by default; `order_sensitive=True` makes row order part
+of the digest) keys the state, `filter_triplets`
 (semi-join) applies `scope`, and `export_to_nquads` feeds the index build —
 which runs **only on a cache miss** and streams through a memfd on Linux (no
 filesystem round-trip for the input). One on-disk index per content key
 (data + rdf_map) lives under `$TRIPLETS_QLEVER_DIR` (point it at `/dev/shm`
 for fully RAM-backed indexes) or the temp dir; index files are memory-mapped,
 so hot pages sit in the OS page cache either way, and loaded engines are
-cached in-process. Because hashes match across flavors, pandas and polars
-input of the same content share one index. pyarrow input is not supported
-(convert with `polars.from_arrow` first). Custom engines register via
+cached in-process. Digests are engine-specific
+(each engine hashes with its native row-hash primitive for speed: polars
+~41 ms, duckdb ~35 ms streaming, pandas ~666 ms per 1M rows), so an index is
+shared across row order and repeated calls within a flavor, not across
+flavors. Cross-*parse* sharing is limited by the parser generating fresh
+INSTANCE_IDs per parse (they name the graphs, so they must be in the key —
+see TODO.md). pyarrow input is not supported (convert with
+`polars.from_arrow` first). Custom engines register via
 `triplets.sparql.register_engine(name, module)`.
 
 **Parallelism.** rdflib query evaluation is GIL-bound pure Python, so threads
