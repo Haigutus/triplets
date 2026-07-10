@@ -74,13 +74,18 @@ validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) →
   gives copy-on-write sharing of the dataset; threads don't help rdflib — it
   is GIL-bound pure Python; qlever handles concurrency natively).
   Real-profile scale (Svedala EQ, 48k triples, Simple+Complex Equipment SHACL
-  = 4,857 IR rows of which 148 sh:sparql): with the embedded **qlever** engine
-  built, the 148 constraint queries run in **~7 s** (one content-hashed index,
-  built once in ~2 s and cached on disk) and the **complete validation —
-  polars + qlever — takes ~9 s**. On the rdflib fallback the same queries cost
-  ~3.5 min with `max_workers=8` (fork pool; degrades to sequential
-  automatically if forking fails) vs ~25 min sequential — build the qlever
-  extension for sh:sparql-heavy profiles.
+  = 4,857 IR rows of which 148 sh:sparql, 50 with focus nodes): with the
+  embedded **qlever** engine built, the **complete validation — polars +
+  qlever — takes ~2.6 s warm** (0.9 s constraint queries + 1.7 s vectorized
+  components; the on-disk index is content-hashed and reused, and within one
+  validation run the data is hashed **once** — the constraint queries after
+  the first assert ``data_unchanged``). Cold (first contact with the dataset:
+  parallel Arrow index build + first hash) adds a few seconds. On the rdflib
+  fallback the same queries cost ~3.3 min sequential (the content-keyed
+  dataset cache made the old 8-process fork pool unnecessary — it previously
+  took ~25 min sequential); the **pyshacl reference exceeds 10 minutes** on
+  the same profiles — build the qlever extension for sh:sparql-heavy
+  profiles.
   **No query fixing**: constraint queries run exactly as authored. When the
   strict engine rejects one (e.g. the ENTSO-E `HAVING`-without-`GROUP BY`
   defect, upstream PR entsoe/application-profiles-library#82), the constraint

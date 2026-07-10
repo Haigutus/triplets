@@ -18,8 +18,7 @@ logger = logging.getLogger(__name__)
 _UUID_PREFIX = "urn:uuid:"
 
 
-def query(data, query_string, rdf_map=None, scope=None, return_type="pandas",
-          data_unchanged=False):
+def query(data, query_string, rdf_map=None, scope=None, return_type="pandas", data_unchanged=False):
     """Execute query_string over data; shape the result by query type."""
     dataset = load_dataset(data, rdf_map=rdf_map, data_unchanged=data_unchanged)
     graph = scoped_graph(dataset, scope)
@@ -57,13 +56,20 @@ def _graph_to_triplets(graph):
     (a constructed graph has no source instance).
     """
     rows = []
+    # TODO - is there no faster way?
     for subject, predicate, obj in graph:
-        rows.append({
-            "ID": _strip_uuid(str(subject)),
-            "KEY": _shorten_predicate(str(predicate)),
-            "VALUE": _shorten_object(obj),
-            "INSTANCE_ID": None,
-        })
+
+        # Tuples are faster than dicts to convert to dataframe
+        rows.append(
+            (
+                _strip_uuid(str(subject)),              # ID
+                _shorten_predicate(str(predicate)),     # KEY
+                _shorten_object(obj),                   # VALUE
+                None,                                   # INSTANCE_ID # TODO - why none?
+            )
+        )
+
+    # TODO should use polars if available?
     return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
 

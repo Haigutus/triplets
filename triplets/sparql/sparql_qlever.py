@@ -64,8 +64,7 @@ _INDEXES = {}    # content hash → loaded _qlever.QleverIndex
 _QUERY_FORM = re.compile(r"\b(select|ask|construct|describe)\b", re.IGNORECASE)
 
 
-def query(data, query_string, rdf_map=None, scope=None, return_type="auto",
-          data_unchanged=False):
+def query(data, query_string, rdf_map=None, scope=None, return_type="auto",data_unchanged=False):
     """Execute query_string over data; shape the result by query type.
 
     Queries are executed exactly as given — the text is never modified.

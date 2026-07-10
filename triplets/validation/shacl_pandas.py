@@ -95,6 +95,10 @@ class _Context:
         self._all_ids = None
         self._key_metadata = None
         self._dataset = None
+        # The data cannot change between the constraint queries of one
+        # validation run: after the first sh:sparql query has hashed it, the
+        # rest assert data_unchanged and skip the per-query content_hash.
+        self.data_hashed = False
 
     def dataset(self):
         """rdflib dataset for the sh:sparql constraints — loaded once, reused per query."""
@@ -411,8 +415,10 @@ def _sparql(context, rule):
         return _sparql_violations(rule, sparql.query(context.dataset(), query_text))
 
     try:
-        return _sparql_violations(rule, sparql.query(context.data, query_text,
-                                                     rdf_map=context.rdf_map))
+        result = sparql.query(context.data, query_text, rdf_map=context.rdf_map,
+                              data_unchanged=context.data_hashed)
+        context.data_hashed = True
+        return _sparql_violations(rule, result)
     except Exception as error:                            # noqa: BLE001 — engine strictness
         logger.warning("sh:sparql constraint %s rejected by %s — evaluating with rdflib "
                        "and flagging the shape (fix the rule upstream):\n%s",
