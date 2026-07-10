@@ -6,6 +6,9 @@
 	url = https://github.com/zeux/pugixml.git
 [submodule "vendor/qlever"]
 	path = vendor/qlever
-	url = https://github.com/ad-freiburg/qlever.git
+	# Haigutus fork carrying the libqlever-parser-injection patch (programmatic
+	# index building + protocol datasets); re-pin to ad-freiburg/qlever once the
+	# upstream PR is merged.
+	url = https://github.com/Haigutus/qlever.git
 	update = none
 	shallow = true
