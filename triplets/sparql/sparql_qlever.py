@@ -5,18 +5,27 @@ triplets.sparql._qlever Cython extension (build: setup_qlever.py).
 
 Flavor-blind by construction: the input (pandas / polars DataFrame or a DuckDB
 connection) carries everything as registered methods — ``content_hash`` keys
-the engine state, ``filter_triplets`` applies scope, ``export_to_nquads``
-feeds the index build — so this module never inspects input types.
+the engine state, ``export_to_nquads`` feeds the index build — so this module
+never inspects input types. Scope is not a data operation: it becomes SPARQL
+dataset (FROM) clauses over the per-INSTANCE_ID named graphs, so one index
+serves every scope.
+
+Data results follow the read_rdf pattern: all heavy lifting happens on the
+C++ side — the wrapper decodes the query result straight into Arrow string
+buffers (unbound → null), the Cython layer wraps them zero-copy, and this
+module only maps conventions and finalizes the output flavor (``return_type``:
+"auto" matches the input — polars in, polars out; explicit "pandas" /
+"polars" / "arrow" also accepted). All values are strings (triplets are
+all-string; consumers cast); ASK stays a bool via the tiny JSON path.
 
 Engine state = one on-disk qlever index per content key (data + rdf_map),
-loaded engines cached in-process; queries then run in-process returning
-standard SPARQL 1.1 JSON (SELECT/ASK) or Turtle (CONSTRUCT/DESCRIBE). The
-N-Quads export runs only when an index must actually be built, and streams
-through a memfd on Linux (no filesystem round-trip). The index directory is
-``$TRIPLETS_QLEVER_DIR`` (point it at /dev/shm for RAM-backed indexes) or the
-temp dir; loaded index files are memory-mapped, so hot pages live in the OS
-page cache either way. The GIL is released during queries: Python threads
-parallelize, no fork needed.
+loaded engines cached in-process. The N-Quads export runs only when an index
+must actually be built, and streams through a memfd on Linux (no filesystem
+round-trip). The index directory is ``$TRIPLETS_QLEVER_DIR`` (point it at
+/dev/shm for RAM-backed indexes) or the temp dir; loaded index files are
+memory-mapped, so hot pages live in the OS page cache either way. The GIL is
+released during queries and decoding: Python threads parallelize, no fork
+needed.
 
 Benchmarked 3.5–216x faster than the alternatives on CGMES data; index build
 ~2.3 s per 892k triples, index load from disk ~4 ms.
@@ -25,71 +34,108 @@ import os
 import re
 import json
 import logging
-import hashlib
 import tempfile
 
 from pathlib import Path
 
 import pandas
+import pyarrow
 
 from . import _qlever  # ImportError here → the registry falls back to rdflib
+from . import content_key
+from .._engine_detect import is_polars
+from ..export.nquads_utils import CIM_NS, RDF_TYPE
 
 logger = logging.getLogger(__name__)
+
+_UUID_PREFIX = "urn:uuid:"
 
 # qlever writes its own INFO log to stdout — keep it quiet unless triplets
 # debugging is on (re-enable per-process with _qlever.set_quiet(False))
 _qlever.set_quiet(not logger.isEnabledFor(logging.DEBUG))
 
 _INDEXES = {}    # content hash → loaded _qlever.QleverIndex
-_XSD = "http://www.w3.org/2001/XMLSchema#"
-_NUMERIC = {f"{_XSD}{name}" for name in ("integer", "int", "long", "short", "byte",
-                                         "decimal", "float", "double",
-                                         "nonNegativeInteger", "positiveInteger")}
 _QUERY_FORM = re.compile(r"\b(select|ask|construct|describe)\b", re.IGNORECASE)
 
 
-def query(data, query_string, rdf_map=None, scope=None, return_type="pandas"):
-    """Execute query_string over data; shape the result by query type
-    (same shapes as the rdflib engine).
+def query(data, query_string, rdf_map=None, scope=None, return_type="auto"):
+    """Execute query_string over data; shape the result by query type.
 
     Queries are executed exactly as given — no fixing/rewriting. qlever's
     parser is strict; a rejected query raises ValueError carrying qlever's
     message plus the query text, so the failure is directly actionable
-    (broken constraint queries belong upstream, see TODO.md).
+    (broken constraint queries belong upstream, see TODO.md). The one
+    exception is ``scope``, which by definition adjusts the query: it becomes
+    SPARQL dataset (FROM) clauses, so the one index serves every scope.
     """
-    index = _index_for(data, rdf_map, scope)
+    index = _index_for(data, rdf_map)
+    query_string = _scoped(query_string, scope)
     form = _query_form(query_string)
+    if return_type == "auto":
+        return_type = "polars" if is_polars(data) else "pandas"
 
-    if form in ("construct", "describe"):
-        return _turtle_to_triplets(_run(index, query_string, "turtle"))
-
-    import json
-    result = json.loads(_run(index, query_string, "sparqljson"))
     if form == "ask":
-        return bool(result["boolean"])
-    return _select_to_dataframe(result)
+        return bool(json.loads(_run(index.query, query_string, "sparqljson"))["boolean"])
+    if form in ("construct", "describe"):
+        return _finalize(_terms_to_triplets(_run(index.construct_arrow, query_string)), return_type)
+    return _finalize(_run(index.select_arrow, query_string), return_type)
 
 
-def _run(index, query_string, media_type):
+def _run(call, query_string, *args):
     try:
-        return index.query(query_string, media_type)
+        return call(query_string, *args)
     except RuntimeError as error:                          # qlever parse/execution error
         raise ValueError(f"qlever rejected the query: {error}\n"
                          f"--- query ---\n{query_string.strip()[:2000]}") from error
 
 
-def _index_for(data, rdf_map, scope):
-    """Load (or build) the engine state for this exact data + schema + scope.
+def _finalize(result, return_type):
+    """Canonical result (RecordBatch from the C++ decode, or the pandas
+    triplet frame from _terms_to_triplets) → requested flavor. Arrow is the
+    hub: pandas/polars conversions are zero-copy buffer wraps."""
+    if isinstance(result, pyarrow.RecordBatch):
+        if return_type == "polars":
+            import polars
+            return polars.from_arrow(result)
+        if return_type == "arrow":
+            return pyarrow.Table.from_batches([result])
+        return result.to_pandas(types_mapper=pandas.ArrowDtype)
+    if return_type == "polars":
+        import polars
+        return polars.from_pandas(result)
+    if return_type == "arrow":
+        return pyarrow.Table.from_pandas(result)
+    return result
 
-    Everything goes through the flavor-registered methods: scope via
-    filter_triplets (semi-join), identity via content_hash, index input via
-    export_to_nquads — executed only on a cache miss.
+
+def _scoped(query_string, scope):
+    """Scope as SPARQL dataset clauses: qlever's default graph is the union of
+    all graphs and FROM restricts it to the scoped instances' named graphs —
+    the same union semantics as rdflib's scoped_graph, on the one shared index
+    (no per-scope index builds). Dataset clauses belong between the query form
+    and its pattern, so they are injected before WHERE (or the pattern's
+    opening brace when WHERE is omitted). A query carrying its own FROM is
+    refused: SPARQL unions dataset clauses, so adding more would silently
+    broaden the scope instead of narrowing it."""
+    if scope is None:
+        return query_string
+    if re.search(r"\bFROM\b", query_string, re.IGNORECASE):
+        raise ValueError("scope cannot be applied to a query that has its own FROM clause:\n"
+                         f"--- query ---\n{query_string.strip()[:2000]}")
+    clauses = " ".join(f"FROM <urn:uuid:{instance}>" for instance in scope)
+    anchor = re.search(r"\bWHERE\b", query_string, re.IGNORECASE) or re.search(r"\{", query_string)
+    position = anchor.start() if anchor else len(query_string)
+    return f"{query_string[:position]}{clauses} {query_string[position:]}"
+
+
+def _index_for(data, rdf_map):
+    """Load (or build) the engine state for this exact data + schema.
+
+    Everything goes through the flavor-registered methods: identity via
+    content_hash, index input via export_to_nquads — executed only on a
+    cache miss. Scope does not key the state (see _scoped).
     """
-    if scope is not None:
-        data = data.filter_triplets(INSTANCE_ID=list(scope))
-        if hasattr(data, "df"):        # duckdb relation — materialize to hash/export
-            data = data.df()
-    key = _content_key(data, rdf_map)
+    key = content_key(data, rdf_map, b"triplets-qlever-1")
 
     if key in _INDEXES:
         return _INDEXES[key]
@@ -106,20 +152,6 @@ def _index_for(data, rdf_map, scope):
 
     _INDEXES[key] = _qlever.QleverIndex(basename)
     return _INDEXES[key]
-
-
-def _content_key(data, rdf_map):
-    """content_hash of exactly what gets indexed (all four columns, nothing
-    ignored — the key must match the indexed content, or queries against
-    ignored triples would answer from another dataset's index), mixed with
-    the export schema and a format-version salt."""
-    content = data.content_hash(ignore_types=(), columns=("ID", "KEY", "VALUE", "INSTANCE_ID"))
-    if isinstance(rdf_map, (str, os.PathLike)):
-        with open(rdf_map, "rb") as file:
-            schema = file.read()
-    else:
-        schema = json.dumps(rdf_map, sort_keys=True, default=str).encode() if rdf_map else b""
-    return hashlib.sha256(b"triplets-qlever-1" + content.encode() + schema).hexdigest()[:24]
 
 
 def _build_index(nquads, basename, index_dir):
@@ -147,38 +179,27 @@ def _query_form(query_string):
     return match.group(1).lower() if match else "select"
 
 
-def _select_to_dataframe(result):
-    """SPARQL 1.1 JSON SELECT result → DataFrame (columns = projected vars)."""
-    variables = result.get("head", {}).get("vars", [])
-    rows = [[_term_to_py(binding.get(variable)) for variable in variables]
-            for binding in result.get("results", {}).get("bindings", [])]
-    return pandas.DataFrame(rows, columns=variables)
+def _terms_to_triplets(batch):
+    """CONSTRUCT/DESCRIBE term columns (N-Triples-form, decoded on the C++
+    side) → triplet DataFrame, converted with vectorized string ops. Same
+    conventions as the rdflib engine's inverse of the N-Quads export:
+    urn:uuid: stripped, CIM namespace shortened, rdf:type → 'Type';
+    INSTANCE_ID is empty (a constructed graph has no source instance).
+    Term shapes: ``<iri>``, ``_:bnode``, ``"literal"`` (raw value between the
+    outer quotes, optionally with a ``^^<datatype>`` / ``@lang`` suffix —
+    dropped, the value keeps its lexical form), or bare turtle-shorthand
+    numbers/booleans."""
+    frame = batch.to_pandas(types_mapper=pandas.ArrowDtype)
+    frame.columns = ["ID", "KEY", "VALUE"]
 
+    def iri(column):
+        return (column.str.replace(r"^<(.*)>$", r"\1", regex=True)
+                .str.removeprefix("_:").str.removeprefix(_UUID_PREFIX).str.removeprefix(CIM_NS))
 
-def _term_to_py(term):
-    """SPARQL JSON term → python value; typed literals keep their xsd-mapped type."""
-    if term is None:
-        return None
-    value = term.get("value")
-    if term.get("type") != "literal":
-        return str(value)                      # uri / bnode
-    datatype = term.get("datatype")
-    if datatype in _NUMERIC:
-        number = float(value)
-        return int(number) if number.is_integer() and "float" not in datatype \
-            and "double" not in datatype and "decimal" not in datatype else number
-    if datatype == f"{_XSD}boolean":
-        return value == "true"
-    return value
-
-
-def _turtle_to_triplets(turtle):
-    """CONSTRUCT/DESCRIBE Turtle output → triplet DataFrame, via the shared
-    rdflib conventions (urn:uuid: stripped, CIM shortened, rdf:type → Type)."""
-    import rdflib
-
-    from .sparql_rdflib import _graph_to_triplets
-
-    graph = rdflib.Graph()
-    graph.parse(data=turtle, format="turtle")
-    return _graph_to_triplets(graph)
+    rdf_type = frame["KEY"] == f"<{RDF_TYPE}>"
+    frame["ID"] = iri(frame["ID"])
+    frame["KEY"] = iri(frame["KEY"]).mask(rdf_type, "Type")
+    unquoted = frame["VALUE"].str.replace(r'(?s)^"(.*)"(\^\^<[^>]*>|@[\w-]+)?$', r"\1", regex=True)
+    frame["VALUE"] = unquoted.where(frame["VALUE"].str.startswith('"'), iri(frame["VALUE"]))
+    frame["INSTANCE_ID"] = None
+    return frame

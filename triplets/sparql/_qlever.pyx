@@ -2,22 +2,41 @@
 # cython: language_level=3
 """Cython binding for the embedded qlever SPARQL engine (via libqlever).
 
-Deliberately dumb: strings in, strings out (SPARQL text → SPARQL 1.1 JSON /
-Turtle / TSV). All result shaping lives in sparql_qlever.py. The GIL is
-released during index building and querying, so Python threads parallelize
-across queries.
+Two boundaries, both dumb (all result shaping lives in sparql_qlever.py):
+- strings: SPARQL text → serialized result (SPARQL 1.1 JSON / Turtle / CSV),
+  used for ASK and diagnostics.
+- Arrow: SPARQL text → pyarrow.RecordBatch of utf8 columns — the data path.
+  The C++ wrapper decodes the result straight into Arrow buffers (same
+  pattern as the cython_pugixml_arrow parser); here they are only wrapped
+  zero-copy via pyarrow_wrap_array.
+
+The GIL is released during index building, querying and decoding, so Python
+threads parallelize across queries.
 
 Build: python setup_qlever.py build_ext --inplace
 (needs a compiled qlever checkout — see setup_qlever.py).
 """
 
+from libcpp.memory cimport shared_ptr
 from libcpp.string cimport string
+from libcpp.vector cimport vector
+
+from pyarrow.includes.libarrow cimport CArray
+from pyarrow.lib cimport pyarrow_wrap_array
+
+import pyarrow
 
 
 cdef extern from "_qlever_wrapper.h" nogil:
+    cdef cppclass ArrowColumns:
+        vector[shared_ptr[CArray]] columns
+        vector[string] names
+
     cdef cppclass QleverWrapper:
         QleverWrapper(const string& index_basename, int memory_gb) except +
         string query(const string& sparql, const string& media_type) except +
+        ArrowColumns select_arrow(const string& sparql) except +
+        ArrowColumns construct_arrow(const string& sparql) except +
 
         @staticmethod
         void set_quiet(bint quiet) except +
@@ -25,6 +44,14 @@ cdef extern from "_qlever_wrapper.h" nogil:
         @staticmethod
         void build_index(const string& input_file, const string& index_basename,
                          const string& filetype, int memory_gb) except +
+
+
+cdef _wrap_batch(ArrowColumns result):
+    """C++-built columns → pyarrow.RecordBatch (zero-copy wrap)."""
+    arrays = [pyarrow_wrap_array(result.columns[i])
+              for i in range(result.columns.size())]
+    names = [result.names[i].decode() for i in range(result.names.size())]
+    return pyarrow.RecordBatch.from_arrays(arrays, names=names)
 
 
 def set_quiet(quiet=True):
@@ -63,3 +90,20 @@ cdef class QleverIndex:
         with nogil:
             result = self._engine.query(c_sparql, c_media)
         return result.decode()
+
+    def select_arrow(self, str sparql):
+        """SELECT → pyarrow.RecordBatch (utf8 columns; unbound → null)."""
+        cdef string c_sparql = sparql.encode()
+        cdef ArrowColumns result
+        with nogil:
+            result = self._engine.select_arrow(c_sparql)
+        return _wrap_batch(result)
+
+    def construct_arrow(self, str sparql):
+        """CONSTRUCT/DESCRIBE → pyarrow.RecordBatch (subject/predicate/object
+        utf8 columns, N-Triples-form terms)."""
+        cdef string c_sparql = sparql.encode()
+        cdef ArrowColumns result
+        with nogil:
+            result = self._engine.construct_arrow(c_sparql)
+        return _wrap_batch(result)

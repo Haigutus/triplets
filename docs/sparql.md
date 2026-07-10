@@ -20,16 +20,25 @@ index build ~2.3 s per 892k triples, index load from disk ~4 ms).
 qlever natively ships a server (SPARQL-over-HTTP + UI); we use the **engine**.
 The boundary is qlever's official embedding facade — `src/libqlever`
 (`qlever::Qlever`, "use QLever as an embedded database, without the HTTP
-server"), which upstream maintains and CI-tests. Everything crosses it as
-strings: SPARQL text in, spec-stable serializations out (SPARQL 1.1 JSON for
-SELECT/ASK, Turtle for CONSTRUCT/DESCRIBE). qlever's internal API churn is
-absorbed upstream by the facade; what remains is absorbed by a ~50-line shim:
+server"), which upstream maintains and CI-tests. Two boundaries cross it:
+
+- **Arrow (the data path)** — SPARQL text in, decoded Arrow string columns
+  out. The C++ shim runs `parseAndPlanQuery`, walks the raw result `IdTable`
+  and decodes each id with qlever's own `exportIds::idToStringAndType`
+  straight into `arrow::StringBuilder`s (unbound → null), with the GIL
+  released; Cython wraps the finished arrays zero-copy (`pyarrow_wrap_array`,
+  same pattern as the `cython_pugixml_arrow` parser). No serialize-to-text →
+  re-parse round trip: measured 16.1 s → 2.6 s end-to-end on a 1M-row SELECT
+  (RealGrid), Python side reduced to buffer wrapping.
+- **strings (ASK + diagnostics)** — SPARQL text in, spec-stable
+  serializations out (SPARQL 1.1 JSON / Turtle / CSV).
 
 ```
 triplets/sparql/
-|-- _qlever_wrapper.h/.cpp   # ~50-line shim: build_index(), query(text, media_type)
-|-- _qlever.pyx              # dumb Cython binding (strings across, GIL released)
-'-- sparql_qlever.py         # engine: index cache, result shaping, scope
+|-- _qlever_wrapper.h/.cpp   # shim: build_index(), query(text, media_type),
+|                            #   select_arrow() / construct_arrow() -> Arrow columns
+|-- _qlever.pyx              # dumb Cython binding (zero-copy wrap, GIL released)
+'-- sparql_qlever.py         # engine: index cache, conventions, output flavor
 ```
 
 Build (one-time; the pixi `qlever` environment pins the whole toolchain —
@@ -47,18 +56,23 @@ Without the extension nothing changes — auto falls back to rdflib.
 polars DataFrame or DuckDB connection) carries every needed capability as a
 registered method, so the engine never inspects types: `content_hash`
 (row-order-invariant by default; `order_sensitive=True` makes row order part
-of the digest) keys the state, `filter_triplets`
-(semi-join) applies `scope`, and `export_to_nquads` feeds the index build —
+of the digest) keys the state, and `export_to_nquads` feeds the index build —
 which runs **only on a cache miss** and streams through a memfd on Linux (no
-filesystem round-trip for the input). One on-disk index per content key
-(data + rdf_map) lives under `$TRIPLETS_QLEVER_DIR` (point it at `/dev/shm`
+filesystem round-trip for the input). Both engines share the same lifecycle
+(`triplets.sparql.content_key`): the rdflib engine caches loaded datasets
+in-process the same way. `scope` is not a data operation and does not key the
+state — qlever's default graph is the union of all named graphs and `FROM`
+restricts it, so scope becomes injected dataset clauses (queries carrying
+their own `FROM` refuse scoping), and one index serves every scope; rdflib
+selects the scoped named graphs after loading. One on-disk index per content
+key (data + rdf_map) lives under `$TRIPLETS_QLEVER_DIR` (point it at `/dev/shm`
 for fully RAM-backed indexes) or the temp dir; index files are memory-mapped,
 so hot pages sit in the OS page cache either way, and loaded engines are
 cached in-process. Digests are engine-specific
 (each engine hashes with its native row-hash primitive for speed: polars
 ~41 ms, duckdb ~35 ms streaming, pandas ~666 ms per 1M rows), so an index is
-shared across row order and repeated calls within a flavor, not across
-flavors. Cross-*parse* sharing is limited by the parser generating fresh
+shared across row order, scopes, and repeated calls within a flavor, not
+across flavors. Cross-*parse* sharing is limited by the parser generating fresh
 INSTANCE_IDs per parse (they name the graphs, so they must be in the key —
 see TODO.md). pyarrow input is not supported (convert with
 `polars.from_arrow` first). Custom engines register via
@@ -92,16 +106,21 @@ data.sparql.query(q)
 |
 '-> sparql.query(data, q, engine="auto")
     |
-    |-> get_engine("auto")
-    |   try rdflib -> always works with the extra
+    |-> get_engine("auto")                     # qlever when built, else rdflib
     |
-    |-> load_dataset(data, rdf_map)
-    |   '-> export_to_nquads(..., export_to_memory=True)
-    |       '-> rdflib.Dataset.parse(nquads)   # INSTANCE_ID -> named graph
+    |-> qlever path (performance)
+    |   |-> _index_for: content_key -> cached index | build (export_to_nquads -> memfd)
+    |   |-> _scoped: scope -> FROM dataset clauses (one index serves every scope)
+    |   '-> C++ decode -> Arrow columns (GIL released) -> zero-copy wrap
     |
-    |-> scoped_graph(dataset, scope)           # union, or just scoped instances
+    |-> rdflib path (reference)
+    |   |-> load_dataset(data, rdf_map)        # cached by content_key
+    |   |   '-> export_to_nquads(..., export_to_memory=True)
+    |   |       '-> rdflib.Dataset.parse(nquads)   # INSTANCE_ID -> named graph
+    |   |-> scoped_graph(dataset, scope)       # union, or just scoped instances
+    |   '-> graph.query(q)
     |
-    '-> graph.query(q)                         # shape the result by query type
+    '-> result by query form (finalized to return_type)
         |-> ASK                -> bool
         |-> SELECT             -> DataFrame (columns = projected vars)
         '-> CONSTRUCT/DESCRIBE -> triplet DataFrame [ID, KEY, VALUE, INSTANCE_ID]
@@ -113,12 +132,21 @@ The result is shaped by the SPARQL query form:
 
 | Query form | Returns | Structure |
 |------------|---------|-----------|
-| `SELECT` | `pandas.DataFrame` | one column per projected variable (`?name` -> column `name`); IRIs as full strings, literals python-typed via `rdf_map` |
+| `SELECT` | DataFrame (see `return_type`) | one column per projected variable (`?name` -> column `name`); IRIs as full strings. qlever: **all values are lexical strings** (triplets are all-string; consumers cast), unbound → null. rdflib reference: literals python-typed via `rdf_map` |
 | `ASK` | `bool` | `True` / `False` |
-| `CONSTRUCT` / `DESCRIBE` | triplet `DataFrame` | `[ID, KEY, VALUE, INSTANCE_ID]`; `urn:uuid:` stripped from `ID`, CIM namespace shortened on `KEY`, `rdf:type` -> `Type`, `INSTANCE_ID` is `None` (constructed graph has no source instance) |
+| `CONSTRUCT` / `DESCRIBE` | triplet DataFrame | `[ID, KEY, VALUE, INSTANCE_ID]`; `urn:uuid:` stripped from `ID`, CIM namespace shortened on `KEY`, `rdf:type` -> `Type`, `INSTANCE_ID` is `None` (constructed graph has no source instance) |
 
 `SELECT` keeps full IRIs (raw bindings); `CONSTRUCT`/`DESCRIBE` apply the triplets
 naming conventions so the output drops straight back into the pipeline.
+
+**Output flavor** (`return_type`, qlever engine; rdflib always returns pandas):
+
+| `return_type` | Result |
+|---------------|--------|
+| `"auto"` (default) | matches the input — polars in → polars out; pandas / DuckDB in → pandas out |
+| `"pandas"` | `pandas.DataFrame` (arrow-backed dtypes, zero-copy) |
+| `"polars"` | `polars.DataFrame` (`from_arrow`, zero-copy) |
+| `"arrow"` | `pyarrow.Table` |
 
 ## File Layout
 

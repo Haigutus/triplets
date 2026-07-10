@@ -51,12 +51,41 @@ def test_ask(svedala):
                                  engine="qlever") is False
 
 
-def test_typed_values_with_rdf_map(svedala):
+def test_values_are_lexical_strings(svedala):
+    """All SELECT values are strings (triplets are all-string; consumers
+    cast) — typed literals keep their lexical form, no dtype inference."""
     from triplets.export_schema import schemas
     result = triplets.sparql.query(
         svedala, PREFIXES + "SELECT ?l WHERE { ?s cim:Conductor.length ?l } LIMIT 1",
         rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine="qlever")
-    assert isinstance(result["l"].iloc[0], float)
+    value = result["l"].iloc[0]
+    assert isinstance(value, str)
+    assert float(value) > 0
+
+
+def test_return_type_flavors(svedala):
+    """return_type: "auto" matches the input flavor; explicit "polars" /
+    "arrow" / "pandas" honored — all zero-copy wraps of the same arrow data."""
+    polars = pytest.importorskip("polars")
+    import pyarrow
+    q = PREFIXES + "SELECT ?s ?name WHERE { ?s cim:IdentifiedObject.name ?name } LIMIT 5"
+    assert isinstance(triplets.sparql.query(svedala, q, engine="qlever"), pandas.DataFrame)
+    assert isinstance(triplets.sparql.query(svedala, q, return_type="polars", engine="qlever"),
+                      polars.DataFrame)
+    assert isinstance(triplets.sparql.query(svedala, q, return_type="arrow", engine="qlever"),
+                      pyarrow.Table)
+    auto = triplets.sparql.query(polars.from_pandas(svedala), q, engine="qlever")
+    assert isinstance(auto, polars.DataFrame)
+    assert auto.height == 5
+
+
+def test_unbound_values_are_null(svedala):
+    """An OPTIONAL variable with no binding is a real null (the C++ decode
+    appends validity-bitmap nulls), distinguishable from an empty string."""
+    q = PREFIXES + ("SELECT ?s ?missing WHERE { ?s rdf:type cim:ACLineSegment "
+                    "OPTIONAL { ?s cim:NoSuch.key ?missing } } LIMIT 3")
+    result = triplets.sparql.query(svedala, q, return_type="arrow", engine="qlever")
+    assert result["missing"].null_count == 3
 
 
 def test_construct_returns_triplets(svedala):
@@ -66,6 +95,18 @@ def test_construct_returns_triplets(svedala):
         engine="qlever")
     assert list(result.columns) == ["ID", "KEY", "VALUE", "INSTANCE_ID"]
     assert (result["KEY"] == "Type").all()
+
+
+def test_construct_parity_with_rdflib(svedala):
+    """The CSV-based CONSTRUCT conversion (no rdflib round-trip) produces the
+    same triplet frame as the rdflib engine: uuid stripped, CIM shortened,
+    literal values in lexical form."""
+    q = PREFIXES + ("CONSTRUCT { ?s cim:IdentifiedObject.name ?n } "
+                    "WHERE { ?s rdf:type cim:ACLineSegment . ?s cim:IdentifiedObject.name ?n }")
+    order = ["ID", "KEY", "VALUE"]
+    qlever = triplets.sparql.query(svedala, q, engine="qlever").sort_values(order).reset_index(drop=True)
+    rdflib = triplets.sparql.query(svedala, q, engine="rdflib").sort_values(order).reset_index(drop=True)
+    pandas.testing.assert_frame_equal(qlever, rdflib, check_dtype=False)
 
 
 def test_scope_parity(svedala):
@@ -79,6 +120,23 @@ def test_scope_parity(svedala):
     reference = int(triplets.sparql.query(svedala, q, scope=[eq_instance], engine="rdflib")["n"].iloc[0])
     assert in_scope == reference > 0
     assert out_scope == 0
+
+
+def test_scope_shares_index(svedala):
+    """Scope is FROM dataset clauses at query time, not a data operation —
+    scoped and unscoped queries (ASK without WHERE included) resolve to the
+    same cached index; a query with its own FROM refuses scope (SPARQL unions
+    dataset clauses — more FROMs would broaden the scope, not narrow it)."""
+    from triplets.sparql import sparql_qlever
+    q = PREFIXES + "ASK { ?s rdf:type cim:Substation }"
+    triplets.sparql.query(svedala, q, engine="qlever")
+    cached = len(sparql_qlever._INDEXES)
+    instance = str(svedala["INSTANCE_ID"].astype(str).iloc[0])
+    triplets.sparql.query(svedala, q, scope=[instance], engine="qlever")
+    assert len(sparql_qlever._INDEXES) == cached
+    own_from = PREFIXES + f"SELECT ?s FROM <urn:uuid:{instance}> WHERE {{ ?s ?p ?o }}"
+    with pytest.raises(ValueError, match="own FROM clause"):
+        triplets.sparql.query(svedala, own_from, scope=[instance], engine="qlever")
 
 
 def test_index_cache_reused(svedala):

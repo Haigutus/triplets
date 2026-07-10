@@ -3,10 +3,19 @@
 Both engines turn triplet data into an in-memory rdflib graph by going through
 the existing N-Quads export (datatype-annotated, INSTANCE_ID as named graph).
 No temp files: the export is taken in memory as a BytesIO and parsed directly.
+
+Loaded datasets are cached in-process keyed by content (same logic as the
+qlever engine's index cache): the export/parse runs only on a cache miss.
+Consumers must treat the returned dataset as read-only — scope is applied
+after loading (``scoped_graph``), so one cached dataset serves all scopes.
 """
 import logging
 
+from .sparql import content_key
+
 logger = logging.getLogger(__name__)
+
+_DATASETS = {}   # content key → loaded rdflib.Dataset
 
 
 def load_dataset(data, rdf_map=None):
@@ -32,13 +41,19 @@ def load_dataset(data, rdf_map=None):
     if isinstance(data, rdflib.Graph):  # incl. Dataset — already loaded, reuse as-is
         return data
 
-    data = _to_loadable(data)
-    buffer = export_to_nquads(data, rdf_map=rdf_map, export_to_memory=True)
+    if not hasattr(data, "content_hash"):  # pyarrow — no registered methods
+        data = _to_loadable(data)
+    key = content_key(data, rdf_map, b"triplets-rdflib-1")
+    if key in _DATASETS:
+        return _DATASETS[key]
+
+    buffer = export_to_nquads(_to_loadable(data), rdf_map=rdf_map, export_to_memory=True)
     buffer.seek(0)
 
     dataset = rdflib.Dataset(default_union=True)
     dataset.parse(source=buffer, format="nquads")
     logger.debug("loaded rdflib Dataset: %d quads", len(dataset))
+    _DATASETS[key] = dataset
     return dataset
 
 

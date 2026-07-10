@@ -14,8 +14,11 @@ Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, spee
   KEY); SPARQLTarget can ride on `triplets.sparql` now that qlever makes it cheap.
 - [ ] `sh:xone` (2 uses in the library) — not in the IR component table (kept + logged;
   pyshacl-only).
-- [ ] qlever SELECT typing gap: `xsd:dateTime` literals return as strings (rdflib engine
-  returns `datetime`) — minor result-parity difference, untested.
+- [x] qlever SELECT typing: all values are lexical strings **by design** (arrow decode,
+  all-string triplets convention; consumers cast) — rdflib reference stays python-typed.
+- [ ] per-query engine-state keying costs a content_hash of the input — ~0.7 s for a
+  1.14M-row *pandas* frame (polars ~35 ms), which dominates small queries (ASK ~0.7 s).
+  Options: cheaper pandas hash, or a WeakKeyDictionary identity fast-path per object.
 - [ ] `sh:nodeKind` BlankNode / `*Or*` combinations — not expressible over triplets;
   skipped with a debug log (documented, likely permanent).
 

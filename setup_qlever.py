@@ -20,9 +20,21 @@ import os
 from setuptools import setup, Extension
 from Cython.Build import cythonize
 
+import pyarrow
+
 from setup_qlever_lib import resolve_qlever_dirs
 
 QLEVER_SRC, QLEVER_BUILD = resolve_qlever_dirs()
+
+# Arrow wiring (same recipe as setup_cython_parser.py): the wrapper decodes
+# query results straight into Arrow buffers, the pyx wraps them zero-copy.
+pa_include = pyarrow.get_include()
+pa_lib_dirs = pyarrow.get_library_dirs()
+try:
+    import numpy
+    np_include = numpy.get_include()
+except Exception:
+    np_include = None
 
 lib_dir = os.path.join(QLEVER_BUILD, "lib")
 static_libs = sorted(glob.glob(os.path.join(lib_dir, "*.a")))
@@ -43,8 +55,9 @@ include_dirs = [
     os.path.join(QLEVER_BUILD, "_deps", "fsst-src"),
     os.path.join(QLEVER_BUILD, "_deps", "spatialjoin-src", "include"),
     os.path.join(QLEVER_BUILD, "_deps", "googletest-src", "googletest", "include"),
-]
-library_dirs = [lib_dir]
+    pa_include,
+] + ([np_include] if np_include else [])
+library_dirs = [lib_dir] + pa_lib_dirs
 # NOTE: no jemalloc here on purpose. qlever links it only as a global malloc
 # replacement (no jemalloc-API symbols in the archives) — inside a Python
 # extension that interposition mixes allocators with the interpreter and
@@ -62,7 +75,9 @@ system_libs = [
 # library listed before the objects that reference it would be discarded.
 extra_link_args = ["-std=c++20",
                    "-Wl,--start-group", *static_libs, "-Wl,--end-group",
-                   *[f"-l{lib}" for lib in system_libs]]
+                   *[f"-l{lib}" for lib in system_libs],
+                   "-larrow_python", "-larrow",
+                   *[f"-Wl,-rpath,{d}" for d in pa_lib_dirs]]
 
 # pixi/conda environment: headers, libraries and a runtime rpath so the built
 # extension finds the environment's shared libraries from any interpreter

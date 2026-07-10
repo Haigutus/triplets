@@ -49,11 +49,13 @@ def test_construct_returns_triplets(svedala):
 
 
 def test_typed_values_with_rdf_map(svedala):
-    """With rdf_map, numeric literals come back as python floats (xsd datatype survives)."""
+    """rdflib reference: with rdf_map, numeric literals come back as python
+    floats (xsd datatype survives). qlever intentionally differs — all values
+    are lexical strings (see test_sparql_qlever)."""
     from triplets.export_schema import schemas
     result = svedala.sparql.query(
         PREFIXES + "SELECT ?l WHERE { ?s cim:Conductor.length ?l } LIMIT 1",
-        rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+        rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine="rdflib")
     assert isinstance(result["l"].iloc[0], float)
 
 
@@ -71,11 +73,32 @@ def test_scope_restricts_to_named_graph(svedala):
     assert out_scope == 0
 
 
+def test_dataset_shared_across_row_order_and_scope(svedala):
+    """Same logic as the qlever index cache: the loaded Dataset is keyed by
+    content (row-order-invariant), and scope is applied after loading — so a
+    shuffled frame and a scoped query reuse the cached dataset, no re-export."""
+    from triplets import _rdflib_loader
+    q = PREFIXES + "ASK { ?s rdf:type cim:Substation }"
+    svedala.sparql.query(q)
+    cached = len(_rdflib_loader._DATASETS)
+    shuffled = svedala.sample(frac=1, random_state=3).reset_index(drop=True)
+    triplets.sparql.query(shuffled, q)
+    instance = str(svedala["INSTANCE_ID"].astype(str).iloc[0])
+    triplets.sparql.query(shuffled, q, scope=[instance])
+    assert len(_rdflib_loader._DATASETS) == cached
+
+
 def test_polars_input_parity(svedala):
+    """return_type="auto": polars in → polars out, same values as pandas."""
     polars = pytest.importorskip("polars")
     q = PREFIXES + "SELECT (COUNT(?s) AS ?n) WHERE { ?s rdf:type cim:ACLineSegment }"
-    pandas_n = int(triplets.sparql.query(svedala, q)["n"].iloc[0])
-    polars_n = int(triplets.sparql.query(polars.from_pandas(svedala), q)["n"].iloc[0])
+    pandas_result = triplets.sparql.query(svedala, q)
+    polars_result = triplets.sparql.query(polars.from_pandas(svedala), q)
+    pandas_n = int(pandas_result["n"].iloc[0])
+    if isinstance(polars_result, polars.DataFrame):   # qlever honors auto; rdflib is pandas-only
+        polars_n = int(polars_result["n"][0])
+    else:
+        polars_n = int(polars_result["n"].iloc[0])
     assert pandas_n == polars_n
 
 

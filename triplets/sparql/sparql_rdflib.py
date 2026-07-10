@@ -1,8 +1,10 @@
 """SPARQL reference engine — rdflib's built-in SPARQL 1.1.
 
 Correctness-first reference; the data is loaded into an in-memory rdflib
-Dataset via the N-Quads export. Faster engines (qlever) come later behind the
-same dispatcher.
+Dataset via the N-Quads export — cached in-process by content key (see
+_rdflib_loader), so the export/parse runs only on a cache miss, same logic
+as the qlever engine's index cache. Scope is applied after loading (named
+graphs), so one cached dataset serves all scopes.
 """
 import logging
 
