@@ -26,14 +26,19 @@ Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, spee
 - [ ] `sh:nodeKind` BlankNode / `*Or*` combinations — not expressible over triplets;
   skipped with a debug log (documented, likely permanent).
 - [x] qlever index build fed by zero-copy Arrow (no N-Quads text round-trip): vendored
-  patch exposes `createFromParser` (fork branch `libqlever-parser-injection`, shaped as
-  an upstream PR — libqlever embedders lack a programmatic ingest API), and
-  `ArrowTripleParser` yields TurtleTriples straight from the triplet columns. Cold
-  build 1.46 s → 1.01 s per 1.14M rows (Python side ~370 ms → ~3 ms); characters
-  beyond the old escape set (`\t`, `\r`) now ingest losslessly; salt bumped to
-  `triplets-qlever-2`. Same patch forwards SPARQL-protocol dataset clauses, so scope
-  no longer rewrites the query text (protocol semantics: scope overrides a query's own
-  FROM).
+  patch exposes `createFromParser` (fork branch `libqlever-parser-injection`, rebased
+  onto upstream master ecc04798, **upstream draft PR
+  https://github.com/ad-freiburg/qlever/pull/3074** — re-pin to ad-freiburg once
+  merged), and `ArrowTripleParser` yields TurtleTriples straight from the triplet
+  columns. Cold build 1.46 s → 1.01 s per 1.14M rows (Python side ~370 ms → ~3 ms);
+  characters beyond the old escape set (`\t`, `\r`) now ingest losslessly; salt bumped
+  to `triplets-qlever-2`. Scope rides qlever's native SPARQL-protocol dataset clauses
+  (upstream added them while we were on the old pin), so the query text is never
+  rewritten (protocol semantics: scope overrides a query's own FROM).
+- [ ] Upstream `LibQlever.buildIndexAndRunQuery` segfaults on *pristine* master in our
+  environment (exit 139, also without our patch — likely the `addWordsFromLiterals`
+  part their own comment marks broken); our `buildIndexFromInjectedParser` test passes.
+  Watch whether qlever CI agrees on PR #3074; report upstream if reproducible there.
 - [ ] `ArrowTripleParser` is single-threaded (the old text path parsed in parallel) —
   the C++ build is only ~8% faster despite skipping the parse; batch-parallelizing the
   triple construction would cut the remaining ~1 s/1.14M cold build further.
