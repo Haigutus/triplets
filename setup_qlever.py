@@ -53,6 +53,7 @@ include_dirs = [
     os.path.join(QLEVER_BUILD, "_deps", "antlr-src", "runtime", "Cpp", "runtime", "src"),
     os.path.join(QLEVER_BUILD, "_deps", "range-v3-src", "include"),
     os.path.join(QLEVER_BUILD, "_deps", "fsst-src"),
+    os.path.join(QLEVER_BUILD, "_deps", "uriparser-src", "include"),
     os.path.join(QLEVER_BUILD, "_deps", "spatialjoin-src", "include"),
     os.path.join(QLEVER_BUILD, "_deps", "googletest-src", "googletest", "include"),
     pa_include,

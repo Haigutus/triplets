@@ -16,6 +16,7 @@
 #include "index/ExportIds.h"
 #include "libqlever/Qlever.h"
 #include "parser/ParsedQuery.h"
+#include "parser/sparqlParser/DatasetClause.h"
 #include "util/CancellationHandle.h"
 #include "util/Log.h"
 #include "util/MemorySize/MemorySize.h"
@@ -80,8 +81,9 @@ QleverWrapper::~QleverWrapper() = default;
 namespace {
 
 // Scope IRIs → SPARQL-protocol dataset clauses (`default-graph-uri`): the
-// query runs against exactly the union of these graphs, overriding any FROM
-// inside the query text (which is therefore never modified).
+// query runs against exactly the union of these graphs, taking precedence
+// over any FROM inside the query text (which is therefore never modified).
+// This is qlever's native protocol-dataset mechanism on parseAndPlanQuery.
 std::vector<DatasetClause> datasetClauses(
     const std::vector<std::string>& scope_graphs) {
   std::vector<DatasetClause> datasets;
@@ -121,7 +123,9 @@ std::shared_ptr<arrow::Array> finish(arrow::StringBuilder& builder) {
 LimitOffsetClause exportLimit(const ParsedQuery& parsedQuery,
                               const QueryExecutionTree& qet) {
   auto limit = parsedQuery._limitOffset;
-  if (qet.supportsLimitOffset()) limit._offset = 0;
+  if (qet.handlesLimitOffset() != LimitOffsetHandling::NONE) {
+    limit._offset = 0;
+  }
   return limit;
 }
 
@@ -130,14 +134,15 @@ LimitOffsetClause exportLimit(const ParsedQuery& parsedQuery,
 ArrowColumns QleverWrapper::select_arrow(
     const std::string& sparql,
     const std::vector<std::string>& scope_graphs) const {
-  const auto& [qet, qec, parsedQuery] =
-      engine_->parseAndPlanQuery(sparql, datasetClauses(scope_graphs));
+  auto planned = engine_->parseAndPlanQuery(sparql, datasetClauses(scope_graphs));
+  const auto& parsedQuery = planned.parsedQuery();
+  const auto& qet = planned.queryExecutionTree();
   if (!parsedQuery.hasSelectClause()) {
     throw std::invalid_argument("select_arrow expects a SELECT query");
   }
-  auto limit = exportLimit(parsedQuery, *qet);
+  auto limit = exportLimit(parsedQuery, qet);
   const auto& selectClause = parsedQuery.selectClause();
-  auto columnIndices = qet->selectedVariablesToColumnIndices(selectClause, true);
+  auto columnIndices = qet.selectedVariablesToColumnIndices(selectClause, true);
 
   ArrowColumns out;
   for (auto& variable : selectClause.getSelectedVariablesAsStrings()) {
@@ -147,21 +152,23 @@ ArrowColumns QleverWrapper::select_arrow(
   // One utf8 builder per projected variable — decoded values go straight into
   // Arrow buffers (offsets + data + validity); unbound cells become nulls.
   std::vector<arrow::StringBuilder> builders(columnIndices.size());
-  std::shared_ptr<const Result> result = qet->getResult(true);
+  std::shared_ptr<const Result> result = qet.getResult(true);
+  const auto& index = planned.queryExecutionContext().getIndex();
   uint64_t resultSize = 0;
-  for (const auto& [pair, range] :
+  for (const auto& tableWithRange :
        ExportQueryExecutionTrees::getRowIndices(limit, *result, resultSize)) {
-    for (uint64_t row : range) {
+    const auto& table = tableWithRange.tableWithVocab_;
+    for (uint64_t row : tableWithRange.view_) {
       for (size_t j = 0; j < columnIndices.size(); ++j) {
         if (!columnIndices[j].has_value()) {
           checkStatus(builders[j].AppendNull());  // variable never bound
           continue;
         }
-        Id id = pair.idTable()(row, columnIndices[j]->columnIndex_);
+        Id id = table.idTable()(row, columnIndices[j]->columnIndex_);
         // csv-mode decode: plain lexical values (IRIs bare, literals
         // unquoted, datatype dropped) — triplets are all-string
         auto value = ql::exportIds::idToStringAndType<true>(
-            qec->getIndex(), id, pair.localVocab());
+            index, id, table.localVocab());
         checkStatus(value.has_value() ? builders[j].Append(value->first)
                                       : builders[j].AppendNull());
       }
@@ -174,21 +181,30 @@ ArrowColumns QleverWrapper::select_arrow(
 ArrowColumns QleverWrapper::construct_arrow(
     const std::string& sparql,
     const std::vector<std::string>& scope_graphs) const {
-  const auto& [qet, qec, parsedQuery] =
-      engine_->parseAndPlanQuery(sparql, datasetClauses(scope_graphs));
+  auto planned = engine_->parseAndPlanQuery(sparql, datasetClauses(scope_graphs));
+  const auto& parsedQuery = planned.parsedQuery();
+  const auto& qet = planned.queryExecutionTree();
   if (!parsedQuery.hasConstructClause()) {
     throw std::invalid_argument(
         "construct_arrow expects a CONSTRUCT/DESCRIBE query");
   }
-  auto limit = exportLimit(parsedQuery, *qet);
+  auto limit = exportLimit(parsedQuery, qet);
+  const auto& constructTriples = parsedQuery.constructClause().triples_;
 
   std::vector<arrow::StringBuilder> builders(3);
   uint64_t resultSize = 0;
   auto handle = std::make_shared<ad_utility::CancellationHandle<>>();
+  // Mirrors the (private) ExportQueryExecutionTrees::
+  // constructQueryResultToStringTriples; `result` stays alive for the whole
+  // consumption of the lazy triple range below.
+  std::shared_ptr<const Result> result = qet.getResult(true);
+  auto rowIndices = ExportQueryExecutionTrees::getRowIndices(
+      limit, *result, resultSize, constructTriples.size());
   auto triples = qlever::constructExport::ConstructTripleGenerator::
-      generateStringTriples(*qet, parsedQuery.constructClause().triples_,
-                            limit, qet->getResult(true), resultSize,
-                            std::move(handle));
+      generateStringTriples(constructTriples, qet.getVariableColumns(),
+                            planned.queryExecutionContext().getIndex(),
+                            std::move(handle), std::move(rowIndices),
+                            limit._offset);
   for (auto& triple : triples) {
     checkStatus(builders[0].Append(triple.subject_));
     checkStatus(builders[1].Append(triple.predicate_));
