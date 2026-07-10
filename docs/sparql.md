@@ -32,12 +32,17 @@ two things the facade lacked: programmatic index building via an injected
   Arrow batches (`pyarrow_unwrap_batch`), consumed by `ArrowTripleParser`
   (`_qlever_arrow_parser.cpp`): an `RdfParserBase` that yields `TurtleTriple`s
   straight from the Arrow buffers (utf8 / large_utf8 / dictionary-encoded,
-  offset-aware). No N-Quads serialization, no text re-parsing. The term
-  mapping reproduces the N-Quads export rules exactly — typed literals run
-  through qlever's own `literalAndDatatypeToTripleComponent` (the very code
-  its N-Quads parser calls), and `build_key_metadata` stays the single Python
-  source of truth for `rdf_map` interpretation. Cold build 1.46 s → 1.01 s
-  per 1.14M rows; the Python-side cost drops from ~370 ms to ~3 ms.
+  offset-aware). No N-Quads serialization, no text re-parsing, and the
+  conversion runs in parallel using qlever's own worker/queue machinery
+  (the `RdfMultifileParser` pattern: 100k-row ranges on a `TaskQueue`,
+  finished `TurtleTriple` batches through a bounded `ThreadSafeQueue`,
+  worker exceptions propagated to the consumer with deterministic row
+  numbers). The term mapping reproduces the N-Quads export rules exactly —
+  typed literals run through qlever's own
+  `literalAndDatatypeToTripleComponent` (the very code its N-Quads parser
+  calls), and `build_key_metadata` stays the single Python source of truth
+  for `rdf_map` interpretation. Index build 1.46 s → 0.62 s per 1.14M rows
+  (2.4×); the Python-side cost drops from ~370 ms to ~3 ms.
 - **Arrow out (query results)** — SPARQL text in, decoded Arrow string columns
   out. The C++ shim runs `parseAndPlanQuery`, walks the raw result `IdTable`
   and decodes each id with qlever's own `exportIds::idToStringAndType`

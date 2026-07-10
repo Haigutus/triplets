@@ -40,9 +40,12 @@ Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, spee
   environment (exit 139, also without our patch — likely the `addWordsFromLiterals`
   part their own comment marks broken); our `buildIndexFromInjectedParser` test passes.
   Watch whether qlever CI agrees on PR #3074; report upstream if reproducible there.
-- [ ] `ArrowTripleParser` is single-threaded (the old text path parsed in parallel) —
-  the C++ build is only ~8% faster despite skipping the parse; batch-parallelizing the
-  triple construction would cut the remaining ~1 s/1.14M cold build further.
+- [x] `ArrowTripleParser` conversion parallelized (the old text path parsed in
+  parallel; the first arrow version was single-threaded): row ranges of 100k convert
+  on qlever's own TaskQueue/ThreadSafeQueue machinery (RdfMultifileParser pattern —
+  bounded batch queue, feeder thread, exceptions through the queue with deterministic
+  global row numbers). Index build 1.01 s → 0.62 s per 1.14M rows (95k: 271 → 188 ms);
+  vs the original text path (serialize+parse) the build is now 2.4x faster.
 - [ ] Decision recorded (2026-07-10): **no oxigraph engine** — rdflib+Oxigraph store is
   3–16x faster than rdflib Memory (numbers in docs/sparql.md), but engine-only qlever
   dominates everything non-trivial (heavy agg 0.2 ms vs 51.7 ms). Revisit only if the
