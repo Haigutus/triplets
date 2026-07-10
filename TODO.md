@@ -16,11 +16,41 @@ Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, spee
   pyshacl-only).
 - [x] qlever SELECT typing: all values are lexical strings **by design** (arrow decode,
   all-string triplets convention; consumers cast) — rdflib reference stays python-typed.
-- [ ] per-query engine-state keying costs a content_hash of the input — ~0.7 s for a
-  1.14M-row *pandas* frame (polars ~35 ms), which dominates small queries (ASK ~0.7 s).
-  Options: cheaper pandas hash, or a WeakKeyDictionary identity fast-path per object.
+- [x] per-query engine-state keying costs a content_hash of the input (~260 ms per
+  1.14M-row *pandas* frame; polars ~5 ms) — resolved with an explicit
+  `data_unchanged=True` flag on `query()`: reuses the digest remembered for that exact
+  object (id-keyed, weakref-evicted on GC), warm ASK ~25–370 ms → ~0.4 ms flat. By
+  default the hash always runs; no automatic identity fast-path (in-place mutation
+  staleness stays an explicit user assertion), no cross-flavor hash tricks (pandas does
+  not route through polars).
 - [ ] `sh:nodeKind` BlankNode / `*Or*` combinations — not expressible over triplets;
   skipped with a debug log (documented, likely permanent).
+- [x] qlever index build fed by zero-copy Arrow (no N-Quads text round-trip): vendored
+  patch exposes `createFromParser` (fork branch `libqlever-parser-injection`, shaped as
+  an upstream PR — libqlever embedders lack a programmatic ingest API), and
+  `ArrowTripleParser` yields TurtleTriples straight from the triplet columns. Cold
+  build 1.46 s → 1.01 s per 1.14M rows (Python side ~370 ms → ~3 ms); characters
+  beyond the old escape set (`\t`, `\r`) now ingest losslessly; salt bumped to
+  `triplets-qlever-2`. Same patch forwards SPARQL-protocol dataset clauses, so scope
+  no longer rewrites the query text (protocol semantics: scope overrides a query's own
+  FROM).
+- [ ] `ArrowTripleParser` is single-threaded (the old text path parsed in parallel) —
+  the C++ build is only ~8% faster despite skipping the parse; batch-parallelizing the
+  triple construction would cut the remaining ~1 s/1.14M cold build further.
+- [ ] Decision recorded (2026-07-10): **no oxigraph engine** — rdflib+Oxigraph store is
+  3–16x faster than rdflib Memory (numbers in docs/sparql.md), but engine-only qlever
+  dominates everything non-trivial (heavy agg 0.2 ms vs 51.7 ms). Revisit only if the
+  qlever wheel packaging decision fails.
+- [ ] qlever binary result formats (`octetStream` raw Ids; `binaryQleverExport`
+  Ids+string-sidecar, stub at pin 9ec88a0) are HTTP-boundary features — not useful
+  embedded (we decode the IdTable directly). The StringMapping *idea* maps to emitting
+  Arrow dictionary columns for repetitive result columns — possible future decode
+  optimization. qlever's `IndexRebuilder`/`materializeToIndex` (delta updates without
+  re-parse) is the machinery for a future incremental-update story.
+- [ ] `cimxml_cython_pugixml.pyx` could reuse the offset/dictionary/large_utf8-aware
+  Arrow column accessors from `_qlever_arrow_parser.cpp` (it currently copies every
+  cell via `GetString`, holds the GIL for per-row dict lookups, and `combine_chunks()`s
+  multi-chunk tables); lift the accessor into a shared header when touching it next.
 
 ## Build / packaging / CI
 

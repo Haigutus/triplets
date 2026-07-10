@@ -18,9 +18,10 @@ logger = logging.getLogger(__name__)
 _UUID_PREFIX = "urn:uuid:"
 
 
-def query(data, query_string, rdf_map=None, scope=None, return_type="pandas"):
+def query(data, query_string, rdf_map=None, scope=None, return_type="pandas",
+          data_unchanged=False):
     """Execute query_string over data; shape the result by query type."""
-    dataset = load_dataset(data, rdf_map=rdf_map)
+    dataset = load_dataset(data, rdf_map=rdf_map, data_unchanged=data_unchanged)
     graph = scoped_graph(dataset, scope)
     result = graph.query(query_string)
 

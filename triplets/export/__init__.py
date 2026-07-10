@@ -68,6 +68,21 @@ def _check_columns(data):
                          f"expected {list(REQUIRED_COLUMNS)}, got {list(data.columns)}")
 
 
+def export_to_arrow(data):
+    """Triplet columns (ID, KEY, VALUE, INSTANCE_ID) as a pyarrow.Table.
+
+    Zero-copy where the backing store allows it (arrow-backed pandas from
+    read_RDF, polars); dictionary-encoded (categorical) columns pass through
+    undecoded. This is the columnar interchange consumed by engines with a
+    native Arrow ingest (the qlever SPARQL engine's index builder).
+    """
+    _check_columns(data)
+    if _is_polars(data):
+        return data.select(list(REQUIRED_COLUMNS)).to_arrow()
+    import pyarrow
+    return pyarrow.Table.from_pandas(data[list(REQUIRED_COLUMNS)], preserve_index=False)
+
+
 def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):
     """Export triplet DataFrame to CSV files.
 

@@ -12,6 +12,8 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace qlever {
@@ -19,12 +21,25 @@ class Qlever;
 }
 namespace arrow {
 class Array;
+class RecordBatch;
 }
 
 // Decoded result columns for the Cython layer to wrap (zero-copy).
 struct ArrowColumns {
   std::vector<std::shared_ptr<arrow::Array>> columns;
   std::vector<std::string> names;
+};
+
+// Flattened export-schema metadata for the Arrow ingest, built by
+// triplets.export.nquads_utils.build_key_metadata on the Python side (the
+// single source of truth for rdf_map interpretation).
+struct TermMapping {
+  std::unordered_set<std::string> enumKeys;
+  std::unordered_map<std::string, std::string> keyNamespaces;
+  // KEY → full xsd datatype IRI; "" means schema-typed as plain xsd:string.
+  std::unordered_map<std::string, std::string> keyDatatypes;
+  // Namespace for bare predicates / Type classes / enum values (CIM_NS).
+  std::string defaultNamespace;
 };
 
 class QleverWrapper {
@@ -40,22 +55,40 @@ class QleverWrapper {
                           const std::string& filetype = "nq",
                           int memory_gb = 4);
 
+  // Build an on-disk index directly from triplet Arrow columns (ID, KEY,
+  // VALUE, INSTANCE_ID — resolved by name in each batch): the batches feed
+  // qlever's index builder through an injected parser, no RDF text
+  // serialization or re-parsing anywhere.
+  static void build_index_from_arrow(
+      std::vector<std::shared_ptr<arrow::RecordBatch>> batches,
+      TermMapping mapping, const std::string& index_basename,
+      int memory_gb = 4);
+
   // Load an existing index for querying (read-only).
   explicit QleverWrapper(const std::string& index_basename, int memory_gb = 4);
   ~QleverWrapper();
 
+  // `scope_graphs` on the query methods below are named-graph IRIs passed as
+  // SPARQL-protocol dataset clauses (`default-graph-uri`): the query is
+  // evaluated against exactly the union of these graphs, and per the
+  // protocol they take precedence over any FROM inside the query. Empty =
+  // the full default dataset (union of all graphs).
+
   // Execute a SPARQL query. media_type: "sparqljson" (SELECT/ASK),
   // "turtle" (CONSTRUCT/DESCRIBE), "tsv" or "csv".
   std::string query(const std::string& sparql,
-                    const std::string& media_type = "sparqljson") const;
+                    const std::string& media_type = "sparqljson",
+                    const std::vector<std::string>& scope_graphs = {}) const;
 
   // Execute a SELECT query and decode the result directly into Arrow utf8
   // columns (one per projected variable; unbound values become nulls).
-  ArrowColumns select_arrow(const std::string& sparql) const;
+  ArrowColumns select_arrow(const std::string& sparql,
+                            const std::vector<std::string>& scope_graphs = {}) const;
 
   // Execute a CONSTRUCT/DESCRIBE query into three Arrow utf8 columns
   // (subject / predicate / object, N-Triples-form terms).
-  ArrowColumns construct_arrow(const std::string& sparql) const;
+  ArrowColumns construct_arrow(const std::string& sparql,
+                               const std::vector<std::string>& scope_graphs = {}) const;
 
  private:
   std::unique_ptr<qlever::Qlever> engine_;

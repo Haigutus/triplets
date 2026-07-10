@@ -11,14 +11,14 @@ after loading (``scoped_graph``), so one cached dataset serves all scopes.
 """
 import logging
 
-from .sparql import content_key
+from ._content_key import content_key
 
 logger = logging.getLogger(__name__)
 
 _DATASETS = {}   # content key → loaded rdflib.Dataset
 
 
-def load_dataset(data, rdf_map=None):
+def load_dataset(data, rdf_map=None, data_unchanged=False):
     """Triplet data (any flavor) → rdflib.Dataset with named graphs per INSTANCE_ID.
 
     Parameters
@@ -28,6 +28,9 @@ def load_dataset(data, rdf_map=None):
     rdf_map : dict or str, optional
         Export schema — enables correct xsd datatypes / enum namespaces in the
         loaded graph. Optional (schema-optional principle): works without it.
+    data_unchanged : bool, default False
+        Assert the data object is unmutated since last hashed — reuses the
+        stored content digest for this exact object (see _content_key).
 
     Returns
     -------
@@ -43,7 +46,7 @@ def load_dataset(data, rdf_map=None):
 
     if not hasattr(data, "content_hash"):  # pyarrow — no registered methods
         data = _to_loadable(data)
-    key = content_key(data, rdf_map, b"triplets-rdflib-1")
+    key = content_key(data, rdf_map, b"triplets-rdflib-1", data_unchanged)
     if key in _DATASETS:
         return _DATASETS[key]
 

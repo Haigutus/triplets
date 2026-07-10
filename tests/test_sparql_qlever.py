@@ -123,10 +123,9 @@ def test_scope_parity(svedala):
 
 
 def test_scope_shares_index(svedala):
-    """Scope is FROM dataset clauses at query time, not a data operation —
-    scoped and unscoped queries (ASK without WHERE included) resolve to the
-    same cached index; a query with its own FROM refuses scope (SPARQL unions
-    dataset clauses — more FROMs would broaden the scope, not narrow it)."""
+    """Scope is SPARQL-protocol dataset clauses at query time, not a data
+    operation — scoped and unscoped queries (ASK without WHERE included)
+    resolve to the same cached index, and the query text is never modified."""
     from triplets.sparql import sparql_qlever
     q = PREFIXES + "ASK { ?s rdf:type cim:Substation }"
     triplets.sparql.query(svedala, q, engine="qlever")
@@ -134,9 +133,22 @@ def test_scope_shares_index(svedala):
     instance = str(svedala["INSTANCE_ID"].astype(str).iloc[0])
     triplets.sparql.query(svedala, q, scope=[instance], engine="qlever")
     assert len(sparql_qlever._INDEXES) == cached
-    own_from = PREFIXES + f"SELECT ?s FROM <urn:uuid:{instance}> WHERE {{ ?s ?p ?o }}"
-    with pytest.raises(ValueError, match="own FROM clause"):
-        triplets.sparql.query(svedala, own_from, scope=[instance], engine="qlever")
+
+
+def test_scope_overrides_own_from(svedala):
+    """Per the SPARQL protocol, an externally supplied dataset (scope) takes
+    precedence over FROM inside the query — the query's own FROM cannot
+    broaden a scoped query."""
+    instances = svedala[(svedala["KEY"] == "Type") & (svedala["VALUE"] == "ACLineSegment")]["INSTANCE_ID"]
+    eq_instance = str(instances.astype(str).iloc[0])
+    other = next(i for i in set(svedala["INSTANCE_ID"].astype(str).unique()) if i != eq_instance)
+
+    q = PREFIXES + (f"SELECT (COUNT(?s) AS ?n) FROM <urn:uuid:{eq_instance}> "
+                    "WHERE { ?s rdf:type cim:ACLineSegment }")
+    unscoped = int(triplets.sparql.query(svedala, q, engine="qlever")["n"].iloc[0])
+    scoped = int(triplets.sparql.query(svedala, q, scope=[other], engine="qlever")["n"].iloc[0])
+    assert unscoped > 0        # the query's own FROM sees the EQ instance
+    assert scoped == 0         # scope replaces it entirely
 
 
 def test_index_cache_reused(svedala):

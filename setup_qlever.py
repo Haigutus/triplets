@@ -92,6 +92,7 @@ extension = Extension(
     sources=[
         os.path.join("triplets", "sparql", "_qlever.pyx"),
         os.path.join("triplets", "sparql", "_qlever_wrapper.cpp"),
+        os.path.join("triplets", "sparql", "_qlever_arrow_parser.cpp"),
     ],
     include_dirs=include_dirs,
     library_dirs=library_dirs,

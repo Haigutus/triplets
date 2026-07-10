@@ -110,3 +110,44 @@ def test_duckdb_input(svedala):
     q = PREFIXES + "SELECT (COUNT(?s) AS ?n) WHERE { ?s rdf:type cim:ACLineSegment }"
     assert int(triplets.sparql.query(con, q)["n"].iloc[0]) == len(svedala.triplets.type_tableview("ACLineSegment"))
     assert int(con.sparql.query(q)["n"].iloc[0]) > 0  # namespace accessor on the connection
+
+
+def test_data_unchanged_skips_rehash(svedala):
+    """data_unchanged=True reuses the digest stored for this exact object —
+    content_hash must not run; without the flag it always runs."""
+    q = PREFIXES + "ASK { ?s rdf:type cim:Substation }"
+    data = svedala.copy()
+    triplets.sparql.query(data, q)                       # hashes and remembers
+
+    original = type(data).content_hash
+    type(data).content_hash = lambda *a, **k: (_ for _ in ()).throw(AssertionError("hash ran"))
+    try:
+        assert triplets.sparql.query(data, q, data_unchanged=True) is True
+        with pytest.raises(AssertionError, match="hash ran"):
+            triplets.sparql.query(data, q)               # no flag → rehash
+    finally:
+        type(data).content_hash = original
+
+
+def test_data_unchanged_computes_when_unknown(svedala):
+    """The flag only skips work when this object was hashed before; an
+    unknown object is hashed (and remembered) as usual."""
+    q = PREFIXES + "ASK { ?s rdf:type cim:Substation }"
+    fresh = svedala.copy()
+    assert triplets.sparql.query(fresh, q, data_unchanged=True) is True
+
+
+def test_hash_memo_evicted_on_gc(svedala):
+    """The digest memo holds the object only weakly: after collection the
+    entry is gone, so a new object reusing the same id() can never inherit
+    a dead frame's digest."""
+    import gc
+    from triplets import _content_key
+
+    data = svedala.copy()
+    triplets.sparql.query(data, PREFIXES + "ASK { ?s rdf:type cim:Substation }")
+    object_id = id(data)
+    assert object_id in _content_key._HASHES
+    del data
+    gc.collect()
+    assert object_id not in _content_key._HASHES

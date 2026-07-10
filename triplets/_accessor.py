@@ -41,7 +41,7 @@ except ImportError:
 # explicitly. The exporters accept any DataFrame flavor (converting internally).
 EXPORT_METHODS = [
     "export_to_excel", "export_to_csv", "export_to_cimxml",
-    "export_to_nquads", "export_to_networkx",
+    "export_to_nquads", "export_to_networkx", "export_to_arrow",
 ]
 
 DUCKDB_EXPORT_METHODS = ["export_to_excel", "export_to_csv", "export_to_nquads", "export_to_cimxml"]
@@ -135,10 +135,18 @@ if duckdb:
         fn.__doc__ = function.__doc__
         return fn
 
+    def _duckdb_export_to_arrow(connection, table_name="triplets"):
+        """Triplet columns as a pyarrow.Table, straight from duckdb's native
+        arrow result path (no pandas materialization)."""
+        return connection.execute(
+            f"SELECT ID, KEY, VALUE, INSTANCE_ID FROM {table_name}").fetch_arrow_table()
+
     # duckdb has no register_*_namespace API — attach the accessor via a property
     # (accepted on the C-extension type). None of the method names is "triplets".
     _register(duckdb.DuckDBPyConnection,
-              _methods(duckdb_engine) | {name: _duckdb_export_fn(name) for name in DUCKDB_EXPORT_METHODS},
+              _methods(duckdb_engine)
+              | {name: _duckdb_export_fn(name) for name in DUCKDB_EXPORT_METHODS}
+              | {"export_to_arrow": _duckdb_export_to_arrow},
               lambda accessor: setattr(duckdb.DuckDBPyConnection, "triplets", property(accessor)))
 else:
     logger.debug("duckdb not installed, skipping DuckDB tools/export patches")

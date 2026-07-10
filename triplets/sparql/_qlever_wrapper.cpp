@@ -8,6 +8,7 @@
 
 #include "arrow/array/builder_binary.h"
 
+#include "_qlever_arrow_parser.h"
 #include "engine/ConstructTripleGenerator.h"
 #include "engine/ExportQueryExecutionTrees.h"
 #include "engine/QueryExecutionContext.h"
@@ -51,6 +52,21 @@ void QleverWrapper::build_index(const std::string& input_file,
   qlever::Qlever::buildIndex(std::move(config));
 }
 
+void QleverWrapper::build_index_from_arrow(
+    std::vector<std::shared_ptr<arrow::RecordBatch>> batches,
+    TermMapping mapping, const std::string& index_basename, int memory_gb) {
+  qlever::IndexBuilderConfig config;
+  config.baseName_ = index_basename;
+  config.memoryLimit_ = ad_utility::MemorySize::gigabytes(memory_gb);
+  qlever::Qlever::buildIndex(
+      std::move(config),
+      [batches = std::move(batches), mapping = std::move(mapping)](
+          const EncodedIriManager* encodedIriManager) mutable {
+        return std::make_unique<ArrowTripleParser>(
+            std::move(batches), std::move(mapping), encodedIriManager);
+      });
+}
+
 QleverWrapper::QleverWrapper(const std::string& index_basename, int memory_gb) {
   qlever::EngineConfig config;
   config.baseName_ = index_basename;
@@ -61,9 +77,30 @@ QleverWrapper::QleverWrapper(const std::string& index_basename, int memory_gb) {
 
 QleverWrapper::~QleverWrapper() = default;
 
-std::string QleverWrapper::query(const std::string& sparql,
-                                 const std::string& media_type) const {
-  return engine_->query(sparql, mediaTypeFromString(media_type));
+namespace {
+
+// Scope IRIs → SPARQL-protocol dataset clauses (`default-graph-uri`): the
+// query runs against exactly the union of these graphs, overriding any FROM
+// inside the query text (which is therefore never modified).
+std::vector<DatasetClause> datasetClauses(
+    const std::vector<std::string>& scope_graphs) {
+  std::vector<DatasetClause> datasets;
+  datasets.reserve(scope_graphs.size());
+  for (const auto& graph : scope_graphs) {
+    datasets.push_back(
+        {TripleComponent::Iri::fromIrirefWithoutBrackets(graph), false});
+  }
+  return datasets;
+}
+
+}  // namespace
+
+std::string QleverWrapper::query(
+    const std::string& sparql, const std::string& media_type,
+    const std::vector<std::string>& scope_graphs) const {
+  return engine_->query(
+      engine_->parseAndPlanQuery(sparql, datasetClauses(scope_graphs)),
+      mediaTypeFromString(media_type));
 }
 
 namespace {
@@ -90,8 +127,11 @@ LimitOffsetClause exportLimit(const ParsedQuery& parsedQuery,
 
 }  // namespace
 
-ArrowColumns QleverWrapper::select_arrow(const std::string& sparql) const {
-  const auto& [qet, qec, parsedQuery] = engine_->parseAndPlanQuery(sparql);
+ArrowColumns QleverWrapper::select_arrow(
+    const std::string& sparql,
+    const std::vector<std::string>& scope_graphs) const {
+  const auto& [qet, qec, parsedQuery] =
+      engine_->parseAndPlanQuery(sparql, datasetClauses(scope_graphs));
   if (!parsedQuery.hasSelectClause()) {
     throw std::invalid_argument("select_arrow expects a SELECT query");
   }
@@ -131,8 +171,11 @@ ArrowColumns QleverWrapper::select_arrow(const std::string& sparql) const {
   return out;
 }
 
-ArrowColumns QleverWrapper::construct_arrow(const std::string& sparql) const {
-  const auto& [qet, qec, parsedQuery] = engine_->parseAndPlanQuery(sparql);
+ArrowColumns QleverWrapper::construct_arrow(
+    const std::string& sparql,
+    const std::vector<std::string>& scope_graphs) const {
+  const auto& [qet, qec, parsedQuery] =
+      engine_->parseAndPlanQuery(sparql, datasetClauses(scope_graphs));
   if (!parsedQuery.hasConstructClause()) {
     throw std::invalid_argument(
         "construct_arrow expects a CONSTRUCT/DESCRIBE query");

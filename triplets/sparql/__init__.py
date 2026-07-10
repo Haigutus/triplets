@@ -36,26 +36,6 @@ def register_engine(name: str, module: Any) -> None:
     _ENGINES[name] = module
 
 
-def content_key(data, rdf_map, salt):
-    """Identity of exactly what an engine loads — shared by every engine's
-    state cache (qlever on-disk indexes, rdflib in-memory datasets):
-    content_hash over all four columns, nothing ignored (the key must match
-    the loaded content, or queries against ignored triples would answer from
-    another dataset's state), mixed with the export schema and an
-    engine/format-version salt."""
-    import os
-    import json
-    import hashlib
-
-    content = data.content_hash(ignore_types=(), columns=("ID", "KEY", "VALUE", "INSTANCE_ID"))
-    if isinstance(rdf_map, (str, os.PathLike)):
-        with open(rdf_map, "rb") as file:
-            schema = file.read()
-    else:
-        schema = json.dumps(rdf_map, sort_keys=True, default=str).encode() if rdf_map else b""
-    return hashlib.sha256(salt + content.encode() + schema).hexdigest()[:24]
-
-
 def _load_engine(name: str):
     if name in _ENGINES:
         return _ENGINES[name]
@@ -84,7 +64,8 @@ def get_engine(name: str = "auto"):
     return resolved, _load_engine(resolved)
 
 
-def query(data, query_string, rdf_map=None, scope=None, engine="auto", return_type="auto"):
+def query(data, query_string, rdf_map=None, scope=None, engine="auto", return_type="auto",
+          data_unchanged=False):
     """Run a SPARQL query over triplet data.
 
     Parameters
@@ -106,6 +87,13 @@ def query(data, query_string, rdf_map=None, scope=None, engine="auto", return_ty
         polars out; pandas/duckdb → pandas), or explicit "pandas" / "polars" /
         "arrow". Honored by the qlever engine (arrow-native results); the
         rdflib reference engine always returns pandas.
+    data_unchanged : bool, default False
+        Assert that `data` has not been mutated since it was last hashed:
+        the engine reuses the stored content digest for this exact object
+        and skips the content_hash (the dominant cost of small warm
+        queries). Only skips work when this object was hashed before;
+        otherwise the hash runs and is remembered.
     """
     engine_name, engine_mod = get_engine(engine)
-    return engine_mod.query(data, query_string, rdf_map=rdf_map, scope=scope, return_type=return_type)
+    return engine_mod.query(data, query_string, rdf_map=rdf_map, scope=scope,
+                            return_type=return_type, data_unchanged=data_unchanged)
