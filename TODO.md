@@ -27,7 +27,8 @@ Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, spee
   skipped with a debug log (documented, likely permanent).
 - [x] qlever index build fed by zero-copy Arrow (no N-Quads text round-trip): vendored
   patch exposes `createFromParser` (fork branch `libqlever-parser-injection`, rebased
-  onto upstream master ecc04798, **upstream draft PR
+  onto upstream master ecc04798, **upstream issue
+  https://github.com/ad-freiburg/qlever/issues/3075 + draft PR
   https://github.com/ad-freiburg/qlever/pull/3074** — re-pin to ad-freiburg once
   merged), and `ArrowTripleParser` yields TurtleTriples straight from the triplet
   columns. Cold build 1.46 s → 1.01 s per 1.14M rows (Python side ~370 ms → ~3 ms);
