@@ -13,9 +13,9 @@ Engine aliases: `reference` → `rdflib`, `performance` → `qlever`.
 
 No oxigraph engine: the native tooling is C/C++/Cython and qlever is the chosen
 performance path (benchmarked 3.5–216x faster than oxigraph on CGMES data;
-index build ~1.0 s per 1.14M triples via the Arrow ingest, index load from
-disk ~4 ms). See "rdflib store backends" below for the measured oxigraph
-numbers behind that decision.
+index build ~0.6 s per 1.14M triples via the parallel Arrow ingest, index
+load from disk ~4 ms). See "Store and engine comparison" below for the
+measured numbers behind that decision.
 
 ## The qlever C++ Boundary
 
@@ -238,24 +238,42 @@ for q in queries:
 A runnable end-to-end demo lives in `examples/sparql_query.py`; the store
 backend comparison in `examples/sparql_backend_benchmark.py`.
 
-## rdflib store backends (measured, no engine added)
+## Store and engine comparison (measured)
 
-rdflib can swap its store backend without any triplets code changes
-(`rdflib.Dataset(store="Oxigraph")` via the `oxrdflib` package). Measured on
-the Svedala IGM (94 861 rows, warm, best of 3) — the reason there is still no
-oxigraph *engine*: qlever dominates everything non-trivial once its per-query
-hash overhead is removed (numbers in parentheses = engine-only, same queries):
+Import (end-to-end from the triplets DataFrame to a queryable store,
+including each path's serialization leg), warm queries (best of 3, engine
+handle in-process), and export (full dataset out). Svedala IGM, 94 861 rows
+/ 17 MB N-Quads; the ×12 column repeats the frame to 1.14M input rows:
 
-| | load | select+join | group-by-type | 2-hop join | ASK |
-|---|---|---|---|---|---|
-| rdflib Memory (default) | 1.15 s | 2.3 ms | 82 ms | 87 ms | 0.6 ms |
-| rdflib + Oxigraph store | 1.03 s | 0.5 ms | 4.9 ms | 39 ms | 0.0 ms |
-| qlever engine | 0.27 s build / 4 ms load | (1.7 ms) | (0.1 ms) | (3.1 ms) | (0.3 ms) |
+| | import 95k | import 1.14M | select+join | group-by-type | 2-hop join | ASK | export (full dump) |
+|---|---|---|---|---|---|---|---|
+| pyoxigraph `bulk_load` | 141 ms | 884 ms | 0.1 ms | 4.1 ms | 21 ms | 0.0 ms | 45 ms (N-Quads text) |
+| rdflib Memory (default) | 1.15 s | ~14 s | 2.3 ms | 82 ms | 87 ms | 0.6 ms | — |
+| rdflib + Oxigraph store | 1.24 s | 13.8 s | 0.6 ms | 4.7 ms | 39 ms | 0.1 ms | 541 ms (N-Quads text) |
+| **qlever (parallel Arrow)** | 205 ms | **659 ms** | 1.3 ms | **0.2 ms** | **4.9 ms** | 0.4 ms | 154 ms (Arrow table) |
 
-Two caveats for anyone swapping the store manually: oxigraph's
-union-of-named-graphs keeps duplicate solutions (a 2-hop join returned 3× the
-rows until `DISTINCT` — rdflib and qlever dedupe), and the fast oxigraph load
-path (`pyoxigraph.bulk_load`, 0.08 s) requires bypassing rdflib's parser.
+Readings: qlever wins every non-trivial query (its heavy-aggregation lead is
+~260x) and, at scale, the import — the parallel Arrow ingest skips the text
+serialize+parse the oxigraph paths still pay, and produces a *persistent*
+on-disk index (4 ms reload in a later process; the oxigraph memory store
+re-imports every process). pyoxigraph wins sub-millisecond point lookups and
+text export. The rdflib rows are bottlenecked by rdflib's Python N-Quads
+parser, not the stores.
+
+Caveats and dead ends, so nobody re-derives them:
+
+- oxigraph's union-of-named-graphs keeps duplicate solutions (a 2-hop join
+  returned 3× the rows until `DISTINCT` — rdflib and qlever dedupe).
+- `pyoxigraph.Store.bulk_extend(quads)` skips the text step but is ~3x
+  *slower* end-to-end than the text path (~680 ms of Python `Quad` object
+  construction per 95k rows dwarfs the serialization it saves); oxigraph's
+  fast programmatic loader (`BulkLoader::load_quads`) is Rust-only and it has
+  no Arrow interface.
+- rdflib's `Concurrent` store is not usable as a Dataset backend (a legacy
+  wrapper exposing only `add`/`remove`/`triples`, not a `Store` subclass).
+- At ×12 scale every engine deduplicates the repeated quads, so the ×12
+  *import* column measures ingesting 1.14M input rows while queries/export
+  operate on 95k unique quads in all engines alike.
 
 ## Naming Convention
 
