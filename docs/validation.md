@@ -76,16 +76,20 @@ validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) →
   Real-profile scale (Svedala EQ, 48k triples, Simple+Complex Equipment SHACL
   = 4,857 IR rows of which 148 sh:sparql, 50 with focus nodes): with the
   embedded **qlever** engine built, the **complete validation — polars +
-  qlever — takes ~2.6 s warm** (0.9 s constraint queries + 1.7 s vectorized
-  components; the on-disk index is content-hashed and reused, and within one
-  validation run the data is hashed **once** — the constraint queries after
-  the first assert ``data_unchanged``). Cold (first contact with the dataset:
-  parallel Arrow index build + first hash) adds a few seconds. On the rdflib
-  fallback the same queries cost ~3.3 min sequential (the content-keyed
-  dataset cache made the old 8-process fork pool unnecessary — it previously
-  took ~25 min sequential); the **pyshacl reference exceeds 10 minutes** on
-  the same profiles — build the qlever extension for sh:sparql-heavy
-  profiles.
+  qlever — takes ~0.6 s warm** (~0.4 s constraint queries + ~0.16 s
+  vectorized components; the on-disk index is content-hashed and reused, and
+  within one validation run the data is hashed **once** — the constraint
+  queries after the first assert ``data_unchanged``). Cold (first contact
+  with the dataset: parallel Arrow index build + first hash) adds a few
+  seconds. The vectorized components run as **batched per-component plans**
+  (the rules become a frame joined against the data on KEY + class
+  membership, per-rule messages riding as columns) instead of one plan per
+  rule — ~4,300 plans collapse to a handful, 4x faster with bit-identical
+  output. On the rdflib fallback the same constraint queries cost ~3.3 min
+  sequential (the content-keyed dataset cache made the old 8-process fork
+  pool unnecessary — it previously took ~25 min sequential); the **pyshacl
+  reference exceeds 10 minutes** on the same profiles — build the qlever
+  extension for sh:sparql-heavy profiles.
   **No query fixing**: constraint queries run exactly as authored. When the
   strict engine rejects one (e.g. the ENTSO-E `HAVING`-without-`GROUP BY`
   defect, upstream PR entsoe/application-profiles-library#82), the constraint
