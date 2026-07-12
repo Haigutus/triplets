@@ -55,7 +55,10 @@ def test_parse_zip_path(reference, tmp_path):
 @pytest.mark.parametrize("engine", ["python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow"])
 def test_engines_accept_path_directly(reference, engine):
     """Defensive coercion inside each engine (bypassing find_all_xml)."""
-    _, module = triplets.parser.get_engine(engine)   # raises ImportError → skip
+    try:
+        _, module = triplets.parser.get_engine(engine)
+    except ImportError as error:                     # compiled engine not built
+        pytest.skip(str(error))
     result = module.load_rdf_to_dataframe(Path(XML))
     length = result.num_rows if hasattr(result, "num_rows") else len(result)
     assert length > 0

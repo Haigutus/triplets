@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: false
+          lfs: true          # test_data zips (RealGrid) are LFS objects
 
       - name: Fetch test data (only the data submodule — not vendor/qlever)
         run: git submodule update --init test_data/relicapgrid
