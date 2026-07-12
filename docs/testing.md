@@ -70,6 +70,14 @@ pytest tests/test_parser_backends.py::TestParity -v
 
 ## Benchmarks
 
+Tests marked `performance` are **deselected by default** (pyproject
+`addopts = '-m "not performance"'` — the full benchmark suite takes ~35 min).
+Selecting them explicitly overrides the default:
+
+```shell
+pytest -m performance                 # all performance benchmarks
+```
+
 Benchmarks use `pytest-benchmark` and require the RealGrid test data:
 
 ```shell

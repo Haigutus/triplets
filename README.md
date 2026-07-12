@@ -20,6 +20,21 @@ pip install triplets
 pip install triplets[arrow]
 ```
 
+Install extras by feature:
+
+| Extra | Enables |
+|-------|---------|
+| `arrow` | compiled Arrow parser engines (~12x faster parsing) |
+| `polars` | polars DataFrames (`polars.read_rdf`, `.triplets` namespace) |
+| `duckdb` | DuckDB connections (`con.read_rdf`, SQL over triplets) |
+| `sparql` | SPARQL queries (rdflib reference engine) |
+| `oxigraph` | fast embedded Rust SPARQL engine (auto-preferred over rdflib) |
+| `validation` | SHACL validation (pyshacl reference engine) |
+| `excel` / `networkx` / `visualization` | Excel export / graph export / drawing |
+
+The embedded qlever SPARQL engine (fastest) ships in no wheel — it is a local
+source build, see [docs/building.md](docs/building.md).
+
 ```python
 import pandas
 import triplets
@@ -110,6 +125,51 @@ data.sql("SELECT VALUE, COUNT(*) FROM triplets WHERE KEY = 'Type' GROUP BY VALUE
 data.triplets.tableview_by_type("ACLineSegment").df()
 data.triplets.get_types_count()
 ```
+
+## SPARQL queries
+
+SPARQL 1.1 over the loaded data — `SELECT` → DataFrame, `ASK` → bool,
+`CONSTRUCT` → triplet DataFrame. Works on pandas, polars and DuckDB inputs:
+
+```python
+PREFIXES = """
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX cim: <http://iec.ch/TC57/CIM100#>
+"""
+names = data.sparql.query(PREFIXES + "SELECT ?s ?name WHERE { ?s cim:IdentifiedObject.name ?name }")
+```
+
+Three engines behind one API (auto picks the fastest available):
+
+| Engine | Install | Role |
+|--------|---------|------|
+| `qlever` | local source build ([docs/building.md](docs/building.md)) | fastest — embedded C++, persistent on-disk index |
+| `oxigraph` | `pip install triplets[oxigraph]` | embedded Rust — ~3x faster import, 2–5x faster queries than rdflib |
+| `rdflib` | `pip install triplets[sparql]` | pure-Python reference |
+
+Details and measured numbers: [docs/sparql.md](docs/sparql.md).
+
+## SHACL validation
+
+Validate against SHACL shape files; the result is a violations DataFrame
+(empty = conforms) with the same shape across all engines:
+
+```python
+violations = data.shacl.validate("shapes.ttl", rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+
+# slower optional context pass: source file, object type/name,
+# shape sh:name/sh:description, schema attribute/class definitions
+violations = data.shacl.validate(shapes, context=True)
+
+# SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer — grouped by default
+# (one result per rule with occurrenceCount + sample instances)
+violations.shacl.to_sarif(path="report.sarif")
+```
+
+Engines: `polars` (auto, real profiles in ~2 s) → `pandas` → `pyshacl`
+(reference); `duckdb` for larger-than-memory data. `sh:sparql` constraints
+ride the SPARQL engine above (minutes → milliseconds with oxigraph/qlever).
+Details: [docs/validation.md](docs/validation.md).
 
 ## Accessor namespace
 

@@ -7,16 +7,53 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- **oxigraph SPARQL engine** (`pip install triplets[oxigraph]`): embedded Rust
-  engine via the pyoxigraph wheel — the portable performance path, auto-preferred
-  when the compiled qlever extension is not built (~3x faster import, 2–5x faster
-  warm queries than rdflib; measured tables in docs/sparql.md).
+- **SHACL validation** (`df.shacl.validate(shapes)`, `triplets.validation`):
+  shapes compile once into a constraint IR (content-hash cached), executed by
+  four engines — `pyshacl` (spec reference), `pandas` (complete constraint
+  registry incl. sh:sparql and sh:node), `polars` (lazy plans, the auto
+  performance path — real Equipment profiles in ~2 s vs pyshacl minutes) and
+  `duckdb` (larger-than-memory, explicit). One deliberate deviation: datatype
+  checks judge the raw lexical form (`lexical=True`). See docs/validation.md.
+- **SPARQL querying** (`df.sparql.query(q)`, `triplets.sparql`): SELECT/ASK/
+  CONSTRUCT over triplet data with three engines — `qlever` (embedded C++,
+  local source build), `oxigraph` (embedded Rust, `pip install
+  triplets[oxigraph]` — the portable performance path, ~3x faster import and
+  2–5x faster warm queries than rdflib) and `rdflib` (reference). Engine
+  state is content-hash cached; `scope=` restricts to instances'
+  named graphs; `data_unchanged=True` skips re-hashing in hot loops.
+  sh:sparql constraints in the SHACL engines ride the same auto engine
+  (38.5 s → 74 ms on a constraint-heavy shape). See docs/sparql.md.
+- **SARIF 2.1.0 export** (`violations.shacl.to_sarif()`,
+  `triplets.validation.export_to_sarif`): violations → SARIF log for GitHub /
+  SonarQube / any SARIF viewer. Grouped by default — one result per rule with
+  `occurrenceCount` and first-3/last-3 sample instances (`group=False` for
+  one result per violation).
+- **Context enrichment** (`validate(..., context=True)`,
+  `violations.shacl.enrich(...)`): optional slower pass adding instance/file,
+  object type/name, shape name/description (sh:name/sh:description, inherited
+  from the node shape) and export-schema definitions (attribute description,
+  multiplicity, class description) to the violations report.
 - **`read_nquads`** (`triplets.read_nquads`, `pandas.read_nquads`,
   `polars.read_nquads`): N-Quads/N-Triples → triplet DataFrame, the vectorized
   inverse of `export_to_nquads`.
 - The pyshacl engine accepts `store="oxigraph"` to load its data graph through
   the oxigraph engine's cached store (identical results; Memory remains the
   measured-faster default — see docs/sparql.md caveats).
+
+### Fixed
+- `pathlib.Path` inputs are accepted everywhere: `read_rdf`/`parse` (all
+  engines, incl. the compiled Arrow parser — closes #75), `export_to_excel`
+  (crashed on `path.endswith`), `export_to_csv`, `export_to_nquads`.
+- `export_to_nquads()` without a path no longer crashes — defaults to
+  `export.nq` in the working directory.
+
+### Changed
+- Performance benchmarks are deselected by default (`pytest -m performance`
+  runs them); the plain suite runs in minutes.
+
+### Removed
+- `build-qlever.yml` CI workflow — the qlever engine is a local source build
+  (decision record in TODO.md; build + fork pinning in docs/building.md).
 
 ## [0.1.0] - 2026-06-29
 

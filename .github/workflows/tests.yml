@@ -1,0 +1,35 @@
+# Plain unit-test run (pure-Python engines — the compiled parser and qlever
+# extensions are covered by build-wheels.yml and the local qlever test task).
+# Performance benchmarks are deselected by default (pyproject addopts).
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Fetch test data (only the data submodule — not vendor/qlever)
+        run: git submodule update --init test_data/relicapgrid
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install with test extras
+        run: pip install -e .[dev,validation,oxigraph,duckdb,excel,networkx]
+
+      - name: Run tests
+        run: pytest -n auto -q

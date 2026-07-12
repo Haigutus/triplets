@@ -94,6 +94,9 @@ duckdb = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# performance benchmarks take ~35 min — deselected by default;
+# run them with: pytest -m performance
+addopts = '-m "not performance"'
 markers = [
     "performance: marks performance tests (run with '-m performance')",
     "requires_perf_backend: needs the compiled cython_pugixml extension",
