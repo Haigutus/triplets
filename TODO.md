@@ -46,10 +46,24 @@ Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, spee
   bounded batch queue, feeder thread, exceptions through the queue with deterministic
   global row numbers). Index build 1.01 s → 0.62 s per 1.14M rows (95k: 271 → 188 ms);
   vs the original text path (serialize+parse) the build is now 2.4x faster.
-- [ ] Decision recorded (2026-07-10): **no oxigraph engine** — rdflib+Oxigraph store is
-  3–16x faster than rdflib Memory (numbers in docs/sparql.md), but engine-only qlever
-  dominates everything non-trivial (heavy agg 0.2 ms vs 51.7 ms). Revisit only if the
-  qlever wheel packaging decision fails.
+- [x] Decision **reversed** (2026-07-12; originally 2026-07-10 "no oxigraph engine",
+  when qlever measured 3.5–216x faster and heavy agg was 0.2 ms vs 51.7 ms): the
+  qlever wheel packaging is still unresolved (see below), so a pip-only install was
+  stuck on rdflib — the `oxigraph` engine (pyoxigraph wheel, `sparql_oxigraph.py`)
+  now upgrades those installs to Rust speed (~3x import, 2–5x warm queries vs
+  rdflib) and slots between qlever and rdflib in auto order. qlever keeps the
+  performance crown and auto priority; measured numbers in docs/sparql.md.
+- [ ] oxigraph engine future optimization: pyoxigraph releases the GIL during
+  queries — the SHACL sh:sparql batch path could thread over constraints
+  (today it runs sequentially; the fork pool stays rdflib-only).
+- [x] Decision recorded (2026-07-12): **pyshacl stays on the Memory store** —
+  `load_dataset(store="oxigraph")` (oxrdflib wrapper over the engine's cached
+  store, `default_union=False` because the projection is the union) gives
+  identical violations, but pyshacl's forced Memory clone through the wrapper
+  costs more than the Rust parse saves (95k warm 1.8 s vs 1.2 s; 1.14M
+  load+clone 40 s vs 33 s). The `store=` parameter on `shacl_pyshacl.validate`
+  is the explicit opt-in for callers whose store is already loaded for SPARQL.
+  Revisit if pyshacl gains a no-clone path or oxrdflib gets a bulk iterator.
 - [ ] qlever binary result formats (`octetStream` raw Ids; `binaryQleverExport`
   Ids+string-sidecar, stub at pin 9ec88a0) are HTTP-boundary features — not useful
   embedded (we decode the IdTable directly). The StringMapping *idea* maps to emitting

@@ -7,15 +7,27 @@ Registry dispatch (mirroring the parser), auto = first importable:
 | Engine | File | Requires | Role |
 |--------|------|----------|------|
 | `qlever` | `sparql/sparql_qlever.py` | compiled extension (`pixi run -e qlever build-qlever`) | **performance** — embedded C++ engine, in-process, no server; auto-preferred when built |
+| `oxigraph` | `sparql/sparql_oxigraph.py` | pyoxigraph (`pip install triplets[oxigraph]`) | **portable performance** — embedded Rust engine, plain pip wheel; auto-preferred when qlever is not built |
 | `rdflib` | `sparql/sparql_rdflib.py` | rdflib (`pip install triplets[sparql]`) | **reference** — built-in SPARQL 1.1, always available with the extra |
 
 Engine aliases: `reference` → `rdflib`, `performance` → `qlever`.
 
-No oxigraph engine: the native tooling is C/C++/Cython and qlever is the chosen
-performance path (benchmarked 3.5–216x faster than oxigraph on CGMES data;
-index build ~0.6 s per 1.14M triples via the parallel Arrow ingest, index
-load from disk ~4 ms). See "Store and engine comparison" below for the
-measured numbers behind that decision.
+Role split: qlever is the fastest engine but requires the compiled extension
+(no pip wheel); the oxigraph engine gives every pip-only install Rust speed —
+~3x faster import and 2–5x faster warm queries than rdflib (measured table
+below) — while qlever keeps the overall lead and the auto priority.
+
+The oxigraph engine keeps loaded data in an in-memory `pyoxigraph.Store`,
+fed by `Store.bulk_load` from the N-Quads export and cached by content key
+like the other engines. At load time the deduplicated union of the named
+graphs is projected into the store's default graph
+(`INSERT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }`), so unscoped queries
+match rdflib's `default_union` set semantics — oxigraph's own
+union-of-named-graphs keeps one solution per graph (see caveats). SELECT
+results decode from oxigraph's SPARQL-CSV serializer (lexical forms — the
+same all-strings convention as qlever) straight into pandas/polars;
+CONSTRUCT/DESCRIBE results serialize to N-Quads Rust-side and come back
+through `triplets.read_nquads` — the same round-trip that loaded the data.
 
 ## The qlever C++ Boundary
 
@@ -41,16 +53,16 @@ two things the facade lacked: programmatic index building via an injected
   typed literals run through qlever's own
   `literalAndDatatypeToTripleComponent` (the very code its N-Quads parser
   calls), and `build_key_metadata` stays the single Python source of truth
-  for `rdf_map` interpretation. Index build 1.46 s → 0.62 s per 1.14M rows
-  (2.4×); the Python-side cost drops from ~370 ms to ~3 ms.
+  for `rdf_map` interpretation. Index build ~0.62 s per 1.14M rows, with
+  ~3 ms of Python-side cost.
 - **Arrow out (query results)** — SPARQL text in, decoded Arrow string columns
   out. The C++ shim runs `parseAndPlanQuery`, walks the raw result `IdTable`
   and decodes each id with qlever's own `exportIds::idToStringAndType`
   straight into `arrow::StringBuilder`s (unbound → null), with the GIL
   released; Cython wraps the finished arrays zero-copy (`pyarrow_wrap_array`,
   same pattern as the `cython_pugixml_arrow` parser). No serialize-to-text →
-  re-parse round trip: measured 16.1 s → 2.6 s end-to-end on a 1M-row SELECT
-  (RealGrid), Python side reduced to buffer wrapping.
+  re-parse round trip: ~2.6 s end-to-end on a 1M-row SELECT (RealGrid), the
+  Python side reduced to buffer wrapping.
 - **strings (ASK + diagnostics)** — SPARQL text in, spec-stable
   serializations out (SPARQL 1.1 JSON / Turtle / CSV).
 
@@ -72,17 +84,19 @@ pixi run -e qlever build-qlever-lib   # compile qlever with PIC (long, once)
 pixi run -e qlever build-qlever       # build triplets.sparql._qlever
 ```
 
-Without the extension nothing changes — auto falls back to rdflib.
+Without the extension nothing changes — auto falls back to oxigraph when
+installed, else rdflib.
 
 **Engine state lifecycle.** Flavor-blind by construction — the input (pandas /
 polars DataFrame or DuckDB connection) carries every needed capability as a
 registered method, so the engine never inspects types: `content_hash`
 (row-order-invariant by default; `order_sensitive=True` makes row order part
 of the digest) keys the state, and `export_to_arrow` feeds the index build —
-which runs **only on a cache miss**, zero-copy. Both engines share the same
-lifecycle (`triplets._content_key`, engine-neutral so no engine imports
-another's package): the rdflib engine caches loaded datasets in-process the
-same way. `scope` is not a data operation and does not key the state — the
+which runs **only on a cache miss**, zero-copy. All three engines share the
+same lifecycle (`triplets._content_key`, engine-neutral so no engine imports
+another's package): the oxigraph engine caches loaded stores and the rdflib
+engine loaded datasets in-process the same way, each under its own salt.
+`scope` is not a data operation and does not key the state — the
 scoped instances' named graphs travel beside each query as SPARQL-protocol
 dataset clauses (`default-graph-uri`), so the query text is never modified,
 one index serves every scope, and per the protocol the scope takes precedence
@@ -114,9 +128,10 @@ Custom engines register via `triplets.sparql.register_engine(name, module)`.
 **Parallelism.** rdflib query evaluation is GIL-bound pure Python, so threads
 don't help — batch workloads (the sh:sparql constraints the SHACL engines
 delegate here) use `ProcessPoolExecutor` fork on the rdflib path. The qlever
-binding releases the GIL during queries, so plain threads parallelize; the
-SHACL engines skip the fork pool automatically when qlever is the auto engine
-(it is orders of magnitude faster sequentially anyway).
+binding and pyoxigraph both release the GIL during queries, so plain threads
+parallelize; the SHACL engines skip the fork pool automatically whenever the
+auto engine is not rdflib (both are orders of magnitude faster sequentially
+anyway).
 
 ## Shared Loading (`_rdflib_loader.py`)
 
@@ -125,7 +140,7 @@ validation over the same data see an identical graph:
 
 | Function | Produces |
 |----------|----------|
-| `load_dataset(data, rdf_map=None)` | `rdflib.Dataset(default_union=True)`, one named graph per `INSTANCE_ID` (`urn:uuid:{INSTANCE_ID}`) |
+| `load_dataset(data, rdf_map=None, store="memory")` | `rdflib.Dataset` seeing the deduplicated union, one named graph per `INSTANCE_ID` (`urn:uuid:{INSTANCE_ID}`). `store="oxigraph"` backs it with the oxigraph engine's cached store via oxrdflib (`"auto"`: oxigraph when installed) |
 | `scoped_graph(dataset, scope=None)` | full union when `scope is None`; otherwise a concrete `Graph` holding just the scoped instances' named graphs |
 
 `rdf_map` is optional. Without it, every `VALUE` is an untyped string literal
@@ -139,12 +154,18 @@ data.sparql.query(q)
 |
 '-> sparql.query(data, q, engine="auto")
     |
-    |-> get_engine("auto")                     # qlever when built, else rdflib
+    |-> get_engine("auto")                     # qlever when built, else oxigraph, else rdflib
     |
     |-> qlever path (performance)
     |   |-> _index_for: content_key -> cached index | build (export_to_arrow -> ArrowTripleParser)
     |   |-> scope -> SPARQL-protocol dataset clauses (one index serves every scope)
     |   '-> C++ decode -> Arrow columns (GIL released) -> zero-copy wrap
+    |
+    |-> oxigraph path (portable performance)
+    |   |-> _store_for: content_key -> cached store | bulk_load(export_to_nquads)
+    |   |   '-> default graph := deduplicated union of the named graphs
+    |   |-> scope -> SPARQL-protocol default graphs (one store serves every scope)
+    |   '-> SELECT: SPARQL-CSV -> read_csv | CONSTRUCT: N-Quads -> read_nquads
     |
     |-> rdflib path (reference)
     |   |-> load_dataset(data, rdf_map)        # cached by content_key
@@ -165,14 +186,15 @@ The result is shaped by the SPARQL query form:
 
 | Query form | Returns | Structure |
 |------------|---------|-----------|
-| `SELECT` | DataFrame (see `return_type`) | one column per projected variable (`?name` -> column `name`); IRIs as full strings. qlever: **all values are lexical strings** (triplets are all-string; consumers cast), unbound → null. rdflib reference: literals python-typed via `rdf_map` |
+| `SELECT` | DataFrame (see `return_type`) | one column per projected variable (`?name` -> column `name`); IRIs as full strings. qlever/oxigraph: **all values are lexical strings** (triplets are all-string; consumers cast), unbound → null (oxigraph's CSV decode also nulls empty-string literals — the W3C CSV-results tradeoff). rdflib reference: literals python-typed via `rdf_map` |
 | `ASK` | `bool` | `True` / `False` |
 | `CONSTRUCT` / `DESCRIBE` | triplet DataFrame | `[ID, KEY, VALUE, INSTANCE_ID]`; `urn:uuid:` stripped from `ID`, CIM namespace shortened on `KEY`, `rdf:type` -> `Type`, `INSTANCE_ID` is `None` (constructed graph has no source instance) |
 
 `SELECT` keeps full IRIs (raw bindings); `CONSTRUCT`/`DESCRIBE` apply the triplets
 naming conventions so the output drops straight back into the pipeline.
 
-**Output flavor** (`return_type`, qlever engine; rdflib always returns pandas):
+**Output flavor** (`return_type`, qlever and oxigraph engines; rdflib always
+returns pandas):
 
 | `return_type` | Result |
 |---------------|--------|
@@ -188,8 +210,11 @@ triplets/
 |-- _content_key.py          # engine-neutral state keying (content_hash + rdf_map + salt,
 |                            #   data_unchanged digest memo with weakref eviction)
 |-- _rdflib_loader.py        # shared with validation: load_dataset(), scoped_graph()
+|-- parser/nquads.py         # read_nquads: N-Quads -> triplets (inverse of the export);
+|                            #   terms_to_triplets shared by the engines' CONSTRUCT decode
 '-- sparql/
     |-- __init__.py          # query() dispatcher + engine registry
+    |-- sparql_oxigraph.py   # oxigraph engine: store cache, CSV/N-Quads decode
     '-- sparql_rdflib.py     # rdflib engine: result -> DataFrame / bool / triplets
 ```
 
@@ -227,8 +252,12 @@ one_instance = str(data["INSTANCE_ID"].astype(str).iloc[0])
 scoped = data.sparql.query(PREFIXES + "SELECT ?s WHERE { ?s rdf:type cim:ACLineSegment }", scope=[one_instance])
 
 # explicit engine selection, and use on any input (e.g. a DuckDB connection)
-data.sparql.query(q, engine="rdflib")
+data.sparql.query(q, engine="oxigraph")   # or "qlever" / "rdflib"
 triplets.sparql.query(con, q)
+
+# N-Quads round-trip: export and read back (also pandas/polars.read_nquads)
+buffer = data.export_to_nquads(export_to_memory=True)
+same = triplets.read_nquads(buffer)
 
 # hot loop over unchanging data: skip the per-query content hash
 for q in queries:
@@ -247,23 +276,56 @@ handle in-process), and export (full dataset out). Svedala IGM, 94 861 rows
 
 | | import 95k | import 1.14M | select+join | group-by-type | 2-hop join | ASK | export (full dump) |
 |---|---|---|---|---|---|---|---|
-| pyoxigraph `bulk_load` | 141 ms | 884 ms | 0.1 ms | 4.1 ms | 21 ms | 0.0 ms | 45 ms (N-Quads text) |
+| pyoxigraph `bulk_load` (raw store) | 141 ms | 884 ms | 0.1 ms | 4.1 ms | 21 ms | 0.0 ms | 45 ms (N-Quads text) |
 | rdflib Memory (default) | 1.15 s | ~14 s | 2.3 ms | 82 ms | 87 ms | 0.6 ms | — |
 | rdflib + Oxigraph store | 1.24 s | 13.8 s | 0.6 ms | 4.7 ms | 39 ms | 0.1 ms | 541 ms (N-Quads text) |
+| `oxigraph` engine (incl. union projection) | 412 ms | 2.1 s | 0.5 ms | 4.8 ms | 18 ms | 0.0 ms | 87 ms (DataFrame) |
 | **qlever (parallel Arrow)** | 205 ms | **659 ms** | 1.3 ms | **0.2 ms** | **4.9 ms** | 0.4 ms | 154 ms (Arrow table) |
 
-Readings: qlever wins every non-trivial query (its heavy-aggregation lead is
-~260x) and, at scale, the import — the parallel Arrow ingest skips the text
-serialize+parse the oxigraph paths still pay, and produces a *persistent*
-on-disk index (4 ms reload in a later process; the oxigraph memory store
-re-imports every process). pyoxigraph wins sub-millisecond point lookups and
-text export. The rdflib rows are bottlenecked by rdflib's Python N-Quads
-parser, not the stores.
+Readings: qlever wins the non-trivial queries (its heavy-aggregation lead is
+~10–25x over oxigraph, ~260x over rdflib Memory) and, at scale, the import —
+the parallel Arrow ingest skips the text serialize+parse the oxigraph paths
+still pay, and produces a *persistent* on-disk index (4 ms reload in a later
+process; the oxigraph memory store re-imports every process). The `oxigraph`
+engine row is the raw `bulk_load` plus the default-graph union projection
+(roughly half its import time) — the price of exact rdflib `default_union`
+set semantics without touching query text; it beats rdflib ~3x on import and
+2–5x on warm queries as a plain pip wheel. On a real 1.14M-unique-row model
+(RealGrid) the oxigraph engine imports in ~4.8 s (2.2 s bulk_load + 2.0 s
+projection, store ~1.2 GB RSS at 2.2M quads) and dumps a 1.08M-row SELECT in
+~1.1 s (vs qlever's 2.6 s Arrow decode). The rdflib rows are bottlenecked by
+rdflib's Python N-Quads parser, not the stores.
 
 Caveats and dead ends, so nobody re-derives them:
 
-- oxigraph's union-of-named-graphs keeps duplicate solutions (a 2-hop join
-  returned 3× the rows until `DISTINCT` — rdflib and qlever dedupe).
+- oxigraph's union-of-named-graphs keeps duplicate solutions — one per graph
+  holding the triple (rdflib and qlever dedupe). The `oxigraph` engine
+  handles this by projecting the deduplicated union into the store's default
+  graph at load time; the residual is a **multi-instance `scope`** (a
+  SPARQL-protocol dataset union): a triple present in several scoped
+  instances yields one solution per instance — `DISTINCT` dedupes. Pinned in
+  `tests/test_sparql_oxigraph.py`.
+- Projecting via a second `bulk_load(to_graph=DefaultGraph())` is slower
+  than the `INSERT WHERE GRAPH` update *and* produces a wrong quad count.
+  `lenient=True` on `bulk_load` saves nothing (~1%) — strict validation
+  stays.
+- oxigraph's parser is *more permissive* than qlever's in places: the
+  ENTSO-E bare-`HAVING` shapes that qlever rejects are accepted (implicit
+  grouping per spec), so they execute instead of falling back to rdflib.
+- The CSV SELECT decode cannot distinguish an unbound variable from an
+  empty-string literal — both come back null (the W3C CSV-results tradeoff).
+- The oxigraph store can back the *rdflib* dataset too
+  (`load_dataset(..., store="oxigraph")` wraps the engine's cached store via
+  oxrdflib — one bulk_load serves both; the wrapper uses
+  `default_union=False` because the store's default graph *is* the projected
+  union, and unioning again would count each triple once per graph). For the
+  pyshacl engine this gives identical violations but is **slower** than the
+  Memory store — pyshacl force-clones the data graph into rdflib Memory
+  (`advanced=True`), and the per-triple clone through the oxrdflib wrapper
+  costs more than the Rust N-Quads parse saves (95k warm: 1.8 s vs 1.2 s;
+  1.14M load+clone: 40 s vs 33 s). So `shacl_pyshacl` defaults to
+  `store="memory"`; the parameter is the explicit opt-in. `sparql_rdflib`
+  never uses the oxigraph store (reference purity).
 - `pyoxigraph.Store.bulk_extend(quads)` skips the text step but is ~3x
   *slower* end-to-end than the text path (~680 ms of Python `Quad` object
   construction per 95k rows dwarfs the serialization it saves); oxigraph's
@@ -280,6 +342,6 @@ Caveats and dead ends, so nobody re-derives them:
 Engine files follow `{purpose}_{engine}.py`, mirroring the parser and export modules:
 
 - **purpose**: what is produced (`sparql`)
-- **engine**: what does the work (`rdflib`)
+- **engine**: what does the work (`qlever`, `oxigraph`, `rdflib`)
 
 Shared loading lives in `_rdflib_loader.py`.

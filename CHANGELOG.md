@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **oxigraph SPARQL engine** (`pip install triplets[oxigraph]`): embedded Rust
+  engine via the pyoxigraph wheel — the portable performance path, auto-preferred
+  when the compiled qlever extension is not built (~3x faster import, 2–5x faster
+  warm queries than rdflib; measured tables in docs/sparql.md).
+- **`read_nquads`** (`triplets.read_nquads`, `pandas.read_nquads`,
+  `polars.read_nquads`): N-Quads/N-Triples → triplet DataFrame, the vectorized
+  inverse of `export_to_nquads`.
+- The pyshacl engine accepts `store="oxigraph"` to load its data graph through
+  the oxigraph engine's cached store (identical results; Memory remains the
+  measured-faster default — see docs/sparql.md caveats).
+
 ## [0.1.0] - 2026-06-29
 
 First packaged release of the restructured library. The codebase was reorganised
