@@ -18,11 +18,13 @@ CONSTRAINT_VALIDATORS. Every validator sees the rule's path normalized to
 (FOCUS, PATH_VALUE) pairs — inverse paths (sh:inversePath) swap the columns,
 so direction is handled once in ``_Context.path_rows``.
 
-sh:sparql constraints are delegated to triplets.sparql (whichever engine is
-available — rdflib today, qlever later): the data is loaded into one rdflib
-dataset, each constraint runs as one SELECT with the focus nodes bound via
-VALUES, and ``max_workers`` runs the constraint queries in parallel processes
-(fork — copy-on-write shares the dataset; threads don't help GIL-bound rdflib).
+sh:sparql constraints are delegated to triplets.sparql (auto engine — qlever
+when built, else oxigraph, else rdflib): the engine loads the data once
+(content-hash cached), each constraint runs as one SELECT with the focus
+nodes bound via VALUES, and ``max_workers`` runs the constraint queries in
+parallel processes on the rdflib path only (fork — copy-on-write shares the
+dataset; threads don't help GIL-bound rdflib; the embedded engines are
+ms-scale sequentially).
 
 Known limits:
 - sh:nodeKind — triplets store every value as a string, so term kind is decided
@@ -398,17 +400,18 @@ def _sparql_violations(rule, result):
 def _sparql(context, rule):
     """Run one sh:sparql constraint. Queries run exactly as authored — no fixing.
 
-    When the strict engine (qlever) rejects a query, the constraint is still
-    evaluated on the lenient rdflib engine so the report stays complete, and a
-    ``triplets:invalidSparql`` Warning row flags the defective shape — broken
-    rules get reported and fixed upstream, not auto-patched here.
+    When a strict engine (qlever, oxigraph) rejects a query, the constraint is
+    still evaluated on the lenient rdflib engine so the report stays complete,
+    and a ``triplets:invalidSparql`` Warning row flags the defective shape —
+    broken rules get reported and fixed upstream, not auto-patched here.
     """
     from .. import sparql
     focus_ids = context.focus(rule)
     if not len(focus_ids):
         return _empty()
-    # rdflib queries the shared pre-loaded dataset; other engines (qlever) take
-    # the raw frame and manage their own index cache (one build, content-hashed)
+    # rdflib queries the shared pre-loaded dataset; other engines (qlever,
+    # oxigraph) take the raw frame and manage their own engine-state cache
+    # (one build, content-hashed)
     query_text = _sparql_query_text(rule, focus_ids)
     engine_name = sparql.get_engine("auto")[0]
     if engine_name == "rdflib":
@@ -464,8 +467,10 @@ def _sparql_parallel(context, rules, max_workers):
     rdflib query evaluation is GIL-bound pure Python, so threads don't help;
     fork gives copy-on-write sharing of the loaded dataset (Linux). One task
     per constraint query. Only applies to the rdflib engine — the embedded
-    qlever engine is orders of magnitude faster and must not be forked
-    (C++ state), so it runs the queries sequentially.
+    engines (qlever: C++ state must not be forked; oxigraph: Rust store) are
+    orders of magnitude faster and run the queries sequentially. Both release
+    the GIL during queries, so threading them is a recorded future
+    optimization (TODO.md).
     """
     from .. import sparql
     if sparql.get_engine("auto")[0] != "rdflib":

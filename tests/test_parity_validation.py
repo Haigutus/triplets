@@ -252,6 +252,23 @@ def test_benchmark_engines(benchmark, svedala_eq, timing_shape, engine):
 
 
 @pytest.mark.performance
+@pytest.mark.benchmark(group="shacl-engines")
+def test_benchmark_pyshacl_oxigraph_store(benchmark, svedala_eq, timing_shape):
+    """pyshacl with the data graph loaded through the oxigraph engine's store
+    (store="oxigraph") — measured slower than Memory (pyshacl clones the graph
+    into Memory regardless; the wrapper clone outweighs the Rust parse), which
+    is why "memory" stays the engine default."""
+    pytest.importorskip("pyoxigraph")
+    pytest.importorskip("oxrdflib")
+    from triplets.export_schema import schemas
+    compiled = triplets.validation.compile(timing_shape)
+    benchmark.extra_info.update({"engine": "pyshacl", "store": "oxigraph"})
+    benchmark(lambda: triplets.validation.validate(
+        svedala_eq, compiled, engine="pyshacl", store="oxigraph",
+        rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, lexical=False))
+
+
+@pytest.mark.performance
 @pytest.mark.benchmark(group="shacl-compile")
 @pytest.mark.skipif(not all(f.exists() for f in CGMES_EQ_SHACL_FILES),
                     reason="external CGMES SHACL shapes not available")

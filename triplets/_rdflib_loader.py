@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 _DATASETS = {}   # content key → loaded rdflib.Dataset
 
 
-def load_dataset(data, rdf_map=None, data_unchanged=False):
+def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory"):
     """Triplet data (any flavor) → rdflib.Dataset with named graphs per INSTANCE_ID.
 
     Parameters
@@ -31,12 +31,20 @@ def load_dataset(data, rdf_map=None, data_unchanged=False):
     data_unchanged : bool, default False
         Assert the data object is unmutated since last hashed — reuses the
         stored content digest for this exact object (see _content_key).
+    store : str, default "memory"
+        rdflib store backend: "memory" (default rdflib Memory store),
+        "oxigraph" (the SPARQL engine's cached in-memory pyoxigraph store
+        wrapped via oxrdflib — Rust N-Quads parse, shared with the oxigraph
+        engine so one bulk_load serves both), or "auto" (oxigraph when
+        pyoxigraph + oxrdflib are importable, else memory).
 
     Returns
     -------
     rdflib.Dataset
-        default_union=True so queries/validation see the union across the
-        per-INSTANCE_ID named graphs.
+        Queries/validation see the deduplicated union across the
+        per-INSTANCE_ID named graphs (memory: default_union=True; oxigraph:
+        the store's projected default graph). Treat as read-only (cached,
+        shared — the oxigraph store is also the SPARQL engine's).
     """
     import rdflib
     from .export import export_to_nquads
@@ -46,18 +54,40 @@ def load_dataset(data, rdf_map=None, data_unchanged=False):
 
     if not hasattr(data, "content_hash"):  # pyarrow — no registered methods
         data = _to_loadable(data)
-    key = content_key(data, rdf_map, b"triplets-rdflib-1", data_unchanged)
+    backend = _resolve_store(store)
+    key = backend + ":" + content_key(data, rdf_map, b"triplets-rdflib-1", data_unchanged)
     if key in _DATASETS:
         return _DATASETS[key]
 
-    buffer = export_to_nquads(_to_loadable(data), rdf_map=rdf_map, export_to_memory=True)
-    buffer.seek(0)
-
-    dataset = rdflib.Dataset(default_union=True)
-    dataset.parse(source=buffer, format="nquads")
-    logger.debug("loaded rdflib Dataset: %d quads", len(dataset))
+    if backend == "oxigraph":
+        from oxrdflib import OxigraphStore
+        from .sparql.sparql_oxigraph import _store_for
+        # The engine's shared store already carries the deduplicated union of
+        # the named graphs in its *default graph* (the load-time projection),
+        # so the wrapper must NOT union again (default_union=True would count
+        # each triple once per graph — oxigraph union keeps per-graph
+        # solutions). default_union=False exposes exactly the projected
+        # union, with the named graphs still reachable for scoped_graph.
+        dataset = rdflib.Dataset(store=OxigraphStore(store=_store_for(data, rdf_map, data_unchanged)),
+                                 default_union=False)
+    else:
+        buffer = export_to_nquads(_to_loadable(data), rdf_map=rdf_map, export_to_memory=True)
+        buffer.seek(0)
+        dataset = rdflib.Dataset(default_union=True)
+        dataset.parse(source=buffer, format="nquads")
+    logger.debug("loaded rdflib Dataset (%s): %d quads", backend, len(dataset))
     _DATASETS[key] = dataset
     return dataset
+
+
+def _resolve_store(store):
+    if store == "auto":
+        from importlib.util import find_spec
+        available = find_spec("oxrdflib") is not None and find_spec("pyoxigraph") is not None
+        return "oxigraph" if available else "memory"
+    if store not in ("memory", "oxigraph"):
+        raise ValueError(f"Unknown rdflib store backend: {store}. Known: memory, oxigraph, auto")
+    return store
 
 
 def _to_loadable(data):

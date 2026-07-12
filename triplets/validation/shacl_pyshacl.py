@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def validate(data, compiled, rdf_map=None, scope=None, inference="none",
-             advanced=True, abort_on_first=False):
+             advanced=True, abort_on_first=False, store="memory"):
     """Validate triplet data against compiled shapes; return a violations DataFrame.
 
     Parameters
@@ -27,10 +27,21 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
         Validate only these instances (named graphs); all data stays loaded for
         reference resolution. None = full union (all profiles).
     inference, advanced, abort_on_first : passed to pyshacl.validate.
+    store : str, default "memory"
+        rdflib store backend for the data graph (see ``load_dataset``):
+        "oxigraph" loads through the oxigraph engine's cached store
+        (Rust N-Quads parse instead of rdflib's Python parser); "auto" picks
+        it when pyoxigraph + oxrdflib are installed. Measured (2026-07-12):
+        results are identical, but memory stays the default — pyshacl
+        force-clones the data graph into rdflib Memory regardless
+        (advanced=True), and the clone through the oxrdflib wrapper costs
+        more than the Rust parse saves (95k warm: 1.8 s vs 1.2 s; 1.14M
+        load+clone: 40 s vs 33 s). Opt in when the store is already loaded
+        for SPARQL anyway — then the load leg is free.
     """
     from pyshacl import validate as pyshacl_validate
 
-    data_graph = scoped_graph(load_dataset(data, rdf_map=rdf_map), scope)
+    data_graph = scoped_graph(load_dataset(data, rdf_map=rdf_map, store=store), scope)
 
     conforms, report_graph, _report_text = pyshacl_validate(
         data_graph, shacl_graph=compiled.graph,
