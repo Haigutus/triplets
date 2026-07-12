@@ -69,6 +69,7 @@ validation = [
 dev = [
     "pytest>=7.0",
     "pytest-xdist",
+    "pytest-benchmark",
     "polars>=1.0",
     "pyarrow>=14.0",
     "networkx>=3.0",
