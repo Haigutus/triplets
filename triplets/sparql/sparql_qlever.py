@@ -50,11 +50,10 @@ import pyarrow
 from . import _qlever  # ImportError here → the registry falls back to rdflib
 from .._content_key import content_key
 from .._engine_detect import is_polars
-from ..export.nquads_utils import CIM_NS, RDF_TYPE, build_key_metadata
+from ..export.nquads_utils import CIM_NS, build_key_metadata
+from ..parser.nquads import terms_to_triplets
 
 logger = logging.getLogger(__name__)
-
-_UUID_PREFIX = "urn:uuid:"
 
 # qlever writes its own INFO log to stdout — keep it quiet unless triplets
 # debugging is on (re-enable per-process with _qlever.set_quiet(False))
@@ -162,25 +161,8 @@ def _query_form(query_string):
 
 def _terms_to_triplets(batch):
     """CONSTRUCT/DESCRIBE term columns (N-Triples-form, decoded on the C++
-    side) → triplet DataFrame, converted with vectorized string ops. Same
-    conventions as the rdflib engine's inverse of the N-Quads export:
-    urn:uuid: stripped, CIM namespace shortened, rdf:type → 'Type';
-    INSTANCE_ID is empty (a constructed graph has no source instance).
-    Term shapes: ``<iri>``, ``_:bnode``, ``"literal"`` (raw value between the
-    outer quotes, optionally with a ``^^<datatype>`` / ``@lang`` suffix —
-    dropped, the value keeps its lexical form), or bare turtle-shorthand
-    numbers/booleans."""
+    side) → triplet DataFrame via the shared term conversion (the inverse of
+    the N-Quads export conventions, see parser.nquads.terms_to_triplets)."""
     frame = batch.to_pandas(types_mapper=pandas.ArrowDtype)
     frame.columns = ["ID", "KEY", "VALUE"]
-
-    def iri(column):
-        return (column.str.replace(r"^<(.*)>$", r"\1", regex=True)
-                .str.removeprefix("_:").str.removeprefix(_UUID_PREFIX).str.removeprefix(CIM_NS))
-
-    rdf_type = frame["KEY"] == f"<{RDF_TYPE}>"
-    frame["ID"] = iri(frame["ID"])
-    frame["KEY"] = iri(frame["KEY"]).mask(rdf_type, "Type")
-    unquoted = frame["VALUE"].str.replace(r'(?s)^"(.*)"(\^\^<[^>]*>|@[\w-]+)?$', r"\1", regex=True)
-    frame["VALUE"] = unquoted.where(frame["VALUE"].str.startswith('"'), iri(frame["VALUE"]))
-    frame["INSTANCE_ID"] = None
-    return frame
+    return terms_to_triplets(frame)

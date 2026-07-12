@@ -80,6 +80,8 @@ def get_engine(name: str = "auto"):
 # Re-exports for compat layer (rdf_parser.py)
 from .utils import find_all_xml, clean_ID  # noqa: F401
 
+from .nquads import read_nquads  # noqa: F401
+
 
 def parse(
     list_of_paths_to_zip_globalzip_xml: Union[str, List, Any],

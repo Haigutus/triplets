@@ -25,7 +25,7 @@ __version__ = get_versions()['version']
 del get_versions
 
 # Expose the new parser API at top level
-from .parser import parse, read_rdf as read_rdf_func  # noqa: F401
+from .parser import parse, read_rdf as read_rdf_func, read_nquads  # noqa: F401
 
 # Register read_rdf on pandas and polars (monkey-patch, standard approach)
 # There is no official plugin API for top-level read functions in either library.
@@ -36,12 +36,14 @@ import pandas as pd
 import logging
 pd.read_RDF = partial(parse, return_type="pandas")
 pd.read_rdf = partial(parse, return_type="pandas")
+pd.read_nquads = partial(read_nquads, return_type="pandas")
 logging.getLogger(__name__).debug("Registered pandas.read_rdf (and read_RDF)")
 
 try:
     import polars as pl
     pl.read_rdf = partial(parse, return_type="polars")
     pl.read_RDF = partial(parse, return_type="polars")
+    pl.read_nquads = partial(read_nquads, return_type="polars")
     logging.getLogger(__name__).debug("Registered polars.read_rdf (polars available)")
 except ImportError:
     logging.getLogger(__name__).debug("polars not installed, skipping read_rdf registration")
