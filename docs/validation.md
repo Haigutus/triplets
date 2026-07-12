@@ -200,7 +200,9 @@ triplets/
     |-- shacl_pandas.py      # compiled-IR executor (full registry; eager, debugging)
     |-- shacl_polars.py      # compiled-IR executor (lazy plans + collect_all, performance)
     |-- shacl_duckdb.py      # compiled-IR executor (SQL per constraint, larger-than-memory)
-    '-- shacl_report.py      # ValidationReport graph -> violations DataFrame
+    |-- shacl_report.py      # ValidationReport graph -> violations DataFrame
+    |-- context.py           # optional enrichment pass (instance/object/shape/schema context)
+    '-- sarif.py             # violations -> SARIF 2.1.0 (grouped by default)
 ```
 
 ## Usage
@@ -231,11 +233,61 @@ violations = data.shacl.validate("shapes.ttl", lexical=False)   # pure pyshacl r
 # pyshacl on the oxigraph engine's cached store (identical results; opt in
 # when the store is already loaded for SPARQL — Memory is faster otherwise)
 data.shacl.validate("shapes.ttl", engine="pyshacl", store="oxigraph")
+
+# slower optional context pass — adds instance/file, object type/name,
+# shape sh:name/sh:description and schema definition columns
+violations = data.shacl.validate(compiled, rdf_map=..., context=True)
+violations = violations.shacl.enrich(data=data, shapes=compiled, rdf_map=...)  # same, standalone
+
+# SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer
+violations.shacl.to_sarif(path="report.sarif")
 ```
 
 pyshacl pass-through options (`inference`, `advanced`, `abort_on_first`,
 `store`) are forwarded as keyword arguments. A runnable end-to-end demo lives
 in `examples/shacl_validation.py`.
+
+## Context enrichment (`validation/context.py`)
+
+`validate(..., context=True)` — or standalone
+`enrich(violations, data=, shapes=, rdf_map=)` — appends `ENRICHMENT_COLUMNS`
+to the report. Every source is optional; absent sources leave their columns
+null, so the output schema is stable:
+
+| Columns | Source | Content |
+|---------|--------|---------|
+| `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows) |
+| `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` |
+| `SHAPE_NAME`, `SHAPE_DESCRIPTION` | shapes | `sh:name` / `sh:description` (a property shape inherits the parent NodeShape's) |
+| `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition |
+| `CLASS_DESCRIPTION` | rdf_map | the object's class description |
+
+Pass the *same* shapes object the validation ran with — anonymous property
+shapes get fresh blank-node ids per parse, so a re-parsed graph cannot be
+matched. An object present in several instances is attributed to its first
+occurrence.
+
+## SARIF 2.1.0 export (`validation/sarif.py`)
+
+`triplets.validation.export_to_sarif(violations, ...)` /
+`violations.shacl.to_sarif(...)` — a spec-valid SARIF 2.1.0 log for GitHub,
+SonarQube or any SARIF viewer. Passing `data=`/`shapes=`/`rdf_map=` runs the
+enrichment pass first (an already-enriched frame is used as-is).
+
+- **Grouped by default** (`group=True`): a model can carry 100k identical
+  findings that are really *one* issue — each rule becomes one result with
+  `occurrenceCount` and the first-3 + last-3 sample instances (all listed
+  when ≤ 6). `group=False` emits one result per violation row.
+- Severity maps `Violation/Warning/Info` → `error/warning/note`; rules carry
+  the shape's `sh:name`/`sh:description`; `MESSAGE` falls back to a generated
+  text (message is mandatory in SARIF).
+- RDF objects have no text coordinates: results point at the model via
+  `logicalLocations` (`Type/ID` + object name) plus
+  `physicalLocation.artifactLocation.uri` = the source file when the
+  enrichment traced it. Exact line/region locations inside the source XML
+  are a recorded future extension.
+- Everything domain-specific (triplet coordinates, schema descriptions,
+  sample IDs) rides in the `properties` bags.
 
 ## Naming Convention
 

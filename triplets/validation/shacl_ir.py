@@ -135,18 +135,23 @@ def _node_rows(graph, SH, shape, target_class):
 
     rows.extend(_sparql_rows(graph, SH, shape, meta))
     for property_shape in graph.objects(shape, SH.property):
-        rows.extend(_shape_rows(graph, SH, property_shape, target_class))
+        rows.extend(_shape_rows(graph, SH, property_shape, target_class, parent=meta))
     return rows
 
 
-def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset()):
+def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=None):
     """One property shape → IR rows (one per constraint component present).
 
     *visited* tracks named shapes already expanded through sh:node, so shape
-    graphs that reference each other cannot recurse forever.
+    graphs that reference each other cannot recurse forever. *parent* is the
+    owning NodeShape's meta — a property shape without its own sh:name /
+    sh:description inherits them (authors commonly title the node shape).
     """
     path, inverse = _resolve_path(graph, SH, graph.value(shape_uri, SH.path))
     meta = _shape_meta(graph, SH, shape_uri, target_class, path, inverse)
+    if parent is not None:
+        meta["name"] = meta["name"] or parent["name"]
+        meta["description"] = meta["description"] or parent["description"]
     rows = []
 
     for term, component, transform in _components(SH):

@@ -160,7 +160,12 @@ from . import sparql, validation
 
 _QUERY_NAMESPACES = {
     "sparql": ({"query": sparql.query}, "SPARQL queries via the `sparql` namespace."),
-    "shacl": ({"validate": validation.validate}, "SHACL validation via the `shacl` namespace."),
+    # enrich/to_sarif take a *violations* frame (plain pandas) — the namespace
+    # is registered on every DataFrame, so violations.shacl.to_sarif() works
+    "shacl": ({"validate": validation.validate,
+               "enrich": validation.enrich,
+               "to_sarif": validation.export_to_sarif},
+              "SHACL validation via the `shacl` namespace."),
 }
 
 for _name, (_ns_methods, _doc) in _QUERY_NAMESPACES.items():

@@ -1,0 +1,164 @@
+"""Tests for the SARIF 2.1.0 exporter (triplets.validation.sarif)."""
+import io
+import json
+
+from pathlib import Path
+
+import pandas
+import pytest
+
+pytest.importorskip("rdflib")
+
+import triplets
+from triplets.validation.sarif import build_sarif, export_to_sarif
+
+SHAPE = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+
+cim:NameShape a sh:NodeShape ;
+    sh:targetClass cim:ACLineSegment ;
+    sh:name "Line completeness" ;
+    sh:description "Lines carry a name and a length." ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ;
+                  sh:message "every line needs a name" ] ;
+    sh:property [ sh:path cim:Conductor.length ; sh:minCount 1 ; sh:severity sh:Warning ] .
+"""
+
+
+def frame(count=8):
+    """count nameless, lengthless lines + the instance meta rows."""
+    rows = [(f"{i:08d}-2222-3333-4444-555555555555", "Type", "ACLineSegment", "g1")
+            for i in range(count)]
+    rows += [("dddddddd-2222-3333-4444-555555555555", "Type", "Distribution", "g1"),
+             ("dddddddd-2222-3333-4444-555555555555", "label", "Svedala EQ.xml", "g1")]
+    return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+
+@pytest.fixture(scope="module")
+def shapes():
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=SHAPE, format="turtle")
+    return triplets.validation.compile(graph)
+
+
+@pytest.fixture(scope="module")
+def violations(shapes):
+    data = frame()
+    return triplets.validation.validate(data, shapes, engine="pandas",
+                                        context=True)   # 8 name + 8 length violations
+
+
+def test_document_skeleton(violations):
+    document = build_sarif(violations)
+    assert document["version"] == "2.1.0"
+    assert document["$schema"].endswith("sarif-schema-2.1.0.json")
+    run = document["runs"][0]
+    assert run["tool"]["driver"]["name"] == "triplets-shacl"
+    for result in run["results"]:
+        assert run["tool"]["driver"]["rules"][result["ruleIndex"]]["id"] == result["ruleId"]
+
+
+def test_grouped_default(violations):
+    run = build_sarif(violations)["runs"][0]
+    assert len(run["results"]) == 2                      # one per rule, not 16
+    by_level = {result["level"]: result for result in run["results"]}
+    error = by_level["error"]                            # name shape: default severity
+    assert error["occurrenceCount"] == 8
+    assert "8 object(s) affected" in error["message"]["text"]
+    assert "every line needs a name" in error["message"]["text"]
+    assert "…" in error["message"]["text"]               # first 3 … last 3
+    assert len(error["locations"]) == 6
+    assert by_level["warning"]["occurrenceCount"] == 8   # sh:severity sh:Warning
+
+    logical = error["locations"][0]["logicalLocations"][0]
+    assert logical["fullyQualifiedName"].startswith("ACLineSegment/")
+    assert error["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == "Svedala%20EQ.xml"
+    assert error["properties"]["count"] == 8
+    assert len(error["properties"]["sampleIDs"]) == 6
+
+
+def test_small_group_lists_all(shapes):
+    data = frame(count=2)
+    violations = triplets.validation.validate(data, shapes, engine="pandas", context=True)
+    result = build_sarif(violations)["runs"][0]["results"][0]
+    assert result["occurrenceCount"] == 2
+    assert len(result["locations"]) == 2
+    assert "…" not in result["message"]["text"]
+
+
+def test_ungrouped(violations):
+    run = build_sarif(violations, group=False)["runs"][0]
+    assert len(run["results"]) == 16                     # one per violation row
+    result = run["results"][0]
+    assert "occurrenceCount" not in result
+    assert len(result["locations"]) == 1
+    assert result["properties"]["objectType"] == "ACLineSegment"
+    assert "value" not in result["properties"]           # nulls dropped
+
+
+def test_rules_metadata(violations):
+    rules = build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"]
+    assert len(rules) == 2
+    for rule in rules:
+        assert rule["id"].endswith("/sh:minCount")
+        assert rule["shortDescription"]["text"] == "Line completeness"      # inherited sh:name
+        assert rule["fullDescription"]["text"] == "Lines carry a name and a length."
+        assert rule["properties"]["constraint"] == "sh:minCount"
+
+
+def test_unenriched_frame_and_null_id():
+    violations = pandas.DataFrame(
+        [[None, "IdentifiedObject.name", None, "triplets:invalidSparql",
+          "oxigraph rejected the query", "Warning", "urn:shape"]],
+        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
+    result = build_sarif(violations)["runs"][0]["results"][0]
+    assert result["level"] == "warning"
+    assert "locations" not in result                     # no ID → no locations
+    assert result["message"]["text"].startswith("oxigraph rejected")
+
+
+def test_message_fallback_generated():
+    violations = pandas.DataFrame(
+        [["id1", "Conductor.length", "-4", "sh:minInclusive", None, "Violation", None]],
+        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
+    document = build_sarif(violations)
+    result = document["runs"][0]["results"][0]
+    assert "Conductor.length: sh:minInclusive constraint violated" in result["message"]["text"]
+    assert document["runs"][0]["tool"]["driver"]["rules"][0]["id"] == "sh:minInclusive"
+
+
+def test_export_paths_and_memory(violations, tmp_path):
+    target = tmp_path / "out.sarif"
+    export_to_sarif(violations, path=target)
+    on_disk = json.loads(target.read_text(encoding="utf-8"))
+
+    buffer = export_to_sarif(violations, export_to_memory=True)
+    assert isinstance(buffer, io.BytesIO) and buffer.name == "report.sarif"
+    assert json.loads(buffer.read().decode("utf-8")) == on_disk
+
+    as_str = export_to_sarif(violations, path=str(tmp_path / "out2.sarif"))
+    assert Path(as_str).exists()
+
+
+def test_exporter_runs_enrichment(shapes):
+    """Passing the sources to export_to_sarif enriches internally."""
+    data = frame(count=2)
+    violations = triplets.validation.validate(data, shapes, engine="pandas")   # no context
+    document = build_sarif(violations)
+    assert "logicalLocations" in json.dumps(document)    # works without enrichment too
+
+    buffer = export_to_sarif(violations, data=data, shapes=shapes, export_to_memory=True)
+    document = json.loads(buffer.read().decode("utf-8"))
+    rule = document["runs"][0]["tool"]["driver"]["rules"][0]
+    assert rule["shortDescription"]["text"] == "Line completeness"
+    uri = document["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+    assert uri == "Svedala%20EQ.xml"
+
+
+def test_accessor(violations):
+    buffer = violations.shacl.to_sarif(export_to_memory=True)
+    assert json.loads(buffer.read().decode("utf-8"))["version"] == "2.1.0"
+    enriched = violations.shacl.enrich()
+    assert "OBJECT_NAME" in enriched.columns

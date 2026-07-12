@@ -38,6 +38,8 @@ import pandas
 
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
 from .shacl_report import VIOLATION_COLUMNS
+from .context import ENRICHMENT_COLUMNS, enrich  # noqa: F401 — public API
+from .sarif import export_to_sarif  # noqa: F401 — public API
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +98,8 @@ def get_engine(name: str = "auto"):
     return resolved, _load_engine(resolved)
 
 
-def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True, **kwargs):
+def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True,
+             context=False, **kwargs):
     """Validate triplet data against SHACL shapes; return a violations DataFrame.
 
     Parameters
@@ -117,6 +120,10 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     lexical : bool, default True
         Append the lexical-form datatype findings (the deliberate deviation
         from pyshacl — see shacl_pandas) to the engine's report.
+    context : bool, default False
+        Run the slower enrichment pass (triplets.validation.context.enrich):
+        adds instance/file, object type/name, shape name/description and
+        schema definition columns to the report.
     """
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
     engine_name, engine_mod = get_engine(engine)
@@ -127,4 +134,7 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         supplement = shacl_pandas.validate(data, compiled, scope=scope, components=("sh:datatype",))
         violations = (pandas.concat([violations, supplement], ignore_index=True)
                       .drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE"], ignore_index=True))
+    if context:
+        from .context import enrich
+        violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
     return violations
