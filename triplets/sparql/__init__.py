@@ -1,13 +1,15 @@
 """SPARQL querying over triplet data.
 
 Engines (registry dispatch, mirroring triplets.parser):
-- qlever  — performance (embedded C++ via the official libqlever facade; needs
+- qlever   — performance (embedded C++ via the official libqlever facade; needs
   the compiled extension, see setup_qlever.py; takes auto priority when built)
-- rdflib  — reference, built-in SPARQL 1.1, always available with the `sparql` extra
+- oxigraph — portable performance (embedded Rust via the pyoxigraph wheel,
+  `oxigraph` extra; auto priority when qlever is not built)
+- rdflib   — reference, built-in SPARQL 1.1, always available with the `sparql` extra
 
-Data is loaded via the N-Quads export into an rdflib Dataset (INSTANCE_ID as
-named graph). No oxigraph engine: our native tooling is C/C++/Cython and qlever
-is the chosen performance path.
+Data reaches every engine through the N-Quads export conventions
+(INSTANCE_ID as named graph): rdflib and oxigraph load the export directly,
+qlever ingests the same term mapping as Arrow batches.
 """
 from __future__ import annotations
 
@@ -19,15 +21,18 @@ logger = logging.getLogger(__name__)
 
 # Engine name → module (lazy import). Auto preference: first importable —
 # qlever (embedded C++, needs the compiled extension: setup_qlever.py) wins
-# over rdflib (reference, always available with the sparql extra).
+# over oxigraph (embedded Rust, needs the pyoxigraph wheel), which wins over
+# rdflib (reference, always available with the sparql extra).
 _ENGINE_MODULES = {
     "qlever": ".sparql_qlever",
+    "oxigraph": ".sparql_oxigraph",
     "rdflib": ".sparql_rdflib",
 }
 _ENGINE_ALIASES = {
     "reference": "rdflib",
     "performance": "qlever",
 }
+_ENGINE_EXTRAS = {"oxigraph": "oxigraph"}  # pip extra per engine (default: sparql)
 _ENGINES: dict[str, Any] = {}  # loaded-module cache
 
 
@@ -45,8 +50,9 @@ def _load_engine(name: str):
     try:
         _ENGINES[name] = import_module(module_name, __package__)
     except ImportError as e:
+        extra = _ENGINE_EXTRAS.get(name, "sparql")
         raise ImportError(f"{name} sparql engine not available. "
-                          "Install with: pip install triplets[sparql]. "
+                          f"Install with: pip install triplets[{extra}]. "
                           f"Original error: {e}") from e
     return _ENGINES[name]
 
@@ -80,13 +86,14 @@ def query(data, query_string, rdf_map=None, scope=None, engine="auto", return_ty
         Restrict the queried data to these instances' named graphs; all data
         stays loaded for reference resolution. None = full union.
     engine : str, default "auto"
-        "qlever" (performance, embedded C++) or "rdflib" (reference).
-        "auto" picks qlever when its extension is built, else rdflib.
+        "qlever" (performance, embedded C++), "oxigraph" (portable
+        performance, embedded Rust) or "rdflib" (reference). "auto" picks
+        the first available in that order.
     return_type : str, default "auto"
         Output flavor for data results: "auto" matches the input (polars in →
         polars out; pandas/duckdb → pandas), or explicit "pandas" / "polars" /
-        "arrow". Honored by the qlever engine (arrow-native results); the
-        rdflib reference engine always returns pandas.
+        "arrow". Honored by the qlever and oxigraph engines; the rdflib
+        reference engine always returns pandas.
     data_unchanged : bool, default False
         Assert that `data` has not been mutated since it was last hashed:
         the engine reuses the stored content digest for this exact object

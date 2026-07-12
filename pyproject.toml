@@ -56,6 +56,12 @@ networkx = [
 sparql = [
     "rdflib>=7.6.0",
 ]
+# portable performance SPARQL engine (embedded Rust) + the oxrdflib bridge
+# that lets the pyshacl engine run on an oxigraph-backed rdflib store
+oxigraph = [
+    "pyoxigraph>=0.5",
+    "oxrdflib>=0.5",
+]
 validation = [
     "pyshacl>=0.30",
     "rdflib>=7.6.0",
@@ -69,6 +75,8 @@ dev = [
     "openpyxl>=3.1.5",
     "rdflib>=7.6.0",
     "pyshacl>=0.30",
+    "pyoxigraph>=0.5",
+    "oxrdflib>=0.5",
 ]
 # vis-network JS is vendored in triplets/cgmes_tools/static — graph drawing needs no extra deps
 visualization = [

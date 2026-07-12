@@ -2,8 +2,8 @@
 
 Benchmarks rdflib with every usable store backend registered in this
 environment (code unchanged — the store name is the only difference), plus
-the triplets qlever engine, over four representative queries. This is the
-measurement behind the "no oxigraph engine" decision in docs/sparql.md.
+the triplets qlever and oxigraph engines, over four representative queries.
+These are the measurements behind the engine table in docs/sparql.md.
 
 Run:  uv run python examples/sparql_backend_benchmark.py
 """
@@ -53,16 +53,21 @@ def bench_rdflib_store(store_name, nquads):
     print(f"rdflib {store_name:12s} | " + " | ".join(cells))
 
 
-def bench_qlever(data):
+def bench_engine(data, engine):
     from triplets import sparql
+    try:
+        sparql.get_engine(engine)
+    except ImportError:
+        print(f"{engine} engine not available — skipped")
+        return
     start = time.perf_counter()
-    sparql.query(data, QUERIES["ask"], engine="qlever")
-    print(f"qlever first call (index build or cached load): {(time.perf_counter() - start) * 1000:.0f} ms")
+    sparql.query(data, QUERIES["ask"], engine=engine)
+    print(f"{engine} first call (state build or cached load): {(time.perf_counter() - start) * 1000:.0f} ms")
     cells = []
     for name, query in QUERIES.items():
-        ms = best_of(lambda q=query: sparql.query(data, q, engine="qlever", data_unchanged=True))
+        ms = best_of(lambda q=query: sparql.query(data, q, engine=engine, data_unchanged=True))
         cells.append(f"{name} {ms:7.1f} ms")
-    print("qlever (data_unchanged) | " + " | ".join(cells))
+    print(f"{engine} (data_unchanged) | " + " | ".join(cells))
 
 
 def main():
@@ -79,11 +84,8 @@ def main():
         else:
             print(f"rdflib {store_name:12s} | not installed")
 
-    try:
-        import triplets.sparql._qlever  # noqa: F401
-        bench_qlever(data)
-    except ImportError:
-        print("qlever extension not built — skipped")
+    bench_engine(data, "oxigraph")
+    bench_engine(data, "qlever")
 
 
 if __name__ == "__main__":
