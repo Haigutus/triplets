@@ -62,8 +62,7 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
         if export_to_memory:
             return output
         else:
-            if path is None:
-                path = os.getcwd()
+            path = os.getcwd() if path is None else os.fspath(path)
             if os.path.isdir(path) or not path.endswith('.xlsx'):
                 export_path = os.path.join(path, filename)
             else:
@@ -99,8 +98,7 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
         if export_to_memory:
             return exported_files
         else:
-            if path is None:
-                path = os.getcwd()
+            path = os.getcwd() if path is None else os.fspath(path)
             exported_file_names = []
             for file_object in exported_files:
                 export_path = os.path.join(path, file_object.name)

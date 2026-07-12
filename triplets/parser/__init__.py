@@ -16,6 +16,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import logging
 from importlib import import_module
 from concurrent.futures import ThreadPoolExecutor
@@ -117,7 +118,8 @@ def parse(
         raise RuntimeError(f"Engine {engine_name} missing load_rdf_to_dataframe entrypoint")
 
     # Normalize input to list for find_all_xml
-    if isinstance(list_of_paths_to_zip_globalzip_xml, (str, bytes)) or hasattr(list_of_paths_to_zip_globalzip_xml, "read"):
+    if (isinstance(list_of_paths_to_zip_globalzip_xml, (str, bytes, os.PathLike))
+            or hasattr(list_of_paths_to_zip_globalzip_xml, "read")):
         items = [list_of_paths_to_zip_globalzip_xml]
     else:
         items = list(list_of_paths_to_zip_globalzip_xml) if list_of_paths_to_zip_globalzip_xml else []

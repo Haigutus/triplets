@@ -102,8 +102,9 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
 
     Parameters
     ----------
-    path : str, optional
-        Output file path (.nq). Ignored when export_to_memory=True.
+    path : str or Path, optional
+        Output file path (.nq); defaults to "export.nq" in the current
+        directory. Ignored when export_to_memory=True.
     rdf_map : dict or str, optional
         Export schema for proper enum detection and literal datatype
         annotations. If None, enums exported as literals.
@@ -116,6 +117,8 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
         writing to disk — same convention as export_to_csv / export_to_cimxml.
     """
     _check_columns(data)
+    if not export_to_memory:
+        path = "export.nq" if path is None else os.fspath(path)
     if engine == "auto":
         try:
             import polars  # noqa: F401

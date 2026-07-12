@@ -248,6 +248,10 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False):
     # the first time.
     import uuid as uuid_mod
 
+    if hasattr(path_or_fileobject, "__fspath__"):
+        import os
+        path_or_fileobject = os.fspath(path_or_fileobject)  # pathlib.Path → mmap fast path
+
     cdef str file_name
     if isinstance(path_or_fileobject, str):
         file_name = path_or_fileobject
