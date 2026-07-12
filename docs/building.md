@@ -102,6 +102,38 @@ The GitHub Actions workflow (`.github/workflows/build-wheels.yml`) builds wheels
 
 CPython 3.11, 3.12, 3.13. Arrow shared libraries are NOT bundled — they're provided by pyarrow at runtime.
 
+## qlever SPARQL engine (optional, source-only)
+
+The embedded qlever engine (`triplets.sparql._qlever`) ships in **no wheel** —
+it is a local source build only (decision record in TODO.md: a bundled wheel
+would be ~10x the download; the pip-installable performance path is the
+`oxigraph` extra). There is no CI for it either — verification is the local
+test task below, run before/after any qlever bump.
+
+**How the source is pinned.** `vendor/qlever` is a git submodule pointing at
+the fork `https://github.com/Haigutus/qlever.git`, branch
+`libqlever-parser-injection` (upstream master + the libqlever patch adding
+programmatic index building via an injected RDF parser and SPARQL-protocol
+dataset clauses — shaped as upstream PR ad-freiburg/qlever#3074). The exact
+commit is the superproject's recorded gitlink; `.gitmodules` carries the
+fork URL and branch. Re-pin to `ad-freiburg/qlever` once the upstream PR
+merges.
+
+**Reproduce the build** (the pixi `qlever` environment pins the whole C++
+toolchain — compilers, cmake, boost, icu, openssl, zstd — via pixi.lock):
+
+```bash
+git submodule update --init vendor/qlever      # checkout the pinned fork commit
+pixi run -e qlever build-qlever-lib            # one-time qlever static-lib compile (long)
+pixi run -e qlever build-qlever                # build triplets.sparql._qlever
+pixi run -e qlever test-qlever                 # parity tests vs the rdflib engine
+```
+
+An external checkout can override the source location: resolution order is
+`$QLEVER_SRC_DIR` → `vendor/qlever` → `../qlever` (see `setup_qlever_lib.py`).
+Without the extension nothing changes — the SPARQL engine registry falls back
+to oxigraph, then rdflib (see docs/sparql.md).
+
 ## Troubleshooting
 
 ### `unsupported platform tag 'linux_aarch64'`

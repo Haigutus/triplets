@@ -85,7 +85,9 @@ pixi run -e qlever build-qlever       # build triplets.sparql._qlever
 ```
 
 Without the extension nothing changes — auto falls back to oxigraph when
-installed, else rdflib.
+installed, else rdflib. qlever ships in no wheel (source build only, local);
+how the fork/branch is pinned and reproduced is documented in
+[building.md](building.md).
 
 **Engine state lifecycle.** Flavor-blind by construction — the input (pandas /
 polars DataFrame or DuckDB connection) carries every needed capability as a
