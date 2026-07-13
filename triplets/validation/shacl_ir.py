@@ -109,6 +109,20 @@ def parse_ir(graph) -> pandas.DataFrame:
         for target in graph.objects(shape, SH.targetClass):
             rows.extend(_node_rows(graph, SH, shape, _local(target)))
 
+    # Only sh:targetClass is walked into the IR — shapes reached exclusively
+    # through other target declarations (or sh:xone) are INVISIBLE to the
+    # vectorized engines and would silently under-validate. Warn loudly;
+    # the pyshacl reference engine covers them (engine="pyshacl").
+    invisible = {term: count for term in
+                 (SH.targetNode, SH.targetSubjectsOf, SH.targetObjectsOf, SH.target, SH.xone)
+                 if (count := sum(1 for _ in graph.subject_objects(term)))}
+    if invisible:
+        logger.warning(
+            "shapes use SHACL features the vectorized engines do not implement — "
+            "affected shapes are skipped by the polars/pandas/duckdb engines; "
+            "use engine=\"pyshacl\" for full coverage: %s",
+            ", ".join(f"sh:{_local(term)} (x{count})" for term, count in invisible.items()))
+
     ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
     unknown = ir.loc[~ir["component"].isin(KNOWN_COMPONENTS), "component"].unique()
     if len(unknown):

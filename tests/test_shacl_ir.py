@@ -150,3 +150,23 @@ def test_ir_real_cgmes_eq_shapes():
     assert {"sh:minCount", "sh:datatype", "sh:nodeKind", "sh:sparql", "sh:minExclusive"} <= set(ir["component"])
     unknown = set(ir["component"]) - KNOWN_COMPONENTS
     assert not unknown, f"unexpected components in real shapes: {unknown}"
+
+
+def test_invisible_targets_warn_at_compile(caplog, tmp_path):
+    """Shapes reached only through targets the IR does not walk must warn —
+    the vectorized engines would otherwise silently under-validate."""
+    import logging
+    path = tmp_path / "invisible.ttl"
+    path.write_text("""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+
+cim:PickedNodeShape a sh:NodeShape ;
+    sh:targetNode <urn:uuid:11111111-2222-3333-4444-555555555555> ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+""")
+    with caplog.at_level(logging.WARNING, logger="triplets.validation.shacl_ir"):
+        compiled = compile_shapes(str(path))
+    assert len(compiled.ir) == 0                           # invisible to the IR
+    assert any("sh:targetNode" in record.getMessage()
+               for record in caplog.records if record.levelname == "WARNING")

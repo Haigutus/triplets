@@ -28,7 +28,7 @@ Install extras by feature:
 | `polars` | polars DataFrames (`polars.read_rdf`, `.triplets` namespace) |
 | `duckdb` | DuckDB connections (`con.read_rdf`, SQL over triplets) |
 | `sparql` | SPARQL queries (rdflib reference engine) |
-| `oxigraph` | fast embedded Rust SPARQL engine (auto-preferred over rdflib) |
+| `oxigraph` | **recommended pip performance path** — embedded Rust SPARQL engine (auto-preferred over rdflib) |
 | `validation` | SHACL validation (pyshacl reference engine) |
 | `excel` / `networkx` / `visualization` | Excel export / graph export / drawing |
 

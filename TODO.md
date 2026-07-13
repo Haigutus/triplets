@@ -9,11 +9,13 @@ Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, spee
 - [ ] **Advanced SHACL targets are invisible to the vectorized engines.** 30 NodeShapes
   across the CGMES SHACL library use `sh:target` (SPARQLTarget), `sh:targetNode` or
   `sh:targetSubjectsOf` instead of `sh:targetClass`; `shacl_ir.parse_ir` walks only
-  `targetClass` shapes and does not log the skip. Minimum: warn at compile time.
-  Real fix: `targetSubjectsOf` is trivial over triplets (focus = subjects carrying the
-  KEY); SPARQLTarget can ride on `triplets.sparql` now that qlever makes it cheap.
-- [ ] `sh:xone` (2 uses in the library) — not in the IR component table (kept + logged;
-  pyshacl-only).
+  `targetClass` shapes. *Compile-time warning shipped 2026-07-13* (names the features
+  and counts, points at engine="pyshacl"; called out in docs/validation.md status
+  section). Real fix still open: `targetSubjectsOf` is trivial over triplets (focus =
+  subjects carrying the KEY); SPARQLTarget can ride on `triplets.sparql` now that
+  qlever/oxigraph make it cheap.
+- [ ] `sh:xone` (2 uses in the library) — not in the IR component table (covered by
+  the same compile warning; pyshacl-only).
 - [x] qlever SELECT typing: all values are lexical strings **by design** (arrow decode,
   all-string triplets convention; consumers cast) — rdflib reference stays python-typed.
 - [x] per-query engine-state keying costs a content_hash of the input (~260 ms per

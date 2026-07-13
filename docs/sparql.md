@@ -1,5 +1,22 @@
 # SPARQL Architecture
 
+## Status & known limitations (alpha)
+
+The module is new — APIs may still shift. Know these before relying on it:
+
+- **qlever is a local source build** (no wheel, no CI — see
+  [building.md](building.md)); the pip performance path is
+  `pip install triplets[oxigraph]`.
+- **Result typing differs by engine**: qlever/oxigraph return all values as
+  lexical strings (consumers cast); the rdflib reference returns
+  python-typed literals when `rdf_map` is given, and always returns pandas.
+- **oxigraph caveats** (details under "Caveats and dead ends" below):
+  a multi-instance `scope` yields one solution per instance for shared
+  triples (`DISTINCT` dedupes); the CSV SELECT decode nulls empty-string
+  literals; its parser accepts some queries qlever rejects (bare `HAVING`).
+- Engine state caches (indexes, stores, datasets) are unbounded by design —
+  long-lived processes over many distinct datasets grow memory/disk.
+
 ## Engines
 
 Registry dispatch (mirroring the parser), auto = first importable:

@@ -1,5 +1,22 @@
 # SHACL Validation Architecture
 
+## Status & known limitations (alpha)
+
+The module is new — APIs may still shift. Know these before relying on it:
+
+- **Vectorized engines walk `sh:targetClass` only.** Shapes reached solely
+  through `sh:targetNode` / `sh:targetSubjectsOf` / `sh:targetObjectsOf` /
+  `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —
+  `compile()` logs a warning naming them; use `engine="pyshacl"` for full
+  spec coverage.
+- **Deliberate deviation from pyshacl**: datatype checks judge the raw
+  *lexical form* of values (`lexical=True`, the default) — see the dedicated
+  section below. `engine="reference"` always gives the pure pyshacl view.
+- `sh:nodeKind` BlankNode(+combo) cases are intentionally not implemented in
+  the vectorized engines (triplets data has no blank nodes).
+- The duckdb engine streams/spills by design, but a true larger-than-RAM
+  validation has not been exercised yet.
+
 ## Engines
 
 Registry dispatch (mirroring the parser), so compiled engines plug in without
