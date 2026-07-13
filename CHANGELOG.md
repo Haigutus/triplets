@@ -48,6 +48,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `export.nq` in the working directory.
 
 ### Changed
+- **Python 3.14 supported**: wheels build for cp314, CI tests it (full suite
+  verified incl. the compiled Arrow parser).
 - Performance benchmarks are deselected by default (`pytest -m performance`
   runs them); the plain suite runs in minutes.
 

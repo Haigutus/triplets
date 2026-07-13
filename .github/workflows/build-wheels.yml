@@ -86,7 +86,7 @@ jobs:
       - name: Build wheels
         run: cibuildwheel --output-dir dist
         env:
-          CIBW_BUILD: "cp311-* cp312-* cp313-*"  # matches pyproject requires-python >=3.11; keep in sync with docs/testing.md
+          CIBW_BUILD: "cp311-* cp312-* cp313-* cp314-*"  # matches pyproject requires-python >=3.11; keep in sync with docs/testing.md
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_SKIP: "*-musllinux_*"
           # auditwheel applies manylinux tags (required by PyPI for Linux).

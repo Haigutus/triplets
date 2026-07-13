@@ -100,7 +100,7 @@ The GitHub Actions workflow (`.github/workflows/build-wheels.yml`) builds wheels
 | macOS arm64 | macos-14 | skipped | macosx_* tags accepted by PyPI |
 | Windows AMD64 | windows-latest | delvewheel | `--no-dll arrow*.dll` |
 
-CPython 3.11, 3.12, 3.13. Arrow shared libraries are NOT bundled — they're provided by pyarrow at runtime.
+CPython 3.11–3.14. Arrow shared libraries are NOT bundled — they're provided by pyarrow at runtime.
 
 ## qlever SPARQL engine (optional, source-only)
 

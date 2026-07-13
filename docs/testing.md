@@ -191,4 +191,4 @@ Wheels are built for:
 | macOS | x86_64 (Intel), arm64 (Apple Silicon) |
 | Windows | AMD64 |
 
-CPython 3.11, 3.12, 3.13 (requires-python >=3.11). Each wheel includes the compiled `cython_pugixml_arrow` extension (usable when pyarrow also installed).
+CPython 3.11–3.14 (requires-python >=3.11). Each wheel includes the compiled `cython_pugixml_arrow` extension (usable when pyarrow also installed).
