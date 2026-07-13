@@ -92,8 +92,8 @@ def query(data, query_string, rdf_map=None, scope=None, engine="auto", return_ty
     return_type : str, default "auto"
         Output flavor for data results: "auto" matches the input (polars in →
         polars out; pandas/duckdb → pandas), or explicit "pandas" / "polars" /
-        "arrow". Honored by the qlever and oxigraph engines; the rdflib
-        reference engine always returns pandas.
+        "arrow". All SELECT values are lexical strings in every engine
+        (triplets are all-string; consumers cast).
     data_unchanged : bool, default False
         Assert that `data` has not been mutated since it was last hashed:
         the engine reuses the stored content digest for this exact object

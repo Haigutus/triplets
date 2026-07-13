@@ -391,6 +391,9 @@ def _sparql_violations(rule, result):
     """Each SELECT result row is one violation: $this = focus node, ?value = value."""
     if result is None or len(result) == 0 or "this" not in result.columns:
         return _empty()
+    result = result[result["this"].notna()]   # a row without a focus node is no violation
+    if len(result) == 0:                      # (rdflib serializes a spurious empty binding
+        return _empty()                       #  for some aggregate queries)
     focus = result["this"].astype(str).str.removeprefix("urn:uuid:")
     values = (result["value"].astype(str).str.removeprefix("urn:uuid:").str.removeprefix(CIM_NS)
               if "value" in result.columns else None)

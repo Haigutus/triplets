@@ -48,15 +48,18 @@ def test_construct_returns_triplets(svedala):
     assert (result["KEY"] == "Type").all()
 
 
-def test_typed_values_with_rdf_map(svedala):
-    """rdflib reference: with rdf_map, numeric literals come back as python
-    floats (xsd datatype survives). qlever intentionally differs — all values
-    are lexical strings (see test_sparql_qlever)."""
+def test_values_are_lexical_strings(svedala):
+    """The shared engine contract: all SELECT values are lexical strings
+    (triplets are all-string; consumers cast) — swapping engines never
+    changes result dtypes. rdf_map still types the *loaded graph* (drives
+    comparisons inside the query), not the returned representation."""
     from triplets.export_schema import schemas
     result = svedala.sparql.query(
         PREFIXES + "SELECT ?l WHERE { ?s cim:Conductor.length ?l } LIMIT 1",
         rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine="rdflib")
-    assert isinstance(result["l"].iloc[0], float)
+    value = result["l"].iloc[0]
+    assert isinstance(value, str)
+    assert float(value) > 0
 
 
 def test_scope_restricts_to_named_graph(svedala):
@@ -89,17 +92,13 @@ def test_dataset_shared_across_row_order_and_scope(svedala):
 
 
 def test_polars_input_parity(svedala):
-    """return_type="auto": polars in → polars out, same values as pandas."""
+    """return_type="auto": polars in → polars out (every engine), same values."""
     polars = pytest.importorskip("polars")
     q = PREFIXES + "SELECT (COUNT(?s) AS ?n) WHERE { ?s rdf:type cim:ACLineSegment }"
     pandas_result = triplets.sparql.query(svedala, q)
     polars_result = triplets.sparql.query(polars.from_pandas(svedala), q)
-    pandas_n = int(pandas_result["n"].iloc[0])
-    if isinstance(polars_result, polars.DataFrame):   # qlever honors auto; rdflib is pandas-only
-        polars_n = int(polars_result["n"][0])
-    else:
-        polars_n = int(polars_result["n"].iloc[0])
-    assert pandas_n == polars_n
+    assert isinstance(polars_result, polars.DataFrame)
+    assert int(pandas_result["n"].iloc[0]) == int(polars_result["n"][0])
 
 
 def test_duckdb_input(svedala):

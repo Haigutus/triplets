@@ -7,9 +7,10 @@ The module is new — APIs may still shift. Know these before relying on it:
 - **qlever is a local source build** (no wheel, no CI — see
   [building.md](building.md)); the pip performance path is
   `pip install triplets[oxigraph]`.
-- **Result typing differs by engine**: qlever/oxigraph return all values as
-  lexical strings (consumers cast); the rdflib reference returns
-  python-typed literals when `rdf_map` is given, and always returns pandas.
+- **All SELECT values are lexical strings in every engine** (triplets are
+  all-string; consumers cast) — swapping engines never changes result
+  dtypes. `rdf_map` still types the *loaded graph* (drives comparisons and
+  ORDER BY inside the query), not the returned representation.
 - **oxigraph caveats** (details under "Caveats and dead ends" below):
   a multi-instance `scope` yields one solution per instance for shared
   triples (`DISTINCT` dedupes); the CSV SELECT decode nulls empty-string
@@ -205,15 +206,14 @@ The result is shaped by the SPARQL query form:
 
 | Query form | Returns | Structure |
 |------------|---------|-----------|
-| `SELECT` | DataFrame (see `return_type`) | one column per projected variable (`?name` -> column `name`); IRIs as full strings. qlever/oxigraph: **all values are lexical strings** (triplets are all-string; consumers cast), unbound → null (oxigraph's CSV decode also nulls empty-string literals — the W3C CSV-results tradeoff). rdflib reference: literals python-typed via `rdf_map` |
+| `SELECT` | DataFrame (see `return_type`) | one column per projected variable (`?name` -> column `name`); IRIs as full strings. **All values are lexical strings in every engine** (triplets are all-string; consumers cast), unbound → null (the rdflib/oxigraph CSV decodes also null empty-string literals — the W3C CSV-results tradeoff; qlever distinguishes) |
 | `ASK` | `bool` | `True` / `False` |
 | `CONSTRUCT` / `DESCRIBE` | triplet DataFrame | `[ID, KEY, VALUE, INSTANCE_ID]`; `urn:uuid:` stripped from `ID`, CIM namespace shortened on `KEY`, `rdf:type` -> `Type`, `INSTANCE_ID` is `None` (constructed graph has no source instance) |
 
 `SELECT` keeps full IRIs (raw bindings); `CONSTRUCT`/`DESCRIBE` apply the triplets
 naming conventions so the output drops straight back into the pipeline.
 
-**Output flavor** (`return_type`, qlever and oxigraph engines; rdflib always
-returns pandas):
+**Output flavor** (`return_type`, honored by every engine):
 
 | `return_type` | Result |
 |---------------|--------|
@@ -261,7 +261,8 @@ has_substation = data.sparql.query(PREFIXES + "ASK { ?s rdf:type cim:Substation 
 constructed = data.sparql.query(
     PREFIXES + "CONSTRUCT { ?s rdf:type cim:ACLineSegment } WHERE { ?s rdf:type cim:ACLineSegment }")
 
-# rdf_map types the literals — numeric values come back as python floats
+# rdf_map types the literals in the loaded graph (numeric comparisons and
+# ORDER BY inside the query work) — returned values stay lexical strings
 typed = data.sparql.query(
     PREFIXES + "SELECT ?l WHERE { ?s cim:Conductor.length ?l }",
     rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)

@@ -18,8 +18,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   CONSTRUCT over triplet data with three engines — `qlever` (embedded C++,
   local source build), `oxigraph` (embedded Rust, `pip install
   triplets[oxigraph]` — the portable performance path, ~3x faster import and
-  2–5x faster warm queries than rdflib) and `rdflib` (reference). Engine
-  state is content-hash cached; `scope=` restricts to instances'
+  2–5x faster warm queries than rdflib) and `rdflib` (reference). One result
+  contract across engines: all SELECT values are lexical strings (consumers
+  cast) and `return_type` is honored everywhere. Engine state is
+  content-hash cached; `scope=` restricts to instances'
   named graphs; `data_unchanged=True` skips re-hashing in hot loops.
   sh:sparql constraints in the SHACL engines ride the same auto engine
   (38.5 s → 74 ms on a constraint-heavy shape). See docs/sparql.md.
