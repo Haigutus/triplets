@@ -142,7 +142,9 @@ def test_equals_and_disjoint(engine):
     rows = breaker("b1", ("IdentifiedObject.name", "A"), ("IdentifiedObject.aliasName", "A")) \
         + breaker("b2", ("IdentifiedObject.name", "A"), ("IdentifiedObject.aliasName", "B"))
     equals = run(rows, SHAPE.format(body="sh:path cim:IdentifiedObject.name ; sh:equals cim:IdentifiedObject.aliasName"), engine)
-    assert violating(equals, "sh:equals") == {("b2", "A")}
+    # set equality reports both directions (matches pyshacl): A missing from
+    # aliasName's values AND B missing from name's values
+    assert violating(equals, "sh:equals") == {("b2", "A"), ("b2", "B")}
     disjoint = run(rows, SHAPE.format(body="sh:path cim:IdentifiedObject.name ; sh:disjoint cim:IdentifiedObject.aliasName"), engine)
     assert violating(disjoint, "sh:disjoint") == {("b1", "A")}
 

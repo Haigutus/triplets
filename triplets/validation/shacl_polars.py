@@ -231,10 +231,12 @@ def _pair(context, rule, other_path):
 
 
 def _equals(context, rule):
+    """sh:equals is set equality per focus node: a value present at only one
+    of the two properties is a violation; matching multi-valued sets conform."""
     left, right = _pair(context, rule, rule.params)
-    plan = (left.join(right, on="FOCUS", how="full", coalesce=True)
-            .filter((polars.col("PATH_VALUE") != polars.col("OTHER"))
-                    | polars.col("PATH_VALUE").is_null() | polars.col("OTHER").is_null()))
+    right = right.rename({"OTHER": "PATH_VALUE"})
+    plan = polars.concat([left.join(right, on=["FOCUS", "PATH_VALUE"], how="anti"),
+                          right.join(left, on=["FOCUS", "PATH_VALUE"], how="anti")])
     return _emit(plan, rule, f"{rule.path} does not equal {rule.params}")
 
 

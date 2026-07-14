@@ -329,10 +329,12 @@ def _node_kind(context, rule):
 # ── property pair constraints ────────────────────────────────────────────────
 
 def _equals(context, rule):
+    """sh:equals is set equality per focus node: a value present at only one
+    of the two properties is a violation; matching multi-valued sets conform."""
     left, right = context.pair_rows(rule, rule.params)
-    merged = left.merge(right, on="FOCUS", how="outer")
-    bad = merged[(merged["PATH_VALUE"] != merged["OTHER_VALUE"])
-                 | merged["PATH_VALUE"].isna() | merged["OTHER_VALUE"].isna()]
+    merged = left.merge(right.rename(columns={"OTHER_VALUE": "PATH_VALUE"}),
+                        on=["FOCUS", "PATH_VALUE"], how="outer", indicator=True)
+    bad = merged[merged["_merge"] != "both"]
     return _frame(rule, bad["FOCUS"], bad["PATH_VALUE"],
                   f"{rule.path} does not equal {rule.params}")
 

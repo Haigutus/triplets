@@ -161,7 +161,14 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
     owning NodeShape's meta — a property shape without its own sh:name /
     sh:description inherits them (authors commonly title the node shape).
     """
-    path, inverse = _resolve_path(graph, SH, graph.value(shape_uri, SH.path))
+    path_node = graph.value(shape_uri, SH.path)
+    path, inverse = _resolve_path(graph, SH, path_node)
+    if path_node is not None and path is None:
+        logger.warning(
+            "sh:path at %s is a property path the vectorized engines cannot express "
+            "as one KEY — property shape skipped; use engine=\"pyshacl\" for coverage",
+            shape_uri)
+        return []
     meta = _shape_meta(graph, SH, shape_uri, target_class, path, inverse)
     if parent is not None:
         meta["name"] = meta["name"] or parent["name"]
@@ -269,7 +276,10 @@ def _shape_meta(graph, SH, shape_uri, target_class, path, inverse):
 
 
 def _resolve_path(graph, SH, path_node):
-    """Resolve sh:path → (KEY name, inverse); handles sh:inversePath / sh:alternativePath."""
+    """Resolve sh:path → (KEY name, inverse); handles sh:inversePath and
+    sh:alternativePath with a nested inverse. Any other blank-node path
+    (sequence, zeroOrMorePath, ...) spans more than one KEY and cannot be
+    expressed as an IR row → (None, False); callers skip the shape."""
     import rdflib
 
     if path_node is None:
@@ -285,7 +295,7 @@ def _resolve_path(graph, SH, path_node):
             nested_inverse = graph.value(item, SH.inversePath)
             if nested_inverse is not None:
                 return _local(nested_inverse), True
-    return _local(path_node), False
+    return None, False
 
 
 # SHACL term → (component short name, params transform). Short names match the

@@ -184,12 +184,16 @@ def _pair_sql(rule, table, other_path):
 
 
 def _equals(rule, table, context):
+    """sh:equals is set equality per focus node: a value present at only one
+    of the two properties is a violation; matching multi-valued sets conform."""
     left, left_params, right, right_params = _pair_sql(rule, table, rule.params)
-    from_sql = (f"SELECT COALESCE(a.FOCUS, b.FOCUS) AS FOCUS, a.PV AS PV "
-                f"FROM ({left}) a FULL JOIN ({right}) b ON a.FOCUS = b.FOCUS "
-                f"WHERE a.PV IS DISTINCT FROM b.OTHER")
+    from_sql = (f"SELECT a.FOCUS AS FOCUS, a.PV AS PV FROM ({left}) a "
+                f"ANTI JOIN ({right}) b ON a.FOCUS = b.FOCUS AND a.PV = b.OTHER "
+                f"UNION ALL "
+                f"SELECT b.FOCUS AS FOCUS, b.OTHER AS PV FROM ({right}) b "
+                f"ANTI JOIN ({left}) a ON a.FOCUS = b.FOCUS AND a.PV = b.OTHER")
     return _wrap(rule, f"{rule.path} does not equal {rule.params}",
-                 from_sql, [*left_params, *right_params], "TRUE", [])
+                 from_sql, [*left_params, *right_params, *right_params, *left_params], "TRUE", [])
 
 
 def _disjoint(rule, table, context):

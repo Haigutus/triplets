@@ -133,7 +133,8 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         from . import shacl_pandas
         supplement = shacl_pandas.validate(data, compiled, scope=scope, components=("sh:datatype",))
         violations = (pandas.concat([violations, supplement], ignore_index=True)
-                      .drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE"], ignore_index=True))
+                      .drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
+                                               "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
     if context:
         from .context import enrich
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
