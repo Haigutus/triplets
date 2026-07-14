@@ -859,9 +859,8 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     data : pandas.DataFrame
         Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
     ID, KEY, VALUE, INSTANCE_ID : str or list of str, optional
-        Filter value. A list keeps rows matching any of its values
-        (semi-join — scales to large value sets). If regex=True, treated as
-        regex pattern (scalar only).
+        Filter value. A list keeps rows matching any of its values. With
+        regex=True the value(s) are regex patterns (re.search).
     regex : bool, default False
         If True, use regex matching (re.search). If False, exact match.
 
@@ -879,13 +878,18 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
         if val is None:
             continue
+        column = data[col].astype(str)
         if isinstance(val, (list, tuple, set, pandas.Series)):
-            values = pandas.DataFrame({col: pandas.unique(pandas.Series(list(val), dtype=str))})
-            data = data.merge(values, on=col, how="inner")   # semi-join, keeps data order
+            values = [str(v) for v in val]
+            if regex and values:
+                pattern = "|".join(f"(?:{v})" for v in values)
+                data = data[column.str.contains(pattern, regex=True, na=False)]
+            else:
+                data = data[column.isin(values)]
         elif regex:
-            data = data[data[col].astype(str).str.contains(val, regex=True, na=False)]
+            data = data[column.str.contains(val, regex=True, na=False)]
         else:
-            data = data[data[col].astype(str) == val]
+            data = data[column == val]
     return data
 
 

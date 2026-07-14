@@ -237,9 +237,8 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     data : polars.DataFrame
         Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
     ID, KEY, VALUE, INSTANCE_ID : str or list of str, optional
-        Filter value. A list keeps rows matching any of its values
-        (semi-join — scales to large value sets). If regex=True, treated as
-        regex pattern (scalar only).
+        Filter value. A list keeps rows matching any of its values. With
+        regex=True the value(s) are regex patterns (str.contains).
     regex : bool, default False
         If True, use regex matching (str.contains). If False, exact match.
 
@@ -251,13 +250,17 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
         if val is None:
             continue
+        column = pl.col(col).cast(pl.Utf8)
         if isinstance(val, (list, tuple, set, pl.Series)):
-            values = pl.DataFrame({col: [str(v) for v in val]}).unique()
-            data = data.join(values, on=col, how="semi")
+            values = [str(v) for v in val]
+            if regex and values:
+                data = data.filter(column.str.contains("|".join(f"(?:{v})" for v in values)))
+            else:
+                data = data.filter(column.is_in(values))
         elif regex:
-            data = data.filter(pl.col(col).cast(pl.Utf8).str.contains(val))
+            data = data.filter(column.str.contains(val))
         else:
-            data = data.filter(pl.col(col).cast(pl.Utf8) == val)
+            data = data.filter(column == val)
     return data
 
 

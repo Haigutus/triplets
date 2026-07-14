@@ -101,17 +101,25 @@ def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
                     regex=False, table_name=TABLE_NAME):
     """Filter triplets by any combination of columns. Returns DuckDBPyRelation (lazy).
 
-    A list value keeps rows matching any of its values (planned as a semi-join).
+    A list value keeps rows matching any of its values; with regex=True the
+    value(s) are SIMILAR TO patterns.
     """
     conditions = []
     for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
-        if val is not None:
-            if isinstance(val, (list, tuple, set)):
-                conditions.append(f"{col} IN ({_in_list(val)})")
+        if val is None:
+            continue
+        if isinstance(val, (list, tuple, set)):
+            values = list(val)
+            if not values:
+                conditions.append("FALSE")
             elif regex:
-                conditions.append(f"{col} SIMILAR TO '{val}'")
+                conditions.append("(" + " OR ".join(f"{col} SIMILAR TO {_lit(v)}" for v in values) + ")")
             else:
-                conditions.append(f"{col} = '{val}'")
+                conditions.append(f"{col} IN ({_in_list(values)})")
+        elif regex:
+            conditions.append(f"{col} SIMILAR TO {_lit(val)}")
+        else:
+            conditions.append(f"{col} = {_lit(val)}")
     where = " AND ".join(conditions) if conditions else "TRUE"
     return self.sql(f"SELECT * FROM {table_name} WHERE {where}")
 
