@@ -97,10 +97,14 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: ""
           # Windows: delvewheel runs by default in cibw 4.0+; exclude arrow DLLs (provided by pyarrow at runtime)
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} -v {wheel} --no-dll arrow_python.dll --no-dll arrow.dll"
+          # TRIPLETS_REQUIRE_COMPILED turns the compiled-module import guard
+          # (tests/test_compiled_modules.py) into a hard failure — a wheel whose
+          # extensions failed to build must not pass by skipping.
+          CIBW_ENVIRONMENT: "TRIPLETS_REQUIRE_COMPILED=1"
           # Force UTF-8 on Windows (versioneer's find_sources hits cp1252 encoding errors)
-          CIBW_ENVIRONMENT_WINDOWS: "PYTHONUTF8=1"
+          CIBW_ENVIRONMENT_WINDOWS: "PYTHONUTF8=1 TRIPLETS_REQUIRE_COMPILED=1"
           CIBW_TEST_REQUIRES: "pytest pyarrow>=14.0"
-          CIBW_TEST_COMMAND: "pytest {project}/tests/test_parser.py -q --tb=short -k \"not realgrid\""
+          CIBW_TEST_COMMAND: "pytest {project}/tests/test_parser.py {project}/tests/test_compiled_modules.py -q --tb=short -k \"not realgrid\""
 
       - uses: actions/upload-artifact@v7
         with:
