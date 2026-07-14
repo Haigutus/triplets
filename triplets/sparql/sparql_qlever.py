@@ -39,6 +39,7 @@ from disk ~4 ms.
 import os
 import re
 import json
+import shutil
 import logging
 import tempfile
 
@@ -60,7 +61,13 @@ logger = logging.getLogger(__name__)
 _qlever.set_quiet(not logger.isEnabledFor(logging.DEBUG))
 
 _INDEXES = {}    # content hash → loaded _qlever.QleverIndex
-_QUERY_FORM = re.compile(r"\b(select|ask|construct|describe)\b", re.IGNORECASE)
+
+# SPARQL grammar: [comments +] prologue (PREFIX/BASE declarations), then the
+# query form keyword — anchored so 'select' inside a comment, PREFIX IRI or
+# string literal cannot misclassify the query.
+_PROLOGUE = re.compile(r"^(?:\s*(?:#[^\n]*|PREFIX\s+\S*\s*<[^>]*>|BASE\s*<[^>]*>))*\s*",
+                       re.IGNORECASE)
+_QUERY_FORM = re.compile(r"(select|ask|construct|describe)\b", re.IGNORECASE)
 
 
 def query(data, query_string, rdf_map=None, scope=None, return_type="auto",data_unchanged=False):
@@ -131,13 +138,24 @@ def _index_for(data, rdf_map, data_unchanged=False):
 
     index_dir = Path(os.environ.get("TRIPLETS_QLEVER_DIR", tempfile.gettempdir())) \
         / "triplets-qlever" / key
-    basename = str(index_dir / "index")
     if not (index_dir / "build-complete").exists():
-        index_dir.mkdir(parents=True, exist_ok=True)
-        _build_index(data.export_to_arrow(), rdf_map, basename)
-        (index_dir / "build-complete").touch()
+        # Concurrency-safe publish: build into a private directory, then rename
+        # it into place — atomic, so no process/thread ever sees a half-built
+        # index. build-complete marks the directory as a finished build.
+        index_dir.parent.mkdir(parents=True, exist_ok=True)
+        build_dir = Path(tempfile.mkdtemp(prefix=f"{key}.build-", dir=index_dir.parent))
+        _build_index(data.export_to_arrow(), rdf_map, str(build_dir / "index"))
+        (build_dir / "build-complete").touch()
+        try:
+            os.rename(build_dir, index_dir)
+        except OSError:
+            if not (index_dir / "build-complete").exists():  # leftover of a crashed build — replace it
+                shutil.rmtree(index_dir, ignore_errors=True)
+                os.rename(build_dir, index_dir)
+            else:                                            # a concurrent build won — use its index
+                shutil.rmtree(build_dir)
 
-    _INDEXES[key] = _qlever.QleverIndex(basename)
+    _INDEXES[key] = _qlever.QleverIndex(str(index_dir / "index"))
     return _INDEXES[key]
 
 
@@ -155,7 +173,7 @@ def _build_index(table, rdf_map, basename):
 
 
 def _query_form(query_string):
-    match = _QUERY_FORM.search(query_string)
+    match = _QUERY_FORM.match(_PROLOGUE.sub("", query_string, count=1))
     return match.group(1).lower() if match else "select"
 
 
