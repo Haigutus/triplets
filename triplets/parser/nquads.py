@@ -22,8 +22,9 @@ from ..export.nquads_utils import CIM_NS, RDF_TYPE
 _UUID_PREFIX = "urn:uuid:"
 
 # subject predicate object [graph] . — subject/predicate are space-free terms,
-# the object may contain spaces inside a quoted literal, the graph is an IRI.
-_QUAD_PATTERN = r'^\s*(\S+)\s+(\S+)\s+(.+?)(?:\s+(<[^>]*>))?\s*\.\s*$'
+# the object may contain spaces inside a quoted literal, the graph is an IRI
+# or a blank-node label.
+_QUAD_PATTERN = r'^\s*(\S+)\s+(\S+)\s+(.+?)(?:\s+(<[^>]*>|_:[^\s"<]+))?\s*\.\s*$'
 
 # N-Triples string escapes: \uXXXX / \UXXXXXXXX and single-char (\n \t \" \\ ...)
 _ESCAPE = re.compile(r'\\u([0-9A-Fa-f]{4})|\\U([0-9A-Fa-f]{8})|\\(.)')
