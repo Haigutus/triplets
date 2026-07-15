@@ -6,14 +6,19 @@ once by the IR compiler); the constraint table is for the vectorized engines.
 """
 import logging
 
+from importlib.util import find_spec
+
 from .._rdflib_loader import load_dataset, scoped_graph
 from .shacl_report import report_to_violations
+
+if find_spec("pyshacl") is None:  # registry contract: an unavailable engine fails at import
+    raise ImportError("pyshacl is not installed")
 
 logger = logging.getLogger(__name__)
 
 
 def validate(data, compiled, rdf_map=None, scope=None, inference="none",
-             advanced=True, abort_on_first=False, store="memory"):
+             advanced=True, abort_on_first=False, store="memory", **kwargs):
     """Validate triplet data against compiled shapes; return a violations DataFrame.
 
     Parameters
@@ -27,6 +32,8 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
         Validate only these instances (named graphs); all data stays loaded for
         reference resolution. None = full union (all profiles).
     inference, advanced, abort_on_first : passed to pyshacl.validate.
+    **kwargs : other engines' options (components, max_workers, table_name) —
+        accepted and ignored, per the shared engine contract.
     store : str, default "memory"
         rdflib store backend for the data graph (see ``load_dataset``):
         "oxigraph" loads through the oxigraph engine's cached store

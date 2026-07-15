@@ -65,6 +65,8 @@ def get_engine(name: str = "auto"):
                 return candidate, _load_engine(candidate)
             except ImportError:
                 continue
+        raise ImportError(f"no sparql engine available (tried: {', '.join(_ENGINE_MODULES)}). "
+                          "Install with: pip install triplets[sparql]")
     resolved = _ENGINE_ALIASES.get(name, name)
     logger.debug(f"sparql engine: {resolved}")
     return resolved, _load_engine(resolved)

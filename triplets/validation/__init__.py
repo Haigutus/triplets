@@ -93,6 +93,8 @@ def get_engine(name: str = "auto"):
                 return candidate, _load_engine(candidate)
             except ImportError:
                 continue
+        raise ImportError(f"no validation engine available (tried: {', '.join(_AUTO_ORDER)}). "
+                          "Install with: pip install triplets[validation]")
     resolved = _ENGINE_ALIASES.get(name, name)
     logger.debug(f"validation engine: {resolved}")
     return resolved, _load_engine(resolved)
@@ -136,6 +138,5 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
                       .drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
                                                "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
     if context:
-        from .context import enrich
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
     return violations

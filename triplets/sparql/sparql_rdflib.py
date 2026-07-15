@@ -17,11 +17,16 @@ is string.
 import io
 import logging
 
+from importlib.util import find_spec
+
 import pandas
 
-from .._engine_detect import is_polars
+from .._engine_detect import is_polars, to_return_type
 from .._rdflib_loader import load_dataset, scoped_graph
 from ..export.nquads_utils import CIM_NS, RDF_TYPE
+
+if find_spec("rdflib") is None:  # registry contract: an unavailable engine fails at import
+    raise ImportError("rdflib is not installed")
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +44,8 @@ def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data
     if result.type == "ASK":
         return bool(result.askAnswer)
     if result.type in ("CONSTRUCT", "DESCRIBE"):
-        return _finalize(_graph_to_triplets(result.graph), return_type)
-    return _finalize(_select_to_dataframe(result), return_type)
+        return to_return_type(_graph_to_triplets(result.graph), return_type)
+    return to_return_type(_select_to_dataframe(result), return_type)
 
 
 def _select_to_dataframe(result):
@@ -51,16 +56,6 @@ def _select_to_dataframe(result):
     convention, same decode as the oxigraph engine."""
     payload = result.serialize(format="csv")
     return pandas.read_csv(io.BytesIO(payload), dtype=str, keep_default_na=False, na_values=[""])
-
-
-def _finalize(frame, return_type):
-    if return_type == "polars":
-        import polars
-        return polars.from_pandas(frame)
-    if return_type == "arrow":
-        import pyarrow
-        return pyarrow.Table.from_pandas(frame, preserve_index=False)
-    return frame
 
 
 def _graph_to_triplets(graph):
