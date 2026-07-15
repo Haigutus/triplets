@@ -64,6 +64,12 @@ implement; pyshacl still covers the full spec.
 artifact (polars LazyFrame builders, duckdb SQL) — re-validating new data
 against the same shapes never recompiles anything.
 
+The compile cache participates in the shared engine-state lifecycle:
+`triplets.clear_caches()` drops cached `CompiledShapes` (with their plans)
+together with the SPARQL engines' loaded state, and
+`with triplets.cache_scope():` bounds the state created inside the block —
+see [sparql.md](sparql.md).
+
 ```python
 compiled = triplets.validation.compile(["equipment.ttl", "topology.ttl"])
 triplets.validation.validate(data_a, compiled)

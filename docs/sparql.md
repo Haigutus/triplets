@@ -16,7 +16,10 @@ The module is new — APIs may still shift. Know these before relying on it:
   triples (`DISTINCT` dedupes); the CSV SELECT decode nulls empty-string
   literals; its parser accepts some queries qlever rejects (bare `HAVING`).
 - Engine state caches (indexes, stores, datasets) are unbounded by design —
-  long-lived processes over many distinct datasets grow memory/disk.
+  long-lived processes over many distinct datasets grow memory/disk. Manage
+  the lifecycle explicitly: `triplets.clear_caches()` drops all in-memory
+  engine state, `with triplets.cache_scope():` drops the state created
+  inside the block on exit.
 
 ## Engines
 
@@ -125,7 +128,12 @@ after loading. One on-disk index per content key (data + rdf_map) lives under
 `$TRIPLETS_QLEVER_DIR` (point it at `/dev/shm` for fully RAM-backed indexes)
 or the temp dir; index files are memory-mapped, so hot pages sit in the OS
 page cache either way, and loaded engines are cached in-process (unbounded by
-design — datasets per process are few).
+design — datasets per process are few). Nothing evicts automatically:
+`triplets.clear_caches()` drops every in-memory cache (loaded indexes,
+stores, datasets, compiled SHACL shapes), and `with triplets.cache_scope():`
+bounds the state created inside the block to it — entries that existed
+before survive. Only in-memory state is dropped; qlever's on-disk indexes
+stay (reloading one is ~4 ms, delete `$TRIPLETS_QLEVER_DIR` to reclaim disk).
 
 Digests are engine-specific (each engine hashes with its native row-hash
 primitive for speed: polars ~5 ms, duckdb ~6 ms streaming, pandas ~260 ms per
