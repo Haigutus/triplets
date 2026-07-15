@@ -27,9 +27,8 @@ def svedala():
 @pytest.fixture
 def no_qlever(monkeypatch):
     """Engine registry as seen by a pip-only install (no compiled extension)."""
-    modules = {name: module for name, module in triplets.sparql._ENGINE_MODULES.items()
-               if name != "qlever"}
-    monkeypatch.setattr(triplets.sparql, "_ENGINE_MODULES", modules)
+    monkeypatch.setattr(triplets.sparql._REGISTRY, "auto",
+                        [name for name in triplets.sparql._REGISTRY.auto if name != "qlever"])
 
 
 def test_auto_order(no_qlever):
@@ -279,12 +278,12 @@ def test_shacl_sparql_positive_violations_parity(no_qlever, svedala):
 
     via_oxigraph = triplets.validation.validate(svedala, graph, engine="pandas")
     import triplets.sparql as sparql_registry
-    saved = sparql_registry._ENGINE_MODULES
-    sparql_registry._ENGINE_MODULES = {"rdflib": saved["rdflib"]}
+    saved = sparql_registry._REGISTRY.auto
+    sparql_registry._REGISTRY.auto = ["rdflib"]
     try:
         via_rdflib = triplets.validation.validate(svedala, graph, engine="pandas")
     finally:
-        sparql_registry._ENGINE_MODULES = saved
+        sparql_registry._REGISTRY.auto = saved
 
     key = ["ID", "VIOLATION_TYPE", "VALUE"]
     left = via_oxigraph[via_oxigraph["VIOLATION_TYPE"] == "sh:sparql"].sort_values(key)
@@ -321,9 +320,9 @@ def test_benchmark_shacl_sparql_backend(benchmark, svedala, monkeypatch, sparql_
     pytest.importorskip("pyshacl")
     if sparql_engine == "qlever":
         pytest.importorskip("triplets.sparql._qlever", reason="qlever extension not built")
-    modules = {name: module for name, module in triplets.sparql._ENGINE_MODULES.items()
-               if name in (sparql_engine, "rdflib")}
-    monkeypatch.setattr(triplets.sparql, "_ENGINE_MODULES", modules)
+    monkeypatch.setattr(triplets.sparql._REGISTRY, "auto",
+                        [name for name in triplets.sparql._REGISTRY.auto
+                         if name in (sparql_engine, "rdflib")])
 
     rdflib = pytest.importorskip("rdflib")
     graph = rdflib.Graph()

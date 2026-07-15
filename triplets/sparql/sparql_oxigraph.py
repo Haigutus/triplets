@@ -37,6 +37,7 @@ import pyoxigraph  # ImportError here → the registry falls back to rdflib
 
 from pyoxigraph import NamedNode, QueryResultsFormat, RdfFormat
 
+from .._caches import register_cache
 from .._content_key import content_key
 from .._engine_detect import is_polars
 from .._rdflib_loader import _to_loadable
@@ -45,7 +46,7 @@ from ..parser.nquads import read_nquads
 
 logger = logging.getLogger(__name__)
 
-_STORES = {}    # content hash → loaded in-memory pyoxigraph.Store
+_STORES = register_cache({})    # content hash → loaded in-memory pyoxigraph.Store
 
 
 def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data_unchanged=False):

@@ -49,6 +49,7 @@ import pandas
 import pyarrow
 
 from . import _qlever  # ImportError here → the registry falls back to rdflib
+from .._caches import register_cache
 from .._content_key import content_key
 from .._engine_detect import is_polars, to_return_type
 from ..export.nquads_utils import CIM_NS, build_key_metadata
@@ -60,7 +61,7 @@ logger = logging.getLogger(__name__)
 # debugging is on (re-enable per-process with _qlever.set_quiet(False))
 _qlever.set_quiet(not logger.isEnabledFor(logging.DEBUG))
 
-_INDEXES = {}    # content hash → loaded _qlever.QleverIndex
+_INDEXES = register_cache({})    # content hash → loaded _qlever.QleverIndex
 
 # SPARQL grammar: [comments +] prologue (PREFIX/BASE declarations), then the
 # query form keyword — anchored so 'select' inside a comment, PREFIX IRI or

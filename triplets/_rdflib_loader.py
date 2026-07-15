@@ -11,12 +11,13 @@ after loading (``scoped_graph``), so one cached dataset serves all scopes.
 """
 import logging
 
+from ._caches import register_cache
 from ._content_key import content_key
 from ._engine_detect import flavor
 
 logger = logging.getLogger(__name__)
 
-_DATASETS = {}   # content key → loaded rdflib.Dataset
+_DATASETS = register_cache({})   # content key → loaded rdflib.Dataset
 
 
 def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory"):

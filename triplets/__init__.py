@@ -9,6 +9,7 @@ from . import export
 from . import sparql
 from . import validation
 from . import _accessor  # registers df.triplets / df.sparql / df.shacl namespaces  # noqa: F401
+from ._caches import clear_caches, cache_scope  # noqa: F401 — engine-state lifecycle
 
 __all__ = [
     'cgmes_tools',
@@ -18,6 +19,8 @@ __all__ = [
     'cli',
     'sparql',
     'validation',
+    'clear_caches',
+    'cache_scope',
 ]
 
 from ._version import get_versions

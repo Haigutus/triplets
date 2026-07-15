@@ -25,6 +25,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   named graphs; `data_unchanged=True` skips re-hashing in hot loops.
   sh:sparql constraints in the SHACL engines ride the same auto engine
   (38.5 s → 74 ms on a constraint-heavy shape). See docs/sparql.md.
+- **Engine-state lifecycle** (`triplets.clear_caches()`,
+  `triplets.cache_scope()`): the in-process engine caches (rdflib datasets,
+  oxigraph stores, qlever index handles, compiled SHACL shapes) never evict on
+  their own; long-running processes drop them explicitly, or scope them to a
+  `with` block. Only in-memory state is dropped — qlever's on-disk indexes
+  stay (reload ~4 ms).
 - **SARIF 2.1.0 export** (`violations.shacl.to_sarif()`,
   `triplets.validation.export_to_sarif`): violations → SARIF log for GitHub /
   SonarQube / any SARIF viewer. Grouped by default — one result per rule with

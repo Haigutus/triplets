@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 
 import pandas
 
+from .._caches import register_cache
+
 logger = logging.getLogger(__name__)
 
 IR_COLUMNS = ["shape_id", "target_class", "path", "inverse", "component", "params",
@@ -41,7 +43,7 @@ class CompiledShapes:
     plans: dict = field(default_factory=dict)  # engine name → compiled artifact (lazy)
 
 
-_COMPILE_CACHE: dict = {}  # content hash → CompiledShapes
+_COMPILE_CACHE: dict = register_cache({})  # content hash → CompiledShapes
 
 
 def compile_shapes(shapes) -> CompiledShapes:

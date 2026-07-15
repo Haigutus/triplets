@@ -31,11 +31,11 @@ those findings are appended to any engine's report.
 from __future__ import annotations
 
 import logging
-from importlib import import_module
 from typing import Any
 
 import pandas
 
+from .._registry import EngineRegistry
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
 from .shacl_report import VIOLATION_COLUMNS
 from .context import ENRICHMENT_COLUMNS, enrich  # noqa: F401 — public API
@@ -43,61 +43,38 @@ from .sarif import export_to_sarif  # noqa: F401 — public API
 
 logger = logging.getLogger(__name__)
 
-# Engine name → module (lazy import).
-_ENGINE_MODULES = {
-    "polars": ".shacl_polars",
-    "pandas": ".shacl_pandas",
-    "duckdb": ".shacl_duckdb",
-    "pyshacl": ".shacl_pyshacl",
-}
-_ENGINE_ALIASES = {
-    "reference": "pyshacl",
-}
 # Auto preference: first importable — polars (lazy, fast) → pandas (same
 # semantics, eager) → pyshacl (spec reference). duckdb is deliberately NOT in
 # auto: it is the explicit choice for larger-than-memory data (polars owns the
 # in-memory fast path). The vectorized engines share the IR and the deliberate
 # deviations (lexical datatype, schema-driven nodeKind); engine="reference"
 # always gives the pure pyshacl view.
-_AUTO_ORDER = ["polars", "pandas", "pyshacl"]
+_REGISTRY = EngineRegistry(
+    "validation", __package__,
+    modules={
+        "polars": ".shacl_polars",
+        "pandas": ".shacl_pandas",
+        "duckdb": ".shacl_duckdb",
+        "pyshacl": ".shacl_pyshacl",
+    },
+    aliases={
+        "reference": "pyshacl",
+    },
+    default_hint="Install with: pip install triplets[validation].",
+    auto=["polars", "pandas", "pyshacl"],
+)
 # engines whose datatype check already emits the lexical findings itself
 _LEXICAL_BUILTIN = {"polars", "pandas", "duckdb"}
-_ENGINES: dict[str, Any] = {}  # loaded-module cache
 
 
 def register_engine(name: str, module: Any) -> None:
     """Register a custom validation engine for future extensibility."""
-    _ENGINES[name] = module
-
-
-def _load_engine(name: str):
-    if name in _ENGINES:
-        return _ENGINES[name]
-    module_name = _ENGINE_MODULES.get(name)
-    if module_name is None:
-        raise ValueError(f"Unknown validation engine: {name}. Known: {', '.join(_ENGINE_MODULES)}")
-    try:
-        _ENGINES[name] = import_module(module_name, __package__)
-    except ImportError as e:
-        raise ImportError(f"{name} validation engine not available. "
-                          "Install with: pip install triplets[validation]. "
-                          f"Original error: {e}") from e
-    return _ENGINES[name]
+    _REGISTRY.register(name, module)
 
 
 def get_engine(name: str = "auto"):
     """Resolve validation engine name (with aliases) and return (name, module)."""
-    if name == "auto":
-        for candidate in _AUTO_ORDER:
-            try:
-                return candidate, _load_engine(candidate)
-            except ImportError:
-                continue
-        raise ImportError(f"no validation engine available (tried: {', '.join(_AUTO_ORDER)}). "
-                          "Install with: pip install triplets[validation]")
-    resolved = _ENGINE_ALIASES.get(name, name)
-    logger.debug(f"validation engine: {resolved}")
-    return resolved, _load_engine(resolved)
+    return _REGISTRY.get(name)
 
 
 def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True,

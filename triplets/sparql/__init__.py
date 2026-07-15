@@ -14,62 +14,40 @@ qlever ingests the same term mapping as Arrow batches.
 from __future__ import annotations
 
 import logging
-from importlib import import_module
 from typing import Any
+
+from .._registry import EngineRegistry
 
 logger = logging.getLogger(__name__)
 
-# Engine name → module (lazy import). Auto preference: first importable —
-# qlever (embedded C++, needs the compiled extension: setup_qlever.py) wins
-# over oxigraph (embedded Rust, needs the pyoxigraph wheel), which wins over
-# rdflib (reference, always available with the sparql extra).
-_ENGINE_MODULES = {
-    "qlever": ".sparql_qlever",
-    "oxigraph": ".sparql_oxigraph",
-    "rdflib": ".sparql_rdflib",
-}
-_ENGINE_ALIASES = {
-    "reference": "rdflib",
-    "performance": "qlever",
-}
-_ENGINE_EXTRAS = {"oxigraph": "oxigraph"}  # pip extra per engine (default: sparql)
-_ENGINES: dict[str, Any] = {}  # loaded-module cache
+# Auto preference: first importable — qlever (embedded C++, needs the compiled
+# extension: setup_qlever.py) wins over oxigraph (embedded Rust, needs the
+# pyoxigraph wheel), which wins over rdflib (reference, always available with
+# the sparql extra).
+_REGISTRY = EngineRegistry(
+    "sparql", __package__,
+    modules={
+        "qlever": ".sparql_qlever",
+        "oxigraph": ".sparql_oxigraph",
+        "rdflib": ".sparql_rdflib",
+    },
+    aliases={
+        "reference": "rdflib",
+        "performance": "qlever",
+    },
+    hints={"oxigraph": "Install with: pip install triplets[oxigraph]."},
+    default_hint="Install with: pip install triplets[sparql].",
+)
 
 
 def register_engine(name: str, module: Any) -> None:
     """Register a custom SPARQL engine for future extensibility."""
-    _ENGINES[name] = module
-
-
-def _load_engine(name: str):
-    if name in _ENGINES:
-        return _ENGINES[name]
-    module_name = _ENGINE_MODULES.get(name)
-    if module_name is None:
-        raise ValueError(f"Unknown sparql engine: {name}. Known: {', '.join(_ENGINE_MODULES)}")
-    try:
-        _ENGINES[name] = import_module(module_name, __package__)
-    except ImportError as e:
-        extra = _ENGINE_EXTRAS.get(name, "sparql")
-        raise ImportError(f"{name} sparql engine not available. "
-                          f"Install with: pip install triplets[{extra}]. "
-                          f"Original error: {e}") from e
-    return _ENGINES[name]
+    _REGISTRY.register(name, module)
 
 
 def get_engine(name: str = "auto"):
     """Resolve SPARQL engine name (with aliases) and return (name, module)."""
-    if name == "auto":
-        for candidate in _ENGINE_MODULES:
-            try:
-                return candidate, _load_engine(candidate)
-            except ImportError:
-                continue
-        raise ImportError(f"no sparql engine available (tried: {', '.join(_ENGINE_MODULES)}). "
-                          "Install with: pip install triplets[sparql]")
-    resolved = _ENGINE_ALIASES.get(name, name)
-    logger.debug(f"sparql engine: {resolved}")
-    return resolved, _load_engine(resolved)
+    return _REGISTRY.get(name)
 
 
 def query(data, query_string, rdf_map=None, scope=None, engine="auto", return_type="auto",
