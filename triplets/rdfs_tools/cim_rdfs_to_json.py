@@ -1,11 +1,17 @@
+import argparse
 import json
+from pathlib import Path
 import pandas
 from triplets.tools import get_namespace_map
-from triplets.parser import parse as load_all_to_dataframe
 from triplets.rdfs_tools import rdfs_tools
+from triplets.rdfs_tools.rdfs_tools import load_all_to_dataframe
 import logging
 
 logger = logging.getLogger(__name__)
+
+REPO_ROOT = Path(__file__).parents[2]
+RDFS_ROOT = REPO_ROOT / "rdfs"
+EXPORT_DIR = REPO_ROOT / "triplets" / "export_schema"
 
 cgmes_data_types_map = {
  'String': 'xsd:string',
@@ -95,10 +101,13 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
     profile["ProfileNamespaceMap"] = namespace_map
     profile["ProfileXMLBase"] = xml_base
 
-    classes_defined_externally = profile_data.query("KEY == 'stereotype' and VALUE == 'Description'").ID.to_list()
+    classes_defined_externally = profile_data.query(rdfs_tools.stereotype_query("Description")).ID.to_list()
 
-    # Add concrete classes
-    for concrete_class in rdfs_tools.concrete_classes_list(profile_data):
+    # Concrete classes are instantiated by ID; Description classes are defined in another
+    # profile and referenced by about (e.g. NC associations attached to EQ objects)
+    export_classes = list(dict.fromkeys(rdfs_tools.concrete_classes_list(profile_data) + classes_defined_externally))
+
+    for concrete_class in export_classes:
 
         # Define class namespace
         class_namespace, class_name = rdfs_tools.get_namespace_and_name(concrete_class, default_namespace=xml_base)
@@ -137,7 +146,8 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
         for parameter, parameter_meta in class_parameters_table.iterrows():
 
-            parameter_dict = parameter_meta.to_dict()
+            # Pivot yields NaN for keys a parameter does not have, semantics expect them absent
+            parameter_dict = {key: value for key, value in parameter_meta.to_dict().items() if pandas.notna(value)}
 
             # TODO - export this and add it to Association metadata
             association_used = parameter_dict.get("AssociationUsed")
@@ -323,143 +333,94 @@ def export_single_profile(path, serialization_version="552_ED2", additional_meta
 
     return conf_dict
 
-def convert_entsoe_cgmes_2_4():
-    base_name = "ENTSOE_CGMES_2.4.15"
-    header_name = "Header-AP-Voc-RDFS2020_v2-3-5.rdf"
-    serialization_versions = ["552_ED1", "552_ED2"]
+def index_by_keyword(merged_profiles):
+    """Index profiles by their keyword; profiles without one are dropped with an error."""
+    indexed = {}
+    for profile in merged_profiles:
+        if "keyword" in profile["ProfileMetadata"]:
+            indexed[profile["ProfileMetadata"]["keyword"]] = profile
+        else:
+            logger.error(f"Missing keyword in profile: {profile['ProfileMetadata']}, will not be included in export")
+
+    return indexed
+
+
+def index_largest_per_keyword(merged_profiles):
+    """Index profiles by keyword (underscores stripped), keeping the largest profile per keyword."""
+    loaded_meta = pandas.DataFrame(
+        [{"profileSize": len(meta), **meta["ProfileMetadata"]} for meta in merged_profiles])
+
+    largest = loaded_meta.groupby("keyword")["profileSize"].idxmax().to_list()
+
+    return {profile["ProfileMetadata"]["keyword"].replace("_", ""): profile
+            for index, profile in enumerate(merged_profiles) if index in largest}
+
+
+BUNDLES = {
+    "ENTSOE_CGMES_2.4.15": dict(rdfs_dir="ENTSOE_CGMES_2.4.15",
+                                header="ENTSOE_FH/Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                                index=index_largest_per_keyword),
+    "ENTSOE_CGMES_3.0.0":  dict(rdfs_dir="ENTSOE_CGMES_3.0.0",
+                                header="ENTSOE_FH/Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                                index=index_by_keyword),
+    "ENTSOE_NC_2.4.1":     dict(rdfs_dir="ENTSOE_NC_2.4.1",
+                                header="ENTSOE_NC_2.4.1/DatasetMetadata-AP-Voc-RDFS2020.rdf",
+                                exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},
+                                index=index_by_keyword),
+    "ENTSOE_NC_2.4.2":     dict(rdfs_dir="ENTSOE_NC_2.4.2",
+                                header="ENTSOE_NC_2.4.2/DatasetMetadata-AP-Voc-RDFS2020.rdf",
+                                exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},
+                                index=index_by_keyword),
+    "ENTSOE_NC_2.5-dev":   dict(rdfs_dir="ENTSOE_NC_2.5-dev",
+                                header="ENTSOE_NC_2.5-dev/DatasetMetadata-AP-Voc-RDFS2020.rdf",
+                                exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},
+                                index=index_by_keyword),
+}
+
+
+def build_bundle(name, spec, serialization_versions=("552_ED1", "552_ED2")):
 
     # Load Header
-    header_data = load_all_to_dataframe(rf"../../rdfs/ENTSOE_FH/{header_name}")
+    header_data = load_all_to_dataframe(str(RDFS_ROOT / spec["header"]))
     header_profile = convert_profile(header_data, serialization_version="552_ED2")
     header_profile.pop("ProfileXMLBase")
     header_namespace_map = header_profile.pop("ProfileNamespaceMap")
 
     # Load Schema
-    files_list = rdfs_tools.list_of_files(rf"../../rdfs/{base_name}", ".rdf")
+    files_list = [file for file in rdfs_tools.list_of_files(str(RDFS_ROOT / spec["rdfs_dir"]), ".rdf")
+                  if Path(file).name not in spec.get("exclude", set())]
     data = load_all_to_dataframe(files_list)
 
     for serialization_version in serialization_versions:
 
         merged_profiles = convert(data, serialization_version)
+        indexed_profiles = spec["index"](merged_profiles)
 
-        # Loaded Profiles Meta
-        loaded_meta = pandas.DataFrame(
-            [{"profileSize": len(meta), **meta["ProfileMetadata"]} for meta in merged_profiles])
-
-        # DataFrame with all largest profiles per keyword
-        filtered_meta = data.loc[loaded_meta.groupby("keyword")['profileSize'].idxmax()]
-
-        merged_profiles_filtered = {profile["ProfileMetadata"]["keyword"].replace("_", ""): profile for
-                                    index, profile in enumerate(merged_profiles) if
-                                    index in filtered_meta.index.to_list()}
-
-        for keyword in merged_profiles_filtered.keys():
-            # Insert Header to each profile
-            merged_profiles_filtered[keyword].update(header_profile)
+        for keyword, profile in indexed_profiles.items():
+            # Insert Header entries into each profile, only if missing
+            profile.update({key: value for key, value in header_profile.items() if key not in profile})
 
             # Add header namespaces to map, only if missing
-            merged_profiles_filtered[keyword]["ProfileNamespaceMap"].update(
+            profile["ProfileNamespaceMap"].update(
                 {key: value for key, value in header_namespace_map.items() if
-                 key not in merged_profiles_filtered[keyword]["ProfileNamespaceMap"]})
+                 key not in profile["ProfileNamespaceMap"]})
 
-        export_file_name = f"../export_schema/{base_name}_{serialization_version}.json"
+        export_file_name = EXPORT_DIR / f"{name}_{serialization_version}.json"
 
         with open(export_file_name, "w") as file_object:
-            json.dump(merged_profiles_filtered, file_object, indent=4)
+            json.dump(indexed_profiles, file_object, indent=4)
 
         logger.info(f"Exported to {export_file_name}")
 
 
-def convert_entsoe_cgmes_3_0():
-    base_name = "ENTSOE_CGMES_3.0.0"
-    header_name = "Header-AP-Voc-RDFS2020_v2-3-5.rdf"
-    serialization_versions = ["552_ED1", "552_ED2"]
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Generate export schema JSON bundles from RDFS")
+    parser.add_argument("bundles", nargs="*", choices=[[], *BUNDLES], default=[],
+                        help="bundle names to generate (default: all)")
+    args = parser.parse_args(argv)
 
-    # Load Header
-    header_data = load_all_to_dataframe(rf"../../rdfs/ENTSOE_FH/{header_name}")
-    header_profile = convert_profile(header_data, serialization_version="552_ED2")
-    header_profile.pop("ProfileXMLBase")
-    header_namespace_map = header_profile.pop("ProfileNamespaceMap")
-
-    # Load Schema
-    files_list = rdfs_tools.list_of_files(rf"../../rdfs/{base_name}", ".rdf")
-    data = load_all_to_dataframe(files_list)
-
-    for serialization_version in serialization_versions:
-
-        merged_profiles = convert(data, serialization_version)
-
-        # Loaded Profiles Meta
-        loaded_meta = pandas.DataFrame([{"profileSize": len(meta), **meta["ProfileMetadata"]} for meta in merged_profiles])
-
-        merged_profiles_filtered = {}
-        for profile in merged_profiles:
-            if "keyword" in profile["ProfileMetadata"]:
-                merged_profiles_filtered[profile["ProfileMetadata"]["keyword"]] = profile
-            else:
-                logger.error(f"Missing keyword in profile: {profile['ProfileMetadata']}, will not be included in export")
-
-        for keyword in merged_profiles_filtered.keys():
-            # Insert Header to each profile
-            merged_profiles_filtered[keyword].update(header_profile)
-
-            # Add header namespaces to map, only if missing
-            merged_profiles_filtered[keyword]["ProfileNamespaceMap"].update({key: value for key, value in header_namespace_map.items() if key not in merged_profiles_filtered[keyword]["ProfileNamespaceMap"]})
-
-        export_file_name = f"../export_schema/{base_name}_{serialization_version}.json"
-
-        with open(export_file_name, "w") as file_object:
-            json.dump(merged_profiles_filtered, file_object, indent=4)
-
-        logger.info(f"Exported to {export_file_name}")
-
-
-def convert_entsoe_nc():
-    base_name = "ENTSOE_NC"
-    header_name = "DatasetMetadata-AP-Voc-RDFS2020_v3-0-0.rdf"
-    serialization_versions = ["552_ED1", "552_ED2"]
-
-    # Load Header
-    header_data = load_all_to_dataframe(rf"../../rdfs/ENTSOE_FH/{header_name}")
-    header_profile = convert_profile(header_data, serialization_version="552_ED2")
-    header_profile.pop("ProfileXMLBase")
-    header_namespace_map = header_profile.pop("ProfileNamespaceMap")
-
-    # Load Schema
-    files_list = rdfs_tools.list_of_files(rf"../../rdfs/{base_name}", ".rdf")
-    data = load_all_to_dataframe(files_list)
-
-    for serialization_version in serialization_versions:
-
-        merged_profiles = convert(data, serialization_version)
-
-        # Loaded Profiles Meta
-        loaded_meta = pandas.DataFrame(
-            [{"profileSize": len(meta), **meta["ProfileMetadata"]} for meta in merged_profiles])
-
-        merged_profiles_filtered = {}
-        for profile in merged_profiles:
-            if "keyword" in profile["ProfileMetadata"]:
-                merged_profiles_filtered[profile["ProfileMetadata"]["keyword"]] = profile
-            else:
-                logger.error(
-                    f"Missing keyword in profile: {profile['ProfileMetadata']}, will not be included in export")
-
-        for keyword in merged_profiles_filtered.keys():
-            # Insert Header to each profile
-            merged_profiles_filtered[keyword].update(header_profile)
-
-            # Add header namespaces to map, only if missing
-            merged_profiles_filtered[keyword]["ProfileNamespaceMap"].update(
-                {key: value for key, value in header_namespace_map.items() if
-                 key not in merged_profiles_filtered[keyword]["ProfileNamespaceMap"]})
-
-        export_file_name = f"../export_schema/{base_name}_{serialization_version}.json"
-
-        with open(export_file_name, "w") as file_object:
-            json.dump(merged_profiles_filtered, file_object, indent=4)
-
-        logger.info(f"Exported to {export_file_name}")
+    for name in args.bundles or BUNDLES:
+        build_bundle(name, BUNDLES[name])
 
 
 if __name__ == '__main__':
@@ -467,32 +428,8 @@ if __name__ == '__main__':
     import sys
     logging.basicConfig(stream=sys.stdout,
                         format='%(levelname) -10s %(asctime)s %(name) -30s %(funcName) -35s %(lineno) -5d: %(message)s',
-                        level=logging.DEBUG)
-
-
-    path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
-    #path = r"/rdfs/ENTSOE_FH/DatasetMetadata-AP-Voc-RDFS2020_v3-0-0.rdf"
-    #path = r"/rdfs/ENTSOE_FH/Header-AP-Voc-RDFS2020_v2-3-5.rdf"
-
-
-    serialization_version = "552_ED2"
-
-    export = export_single_profile(path, serialization_version)
-
-    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
-    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
-    # path = r"../../rdfs/ENTSOE_CGMES_3.0.0/FileHeader_RDFS2019.rdf"
-    # path = r"../../rdfs/ENTSOE_CGMES_2.4.15/EquipmentProfileCoreRDFSAugmented-v2_4_15-4Sep2020.rdf"
-
-
-    # path_old = r"../../rdfs/ENTSOE_CGMES_2.4.15/FileHeader.rdf"
-    #
-    # data_new = load_all_to_dataframe(path_new)
-    # print(data.merge(data.query("KEY == 'type' and VALUE == 'http://www.w3.org/2002/07/owl#Ontology'").ID))
-    #
-    # data_old = load_all_to_dataframe(path_old)
-    # profile_domain = data_old.query("VALUE == 'baseUML'")["ID"].to_list()[0].split(".")[0]
-    # print(data_old[data_old.ID.str.contains(profile_domain)].query("KEY == 'isFixed'"))
+                        level=logging.INFO)
+    main()
 
 
 

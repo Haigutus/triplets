@@ -1,10 +1,16 @@
-from triplets.parser import parse as load_all_to_dataframe
+from triplets.parser import parse
 import pandas
 import os
 
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def load_all_to_dataframe(paths):
+    """Parse RDFS losslessly: schema conversion needs full resource URIs, so resource
+    shortening is disabled (only the python engines support that)."""
+    return parse(paths, engine="python_lxml_pandas", shorten_resources=False)
 
 pandas.set_option("display.max_rows", 20)
 pandas.set_option("display.max_columns", 8)
@@ -192,9 +198,14 @@ def parse_multiplicity(uri):
     return minOccurs, maxOccurs
 
 
+def stereotype_query(value):
+    """Stereotypes appear both as plain text and as UML-namespace resources in RDFS."""
+    return f"KEY == 'stereotype' and (VALUE == '{value}' or VALUE == 'http://iec.ch/TC57/NonStandard/UML#{value}')"
+
+
 def concrete_classes_list(data):
     """Returns list of Concrete classes from Triplet"""
-    return list(data.query("KEY == 'stereotype' and VALUE == 'concrete'")["ID"])
+    return list(data.query(stereotype_query("concrete"))["ID"])
 
 
 
