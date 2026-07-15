@@ -69,6 +69,7 @@ def parse(
     engine: str = "auto",
     return_type: str = "pandas",
     categorical_columns: Optional[Sequence[str]] = ("INSTANCE_ID", "KEY"),
+    shorten_resources: bool = True,
     **kwargs: Any,
 ) -> Any:
     """Main entry: parse CIM RDF/XML (or zips) using chosen engine.
@@ -86,10 +87,18 @@ def parse(
         Output format: "pandas", "arrow", or "polars".
     categorical_columns : tuple or None, default ("INSTANCE_ID", "KEY")
         Columns to dictionary-encode for memory savings. Pass None to disable.
+    shorten_resources : bool, default True
+        Shorten http(s) resource values to their #fragment (CIM instance data convention).
+        Pass False for lossless URIs (e.g. RDFS schema parsing); only the python engines
+        support this.
     """
     debug = debug or logger.isEnabledFor(logging.DEBUG)
     engine_name, engine_mod = get_engine(engine)
     is_arrow_engine = engine_name in _ARROW_ENGINES
+
+    if not shorten_resources and engine_name == "cython_pugixml_arrow":
+        raise ValueError("shorten_resources=False is not supported by the cython_pugixml_arrow engine, "
+                         "use engine='python_lxml_pandas' or 'python_lxml_arrow'")
 
     parse_one = getattr(engine_mod, "load_rdf_to_dataframe", None)
     if parse_one is None:
@@ -108,6 +117,8 @@ def parse(
         return _empty(return_type)
 
     def _one(f: Any):
+        if not shorten_resources:
+            return parse_one(f, debug=debug, shorten_resources=False)
         return parse_one(f, debug=debug)
 
     if max_workers and len(xml_files) > 1:

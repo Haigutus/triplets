@@ -21,7 +21,8 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
-def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False) -> pa.RecordBatch:
+def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False,
+                          shorten_resources: bool = True) -> pa.RecordBatch:
     """Parse single RDF/XML (path or fileobj) to pyarrow RecordBatch using lxml + lists.
 
     Streaming in the sense of column-wise collection then direct Arrow (no 4-tuple list).
@@ -99,7 +100,7 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
                     or element.attrib.get(RDF_NODEID)
                     or ""
                 )
-                if value and value.startswith("http"):
+                if shorten_resources and value and value.startswith("http"):
                     value = value.split("#")[-1] if "#" in value else value
             id_b.append(obj_id)
             key_b.append(key)

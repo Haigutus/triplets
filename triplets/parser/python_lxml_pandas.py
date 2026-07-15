@@ -23,7 +23,8 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
-def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False) -> pd.DataFrame:
+def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False,
+                          shorten_resources: bool = True) -> pd.DataFrame:
     """Parse single RDF/XML file to pandas DataFrame using lxml + list-of-tuples.
 
     This is the old proven path: lxml parse → iterate → build Python list → pd.DataFrame.
@@ -91,7 +92,7 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
                     or element.attrib.get(RDF_NODEID)
                     or ""
                 )
-                if value and value.startswith("http"):
+                if shorten_resources and value and value.startswith("http"):
                     value = value.split("#")[-1] if "#" in value else value
             # Use empty string instead of None for parity with arrow engines
             if value is None:
