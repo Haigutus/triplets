@@ -50,7 +50,7 @@ import pyarrow
 
 from . import _qlever  # ImportError here → the registry falls back to rdflib
 from .._content_key import content_key
-from .._engine_detect import is_polars
+from .._engine_detect import is_polars, to_return_type
 from ..export.nquads_utils import CIM_NS, build_key_metadata
 from ..parser.nquads import terms_to_triplets
 
@@ -115,12 +115,7 @@ def _finalize(result, return_type):
         if return_type == "arrow":
             return pyarrow.Table.from_batches([result])
         return result.to_pandas(types_mapper=pandas.ArrowDtype)
-    if return_type == "polars":
-        import polars
-        return polars.from_pandas(result)
-    if return_type == "arrow":
-        return pyarrow.Table.from_pandas(result)
-    return result
+    return to_return_type(result, return_type)
 
 
 def _index_for(data, rdf_map, data_unchanged=False):

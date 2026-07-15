@@ -26,8 +26,10 @@ import logging
 import pandas
 import polars
 
+from .._engine_detect import flavor
 from .shacl_report import VIOLATION_COLUMNS
-from .shacl_pandas import DATATYPES, _REFERENCE_LIKE
+from .shacl_ir import split_rules
+from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +39,7 @@ FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:not", "sh:node", "sh:sparql"}
 _COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 
 
-class _Context:
+class _Context(SchemaKind):
     """Lazy base + eagerly materialized shared indices (built once per validate)."""
 
     def __init__(self, frame, rdf_map=None):
@@ -53,7 +55,6 @@ class _Context:
         self._class_ids_imploded = {key: ids.implode()
                                     for key, ids in self._class_ids.items()}
         self._all_ids = frame["ID"].unique().implode()
-        self._key_metadata = None
 
     def class_ids(self, target_class):
         """Flat ID Series (plan *data*, e.g. focus_frame)."""
@@ -66,20 +67,6 @@ class _Context:
     @property
     def all_ids(self):
         return self._all_ids
-
-    def key_kind(self, key):
-        """Same schema-driven term-kind decision as shacl_pandas._Context.key_kind."""
-        if self.rdf_map is None:
-            return None
-        if self._key_metadata is None:
-            from ..export.nquads_utils import build_key_metadata
-            self._key_metadata = build_key_metadata(self.rdf_map)
-        enum_keys, _namespaces, key_datatypes = self._key_metadata
-        if key in enum_keys:
-            return "iri"
-        if key in key_datatypes:
-            return "literal"
-        return None
 
     def path_rows(self, rule):
         """The rule's path as a lazy (FOCUS, PATH_VALUE) plan, restricted to the target class."""
@@ -466,7 +453,9 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     if scope is not None:
         frame = frame.filter(polars.col("INSTANCE_ID").is_in([str(s) for s in scope]))
 
-    vectorized, fallback = compiled.plans.setdefault("polars", _split_rules(compiled.ir))
+    if "polars" not in compiled.plans:   # setdefault would re-split on every call
+        compiled.plans["polars"] = split_rules(compiled.ir, PLAN_BUILDERS, FALLBACK_COMPONENTS, "polars")
+    vectorized, fallback = compiled.plans["polars"]
     if components is not None:
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]
@@ -491,33 +480,24 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         violations = pandas.DataFrame(columns=VIOLATION_COLUMNS)
 
     if fallback:
+        # pass the already-converted-and-scoped frame — the pandas engine
+        # would otherwise redo both from the original input
         from . import shacl_pandas
-        supplement = shacl_pandas.validate(data, compiled, rdf_map=rdf_map, scope=scope,
+        supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
                                            max_workers=max_workers)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     return violations
 
 
-def _split_rules(ir):
-    """IR → (vectorized rules, fallback rules); cached in CompiledShapes.plans."""
-    rules = list(ir.itertuples())
-    vectorized = [rule for rule in rules if rule.component in PLAN_BUILDERS]
-    fallback = [rule for rule in rules if rule.component in FALLBACK_COMPONENTS]
-    skipped = {rule.component for rule in rules} - set(PLAN_BUILDERS) - FALLBACK_COMPONENTS
-    if skipped:
-        logger.debug("polars engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
-    return vectorized, fallback
-
-
 def _to_polars(data):
     """Any supported flavor → polars DataFrame with Utf8 columns."""
-    module = type(data).__module__
-    if module.startswith("polars"):
+    kind = flavor(data)
+    if kind == "polars":
         frame = data
-    elif module.startswith("pyarrow"):
+    elif kind == "pyarrow":
         frame = polars.from_arrow(data)
-    elif module.startswith(("duckdb", "_duckdb")):
+    elif kind == "duckdb":
         frame = polars.from_arrow(data.execute("SELECT * FROM triplets").arrow())
     else:
         frame = polars.from_pandas(data[list(_COLUMNS)])

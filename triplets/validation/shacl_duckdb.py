@@ -22,8 +22,10 @@ import logging
 
 import pandas
 
+from .._engine_detect import flavor
+from .shacl_ir import split_rules
 from .shacl_report import VIOLATION_COLUMNS
-from .shacl_pandas import DATATYPES, _REFERENCE_LIKE
+from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
 from .shacl_polars import FALLBACK_COMPONENTS
 
 logger = logging.getLogger(__name__)
@@ -250,25 +252,11 @@ SQL_BUILDERS = {
 }
 
 
-class _Context:
-    """Schema-driven term-kind decisions (same as the other vectorized engines)."""
+class _Context(SchemaKind):
+    """Schema-driven term-kind decisions (shared with the other vectorized engines)."""
 
     def __init__(self, rdf_map):
         self.rdf_map = rdf_map
-        self._key_metadata = None
-
-    def key_kind(self, key):
-        if self.rdf_map is None:
-            return None
-        if self._key_metadata is None:
-            from ..export.nquads_utils import build_key_metadata
-            self._key_metadata = build_key_metadata(self.rdf_map)
-        enum_keys, _namespaces, key_datatypes = self._key_metadata
-        if key in enum_keys:
-            return "iri"
-        if key in key_datatypes:
-            return "literal"
-        return None
 
 
 def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
@@ -287,7 +275,9 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
                            f"SELECT * FROM {table} WHERE INSTANCE_ID IN ({values})")
         table = "_shacl_scoped"
 
-    vectorized, fallback = compiled.plans.setdefault("duckdb", _split_rules(compiled.ir))
+    if "duckdb" not in compiled.plans:   # setdefault would re-split on every call
+        compiled.plans["duckdb"] = split_rules(compiled.ir, SQL_BUILDERS, FALLBACK_COMPONENTS, "duckdb")
+    vectorized, fallback = compiled.plans["duckdb"]
     if components is not None:
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]
@@ -324,22 +314,11 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     return violations
 
 
-def _split_rules(ir):
-    """IR → (vectorized rules, fallback rules); cached in CompiledShapes.plans."""
-    rules = list(ir.itertuples())
-    vectorized = [rule for rule in rules if rule.component in SQL_BUILDERS]
-    fallback = [rule for rule in rules if rule.component in FALLBACK_COMPONENTS]
-    skipped = {rule.component for rule in rules} - set(SQL_BUILDERS) - FALLBACK_COMPONENTS
-    if skipped:
-        logger.debug("duckdb engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
-    return vectorized, fallback
-
-
 def _connection(data, table_name):
     """DuckDB connection holding the triplets table; other flavors are registered."""
     import duckdb
 
-    if type(data).__module__.startswith(("duckdb", "_duckdb")):
+    if flavor(data) == "duckdb":
         return data, table_name
     connection = duckdb.connect()
     connection.register(table_name, data)   # pandas / polars / arrow — zero-copy via Arrow

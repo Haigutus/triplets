@@ -12,6 +12,7 @@ after loading (``scoped_graph``), so one cached dataset serves all scopes.
 import logging
 
 from ._content_key import content_key
+from ._engine_detect import flavor
 
 logger = logging.getLogger(__name__)
 
@@ -92,10 +93,11 @@ def _resolve_store(store):
 
 def _to_loadable(data):
     """export_to_nquads handles pandas/polars; convert arrow/duckdb to pandas first."""
-    module = type(data).__module__
-    if module.startswith("pyarrow"):
-        return data.to_pandas(types_mapper=__import__("pandas").ArrowDtype)
-    if module.startswith(("duckdb", "_duckdb")):
+    kind = flavor(data)
+    if kind == "pyarrow":
+        import pandas
+        return data.to_pandas(types_mapper=pandas.ArrowDtype)
+    if kind == "duckdb":
         return data.execute("SELECT * FROM triplets").df()
     return data  # pandas / polars — export_to_nquads takes these directly
 

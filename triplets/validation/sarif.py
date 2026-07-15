@@ -127,11 +127,9 @@ def _rule(shape, constraint, records, seen_ids):
 def _grouped_result(rule_id, rule_index, records):
     total = len(records)
     samples = records if total <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
-    described = ", ".join(filter(None, (_describe(record) for record in samples)))
-    if total > 2 * _SAMPLES:
-        first = ", ".join(filter(None, (_describe(r) for r in records[:_SAMPLES])))
-        last = ", ".join(filter(None, (_describe(r) for r in records[-_SAMPLES:])))
-        described = f"{first} … {last}"
+    head = ", ".join(filter(None, (_describe(record) for record in samples[:_SAMPLES])))
+    tail = ", ".join(filter(None, (_describe(record) for record in samples[_SAMPLES:])))
+    described = f"{head} … {tail}" if total > 2 * _SAMPLES else ", ".join(filter(None, (head, tail)))
 
     message = _message(records[0])
     text = f"{message} — {total} object(s) affected." + (f" Examples: {described}" if described else "")

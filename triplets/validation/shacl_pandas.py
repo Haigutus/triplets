@@ -81,21 +81,46 @@ _REFERENCE_LIKE = re.compile(rf"(?:{_UUID}|\w+://\S+|urn:\S+|[A-Za-z]\w*\.\w+)$"
 _NO_IDS = numpy.array([], dtype=object)
 
 
-class _Context:
-    """Shared per-validation state: data, IR, and memoized lookups.
+class SchemaKind:
+    """Schema-driven term-kind decision, shared by the vectorized engines' contexts.
+
+    Mirrors the N-Quads exporter's classification (build_key_metadata): a key
+    with a schema datatype (incl. xsd:string) holds literals; an enumeration
+    key holds IRIs; anyURI/unknown keys return None (decide by value form).
+    Without rdf_map everything is None.
+    """
+
+    rdf_map = None
+    _key_metadata = None
+
+    def key_kind(self, key):
+        """"literal" / "iri" / None — what the export schema says values at *key* are."""
+        if self.rdf_map is None:
+            return None
+        if self._key_metadata is None:
+            from ..export.nquads_utils import build_key_metadata
+            self._key_metadata = build_key_metadata(self.rdf_map)
+        enum_keys, _namespaces, key_datatypes = self._key_metadata
+        if key in enum_keys:
+            return "iri"
+        if key in key_datatypes:
+            return "literal"
+        return None
+
+
+class _Context(SchemaKind):
+    """Shared per-validation state: data and memoized lookups.
 
     Hundreds of IR rules hit the same per-class indices — build them once here
     instead of once per rule (the polars/duckdb compilers follow the same shape).
     """
 
-    def __init__(self, data, ir, rdf_map=None):
+    def __init__(self, data, rdf_map=None):
         self.data = data
-        self.ir = ir
         self.rdf_map = rdf_map
         self._by_key = None
         self._class_ids = None
         self._all_ids = None
-        self._key_metadata = None
         self._dataset = None
         # The data cannot change between the constraint queries of one
         # validation run: after the first sh:sparql query has hashed it, the
@@ -129,26 +154,6 @@ class _Context:
         if self._all_ids is None:
             self._all_ids = set(self.data["ID"].unique())
         return self._all_ids
-
-    def key_kind(self, key):
-        """"literal" / "iri" / None — what the export schema says values at *key* are.
-
-        Mirrors the N-Quads exporter's classification (build_key_metadata): a
-        key with a schema datatype (incl. xsd:string) holds literals; an
-        enumeration key holds IRIs; anyURI/unknown keys return None (decide by
-        value form). Without rdf_map everything is None.
-        """
-        if self.rdf_map is None:
-            return None
-        if self._key_metadata is None:
-            from ..export.nquads_utils import build_key_metadata
-            self._key_metadata = build_key_metadata(self.rdf_map)
-        enum_keys, _namespaces, key_datatypes = self._key_metadata
-        if key in enum_keys:
-            return "iri"
-        if key in key_datatypes:
-            return "literal"
-        return None
 
     def focus(self, rule):
         """The rule's focus nodes: an explicit ``focus_ids`` (set by sh:node — the
@@ -617,7 +622,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     if skipped:
         logger.debug("pandas engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
 
-    context = _Context(data, compiled.ir, rdf_map)
+    context = _Context(data, rdf_map)
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
 

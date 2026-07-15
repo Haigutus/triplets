@@ -93,6 +93,22 @@ def _content_hash(shapes):
     return digest.hexdigest()
 
 
+def split_rules(ir, implemented, fallback_components, engine):
+    """IR rows → (vectorized, fallback) rule lists against an engine's registries.
+
+    Engines cache the result in ``CompiledShapes.plans[engine]`` so the split
+    runs once per compiled shapes, not once per validate call.
+    """
+    rules = list(ir.itertuples())
+    vectorized = [rule for rule in rules if rule.component in implemented]
+    fallback = [rule for rule in rules if rule.component in fallback_components]
+    skipped = {rule.component for rule in rules} - set(implemented) - set(fallback_components)
+    if skipped:
+        logger.debug("%s engine skips components: %s (pyshacl covers them)",
+                     engine, ", ".join(sorted(skipped)))
+    return vectorized, fallback
+
+
 # ── shapes graph → constraint table ──────────────────────────────────────────
 
 def parse_ir(graph) -> pandas.DataFrame:

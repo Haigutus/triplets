@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pandas
 
+from .._engine_detect import to_return_type
 from ..export.nquads_utils import CIM_NS, RDF_TYPE
 
 _UUID_PREFIX = "urn:uuid:"
@@ -58,7 +59,7 @@ def read_nquads(source, return_type="pandas"):
     if bad.any():
         raise ValueError(f"not N-Quads: {lines[bad].iloc[0][:200]!r}")
 
-    return _to_return_type(terms_to_triplets(terms).reset_index(drop=True), return_type)
+    return to_return_type(terms_to_triplets(terms).reset_index(drop=True), return_type)
 
 
 def terms_to_triplets(frame):
@@ -115,13 +116,3 @@ def _read_text(source):
         content = source.read()
         return content.decode("utf-8") if isinstance(content, bytes) else content
     return Path(source).read_text(encoding="utf-8")
-
-
-def _to_return_type(frame, return_type):
-    if return_type == "polars":
-        import polars
-        return polars.from_pandas(frame)
-    if return_type == "arrow":
-        import pyarrow
-        return pyarrow.Table.from_pandas(frame, preserve_index=False)
-    return frame
