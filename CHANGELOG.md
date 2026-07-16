@@ -108,6 +108,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rdflib fallback. Ill-typed data itself is never silently "fixed".
 - N-Quads exporters escape `\r` (was emitted raw — grammar-invalid output that
   broke strict oxigraph ingest).
+- The context pass (`enrich()` / `validate(..., context=True)`) appends the
+  violated property to generic shape-authored messages — "Missing required
+  property (attribute). — IdentifiedObject.name"; messages that already name
+  their property stay untouched, and raw engine output keeps the authored
+  text verbatim.
 
 ### Changed
 - **Python 3.14 supported**: wheels build for cp314, CI tests it (full suite

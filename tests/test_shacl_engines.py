@@ -299,7 +299,7 @@ def test_shape_message_and_severity_carried(engine):
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ;
                       sh:message "give it a name" ; sh:severity sh:Warning ] ."""
     v = run(breaker("b1"), shape, engine)
-    assert list(v["MESSAGE"]) == ["give it a name"]
+    assert list(v["MESSAGE"]) == ["give it a name"]   # authored text verbatim (enrich adds context)
     assert list(v["SEVERITY"]) == ["Warning"]
 
 
