@@ -157,9 +157,14 @@ class _Context(SchemaKind):
 
     def focus(self, rule):
         """The rule's focus nodes: an explicit ``focus_ids`` (set by sh:node — the
-        referenced value nodes) or all instances of the rule's target class."""
+        referenced value nodes), the subjects carrying the target property
+        (sh:targetSubjectsOf), or all instances of the rule's target class."""
         focus_ids = getattr(rule, "focus_ids", None)
-        return focus_ids if focus_ids is not None else self.class_ids(rule.target_class)
+        if focus_ids is not None:
+            return focus_ids
+        if getattr(rule, "target_kind", "class") == "subjectsOf":
+            return self.key_rows(rule.target_class)["ID"].unique()
+        return self.class_ids(rule.target_class)
 
     def path_rows(self, rule):
         """The rule's path as (FOCUS, PATH_VALUE) pairs, restricted to the rule's focus.
@@ -181,7 +186,9 @@ class _Context(SchemaKind):
     def pair_rows(self, rule, other_path):
         """FOCUS + both paths' values, for the pair constraints (equals/disjoint/lessThan)."""
         left = self.path_rows(rule)
-        other = SimpleNamespace(target_class=rule.target_class, path=other_path, inverse=False,
+        other = SimpleNamespace(target_class=rule.target_class,
+                                target_kind=getattr(rule, "target_kind", "class"),
+                                path=other_path, inverse=False,
                                 focus_ids=getattr(rule, "focus_ids", None))
         right = self.path_rows(other).rename(columns={"PATH_VALUE": "OTHER_VALUE"})
         return left, right

@@ -12,8 +12,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   four engines — `pyshacl` (spec reference), `pandas` (complete constraint
   registry incl. sh:sparql and sh:node), `polars` (lazy plans, the auto
   performance path — real Equipment profiles in ~2 s vs pyshacl minutes) and
-  `duckdb` (larger-than-memory, explicit). One deliberate deviation: datatype
-  checks judge the raw lexical form (`lexical=True`). See docs/validation.md.
+  `duckdb` (larger-than-memory, explicit). Targets: `sh:targetClass` and
+  `sh:targetSubjectsOf` (other target kinds warn at compile; pyshacl covers
+  them). One deliberate deviation: datatype checks judge the raw lexical form
+  (`lexical=True`). See docs/validation.md.
 - **SPARQL querying** (`df.sparql.query(q)`, `triplets.sparql`): SELECT/ASK/
   CONSTRUCT over triplet data with three engines — `qlever` (embedded C++,
   local source build), `oxigraph` (embedded Rust, `pip install

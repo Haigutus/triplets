@@ -34,19 +34,27 @@ TABLE_NAME = "triplets"
 _BATCH_SIZE = 100  # constraints per UNION ALL statement
 
 
-def _focus_sql(table):
-    """Focus nodes of a target class (bound with one target_class parameter)."""
+def _class_sql(table):
+    """Instances of a class (bound with one class-name parameter)."""
     return f"SELECT ID FROM {table} WHERE KEY = 'Type' AND VALUE = ?"
+
+
+def _focus_sql(rule, table):
+    """The rule's focus nodes (bound with one target_class parameter): a class's
+    instances, or the subjects carrying the target property (sh:targetSubjectsOf)."""
+    if getattr(rule, "target_kind", "class") == "subjectsOf":
+        return f"SELECT DISTINCT ID FROM {table} WHERE KEY = ?"
+    return _class_sql(table)
 
 
 def _rows_sql(rule, table):
     """The rule's path as (FOCUS, PV) rows — inverse-aware, like the other engines."""
     if rule.inverse:
         sql = (f"SELECT VALUE AS FOCUS, ID AS PV FROM {table} "
-               f"WHERE KEY = ? AND VALUE IN ({_focus_sql(table)})")
+               f"WHERE KEY = ? AND VALUE IN ({_focus_sql(rule, table)})")
     else:
         sql = (f"SELECT ID AS FOCUS, VALUE AS PV FROM {table} "
-               f"WHERE KEY = ? AND ID IN ({_focus_sql(table)})")
+               f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table)})")
     return sql, [rule.path, rule.target_class]
 
 
@@ -69,7 +77,7 @@ _NULL_VALUE = "CAST(NULL AS VARCHAR)"
 
 def _min_count(rule, table, context):
     rows, rows_params = _rows_sql(rule, table)
-    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(table)}) f "
+    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table)}) f "
                 f"LEFT JOIN (SELECT FOCUS, COUNT(*) AS n FROM ({rows}) GROUP BY FOCUS) c "
                 f"ON f.ID = c.FOCUS WHERE COALESCE(c.n, 0) < ?")
     return _wrap(rule, f"{rule.path} occurs fewer than {rule.params} time(s)",
@@ -146,7 +154,7 @@ def _in(rule, table, context):
 
 def _has_value(rule, table, context):
     rows, rows_params = _rows_sql(rule, table)
-    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(table)}) f "
+    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table)}) f "
                 f"WHERE f.ID NOT IN (SELECT FOCUS FROM ({rows}) WHERE PV = ?)")
     return _wrap(rule, f"{rule.path} does not have required value '{rule.params}'",
                  from_sql, [rule.target_class, *rows_params, str(rule.params)], "TRUE", [],
@@ -156,7 +164,7 @@ def _has_value(rule, table, context):
 def _class(rule, table, context):
     rows, rows_params = _rows_sql(rule, table)
     return _wrap(rule, f"referenced object is not of class {rule.params}",
-                 rows, rows_params, f"PV NOT IN ({_focus_sql(table)})", [rule.params])
+                 rows, rows_params, f"PV NOT IN ({_class_sql(table)})", [rule.params])
 
 
 def _node_kind(rule, table, context):
@@ -181,7 +189,7 @@ def _pair_sql(rule, table, other_path):
     """Both paths' values per focus node, for the pair constraints."""
     left, left_params = _rows_sql(rule, table)
     right = (f"SELECT ID AS FOCUS, VALUE AS OTHER FROM {table} "
-             f"WHERE KEY = ? AND ID IN ({_focus_sql(table)})")
+             f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table)})")
     return left, left_params, right, [other_path, rule.target_class]
 
 
@@ -222,7 +230,7 @@ def _pair_compare(operator, description):
 def _closed(rule, table, context):
     allowed = list(set(rule.params) | {"Type"})
     sql = (f"SELECT ID, KEY, VALUE, ? AS VIOLATION_TYPE, ? AS MESSAGE, ? AS SEVERITY, ? AS SOURCE_SHAPE "
-           f"FROM {table} WHERE ID IN ({_focus_sql(table)}) AND NOT list_contains(?, KEY)")
+           f"FROM {table} WHERE ID IN ({_focus_sql(rule, table)}) AND NOT list_contains(?, KEY)")
     params = [rule.component, rule.message or "property is not allowed on a closed shape",
               rule.severity, rule.shape_id, rule.target_class, allowed]
     return sql, params

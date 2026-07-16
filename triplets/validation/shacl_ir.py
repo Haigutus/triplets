@@ -27,8 +27,8 @@ from .._caches import register_cache
 
 logger = logging.getLogger(__name__)
 
-IR_COLUMNS = ["shape_id", "target_class", "path", "inverse", "component", "params",
-              "severity", "message", "name", "description"]
+IR_COLUMNS = ["shape_id", "target_class", "target_kind", "path", "inverse", "component",
+              "params", "severity", "message", "name", "description"]
 
 _SHAPE_FORMATS = {".ttl": "turtle", ".rdf": "xml", ".xml": "xml", ".nt": "nt", ".jsonld": "json-ld"}
 
@@ -117,7 +117,10 @@ def parse_ir(graph) -> pandas.DataFrame:
     """Walk NodeShapes → property shapes → one IR row per constraint component.
 
     A NodeShape may declare several sh:targetClass (the ENTSO-E profiles do);
-    every constraint row is emitted once per target class.
+    every constraint row is emitted once per target. ``sh:targetSubjectsOf``
+    targets compile the same way with target_kind="subjectsOf" — the engines
+    resolve the focus as the subjects carrying that KEY instead of a class's
+    instances.
     """
     import rdflib
 
@@ -126,13 +129,16 @@ def parse_ir(graph) -> pandas.DataFrame:
     for shape in graph.subjects(rdflib.RDF.type, SH.NodeShape):
         for target in graph.objects(shape, SH.targetClass):
             rows.extend(_node_rows(graph, SH, shape, _local(target)))
+        for target in graph.objects(shape, SH.targetSubjectsOf):
+            rows.extend(_node_rows(graph, SH, shape, _local(target), target_kind="subjectsOf"))
 
-    # Only sh:targetClass is walked into the IR — shapes reached exclusively
-    # through other target declarations (or sh:xone) are INVISIBLE to the
-    # vectorized engines and would silently under-validate. Warn loudly;
-    # the pyshacl reference engine covers them (engine="pyshacl").
+    # Only sh:targetClass / sh:targetSubjectsOf are walked into the IR —
+    # shapes reached exclusively through other target declarations (or
+    # sh:xone) are INVISIBLE to the vectorized engines and would silently
+    # under-validate. Warn loudly; the pyshacl reference engine covers them
+    # (engine="pyshacl").
     invisible = {term: count for term in
-                 (SH.targetNode, SH.targetSubjectsOf, SH.targetObjectsOf, SH.target, SH.xone)
+                 (SH.targetNode, SH.targetObjectsOf, SH.target, SH.xone)
                  if (count := sum(1 for _ in graph.subject_objects(term)))}
     if invisible:
         logger.warning(
@@ -148,9 +154,10 @@ def parse_ir(graph) -> pandas.DataFrame:
     return ir
 
 
-def _node_rows(graph, SH, shape, target_class):
+def _node_rows(graph, SH, shape, target_class, target_kind="class"):
     """NodeShape-level constraints (closed, sparql) + its property shapes' rows."""
-    meta = _shape_meta(graph, SH, shape, target_class, path=None, inverse=False)
+    meta = _shape_meta(graph, SH, shape, target_class, path=None, inverse=False,
+                       target_kind=target_kind)
     rows = []
 
     closed = graph.value(shape, SH.closed)
@@ -167,11 +174,13 @@ def _node_rows(graph, SH, shape, target_class):
 
     rows.extend(_sparql_rows(graph, SH, shape, meta))
     for property_shape in graph.objects(shape, SH.property):
-        rows.extend(_shape_rows(graph, SH, property_shape, target_class, parent=meta))
+        rows.extend(_shape_rows(graph, SH, property_shape, target_class, parent=meta,
+                                target_kind=target_kind))
     return rows
 
 
-def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=None):
+def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=None,
+                target_kind="class"):
     """One property shape → IR rows (one per constraint component present).
 
     *visited* tracks named shapes already expanded through sh:node, so shape
@@ -187,7 +196,8 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
             "as one KEY — property shape skipped; use engine=\"pyshacl\" for coverage",
             shape_uri)
         return []
-    meta = _shape_meta(graph, SH, shape_uri, target_class, path, inverse)
+    meta = _shape_meta(graph, SH, shape_uri, target_class, path, inverse,
+                       target_kind=target_kind)
     if parent is not None:
         meta["name"] = meta["name"] or parent["name"]
         meta["description"] = meta["description"] or parent["description"]
@@ -204,18 +214,19 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
     for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and")):
         head = graph.value(shape_uri, term)
         if head is not None:
-            nested = [_shape_rows(graph, SH, item, target_class, visited)
+            nested = [_shape_rows(graph, SH, item, target_class, visited, target_kind=target_kind)
                       for item in _rdf_list(graph, head, lambda node: node)]
             rows.append({**meta, "component": component, "params": nested})
 
     negated = graph.value(shape_uri, SH["not"])
     if negated is not None:
         rows.append({**meta, "component": "sh:not",
-                     "params": _shape_rows(graph, SH, negated, target_class, visited)})
+                     "params": _shape_rows(graph, SH, negated, target_class, visited,
+                                           target_kind=target_kind)})
 
     node_shape = graph.value(shape_uri, SH.node)
     if node_shape is not None:
-        nested = _node_expansion(graph, SH, node_shape, target_class, visited)
+        nested = _node_expansion(graph, SH, node_shape, target_class, visited, target_kind)
         if nested is None:
             logger.warning("sh:node cycle at %s — constraint dropped (%s)", node_shape, shape_uri)
         else:
@@ -225,7 +236,7 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
     return rows
 
 
-def _node_expansion(graph, SH, node_shape, target_class, visited):
+def _node_expansion(graph, SH, node_shape, target_class, visited, target_kind="class"):
     """sh:node — expand the referenced shape into nested IR rows at compile time.
 
     params = {"shape": local name (for messages), "rows": nested row dicts}.
@@ -238,10 +249,12 @@ def _node_expansion(graph, SH, node_shape, target_class, visited):
     visited = visited | {key}
 
     rows = []
-    meta = _shape_meta(graph, SH, node_shape, target_class, path=None, inverse=False)
+    meta = _shape_meta(graph, SH, node_shape, target_class, path=None, inverse=False,
+                       target_kind=target_kind)
     rows.extend(_sparql_rows(graph, SH, node_shape, meta))
     for property_shape in graph.objects(node_shape, SH.property):
-        rows.extend(_shape_rows(graph, SH, property_shape, target_class, visited))
+        rows.extend(_shape_rows(graph, SH, property_shape, target_class, visited,
+                                target_kind=target_kind))
     return rows
 
 
@@ -276,14 +289,17 @@ def _sparql_rows(graph, SH, shape_uri, meta):
     return rows
 
 
-def _shape_meta(graph, SH, shape_uri, target_class, path, inverse):
+def _shape_meta(graph, SH, shape_uri, target_class, path, inverse, target_kind="class"):
     severity = graph.value(shape_uri, SH.severity)
     message = graph.value(shape_uri, SH.message)
     name = graph.value(shape_uri, SH.name)
     description = graph.value(shape_uri, SH.description)
     return {
         "shape_id": str(shape_uri),
+        # target_class holds the target term's local name: a class name for
+        # target_kind="class", the property KEY for target_kind="subjectsOf"
         "target_class": target_class,
+        "target_kind": target_kind,
         "path": path,
         "inverse": inverse,
         "severity": _local(severity) if severity is not None else "Violation",

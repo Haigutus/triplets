@@ -55,6 +55,8 @@ class _Context(SchemaKind):
         self._class_ids_imploded = {key: ids.implode()
                                     for key, ids in self._class_ids.items()}
         self._all_ids = frame["ID"].unique().implode()
+        self._frame = frame
+        self._subjects = {}   # KEY → (ids, imploded) for sh:targetSubjectsOf focus
 
     def class_ids(self, target_class):
         """Flat ID Series (plan *data*, e.g. focus_frame)."""
@@ -68,10 +70,28 @@ class _Context(SchemaKind):
     def all_ids(self):
         return self._all_ids
 
+    def _subjects_of(self, key):
+        if key not in self._subjects:
+            ids = self._frame.filter(polars.col("KEY") == key)["ID"].unique()
+            self._subjects[key] = (ids, ids.implode())
+        return self._subjects[key]
+
+    def focus_ids(self, rule):
+        """Flat focus ID Series (plan data, e.g. focus_frame)."""
+        if getattr(rule, "target_kind", "class") == "subjectsOf":
+            return self._subjects_of(rule.target_class)[0]
+        return self.class_ids(rule.target_class)
+
+    def focus_ids_in(self, rule):
+        """Imploded focus IDs for is_in membership tests."""
+        if getattr(rule, "target_kind", "class") == "subjectsOf":
+            return self._subjects_of(rule.target_class)[1]
+        return self.class_ids_in(rule.target_class)
+
     def path_rows(self, rule):
-        """The rule's path as a lazy (FOCUS, PATH_VALUE) plan, restricted to the target class."""
+        """The rule's path as a lazy (FOCUS, PATH_VALUE) plan, restricted to the rule's focus."""
         rows = self.base.filter(polars.col("KEY") == rule.path)
-        ids = self.class_ids_in(rule.target_class)
+        ids = self.focus_ids_in(rule)
         if rule.inverse:
             return rows.filter(polars.col("VALUE").is_in(ids)).select(
                 polars.col("VALUE").alias("FOCUS"), polars.col("ID").alias("PATH_VALUE"))
@@ -79,7 +99,7 @@ class _Context(SchemaKind):
             polars.col("ID").alias("FOCUS"), polars.col("VALUE").alias("PATH_VALUE"))
 
     def focus_frame(self, rule):
-        return polars.LazyFrame({"FOCUS": self.class_ids(rule.target_class)},
+        return polars.LazyFrame({"FOCUS": self.focus_ids(rule)},
                                 schema={"FOCUS": polars.Utf8})
 
 
@@ -212,7 +232,7 @@ def _node_kind(context, rule):
 def _pair(context, rule, other_path):
     left = context.path_rows(rule)
     right = (context.base.filter(polars.col("KEY") == other_path)
-             .filter(polars.col("ID").is_in(context.class_ids_in(rule.target_class)))
+             .filter(polars.col("ID").is_in(context.focus_ids_in(rule)))
              .select(polars.col("ID").alias("FOCUS"), polars.col("VALUE").alias("OTHER")))
     return left, right
 
@@ -249,7 +269,7 @@ def _pair_compare(operator, description):
 def _closed(context, rule):
     allowed = list(set(rule.params) | {"Type"})
     plan = (context.base
-            .filter(polars.col("ID").is_in(context.class_ids_in(rule.target_class))
+            .filter(polars.col("ID").is_in(context.focus_ids_in(rule))
                     & ~polars.col("KEY").is_in(allowed))
             .select(
                 polars.col("ID"),
@@ -463,7 +483,9 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     context = _Context(frame, rdf_map)
     batched, plans = {}, []
     for rule in vectorized:
-        if rule.component in BATCH_BUILDERS and not rule.inverse:
+        # batching joins on class membership — subjectsOf targets take the per-rule path
+        if (rule.component in BATCH_BUILDERS and not rule.inverse
+                and getattr(rule, "target_kind", "class") == "class"):
             batched.setdefault(rule.component, []).append(rule)
         elif (plan := PLAN_BUILDERS[rule.component](context, rule)) is not None:
             plans.append(plan)

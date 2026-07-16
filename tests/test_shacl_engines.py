@@ -301,3 +301,40 @@ def test_shape_message_and_severity_carried(engine):
     v = run(breaker("b1"), shape, engine)
     assert list(v["MESSAGE"]) == ["give it a name"]
     assert list(v["SEVERITY"]) == ["Warning"]
+
+
+def test_target_subjects_of(engine):
+    """sh:targetSubjectsOf — focus = every subject carrying the property,
+    regardless of its class; subjects without it are not targeted."""
+    shape = """cim:SwitchStateShape a sh:NodeShape ;
+        sh:targetSubjectsOf cim:Switch.normalOpen ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = (breaker("b1", ("Switch.normalOpen", "true"))                       # targeted, nameless
+            + breaker("b2", ("Switch.normalOpen", "false"), ("IdentifiedObject.name", "B2"))
+            + [("d1", "Type", "Disconnector", "eq"),
+               ("d1", "Switch.normalOpen", "true", "eq")]                      # other class, still targeted
+            + breaker("b3"))                                                   # not targeted
+    v = run(rows, shape, engine)
+    assert violating(v, "sh:minCount") == {("b1", None), ("d1", None)}
+
+
+def test_target_subjects_of_value_test(engine):
+    """A value constraint under sh:targetSubjectsOf checks the focus set's paths."""
+    shape = """cim:SwitchStateShape a sh:NodeShape ;
+        sh:targetSubjectsOf cim:Switch.normalOpen ;
+        sh:property [ sh:path cim:Switch.normalOpen ; sh:in ( "true" "false" ) ] ."""
+    rows = (breaker("b1", ("Switch.normalOpen", "open"))
+            + breaker("b2", ("Switch.normalOpen", "true")))
+    v = run(rows, shape, engine)
+    assert violating(v, "sh:in") == {("b1", "open")}
+
+
+def test_target_subjects_of_pyshacl_parity(engine):
+    pytest.importorskip("pyshacl")
+    shape = """cim:SwitchStateShape a sh:NodeShape ;
+        sh:targetSubjectsOf cim:Switch.normalOpen ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = (breaker("b1", ("Switch.normalOpen", "true"))
+            + breaker("b2", ("Switch.normalOpen", "false"), ("IdentifiedObject.name", "B2")))
+    assert violating(run(rows, shape, engine), "sh:minCount") \
+        == violating(run(rows, shape, "pyshacl"), "sh:minCount") == {("b1", None)}

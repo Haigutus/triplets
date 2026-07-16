@@ -4,8 +4,8 @@
 
 The module is new — APIs may still shift. Know these before relying on it:
 
-- **Vectorized engines walk `sh:targetClass` only.** Shapes reached solely
-  through `sh:targetNode` / `sh:targetSubjectsOf` / `sh:targetObjectsOf` /
+- **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
+  Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /
   `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —
   `compile()` logs a warning naming them; use `engine="pyshacl"` for full
   spec coverage.
