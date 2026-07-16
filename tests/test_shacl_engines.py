@@ -383,3 +383,61 @@ def test_ill_typed_value_fails_sparql_engine_once_with_context():
     assert violating(violations, "sh:datatype") == {("a1", "abc")}
     # both sh:sparql rules still validated via the rdflib fallback
     assert violating(violations, "sh:sparql") == {("a2", "reserved"), ("a1", "banned")}
+
+
+VALUE_TYPE_SHAPE = """@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+cim:BreakerBayShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [
+        sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ;
+        sh:in ( cim:Bay cim:VoltageLevel ) ;
+        sh:nodeKind sh:IRI ;
+        sh:message "container must be a Bay or a VoltageLevel" ;
+    ] ."""
+
+
+def test_sequence_path_via_type(engine):
+    """The ENTSO-E valueType pattern — sh:path ( assoc rdf:type ) — checks the
+    referenced object's class. Wrong-class targets are flagged; a dangling
+    reference yields no value node (SHACL path semantics) and passes."""
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "bay1"))
+            + breaker("b2", ("Equipment.EquipmentContainer", "sub1"))
+            + breaker("b3", ("Equipment.EquipmentContainer", "missing"))
+            + [("bay1", "Type", "Bay", "eq"), ("sub1", "Type", "Substation", "eq")])
+    v = run(rows, VALUE_TYPE_SHAPE, engine)
+    assert violating(v, "sh:in") == {("b2", "Substation")}
+    assert violating(v, "sh:nodeKind") == set()   # types are IRIs by definition
+
+
+def test_sequence_path_via_type_pyshacl_parity(engine):
+    # UUID-shaped ids: the rdflib graph links references only for
+    # reference-like values, plain names would load as literals
+    pytest.importorskip("pyshacl")
+    bay = "aaaaaaaa-1111-2222-3333-444444444444"
+    sub = "bbbbbbbb-1111-2222-3333-444444444444"
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", bay))
+            + breaker("b2", ("Equipment.EquipmentContainer", sub))
+            + [(bay, "Type", "Bay", "eq"), (sub, "Type", "Substation", "eq")])
+    # pyshacl reports the type as the full IRI, the triplets engines as the
+    # stored local name — same violation, compare on local names
+    reference = {(focus, value.rsplit("#", 1)[-1])
+                 for focus, value in violating(run(rows, VALUE_TYPE_SHAPE, "pyshacl"), "sh:in")}
+    assert violating(run(rows, VALUE_TYPE_SHAPE, engine), "sh:in") \
+        == reference == {("b2", "Substation")}
+
+
+def test_unsupported_property_paths_still_skip_with_warning(caplog):
+    """Longer sequences / zeroOrMorePath stay out of the IR — skipped with the
+    coverage warning (pyshacl covers them)."""
+    import logging
+    shape = """@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+        cim:DeepShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path ( cim:Equipment.EquipmentContainer cim:Bay.VoltageLevel rdf:type ) ;
+                      sh:in ( cim:VoltageLevel ) ] ;
+        sh:property [ sh:path [ sh:zeroOrMorePath cim:Bay.VoltageLevel ] ; sh:minCount 1 ] ."""
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    with caplog.at_level(logging.WARNING, logger="triplets.validation.shacl_ir"):
+        compiled = triplets.validation.compile(graph)
+    assert len(compiled.ir) == 0
+    assert sum("cannot express" in record.message for record in caplog.records) == 2

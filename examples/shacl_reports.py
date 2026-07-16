@@ -35,9 +35,9 @@ import pandas
 import triplets
 from triplets.export_schema import schemas
 
-# The vectorized engines skip the ~60 valueType shapes whose sh:path is a
-# sequence path (association -> rdf:type) and warn per shape — documented
-# coverage caveat (use engine="pyshacl" for those); silenced here for readability.
+# The ( assoc rdf:type ) valueType shapes are vectorized; only a couple of
+# genuinely inexpressible property paths remain skipped with a warning
+# (use engine="pyshacl" for those) — silenced here for readability.
 logging.getLogger("triplets.validation").setLevel(logging.ERROR)
 
 HERE = Path(__file__).resolve().parent

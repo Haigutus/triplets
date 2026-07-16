@@ -9,6 +9,12 @@ The module is new — APIs may still shift. Know these before relying on it:
   `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —
   `compile()` logs a warning naming them; use `engine="pyshacl"` for full
   spec coverage.
+- **Property paths**: direct, `sh:inversePath`, and the two-step sequence
+  `sh:path ( assoc rdf:type )` (the ENTSO-E "valueType" pattern — the
+  constraint applies to the referenced object's type; a dangling reference
+  yields no value node per SHACL path semantics). Longer sequences and the
+  `*OrMorePath` forms are skipped with a compile warning; `engine="pyshacl"`
+  covers them.
 - **Deliberate deviation from pyshacl**: datatype checks judge the raw
   *lexical form* of values (`lexical=True`, the default) — see the dedicated
   section below. `engine="reference"` always gives the pure pyshacl view.
