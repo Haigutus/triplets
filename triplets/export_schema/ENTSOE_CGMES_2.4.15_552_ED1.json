@@ -18,7 +18,13 @@
             "modified": "2014-08-07",
             "label": "DiagramLayoutProfile",
             "comment": "This profile has been built on the basis of the IEC 61970-453 document and adjusted to fit the purpose of the ENTSO-E CGMES.",
-            "serialization": "552_ED1"
+            "serialization": "552_ED1",
+            "header": {
+                "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
+                "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                "versionIRI": "https://ap-voc.cim4.eu/DocumentHeader/2.3",
+                "versionInfo": "2.3.5"
+            }
         },
         "ProfileNamespaceMap": {
             "cims": "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
@@ -1240,7 +1246,13 @@
             "modified": "2014-08-07",
             "label": "DynamicsProfile",
             "comment": "The CIM dynamic model definitions reflect the most common IEEE or, in the case of wind models, IEC, representations of models as well as models included in some of the transient stability software widely used by utilities. \n\nThese dynamic models are intended to ensure interoperability between different vendors\u2019 software products currently in use by electric utility energy companies, utilities, TSOs and RTO/ISOs.  It is important to note that each vendor is free to select its own internal implementation of these models.  Differences in vendor results, as long as they are within accepted engineering practice, caused by different internal representations, are acceptable.\n\nNotes:\n1. Wind models package is defined in accordance with IEC 61400-27-1 version CDV 2013-08-15.",
-            "serialization": "552_ED1"
+            "serialization": "552_ED1",
+            "header": {
+                "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
+                "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                "versionIRI": "https://ap-voc.cim4.eu/DocumentHeader/2.3",
+                "versionInfo": "2.3.5"
+            }
         },
         "ProfileNamespaceMap": {
             "cims": "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
@@ -36709,7 +36721,13 @@
             "modified": "2014-08-07",
             "label": "EquipmentBoundaryProfile",
             "comment": "This profile has been built on the basis of the IEC 61970-452 document and adjusted to fit the purpose of the ENTSO-E boundary profile.",
-            "serialization": "552_ED1"
+            "serialization": "552_ED1",
+            "header": {
+                "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
+                "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                "versionIRI": "https://ap-voc.cim4.eu/DocumentHeader/2.3",
+                "versionInfo": "2.3.5"
+            }
         },
         "ProfileNamespaceMap": {
             "cims": "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
@@ -37846,7 +37864,13 @@
             "modified": "2014-08-07",
             "label": "EquipmentProfile",
             "comment": "This profile has been built on the basis of the IEC 61970-452 document and adjusted to fit the purpose of the ENTSO-E CGMES.",
-            "serialization": "552_ED1"
+            "serialization": "552_ED1",
+            "header": {
+                "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
+                "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                "versionIRI": "https://ap-voc.cim4.eu/DocumentHeader/2.3",
+                "versionInfo": "2.3.5"
+            }
         },
         "ProfileNamespaceMap": {
             "cims": "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
@@ -48276,7 +48300,13 @@
             "modified": "2019-07-26",
             "label": "FileHeaderProfile",
             "comment": "The package describes the profile for the exchange of power system model data according to IEC 61970-552. It contains extensions used for data exchanges based on IEC 61970-600.",
-            "serialization": "552_ED1"
+            "serialization": "552_ED1",
+            "header": {
+                "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
+                "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                "versionIRI": "https://ap-voc.cim4.eu/DocumentHeader/2.3",
+                "versionInfo": "2.3.5"
+            }
         },
         "ProfileNamespaceMap": {
             "cims": "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
@@ -48960,7 +48990,13 @@
             "modified": "2014-08-07",
             "label": "GeographicalLocationProfile",
             "comment": "This geographical location profile is built on the basis of the IEC profile. There is small difference in one association which is specific for exchanges between TSOs.",
-            "serialization": "552_ED1"
+            "serialization": "552_ED1",
+            "header": {
+                "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
+                "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                "versionIRI": "https://ap-voc.cim4.eu/DocumentHeader/2.3",
+                "versionInfo": "2.3.5"
+            }
         },
         "ProfileNamespaceMap": {
             "cims": "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
@@ -49876,7 +49912,13 @@
             "modified": "2014-08-07",
             "label": "StateVariablesProfile",
             "comment": "This profile has been built on the basis of the IEC 61970-456 document and adjusted to fit the purpose of the ENTSO-E CGMES.",
-            "serialization": "552_ED1"
+            "serialization": "552_ED1",
+            "header": {
+                "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
+                "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                "versionIRI": "https://ap-voc.cim4.eu/DocumentHeader/2.3",
+                "versionInfo": "2.3.5"
+            }
         },
         "ProfileNamespaceMap": {
             "cims": "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
@@ -51163,7 +51205,13 @@
             "modified": "2014-08-07",
             "label": "SteadyStateHypothesisProfile",
             "comment": "This profile has been built on the basis of the IEC 61970-456 document and adjusted to fit the purpose of the ENTSO-E CGMES.",
-            "serialization": "552_ED1"
+            "serialization": "552_ED1",
+            "header": {
+                "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
+                "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                "versionIRI": "https://ap-voc.cim4.eu/DocumentHeader/2.3",
+                "versionInfo": "2.3.5"
+            }
         },
         "ProfileNamespaceMap": {
             "cims": "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
@@ -53532,7 +53580,13 @@
             "modified": "2014-08-07",
             "label": "TopologyBoundaryProfile",
             "comment": "This profile has been built on the basis of the IEC 61970-456 document and adjusted to fit the purpose of the ENTSO-E  boundary profile.",
-            "serialization": "552_ED1"
+            "serialization": "552_ED1",
+            "header": {
+                "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
+                "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                "versionIRI": "https://ap-voc.cim4.eu/DocumentHeader/2.3",
+                "versionInfo": "2.3.5"
+            }
         },
         "ProfileNamespaceMap": {
             "cims": "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",
@@ -54485,7 +54539,13 @@
             "modified": "2014-08-07",
             "label": "TopologyProfile",
             "comment": "This profile has been built on the basis of the IEC 61970-456 document and adjusted to fit the purpose of the ENTSO-E CGMES.",
-            "serialization": "552_ED1"
+            "serialization": "552_ED1",
+            "header": {
+                "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
+                "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
+                "versionIRI": "https://ap-voc.cim4.eu/DocumentHeader/2.3",
+                "versionInfo": "2.3.5"
+            }
         },
         "ProfileNamespaceMap": {
             "cims": "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#",

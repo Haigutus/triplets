@@ -389,6 +389,10 @@ def build_bundle(name, spec, serialization_versions=("552_ED1", "552_ED2")):
     header_profile.pop("ProfileXMLBase")
     header_namespace_map = header_profile.pop("ProfileNamespaceMap")
 
+    # Identity of the header profile injected into each section
+    header_metadata = {key: value for key, value in get_metadata(header_data).to_dict().items()
+                       if key in ("keyword", "title", "identifier", "versionInfo", "versionIRI")}
+
     # Load Schema
     files_list = [file for file in rdfs_tools.list_of_files(str(RDFS_ROOT / spec["rdfs_dir"]), ".rdf")
                   if Path(file).name not in spec.get("exclude", set())]
@@ -407,6 +411,8 @@ def build_bundle(name, spec, serialization_versions=("552_ED1", "552_ED2")):
             profile["ProfileNamespaceMap"].update(
                 {key: value for key, value in header_namespace_map.items() if
                  key not in profile["ProfileNamespaceMap"]})
+
+            profile["ProfileMetadata"]["header"] = header_metadata
 
         export_file_name = EXPORT_DIR / f"{name}_{serialization_version}.json"
 
