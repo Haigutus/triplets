@@ -31,7 +31,7 @@ _SAMPLES = 3   # per end: grouped results carry the first 3 and last 3 instances
 
 
 def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True,
-                    path=None, export_to_memory=False):
+                    sources=None, path=None, export_to_memory=False):
     """Violations frame → SARIF 2.1.0 log.
 
     Parameters
@@ -45,6 +45,13 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
     group : bool, default True
         One result per rule (occurrenceCount + sample instances) instead of
         one result per violation row.
+    sources : optional
+        The original CIM/XML files (paths/zips/file-likes, same shapes
+        read_rdf accepts). When given, the reported instances are located
+        in the text (one grep-style pass per file, at export time only) and
+        results carry physicalLocation.region.startLine pointing at the
+        violated property element (or the object definition) — what GitHub
+        code scanning needs to annotate lines.
     path : str or Path, optional
         Output file (default "report.sarif"). Ignored with export_to_memory.
     export_to_memory : bool, default False
@@ -54,7 +61,7 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
             and not set(ENRICHMENT_COLUMNS) <= set(violations.columns):
         violations = enrich(violations, data=data, shapes=shapes, rdf_map=rdf_map)
 
-    payload = json.dumps(build_sarif(violations, group=group),
+    payload = json.dumps(build_sarif(violations, group=group, sources=sources),
                          ensure_ascii=False, indent=2).encode("utf-8")
     if export_to_memory:
         buffer = io.BytesIO(payload)
@@ -68,25 +75,28 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
     return path
 
 
-def build_sarif(violations, group=True):
-    """Violations frame → SARIF document dict (pure, I/O-free)."""
+def build_sarif(violations, group=True, sources=None):
+    """Violations frame → SARIF document dict (I/O only when *sources* is
+    given — see export_to_sarif; the pass reads just the source files)."""
     frame = violations.copy()
     for column in ENRICHMENT_COLUMNS:                # tolerate un-enriched frames
         if column not in frame.columns:
             frame[column] = pandas.NA
 
+    groups = [(key, rows.to_dict("records")) for key, rows
+              in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False)]
+    located = _locate_reported(groups, group, sources) if sources is not None else {}
+
     rules, results = [], []
     seen_ids = {}
-    for (shape, constraint), rows in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"],
-                                                   dropna=False, sort=False):
-        records = rows.to_dict("records")
+    for (shape, constraint), records in groups:
         rule = _rule(shape, constraint, records, seen_ids)
         rule_index = len(rules)
         rules.append(rule)
         if group:
-            results.append(_grouped_result(rule["id"], rule_index, records))
+            results.append(_grouped_result(rule["id"], rule_index, records, located))
         else:
-            results.extend(_result(rule["id"], rule_index, record) for record in records)
+            results.extend(_result(rule["id"], rule_index, record, located) for record in records)
 
     import triplets
     return {
@@ -102,6 +112,24 @@ def build_sarif(violations, group=True):
             "results": results,
         }],
     }
+
+
+def _samples(records):
+    """The instances a grouped result reports: all, or first 3 + last 3."""
+    return records if len(records) <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
+
+
+def _locate_reported(groups, group, sources):
+    """Source regions for exactly the records that will emit locations —
+    the grouped samples (a handful per rule) or every record (group=False)."""
+    from .locations import locate
+
+    wanted = {}
+    for _, records in groups:
+        for record in (_samples(records) if group else records):
+            if not pandas.isna(record["ID"]):
+                wanted.setdefault(str(record["ID"]), set()).add(_value(record["KEY"]))
+    return locate(wanted, sources)
 
 
 def _rule(shape, constraint, records, seen_ids):
@@ -124,16 +152,17 @@ def _rule(shape, constraint, records, seen_ids):
     })
 
 
-def _grouped_result(rule_id, rule_index, records):
+def _grouped_result(rule_id, rule_index, records, located={}):
     total = len(records)
-    samples = records if total <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
+    samples = _samples(records)
     head = ", ".join(filter(None, (_describe(record) for record in samples[:_SAMPLES])))
     tail = ", ".join(filter(None, (_describe(record) for record in samples[_SAMPLES:])))
     described = f"{head} … {tail}" if total > 2 * _SAMPLES else ", ".join(filter(None, (head, tail)))
 
     message = _message(records[0])
     text = f"{message} — {total} object(s) affected." + (f" Examples: {described}" if described else "")
-    locations = [location for location in (_location(record) for record in samples) if location]
+    locations = [location for location in (_location(record, located) for record in samples)
+                 if location]
     return _prune({
         "ruleId": rule_id,
         "ruleIndex": rule_index,
@@ -156,8 +185,8 @@ def _grouped_result(rule_id, rule_index, records):
     })
 
 
-def _result(rule_id, rule_index, record):
-    location = _location(record)
+def _result(rule_id, rule_index, record, located={}):
+    location = _location(record, located)
     return _prune({
         "ruleId": rule_id,
         "ruleIndex": rule_index,
@@ -204,11 +233,10 @@ def _describe(record):
     return " ".join(parts)
 
 
-def _location(record):
-    """RDF objects have no text coordinates — point at the model element via
-    logicalLocations, plus the source file when the enrichment traced it.
-    TODO: emit physicalLocation.region (line/column inside the source XML)
-    once the parser records element positions."""
+def _location(record, located={}):
+    """Point at the model element via logicalLocations; the physical side is
+    the exact source region when locations.locate found the object (sources=
+    passed to the export), else just the file the enrichment traced."""
     if pandas.isna(record["ID"]):
         return None
     qualified = (f"{record['OBJECT_TYPE']}/{record['ID']}"
@@ -218,7 +246,14 @@ def _location(record):
         "name": _value(record["OBJECT_NAME"]) or str(record["ID"]),
         "kind": "object",
     })]}
-    if not pandas.isna(record["INSTANCE_LABEL"]):
+    entry = located.get(str(record["ID"]))
+    if entry is not None:
+        line = entry["keyLines"].get(_value(record["KEY"]), entry["startLine"])
+        location["physicalLocation"] = {
+            "artifactLocation": {"uri": quote(entry["uri"], safe="/")},
+            "region": {"startLine": line},
+        }
+    elif not pandas.isna(record["INSTANCE_LABEL"]):
         location["physicalLocation"] = {
             "artifactLocation": {"uri": quote(str(record["INSTANCE_LABEL"]))}}
     return location

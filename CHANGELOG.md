@@ -37,7 +37,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `triplets.validation.export_to_sarif`): violations → SARIF log for GitHub /
   SonarQube / any SARIF viewer. Grouped by default — one result per rule with
   `occurrenceCount` and first-3/last-3 sample instances (`group=False` for
-  one result per violation).
+  one result per violation). `sources=` locates the reported instances in
+  the original XML (grep-style pass at export time) and emits exact
+  `region.startLine` annotations for GitHub code scanning.
 - **Context enrichment** (`validate(..., context=True)`,
   `violations.shacl.enrich(...)`): optional slower pass adding instance/file,
   object type/name, shape name/description (sh:name/sh:description, inherited

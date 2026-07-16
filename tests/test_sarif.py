@@ -198,3 +198,81 @@ def test_github_code_scanning_requirements(violations):
         for location in result.get("locations", []):
             uri = location["physicalLocation"]["artifactLocation"]["uri"]
             assert "://" not in uri and not uri.startswith("/")
+
+
+XML = """<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:cim="http://iec.ch/TC57/CIM100#">
+  <cim:ACLineSegment rdf:ID="_aaaaaaaa-2222-3333-4444-555555555555">
+    <cim:IdentifiedObject.name>L1</cim:IdentifiedObject.name>
+  </cim:ACLineSegment>
+  <cim:ACLineSegment rdf:ID="_bbbbbbbb-2222-3333-4444-555555555555">
+    <cim:Conductor.length>7</cim:Conductor.length>
+  </cim:ACLineSegment>
+</rdf:RDF>
+"""
+# object definitions on lines 4 and 7; L1's name property on line 5
+
+
+def test_regions_from_sources(shapes, tmp_path):
+    """sources= locates the violating objects in the XML text: the region
+    points at the violated property's line, or the object definition."""
+    xml = tmp_path / "grid EQ.xml"
+    xml.write_text(XML, encoding="utf-8")
+    data = pandas.read_RDF([str(xml)])
+    violations = triplets.validation.validate(data, shapes, engine="pandas", context=True)
+
+    run = build_sarif(violations, group=False, sources=[str(xml)])["runs"][0]
+    regions = {(result["properties"]["id"], result["properties"]["key"]):
+               result["locations"][0]["physicalLocation"] for result in run["results"]}
+
+    # 'a' misses Conductor.length (not in its element) → object definition line
+    a_length = regions[("aaaaaaaa-2222-3333-4444-555555555555", "Conductor.length")]
+    assert a_length["region"]["startLine"] == 4
+    # 'b' misses IdentifiedObject.name → its object definition line
+    b_name = regions[("bbbbbbbb-2222-3333-4444-555555555555", "IdentifiedObject.name")]
+    assert b_name["region"]["startLine"] == 7
+    assert b_name["artifactLocation"]["uri"].endswith("grid%20EQ.xml")
+
+
+def test_region_points_at_property_line(tmp_path):
+    """A value violation lands on the property element's own line."""
+    import rdflib
+    shape = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:ShortName a sh:NodeShape ; sh:targetClass cim:ACLineSegment ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:maxLength 1 ] .
+"""
+    graph = rdflib.Graph(); graph.parse(data=shape, format="turtle")
+    xml = tmp_path / "grid.xml"
+    xml.write_text(XML, encoding="utf-8")
+    data = pandas.read_RDF([str(xml)])
+    violations = triplets.validation.validate(data, graph, engine="pandas", context=True)
+
+    run = build_sarif(violations, sources=[str(xml)])["runs"][0]
+    location = run["results"][0]["locations"][0]["physicalLocation"]
+    assert location["region"]["startLine"] == 5          # the name property line, not line 4
+
+
+def test_regions_schema_and_github_shape(shapes, tmp_path):
+    """Documents with regions still validate against the official schema."""
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads((Path(__file__).parent / "data" / "sarif-schema-2.1.0.json")
+                        .read_text(encoding="utf-8"))
+    xml = tmp_path / "grid.xml"
+    xml.write_text(XML, encoding="utf-8")
+    data = pandas.read_RDF([str(xml)])
+    violations = triplets.validation.validate(data, shapes, engine="pandas", context=True)
+    jsonschema.validate(build_sarif(violations, sources=[str(xml)]), schema)
+    jsonschema.validate(build_sarif(violations, group=False, sources=[str(xml)]), schema)
+
+
+def test_sources_absent_ids_fall_back(shapes):
+    """IDs not found in the sources keep the enrichment-label location."""
+    violations = triplets.validation.validate(frame(count=2), shapes,
+                                              engine="pandas", context=True)
+    run = build_sarif(violations, sources=[])["runs"][0]           # nothing locatable
+    location = run["results"][0]["locations"][0]
+    assert "region" not in location.get("physicalLocation", {})
+    assert location["physicalLocation"]["artifactLocation"]["uri"] == "Svedala%20EQ.xml"

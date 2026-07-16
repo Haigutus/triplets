@@ -304,11 +304,16 @@ enrichment pass first (an already-enriched frame is used as-is).
 - Severity maps `Violation/Warning/Info` → `error/warning/note`; rules carry
   the shape's `sh:name`/`sh:description`; `MESSAGE` falls back to a generated
   text (message is mandatory in SARIF).
-- RDF objects have no text coordinates: results point at the model via
-  `logicalLocations` (`Type/ID` + object name) plus
-  `physicalLocation.artifactLocation.uri` = the source file when the
-  enrichment traced it. Exact line/region locations inside the source XML
-  are a recorded future extension.
+- RDF objects carry no text coordinates through the triplets frame:
+  results always point at the model via `logicalLocations` (`Type/ID` +
+  object name). Passing `sources=` (the original CIM/XML files — paths,
+  zips or file-likes) locates the reported instances in the text at export
+  time and adds `physicalLocation.region.startLine` on the violated
+  property element (or the object definition) — what GitHub code scanning
+  needs to annotate lines. One grep-style pass per file over exactly the
+  reported IDs (`validation/locations.py`); the parse/validate hot paths
+  are untouched. Without `sources=`, `artifactLocation.uri` falls back
+  to the enrichment-traced file label, region-less.
 - Everything domain-specific (triplet coordinates, schema descriptions,
   sample IDs) rides in the `properties` bags.
 
