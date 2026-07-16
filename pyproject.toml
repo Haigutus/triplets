@@ -79,6 +79,7 @@ dev = [
     "pyshacl>=0.30",
     "pyoxigraph>=0.5",
     "oxrdflib>=0.5",
+    "jsonschema>=4.0",   # SARIF output validated against the official 2.1.0 schema
 ]
 # vis-network JS is vendored in triplets/cgmes_tools/static — graph drawing needs no extra deps
 visualization = [

@@ -162,3 +162,39 @@ def test_accessor(violations):
     assert json.loads(buffer.read().decode("utf-8"))["version"] == "2.1.0"
     enriched = violations.shacl.enrich()
     assert "OBJECT_NAME" in enriched.columns
+
+
+def test_official_schema_conformance(violations):
+    """Every output shape validates against the official OASIS SARIF 2.1.0
+    JSON schema (vendored in tests/data)."""
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads((Path(__file__).parent / "data" / "sarif-schema-2.1.0.json")
+                        .read_text(encoding="utf-8"))
+    jsonschema.validate(build_sarif(violations), schema)               # grouped, enriched
+    jsonschema.validate(build_sarif(violations, group=False), schema)  # per-violation
+
+    minimal = pandas.DataFrame(                                        # unenriched, null ID
+        [[None, "IdentifiedObject.name", None, "triplets:invalidSparql",
+          "engine rejected the query", "Warning", None]],
+        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
+    jsonschema.validate(build_sarif(minimal), schema)
+
+
+def test_github_code_scanning_requirements(violations):
+    """GitHub code-scanning ingestion rules (docs.github.com, 'SARIF support
+    for code scanning'): driver.name, a non-empty message.text per result,
+    the level vocabulary, unique rule ids resolvable via ruleIndex, and
+    repo-relative artifact URIs (absolute paths/URIs cannot be annotated).
+    The grouped default also keeps results far under the 25,000-per-run cap."""
+    run = build_sarif(violations)["runs"][0]
+    assert run["tool"]["driver"]["name"]
+    rule_ids = [rule["id"] for rule in run["tool"]["driver"]["rules"]]
+    assert len(rule_ids) == len(set(rule_ids))
+    assert len(run["results"]) <= 25_000
+    for result in run["results"]:
+        assert result["message"]["text"].strip()
+        assert result["level"] in {"none", "note", "warning", "error"}
+        assert rule_ids[result["ruleIndex"]] == result["ruleId"]
+        for location in result.get("locations", []):
+            uri = location["physicalLocation"]["artifactLocation"]["uri"]
+            assert "://" not in uri and not uri.startswith("/")
