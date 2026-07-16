@@ -49,13 +49,21 @@ Generation is deterministic: rerunning `cim_rdfs_to_json` must produce no diff
   instead of relying on the `dcat:keyword` hint (instances use `ap.cim4.eu`, schema
   `versionIRI` uses `ap-voc.cim4.eu`).
 
-## Known upstream defects (to report)
+## Known upstream defects (reported)
 
-- `ncp-v2-4-2` (and the 2.5 draft) dropped `rdfs:domain` from 11 `dcat:Dataset`
-  properties in `DatasetMetadata-AP-Voc-RDFS2020.rdf` (`conformsTo`, `publisher`,
-  `license`, `accessRights`, …) — they can no longer be tied to the Dataset class, so
-  generated 2.4.2/2.5-dev schemas lack those header attributes and exports drop them
-  (pinned by `test_roundtrip_ncp_2_4_2_upstream_domain_regression`).
+- `ncp-v2-4-2` (and the 2.5 draft) dropped `rdfs:domain` from 11 URI-typed
+  `dcat:Dataset` properties in `DatasetMetadata-AP-Voc-RDFS2020.rdf` (`conformsTo`,
+  `publisher`, `license`, `accessRights`, …; upstream commit `489c5c51ac4f`) — they can
+  no longer be tied to the Dataset class, so generated 2.4.2/2.5-dev schemas lack those
+  header attributes and exports drop them (pinned by
+  `test_roundtrip_ncp_2_4_2_upstream_domain_regression`). Reported:
+  [application-profiles-library#92](https://github.com/entsoe/application-profiles-library/issues/92).
 - Several ReliCapGrid example instances do not conform to the released NCP 2.4.x
   profiles (draft-only attributes; `AssociationUsed=No` directions serialized) — the
-  exact cases live in `KNOWN_MISMATCH` in `tests/test_roundtrip_nc.py`.
+  cases for the pinned submodule commit live in `KNOWN_MISMATCH` in
+  `tests/test_roundtrip_nc.py`. Upstream fixed most of them in the 2026-07-15
+  restructure (which also moved instances back to
+  `Instance/<TSO>/NetworkCode/cimxml/`); the surviving cases are reported in
+  [relicapgrid#340](https://github.com/entsoe/relicapgrid/issues/340). Bumping the
+  submodule past that restructure requires updating the data paths in
+  `tests/conftest.py`, `tests/_parity.py` and `tests/test_roundtrip_nc.py`.
