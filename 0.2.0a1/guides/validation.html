@@ -1,0 +1,794 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Building" href="building.html"><link rel="prev" title="SPARQL Architecture" href="sparql.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>SHACL Validation Architecture - triplets 0.2.0a1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=17187ace" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">triplets 0.2.0a1 documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  <span class="sidebar-brand-text">triplets 0.2.0a1 documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Guides</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="parsers.html">Parser Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="exports.html">Export Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="export_schemas.html">Export Schemas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sparql.html">SPARQL Architecture</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="migration_0.0_to_0.1.html">Migration: 0.0 → 0.1</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.tools.html">Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.export.html">Export</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.cli.html">CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.cgmes_tools.html">CGMES Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.rdfs_tools.html">RDFS Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.rdf_parser.html">rdf_parser (deprecated)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.export_schema.html">Export Schema</a></li>
+</ul>
+
+</div></div><div id="version-selector" style="padding: 0.5rem 1rem; border-top: 1px solid var(--color-sidebar-border);">
+  <label for="version-select" style="font-size: 0.85em; color: var(--color-sidebar-caption);">Version</label>
+  <select id="version-select" onchange="if(this.value) window.location.href=this.value"
+          style="width: 100%; padding: 0.3em; margin-top: 0.3em; border-radius: 4px;
+                 border: 1px solid var(--color-sidebar-border);
+                 background: var(--color-sidebar-background);
+                 color: var(--color-sidebar-text);">
+    <option value="">Loading...</option>
+  </select>
+</div>
+<script>
+  fetch('/triplets/versions.json')
+    .then(r => r.json())
+    .then(versions => {
+      const sel = document.getElementById('version-select');
+      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
+      versions.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = '/triplets/' + v + '/';
+        opt.textContent = v;
+        // Highlight current version
+        if (window.location.pathname.includes('/' + v + '/')) {
+          opt.selected = true;
+        }
+        sel.appendChild(opt);
+      });
+      // Check if we're on latest
+      if (window.location.pathname.includes('/latest/')) {
+        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
+      }
+    })
+    .catch(() => {
+      document.getElementById('version-select').innerHTML =
+        '<option value="">latest</option>';
+    });
+</script>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/guides/validation.md.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="shacl-validation-architecture">
+<h1>SHACL Validation Architecture<a class="headerlink" href="#shacl-validation-architecture" title="Link to this heading">¶</a></h1>
+<section id="status-known-limitations-alpha">
+<h2>Status &amp; known limitations (alpha)<a class="headerlink" href="#status-known-limitations-alpha" title="Link to this heading">¶</a></h2>
+<p>The module is new — APIs may still shift. Know these before relying on it:</p>
+<ul class="simple">
+<li><p><strong>Vectorized engines walk <code class="docutils literal notranslate"><span class="pre">sh:targetClass</span></code> and <code class="docutils literal notranslate"><span class="pre">sh:targetSubjectsOf</span></code>.</strong>
+Shapes reached solely through <code class="docutils literal notranslate"><span class="pre">sh:targetNode</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:targetObjectsOf</span></code> /
+<code class="docutils literal notranslate"><span class="pre">sh:target</span></code> (or using <code class="docutils literal notranslate"><span class="pre">sh:xone</span></code>) are invisible to polars/pandas/duckdb —
+<code class="docutils literal notranslate"><span class="pre">compile()</span></code> logs a warning naming them; use <code class="docutils literal notranslate"><span class="pre">engine=&quot;pyshacl&quot;</span></code> for full
+spec coverage.</p></li>
+<li><p><strong>Deliberate deviation from pyshacl</strong>: datatype checks judge the raw
+<em>lexical form</em> of values (<code class="docutils literal notranslate"><span class="pre">lexical=True</span></code>, the default) — see the dedicated
+section below. <code class="docutils literal notranslate"><span class="pre">engine=&quot;reference&quot;</span></code> always gives the pure pyshacl view.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code> BlankNode(+combo) cases are intentionally not implemented in
+the vectorized engines (triplets data has no blank nodes).</p></li>
+<li><p>The duckdb engine streams/spills by design, but a true larger-than-RAM
+validation has not been exercised yet.</p></li>
+</ul>
+</section>
+<section id="engines">
+<h2>Engines<a class="headerlink" href="#engines" title="Link to this heading">¶</a></h2>
+<p>Registry dispatch (mirroring the parser), so compiled engines plug in without
+touching the public API:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Engine</p></th>
+<th class="head"><p>File</p></th>
+<th class="head"><p>Requires</p></th>
+<th class="head"><p>Role</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pyshacl</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">validation/shacl_pyshacl.py</span></code></p></td>
+<td><p>pyshacl + rdflib (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">triplets[validation]</span></code>)</p></td>
+<td><p><strong>reference</strong> — spec-complete, rdflib-based. <code class="docutils literal notranslate"><span class="pre">store=&quot;oxigraph&quot;</span></code> loads the data graph through the oxigraph SPARQL engine’s cached store (identical results; slower than the default Memory store because pyshacl clones the graph into Memory regardless — opt in only when the store is already loaded for SPARQL)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pandas</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">validation/shacl_pandas.py</span></code></p></td>
+<td><p>core (+<code class="docutils literal notranslate"><span class="pre">sparql</span></code> extra for sh:sparql rules)</p></td>
+<td><p>compiled-IR executor for debugging; <strong>complete registry</strong> — <code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code> delegated to <code class="docutils literal notranslate"><span class="pre">triplets.sparql</span></code> (<code class="docutils literal notranslate"><span class="pre">max_workers</span></code> parallelizes those queries), <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> expanded at compile time and run against the referenced value nodes, <code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code> decided by the rdf_map schema (value form when schema is silent). Explicit <code class="docutils literal notranslate"><span class="pre">engine=&quot;pandas&quot;</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">polars</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">validation/shacl_polars.py</span></code></p></td>
+<td><p>polars</p></td>
+<td><p>compiled-IR executor for performance: one LazyFrame plan per constraint, single <code class="docutils literal notranslate"><span class="pre">polars.collect_all</span></code> (parallel, common subplans eliminated). Same semantics as pandas; nested/query components delegate to the pandas implementations. Real Equipment profiles on Svedala EQ: <strong>1.9 s vs pandas 22.6 s vs pyshacl minutes</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">duckdb</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">validation/shacl_duckdb.py</span></code></p></td>
+<td><p>duckdb</p></td>
+<td><p>compiled-IR executor for <strong>larger-than-memory</strong> data: one SQL query per constraint against the <code class="docutils literal notranslate"><span class="pre">triplets</span></code> table (streams/spills via DuckDB’s executor). Accepts a connection (<code class="docutils literal notranslate"><span class="pre">table_name=</span></code> selectable) or registers any frame. Constraints batch 100-per-<code class="docutils literal notranslate"><span class="pre">UNION</span> <span class="pre">ALL</span></code> statement (~10 s on the real profiles vs polars 2 s in-memory) — it is the explicit choice (<code class="docutils literal notranslate"><span class="pre">engine=&quot;duckdb&quot;</span></code>, not in auto) when the data does not fit</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Auto order: <code class="docutils literal notranslate"><span class="pre">polars</span> <span class="pre">→</span> <span class="pre">pandas</span> <span class="pre">→</span> <span class="pre">pyshacl</span></code> (first importable). The vectorized
+engines share the deliberate deviations (lexical datatype, schema-driven
+nodeKind); <code class="docutils literal notranslate"><span class="pre">engine=&quot;reference&quot;</span></code> always gives the pure pyshacl view. Custom
+engines via <code class="docutils literal notranslate"><span class="pre">triplets.validation.register_engine(name,</span> <span class="pre">module)</span></code>.</p>
+</section>
+<section id="compile-once-shacl-ir-py">
+<h2>Compile Once (<code class="docutils literal notranslate"><span class="pre">shacl_ir.py</span></code>)<a class="headerlink" href="#compile-once-shacl-ir-py" title="Link to this heading">¶</a></h2>
+<p>Shapes are parsed by rdflib <strong>exactly once</strong> into <code class="docutils literal notranslate"><span class="pre">CompiledShapes</span></code>, cached by
+content hash of the shape sources:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>shapes.ttl ──rdflib──► CompiledShapes
+                        ├── graph  (rdflib shapes graph — what pyshacl consumes)
+                        ├── ir     (flat constraint table — what the vectorized engines consume)
+                        ├── hash   (content hash, the cache key)
+                        └── plans  {engine name → compiled artifact, filled lazily}
+</pre></div>
+</div>
+<p>The IR is a pandas DataFrame, one row per shape × path × constraint component:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">shape_id</span><span class="p">,</span> <span class="n">target_class</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">inverse</span><span class="p">,</span> <span class="n">component</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">severity</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">description</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">params</span></code> holds the component’s parameter — a scalar (<code class="docutils literal notranslate"><span class="pre">sh:minCount</span></code>), a list
+(<code class="docutils literal notranslate"><span class="pre">sh:in</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:closed</span></code> ignored properties), the SELECT text (<code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code>), or
+nested row lists (<code class="docutils literal notranslate"><span class="pre">sh:or</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:and</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:not</span></code>). A NodeShape with several
+<code class="docutils literal notranslate"><span class="pre">sh:targetClass</span></code> (the ENTSO-E profiles do this) emits every row once per target
+class. Unknown components are kept and logged — engines skip what they don’t
+implement; pyshacl still covers the full spec.</p>
+<p><code class="docutils literal notranslate"><span class="pre">CompiledShapes.plans</span></code> is where each future engine caches its own compiled
+artifact (polars LazyFrame builders, duckdb SQL) — re-validating new data
+against the same shapes never recompiles anything.</p>
+<p>The compile cache participates in the shared engine-state lifecycle:
+<code class="docutils literal notranslate"><span class="pre">triplets.clear_caches()</span></code> drops cached <code class="docutils literal notranslate"><span class="pre">CompiledShapes</span></code> (with their plans)
+together with the SPARQL engines’ loaded state, and
+<code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">triplets.cache_scope():</span></code> bounds the state created inside the block —
+see <a class="reference internal" href="sparql.html"><span class="std std-doc">sparql.md</span></a>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">compiled</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile</span><span class="p">([</span><span class="s2">&quot;equipment.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;topology.ttl&quot;</span><span class="p">])</span>
+<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data_a</span><span class="p">,</span> <span class="n">compiled</span><span class="p">)</span>
+<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data_b</span><span class="p">,</span> <span class="n">compiled</span><span class="p">)</span>   <span class="c1"># shapes parsed once, plans reused</span>
+</pre></div>
+</div>
+</section>
+<section id="engine-contract">
+<h2>Engine Contract<a class="headerlink" href="#engine-contract" title="Link to this heading">¶</a></h2>
+<p>Every engine module implements:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) → violations DataFrame
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>pyshacl</strong> consumes <code class="docutils literal notranslate"><span class="pre">compiled.graph</span></code> (data goes through <code class="docutils literal notranslate"><span class="pre">_rdflib_loader</span></code>).</p></li>
+<li><p><strong>pandas/polars/duckdb</strong> consume <code class="docutils literal notranslate"><span class="pre">compiled.ir</span></code> — they never touch rdflib and
+read the raw string <code class="docutils literal notranslate"><span class="pre">VALUE</span></code>s directly (<code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> matters only for their
+sh:sparql delegation, where it types the queried graph).</p></li>
+<li><p><strong>sh:sparql IR rows</strong>: pyshacl evaluates them natively (<code class="docutils literal notranslate"><span class="pre">advanced=True</span></code>).
+The vectorized engines delegate them to <code class="docutils literal notranslate"><span class="pre">triplets.sparql</span></code> (auto order:
+qlever when built, else oxigraph when installed, else rdflib): the data is
+loaded into one dataset, each constraint runs as a single SELECT with the
+focus nodes bound via <code class="docutils literal notranslate"><span class="pre">VALUES</span> <span class="pre">?this</span> <span class="pre">{...}</span></code> and <code class="docutils literal notranslate"><span class="pre">$PATH</span></code> substituted from
+the IR, and <code class="docutils literal notranslate"><span class="pre">max_workers=N</span></code> runs the constraint queries in parallel
+processes on the rdflib path only (fork gives copy-on-write sharing of the
+dataset; threads don’t help rdflib — it is GIL-bound pure Python; qlever
+and oxigraph are ms-scale sequentially).
+Backend comparison on a 3-constraint sh:sparql shape over Svedala (95k
+rows, <code class="docutils literal notranslate"><span class="pre">shacl-sparql-backend</span></code> benchmark group in
+<code class="docutils literal notranslate"><span class="pre">tests/test_sparql_oxigraph.py</span></code>): <strong>rdflib ~38.5 s, oxigraph ~74 ms,
+qlever ~72 ms</strong> — the pip-installable oxigraph engine closes ~all of the
+qlever gap for sh:sparql workloads (~520x over rdflib).
+Real-profile scale (Svedala EQ, 48k triples, Simple+Complex Equipment SHACL
+= 4,857 IR rows of which 148 sh:sparql, 50 with focus nodes): with the
+embedded <strong>qlever</strong> engine built, the <strong>complete validation — polars +
+qlever — takes ~0.6 s warm</strong> (~0.4 s constraint queries + ~0.16 s
+vectorized components; the on-disk index is content-hashed and reused, and
+within one validation run the data is hashed <strong>once</strong> — the constraint
+queries after the first assert <code class="docutils literal notranslate"><span class="pre">data_unchanged</span></code>). Cold (first contact
+with the dataset: parallel Arrow index build + first hash) adds a few
+seconds. The vectorized components run as <strong>batched per-component plans</strong>
+(the rules become a frame joined against the data on KEY + class
+membership, per-rule messages riding as columns), so ~4,300 rules execute
+as a handful of plans. On the rdflib fallback the same constraint queries
+cost ~3.3 min sequential; the <strong>pyshacl reference exceeds 10 minutes</strong> on
+the same profiles — build the qlever extension (or
+<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">triplets[oxigraph]</span></code>) for sh:sparql-heavy profiles.
+<strong>No query fixing</strong>: constraint queries run exactly as authored. When a
+strict engine rejects one (e.g. the ENTSO-E <code class="docutils literal notranslate"><span class="pre">HAVING</span></code>-without-<code class="docutils literal notranslate"><span class="pre">GROUP</span> <span class="pre">BY</span></code>
+defect, upstream PR entsoe/application-profiles-library#82 — rejected by
+qlever; oxigraph accepts it as implicit grouping but rejects e.g.
+ungrouped projections), the constraint is still evaluated on the lenient
+rdflib engine and the report carries a <code class="docutils literal notranslate"><span class="pre">triplets:invalidSparql</span></code> Warning
+row naming the shape — broken rules get reported and fixed upstream, not
+auto-patched.</p></li>
+</ul>
+</section>
+<section id="the-lexical-form-datatype-deviation">
+<h2>The Lexical-Form Datatype Deviation<a class="headerlink" href="#the-lexical-form-datatype-deviation" title="Link to this heading">¶</a></h2>
+<p>The one deliberate divergence from pyshacl. rdflib compares a literal’s
+<em>declared</em> datatype, so <code class="docutils literal notranslate"><span class="pre">&quot;1&quot;^^xsd:float</span></code> is simply valid — the vectorized
+engines see the raw lexical form and can judge it. Two levels:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Finding</p></th>
+<th class="head"><p>Example (declared <code class="docutils literal notranslate"><span class="pre">xsd:float</span></code>)</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">VIOLATION_TYPE</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">SEVERITY</span></code></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>outside the lexical space</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;abc&quot;</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sh:datatype</span></code></p></td>
+<td><p>shape’s declared severity</p></td>
+</tr>
+<tr class="row-odd"><td><p>valid but narrower/non-canonical form</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;1&quot;</span></code> (integer form)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">triplets:lexicalForm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Warning</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">validate(...,</span> <span class="pre">lexical=True)</span></code> (the default) appends these findings to any
+engine’s report (duplicates dropped on <code class="docutils literal notranslate"><span class="pre">[ID,</span> <span class="pre">KEY,</span> <span class="pre">VALUE,</span> <span class="pre">VIOLATION_TYPE]</span></code>).
+Parity tests treat <code class="docutils literal notranslate"><span class="pre">triplets:lexicalForm</span></code> rows as documented extras: engines
+must never <em>lose</em> a violation pyshacl reports.</p>
+<p><code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> still matters for the pyshacl path: without it every <code class="docutils literal notranslate"><span class="pre">VALUE</span></code> is an
+untyped string, so <code class="docutils literal notranslate"><span class="pre">sh:datatype</span> <span class="pre">xsd:float</span></code> trips on everything; with it the
+N-Quads export attaches real <code class="docutils literal notranslate"><span class="pre">xsd</span></code> types and only genuinely broken values fail.</p>
+</section>
+<section id="result-structure">
+<h2>Result Structure<a class="headerlink" href="#result-structure" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">validate</span></code> always returns the canonical violations DataFrame — <strong>empty =
+conforms</strong> — identical across all engines:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Column</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ID</span></code></p></td>
+<td><p>focus node (instance UUID, <code class="docutils literal notranslate"><span class="pre">urn:uuid:</span></code> stripped)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">KEY</span></code></p></td>
+<td><p>property path (CIM short name, e.g. <code class="docutils literal notranslate"><span class="pre">IdentifiedObject.name</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">VALUE</span></code></p></td>
+<td><p>offending value</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">VIOLATION_TYPE</span></code></p></td>
+<td><p>constraint component (<code class="docutils literal notranslate"><span class="pre">sh:minCount</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:datatype</span></code>, <code class="docutils literal notranslate"><span class="pre">triplets:lexicalForm</span></code>, <code class="docutils literal notranslate"><span class="pre">triplets:invalidSparql</span></code>, …)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MESSAGE</span></code></p></td>
+<td><p>message from the shape</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SEVERITY</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Violation</span></code> / <code class="docutils literal notranslate"><span class="pre">Warning</span></code> / <code class="docutils literal notranslate"><span class="pre">Info</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SOURCE_SHAPE</span></code></p></td>
+<td><p>shape URI that produced the result</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Violations DataFrames export like any other DataFrame (<code class="docutils literal notranslate"><span class="pre">export_to_csv</span></code>, Excel, …).</p>
+</section>
+<section id="polars-engine-guidance">
+<h2>Polars Engine Guidance<a class="headerlink" href="#polars-engine-guidance" title="Link to this heading">¶</a></h2>
+<p>The lazy engine’s design rules. Speed always wins over memory:</p>
+<ul class="simple">
+<li><p>Build <strong>one LazyFrame plan per IR constraint</strong> against a shared <code class="docutils literal notranslate"><span class="pre">.lazy()</span></code>
+base; execute everything with a single <code class="docutils literal notranslate"><span class="pre">polars.collect_all(plans)</span></code> (parallel
+execution + common-subplan elimination). Pre-materialize shared indices once
+(per-Type row index, the set of all IDs) and reuse them across plans.</p></li>
+<li><p>Use expressions only (<code class="docutils literal notranslate"><span class="pre">polars.col</span></code>), <code class="docutils literal notranslate"><span class="pre">Categorical</span></code>/<code class="docutils literal notranslate"><span class="pre">Enum</span></code> dtype for KEY and
+Type, <code class="docutils literal notranslate"><span class="pre">.cast(strict=False)</span></code> + null-check for datatype casts,
+<code class="docutils literal notranslate"><span class="pre">str.contains(literal=True)</span></code> when no regex is needed, join-based membership
+for large <code class="docutils literal notranslate"><span class="pre">sh:in</span></code> lists (<code class="docutils literal notranslate"><span class="pre">is_in</span></code> only for small ones).</p></li>
+<li><p>Avoid <code class="docutils literal notranslate"><span class="pre">map_elements</span></code>/<code class="docutils literal notranslate"><span class="pre">map_rows</span></code> (Python UDFs serialize execution),
+per-constraint eager <code class="docutils literal notranslate"><span class="pre">.collect()</span></code>, <code class="docutils literal notranslate"><span class="pre">.to_pandas()</span></code> round-trips mid-pipeline,
+<code class="docutils literal notranslate"><span class="pre">iter_rows</span></code>, object dtype, eager <code class="docutils literal notranslate"><span class="pre">pivot</span></code> on large frames.</p></li>
+<li><p>No streaming collect — that trades speed for memory, which is the duckdb
+engine’s job. Keep the base frame and indices materialized; rechunk once
+after load.</p></li>
+</ul>
+</section>
+<section id="shared-loading-rdflib-loader-py">
+<h2>Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)<a class="headerlink" href="#shared-loading-rdflib-loader-py" title="Link to this heading">¶</a></h2>
+<p>SHACL and SPARQL reach rdflib through the same two helpers, so a validation and
+a query over the same data see an identical graph:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Function</p></th>
+<th class="head"><p>Produces</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">load_dataset(data,</span> <span class="pre">rdf_map=None,</span> <span class="pre">store=&quot;memory&quot;)</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">rdflib.Dataset</span></code> seeing the deduplicated union, one named graph per <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code> (<code class="docutils literal notranslate"><span class="pre">urn:uuid:{INSTANCE_ID}</span></code>). <code class="docutils literal notranslate"><span class="pre">store=&quot;oxigraph&quot;</span></code> backs it with the oxigraph SPARQL engine’s cached store via oxrdflib (<code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>: oxigraph when installed)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scoped_graph(dataset,</span> <span class="pre">scope=None)</span></code></p></td>
+<td><p>full union when <code class="docutils literal notranslate"><span class="pre">scope</span> <span class="pre">is</span> <span class="pre">None</span></code>; otherwise a concrete <code class="docutils literal notranslate"><span class="pre">Graph</span></code> holding just the scoped instances’ named graphs</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="call-sequence">
+<h2>Call Sequence<a class="headerlink" href="#call-sequence" title="Link to this heading">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span>
+<span class="o">|</span>
+<span class="s1">&#39;-&gt; validation.validate(data, shapes, engine=&quot;auto&quot;, lexical=True)</span>
+    <span class="o">|</span>
+    <span class="o">|-&gt;</span> <span class="nb">compile</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span>                        <span class="c1"># cached by content hash</span>
+    <span class="o">|</span>   <span class="s1">&#39;-&gt; _load_shapes -&gt; parse_ir           # rdflib parses ONCE</span>
+    <span class="o">|</span>
+    <span class="o">|-&gt;</span> <span class="n">get_engine</span><span class="p">(</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>                     <span class="c1"># pyshacl (reference)</span>
+    <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">load_dataset</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">)</span>        <span class="c1"># in-memory N-Quads -&gt; rdflib.Dataset</span>
+    <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">scoped_graph</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span>       <span class="c1"># union, or just scoped instances</span>
+    <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">pyshacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data_graph</span><span class="p">,</span> <span class="n">shacl_graph</span><span class="o">=</span><span class="n">compiled</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+    <span class="o">|</span>   <span class="s1">&#39;-&gt; report_to_violations(report_graph) # ValidationReport -&gt; DataFrame</span>
+    <span class="o">|</span>
+    <span class="s1">&#39;-&gt; + shacl_pandas datatype/lexical findings (the documented deviation)</span>
+</pre></div>
+</div>
+</section>
+<section id="file-layout">
+<h2>File Layout<a class="headerlink" href="#file-layout" title="Link to this heading">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">triplets</span><span class="o">/</span>
+<span class="o">|--</span> <span class="n">_rdflib_loader</span><span class="o">.</span><span class="n">py</span>        <span class="c1"># shared with sparql: load_dataset(), scoped_graph()</span>
+<span class="s1">&#39;-- validation/</span>
+    <span class="o">|--</span> <span class="fm">__init__</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># validate() + compile() dispatcher, engine registry</span>
+    <span class="o">|--</span> <span class="n">shacl_ir</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># shapes -&gt; CompiledShapes (IR compiler, content-hash cache)</span>
+    <span class="o">|--</span> <span class="n">shacl_pyshacl</span><span class="o">.</span><span class="n">py</span>     <span class="c1"># reference engine: data + compiled.graph -&gt; report</span>
+    <span class="o">|--</span> <span class="n">shacl_pandas</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># compiled-IR executor (full registry; eager, debugging)</span>
+    <span class="o">|--</span> <span class="n">shacl_polars</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># compiled-IR executor (lazy plans + collect_all, performance)</span>
+    <span class="o">|--</span> <span class="n">shacl_duckdb</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># compiled-IR executor (SQL per constraint, larger-than-memory)</span>
+    <span class="o">|--</span> <span class="n">shacl_report</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># ValidationReport graph -&gt; violations DataFrame</span>
+    <span class="o">|--</span> <span class="n">context</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># optional enrichment pass (instance/object/shape/schema context)</span>
+    <span class="s1">&#39;-- sarif.py             # violations -&gt; SARIF 2.1.0 (grouped by default)</span>
+</pre></div>
+</div>
+</section>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">triplets.export_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">schemas</span>
+
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="s2">&quot;grid.zip&quot;</span><span class="p">])</span>
+
+<span class="c1"># validate against a shapes file (format auto-detected by extension) — empty = conforms</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;shapes.ttl&quot;</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
+
+<span class="c1"># compile once, validate many</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile</span><span class="p">([</span><span class="s2">&quot;equipment.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;topology.ttl&quot;</span><span class="p">])</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">compiled</span><span class="p">)</span>
+
+<span class="c1"># scope restricts the validated graphs; all data stays loaded for reference resolution</span>
+<span class="n">one_instance</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;shapes.ttl&quot;</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="p">[</span><span class="n">one_instance</span><span class="p">])</span>
+
+<span class="c1"># engines: auto is polars -&gt; pandas -&gt; pyshacl; works on any input flavor</span>
+<span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;shapes.ttl&quot;</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;pyshacl&quot;</span><span class="p">)</span>      <span class="c1"># or &quot;polars&quot; / &quot;pandas&quot; / &quot;duckdb&quot;</span>
+<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">con</span><span class="p">,</span> <span class="s2">&quot;shapes.ttl&quot;</span><span class="p">)</span>          <span class="c1"># DuckDB connection</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;shapes.ttl&quot;</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>   <span class="c1"># pure pyshacl report</span>
+
+<span class="c1"># pyshacl on the oxigraph engine&#39;s cached store (identical results; opt in</span>
+<span class="c1"># when the store is already loaded for SPARQL — Memory is faster otherwise)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;shapes.ttl&quot;</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;pyshacl&quot;</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="s2">&quot;oxigraph&quot;</span><span class="p">)</span>
+
+<span class="c1"># slower optional context pass — adds instance/file, object type/name,</span>
+<span class="c1"># shape sh:name/sh:description and schema definition columns</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=...</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">enrich</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">shapes</span><span class="o">=</span><span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=...</span><span class="p">)</span>  <span class="c1"># same, standalone</span>
+
+<span class="c1"># SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer</span>
+<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_sarif</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;report.sarif&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>pyshacl pass-through options (<code class="docutils literal notranslate"><span class="pre">inference</span></code>, <code class="docutils literal notranslate"><span class="pre">advanced</span></code>, <code class="docutils literal notranslate"><span class="pre">abort_on_first</span></code>,
+<code class="docutils literal notranslate"><span class="pre">store</span></code>) are forwarded as keyword arguments. A runnable end-to-end demo lives
+in <code class="docutils literal notranslate"><span class="pre">examples/shacl_validation.py</span></code>.</p>
+</section>
+<section id="context-enrichment-validation-context-py">
+<h2>Context enrichment (<code class="docutils literal notranslate"><span class="pre">validation/context.py</span></code>)<a class="headerlink" href="#context-enrichment-validation-context-py" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">validate(...,</span> <span class="pre">context=True)</span></code> — or standalone
+<code class="docutils literal notranslate"><span class="pre">enrich(violations,</span> <span class="pre">data=,</span> <span class="pre">shapes=,</span> <span class="pre">rdf_map=)</span></code> — appends <code class="docutils literal notranslate"><span class="pre">ENRICHMENT_COLUMNS</span></code>
+to the report. Every source is optional; absent sources leave their columns
+null, so the output schema is stable:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Columns</p></th>
+<th class="head"><p>Source</p></th>
+<th class="head"><p>Content</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>, <code class="docutils literal notranslate"><span class="pre">INSTANCE_LABEL</span></code></p></td>
+<td><p>data</p></td>
+<td><p>instance and its parsed file name (the <code class="docutils literal notranslate"><span class="pre">Distribution</span></code>/<code class="docutils literal notranslate"><span class="pre">label</span></code> meta rows)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">OBJECT_TYPE</span></code>, <code class="docutils literal notranslate"><span class="pre">OBJECT_NAME</span></code></p></td>
+<td><p>data</p></td>
+<td><p>the focus object’s <code class="docutils literal notranslate"><span class="pre">Type</span></code> and <code class="docutils literal notranslate"><span class="pre">IdentifiedObject.name</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SHAPE_NAME</span></code>, <code class="docutils literal notranslate"><span class="pre">SHAPE_DESCRIPTION</span></code></p></td>
+<td><p>shapes</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sh:name</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:description</span></code> (a property shape inherits the parent NodeShape’s)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SCHEMA_DESCRIPTION</span></code>, <code class="docutils literal notranslate"><span class="pre">SCHEMA_MULTIPLICITY</span></code></p></td>
+<td><p>rdf_map</p></td>
+<td><p>the violated attribute’s schema definition</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CLASS_DESCRIPTION</span></code></p></td>
+<td><p>rdf_map</p></td>
+<td><p>the object’s class description</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Pass the <em>same</em> shapes object the validation ran with — anonymous property
+shapes get fresh blank-node ids per parse, so a re-parsed graph cannot be
+matched. An object present in several instances is attributed to its first
+occurrence.</p>
+</section>
+<section id="sarif-2-1-0-export-validation-sarif-py">
+<h2>SARIF 2.1.0 export (<code class="docutils literal notranslate"><span class="pre">validation/sarif.py</span></code>)<a class="headerlink" href="#sarif-2-1-0-export-validation-sarif-py" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">triplets.validation.export_to_sarif(violations,</span> <span class="pre">...)</span></code> /
+<code class="docutils literal notranslate"><span class="pre">violations.shacl.to_sarif(...)</span></code> — a spec-valid SARIF 2.1.0 log for GitHub,
+SonarQube or any SARIF viewer. Passing <code class="docutils literal notranslate"><span class="pre">data=</span></code>/<code class="docutils literal notranslate"><span class="pre">shapes=</span></code>/<code class="docutils literal notranslate"><span class="pre">rdf_map=</span></code> runs the
+enrichment pass first (an already-enriched frame is used as-is).</p>
+<ul class="simple">
+<li><p><strong>Grouped by default</strong> (<code class="docutils literal notranslate"><span class="pre">group=True</span></code>): a model can carry 100k identical
+findings that are really <em>one</em> issue — each rule becomes one result with
+<code class="docutils literal notranslate"><span class="pre">occurrenceCount</span></code> and the first-3 + last-3 sample instances (all listed
+when ≤ 6). <code class="docutils literal notranslate"><span class="pre">group=False</span></code> emits one result per violation row.</p></li>
+<li><p>Severity maps <code class="docutils literal notranslate"><span class="pre">Violation/Warning/Info</span></code> → <code class="docutils literal notranslate"><span class="pre">error/warning/note</span></code>; rules carry
+the shape’s <code class="docutils literal notranslate"><span class="pre">sh:name</span></code>/<code class="docutils literal notranslate"><span class="pre">sh:description</span></code>; <code class="docutils literal notranslate"><span class="pre">MESSAGE</span></code> falls back to a generated
+text (message is mandatory in SARIF).</p></li>
+<li><p>RDF objects carry no text coordinates through the triplets frame:
+results always point at the model via <code class="docutils literal notranslate"><span class="pre">logicalLocations</span></code> (<code class="docutils literal notranslate"><span class="pre">Type/ID</span></code> +
+object name). Passing <code class="docutils literal notranslate"><span class="pre">sources=</span></code> (the original CIM/XML files — paths,
+zips or file-likes) locates the reported instances in the text at export
+time and adds <code class="docutils literal notranslate"><span class="pre">physicalLocation.region.startLine</span></code> on the violated
+property element (or the object definition) — what GitHub code scanning
+needs to annotate lines. One grep-style pass per file over exactly the
+reported IDs (<code class="docutils literal notranslate"><span class="pre">validation/locations.py</span></code>); the parse/validate hot paths
+are untouched. Without <code class="docutils literal notranslate"><span class="pre">sources=</span></code>, <code class="docutils literal notranslate"><span class="pre">artifactLocation.uri</span></code> falls back
+to the enrichment-traced file label, region-less.</p></li>
+<li><p>Everything domain-specific (triplet coordinates, schema descriptions,
+sample IDs) rides in the <code class="docutils literal notranslate"><span class="pre">properties</span></code> bags.</p></li>
+</ul>
+</section>
+<section id="naming-convention">
+<h2>Naming Convention<a class="headerlink" href="#naming-convention" title="Link to this heading">¶</a></h2>
+<p>Engine files follow <code class="docutils literal notranslate"><span class="pre">{purpose}_{engine}.py</span></code>, mirroring the parser and export
+modules. Shared loading lives in <code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>; the IR compiler in
+<code class="docutils literal notranslate"><span class="pre">shacl_ir.py</span></code>; the report normalizer in <code class="docutils literal notranslate"><span class="pre">shacl_report.py</span></code>.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="building.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Building</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="sparql.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">SPARQL Architecture</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, Kristjan Vilgo
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">SHACL Validation Architecture</a><ul>
+<li><a class="reference internal" href="#status-known-limitations-alpha">Status &amp; known limitations (alpha)</a></li>
+<li><a class="reference internal" href="#engines">Engines</a></li>
+<li><a class="reference internal" href="#compile-once-shacl-ir-py">Compile Once (<code class="docutils literal notranslate"><span class="pre">shacl_ir.py</span></code>)</a></li>
+<li><a class="reference internal" href="#engine-contract">Engine Contract</a></li>
+<li><a class="reference internal" href="#the-lexical-form-datatype-deviation">The Lexical-Form Datatype Deviation</a></li>
+<li><a class="reference internal" href="#result-structure">Result Structure</a></li>
+<li><a class="reference internal" href="#polars-engine-guidance">Polars Engine Guidance</a></li>
+<li><a class="reference internal" href="#shared-loading-rdflib-loader-py">Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)</a></li>
+<li><a class="reference internal" href="#call-sequence">Call Sequence</a></li>
+<li><a class="reference internal" href="#file-layout">File Layout</a></li>
+<li><a class="reference internal" href="#usage">Usage</a></li>
+<li><a class="reference internal" href="#context-enrichment-validation-context-py">Context enrichment (<code class="docutils literal notranslate"><span class="pre">validation/context.py</span></code>)</a></li>
+<li><a class="reference internal" href="#sarif-2-1-0-export-validation-sarif-py">SARIF 2.1.0 export (<code class="docutils literal notranslate"><span class="pre">validation/sarif.py</span></code>)</a></li>
+<li><a class="reference internal" href="#naming-convention">Naming Convention</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=fb6ffdf1"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>
