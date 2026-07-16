@@ -18,9 +18,9 @@ FRAME = pandas.DataFrame(
         # a UUID-shaped VALUE exports as a reference IRI and must round-trip
         ("11111111-2222-3333-4444-555555555555", "Equipment.EquipmentContainer",
          "99999999-8888-7777-6666-555555555555", "g1"),
-        # escaping round-trip: quote, backslash, newline
+        # escaping round-trip: quote, backslash, newline, carriage return, tab
         ("aaaaaaaa-2222-3333-4444-555555555555", "IdentifiedObject.description",
-         'say "hi" \\ twice\nline two', "g2"),
+         'say "hi" \\ twice\nline two\rreturn\ttab', "g2"),
     ],
     columns=["ID", "KEY", "VALUE", "INSTANCE_ID"],
 )
@@ -39,6 +39,16 @@ def canon(frame):
 def test_roundtrip_recovers_triplets():
     result = roundtrip(FRAME)
     pandas.testing.assert_frame_equal(canon(result), canon(FRAME))
+
+
+def test_control_characters_load_into_oxigraph():
+    """The exporter escape set must produce grammar-valid N-Quads — a raw \\r
+    used to slip through unescaped and broke strict ingest."""
+    pyoxigraph = pytest.importorskip("pyoxigraph")
+    buffer = export_to_nquads(FRAME, export_to_memory=True)
+    store = pyoxigraph.Store()
+    store.bulk_load(buffer.getvalue(), format=pyoxigraph.RdfFormat.N_QUADS)
+    assert len(store) == len(FRAME)
 
 
 def test_roundtrip_with_rdf_map_drops_datatype_to_lexical():

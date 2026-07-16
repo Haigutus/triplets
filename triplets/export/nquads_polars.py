@@ -53,7 +53,8 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     escaped = (pl.col("VALUE")
                .str.replace_all("\\", "\\\\", literal=True)
                .str.replace_all('"', '\\"', literal=True)
-               .str.replace_all("\n", "\\n", literal=True))
+               .str.replace_all("\n", "\\n", literal=True)
+               .str.replace_all("\r", "\\r", literal=True))
     plain_literal = pl.format('"{}"', escaped)
 
     subject = _iri_or_uuid("ID")

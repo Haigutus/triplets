@@ -93,12 +93,21 @@ def _store_for(data, rdf_map, data_unchanged=False):
         data = _to_loadable(data)
     key = content_key(data, rdf_map, b"triplets-oxigraph-1", data_unchanged)
     if key in _STORES:
-        return _STORES[key]
+        cached = _STORES[key]
+        if isinstance(cached, Exception):   # this exact data+schema already failed to load
+            raise cached
+        return cached
 
     buffer = export_to_nquads(_to_loadable(data), rdf_map=rdf_map, export_to_memory=True)
     buffer.seek(0)
     store = pyoxigraph.Store()   # in-memory
-    store.bulk_load(buffer, format=RdfFormat.N_QUADS)
+    try:
+        store.bulk_load(buffer, format=RdfFormat.N_QUADS)
+    except Exception as error:
+        # Cache the failure: the load is deterministic for this content hash,
+        # so every retry would pay the full export+load just to fail again.
+        _STORES[key] = error
+        raise
     # default graph := deduplicated union of the named graphs (rdflib
     # default_union set-semantics parity for unscoped queries)
     store.update("INSERT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }")

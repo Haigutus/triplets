@@ -67,8 +67,8 @@ def torture_frame():
         # O7: UUID reference under unmapped KEY (lowercase only)
         (UUID_A, "RefKey", UUID_B, INSTANCE_1),
         (UUID_A, "NotRef", UUID_B.upper(), INSTANCE_1),                     # stays literal
-        # O8/E1: plain literals with characters the text path escapes (or broke on)
-        (UUID_A, "IdentifiedObject.name", 'q"uo\\te\nnew', INSTANCE_1),
+        # O8/E1: plain literals with characters the text path escapes
+        (UUID_A, "IdentifiedObject.name", 'q"uo\\te\nnew\rreturn', INSTANCE_1),
         (UUID_A, "Desc", "tab\there", INSTANCE_1),
         (UUID_A, "Unicode", "õäöü€", INSTANCE_2),
         (UUID_A, "Empty", "", INSTANCE_1),
@@ -106,14 +106,8 @@ def build_via_arrow(data, rdf_map, directory):
 
 @pytest.mark.parametrize("rdf_map", [None, RDF_MAP], ids=["schema-less", "typed"])
 def test_arrow_ingest_matches_nquads_ingest(rdf_map):
-    """The full quad dump is identical whichever way the index was fed.
-
-    Torture rows with characters beyond the text path's escape set (tab) are
-    excluded here — the text path emits broken N-Quads for them (the arrow
-    path handles them correctly; see test_characters_beyond_the_escape_set).
-    """
+    """The full quad dump is identical whichever way the index was fed."""
     data = torture_frame()
-    data = data[data["KEY"] != "Desc"].reset_index(drop=True)
     with tempfile.TemporaryDirectory() as directory:
         via_nquads = quad_dump(build_via_nquads(data, rdf_map, directory))
         via_arrow = quad_dump(build_via_arrow(data, rdf_map, directory))
@@ -122,8 +116,8 @@ def test_arrow_ingest_matches_nquads_ingest(rdf_map):
 
 
 def test_characters_beyond_the_escape_set():
-    """Literals with \\t or \\r broke the text path (its escape set is only
-    backslash, quote, newline) — the arrow path ingests them losslessly."""
+    """Raw \\t is legal in N-Quads strings and \\r is escaped since the
+    exporter fix — both paths ingest them losslessly."""
     data = pandas.DataFrame({
         "ID": [UUID_A], "KEY": ["Desc"], "VALUE": ["tab\there\rreturn"],
         "INSTANCE_ID": [INSTANCE_1]})
@@ -212,3 +206,15 @@ def test_svedala_parity_smoke():
         via_nquads = quad_dump(build_via_nquads(data, None, directory))
         via_arrow = quad_dump(build_via_arrow(data, None, directory))
     pandas.testing.assert_frame_equal(via_arrow, via_nquads)
+
+
+def test_ill_typed_value_error_names_the_offender():
+    """A value that cannot be parsed under its schema datatype fails the build
+    (strict by design — data-vs-schema errors are reported, not fixed) and the
+    error names key, value and datatype so it is directly actionable."""
+    data = pandas.DataFrame({
+        "ID": [UUID_A], "KEY": ["Test.float"], "VALUE": ["abc"],
+        "INSTANCE_ID": [INSTANCE_1]})
+    with tempfile.TemporaryDirectory() as directory:
+        with pytest.raises(RuntimeError, match=r'Test\.float.*"abc".*XMLSchema#float'):
+            build_via_arrow(data, RDF_MAP, directory)

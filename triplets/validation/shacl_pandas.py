@@ -126,6 +126,9 @@ class _Context(SchemaKind):
         # validation run: after the first sh:sparql query has hashed it, the
         # rest assert data_unchanged and skip the per-query content_hash.
         self.data_hashed = False
+        # Last engine exception — a cached ingest failure re-raises the same
+        # object per rule; _sparql reports it once instead of once per rule.
+        self.sparql_engine_error = None
 
     def dataset(self):
         """rdflib dataset for the sh:sparql constraints — loaded once, reused per query."""
@@ -440,10 +443,16 @@ def _sparql(context, rule):
         context.data_hashed = True
         return _sparql_violations(rule, result)
     except Exception as error:                            # noqa: BLE001 — engine strictness
-        logger.warning("sh:sparql constraint %s rejected by %s — evaluating with rdflib "
-                       "and flagging the shape (fix the rule upstream):\n%s",
-                       rule.shape_id, engine_name, error)
-        note = _invalid_sparql(rule, error)
+        # A cached ingest failure (data vs schema) re-raises the same exception
+        # object for every rule — report it once, not once per rule; per-rule
+        # query rejections are fresh exceptions and keep their own note.
+        repeated = error is getattr(context, "sparql_engine_error", None)
+        context.sparql_engine_error = error
+        if not repeated:
+            logger.warning("sh:sparql constraint %s rejected by %s — evaluating with rdflib "
+                           "and flagging the shape (fix the rule upstream):\n%s",
+                           rule.shape_id, engine_name, error)
+        note = _empty() if repeated else _invalid_sparql(rule, error)
         try:
             violations = _sparql_violations(
                 rule, sparql.query(context.dataset(), query_text, engine="rdflib"))

@@ -338,3 +338,48 @@ def test_target_subjects_of_pyshacl_parity(engine):
             + breaker("b2", ("Switch.normalOpen", "false"), ("IdentifiedObject.name", "B2")))
     assert violating(run(rows, shape, engine), "sh:minCount") \
         == violating(run(rows, shape, "pyshacl"), "sh:minCount") == {("b1", None)}
+
+
+def test_ill_typed_value_fails_sparql_engine_once_with_context():
+    """One ill-typed value under an rdf_map is a data-vs-schema error: the
+    strict qlever ingest names the offender, the failed build is cached (no
+    per-rule rebuild), exactly ONE triplets:invalidSparql Warning is emitted,
+    and the sh:sparql rules still validate through the rdflib fallback."""
+    from triplets import sparql
+    if sparql.get_engine("auto")[0] != "qlever":
+        pytest.skip("needs the strict qlever engine as the auto SPARQL engine")
+    import rdflib
+    import triplets as t
+    t.clear_caches()
+
+    rdf_map = {"EQ": {"Conductor.length": {
+        "type": "Attribute", "xsd:type": "xsd:float",
+        "namespace": "http://iec.ch/TC57/CIM100#"}}}
+    shape = """cim:LineShape a sh:NodeShape ; sh:targetClass cim:ACLineSegment ;
+        sh:property [ sh:path cim:Conductor.length ; sh:datatype xsd:float ] ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:sparql [
+            sh:message "name is reserved" ;
+            sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "reserved") }' ] ] ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:sparql [
+            sh:message "name is banned" ;
+            sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "banned") }' ] ] ."""
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    rows = [("a1", "Type", "ACLineSegment", "eq"),
+            ("a1", "Conductor.length", "abc", "eq"),        # ill-typed for xsd:float
+            ("a1", "IdentifiedObject.name", "banned", "eq"),
+            ("a2", "Type", "ACLineSegment", "eq"),
+            ("a2", "Conductor.length", "1.5", "eq"),
+            ("a2", "IdentifiedObject.name", "reserved", "eq")]
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+    violations = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine="pandas")
+
+    notes = violations[violations["VIOLATION_TYPE"] == "triplets:invalidSparql"]
+    assert len(notes) == 1, "the cached ingest failure must be reported once, not per rule"
+    assert "Conductor.length" in notes["MESSAGE"].iloc[0]
+    assert '"abc"' in notes["MESSAGE"].iloc[0]
+    # the datatype defect itself is reported by the vectorized check
+    assert violating(violations, "sh:datatype") == {("a1", "abc")}
+    # both sh:sparql rules still validated via the rdflib fallback
+    assert violating(violations, "sh:sparql") == {("a2", "reserved"), ("a1", "banned")}
