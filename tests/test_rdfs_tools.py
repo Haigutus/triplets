@@ -109,7 +109,6 @@ class TestGetProfileMetadata:
 # ── cim_rdfs_to_json ────────────────────────────────────────────────────────
 
 class TestCimRdfsToJson:
-    @pytest.mark.xfail(reason="Pre-existing bug: get_namespace_and_name receives NaN float from RDFS data")
     def test_convert_profile(self, rdfs_profile):
         from triplets.rdfs_tools import cim_rdfs_to_json
         result = cim_rdfs_to_json.convert_profile(rdfs_profile)

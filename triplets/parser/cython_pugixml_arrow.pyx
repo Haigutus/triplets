@@ -153,6 +153,7 @@ cdef extern from *:
 cdef extern from "pugixml.hpp" namespace "pugi":
     const unsigned int parse_minimal
     const unsigned int parse_embed_pcdata
+    const unsigned int parse_escapes
 
     cdef cppclass xml_parse_result:
         bool operator bool() const
@@ -228,7 +229,8 @@ cdef extern from *:
     const char* local_name(const char* name) noexcept
 
 
-cdef unsigned int PARSE_FLAGS = parse_minimal | parse_embed_pcdata
+# parse_escapes: decode &gt; &amp; &#xNN; entities — parity with the lxml engines
+cdef unsigned int PARSE_FLAGS = parse_minimal | parse_embed_pcdata | parse_escapes
 
 
 def load_rdf_to_dataframe(path_or_fileobject, debug=False):

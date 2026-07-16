@@ -18,6 +18,7 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.
 
    guides/parsers
    guides/exports
+   guides/export_schemas
    guides/sparql
    guides/validation
    guides/building

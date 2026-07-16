@@ -51,6 +51,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The pyshacl engine accepts `store="oxigraph"` to load its data graph through
   the oxigraph engine's cached store (identical results; Memory remains the
   measured-faster default — see docs/sparql.md caveats).
+- **Versioned NCP export schemas** generated from the ENTSO-E
+  [application-profiles-library](https://github.com/entsoe/application-profiles-library):
+  `schemas.ENTSOE_NC_2_4_1_552_*` from release branch `ncp-v2-4-1` — the most recent
+  official NCP publication (upstream commit pinned in `rdfs/<bundle>/SOURCE.json`;
+  2.4.2 and the 2.5 draft are not onboarded due to their DatasetMetadata rdfs:domain
+  defect, [entsoe/application-profiles-library#92](https://github.com/entsoe/application-profiles-library/issues/92)).
+  Snapshots are fetched with `python -m triplets.rdfs_tools.fetch_profiles`; bundles
+  regenerate with `python -m triplets.rdfs_tools.cim_rdfs_to_json` (registry-driven,
+  replaces the three per-bundle scripts). ReliCapGrid NC roundtrip tests cover every
+  (TSO, profile) example instance.
+- `parse(..., shorten_resources=False)`: lossless resource URIs for schema-grade
+  parsing (python engines; the RDFS tools use it).
 
 ### Fixed
 - `pathlib.Path` inputs are accepted everywhere: `read_rdf`/`parse` (all
@@ -58,6 +70,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (crashed on `path.endswith`), `export_to_csv`, `export_to_nquads`.
 - `export_to_nquads()` without a path no longer crashes — defaults to
   `export.nq` in the working directory.
+- The compiled Arrow parser decodes XML entities (`&gt;`, `&amp;`, …) like the
+  lxml engines — values containing them now roundtrip through export.
+- Export schemas include externally-defined (`Description`-stereotype) classes,
+  so instance objects referenced by `rdf:about` are no longer dropped on export
+  (NC associations attached to EQ objects; CGMES `SSH.RegulatingCondEq`,
+  `DY.EnergyConsumer`).
+- Header entries are injected into each profile section only when the profile
+  does not define them itself — the header no longer overwrites a profile's own
+  definitions (e.g. each profile's `String` datatype namespace, the CGMES 2.4
+  `FH` section's `FullModel`/`Model.profile`).
 
 ### Changed
 - **Python 3.14 supported**: wheels build for cp314, CI tests it (full suite
@@ -68,6 +90,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Removed
 - `build-qlever.yml` CI workflow — the qlever engine is a local source build
   (decision record in TODO.md; build + fork pinning in docs/building.md).
+- **Breaking:** the versionless NC schemas `schemas.ENTSOE_NC_552_ED1/ED2`
+  (shipped in 0.1.0; generated from an incoherent mix of profile versions) are
+  replaced by the versioned `schemas.ENTSOE_NC_2_4_1_552_*` bundles — no alias.
+  The stray `ENTSO-E_Object Registry vocabulary_2.1.1_2022-12-29.json`
+  single-profile export is gone as well (the OR profile lives in the NC bundles).
 
 ## [0.1.0] - 2026-06-29
 

@@ -6,26 +6,20 @@ from pathlib import Path
 
 BASE_PATH = Path(__file__).parent.parent.absolute()
 INSTANCE_PATH = BASE_PATH / "test_data/relicapgrid/Instance"
-PROFILES_PATH = BASE_PATH / "test_data/entsoe-profiles"
 
 # Small NC files for fast tests
 NC_FILES = {
-    "AE": INSTANCE_PATH / "Belgovia/NetworkCode/cimxml/Belgovia_AE.xml",
-    "CO": INSTANCE_PATH / "Belgovia/NetworkCode/cimxml/Belgovia_CO.xml",
-    "OR": INSTANCE_PATH / "Espheim/NetworkCode/cimxml/Espheim_OR.xml",
+    "AE": INSTANCE_PATH / "NetworkCode/Belgovia/Belgovia_instance/Belgovia_AE.xml",
+    "CO": INSTANCE_PATH / "NetworkCode/Belgovia/Belgovia_instance/Belgovia_CO.xml",
+    "OR": INSTANCE_PATH / "NetworkCode/Espheim/Espheim_instance/Espheim_OR.xml",
 }
 
 # CGMES files
 CGMES_FILES = {
-    "EQ": INSTANCE_PATH / "Belgovia/Grid/cimxml/20220615T2230Z__Belgovia_EQ_1.xml",
-    "SSH": INSTANCE_PATH / "Belgovia/Grid/cimxml/20220615T2230Z_2D_Belgovia_SSH_1.xml",
-    "TP": INSTANCE_PATH / "Belgovia/Grid/cimxml/20220615T2230Z_2D_Belgovia_TP_1.xml",
-    "SV": INSTANCE_PATH / "Belgovia/Grid/cimxml/20220615T2230Z_2D_Belgovia_SV_1.xml",
-}
-
-EXPORT_SCHEMAS = {
-    "nc": str(BASE_PATH / "triplets/export_schema/ENTSOE_NC_552_ED1.json"),
-    "cgmes": str(BASE_PATH / "triplets/export_schema/ENTSOE_CGMES_3.0.0_552_ED2.json"),
+    "EQ": INSTANCE_PATH / "Grid/IGM_Belgovia/20220615T2230Z__Belgovia_EQ_1.xml",
+    "SSH": INSTANCE_PATH / "Grid/IGM_Belgovia/20220615T2230Z_2D_Belgovia_SSH_1.xml",
+    "TP": INSTANCE_PATH / "Grid/IGM_Belgovia/20220615T2230Z_2D_Belgovia_TP_1.xml",
+    "SV": INSTANCE_PATH / "Grid/IGM_Belgovia/20220615T2230Z_2D_Belgovia_SV_1.xml",
 }
 
 REALGRID_ZIP = str(BASE_PATH / "test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip")
