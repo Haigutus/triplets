@@ -12,6 +12,10 @@ import polars
 
 from triplets.parser import parse
 
+# the whole module is benchmarks — deselected by default (pyproject addopts),
+# run with: pytest -m performance (or --benchmark-only per the header)
+pytestmark = pytest.mark.performance
+
 try:
     import pyarrow  # noqa: F401
     HAS_PYARROW = True

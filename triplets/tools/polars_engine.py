@@ -236,8 +236,9 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     ----------
     data : polars.DataFrame
         Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
-    ID, KEY, VALUE, INSTANCE_ID : str, optional
-        Filter value. If regex=True, treated as regex pattern.
+    ID, KEY, VALUE, INSTANCE_ID : str or list of str, optional
+        Filter value. A list keeps rows matching any of its values. With
+        regex=True the value(s) are regex patterns (str.contains).
     regex : bool, default False
         If True, use regex matching (str.contains). If False, exact match.
 
@@ -246,14 +247,21 @@ def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex
     polars.DataFrame
         Filtered triplet dataset.
     """
-    expr = pl.lit(True)
     for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
-        if val is not None:
-            if regex:
-                expr = expr & pl.col(col).cast(pl.Utf8).str.contains(val)
+        if val is None:
+            continue
+        column = pl.col(col).cast(pl.Utf8)
+        if isinstance(val, (list, tuple, set, pl.Series)):
+            values = [str(v) for v in val]
+            if regex and values:
+                data = data.filter(column.str.contains("|".join(f"(?:{v})" for v in values)))
             else:
-                expr = expr & (pl.col(col).cast(pl.Utf8) == val)
-    return data.filter(expr)
+                data = data.filter(column.is_in(values))
+        elif regex:
+            data = data.filter(column.str.contains(val))
+        else:
+            data = data.filter(column == val)
+    return data
 
 
 def filter_triplets_by_value(data, VALUE, detailed=False, type_key="Type", regex=False):
@@ -479,3 +487,28 @@ def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_
         print(f"\n{id_val}:")
         for row in id_diff.iter_rows(named=True):
             print(f"  {row['_merge']} {row['KEY']}: {row['VALUE']}")
+
+
+def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),
+                 columns=("ID", "KEY", "VALUE"), order_sensitive=False):
+    """Deterministic identity hash of the triplet content (blake2b hex) —
+    row-order-invariant by default via native row hashes (hash_rows) combined
+    with commutative count/sum/xor — no sort, single pass. With
+    ``order_sensitive=True`` the row hashes are digested in row order, so the
+    same rows in a different order produce a different digest. Engine-specific:
+    not comparable across engines (see pandas_engine)."""
+    import hashlib
+
+    import numpy
+
+    if ignore_types:
+        drop = (data.filter(pl.col("KEY") == "Type")
+                .join(pl.DataFrame({"VALUE": list(ignore_types)}), on="VALUE", how="semi")
+                .select("ID").unique())
+        data = data.join(drop, on="ID", how="anti")
+    hashes = data.select(list(columns)).hash_rows().to_numpy()
+    if order_sensitive:
+        return hashlib.blake2b(hashes.tobytes(), digest_size=16).hexdigest()
+    combined = (len(hashes), int(hashes.sum(dtype=numpy.uint64)),
+                int(numpy.bitwise_xor.reduce(hashes)) if len(hashes) else 0)
+    return hashlib.blake2b(repr(combined).encode(), digest_size=16).hexdigest()

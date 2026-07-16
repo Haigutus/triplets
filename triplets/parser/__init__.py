@@ -16,25 +16,31 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import logging
-from importlib import import_module
 from concurrent.futures import ThreadPoolExecutor
 from typing import Union, List, Any, Optional, Sequence
 
+from .._registry import EngineRegistry
+
 logger = logging.getLogger(__name__)
 
-# Engine name → module (lazy import). Auto preference: first importable.
-_ENGINE_MODULES = {
-    "cython_pugixml_arrow": ".cython_pugixml_arrow",  # compiled extension, fastest
-    "python_lxml_arrow": ".python_lxml_arrow",        # needs pyarrow
-    "python_lxml_pandas": ".python_lxml_pandas",      # pure python, always available
-}
-_ENGINE_ALIASES = {
-    "native": "python_lxml_pandas",
-    "pugixml": "cython_pugixml_arrow",
-    "performance": "cython_pugixml_arrow",
-}
-_ENGINES: dict[str, Any] = {}  # loaded module cache
+# Auto preference: first importable.
+_REGISTRY = EngineRegistry(
+    "parser", __package__,
+    modules={
+        "cython_pugixml_arrow": ".cython_pugixml_arrow",  # compiled extension, fastest
+        "python_lxml_arrow": ".python_lxml_arrow",        # needs pyarrow
+        "python_lxml_pandas": ".python_lxml_pandas",      # pure python, always available
+    },
+    aliases={
+        "native": "python_lxml_pandas",
+        "pugixml": "cython_pugixml_arrow",
+        "performance": "cython_pugixml_arrow",
+    },
+    hints={"cython_pugixml_arrow": "Build with: pixi run build-cython-pugixml-arrow "
+                                   "(or python setup_cython_parser.py build_ext --inplace)."},
+)
 
 # Engines whose load_rdf_to_dataframe returns Arrow RecordBatches
 _ARROW_ENGINES = {"python_lxml_arrow", "cython_pugixml_arrow"}
@@ -42,43 +48,18 @@ _ARROW_ENGINES = {"python_lxml_arrow", "cython_pugixml_arrow"}
 
 def register_engine(name: str, module_or_factory: Any) -> None:
     """Register a custom engine for future extensibility."""
-    _ENGINES[name] = module_or_factory
-
-
-def _load_engine(name: str):
-    """Import engine module on demand."""
-    if name in _ENGINES:
-        return _ENGINES[name]
-    module_name = _ENGINE_MODULES.get(name)
-    if module_name is None:
-        raise ValueError(f"Unknown engine: {name}. Known: {', '.join(_ENGINE_MODULES)}")
-    try:
-        _ENGINES[name] = import_module(module_name, __package__)
-    except ImportError as e:
-        hint = (" Build with: pixi run build-cython-pugixml-arrow"
-                " (or python setup_cython_parser.py build_ext --inplace).") if name == "cython_pugixml_arrow" else ""
-        raise ImportError(f"{name} engine not available.{hint} Original error: {e}") from e
-    return _ENGINES[name]
+    _REGISTRY.register(name, module_or_factory)
 
 
 def get_engine(name: str = "auto"):
-    """Resolve engine name (with aliases) and return its module."""
-    if name == "auto":
-        for candidate in _ENGINE_MODULES:
-            try:
-                logger.debug(f"auto - test engine availability: {candidate}")
-                return candidate, _load_engine(candidate)
-            except ImportError:
-                continue
-
-    resolved = _ENGINE_ALIASES.get(name, name)
-
-    logger.debug(f"engine set: {resolved}")
-    return resolved, _load_engine(resolved)
+    """Resolve parser engine name (with aliases) and return (name, module)."""
+    return _REGISTRY.get(name)
 
 
 # Re-exports for compat layer (rdf_parser.py)
 from .utils import find_all_xml, clean_ID  # noqa: F401
+
+from .nquads import read_nquads  # noqa: F401
 
 
 def parse(
@@ -115,7 +96,8 @@ def parse(
         raise RuntimeError(f"Engine {engine_name} missing load_rdf_to_dataframe entrypoint")
 
     # Normalize input to list for find_all_xml
-    if isinstance(list_of_paths_to_zip_globalzip_xml, (str, bytes)) or hasattr(list_of_paths_to_zip_globalzip_xml, "read"):
+    if (isinstance(list_of_paths_to_zip_globalzip_xml, (str, bytes, os.PathLike))
+            or hasattr(list_of_paths_to_zip_globalzip_xml, "read")):
         items = [list_of_paths_to_zip_globalzip_xml]
     else:
         items = list(list_of_paths_to_zip_globalzip_xml) if list_of_paths_to_zip_globalzip_xml else []

@@ -81,7 +81,7 @@ FORMATS = {
             "python_lxml": lambda d: export.export_to_cimxml(d, rdf_map=RDF_MAP, engine="python_lxml", export_to_memory=True),
             "cython_pugixml": lambda d: export.export_to_cimxml(d, rdf_map=RDF_MAP, engine="cython_pugixml", export_to_memory=True),
         },
-        "needs": {"cython_pugixml": ["pyarrow"]},
+        "needs": {"cython_pugixml": ["pyarrow", "triplets.export.cimxml_cython_pugixml"]},
         "canon": _canon_cimxml,
     },
     "nquads": {

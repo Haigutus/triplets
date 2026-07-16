@@ -7,6 +7,7 @@ Restored from the original rdf_parser.py load_RDF_to_list logic with fixes:
 - Namespace map None key → "" (lxml uses None for default namespace)
 """
 
+import os
 import uuid
 import logging
 from typing import Union, IO
@@ -30,6 +31,8 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
     """
     parser = etree.XMLParser(remove_comments=True, collect_ids=False, remove_blank_text=True)
     try:
+        if isinstance(path_or_fileobject, os.PathLike):
+            path_or_fileobject = os.fspath(path_or_fileobject)
         if isinstance(path_or_fileobject, str):
             parsed = etree.parse(path_or_fileobject, parser=parser)
         else:

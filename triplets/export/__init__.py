@@ -68,6 +68,21 @@ def _check_columns(data):
                          f"expected {list(REQUIRED_COLUMNS)}, got {list(data.columns)}")
 
 
+def export_to_arrow(data):
+    """Triplet columns (ID, KEY, VALUE, INSTANCE_ID) as a pyarrow.Table.
+
+    Zero-copy where the backing store allows it (arrow-backed pandas from
+    read_RDF, polars); dictionary-encoded (categorical) columns pass through
+    undecoded. This is the columnar interchange consumed by engines with a
+    native Arrow ingest (the qlever SPARQL engine's index builder).
+    """
+    _check_columns(data)
+    if _is_polars(data):
+        return data.select(list(REQUIRED_COLUMNS)).to_arrow()
+    import pyarrow
+    return pyarrow.Table.from_pandas(data[list(REQUIRED_COLUMNS)], preserve_index=False)
+
+
 def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):
     """Export triplet DataFrame to CSV files.
 
@@ -87,8 +102,9 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
 
     Parameters
     ----------
-    path : str, optional
-        Output file path (.nq). Ignored when export_to_memory=True.
+    path : str or Path, optional
+        Output file path (.nq); defaults to "export.nq" in the current
+        directory. Ignored when export_to_memory=True.
     rdf_map : dict or str, optional
         Export schema for proper enum detection and literal datatype
         annotations. If None, enums exported as literals.
@@ -101,6 +117,8 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
         writing to disk — same convention as export_to_csv / export_to_cimxml.
     """
     _check_columns(data)
+    if not export_to_memory:
+        path = "export.nq" if path is None else os.fspath(path)
     if engine == "auto":
         try:
             import polars  # noqa: F401
@@ -383,10 +401,3 @@ __all__ = [
     "ExportType",
     "_get_qname",
 ]
-
-# Register monkey-patches on pandas.DataFrame
-pandas.DataFrame.export_to_excel = export_to_excel
-pandas.DataFrame.export_to_csv = export_to_csv
-pandas.DataFrame.export_to_cimxml = export_to_cimxml
-pandas.DataFrame.export_to_nquads = export_to_nquads
-pandas.DataFrame.export_to_networkx = export_to_networkx

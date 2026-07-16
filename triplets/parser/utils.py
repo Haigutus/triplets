@@ -4,6 +4,7 @@ Extracted/adapted from rdf_parser.py and rdf_parser_lxml_arrow.py cues.
 """
 
 from io import BytesIO
+import os
 import uuid
 import logging
 import zipfile
@@ -52,10 +53,12 @@ def find_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
     zip_files_list: List = []
 
     items = list_of_paths_to_zip_globalzip_xml
-    if isinstance(items, (str, bytes)) or hasattr(items, "read"):
+    if isinstance(items, (str, bytes, os.PathLike)) or hasattr(items, "read"):
         items = [items]
 
     for item in items:
+        if isinstance(item, os.PathLike):
+            item = os.fspath(item)  # Path takes the str branch (keeps the cython mmap fast path)
         if isinstance(item, str):
             item_lower = item.lower()
             if ".xml" in item_lower or ".rdf" in item_lower:

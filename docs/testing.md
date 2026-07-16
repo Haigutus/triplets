@@ -70,6 +70,14 @@ pytest tests/test_parser_backends.py::TestParity -v
 
 ## Benchmarks
 
+Tests marked `performance` are **deselected by default** (pyproject
+`addopts = '-m "not performance"'` — the full benchmark suite takes ~35 min).
+Selecting them explicitly overrides the default:
+
+```shell
+pytest -m performance                 # all performance benchmarks
+```
+
 Benchmarks use `pytest-benchmark` and require the RealGrid test data:
 
 ```shell
@@ -183,4 +191,4 @@ Wheels are built for:
 | macOS | x86_64 (Intel), arm64 (Apple Silicon) |
 | Windows | AMD64 |
 
-CPython 3.11, 3.12, 3.13 (requires-python >=3.11). Each wheel includes the compiled `cython_pugixml_arrow` extension (usable when pyarrow also installed).
+CPython 3.11–3.14 (requires-python >=3.11). Each wheel includes the compiled `cython_pugixml_arrow` extension (usable when pyarrow also installed).

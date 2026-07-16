@@ -28,11 +28,46 @@ numpy = "*"  # for pyarrow numpy_interop headers in some builds
 compilers = "*"
 pyarrow = "*"
 
+# C++ toolchain + deps for the embedded qlever SPARQL engine (setup_qlever.py).
+# qlever itself is compiled once from a separate checkout (QLEVER_SRC_DIR)
+# inside this environment, so all libraries share one ABI and pixi.lock pins
+# them. python is pinned to the interpreter ABI the extension is used with.
+[feature.qlever.dependencies]
+python = ">=3.13,<3.14"
+cmake = ">=3.28"
+ninja = "*"
+libboost-devel = ">=1.81"
+icu = "*"
+openssl = "*"
+zstd = "*"
+jemalloc = "*"
+rdflib = ">=7.6"    # sparql extra + parity tests against the rdflib engine
+pyshacl = ">=0.30"  # sh:sparql delegation test
+
+[feature.qlever.tasks]
+# source resolution ($QLEVER_SRC_DIR → vendor/qlever → ../qlever) lives in the scripts
+build-qlever-lib = "python setup_qlever_lib.py"                  # one-time qlever compile (PIC)
+build-qlever = "python setup_qlever.py build_ext --inplace"      # the triplets.sparql._qlever extension
+test-qlever = "pytest tests/test_sparql_qlever.py -q"
+
+# The portable performance SPARQL engine (embedded Rust wheel) + the oxrdflib
+# bridge (oxigraph-backed rdflib store for the pyshacl engine).
+[feature.oxigraph.dependencies]
+pyoxigraph = ">=0.5"
+oxrdflib = ">=0.5"
+rdflib = ">=7.6"    # parity tests against the rdflib engine
+pyshacl = ">=0.30"  # sh:sparql delegation + pyshacl store tests
+
+[feature.oxigraph.tasks]
+test-oxigraph = "pytest tests/test_sparql_oxigraph.py tests/test_parser_nquads.py -q"
+
 [environments]
 default = { features = ["test"] }
 arrow = { features = ["test", "arrow"] }
 build = { features = ["build", "test", "arrow", "polars"] }
 dev = { features = ["build", "test", "arrow", "polars"] }
+qlever = { features = ["build", "test", "arrow", "polars", "qlever", "oxigraph"] }
+oxigraph = { features = ["test", "arrow", "polars", "oxigraph"] }
 
 [tasks]
 build-cython-pugixml-arrow = "python setup_cython_parser.py build_ext --inplace"

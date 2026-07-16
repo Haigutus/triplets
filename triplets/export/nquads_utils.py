@@ -64,6 +64,42 @@ def build_key_metadata(rdf_map):
     return enum_keys, key_namespaces, key_datatypes
 
 
+def flatten_schema(rdf_map):
+    """Flatten the export schema across profiles for human-context lookups.
+
+    The same class/property key repeats per profile with essentially the same
+    definition — the first occurrence wins. Complements build_key_metadata
+    (which extracts the machine fields); this pulls the human ones.
+
+    Returns
+    -------
+    key_info : dict
+        "Class.attr" → {"description", "multiplicity"} for property entries
+        (Attribute / Association / Enumeration).
+    class_info : dict
+        "Class" → description for class entries.
+    """
+    if not isinstance(rdf_map, dict):
+        with open(str(rdf_map)) as f:
+            rdf_map = json.load(f)
+
+    key_info = {}
+    class_info = {}
+    for profile_data in rdf_map.values():
+        if not isinstance(profile_data, dict):
+            continue
+        for name, entry in profile_data.items():
+            if not isinstance(entry, dict):
+                continue
+            entry_type = entry.get("type")
+            if entry_type == "Class":
+                class_info.setdefault(name, entry.get("description"))
+            elif entry_type in ("Attribute", "Association", "Enumeration"):
+                key_info.setdefault(name, {"description": entry.get("description"),
+                                           "multiplicity": entry.get("multiplicity")})
+    return key_info, class_info
+
+
 def make_subject(id_val):
     """Convert ID to subject URI."""
     if id_val.startswith("http://") or id_val.startswith("https://") or id_val.startswith("urn:"):

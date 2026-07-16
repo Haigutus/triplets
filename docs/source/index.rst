@@ -18,6 +18,8 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.
 
    guides/parsers
    guides/exports
+   guides/sparql
+   guides/validation
    guides/building
    guides/testing
    guides/migration_0.0_to_0.1

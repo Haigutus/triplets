@@ -2,6 +2,7 @@
 /dist/
 /venv/
 /docs/build/
+/docs/_build/
 # Python bytecode
 __pycache__/
 *.py[cod]
@@ -16,3 +17,4 @@ triplets/export/cimxml_cython_pugixml.cpp
 /.idea/
 # uv lockfile (dev-only; not part of the published package)
 uv.lock
+triplets/sparql/_qlever.cpp

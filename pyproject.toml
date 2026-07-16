@@ -19,6 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
@@ -53,14 +54,32 @@ excel = [
 networkx = [
     "networkx>=3.0",
 ]
+sparql = [
+    "rdflib>=7.6.0",
+]
+# portable performance SPARQL engine (embedded Rust) + the oxrdflib bridge
+# that lets the pyshacl engine run on an oxigraph-backed rdflib store
+oxigraph = [
+    "pyoxigraph>=0.5",
+    "oxrdflib>=0.5",
+]
+validation = [
+    "pyshacl>=0.30",
+    "rdflib>=7.6.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-xdist",
+    "pytest-benchmark",
     "polars>=1.0",
     "pyarrow>=14.0",
     "networkx>=3.0",
     "openpyxl>=3.1.5",
     "rdflib>=7.6.0",
+    "pyshacl>=0.30",
+    "pyoxigraph>=0.5",
+    "oxrdflib>=0.5",
+    "jsonschema>=4.0",   # SARIF output validated against the official 2.1.0 schema
 ]
 # vis-network JS is vendored in triplets/cgmes_tools/static — graph drawing needs no extra deps
 visualization = [
@@ -78,6 +97,9 @@ duckdb = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# performance benchmarks take ~35 min — deselected by default;
+# run them with: pytest -m performance
+addopts = '-m "not performance"'
 markers = [
     "performance: marks performance tests (run with '-m performance')",
     "requires_perf_backend: needs the compiled cython_pugixml extension",

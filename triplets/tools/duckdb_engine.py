@@ -99,14 +99,27 @@ def type_tableview(self, type_name, table_name=TABLE_NAME, view_name=None):
 
 def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
                     regex=False, table_name=TABLE_NAME):
-    """Filter triplets by any combination of columns. Returns DuckDBPyRelation (lazy)."""
+    """Filter triplets by any combination of columns. Returns DuckDBPyRelation (lazy).
+
+    A list value keeps rows matching any of its values; with regex=True the
+    value(s) are SIMILAR TO patterns.
+    """
     conditions = []
     for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
-        if val is not None:
-            if regex:
-                conditions.append(f"{col} SIMILAR TO '{val}'")
+        if val is None:
+            continue
+        if isinstance(val, (list, tuple, set)):
+            values = list(val)
+            if not values:
+                conditions.append("FALSE")
+            elif regex:
+                conditions.append("(" + " OR ".join(f"{col} SIMILAR TO {_lit(v)}" for v in values) + ")")
             else:
-                conditions.append(f"{col} = '{val}'")
+                conditions.append(f"{col} IN ({_in_list(values)})")
+        elif regex:
+            conditions.append(f"{col} SIMILAR TO {_lit(val)}")
+        else:
+            conditions.append(f"{col} = {_lit(val)}")
     where = " AND ".join(conditions) if conditions else "TRUE"
     return self.sql(f"SELECT * FROM {table_name} WHERE {where}")
 
@@ -472,3 +485,29 @@ def tableview_to_triplets(self, table_name=TABLE_NAME, multivalue=False, instanc
             UNPIVOT {table_name} ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE
         ) WHERE VALUE IS NOT NULL
     """)
+
+
+def content_hash(self, ignore_types=("Distribution", "NamespaceMap", "FullModel"),
+                 columns=("ID", "KEY", "VALUE"), order_sensitive=False,
+                 table_name=TABLE_NAME):
+    """Deterministic identity hash of the triplet content (blake2b hex) —
+    row-order-invariant by default via in-database hash() combined with
+    streaming count/sum/xor aggregates (no sort, no materialization — works
+    larger-than-memory). With ``order_sensitive=True`` each row's position
+    (insertion order via rowid) is mixed into its hash, so the same rows
+    inserted in a different order produce a different digest. Engine-specific:
+    not comparable across engines (see pandas_engine)."""
+    import hashlib
+
+    # no coalesce: hash() distinguishes NULL from '' natively — coalescing
+    # to '' would collide a missing VALUE with an empty one
+    hashed = ", ".join(f"CAST({column} AS VARCHAR)" for column in columns)
+    if order_sensitive:
+        hashed = f"row_number() OVER (ORDER BY rowid), {hashed}"
+    source = f"SELECT hash({hashed}) AS h FROM {table_name}"
+    if ignore_types:
+        source += (f" WHERE ID NOT IN (SELECT ID FROM {table_name}"
+                   f" WHERE KEY = 'Type' AND VALUE IN ({_in_list(ignore_types)}))")
+    row = self.execute(f"SELECT count(*), sum(h)::VARCHAR, bit_xor(h)::VARCHAR"
+                       f" FROM ({source})").fetchone()
+    return hashlib.blake2b(repr(row).encode(), digest_size=16).hexdigest()

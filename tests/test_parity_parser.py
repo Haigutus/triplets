@@ -32,7 +32,7 @@ def _content(obj):
     return df[~df["ID"].isin(meta_ids)]
 
 # ── dynamic discovery: engines from the registry, return types from deps ──────
-REGISTRY_ENGINES = list(parser._ENGINE_MODULES)
+REGISTRY_ENGINES = list(parser._REGISTRY.modules)
 
 
 def _engine_available(name):
