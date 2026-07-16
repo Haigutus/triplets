@@ -161,7 +161,10 @@ conforms** — identical across all engines:
 | `SEVERITY` | `Violation` / `Warning` / `Info` |
 | `SOURCE_SHAPE` | shape URI that produced the result |
 
-Violations DataFrames export like any other DataFrame (`export_to_csv`, Excel, ...).
+Violations DataFrames export like any other DataFrame (`export_to_csv`, Excel, ...),
+as a standard `sh:ValidationReport` (`violations.shacl.to_shacl_report(...)` — the
+exact inverse of the pyshacl report mapping in `shacl_report.py`) or as SARIF 2.1.0
+(`violations.shacl.to_sarif(...)`, see below).
 
 ## Polars Engine Guidance
 
@@ -264,11 +267,16 @@ violations = violations.shacl.enrich(data=data, shapes=compiled, rdf_map=...)  #
 
 # SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer
 violations.shacl.to_sarif(path="report.sarif")
+
+# standard sh:ValidationReport (turtle) for SHACL tooling
+violations.shacl.to_shacl_report(path="report.ttl")
 ```
 
 pyshacl pass-through options (`inference`, `advanced`, `abort_on_first`,
-`store`) are forwarded as keyword arguments. A runnable end-to-end demo lives
-in `examples/shacl_validation.py`.
+`store`) are forwarded as keyword arguments. Runnable end-to-end demos live in
+`examples/shacl_validation.py` (engine behavior walkthrough) and
+`examples/shacl_reports.py` (uv-runnable: performance engines + both report
+exports with source locations — `uv run examples/shacl_reports.py`).
 
 ## Context enrichment (`validation/context.py`)
 

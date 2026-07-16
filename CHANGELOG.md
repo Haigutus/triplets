@@ -63,6 +63,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (TSO, profile) example instance.
 - `parse(..., shorten_resources=False)`: lossless resource URIs for schema-grade
   parsing (python engines; the RDFS tools use it).
+- **`sh:ValidationReport` export** (`violations.shacl.to_shacl_report(...)`,
+  `triplets.validation.export_to_shacl_report`): violations frame → standard
+  SHACL report (turtle), the exact inverse of the pyshacl report mapping.
+- `examples/shacl_reports.py`: uv-runnable (PEP 723) end-to-end demo — Svedala
+  EQ with three deliberately introduced issues validated against the official
+  ENTSO-E Equipment SHACL (Simple + Complex, downloaded on first run), report
+  exported as sh:ValidationReport and as SARIF with exact file:line locations.
 
 ### Fixed
 - `pathlib.Path` inputs are accepted everywhere: `read_rdf`/`parse` (all
