@@ -6,9 +6,14 @@ generation is reproducible offline and upstream changes arrive as reviewable dif
 
 | Directory | Source | Version authority |
 |---|---|---|
-| `ENTSOE_NC_2.4.1/`, `ENTSOE_NC_2.4.2/` | [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) release branches `ncp-v2-4-1` / `ncp-v2-4-2` | branch name + `SOURCE.json` commit pin |
-| `ENTSOE_NC_2.5-dev/` | same repo, `main:NCP/CurrentRelease` (unreleased draft) | `SOURCE.json` commit pin; renamed to `ENTSOE_NC_2.5.0` when ENTSO-E releases |
+| `ENTSOE_NC_2.4.1/` | [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) release branch `ncp-v2-4-1` — the most recent official NCP publication | branch name + `SOURCE.json` commit pin |
 | `ENTSOE_CGMES_2.4.15/`, `ENTSOE_CGMES_3.0.0/`, `ENTSOE_FH/` | legacy hand-collected sets (predate the fetch workflow) | version in filenames |
+
+NCP 2.4.2 and the 2.5 draft are deliberately **not** onboarded: both carry the
+DatasetMetadata `rdfs:domain` defect below, and neither is an official publication.
+Onboard them (one `SOURCES` + `BUNDLES` entry each) once
+[application-profiles-library#92](https://github.com/entsoe/application-profiles-library/issues/92)
+is resolved and/or they are officially released.
 
 Upstream files are versionless by name (git-diff friendly); the release branch is the
 authoritative version — per-profile `owl:versionInfo` inside the files lags the release
@@ -54,9 +59,9 @@ Generation is deterministic: rerunning `cim_rdfs_to_json` must produce no diff
 - `ncp-v2-4-2` (and the 2.5 draft) dropped `rdfs:domain` from 11 URI-typed
   `dcat:Dataset` properties in `DatasetMetadata-AP-Voc-RDFS2020.rdf` (`conformsTo`,
   `publisher`, `license`, `accessRights`, …; upstream commit `489c5c51ac4f`) — they can
-  no longer be tied to the Dataset class, so generated 2.4.2/2.5-dev schemas lack those
-  header attributes and exports drop them (pinned by
-  `test_roundtrip_ncp_2_4_2_upstream_domain_regression`). Reported:
+  no longer be tied to the Dataset class, so schemas generated from those versions
+  would lack the header attributes and exports would drop them; this is why only
+  2.4.1 is onboarded. Reported:
   [application-profiles-library#92](https://github.com/entsoe/application-profiles-library/issues/92).
 - Several ReliCapGrid example instances do not conform to the released NCP 2.4.x
   profiles (draft-only attributes; `AssociationUsed=No` directions serialized) — the

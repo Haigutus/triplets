@@ -367,14 +367,17 @@ BUNDLES = {
                                 header="ENTSOE_NC_2.4.1/DatasetMetadata-AP-Voc-RDFS2020.rdf",
                                 exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},
                                 index=index_by_keyword),
-    "ENTSOE_NC_2.4.2":     dict(rdfs_dir="ENTSOE_NC_2.4.2",
-                                header="ENTSOE_NC_2.4.2/DatasetMetadata-AP-Voc-RDFS2020.rdf",
-                                exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},
-                                index=index_by_keyword),
-    "ENTSOE_NC_2.5-dev":   dict(rdfs_dir="ENTSOE_NC_2.5-dev",
-                                header="ENTSOE_NC_2.5-dev/DatasetMetadata-AP-Voc-RDFS2020.rdf",
-                                exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},
-                                index=index_by_keyword),
+    # Not onboarded: DatasetMetadata lost rdfs:domain on 11 URI-typed Dataset properties,
+    # https://github.com/entsoe/application-profiles-library/issues/92 — and neither is
+    # an official publication. Uncomment (here and in fetch_profiles.SOURCES) when fixed.
+    # "ENTSOE_NC_2.4.2":     dict(rdfs_dir="ENTSOE_NC_2.4.2",
+    #                             header="ENTSOE_NC_2.4.2/DatasetMetadata-AP-Voc-RDFS2020.rdf",
+    #                             exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},
+    #                             index=index_by_keyword),
+    # "ENTSOE_NC_2.5-dev":   dict(rdfs_dir="ENTSOE_NC_2.5-dev",
+    #                             header="ENTSOE_NC_2.5-dev/DatasetMetadata-AP-Voc-RDFS2020.rdf",
+    #                             exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},
+    #                             index=index_by_keyword),
 }
 
 

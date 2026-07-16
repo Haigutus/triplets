@@ -4,10 +4,10 @@ Every (TSO, profile keyword) instance is parsed, exported via each NCP 2.4.1 bun
 serialization and re-parsed — the result must equal the source exactly (the parser
 normalises ED1/ED2 identifier forms, so strict comparison holds for both).
 
-NCP 2.4.2 (and the 2.5 draft) upstream dropped ``rdfs:domain`` from 11 dcat:Dataset
-properties (conformsTo, publisher, license, ...), so those header attributes are absent
-from the generated bundles and get dropped on export. That upstream regression is pinned
-by its own test instead of polluting the roundtrip matrix.
+Only NCP 2.4.1 — the latest official publication — is onboarded. 2.4.2 and the 2.5
+draft dropped ``rdfs:domain`` from 11 dcat:Dataset header properties (conformsTo,
+publisher, license, ...), which makes them unusable for schema-driven export; see
+https://github.com/entsoe/application-profiles-library/issues/92 and rdfs/README.md.
 
 Profile selection is identity-based (``resolve_instance_config``): instances carry
 ``dcat:keyword`` and ``dcterms:conformsTo`` on host ``ap.cim4.eu`` while the schema
@@ -37,15 +37,7 @@ ROUNDTRIP_MAPS = {
     "2.4.1-ED2": schemas.ENTSOE_NC_2_4_1_552_ED2,
 }
 
-RESOLUTION_BUNDLES = ["ENTSOE_NC_2_4_1_552_ED1", "ENTSOE_NC_2_4_2_552_ED1", "ENTSOE_NC_2_5_dev_552_ED1"]
-
-# Dataset properties whose rdfs:domain upstream dropped in ncp-v2-4-2 (inherited by the
-# 2.5 draft): without a domain they cannot be tied to dcat:Dataset in the schema, so
-# instance header rows with these keys are dropped on export. To be reported upstream.
-UPSTREAM_MISSING_DOMAIN = {
-    "accessRights", "accrualPeriodicity", "conformsTo", "license", "processType",
-    "publisher", "source", "spatial", "type", "usedSettings", "wasGeneratedBy",
-}
+RESOLUTION_BUNDLES = ["ENTSOE_NC_2_4_1_552_ED1", "ENTSOE_NC_2_4_1_552_ED2"]
 
 # ReliCapGrid instances that do not conform to the released NCP 2.4.x profiles: rows with
 # these keys are dropped on export because the released RDFS has no such attribute
@@ -114,16 +106,6 @@ def _assert_roundtrip(path, rdf_map, expected_dropped_keys):
 @pytest.mark.parametrize("path,tso,keyword", NC_PARAMS)
 def test_roundtrip_ncp_2_4_1(path, tso, keyword, serialization):
     _assert_roundtrip(path, ROUNDTRIP_MAPS[serialization], KNOWN_MISMATCH.get((tso, keyword), set()))
-
-
-@pytest.mark.parametrize("path,tso,keyword", NC_PARAMS)
-def test_roundtrip_ncp_2_4_2_upstream_domain_regression(path, tso, keyword):
-    """2.4.2 roundtrip additionally loses the header attributes hit by the upstream
-    missing-rdfs:domain regression — nothing else may differ."""
-    data = pandas.read_RDF([str(path)])
-    header_keys = {key for _, key, _ in _canon(data)} & UPSTREAM_MISSING_DOMAIN
-    _assert_roundtrip(path, schemas.ENTSOE_NC_2_4_2_552_ED1,
-                      KNOWN_MISMATCH.get((tso, keyword), set()) | header_keys)
 
 
 @pytest.mark.parametrize("bundle", RESOLUTION_BUNDLES)

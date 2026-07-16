@@ -52,13 +52,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the oxigraph engine's cached store (identical results; Memory remains the
   measured-faster default — see docs/sparql.md caveats).
 - **Versioned NCP export schemas** generated from the ENTSO-E
-  [application-profiles-library](https://github.com/entsoe/application-profiles-library)
-  releases: `schemas.ENTSOE_NC_2_4_1_552_*`, `schemas.ENTSOE_NC_2_4_2_552_*` and the
-  unreleased draft `schemas.ENTSOE_NC_2_5_dev_552_*` (pinned upstream commit in
-  `rdfs/<bundle>/SOURCE.json`). Snapshots are fetched with
-  `python -m triplets.rdfs_tools.fetch_profiles`; bundles regenerate with
-  `python -m triplets.rdfs_tools.cim_rdfs_to_json` (registry-driven, replaces the
-  three per-bundle scripts). ReliCapGrid NC roundtrip tests cover every
+  [application-profiles-library](https://github.com/entsoe/application-profiles-library):
+  `schemas.ENTSOE_NC_2_4_1_552_*` from release branch `ncp-v2-4-1` — the most recent
+  official NCP publication (upstream commit pinned in `rdfs/<bundle>/SOURCE.json`;
+  2.4.2 and the 2.5 draft are not onboarded due to their DatasetMetadata rdfs:domain
+  defect, [entsoe/application-profiles-library#92](https://github.com/entsoe/application-profiles-library/issues/92)).
+  Snapshots are fetched with `python -m triplets.rdfs_tools.fetch_profiles`; bundles
+  regenerate with `python -m triplets.rdfs_tools.cim_rdfs_to_json` (registry-driven,
+  replaces the three per-bundle scripts). ReliCapGrid NC roundtrip tests cover every
   (TSO, profile) example instance.
 - `parse(..., shorten_resources=False)`: lossless resource URIs for schema-grade
   parsing (python engines; the RDFS tools use it).
@@ -91,9 +92,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (decision record in TODO.md; build + fork pinning in docs/building.md).
 - **Breaking:** the versionless NC schemas `schemas.ENTSOE_NC_552_ED1/ED2`
   (shipped in 0.1.0; generated from an incoherent mix of profile versions) are
-  replaced by the versioned bundles above — no alias. The stray
-  `ENTSO-E_Object Registry vocabulary_2.1.1_2022-12-29.json` single-profile
-  export is gone as well (the OR profile lives in the NC bundles).
+  replaced by the versioned `schemas.ENTSOE_NC_2_4_1_552_*` bundles — no alias.
+  The stray `ENTSO-E_Object Registry vocabulary_2.1.1_2022-12-29.json`
+  single-profile export is gone as well (the OR profile lives in the NC bundles).
 
 ## [0.1.0] - 2026-06-29
 
