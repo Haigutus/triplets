@@ -42,6 +42,17 @@ The header profile inside every bundle is always converted with `552_ED2`
 rules — `md:FullModel` / `dcat:Dataset` headers use `rdf:about` with
 `urn:uuid:` in real documents regardless of the body edition.
 
+**The edition only affects CIM XML export.** N-Quads export is
+serialization-edition-independent: `export_to_nquads` reconstructs every
+subject, reference and graph as an absolute `urn:uuid:` IRI from the bare
+UUID (see `export/nquads_utils.py`), so a bundle's ED1 and ED2 produce
+byte-identical `.nq` output — both valid input for any SPARQL engine. The
+`#uuid` fragment-reference pitfall that makes ED1 unsafe to load into a
+triplestore is specific to RDF/XML (`rdf:resource="#uuid"` resolves against
+the document `xml:base`, often the filename); it does not arise here because
+N-Quads never uses relative fragments. Pass either edition for N-Quads; the
+examples use ED2 only for consistency with the CIM XML calls beside them.
+
 ## Anatomy of a Bundle
 
 A bundle is a dict of profile sections keyed by profile keyword
@@ -196,7 +207,8 @@ data = pandas.read_RDF(["nc_instances.zip"])
 
 # exporters take a bundle as rdf_map (Path or dict)
 files = data.export_to_cimxml(rdf_map=schemas.ENTSOE_NC_2_4_1_552_ED1, export_to_memory=True)
-data.export_to_nquads("nc.nq", rdf_map=schemas.ENTSOE_NC_2_4_1_552_ED1)
+# N-Quads is edition-independent (always absolute urn:uuid: IRIs) — see the note below
+data.export_to_nquads("nc.nq", rdf_map=schemas.ENTSOE_NC_2_4_1_552_ED2)
 
 # validation context enrichment uses the same bundles
 report = data.shacl.validate(shapes, context=True, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
