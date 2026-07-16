@@ -253,6 +253,7 @@ cim:ShortName a sh:NodeShape ; sh:targetClass cim:ACLineSegment ;
     run = build_sarif(violations, sources=[str(xml)])["runs"][0]
     location = run["results"][0]["locations"][0]["physicalLocation"]
     assert location["region"]["startLine"] == 5          # the name property line, not line 4
+    assert location["region"]["startColumn"] == 5        # the '<' of the property element
 
 
 def test_regions_schema_and_github_shape(shapes, tmp_path):

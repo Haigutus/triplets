@@ -92,21 +92,26 @@ found = violations[violations["SEVERITY"] == "Violation"]
 print(f"\nafter breaking 3 things: {len(found)} Violations")
 print(found[["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE"]].to_string(index=False, max_colwidth=60))
 
-# >>> enrich with context: object type/name, source file, shape + schema descriptions
+# >>> enrich with context (object type/name, source file, shape + schema
+# >>> descriptions), then locate: one grep-style pass over the original XML
+# >>> stamps SOURCE_URI / SOURCE_LINE / SOURCE_COLUMN onto every violation —
+# >>> both report exports below reuse the same columns
 enriched = violations.shacl.enrich(data=broken, shapes=shapes,
                                    rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
-print("\nenriched Violations (what/where):")
-print(enriched.loc[enriched["SEVERITY"] == "Violation",
-                   ["ID", "OBJECT_TYPE", "OBJECT_NAME", "SHAPE_NAME"]].to_string(index=False))
+located = enriched.shacl.locate(sources=[EQ])
+print("\nenriched + located Violations (what/where):")
+print(located.loc[located["SEVERITY"] == "Violation",
+                  ["ID", "OBJECT_TYPE", "OBJECT_NAME", "SOURCE_LINE", "SOURCE_COLUMN"]]
+      .to_string(index=False))
 
-# >>> export 1: standard sh:ValidationReport (turtle)
-report_ttl = enriched.shacl.to_shacl_report(path=HERE / "shacl_reports.ttl")
+# >>> export 1: standard sh:ValidationReport (turtle) — each result carries
+# >>> the engine message plus Description/Schema/Source messages
+report_ttl = located.shacl.to_shacl_report(path=HERE / "shacl_reports.ttl")
 print(f"\nwrote {report_ttl}")
 
 # >>> export 2: SARIF 2.1.0 — grouped (one result per rule + occurrenceCount);
-# >>> sources= locates the reported instances in the original XML, so results
-# >>> carry file + startLine of the violated element
-report_sarif = enriched.shacl.to_sarif(sources=[EQ], path=HERE / "shacl_reports.sarif")
+# >>> results carry file + startLine/startColumn of the violated element
+report_sarif = located.shacl.to_sarif(path=HERE / "shacl_reports.sarif")
 print(f"wrote {report_sarif}")
 
 # >>> peek at the SARIF locations of the introduced issues

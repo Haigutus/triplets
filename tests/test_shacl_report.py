@@ -63,3 +63,45 @@ def test_export_paths_memory_and_accessor(tmp_path):
     buffer = VIOLATIONS.shacl.to_shacl_report(export_to_memory=True)
     assert buffer.name == "report.ttl"
     assert rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
+
+
+def test_multi_messages_from_context_and_location_columns():
+    """Enrichment and location columns become additional plain-text
+    sh:resultMessage entries (SHACL has no location vocabulary)."""
+    import rdflib
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+
+    enriched = VIOLATIONS.head(1).copy()
+    enriched["SHAPE_DESCRIPTION"] = "Line length plausibility."
+    enriched["SCHEMA_DESCRIPTION"] = "Total length of the line."
+    enriched["SCHEMA_MULTIPLICITY"] = "0..1"
+    enriched["SOURCE_URI"] = "grid.xml"
+    enriched["SOURCE_LINE"] = 5
+    enriched["SOURCE_COLUMN"] = 3
+
+    graph = violations_to_report_graph(enriched)
+    assert {str(message) for message in graph.objects(None, sh.resultMessage)} == {
+        "too long",
+        "Description: Line length plausibility.",
+        "Schema: Total length of the line. [0..1]",
+        "Source: grid.xml line 5 column 3",
+    }
+
+
+def test_sources_add_location_message(tmp_path):
+    """export_to_shacl_report(sources=...) runs the locate pass itself."""
+    import rdflib
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    xml = tmp_path / "grid.xml"
+    xml.write_text('<?xml version="1.0"?>\n'
+                   '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" '
+                   'xmlns:cim="http://iec.ch/TC57/CIM100#">\n'
+                   '  <cim:ACLineSegment rdf:ID="_11111111-2222-3333-4444-555555555555">\n'
+                   '    <cim:Conductor.length>100</cim:Conductor.length>\n'
+                   '  </cim:ACLineSegment>\n'
+                   '</rdf:RDF>\n')
+
+    buffer = VIOLATIONS.head(1).shacl.to_shacl_report(sources=[str(xml)], export_to_memory=True)
+    graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
+    messages = {str(message) for message in graph.objects(None, sh.resultMessage)}
+    assert any(message.startswith("Source: ") and "line 4" in message for message in messages)

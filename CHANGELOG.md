@@ -70,6 +70,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   EQ with three deliberately introduced issues validated against the official
   ENTSO-E Equipment SHACL (Simple + Complex, downloaded on first run), report
   exported as sh:ValidationReport and as SARIF with exact file:line locations.
+- **Vectorized `sh:path ( assoc rdf:type )`** — the profile "valueType"
+  pattern: the constraint applies to the referenced object's type (dangling
+  references yield no value node, per SHACL path semantics). Compiles 428
+  previously skipped constraint rows of the ENTSO-E Equipment SHACL; other
+  property paths keep the compile warning + pyshacl coverage.
+- **Standalone source-location pass** (`violations.shacl.locate(sources=...)`,
+  `triplets.validation.locate_violations`): stamps `SOURCE_URI`/`SOURCE_LINE`/
+  `SOURCE_COLUMN` onto the violations frame in one grep-style pass; SARIF and
+  the sh:ValidationReport export run it automatically when given `sources=`
+  (SARIF regions gain `startColumn`; the SHACL report carries plain-text
+  "Source: file line N column M" messages, alongside Description/Schema
+  messages from the enrichment columns).
 
 ### Fixed
 - `pathlib.Path` inputs are accepted everywhere: `read_rdf`/`parse` (all
@@ -87,6 +99,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   does not define them itself — the header no longer overwrites a profile's own
   definitions (e.g. each profile's `String` datatype namespace, the CGMES 2.4
   `FH` section's `FullModel`/`Model.profile`).
+- An ill-typed value under an `rdf_map` (e.g. `"abc"` on an `xsd:float` key) no
+  longer cripples sh:sparql validation silently: the qlever ingest error names
+  the offending key/value/datatype ("fix the instance data or the schema
+  datatype"), the failed engine-state build is cached per content hash instead
+  of being re-paid by every rule, and the failure is reported as ONE
+  `triplets:invalidSparql` Warning per run while the rules still validate via
+  the rdflib fallback. Ill-typed data itself is never silently "fixed".
+- N-Quads exporters escape `\r` (was emitted raw — grammar-invalid output that
+  broke strict oxigraph ingest).
 
 ### Changed
 - **Python 3.14 supported**: wheels build for cp314, CI tests it (full suite

@@ -1,23 +1,31 @@
-"""Exact source regions for violations — one grep-style pass over the CIM/XML.
+"""Exact source locations for violations — one grep-style pass over the CIM/XML.
 
-RDF objects carry no text coordinates through the triplets frame, so regions
+RDF objects carry no text coordinates through the triplets frame, so locations
 are recovered from the original files at *export* time: each source file is
 read once and every ``rdf:ID`` / ``rdf:about`` definition is indexed with its
 line number — one sequential pass per file, cost independent of how many IDs
-are wanted. For the sample violations that end up in the report, the violated
-property's own line is then searched inside that object's text window, so the
-annotation lands on the offending property element, not just the object.
+are wanted. For each violation, the violated property's own position is then
+searched inside that object's text window, so the annotation lands on the
+offending property element, not just the object.
 
-The parse/validate hot paths are untouched: nothing here runs (or imports)
-unless ``sources=`` is passed to the SARIF export. When the same object is
-defined in several files (``rdf:about`` continuation across profiles), the
-first definition wins — a violated KEY living in a later profile file falls
-back to the definition line.
+``locate_violations`` is the public pass: it stamps ``LOCATION_COLUMNS``
+(SOURCE_URI, SOURCE_LINE, SOURCE_COLUMN) onto a violations frame — both the
+SARIF and the sh:ValidationReport exports call it when given ``sources=``,
+and it is exposed as ``violations.shacl.locate(sources=...)``.
+
+The parse/validate hot paths are untouched: nothing here runs unless sources
+are handed to an export. When the same object is defined in several files
+(``rdf:about`` continuation across profiles), the first definition wins — a
+violated KEY living in a later profile file falls back to the definition
+position. Lines and columns are 1-based; columns count bytes (a multi-byte
+UTF-8 character earlier on the line shifts them).
 """
 import re
 import logging
 
 logger = logging.getLogger(__name__)
+
+LOCATION_COLUMNS = ["SOURCE_URI", "SOURCE_LINE", "SOURCE_COLUMN"]
 
 # an object definition: <cim:Breaker rdf:ID="_uuid"> / rdf:about="#_uuid" /
 # rdf:about="urn:uuid:uuid" — group(1) is the bare ID, triplets conventions
@@ -37,7 +45,8 @@ def locate(wanted, sources):
 
     Returns
     -------
-    dict {ID: {"uri": str, "startLine": int, "keyLines": {KEY: int}}}
+    dict {ID: {"uri": str, "startLine": int, "startColumn": int,
+               "keyLines": {KEY: (line, column)}}}
         IDs not present in the sources are absent from the result.
     """
     from ..parser.utils import find_all_xml
@@ -57,8 +66,9 @@ def locate(wanted, sources):
             if object_id is None:
                 continue
             window_end = matches[position + 1].start() if position + 1 < len(matches) else len(text)
+            element_start = max(text.rfind(b"<", 0, match.start()), 0)
             located[object_id] = {
-                "uri": uri, "startLine": line,
+                "uri": uri, "startLine": line, "startColumn": _column(text, element_start),
                 "keyLines": _key_lines(text, match.start(), window_end, line, wanted[object_id]),
             }
     if remaining:
@@ -66,8 +76,47 @@ def locate(wanted, sources):
     return located
 
 
+def locate_violations(violations, sources):
+    """Stamp LOCATION_COLUMNS onto a violations frame — one locate() pass.
+
+    Per row (ID, KEY): the violated property element's own position when it
+    was found inside the object's text window, else the object definition's;
+    rows whose object is not in the sources get nulls.
+    """
+    import pandas
+
+    wanted = {}
+    for object_id, key in zip(violations["ID"], violations["KEY"]):
+        if not pandas.isna(object_id):
+            wanted.setdefault(str(object_id), set()).add(None if pandas.isna(key) else str(key))
+    located = locate(wanted, sources)
+
+    def position(object_id, key):
+        entry = located.get(str(object_id)) if not pandas.isna(object_id) else None
+        if entry is None:
+            return None, None, None
+        key = None if pandas.isna(key) else str(key)
+        line, column = entry["keyLines"].get(key, (entry["startLine"], entry["startColumn"]))
+        return entry["uri"], line, column
+
+    frame = violations.copy()
+    positions = [position(object_id, key) for object_id, key in zip(frame["ID"], frame["KEY"])]
+    if positions:
+        stamped = pandas.DataFrame(positions, columns=LOCATION_COLUMNS,
+                                   index=frame.index).astype(object)
+        frame[LOCATION_COLUMNS] = stamped.where(stamped.notna(), None)
+    else:
+        frame[LOCATION_COLUMNS] = None
+    return frame
+
+
+def _column(text, position):
+    """1-based byte column of *position* on its line."""
+    return position - text.rfind(b"\n", 0, position)
+
+
 def _key_lines(text, definition_start, window_end, definition_line, keys):
-    """Line of each violated property element inside the object's window."""
+    """(line, column) of each violated property element inside the object's window."""
     lines = {}
     for key in keys:
         if not key or key == "Type":         # the type is the definition element itself
@@ -75,8 +124,9 @@ def _key_lines(text, definition_start, window_end, definition_line, keys):
         pattern = rb"<[\w.-]+:" + re.escape(str(key).encode()) + rb"[\s>/]"
         match = re.search(pattern, text[definition_start:window_end])
         if match is not None:
-            lines[key] = definition_line + text.count(
-                b"\n", definition_start, definition_start + match.start())
+            start = definition_start + match.start()
+            lines[key] = (definition_line + text.count(b"\n", definition_start, start),
+                          _column(text, start))
     return lines
 
 

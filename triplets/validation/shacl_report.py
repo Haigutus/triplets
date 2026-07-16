@@ -122,7 +122,14 @@ _TRIPLETS_NS = "http://triplets#"
 
 def violations_to_report_graph(violations):
     """Violations DataFrame → sh:ValidationReport rdflib graph (inverse of
-    report_to_violations; KEYs expand to the CIM namespace unless already URIs)."""
+    report_to_violations; KEYs expand to the CIM namespace unless already URIs).
+
+    A result carries several plain-text ``sh:resultMessage``s when the frame
+    has the context/location columns: the engine message, the shape and
+    schema descriptions (context.enrich) and the source position
+    (locations.locate_violations) — SHACL has no location vocabulary, so a
+    message is the interoperable carrier.
+    """
     import rdflib
 
     sh = rdflib.Namespace(_SH)
@@ -146,14 +153,34 @@ def violations_to_report_graph(violations):
             graph.add((result, sh.value, rdflib.Literal(row.VALUE)))
         if pandas.notna(row.VIOLATION_TYPE):
             graph.add((result, sh.sourceConstraintComponent, rdflib.URIRef(_expand(row.VIOLATION_TYPE))))
-        if pandas.notna(row.MESSAGE):
-            graph.add((result, sh.resultMessage, rdflib.Literal(row.MESSAGE)))
+        for message in _messages(row):
+            graph.add((result, sh.resultMessage, rdflib.Literal(message)))
         if pandas.notna(row.SOURCE_SHAPE):
             shape = str(row.SOURCE_SHAPE)   # anonymous property shapes stay blank nodes
             graph.add((result, sh.sourceShape,
                        rdflib.URIRef(shape) if "://" in shape or shape.startswith("urn:") else rdflib.BNode(shape)))
 
     return graph
+
+
+def _messages(row):
+    """The result's message set — engine message + optional context/location."""
+    def cell(name):
+        value = getattr(row, name, None)
+        return None if value is None or pandas.isna(value) else value
+
+    messages = []
+    if cell("MESSAGE") is not None:
+        messages.append(str(row.MESSAGE))
+    if cell("SHAPE_DESCRIPTION") is not None:
+        messages.append(f"Description: {row.SHAPE_DESCRIPTION}")
+    if cell("SCHEMA_DESCRIPTION") is not None:
+        multiplicity = f" [{row.SCHEMA_MULTIPLICITY}]" if cell("SCHEMA_MULTIPLICITY") is not None else ""
+        messages.append(f"Schema: {row.SCHEMA_DESCRIPTION}{multiplicity}")
+    if cell("SOURCE_URI") is not None:
+        column = f" column {int(row.SOURCE_COLUMN)}" if cell("SOURCE_COLUMN") is not None else ""
+        messages.append(f"Source: {row.SOURCE_URI} line {int(row.SOURCE_LINE)}{column}")
+    return messages
 
 
 def _expand(value):
@@ -172,17 +199,27 @@ def _expand(value):
     return f"{CIM_NS}{value}"
 
 
-def export_to_shacl_report(violations, path=None, export_to_memory=False):
+def export_to_shacl_report(violations, sources=None, path=None, export_to_memory=False):
     """Violations frame → standard sh:ValidationReport, serialized as turtle.
 
     Parameters
     ----------
     violations : DataFrame in VIOLATION_COLUMNS (any engine's output).
+        Enrichment/location columns, when present, become additional
+        ``sh:resultMessage``s (Description/Schema/Source).
+    sources : optional
+        The original CIM/XML files — runs the locate_violations pass so each
+        result carries a "Source: file line N column M" message (a frame
+        already carrying LOCATION_COLUMNS is used as-is).
     path : str or Path, optional
         Output file (default "report.ttl"). Ignored with export_to_memory.
     export_to_memory : bool, default False
         Return a BytesIO (with .name) instead of writing to disk.
     """
+    if sources is not None:
+        from .locations import LOCATION_COLUMNS, locate_violations
+        if not set(LOCATION_COLUMNS) <= set(violations.columns):
+            violations = locate_violations(violations, sources)
     payload = violations_to_report_graph(violations).serialize(format="turtle").encode("utf-8")
     if export_to_memory:
         buffer = io.BytesIO(payload)
