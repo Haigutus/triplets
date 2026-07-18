@@ -107,6 +107,108 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
     # profile and referenced by about (e.g. NC associations attached to EQ objects)
     export_classes = list(dict.fromkeys(rdfs_tools.concrete_classes_list(profile_data) + classes_defined_externally))
 
+    def add_parameter(parameter, parameter_meta):
+        """Emit one attribute's definition as a top-level profile entry (datatype,
+        multiplicity, enum values, ...). Returns its name, or None for an unused
+        association (skipped). Does not attach it to a class — the caller does that."""
+
+        # Pivot yields NaN for keys a parameter does not have, semantics expect them absent
+        parameter_dict = {key: value for key, value in parameter_meta.to_dict().items() if pandas.notna(value)}
+
+        # TODO - export this and add it to Association metadata
+        association_used = parameter_dict.get("AssociationUsed")
+
+        # If it is association but not used, we don't export it
+        if association_used == 'No':
+            return None
+
+        parameter_namespace, parameter_name = rdfs_tools.get_namespace_and_name(parameter, default_namespace=xml_base)
+
+        parameter_def = {
+            "description": parameter_dict.get("comment", ""),
+            "multiplicity": parameter_dict["multiplicity"].split("M:")[1],
+            "namespace": parameter_namespace
+        }
+
+        parameter_def["xsd:minOccours"], parameter_def["xsd:maxOccours"] = rdfs_tools.parse_multiplicity(parameter_dict["multiplicity"])
+
+        # If association
+        if association_used == 'Yes':
+            parameter_def["attrib"] = {
+                "attribute": resource_attribute,
+                "value_prefix": resource_prefix
+            }
+
+            parameter_def["type"] = "Association"
+            parameter_def["xsd:type"] = "xsd:anyURI"
+            parameter_def["range"] = parameter_dict["range"]
+
+        else:
+            data_type = parameter_dict.get("dataType")
+
+            # If regular attribute, find its data type and add to export
+            if data_type:
+
+                # Set parameter type to Attribute
+                parameter_def["type"] = "Attribute"
+
+                # Get the attribute data type and add to export
+                data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(data_type, default_namespace=xml_base)
+
+                data_type_meta = profile_data.get_object_data(data_type).to_dict()
+
+                if data_type_namespace == "":
+                    data_type_namespace = xml_base
+
+                data_type_def = {
+                    "description": data_type_meta.get("comment", ""),
+                    "type": data_type_meta.get("stereotype", ""),
+                    "xsd:type": cgmes_data_types_map.get(data_type_name, ""),
+                    "namespace": data_type_namespace
+                }
+
+                # Add data type to export
+                profile[data_type_name] = data_type_def
+
+                # Add data type to attribute definition
+                parameter_def["dataType"] = data_type_name
+                parameter_def["xsd:type"] = data_type_def["xsd:type"]
+
+            # If enumeration
+            else:
+                parameter_def["attrib"] = {
+                    "attribute": enumeration_attribute,
+                    "value_prefix": enumeration_prefix  # TODO - prefix should be used per value
+                }
+                parameter_def["type"] = "Enumeration"
+                parameter_def["xsd:type"] = "xsd:anyURI"
+                parameter_def["range"] = parameter_dict["range"].replace("#", "")
+                parameter_def["values"] = []
+
+                # Add allowed values
+                values = profile_data.query(f"VALUE == '{parameter_dict['range']}' and KEY == 'type'").ID.tolist()
+
+                for value in values:
+
+                    value_namespace, value_name = rdfs_tools.get_namespace_and_name(value, default_namespace=xml_base)
+                    value_meta = profile_data.get_object_data(value).to_dict()
+
+                    if value_namespace == "":
+                        value_namespace = xml_base
+
+                    value_def = {
+                        "description": value_meta.get("comment", ""),
+                        "namespace": value_namespace,
+                        "type": "EnumerationValue"
+                    }
+
+                    parameter_def["values"].append(value_name)
+                    profile[value_name] = value_def
+
+        # Add parameter definition
+        profile[parameter_name] = parameter_def
+        return parameter_name
+
     for concrete_class in export_classes:
 
         # Define class namespace
@@ -143,107 +245,29 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
         }
 
         # Add attributes
-
         for parameter, parameter_meta in class_parameters_table.iterrows():
+            parameter_name = add_parameter(parameter, parameter_meta)
+            if parameter_name is not None:
+                profile[class_name]["parameters"].append(parameter_name)
 
-            # Pivot yields NaN for keys a parameter does not have, semantics expect them absent
-            parameter_dict = {key: value for key, value in parameter_meta.to_dict().items() if pandas.notna(value)}
-
-            # TODO - export this and add it to Association metadata
-            association_used = parameter_dict.get("AssociationUsed")
-
-            # If it is association but not used, we don't export it
-            if association_used == 'No':
-                continue
-
-            parameter_namespace, parameter_name = rdfs_tools.get_namespace_and_name(parameter, default_namespace=xml_base)
-
-            parameter_def = {
-                "description": parameter_dict.get("comment", ""),
-                "multiplicity": parameter_dict["multiplicity"].split("M:")[1],
-                "namespace": parameter_namespace
-            }
-
-            parameter_def["xsd:minOccours"], parameter_def["xsd:maxOccours"] = rdfs_tools.parse_multiplicity(parameter_dict["multiplicity"])
-
-            # If association
-            if association_used == 'Yes':
-                parameter_def["attrib"] = {
-                    "attribute": resource_attribute,
-                    "value_prefix": resource_prefix
-                }
-
-                parameter_def["type"] = "Association"
-                parameter_def["xsd:type"] = "xsd:anyURI"
-                parameter_def["range"] = parameter_dict["range"]
-
-            else:
-                data_type = parameter_dict.get("dataType")
-
-                # If regular attribute, find its data type and add to export
-                if data_type:
-
-                    # Set parameter type to Attribute
-                    parameter_def["type"] = "Attribute"
-
-                    # Get the attribute data type and add to export
-                    data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(data_type, default_namespace=xml_base)
-
-                    data_type_meta = profile_data.get_object_data(data_type).to_dict()
-
-                    if data_type_namespace == "":
-                        data_type_namespace = xml_base
-
-                    data_type_def = {
-                        "description": data_type_meta.get("comment", ""),
-                        "type": data_type_meta.get("stereotype", ""),
-                        "xsd:type": cgmes_data_types_map.get(data_type_name, ""),
-                        "namespace": data_type_namespace
-                    }
-
-                    # Add data type to export
-                    profile[data_type_name] = data_type_def
-
-                    # Add data type to attribute definition
-                    parameter_def["dataType"] = data_type_name
-                    parameter_def["xsd:type"] = data_type_def["xsd:type"]
-
-                # If enumeration
-                else:
-                    parameter_def["attrib"] = {
-                        "attribute": enumeration_attribute,
-                        "value_prefix": enumeration_prefix  # TODO - prefix should be used per value
-                    }
-                    parameter_def["type"] = "Enumeration"
-                    parameter_def["xsd:type"] = "xsd:anyURI"
-                    parameter_def["range"] = parameter_dict["range"].replace("#", "")
-                    parameter_def["values"] = []
-
-                    # Add allowed values
-                    values = profile_data.query(f"VALUE == '{parameter_dict['range']}' and KEY == 'type'").ID.tolist()
-
-                    for value in values:
-
-                        value_namespace, value_name = rdfs_tools.get_namespace_and_name(value, default_namespace=xml_base)
-                        value_meta = profile_data.get_object_data(value).to_dict()
-
-                        if value_namespace == "":
-                            value_namespace = xml_base
-
-                        value_def = {
-                            "description": value_meta.get("comment", ""),
-                            "namespace": value_namespace,
-                            "type": "EnumerationValue"
-                        }
-
-                        parameter_def["values"].append(value_name)
-                        profile[value_name] = value_def
-
-            # Add parameter definition
-            profile[parameter_name] = parameter_def
-
-            # Add to class
-            profile[class_name]["parameters"].append(parameter_name)
+    # Orphaned attributes: rdf:Property records with no class binding at all (no
+    # rdfs:domain and no schema:domainIncludes). Their definition is still emitted
+    # as a top-level entry so it is not lost — it is simply not referenced by any
+    # class. A consumer can recover the unreferenced set by diffing the property
+    # entries against the classes' parameter lists. A property that carries a
+    # binding but is skipped for other reasons (e.g. an unused inverse association)
+    # is bound, not orphaned.
+    bound_ids = set(profile_data.query("KEY in ['domain', 'domainIncludes']")["ID"])
+    all_property_ids = profile_data.query(
+        "KEY == 'type' and VALUE == 'http://www.w3.org/1999/02/22-rdf-syntax-ns#Property'")["ID"].unique()
+    orphan_ids = [pid for pid in all_property_ids if pid not in bound_ids]
+    if orphan_ids:
+        logger.warning("%d attribute(s) have no class binding (no rdfs:domain / schema:domainIncludes) "
+                       "— emitted without a class: %s", len(orphan_ids), ", ".join(sorted(orphan_ids)))
+        orphan_rows = profile_data[profile_data["ID"].isin(orphan_ids)].drop_duplicates(["ID", "KEY"])
+        orphan_table = orphan_rows.pivot(index="ID", columns="KEY")["VALUE"]
+        for parameter, parameter_meta in orphan_table.iterrows():
+            add_parameter(parameter, parameter_meta)
 
     return profile
 

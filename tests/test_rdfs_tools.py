@@ -142,3 +142,36 @@ class TestCimRdfsToJson:
         result = cim_rdfs_to_json.convert_profile(rdfs_profile)
         assert isinstance(result, dict)
         assert len(result) > 0
+
+
+class TestOrphanedAttributes:
+    """An attribute with no class binding (no rdfs:domain / schema:domainIncludes)
+    is still emitted as a top-level schema entry — just not listed under any class —
+    with a warning. A consistent profile produces no orphan warning."""
+    DM = Path("rdfs/ENTSOE_NC_2.4.1/DatasetMetadata-AP-Voc-RDFS2020.rdf")
+    LOG = "triplets.rdfs_tools.cim_rdfs_to_json"
+
+    def _data(self):
+        if not self.DM.exists():
+            pytest.skip("NC 2.4.1 DatasetMetadata RDFS not available")
+        return rdfs_tools.load_all_to_dataframe(str(self.DM))
+
+    def test_consistent_profile_has_no_orphans(self, caplog):
+        from triplets.rdfs_tools import cim_rdfs_to_json
+        with caplog.at_level("WARNING", logger=self.LOG):
+            profile = cim_rdfs_to_json.convert_profile(self._data())
+        assert "title" in profile["Dataset"]["parameters"]      # bound attribute, listed
+        assert not any("no class binding" in r.getMessage() for r in caplog.records)
+
+    def test_orphaned_attribute_emitted_without_class(self, caplog):
+        from triplets.rdfs_tools import cim_rdfs_to_json
+        data = self._data()
+        title = "http://purl.org/dc/terms/title"
+        # strip title's class binding → orphan it
+        orphaned = data[~((data.ID == title) & (data.KEY.isin(["domain", "domainIncludes"])))].copy()
+        with caplog.at_level("WARNING", logger=self.LOG):
+            profile = cim_rdfs_to_json.convert_profile(orphaned)
+        assert "title" in profile                               # definition still emitted
+        assert profile["title"].get("dataType") == "String"     # with its datatype preserved
+        assert "title" not in profile["Dataset"]["parameters"]  # but no class references it
+        assert any("no class binding" in r.getMessage() for r in caplog.records)
