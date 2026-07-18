@@ -88,6 +88,17 @@ def test_return_type_flavors(svedala):
     assert auto.height == 5
 
 
+def test_arrow_input(svedala):
+    """A bare pyarrow table (no registered methods) is accepted as data —
+    converted at the engine boundary, same answers as the pandas input."""
+    import pyarrow
+    table = pyarrow.Table.from_pandas(svedala, preserve_index=False)
+    q = PREFIXES + "SELECT (COUNT(?s) AS ?n) WHERE { ?s rdf:type cim:ACLineSegment }"
+    via_arrow = int(triplets.sparql.query(table, q, engine="oxigraph")["n"].iloc[0])
+    via_pandas = int(triplets.sparql.query(svedala, q, engine="oxigraph")["n"].iloc[0])
+    assert via_arrow == via_pandas > 0
+
+
 def test_polars_select_parity(svedala):
     """The direct polars CSV decode returns the same values as the pandas path."""
     polars = pytest.importorskip("polars")
