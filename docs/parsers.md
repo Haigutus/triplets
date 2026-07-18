@@ -99,6 +99,20 @@ table = triplets.parser.parse(path, return_type="arrow")
 data = triplets.parser.parse(path, return_type="polars")
 ```
 
+## Options
+
+`parse()` / `read_RDF` accept (see `triplets/parser/__init__.py`):
+
+- `shorten_resources` (default `True`) — shorten http(s) resource values to
+  their `#fragment` (CIM instance-data convention). `False` keeps lossless
+  full URIs (e.g. for RDFS schema parsing); **not supported by the
+  `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
+- `categorical_columns` (default `("INSTANCE_ID", "KEY")`) — columns to
+  dictionary-encode (Arrow) / categorize (pandas) for memory savings; `None`
+  disables.
+- `max_workers` (default `None`) — when set and more than one XML file is
+  found, files are parsed concurrently on a `ThreadPoolExecutor`.
+
 ## Debug Output
 
 Debug output (file discovery, per-file parse timings, engine selection) follows the

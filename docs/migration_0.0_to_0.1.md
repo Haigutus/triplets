@@ -62,7 +62,7 @@ data["KEY"] = data["KEY"].astype(str)
 ## Deprecations
 
 All functions in `rdf_parser.py` now emit `DeprecationWarning` and delegate to the new modules.
-They will be removed in 0.2.
+They will be removed in a future release.
 
 ### Import paths
 
@@ -86,7 +86,7 @@ compatibility aliases but emit `DeprecationWarning`.
 
 Function names follow `<action>_<format>_<qualifier>` since 0.1 ("triplets" = the
 long ID/KEY/VALUE/INSTANCE_ID table, "tableview" = the pivoted per-class table).
-Old names keep working but emit `DeprecationWarning`; they will be removed in 0.2.
+Old names keep working but emit `DeprecationWarning`; they will be removed in a future release.
 
 | Old (0.0) | New (0.1) |
 |-----------|-----------|
@@ -112,7 +112,7 @@ The renames apply to `triplets.tools.*`, root methods on DataFrames/connections,
 
 ### cgmes_tools renames
 
-Old names keep working in 0.1 but emit `DeprecationWarning`; they will be removed in 0.2.
+Old names keep working in 0.1 but emit `DeprecationWarning`; they will be removed in a future release.
 
 | Old (0.0) | New (0.1) |
 |-----------|-----------|
@@ -190,5 +190,5 @@ triplets/
 ├── rdfs_tools/      # RDF Schema utilities
 ├── export_schema/   # ENTSO-E JSON schema files
 ├── _accessor.py     # .triplets namespace registration
-└── rdf_parser.py    # deprecated shim (will be removed in 0.2)
+└── rdf_parser.py    # deprecated shim (will be removed in a future release)
 ```

@@ -13,6 +13,7 @@ Each format has its own `{format}_{engine}.py` file. The dispatcher in
 | CIM XML | `export_to_cimxml` | `cython_pugixml`, `python_lxml` | `engine` parameter, auto = fastest available |
 | N-Quads | `export_to_nquads` | polars (lazy plan, ~4x), pandas | `engine` parameter, auto = polars when installed |
 | CSV | `export_to_csv` | polars, pandas | by input DataFrame type |
+| Arrow | `export_to_arrow` | polars, pandas (→ `pyarrow.Table`) | by input DataFrame type; columnar interchange feeding qlever's Arrow ingest |
 | Excel | `export_to_excel` | pandas | polars input converted to pandas first |
 | NetworkX | `export_to_networkx` | pandas | polars input converted to pandas first |
 
@@ -34,6 +35,11 @@ data-identical XML (verified by an engine-equivalence test); only whitespace
 formatting differs.
 
 Engine aliases: `performance` / `pugixml` -> `cython_pugixml`, `lxml` / `pandas` -> `python_lxml`
+
+`export_to_cimxml(..., datatypes=True)` annotates literal elements with
+`rdf:datatype` from the schema's `xsd:type` (like N-Quads; `xsd:string` stays
+plain). Supported by `python_lxml` only — passing `datatypes=True` with
+`engine="auto"` forces the `python_lxml` engine.
 
 ## Call Sequence (CIM XML)
 
@@ -117,6 +123,12 @@ files = data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine
 # CIM XML / RDF-XML concern, not N-Quads). ED2 shown for consistency.
 data.export_to_nquads("grid.nq", rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED2)
 
+# CIM XML with rdf:datatype annotations (python_lxml only; forces that engine)
+files = data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, datatypes=True)
+
+# Arrow — columnar interchange (ID, KEY, VALUE, INSTANCE_ID) for qlever's Arrow ingest
+table = data.export_to_arrow()  # pyarrow.Table, zero-copy where the backing store allows
+
 # other formats
 data.export_to_csv(export_to_memory=True)
 data.export_to_excel(export_to_memory=True)
@@ -134,7 +146,14 @@ con.triplets.export_to_csv(export_to_memory=True)
 
 ## Building the Cython Engine
 
-The same build produces both compiled extensions (parser and CIM XML export):
+The same build produces both compiled extensions (parser and CIM XML export).
+First fetch the pugixml source (`setup_cython_parser.py` hard-errors without it):
+
+```shell
+git submodule update --init vendor/pugixml
+```
+
+Then build:
 
 ```shell
 pixi install -e build

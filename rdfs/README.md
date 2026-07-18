@@ -44,8 +44,9 @@ Generation is deterministic: rerunning `cim_rdfs_to_json` must produce no diff
   registry line + two commands.
 - CI reproducibility guard: regenerate schemas and `git diff --exit-code
   triplets/export_schema` to prevent hand-edited JSON drift.
-- Snapshot the upstream `SHACL/*.ttl` with the same fetch spec (feeds the
-  `triplets.validation` engines).
+- Automate the fetch of the upstream `SHACL/*.ttl` snapshots with the same fetch
+  spec (SHACL validation itself ships in 0.2 via `triplets.validation`; only the
+  fetch of the upstream shape files is still manual).
 - Migrate the legacy CGMES snapshots to the fetch workflow (upstream branches
   `cgmes-v3-0` / `cgmes-v2-4`); filenames differ from the local copies, so that is a
   separate migration with its own regeneration diff review.
