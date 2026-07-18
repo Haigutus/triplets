@@ -21,6 +21,7 @@ from urllib.parse import quote
 import pandas
 
 from .context import ENRICHMENT_COLUMNS, enrich
+from .locations import LOCATION_COLUMNS, locate_violations
 from .shacl_ir import _local
 
 logger = logging.getLogger(__name__)
@@ -77,15 +78,17 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
 
 def build_sarif(violations, group=True, sources=None):
     """Violations frame → SARIF document dict (I/O only when *sources* is
-    given — see export_to_sarif; the pass reads just the source files)."""
+    given — the locate_violations pass reads just the source files; a frame
+    already carrying LOCATION_COLUMNS is used as-is)."""
     frame = violations.copy()
-    for column in ENRICHMENT_COLUMNS:                # tolerate un-enriched frames
+    if sources is not None and not set(LOCATION_COLUMNS) <= set(frame.columns):
+        frame = locate_violations(frame, sources)
+    for column in (*ENRICHMENT_COLUMNS, *LOCATION_COLUMNS):   # tolerate bare frames
         if column not in frame.columns:
             frame[column] = pandas.NA
 
     groups = [(key, rows.to_dict("records")) for key, rows
               in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False)]
-    located = _locate_reported(groups, group, sources) if sources is not None else {}
 
     rules, results = [], []
     seen_ids = {}
@@ -94,9 +97,9 @@ def build_sarif(violations, group=True, sources=None):
         rule_index = len(rules)
         rules.append(rule)
         if group:
-            results.append(_grouped_result(rule["id"], rule_index, records, located))
+            results.append(_grouped_result(rule["id"], rule_index, records))
         else:
-            results.extend(_result(rule["id"], rule_index, record, located) for record in records)
+            results.extend(_result(rule["id"], rule_index, record) for record in records)
 
     import triplets
     return {
@@ -119,19 +122,6 @@ def _samples(records):
     return records if len(records) <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
 
 
-def _locate_reported(groups, group, sources):
-    """Source regions for exactly the records that will emit locations —
-    the grouped samples (a handful per rule) or every record (group=False)."""
-    from .locations import locate
-
-    wanted = {}
-    for _, records in groups:
-        for record in (_samples(records) if group else records):
-            if not pandas.isna(record["ID"]):
-                wanted.setdefault(str(record["ID"]), set()).add(_value(record["KEY"]))
-    return locate(wanted, sources)
-
-
 def _rule(shape, constraint, records, seen_ids):
     identifier = f"{_local(str(shape))}/{constraint}" if not pandas.isna(shape) else str(constraint)
     if identifier in seen_ids:                       # distinct shapes, same local name
@@ -152,7 +142,7 @@ def _rule(shape, constraint, records, seen_ids):
     })
 
 
-def _grouped_result(rule_id, rule_index, records, located={}):
+def _grouped_result(rule_id, rule_index, records):
     total = len(records)
     samples = _samples(records)
     head = ", ".join(filter(None, (_describe(record) for record in samples[:_SAMPLES])))
@@ -161,7 +151,7 @@ def _grouped_result(rule_id, rule_index, records, located={}):
 
     message = _message(records[0])
     text = f"{message} — {total} object(s) affected." + (f" Examples: {described}" if described else "")
-    locations = [location for location in (_location(record, located) for record in samples)
+    locations = [location for location in (_location(record) for record in samples)
                  if location]
     return _prune({
         "ruleId": rule_id,
@@ -185,8 +175,8 @@ def _grouped_result(rule_id, rule_index, records, located={}):
     })
 
 
-def _result(rule_id, rule_index, record, located={}):
-    location = _location(record, located)
+def _result(rule_id, rule_index, record):
+    location = _location(record)
     return _prune({
         "ruleId": rule_id,
         "ruleIndex": rule_index,
@@ -233,10 +223,10 @@ def _describe(record):
     return " ".join(parts)
 
 
-def _location(record, located={}):
+def _location(record):
     """Point at the model element via logicalLocations; the physical side is
-    the exact source region when locations.locate found the object (sources=
-    passed to the export), else just the file the enrichment traced."""
+    the exact source region when the locate_violations pass found the object
+    (LOCATION_COLUMNS on the frame), else just the file the enrichment traced."""
     if pandas.isna(record["ID"]):
         return None
     qualified = (f"{record['OBJECT_TYPE']}/{record['ID']}"
@@ -246,12 +236,13 @@ def _location(record, located={}):
         "name": _value(record["OBJECT_NAME"]) or str(record["ID"]),
         "kind": "object",
     })]}
-    entry = located.get(str(record["ID"]))
-    if entry is not None:
-        line = entry["keyLines"].get(_value(record["KEY"]), entry["startLine"])
+    if not pandas.isna(record["SOURCE_URI"]):
+        region = {"startLine": int(record["SOURCE_LINE"])}
+        if not pandas.isna(record["SOURCE_COLUMN"]):
+            region["startColumn"] = int(record["SOURCE_COLUMN"])
         location["physicalLocation"] = {
-            "artifactLocation": {"uri": quote(entry["uri"], safe="/")},
-            "region": {"startLine": line},
+            "artifactLocation": {"uri": quote(str(record["SOURCE_URI"]), safe="/")},
+            "region": region,
         }
     elif not pandas.isna(record["INSTANCE_LABEL"]):
         location["physicalLocation"] = {

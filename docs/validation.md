@@ -9,6 +9,12 @@ The module is new — APIs may still shift. Know these before relying on it:
   `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —
   `compile()` logs a warning naming them; use `engine="pyshacl"` for full
   spec coverage.
+- **Property paths**: direct, `sh:inversePath`, and the two-step sequence
+  `sh:path ( assoc rdf:type )` (the ENTSO-E "valueType" pattern — the
+  constraint applies to the referenced object's type; a dangling reference
+  yields no value node per SHACL path semantics). Longer sequences and the
+  `*OrMorePath` forms are skipped with a compile warning; `engine="pyshacl"`
+  covers them.
 - **Deliberate deviation from pyshacl**: datatype checks judge the raw
   *lexical form* of values (`lexical=True`, the default) — see the dedicated
   section below. `engine="reference"` always gives the pure pyshacl view.
@@ -161,7 +167,13 @@ conforms** — identical across all engines:
 | `SEVERITY` | `Violation` / `Warning` / `Info` |
 | `SOURCE_SHAPE` | shape URI that produced the result |
 
-Violations DataFrames export like any other DataFrame (`export_to_csv`, Excel, ...).
+Violations DataFrames export like any other DataFrame (`export_to_csv`, Excel, ...),
+as a standard `sh:ValidationReport` (`violations.shacl.to_shacl_report(...)` — the
+exact inverse of the pyshacl report mapping in `shacl_report.py`) or as SARIF 2.1.0
+(`violations.shacl.to_sarif(...)`, see below). Source positions come from one shared
+pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS`
+(`SOURCE_URI`, `SOURCE_LINE`, `SOURCE_COLUMN`) onto the frame; both exports run it
+automatically when given `sources=`, or reuse the columns when already present.
 
 ## Polars Engine Guidance
 
@@ -264,11 +276,22 @@ violations = violations.shacl.enrich(data=data, shapes=compiled, rdf_map=...)  #
 
 # SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer
 violations.shacl.to_sarif(path="report.sarif")
+
+# standard sh:ValidationReport (turtle) for SHACL tooling; sources= adds a
+# "Source: file line N column M" message per result (SHACL has no location
+# vocabulary — plain-text messages travel everywhere)
+violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"])
+
+# the location pass standalone — SOURCE_URI/SOURCE_LINE/SOURCE_COLUMN columns,
+# reused by both report exports
+violations = violations.shacl.locate(sources=["grid.zip"])
 ```
 
 pyshacl pass-through options (`inference`, `advanced`, `abort_on_first`,
-`store`) are forwarded as keyword arguments. A runnable end-to-end demo lives
-in `examples/shacl_validation.py`.
+`store`) are forwarded as keyword arguments. Runnable end-to-end demos live in
+`examples/shacl_validation.py` (engine behavior walkthrough) and
+`examples/shacl_reports.py` (uv-runnable: performance engines + both report
+exports with source locations — `uv run examples/shacl_reports.py`).
 
 ## Context enrichment (`validation/context.py`)
 
@@ -307,13 +330,15 @@ enrichment pass first (an already-enriched frame is used as-is).
 - RDF objects carry no text coordinates through the triplets frame:
   results always point at the model via `logicalLocations` (`Type/ID` +
   object name). Passing `sources=` (the original CIM/XML files — paths,
-  zips or file-likes) locates the reported instances in the text at export
-  time and adds `physicalLocation.region.startLine` on the violated
-  property element (or the object definition) — what GitHub code scanning
-  needs to annotate lines. One grep-style pass per file over exactly the
-  reported IDs (`validation/locations.py`); the parse/validate hot paths
-  are untouched. Without `sources=`, `artifactLocation.uri` falls back
-  to the enrichment-traced file label, region-less.
+  zips or file-likes) runs the shared `locate_violations` pass
+  (`validation/locations.py`) and adds `physicalLocation.region.startLine`
+  / `startColumn` on the violated property element (or the object
+  definition) — what GitHub code scanning needs to annotate lines. One
+  grep-style pass per file; the parse/validate hot paths are untouched.
+  A frame already carrying `LOCATION_COLUMNS` (from
+  `violations.shacl.locate(sources=...)`) is used as-is. Without either,
+  `artifactLocation.uri` falls back to the enrichment-traced file label,
+  region-less. Columns are 1-based byte columns.
 - Everything domain-specific (triplet coordinates, schema descriptions,
   sample IDs) rides in the `properties` bags.
 

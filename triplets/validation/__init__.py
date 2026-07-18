@@ -37,8 +37,9 @@ import pandas
 
 from .._registry import EngineRegistry
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
-from .shacl_report import VIOLATION_COLUMNS
+from .shacl_report import VIOLATION_COLUMNS, export_to_shacl_report  # noqa: F401 — public API
 from .context import ENRICHMENT_COLUMNS, enrich  # noqa: F401 — public API
+from .locations import LOCATION_COLUMNS, locate_violations  # noqa: F401 — public API
 from .sarif import export_to_sarif  # noqa: F401 — public API
 
 logger = logging.getLogger(__name__)

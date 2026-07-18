@@ -126,6 +126,9 @@ class _Context(SchemaKind):
         # validation run: after the first sh:sparql query has hashed it, the
         # rest assert data_unchanged and skip the per-query content_hash.
         self.data_hashed = False
+        # Last engine exception — a cached ingest failure re-raises the same
+        # object per rule; _sparql reports it once instead of once per rule.
+        self.sparql_engine_error = None
 
     def dataset(self):
         """rdflib dataset for the sh:sparql constraints — loaded once, reused per query."""
@@ -172,16 +175,26 @@ class _Context(SchemaKind):
         Normal path:  FOCUS = row ID,   PATH_VALUE = row VALUE.
         Inverse path: FOCUS = row VALUE (the referenced focus object),
                       PATH_VALUE = row ID (the referencing object).
+        via_type:     PATH_VALUE = the referenced object's type (the
+                      ( assoc rdf:type ) sequence path; SHACL path semantics:
+                      a reference whose target has no Type row yields no
+                      value node, hence the inner join).
         """
         ids = self.focus(rule)
         rows = self.key_rows(rule.path)
         if rule.inverse:
             rows = rows[rows["VALUE"].isin(ids)]
-            return pandas.DataFrame({"FOCUS": rows["VALUE"].to_numpy(),
-                                     "PATH_VALUE": rows["ID"].to_numpy()})
-        rows = rows[rows["ID"].isin(ids)]
-        return pandas.DataFrame({"FOCUS": rows["ID"].to_numpy(),
-                                 "PATH_VALUE": rows["VALUE"].to_numpy()})
+            frame = pandas.DataFrame({"FOCUS": rows["VALUE"].to_numpy(),
+                                      "PATH_VALUE": rows["ID"].to_numpy()})
+        else:
+            rows = rows[rows["ID"].isin(ids)]
+            frame = pandas.DataFrame({"FOCUS": rows["ID"].to_numpy(),
+                                      "PATH_VALUE": rows["VALUE"].to_numpy()})
+        if getattr(rule, "via_type", False):
+            types = self.key_rows("Type")[["ID", "VALUE"]].astype(str)
+            frame = (frame.merge(types, left_on="PATH_VALUE", right_on="ID")
+                     [["FOCUS", "VALUE"]].rename(columns={"VALUE": "PATH_VALUE"}))
+        return frame
 
     def pair_rows(self, rule, other_path):
         """FOCUS + both paths' values, for the pair constraints (equals/disjoint/lessThan)."""
@@ -327,7 +340,8 @@ def _node_kind(context, rule):
         return _empty()
 
     rows = context.path_rows(rule)
-    kind = context.key_kind(rule.path)
+    # via_type value nodes are the referenced objects' types — always IRIs
+    kind = "iri" if getattr(rule, "via_type", False) else context.key_kind(rule.path)
     if kind is not None:
         is_iri = pandas.Series(kind == "iri", index=rows.index)
     else:
@@ -440,10 +454,16 @@ def _sparql(context, rule):
         context.data_hashed = True
         return _sparql_violations(rule, result)
     except Exception as error:                            # noqa: BLE001 — engine strictness
-        logger.warning("sh:sparql constraint %s rejected by %s — evaluating with rdflib "
-                       "and flagging the shape (fix the rule upstream):\n%s",
-                       rule.shape_id, engine_name, error)
-        note = _invalid_sparql(rule, error)
+        # A cached ingest failure (data vs schema) re-raises the same exception
+        # object for every rule — report it once, not once per rule; per-rule
+        # query rejections are fresh exceptions and keep their own note.
+        repeated = error is getattr(context, "sparql_engine_error", None)
+        context.sparql_engine_error = error
+        if not repeated:
+            logger.warning("sh:sparql constraint %s rejected by %s — evaluating with rdflib "
+                           "and flagging the shape (fix the rule upstream):\n%s",
+                           rule.shape_id, engine_name, error)
+        note = _empty() if repeated else _invalid_sparql(rule, error)
         try:
             violations = _sparql_violations(
                 rule, sparql.query(context.dataset(), query_text, engine="rdflib"))

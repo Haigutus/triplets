@@ -93,10 +93,17 @@ class _Context(SchemaKind):
         rows = self.base.filter(polars.col("KEY") == rule.path)
         ids = self.focus_ids_in(rule)
         if rule.inverse:
-            return rows.filter(polars.col("VALUE").is_in(ids)).select(
+            plan = rows.filter(polars.col("VALUE").is_in(ids)).select(
                 polars.col("VALUE").alias("FOCUS"), polars.col("ID").alias("PATH_VALUE"))
-        return rows.filter(polars.col("ID").is_in(ids)).select(
-            polars.col("ID").alias("FOCUS"), polars.col("VALUE").alias("PATH_VALUE"))
+        else:
+            plan = rows.filter(polars.col("ID").is_in(ids)).select(
+                polars.col("ID").alias("FOCUS"), polars.col("VALUE").alias("PATH_VALUE"))
+        if getattr(rule, "via_type", False):
+            # ( assoc rdf:type ) sequence path: PATH_VALUE = referenced object's
+            # type; a target without a Type row yields no value node (inner join)
+            plan = (plan.join(self.membership, left_on="PATH_VALUE", right_on="ID")
+                    .select("FOCUS", polars.col("CLASS").alias("PATH_VALUE")))
+        return plan
 
     def focus_frame(self, rule):
         return polars.LazyFrame({"FOCUS": self.focus_ids(rule)},
@@ -217,7 +224,8 @@ def _node_kind(context, rule):
     if rule.params not in ("IRI", "Literal"):
         logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)", rule.params, rule.shape_id)
         return None
-    kind = context.key_kind(rule.path)
+    # via_type value nodes are the referenced objects' types — always IRIs
+    kind = "iri" if getattr(rule, "via_type", False) else context.key_kind(rule.path)
     if kind is not None:                     # schema decides for the whole path
         if (kind == "iri") == (rule.params == "IRI"):
             return None                      # every value conforms — no plan at all
@@ -483,8 +491,10 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     context = _Context(frame, rdf_map)
     batched, plans = {}, []
     for rule in vectorized:
-        # batching joins on class membership — subjectsOf targets take the per-rule path
+        # batching joins on class membership — subjectsOf targets and two-hop
+        # (via_type) paths take the per-rule path
         if (rule.component in BATCH_BUILDERS and not rule.inverse
+                and not getattr(rule, "via_type", False)
                 and getattr(rule, "target_kind", "class") == "class"):
             batched.setdefault(rule.component, []).append(rule)
         elif (plan := PLAN_BUILDERS[rule.component](context, rule)) is not None:

@@ -299,7 +299,7 @@ def test_shape_message_and_severity_carried(engine):
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ;
                       sh:message "give it a name" ; sh:severity sh:Warning ] ."""
     v = run(breaker("b1"), shape, engine)
-    assert list(v["MESSAGE"]) == ["give it a name"]
+    assert list(v["MESSAGE"]) == ["give it a name"]   # authored text verbatim (enrich adds context)
     assert list(v["SEVERITY"]) == ["Warning"]
 
 
@@ -338,3 +338,106 @@ def test_target_subjects_of_pyshacl_parity(engine):
             + breaker("b2", ("Switch.normalOpen", "false"), ("IdentifiedObject.name", "B2")))
     assert violating(run(rows, shape, engine), "sh:minCount") \
         == violating(run(rows, shape, "pyshacl"), "sh:minCount") == {("b1", None)}
+
+
+def test_ill_typed_value_fails_sparql_engine_once_with_context():
+    """One ill-typed value under an rdf_map is a data-vs-schema error: the
+    strict qlever ingest names the offender, the failed build is cached (no
+    per-rule rebuild), exactly ONE triplets:invalidSparql Warning is emitted,
+    and the sh:sparql rules still validate through the rdflib fallback."""
+    from triplets import sparql
+    if sparql.get_engine("auto")[0] != "qlever":
+        pytest.skip("needs the strict qlever engine as the auto SPARQL engine")
+    import rdflib
+    import triplets as t
+    t.clear_caches()
+
+    rdf_map = {"EQ": {"Conductor.length": {
+        "type": "Attribute", "xsd:type": "xsd:float",
+        "namespace": "http://iec.ch/TC57/CIM100#"}}}
+    shape = """cim:LineShape a sh:NodeShape ; sh:targetClass cim:ACLineSegment ;
+        sh:property [ sh:path cim:Conductor.length ; sh:datatype xsd:float ] ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:sparql [
+            sh:message "name is reserved" ;
+            sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "reserved") }' ] ] ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:sparql [
+            sh:message "name is banned" ;
+            sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "banned") }' ] ] ."""
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    rows = [("a1", "Type", "ACLineSegment", "eq"),
+            ("a1", "Conductor.length", "abc", "eq"),        # ill-typed for xsd:float
+            ("a1", "IdentifiedObject.name", "banned", "eq"),
+            ("a2", "Type", "ACLineSegment", "eq"),
+            ("a2", "Conductor.length", "1.5", "eq"),
+            ("a2", "IdentifiedObject.name", "reserved", "eq")]
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+    violations = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine="pandas")
+
+    notes = violations[violations["VIOLATION_TYPE"] == "triplets:invalidSparql"]
+    assert len(notes) == 1, "the cached ingest failure must be reported once, not per rule"
+    assert "Conductor.length" in notes["MESSAGE"].iloc[0]
+    assert '"abc"' in notes["MESSAGE"].iloc[0]
+    # the datatype defect itself is reported by the vectorized check
+    assert violating(violations, "sh:datatype") == {("a1", "abc")}
+    # both sh:sparql rules still validated via the rdflib fallback
+    assert violating(violations, "sh:sparql") == {("a2", "reserved"), ("a1", "banned")}
+
+
+VALUE_TYPE_SHAPE = """@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+cim:BreakerBayShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [
+        sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ;
+        sh:in ( cim:Bay cim:VoltageLevel ) ;
+        sh:nodeKind sh:IRI ;
+        sh:message "container must be a Bay or a VoltageLevel" ;
+    ] ."""
+
+
+def test_sequence_path_via_type(engine):
+    """The ENTSO-E valueType pattern — sh:path ( assoc rdf:type ) — checks the
+    referenced object's class. Wrong-class targets are flagged; a dangling
+    reference yields no value node (SHACL path semantics) and passes."""
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "bay1"))
+            + breaker("b2", ("Equipment.EquipmentContainer", "sub1"))
+            + breaker("b3", ("Equipment.EquipmentContainer", "missing"))
+            + [("bay1", "Type", "Bay", "eq"), ("sub1", "Type", "Substation", "eq")])
+    v = run(rows, VALUE_TYPE_SHAPE, engine)
+    assert violating(v, "sh:in") == {("b2", "Substation")}
+    assert violating(v, "sh:nodeKind") == set()   # types are IRIs by definition
+
+
+def test_sequence_path_via_type_pyshacl_parity(engine):
+    # UUID-shaped ids: the rdflib graph links references only for
+    # reference-like values, plain names would load as literals
+    pytest.importorskip("pyshacl")
+    bay = "aaaaaaaa-1111-2222-3333-444444444444"
+    sub = "bbbbbbbb-1111-2222-3333-444444444444"
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", bay))
+            + breaker("b2", ("Equipment.EquipmentContainer", sub))
+            + [(bay, "Type", "Bay", "eq"), (sub, "Type", "Substation", "eq")])
+    # pyshacl reports the type as the full IRI, the triplets engines as the
+    # stored local name — same violation, compare on local names
+    reference = {(focus, value.rsplit("#", 1)[-1])
+                 for focus, value in violating(run(rows, VALUE_TYPE_SHAPE, "pyshacl"), "sh:in")}
+    assert violating(run(rows, VALUE_TYPE_SHAPE, engine), "sh:in") \
+        == reference == {("b2", "Substation")}
+
+
+def test_unsupported_property_paths_still_skip_with_warning(caplog):
+    """Longer sequences / zeroOrMorePath stay out of the IR — skipped with the
+    coverage warning (pyshacl covers them)."""
+    import logging
+    shape = """@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+        cim:DeepShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path ( cim:Equipment.EquipmentContainer cim:Bay.VoltageLevel rdf:type ) ;
+                      sh:in ( cim:VoltageLevel ) ] ;
+        sh:property [ sh:path [ sh:zeroOrMorePath cim:Bay.VoltageLevel ] ; sh:minCount 1 ] ."""
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    with caplog.at_level(logging.WARNING, logger="triplets.validation.shacl_ir"):
+        compiled = triplets.validation.compile(graph)
+    assert len(compiled.ir) == 0
+    assert sum("cannot express" in record.message for record in caplog.records) == 2

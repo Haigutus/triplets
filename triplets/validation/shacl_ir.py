@@ -27,8 +27,8 @@ from .._caches import register_cache
 
 logger = logging.getLogger(__name__)
 
-IR_COLUMNS = ["shape_id", "target_class", "target_kind", "path", "inverse", "component",
-              "params", "severity", "message", "name", "description"]
+IR_COLUMNS = ["shape_id", "target_class", "target_kind", "path", "inverse", "via_type",
+              "component", "params", "severity", "message", "name", "description"]
 
 _SHAPE_FORMATS = {".ttl": "turtle", ".rdf": "xml", ".xml": "xml", ".nt": "nt", ".jsonld": "json-ld"}
 
@@ -167,7 +167,7 @@ def _node_rows(graph, SH, shape, target_class, target_kind="class"):
         ignored = graph.value(shape, SH.ignoredProperties)
         allowed = _rdf_list(graph, ignored, _local) if ignored is not None else []
         for property_shape in graph.objects(shape, SH.property):
-            path, inverse = _resolve_path(graph, SH, graph.value(property_shape, SH.path))
+            path, inverse, _ = _resolve_path(graph, SH, graph.value(property_shape, SH.path))
             if path is not None and not inverse:
                 allowed.append(path)
         rows.append({**meta, "component": "sh:closed", "params": allowed})
@@ -189,7 +189,7 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
     sh:description inherits them (authors commonly title the node shape).
     """
     path_node = graph.value(shape_uri, SH.path)
-    path, inverse = _resolve_path(graph, SH, path_node)
+    path, inverse, via_type = _resolve_path(graph, SH, path_node)
     if path_node is not None and path is None:
         logger.warning(
             "sh:path at %s is a property path the vectorized engines cannot express "
@@ -197,7 +197,7 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
             shape_uri)
         return []
     meta = _shape_meta(graph, SH, shape_uri, target_class, path, inverse,
-                       target_kind=target_kind)
+                       target_kind=target_kind, via_type=via_type)
     if parent is not None:
         meta["name"] = meta["name"] or parent["name"]
         meta["description"] = meta["description"] or parent["description"]
@@ -289,7 +289,8 @@ def _sparql_rows(graph, SH, shape_uri, meta):
     return rows
 
 
-def _shape_meta(graph, SH, shape_uri, target_class, path, inverse, target_kind="class"):
+def _shape_meta(graph, SH, shape_uri, target_class, path, inverse, target_kind="class",
+                via_type=False):
     severity = graph.value(shape_uri, SH.severity)
     message = graph.value(shape_uri, SH.message)
     name = graph.value(shape_uri, SH.name)
@@ -302,6 +303,9 @@ def _shape_meta(graph, SH, shape_uri, target_class, path, inverse, target_kind="
         "target_kind": target_kind,
         "path": path,
         "inverse": inverse,
+        # ( assoc rdf:type ) sequence path: the constraint's value nodes are
+        # the types of the referenced objects, not the association values
+        "via_type": via_type,
         "severity": _local(severity) if severity is not None else "Violation",
         "message": str(message) if message is not None else None,
         "name": str(name) if name is not None else None,
@@ -310,26 +314,34 @@ def _shape_meta(graph, SH, shape_uri, target_class, path, inverse, target_kind="
 
 
 def _resolve_path(graph, SH, path_node):
-    """Resolve sh:path → (KEY name, inverse); handles sh:inversePath and
-    sh:alternativePath with a nested inverse. Any other blank-node path
-    (sequence, zeroOrMorePath, ...) spans more than one KEY and cannot be
-    expressed as an IR row → (None, False); callers skip the shape."""
+    """Resolve sh:path → (KEY name, inverse, via_type); handles sh:inversePath,
+    sh:alternativePath with a nested inverse, and the two-step sequence
+    ``( assoc rdf:type )`` (the profile "valueType" pattern — the constraint
+    applies to the type of the referenced object, via_type=True). Any other
+    blank-node path (longer sequences, zeroOrMorePath, ...) spans more than
+    one KEY and cannot be expressed as an IR row → (None, False, False);
+    callers skip the shape."""
     import rdflib
 
     if path_node is None:
-        return None, False
+        return None, False, False
     if isinstance(path_node, rdflib.URIRef):
-        return _local(path_node), False
+        return _local(path_node), False, False
     inverse = graph.value(path_node, SH.inversePath)
     if inverse is not None:
-        return _local(inverse), True
+        return _local(inverse), True, False
     alternative = graph.value(path_node, SH.alternativePath)
     if alternative is not None:
         for item in _rdf_list(graph, alternative, lambda node: node):
             nested_inverse = graph.value(item, SH.inversePath)
             if nested_inverse is not None:
-                return _local(nested_inverse), True
-    return None, False
+                return _local(nested_inverse), True, False
+    if graph.value(path_node, rdflib.RDF.first) is not None:   # sequence path
+        steps = _rdf_list(graph, path_node, lambda node: node)
+        if (len(steps) == 2 and isinstance(steps[0], rdflib.URIRef)
+                and steps[1] == rdflib.RDF.type):
+            return _local(steps[0]), False, True
+    return None, False, False
 
 
 # SHACL term → (component short name, params transform). Short names match the

@@ -130,7 +130,10 @@ def _index_for(data, rdf_map, data_unchanged=False):
     key = content_key(data, rdf_map, b"triplets-qlever-2", data_unchanged)
 
     if key in _INDEXES:
-        return _INDEXES[key]
+        cached = _INDEXES[key]
+        if isinstance(cached, Exception):   # this exact data+schema already failed to build
+            raise cached
+        return cached
 
     index_dir = Path(os.environ.get("TRIPLETS_QLEVER_DIR", tempfile.gettempdir())) \
         / "triplets-qlever" / key
@@ -140,7 +143,14 @@ def _index_for(data, rdf_map, data_unchanged=False):
         # index. build-complete marks the directory as a finished build.
         index_dir.parent.mkdir(parents=True, exist_ok=True)
         build_dir = Path(tempfile.mkdtemp(prefix=f"{key}.build-", dir=index_dir.parent))
-        _build_index(data.export_to_arrow(), rdf_map, str(build_dir / "index"))
+        try:
+            _build_index(data.export_to_arrow(), rdf_map, str(build_dir / "index"))
+        except Exception as error:
+            # Cache the failure: the build is deterministic for this content
+            # hash, so every retry would pay the full build just to fail again.
+            shutil.rmtree(build_dir, ignore_errors=True)
+            _INDEXES[key] = error
+            raise
         (build_dir / "build-complete").touch()
         try:
             os.rename(build_dir, index_dir)

@@ -145,7 +145,7 @@ def make_object(key, value, enum_keys=None, key_datatypes=None):
 
     # Literal attribute by schema — annotate with its xsd datatype
     if key_datatypes and key in key_datatypes:
-        escaped = value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+        escaped = value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
         datatype = key_datatypes[key]
         return f'"{escaped}"^^<{datatype}>' if datatype else f'"{escaped}"'
 
@@ -154,7 +154,7 @@ def make_object(key, value, enum_keys=None, key_datatypes=None):
         return f"<urn:uuid:{value}>"
 
     # Literal — escape for N-Triples
-    escaped = value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+    escaped = value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
     return f'"{escaped}"'
 
 

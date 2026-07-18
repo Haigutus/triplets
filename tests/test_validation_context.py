@@ -112,3 +112,18 @@ def test_flatten_schema_first_wins_and_shapes():
     key_info, class_info = flatten_schema(duplicated)
     assert key_info["Conductor.length"]["multiplicity"] == "1..1"   # first profile wins
     assert class_info["ACLineSegment"].startswith("A wire")
+
+
+def test_enrich_contextualizes_generic_messages(violations):
+    """Generic authored messages gain the violated property in the context
+    pass — ' — KEY' appended when the text does not name it; the raw engine
+    output stays verbatim (pinned in test_shacl_engines)."""
+    generic = violations.copy()
+    generic["MESSAGE"] = "Missing required property (attribute)."
+    result = enrich(generic)
+    assert list(result["MESSAGE"]) \
+        == ["Missing required property (attribute). — Conductor.length"]
+
+    named = violations.copy()
+    named["MESSAGE"] = "Conductor.length is required."
+    assert list(enrich(named)["MESSAGE"]) == ["Conductor.length is required."]  # untouched

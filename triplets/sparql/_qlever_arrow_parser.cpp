@@ -87,6 +87,7 @@ class RangeConverter {
     TripleComponent predicate;
     ObjectRule rule;
     std::optional<TripleComponent::Iri> datatype;  // only for Typed
+    std::string name;                              // for ingest error context
   };
 
   TripleComponent iriComponent(std::string_view iri) const {
@@ -102,7 +103,8 @@ class RangeConverter {
     auto found = keyInfos_.find(std::string{key});
     if (found != keyInfos_.end()) return found->second;
 
-    KeyInfo info{TripleComponent{}, ObjectRule::Default, std::nullopt};
+    KeyInfo info{TripleComponent{}, ObjectRule::Default, std::nullopt,
+                 std::string{key}};
     if (key == "Type") {
       info.predicate = iriComponent(RDF_TYPE);
       info.rule = ObjectRule::Type;
@@ -154,8 +156,18 @@ class RangeConverter {
         return iriComponent(absl::StrCat(mapping_.defaultNamespace, value));
       case ObjectRule::Typed:
         // qlever's own typed-literal path (identical to the N-Quads parse).
-        return TurtleParser<Tokenizer>::literalAndDatatypeToTripleComponent(
-            value, key.datatype.value(), encodedIriManager_);
+        // Strict by design: an ill-typed value is a data-vs-schema error to be
+        // fixed in the instance data or the schema — name the offender.
+        try {
+          return TurtleParser<Tokenizer>::literalAndDatatypeToTripleComponent(
+              value, key.datatype.value(), encodedIriManager_);
+        } catch (const std::exception& error) {
+          throw std::runtime_error(absl::StrCat(
+              key.name, ": value \"", value, "\" is not a valid ",
+              key.datatype.value().toStringRepresentation(),
+              " — fix the instance data or the schema datatype (",
+              error.what(), ")"));
+        }
       case ObjectRule::PlainString:
         return plainLiteral(value);
       default:

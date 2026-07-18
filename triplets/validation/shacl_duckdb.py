@@ -48,13 +48,18 @@ def _focus_sql(rule, table):
 
 
 def _rows_sql(rule, table):
-    """The rule's path as (FOCUS, PV) rows — inverse-aware, like the other engines."""
+    """The rule's path as (FOCUS, PV) rows — inverse- and via_type-aware, like
+    the other engines (via_type: PV = the referenced object's type; a target
+    without a Type row yields no value node, hence the inner join)."""
     if rule.inverse:
         sql = (f"SELECT VALUE AS FOCUS, ID AS PV FROM {table} "
                f"WHERE KEY = ? AND VALUE IN ({_focus_sql(rule, table)})")
     else:
         sql = (f"SELECT ID AS FOCUS, VALUE AS PV FROM {table} "
                f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table)})")
+    if getattr(rule, "via_type", False):
+        sql = (f"SELECT r.FOCUS AS FOCUS, t.VALUE AS PV FROM ({sql}) r "
+               f"JOIN {table} t ON t.ID = r.PV AND t.KEY = 'Type'")
     return sql, [rule.path, rule.target_class]
 
 
@@ -172,7 +177,8 @@ def _node_kind(rule, table, context):
         logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)", rule.params, rule.shape_id)
         return None
     rows, rows_params = _rows_sql(rule, table)
-    kind = context.key_kind(rule.path)
+    # via_type value nodes are the referenced objects' types — always IRIs
+    kind = "iri" if getattr(rule, "via_type", False) else context.key_kind(rule.path)
     if kind is not None:                                 # schema decides for the whole path
         if (kind == "iri") == (rule.params == "IRI"):
             return None                                  # every value conforms — no query
