@@ -113,12 +113,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   property (attribute). — IdentifiedObject.name"; messages that already name
   their property stay untouched, and raw engine output keeps the authored
   text verbatim.
+- The qlever SPARQL engine accepts a bare pyarrow `Table`/`RecordBatch` as
+  input (routed through the shared loader before hashing), matching the
+  pandas/polars/duckdb and oxigraph engines.
 
 ### Changed
 - **Python 3.14 supported**: wheels build for cp314, CI tests it (full suite
   verified incl. the compiled Arrow parser).
 - Performance benchmarks are deselected by default (`pytest -m performance`
   runs them); the plain suite runs in minutes.
+- The RDFS→JSON schema generator (`rdfs_tools` / `cim_rdfs_to_json`) derives
+  attribute→class binding from `schema:domainIncludes` as well as `rdfs:domain`
+  — the non-inferential convention for reused external terms (dcterms:, prov:,
+  …) that avoids hijacking their meaning (see
+  [application-profiles-library#92](https://github.com/entsoe/application-profiles-library/issues/92)).
+  Attributes with no class binding are now emitted as top-level schema entries
+  (with a warning) instead of being dropped.
 
 ### Removed
 - `build-qlever.yml` CI workflow — the qlever engine is a local source build
