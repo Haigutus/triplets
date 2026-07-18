@@ -5,7 +5,14 @@
 
 ## Local Development Build
 
-Build the cython extension for local development:
+The cython extension is compiled from the vendored pugixml source, so fetch that
+submodule first (`setup_cython_parser.py` hard-errors without it):
+
+```shell
+git submodule update --init vendor/pugixml
+```
+
+Then build the cython extension for local development:
 
 ```shell
 # Option 1: pixi (recommended, manages C++ toolchain)
@@ -83,7 +90,7 @@ pip install cibuildwheel
 CIBW_BUILD="cp313-manylinux_x86_64" \
 CIBW_REPAIR_WHEEL_COMMAND_LINUX="LD_LIBRARY_PATH=\$(python -c 'import pyarrow; print(pyarrow.get_library_dirs()[0])') auditwheel repair -w {dest_dir} {wheel} --exclude 'libarrow_python.so*' --exclude 'libarrow.so*'" \
 CIBW_TEST_REQUIRES="pytest pyarrow>=14.0" \
-CIBW_TEST_COMMAND='pytest {project}/tests/test_parser_backends.py -q --tb=short -k "not realgrid"' \
+CIBW_TEST_COMMAND='pytest {project}/tests/test_parser.py {project}/tests/test_compiled_modules.py -q --tb=short -k "not realgrid"' \
 cibuildwheel --platform linux --output-dir dist/
 ```
 
@@ -96,31 +103,32 @@ The GitHub Actions workflow (`.github/workflows/build-wheels.yml`) builds wheels
 | Platform | Runner | Repair tool | Arrow lib handling |
 |----------|--------|-------------|-------------------|
 | Linux x86_64 | ubuntu-latest (Docker) | auditwheel | `--exclude 'libarrow*.so*'` |
-| Linux aarch64 | ubuntu-latest (QEMU) | auditwheel | `--exclude 'libarrow*.so*'` |
 | macOS arm64 | macos-14 | skipped | macosx_* tags accepted by PyPI |
 | Windows AMD64 | windows-latest | delvewheel | `--no-dll arrow*.dll` |
+
+Only these three are active in `build-wheels.yml`. Linux aarch64 (ubuntu QEMU)
+and macOS x86_64 (macos-13) are commented out in the matrix — aarch64 because the
+QEMU-emulated build dominates release time; re-enable when arm64 runners are available.
 
 CPython 3.11–3.14. Arrow shared libraries are NOT bundled — they're provided by pyarrow at runtime.
 
 ## qlever SPARQL engine (optional, source-only)
 
-The embedded qlever engine (`triplets.sparql._qlever`) ships in **no wheel** —
-it is a local source build only (decision record in TODO.md: a bundled wheel
-would be ~10x the download; the pip-installable performance path is the
-`oxigraph` extra). There is no CI for it either — verification is the local
-test task below, run before/after any qlever bump.
+The embedded qlever engine (`triplets.sparql._qlever`) ships in **no wheel** — it
+is a local source build only; the pip-installable performance path is the
+`oxigraph` extra. There is no CI for it — verification is the local test task
+below, run before/after any qlever bump.
 
-**How the source is pinned.** `vendor/qlever` is a git submodule pointing at
-the fork `https://github.com/Haigutus/qlever.git`, branch
-`libqlever-parser-injection` (upstream master + the libqlever patch adding
-programmatic index building via an injected RDF parser and SPARQL-protocol
-dataset clauses — shaped as upstream PR ad-freiburg/qlever#3074). The exact
-commit is the superproject's recorded gitlink; `.gitmodules` carries the
-fork URL and branch. Re-pin to `ad-freiburg/qlever` once the upstream PR
-merges.
+**How the source is pinned.** `vendor/qlever` is a git submodule pointing at the
+fork `https://github.com/Haigutus/qlever.git`, branch `libqlever-parser-injection`
+(upstream master + the libqlever patch adding programmatic index building and
+SPARQL-protocol dataset clauses). The exact commit is the superproject's recorded
+gitlink; `.gitmodules` carries the fork URL and branch. Re-pin to
+`ad-freiburg/qlever` once the upstream PR merges.
 
-**Reproduce the build** (the pixi `qlever` environment pins the whole C++
-toolchain — compilers, cmake, boost, icu, openssl, zstd — via pixi.lock):
+**Reproduce the build** (fetch the pinned submodule first; the pixi `qlever`
+environment pins the whole C++ toolchain — compilers, cmake, boost, icu, openssl,
+zstd — via pixi.lock):
 
 ```bash
 git submodule update --init vendor/qlever      # checkout the pinned fork commit
@@ -136,20 +144,13 @@ to oxigraph, then rdflib (see docs/sparql.md).
 
 ## Troubleshooting
 
-### `unsupported platform tag 'linux_aarch64'`
+### `unsupported platform tag 'linux_*'`
 PyPI requires manylinux tags. Run `auditwheel repair` on the wheel (see above).
 
 ### `FileNotFoundError: Unable to find library: arrow.dll`
 Windows `delvewheel` can't find arrow DLLs. Add `--no-dll arrow.dll --no-dll arrow_python.dll` to exclude them.
 
-### `UnicodeEncodeError: 'charmap' codec can't encode`
-Windows cp1252 encoding issue with versioneer. Set `PYTHONUTF8=1` environment variable.
-
-### `Could not find all dependencies` (delocate on macOS)
-delocate can't find arrow dylibs. Skip delocate — macOS wheel tags are accepted by PyPI without repair.
-
-### `ModuleNotFoundError: No module named 'pyarrow'` in `CIBW_ENVIRONMENT`
-pyarrow isn't installed when `CIBW_ENVIRONMENT` is evaluated. Set `LD_LIBRARY_PATH` inline in `CIBW_REPAIR_WHEEL_COMMAND` instead.
-
-### `ImportError: cannot import name '__version__' from 'triplets._version'`
-versioneer generates a different `_version.py` in wheels. Use `get_versions()['version']` in `__init__.py`, not `_version.__version__`.
+### Other known gotchas (already handled in CI)
+Windows versioneer cp1252 errors — set `PYTHONUTF8=1`. macOS delocate can't find
+arrow dylibs — skip it (macosx_* tags need no repair). `pyarrow` not yet installed
+when `CIBW_ENVIRONMENT` is evaluated — set `LD_LIBRARY_PATH` inline in the repair command.

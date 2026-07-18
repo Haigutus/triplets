@@ -60,12 +60,22 @@ data.tableview_by_type("ACLineSegment")
 ### Export:
 
 ```python
+from triplets.export_schema import schemas
+from triplets.export import ExportType
+
 data.export_to_cimxml(
     rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1,
     export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
 )
 ```
 
+Export schemas are versioned and shipped per profile. Alongside the CGMES
+bundles (`schemas.ENTSOE_CGMES_2_4_15_552_ED1`,
+`schemas.ENTSOE_CGMES_3_0_0_552_ED1`, …) the versioned **NC (Network Code)**
+profiles are available as `schemas.ENTSOE_NC_2_4_1_552_ED1` /
+`schemas.ENTSOE_NC_2_4_1_552_ED2`. The `_ED1` / `_ED2` suffix selects the
+serialization edition; profile resolution is schema-driven, so the right
+profile section is matched from the instance header.
 
 Look into examples folders for more
 
@@ -98,7 +108,11 @@ data.triplets.tableview_by_type("ACLineSegment")
 data.triplets.filter_triplets(KEY="Type", VALUE=".*Generator.*", regex=True)
 data.triplets.export_to_csv(export_to_memory=True)
 data.triplets.export_to_nquads("/tmp/output.nq")
+data = polars.read_nquads("/tmp/output.nq")           # round-trips N-Quads back to triplets
 ```
+
+`read_nquads` is registered as `pandas.read_nquads` / `polars.read_nquads` and
+is also exposed top-level as `triplets.read_nquads`.
 
 ## DuckDB
 
@@ -155,6 +169,8 @@ Validate against SHACL shape files; the result is a violations DataFrame
 (empty = conforms) with the same shape across all engines:
 
 ```python
+from triplets.export_schema import schemas
+
 violations = data.shacl.validate("shapes.ttl", rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
 
 # slower optional context pass: source file, object type/name,
@@ -164,6 +180,9 @@ violations = data.shacl.validate(shapes, context=True)
 # SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer — grouped by default
 # (one result per rule with occurrenceCount + sample instances)
 violations.shacl.to_sarif(path="report.sarif")
+
+# standard SHACL sh:ValidationReport (Turtle) for any SHACL-aware tooling
+violations.shacl.to_shacl_report(path="report.ttl")
 ```
 
 Engines: `polars` (auto, real profiles in ~2 s) → `pandas` → `pyshacl`
@@ -189,6 +208,21 @@ con.triplets.get_types_count()
 
 Root-level methods (`df.type_tableview(...)`, `con.filter_triplets(...)`) still
 work for backwards compatibility.
+
+## Cache lifecycle
+
+Engines keep internal state (compiled shapes, SPARQL indexes) cached across
+calls. Reset it explicitly with `triplets.clear_caches()`, or scope it to a
+block so it is cleared on exit:
+
+```python
+import triplets
+
+with triplets.cache_scope():
+    ...            # caches populated here are dropped when the block exits
+
+triplets.clear_caches()   # or clear everything manually
+```
 
 ## CLI tools
 

@@ -72,5 +72,5 @@ oxigraph = { features = ["test", "arrow", "polars", "oxigraph"] }
 [tasks]
 build-cython-pugixml-arrow = "python setup_cython_parser.py build_ext --inplace"
 test = "pytest -q --tb=no"
-test-parser = "pytest tests/test_parser_backends.py -q --tb=short"
+test-parser = "pytest tests/test_parser.py tests/test_parity_parser.py -q --tb=short"
 sync-uv = "uv sync --dev"

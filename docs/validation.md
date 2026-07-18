@@ -15,9 +15,9 @@ The module is new — APIs may still shift. Know these before relying on it:
   yields no value node per SHACL path semantics). Longer sequences and the
   `*OrMorePath` forms are skipped with a compile warning; `engine="pyshacl"`
   covers them.
-- **Deliberate deviation from pyshacl**: datatype checks judge the raw
-  *lexical form* of values (`lexical=True`, the default) — see the dedicated
-  section below. `engine="reference"` always gives the pure pyshacl view.
+- **Lexical datatype checks**: with `lexical=True` (the default) datatype
+  checks judge the raw *lexical form* of values — see the dedicated section
+  below. `engine="reference"` always gives the pure pyshacl view.
 - `sh:nodeKind` BlankNode(+combo) cases are intentionally not implemented in
   the vectorized engines (triplets data has no blank nodes).
 - The duckdb engine streams/spills by design, but a true larger-than-RAM
@@ -30,14 +30,13 @@ touching the public API:
 
 | Engine | File | Requires | Role |
 |--------|------|----------|------|
-| `pyshacl` | `validation/shacl_pyshacl.py` | pyshacl + rdflib (`pip install triplets[validation]`) | **reference** — spec-complete, rdflib-based. `store="oxigraph"` loads the data graph through the oxigraph SPARQL engine's cached store (identical results; slower than the default Memory store because pyshacl clones the graph into Memory regardless — opt in only when the store is already loaded for SPARQL) |
+| `pyshacl` | `validation/shacl_pyshacl.py` | pyshacl + rdflib (`pip install triplets[validation]`) | **reference** — spec-complete, rdflib-based. `store="oxigraph"` loads the data graph through the oxigraph SPARQL engine's cached store (identical results; opt in only when the store is already loaded for SPARQL) |
 | `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; **complete registry** — `sh:sparql` delegated to `triplets.sparql` (`max_workers` parallelizes those queries), `sh:node` expanded at compile time and run against the referenced value nodes, `sh:nodeKind` decided by the rdf_map schema (value form when schema is silent). Explicit `engine="pandas"` |
-| `polars` | `validation/shacl_polars.py` | polars | compiled-IR executor for performance: one LazyFrame plan per constraint, single `polars.collect_all` (parallel, common subplans eliminated). Same semantics as pandas; nested/query components delegate to the pandas implementations. Real Equipment profiles on Svedala EQ: **1.9 s vs pandas 22.6 s vs pyshacl minutes** |
-| `duckdb` | `validation/shacl_duckdb.py` | duckdb | compiled-IR executor for **larger-than-memory** data: one SQL query per constraint against the `triplets` table (streams/spills via DuckDB's executor). Accepts a connection (`table_name=` selectable) or registers any frame. Constraints batch 100-per-`UNION ALL` statement (~10 s on the real profiles vs polars 2 s in-memory) — it is the explicit choice (`engine="duckdb"`, not in auto) when the data does not fit |
+| `polars` | `validation/shacl_polars.py` | polars | compiled-IR executor for performance: one LazyFrame plan per constraint, single `polars.collect_all` (parallel, common subplans eliminated). Same semantics as pandas; nested/query components delegate to the pandas implementations. The fast in-memory default |
+| `duckdb` | `validation/shacl_duckdb.py` | duckdb | compiled-IR executor for **larger-than-memory** data: one SQL query per constraint against the `triplets` table (streams/spills via DuckDB's executor). Accepts a connection (`table_name=` selectable) or registers any frame. Constraints batch 100-per-`UNION ALL` statement — it is the explicit choice (`engine="duckdb"`, not in auto) when the data does not fit in memory |
 
-Auto order: `polars → pandas → pyshacl` (first importable). The vectorized
-engines share the deliberate deviations (lexical datatype, schema-driven
-nodeKind); `engine="reference"` always gives the pure pyshacl view. Custom
+Auto order: `polars → pandas → pyshacl` (first importable).
+`engine="reference"` always gives the pure pyshacl view. Custom
 engines via `triplets.validation.register_engine(name, module)`.
 
 ## Compile Once (`shacl_ir.py`)
@@ -56,10 +55,12 @@ shapes.ttl ──rdflib──► CompiledShapes
 The IR is a pandas DataFrame, one row per shape × path × constraint component:
 
 ```
-shape_id, target_class, path, inverse, component, params, severity, message, name, description
+shape_id, target_class, target_kind, path, inverse, via_type, component, params, severity, message, name, description
 ```
 
-`params` holds the component's parameter — a scalar (`sh:minCount`), a list
+`target_kind` is `class` for `sh:targetClass` and `subjectsOf` for
+`sh:targetSubjectsOf`; `via_type` marks the `( assoc rdf:type )` sequence path
+(the constraint applies to the referenced object's type). `params` holds the component's parameter — a scalar (`sh:minCount`), a list
 (`sh:in`, `sh:closed` ignored properties), the SELECT text (`sh:sparql`), or
 nested row lists (`sh:or` / `sh:and` / `sh:not`). A NodeShape with several
 `sh:targetClass` (the ENTSO-E profiles do this) emits every row once per target
@@ -103,34 +104,12 @@ validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) →
   processes on the rdflib path only (fork gives copy-on-write sharing of the
   dataset; threads don't help rdflib — it is GIL-bound pure Python; qlever
   and oxigraph are ms-scale sequentially).
-  Backend comparison on a 3-constraint sh:sparql shape over Svedala (95k
-  rows, `shacl-sparql-backend` benchmark group in
-  `tests/test_sparql_oxigraph.py`): **rdflib ~38.5 s, oxigraph ~74 ms,
-  qlever ~72 ms** — the pip-installable oxigraph engine closes ~all of the
-  qlever gap for sh:sparql workloads (~520x over rdflib).
-  Real-profile scale (Svedala EQ, 48k triples, Simple+Complex Equipment SHACL
-  = 4,857 IR rows of which 148 sh:sparql, 50 with focus nodes): with the
-  embedded **qlever** engine built, the **complete validation — polars +
-  qlever — takes ~0.6 s warm** (~0.4 s constraint queries + ~0.16 s
-  vectorized components; the on-disk index is content-hashed and reused, and
-  within one validation run the data is hashed **once** — the constraint
-  queries after the first assert ``data_unchanged``). Cold (first contact
-  with the dataset: parallel Arrow index build + first hash) adds a few
-  seconds. The vectorized components run as **batched per-component plans**
-  (the rules become a frame joined against the data on KEY + class
-  membership, per-rule messages riding as columns), so ~4,300 rules execute
-  as a handful of plans. On the rdflib fallback the same constraint queries
-  cost ~3.3 min sequential; the **pyshacl reference exceeds 10 minutes** on
-  the same profiles — build the qlever extension (or
-  `pip install triplets[oxigraph]`) for sh:sparql-heavy profiles.
-  **No query fixing**: constraint queries run exactly as authored. When a
-  strict engine rejects one (e.g. the ENTSO-E `HAVING`-without-`GROUP BY`
-  defect, upstream PR entsoe/application-profiles-library#82 — rejected by
-  qlever; oxigraph accepts it as implicit grouping but rejects e.g.
-  ungrouped projections), the constraint is still evaluated on the lenient
-  rdflib engine and the report carries a `triplets:invalidSparql` Warning
-  row naming the shape — broken rules get reported and fixed upstream, not
-  auto-patched.
+  For sh:sparql-heavy profiles build the qlever extension or
+  `pip install triplets[oxigraph]`; the rdflib fallback runs in minutes.
+  **No query fixing**: constraint queries run exactly as authored. A
+  constraint query a strict engine rejects is reported as a
+  `triplets:invalidSparql` Warning row naming the shape and is still
+  evaluated on the lenient rdflib engine.
 
 ## The Lexical-Form Datatype Deviation
 
@@ -175,25 +154,6 @@ pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS`
 (`SOURCE_URI`, `SOURCE_LINE`, `SOURCE_COLUMN`) onto the frame; both exports run it
 automatically when given `sources=`, or reuse the columns when already present.
 
-## Polars Engine Guidance
-
-The lazy engine's design rules. Speed always wins over memory:
-
-- Build **one LazyFrame plan per IR constraint** against a shared `.lazy()`
-  base; execute everything with a single `polars.collect_all(plans)` (parallel
-  execution + common-subplan elimination). Pre-materialize shared indices once
-  (per-Type row index, the set of all IDs) and reuse them across plans.
-- Use expressions only (`polars.col`), `Categorical`/`Enum` dtype for KEY and
-  Type, `.cast(strict=False)` + null-check for datatype casts,
-  `str.contains(literal=True)` when no regex is needed, join-based membership
-  for large `sh:in` lists (`is_in` only for small ones).
-- Avoid `map_elements`/`map_rows` (Python UDFs serialize execution),
-  per-constraint eager `.collect()`, `.to_pandas()` round-trips mid-pipeline,
-  `iter_rows`, object dtype, eager `pivot` on large frames.
-- No streaming collect — that trades speed for memory, which is the duckdb
-  engine's job. Keep the base frame and indices materialized; rechunk once
-  after load.
-
 ## Shared Loading (`_rdflib_loader.py`)
 
 SHACL and SPARQL reach rdflib through the same two helpers, so a validation and
@@ -214,13 +174,13 @@ data.shacl.validate(shapes)
     |-> compile(shapes)                        # cached by content hash
     |   '-> _load_shapes -> parse_ir           # rdflib parses ONCE
     |
-    |-> get_engine("auto")                     # pyshacl (reference)
-    |   |-> load_dataset(data, rdf_map)        # in-memory N-Quads -> rdflib.Dataset
-    |   |-> scoped_graph(dataset, scope)       # union, or just scoped instances
-    |   |-> pyshacl.validate(data_graph, shacl_graph=compiled.graph, ...)
-    |   '-> report_to_violations(report_graph) # ValidationReport -> DataFrame
+    |-> get_engine("auto")                     # polars (first importable)
+    |   '-> shacl_polars.validate(data, compiled.ir, rdf_map)
+    |       # reads raw VALUEs; lexical findings emitted inline
+    |       # (pyshacl path instead: load_dataset -> scoped_graph ->
+    |       #  pyshacl.validate(compiled.graph) -> report_to_violations)
     |
-    '-> + shacl_pandas datatype/lexical findings (the documented deviation)
+    '-> + shacl_pandas datatype/lexical supplement   # ONLY for engine="pyshacl"
 ```
 
 ## File Layout
@@ -237,6 +197,7 @@ triplets/
     |-- shacl_duckdb.py      # compiled-IR executor (SQL per constraint, larger-than-memory)
     |-- shacl_report.py      # ValidationReport graph -> violations DataFrame
     |-- context.py           # optional enrichment pass (instance/object/shape/schema context)
+    |-- locations.py         # violations -> source line/column (the sources= grep pass)
     '-- sarif.py             # violations -> SARIF 2.1.0 (grouped by default)
 ```
 

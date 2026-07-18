@@ -140,6 +140,10 @@ python -m triplets.rdfs_tools.cim_rdfs_to_json [bundle ...]
     '-> per serialization edition (552_ED1, 552_ED2):
         |-> convert(): one section per RDFS profile (classes, attributes,
         |   associations, enumerations, datatypes + ProfileMetadata)
+        |   # attribute→class binding (rdfs_tools.get_class_parameters):
+        |   # CIM-owned terms bind via rdfs:domain; reused external terms
+        |   # (dcterms:/prov:/dcat:) via the non-inferential
+        |   # schema:domainIncludes (application-profiles-library#92)
         |-> spec["index"]: section keying strategy
         |   index_by_keyword          (CGMES 3.0, NC — error on missing keyword)
         |   index_largest_per_keyword (CGMES 2.4 — dedup, "_" stripped)

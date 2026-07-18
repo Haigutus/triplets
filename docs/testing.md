@@ -6,11 +6,12 @@
 ## Quick Start
 
 ```shell
-# run all tests (excluding benchmarks and tests needing test_data submodule)
-pytest tests/ -v -k "not realgrid and not benchmark"
+# run all tests (performance benchmarks are deselected by default via pyproject addopts;
+# tests needing data that is not present skip themselves)
+pytest -n auto -q
 
 # run only parser tests
-pytest tests/test_parser.py tests/test_parser_backends.py -v
+pytest tests/test_parser.py tests/test_parity_parser.py -v
 ```
 
 ## Requirements
@@ -19,31 +20,58 @@ pytest tests/test_parser.py tests/test_parser_backends.py -v
 pip install -e ".[dev]"
 ```
 
-For cython engine tests, build the extension first:
+The `dev` extra pulls in every test dependency (pytest, pytest-xdist,
+pytest-benchmark, polars, pyarrow, networkx, openpyxl, rdflib, pyshacl,
+pyoxigraph, oxrdflib, and `jsonschema>=4.0` — used by the SARIF
+schema-conformance test against `tests/data/sarif-schema-2.1.0.json`).
+
+The CI test job installs a narrower set of feature extras:
+
+```shell
+pip install -e ".[dev,validation,oxigraph,duckdb,excel,networkx]"
+```
+
+| Extra | Enables |
+|-------|---------|
+| `validation` | `pyshacl`, `rdflib` — SHACL validation tests |
+| `oxigraph` | `pyoxigraph`, `oxrdflib` — oxigraph SPARQL engine + n-quads round-trip |
+| `duckdb` | `duckdb` — the duckdb tools engine (parity tests) |
+| `excel` | `openpyxl` — Excel import/export |
+| `networkx` | `networkx` — graph tools |
+
+For the compiled cython engine tests, build the extension first:
+
 ```shell
 python setup_cython_parser.py build_ext --inplace
 ```
 
 ## Test Files
 
-| File | What it tests | Needs test_data? |
-|------|--------------|------------------|
+| File | What it tests | Needs external data? |
+|------|--------------|----------------------|
 | `test_parser.py` | `parse()`, `clean_ID`, `find_all_xml`, nodeID support, categorical encoding, return types | No (uses `tests/data/minimal_cim.xml`) |
-| `test_parser_backends.py` | Engine parity, `pandas.read_RDF` registration, all three engines produce identical output | No |
-| `test_import.py` | Loading NC and CGMES files, column structure, metadata (Distribution, NamespaceMap) | Yes |
-| `test_type_tableview.py` | `type_tableview()` on pandas and polars, pivot correctness | Partially (RealGrid tests) |
-| `test_benchmarks_realgrid.py` | Performance benchmarks for parsing and type_tableview across all engines | Yes |
+| `test_parity_parser.py` | Cross-engine parser parity, `pandas.read_RDF` registration, all engines produce identical output | No |
+| `test_import.py` | Loading NC and CGMES files, column structure, metadata (Distribution, NamespaceMap) | Yes (relicapgrid submodule) |
+| `test_tools.py` | Data-manipulation tool functions on the Svedala IGM dataset | Yes (relicapgrid submodule) |
+| `test_parity_tools.py` | Cross-engine tool parity (pandas/polars/duckdb), including `type_tableview` / pivot correctness | Yes (relicapgrid submodule) |
+| `test_benchmarks_realgrid.py` | Performance benchmarks for parsing and tools across all engines | Yes (RealGrid LFS zip) |
+| `test_compiled_modules.py` | Compiled-extension import guard (see below) | No |
 
 ## Test Data
 
 **Committed** (always available):
 - `tests/data/minimal_cim.xml` — 5 RDF objects, covers Substation, VoltageLevel, BaseVoltage, ConnectivityNode (with `rdf:nodeID`)
+- `tests/data/sarif-schema-2.1.0.json` — official SARIF 2.1.0 schema for the exporter conformance test
 
-**Submodule** (needs `git submodule update --init`):
-- `test_data/relicapgrid/` — NC and CGMES files for import tests
-- `test_data/TestConfigurations_packageCASv2.0/RealGrid/` — full CGMES dataset (~82 MB, 1.14M rows) for benchmarks
+**Submodule** (`git submodule update --init test_data/relicapgrid`):
+- `test_data/relicapgrid/` — NC, CGMES, and Svedala IGM files for import and tools tests
 
-Tests that need submodule data are automatically skipped when the files are not present.
+**Git LFS** (`git lfs pull`):
+- `test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip`
+  — full CGMES dataset (~1.14M rows) for benchmarks. This is an LFS-committed zip
+  (`.gitattributes`: `*.zip filter=lfs`), **not** a submodule.
+
+Tests that need submodule or LFS data are automatically skipped when the files are not present.
 
 ## Engine Detection
 
@@ -64,31 +92,43 @@ pytest tests/test_parser.py -v -k "python_lxml_pandas"
 # only arrow engines
 pytest tests/test_parser.py -v -k "python_lxml_arrow or cython_pugixml_arrow"
 
-# parity test (compares all available engines)
-pytest tests/test_parser_backends.py::TestParity -v
+# cross-engine parity
+pytest tests/test_parity_parser.py -v
+```
+
+## Compiled-Module Guard
+
+`tests/test_compiled_modules.py` asserts that the compiled extensions
+(`triplets.parser.cython_pugixml_arrow`, `triplets.export.cimxml_cython_pugixml`)
+import successfully. It is **skipped unless `TRIPLETS_REQUIRE_COMPILED=1`** is set.
+
+Everywhere else the compiled-engine tests skip silently when the extension is not
+built. `build-wheels.yml` sets `TRIPLETS_REQUIRE_COMPILED=1` in the wheel test
+environment so a wheel whose extensions failed to build fails the run instead of
+turning CI green by skipping.
+
+```shell
+TRIPLETS_REQUIRE_COMPILED=1 pytest tests/test_compiled_modules.py -v
 ```
 
 ## Benchmarks
 
 Tests marked `performance` are **deselected by default** (pyproject
 `addopts = '-m "not performance"'` — the full benchmark suite takes ~35 min).
-Selecting them explicitly overrides the default:
+Select them explicitly to override the default:
 
 ```shell
 pytest -m performance                 # all performance benchmarks
 ```
 
-Benchmarks use `pytest-benchmark` and require the RealGrid test data:
+Benchmarks use `pytest-benchmark` and require the RealGrid LFS zip (`git lfs pull`):
 
 ```shell
 # parse benchmarks (all engines, pandas + polars output)
-pytest tests/test_benchmarks_realgrid.py --benchmark-only -k "parse" -v
-
-# type_tableview benchmarks
-pytest tests/test_benchmarks_realgrid.py --benchmark-only -k "tableview" -v
+pytest tests/test_benchmarks_realgrid.py -m performance -k "parse" -v
 
 # save results to JSON
-pytest tests/test_benchmarks_realgrid.py --benchmark-only \
+pytest tests/test_benchmarks_realgrid.py -m performance \
   --benchmark-json=tests/performance_results/parsers_performance.json -k "parse"
 ```
 
@@ -98,55 +138,94 @@ If using pixi:
 
 ```shell
 pixi run test                         # all tests
-pixi run test-parser                  # parser tests only
 pixi run build-cython-pugixml-arrow   # build cython extension
 ```
 
-## CI / Release Workflow
+Parser-only run:
 
-The GitHub Actions workflow (`.github/workflows/build-wheels.yml`) runs automatically:
+```shell
+pixi run pytest tests/test_parity_parser.py -q
+```
+
+## CI Workflows
+
+Two GitHub Actions workflows run automatically.
+
+### `tests.yml` — unit tests
+
+Runs on push to `main`, on pull requests, and on manual dispatch. Pure-Python
+engines only (the compiled parser and qlever extensions are covered by
+`build-wheels.yml`).
+
+- **Matrix:** CPython 3.11, 3.13, 3.14 on `ubuntu-latest`
+- **Checkout:** LFS enabled (RealGrid zips); inits only the
+  `test_data/relicapgrid` submodule (not `vendor/qlever`)
+- **Install:** `pip install -e .[dev,validation,oxigraph,duckdb,excel,networkx]`
+- **Run:** `pytest -n auto -q`
+
+### `build-wheels.yml` — wheels + publish
 
 | Trigger | What happens |
 |---------|-------------|
-| **GitHub Release** (RC or final) | Build wheels for all platforms + publish to PyPI |
-| **Pull Request** | Build wheels only (no publish, catches build failures early) |
-| **Manual** (workflow_dispatch) | Build wheels only (no publish) |
+| **GitHub Release** (pre-release or final) | Build sdist + wheels, publish to PyPI |
+| **Pull Request** | Build sdist + wheels only (no publish) |
+| **Manual** (workflow_dispatch) | Build sdist + wheels only (no publish) |
 
-### Publishing a Release Candidate
+Publishing uses PyPI **trusted publishing** (OIDC, no API tokens) via the `pypi`
+environment. To enable it: on [PyPI](https://pypi.org/manage/project/triplets/settings/publishing/)
+add a publisher for GitHub repo `Haigutus/triplets`, workflow `build-wheels.yml`,
+environment `pypi`.
 
-1. Tag with an RC version (bare number, matching existing pattern):
+Each wheel is tested during the build with `TRIPLETS_REQUIRE_COMPILED=1`, so a
+wheel missing its compiled extensions fails rather than skips.
+
+#### Build matrix
+
+Wheels are built only for the active runner targets:
+
+| Platform | Runner | Architecture |
+|----------|--------|-------------|
+| Linux (manylinux) | `ubuntu-latest` | x86_64 |
+| macOS (Apple Silicon) | `macos-14` | arm64 |
+| Windows | `windows-latest` | AMD64 |
+
+CPython 3.11–3.14 (`requires-python >=3.11`). Each wheel includes the compiled
+`cython_pugixml_arrow` extension (usable when pyarrow is also installed). Linux
+aarch64 (QEMU) and macOS x86_64 (Intel, macos-13) targets are present but
+commented out in the workflow; Intel-Mac users can install from the sdist.
+
+## Publishing a Release
+
+Tags use bare numbers (matching existing releases like `0.0.17`).
+
+1. Tag the release:
    ```shell
-   git tag 0.1.0rc1
-   git push origin 0.1.0rc1
+   git tag 0.2.0a2       # pre-release
+   git push origin 0.2.0a2
    ```
+2. Create a GitHub Release from the tag (mark pre-releases as such).
+3. `build-wheels.yml` builds the sdist + wheels and publishes to PyPI.
 
-2. Create a GitHub Release from the tag (mark as pre-release)
-
-3. The workflow builds wheels for all platforms and publishes to PyPI
-
-4. Users install the RC:
-   ```shell
-   pip install --pre triplets
-   # or pin the exact RC:
-   pip install triplets==0.1.0rc1
-   ```
-
-### Publishing a Final Release
+Install:
 
 ```shell
-git tag 0.1.0
-git push origin 0.1.0
+pip install --pre triplets       # latest pre-release
+pip install triplets==0.2.0a2    # pin an exact pre-release
+pip install triplets             # latest stable
 ```
 
-Create a GitHub Release from the tag. The workflow builds and publishes to PyPI.
+PyPI treats `a` (alpha), `b` (beta), and `rc` versions all as pre-releases —
+they are installed only when `--pre` is passed or a specific version is pinned.
 
-```shell
-pip install triplets
-```
+| Tag | PyPI version | pip install |
+|-----|-------------|-------------|
+| `0.2.0a2` | `0.2.0a2` (pre-release) | `pip install --pre triplets` |
+| `0.2.0rc1` | `0.2.0rc1` (pre-release) | `pip install --pre triplets` |
+| `0.2.0` | `0.2.0` (stable) | `pip install triplets` |
 
 ### Verifying the Cython Engine in a Wheel
 
-After installing a wheel (RC or release), verify the compiled extension is included:
+After installing a wheel, verify the compiled extension is included:
 
 ```python
 import triplets
@@ -159,36 +238,3 @@ print(engine_name)  # "cython_pugixml_arrow" if the wheel has it
 from triplets.parser import cython_pugixml_arrow
 print("cython engine available")
 ```
-
-### Version Numbering
-
-Tags use bare numbers (matching existing releases like `0.0.17`):
-
-| Tag | PyPI version | pip install |
-|-----|-------------|-------------|
-| `0.1.0rc1` | `0.1.0rc1` (pre-release) | `pip install --pre triplets` |
-| `0.1.0rc2` | `0.1.0rc2` (pre-release) | `pip install --pre triplets` |
-| `0.1.0` | `0.1.0` (stable) | `pip install triplets` |
-
-PyPI treats `rc` versions as pre-releases — they are only installed when `--pre` is passed or a specific version is pinned.
-
-### Setup for Trusted Publishing
-
-The workflow uses PyPI trusted publishing (no API tokens needed). To enable it:
-
-1. Go to [PyPI](https://pypi.org/manage/project/triplets/settings/publishing/) -> Publishing -> Add a new publisher
-2. Set: GitHub repository `Haigutus/triplets`, workflow `build-wheels.yml`, environment `pypi`
-
-The legacy `python-publish.yml` has been removed; all releases (including pure-python sdists) now use `build-wheels.yml` with trusted publishing and cibuildwheel.
-
-### Build Matrix
-
-Wheels are built for:
-
-| Platform | Architecture |
-|----------|-------------|
-| Linux (manylinux) | x86_64, aarch64 |
-| macOS | x86_64 (Intel), arm64 (Apple Silicon) |
-| Windows | AMD64 |
-
-CPython 3.11–3.14 (requires-python >=3.11). Each wheel includes the compiled `cython_pugixml_arrow` extension (usable when pyarrow also installed).

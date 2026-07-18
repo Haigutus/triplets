@@ -23,6 +23,7 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.
    guides/validation
    guides/building
    guides/testing
+   guides/development
    guides/migration_0.0_to_0.1
 
 .. toctree::
