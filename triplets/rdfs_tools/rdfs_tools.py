@@ -73,8 +73,11 @@ def get_class_parameters(data, class_name):
 
     class_data = {"name": class_name}
 
-    # Get parameters
-    class_data["parameters"] = data.query("VALUE == @class_name & KEY == 'domain'")
+    # Attribute→class binding. CIM-owned terms use rdfs:domain ('domain');
+    # reused external terms (dcterms:, prov:, dcat:, …) use the non-inferential
+    # schema:domainIncludes ('domainIncludes') so their meaning is not hijacked
+    # — both express the same "this attribute belongs to this class".
+    class_data["parameters"] = data.query("VALUE == @class_name & KEY in ['domain', 'domainIncludes']")
 
     # Add parent classes (if present)
     class_data["extends"] = list(data.query("ID == @class_name and KEY == 'subClassOf'")["VALUE"].unique())

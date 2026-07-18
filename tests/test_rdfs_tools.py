@@ -85,6 +85,34 @@ class TestGetClassParameters:
             params = rdfs_tools.get_class_parameters(rdfs_profile, classes[0])
             assert params is not None
 
+    def test_domain_and_domainincludes_both_bind_attributes(self, tmp_path):
+        """Attribute→class binding is read from rdfs:domain (CIM-owned terms) and
+        schema:domainIncludes (reused external terms) alike — the DatasetMetadata
+        convention (see application-profiles-library#92)."""
+        rdfs = tmp_path / "mini.rdf"
+        rdfs.write_text("""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:cims="http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#"
+         xmlns:schema="https://schema.org/">
+  <rdf:Description rdf:about="http://www.w3.org/ns/dcat#Dataset">
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cim4.eu/ns/Metadata-European#usedSettings">
+    <rdf:type rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"/>
+    <rdfs:domain rdf:resource="http://www.w3.org/ns/dcat#Dataset"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://purl.org/dc/terms/accessRights">
+    <rdf:type rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"/>
+    <schema:domainIncludes rdf:resource="http://www.w3.org/ns/dcat#Dataset"/>
+  </rdf:Description>
+</rdf:RDF>
+""", encoding="utf-8")
+        data = rdfs_tools.load_all_to_dataframe(str(rdfs))
+        found = set(rdfs_tools.get_class_parameters(data, "http://www.w3.org/ns/dcat#Dataset")["parameters"]["ID"])
+        assert "https://cim4.eu/ns/Metadata-European#usedSettings" in found  # via rdfs:domain
+        assert "http://purl.org/dc/terms/accessRights" in found              # via schema:domainIncludes
+
 
 class TestParametersTableview:
     def test_returns_tuple(self, rdfs_profile):
