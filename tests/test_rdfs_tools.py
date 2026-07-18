@@ -85,6 +85,34 @@ class TestGetClassParameters:
             params = rdfs_tools.get_class_parameters(rdfs_profile, classes[0])
             assert params is not None
 
+    def test_domain_and_domainincludes_both_bind_attributes(self, tmp_path):
+        """Attribute→class binding is read from rdfs:domain (CIM-owned terms) and
+        schema:domainIncludes (reused external terms) alike — the DatasetMetadata
+        convention (see application-profiles-library#92)."""
+        rdfs = tmp_path / "mini.rdf"
+        rdfs.write_text("""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:cims="http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#"
+         xmlns:schema="https://schema.org/">
+  <rdf:Description rdf:about="http://www.w3.org/ns/dcat#Dataset">
+    <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cim4.eu/ns/Metadata-European#usedSettings">
+    <rdf:type rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"/>
+    <rdfs:domain rdf:resource="http://www.w3.org/ns/dcat#Dataset"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://purl.org/dc/terms/accessRights">
+    <rdf:type rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"/>
+    <schema:domainIncludes rdf:resource="http://www.w3.org/ns/dcat#Dataset"/>
+  </rdf:Description>
+</rdf:RDF>
+""", encoding="utf-8")
+        data = rdfs_tools.load_all_to_dataframe(str(rdfs))
+        found = set(rdfs_tools.get_class_parameters(data, "http://www.w3.org/ns/dcat#Dataset")["parameters"]["ID"])
+        assert "https://cim4.eu/ns/Metadata-European#usedSettings" in found  # via rdfs:domain
+        assert "http://purl.org/dc/terms/accessRights" in found              # via schema:domainIncludes
+
 
 class TestParametersTableview:
     def test_returns_tuple(self, rdfs_profile):
@@ -114,3 +142,36 @@ class TestCimRdfsToJson:
         result = cim_rdfs_to_json.convert_profile(rdfs_profile)
         assert isinstance(result, dict)
         assert len(result) > 0
+
+
+class TestOrphanedAttributes:
+    """An attribute with no class binding (no rdfs:domain / schema:domainIncludes)
+    is still emitted as a top-level schema entry — just not listed under any class —
+    with a warning. A consistent profile produces no orphan warning."""
+    DM = Path("rdfs/ENTSOE_NC_2.4.1/DatasetMetadata-AP-Voc-RDFS2020.rdf")
+    LOG = "triplets.rdfs_tools.cim_rdfs_to_json"
+
+    def _data(self):
+        if not self.DM.exists():
+            pytest.skip("NC 2.4.1 DatasetMetadata RDFS not available")
+        return rdfs_tools.load_all_to_dataframe(str(self.DM))
+
+    def test_consistent_profile_has_no_orphans(self, caplog):
+        from triplets.rdfs_tools import cim_rdfs_to_json
+        with caplog.at_level("WARNING", logger=self.LOG):
+            profile = cim_rdfs_to_json.convert_profile(self._data())
+        assert "title" in profile["Dataset"]["parameters"]      # bound attribute, listed
+        assert not any("no class binding" in r.getMessage() for r in caplog.records)
+
+    def test_orphaned_attribute_emitted_without_class(self, caplog):
+        from triplets.rdfs_tools import cim_rdfs_to_json
+        data = self._data()
+        title = "http://purl.org/dc/terms/title"
+        # strip title's class binding → orphan it
+        orphaned = data[~((data.ID == title) & (data.KEY.isin(["domain", "domainIncludes"])))].copy()
+        with caplog.at_level("WARNING", logger=self.LOG):
+            profile = cim_rdfs_to_json.convert_profile(orphaned)
+        assert "title" in profile                               # definition still emitted
+        assert profile["title"].get("dataType") == "String"     # with its datatype preserved
+        assert "title" not in profile["Dataset"]["parameters"]  # but no class references it
+        assert any("no class binding" in r.getMessage() for r in caplog.records)
