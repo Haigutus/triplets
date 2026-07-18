@@ -12,3 +12,6 @@
 	url = https://github.com/Haigutus/qlever.git
 	update = none
 	shallow = true
+	# the local qlever build/test writes index files into the checkout; don't
+	# let that working-tree dirt show as a change in the superproject
+	ignore = dirty
