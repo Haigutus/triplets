@@ -54,6 +54,7 @@ excel = [
 networkx = [
     "networkx>=3.0",
 ]
+# reference SPARQL engine (rdflib) — for performance install [oxigraph] instead
 sparql = [
     "rdflib>=7.6.0",
 ]
