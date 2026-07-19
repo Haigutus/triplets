@@ -1,0 +1,863 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>triplets.validation.shacl_polars - triplets 0.2.0a2 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=17187ace" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0a2 documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">triplets 0.2.0a2 documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/parsers.html">Parser Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/migration_0.0_to_0.1.html">Migration: 0.0 → 0.1</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.validation.html">Validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.cli.html">CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.cgmes_tools.html">CGMES Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.rdfs_tools.html">RDFS Tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.rdf_parser.html">rdf_parser (deprecated)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.export_schema.html">Export Schema</a></li>
+</ul>
+
+</div></div><div id="version-selector" style="padding: 0.5rem 1rem; border-top: 1px solid var(--color-sidebar-border);">
+  <label for="version-select" style="font-size: 0.85em; color: var(--color-sidebar-caption);">Version</label>
+  <select id="version-select" onchange="if(this.value) window.location.href=this.value"
+          style="width: 100%; padding: 0.3em; margin-top: 0.3em; border-radius: 4px;
+                 border: 1px solid var(--color-sidebar-border);
+                 background: var(--color-sidebar-background);
+                 color: var(--color-sidebar-text);">
+    <option value="">Loading...</option>
+  </select>
+</div>
+<script>
+  fetch('/triplets/versions.json')
+    .then(r => r.json())
+    .then(versions => {
+      const sel = document.getElementById('version-select');
+      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
+      versions.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = '/triplets/' + v + '/';
+        opt.textContent = v;
+        // Highlight current version
+        if (window.location.pathname.includes('/' + v + '/')) {
+          opt.selected = true;
+        }
+        sel.appendChild(opt);
+      });
+      // Check if we're on latest
+      if (window.location.pathname.includes('/latest/')) {
+        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
+      }
+    })
+    .catch(() => {
+      document.getElementById('version-select').innerHTML =
+        '<option value="">latest</option>';
+    });
+</script>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for triplets.validation.shacl_polars</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;SHACL polars engine — compiled-IR executor (performance).</span>
+
+<span class="sd">Lazy by construction: every constraint becomes one LazyFrame plan against a</span>
+<span class="sd">shared base, and everything executes in a single ``polars.collect_all`` —</span>
+<span class="sd">parallel across plans, with common subplans (the per-path filters, the Type</span>
+<span class="sd">scan) eliminated once. Shared indices (per-class focus IDs, the set of all</span>
+<span class="sd">IDs) are materialized eagerly once and reused across plans — speed over</span>
+<span class="sd">memory, per the engine guidance in docs/validation.md. No Python UDFs, no</span>
+<span class="sd">per-constraint collects, no streaming.</span>
+
+<span class="sd">Semantics are identical to the pandas engine (same IR, same canonical</span>
+<span class="sd">violations schema, same lexical-form datatype deviation — see shacl_pandas).</span>
+<span class="sd">The rare nested/query components (sh:or, sh:and, sh:not, sh:node, sh:sparql —</span>
+<span class="sd">a handful of rows even in the real profiles) are delegated to the pandas</span>
+<span class="sd">implementations, so coverage is complete while the hot path stays lazy.</span>
+
+<span class="sd">Per-rule plan builders are cached in ``CompiledShapes.plans[&quot;polars&quot;]`` — the</span>
+<span class="sd">IR is split and normalized once per compiled shapes, then only re-bound to</span>
+<span class="sd">new data.</span>
+
+<span class="sd">Note: sh:pattern runs on Rust regex (no lookarounds). The ENTSO-E profiles</span>
+<span class="sd">use plain character-class patterns; exotic patterns belong to pyshacl.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">polars</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.._engine_detect</span><span class="w"> </span><span class="kn">import</span> <span class="n">flavor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_report</span><span class="w"> </span><span class="kn">import</span> <span class="n">VIOLATION_COLUMNS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">split_rules</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_pandas</span><span class="w"> </span><span class="kn">import</span> <span class="n">DATATYPES</span><span class="p">,</span> <span class="n">_REFERENCE_LIKE</span><span class="p">,</span> <span class="n">SchemaKind</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1"># nested/query components — delegated to the pandas implementations</span>
+<span class="n">FALLBACK_COMPONENTS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;sh:or&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:and&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:not&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:node&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:sparql&quot;</span><span class="p">}</span>
+
+<span class="n">_COLUMNS</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_Context</span><span class="p">(</span><span class="n">SchemaKind</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Lazy base + eagerly materialized shared indices (built once per validate).&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">frame</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">base</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">lazy</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rdf_map</span> <span class="o">=</span> <span class="n">rdf_map</span>
+        <span class="n">type_rows</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;Type&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="s2">&quot;ID&quot;</span><span class="p">)</span>
+        <span class="c1"># (ID, CLASS) pairs — the class-membership side of the batched joins</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">membership</span> <span class="o">=</span> <span class="n">type_rows</span><span class="o">.</span><span class="n">rename</span><span class="p">({</span><span class="s2">&quot;VALUE&quot;</span><span class="p">:</span> <span class="s2">&quot;CLASS&quot;</span><span class="p">})</span><span class="o">.</span><span class="n">lazy</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_class_ids</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span> <span class="n">part</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">part</span>
+                           <span class="ow">in</span> <span class="n">type_rows</span><span class="o">.</span><span class="n">partition_by</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="n">as_dict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="c1"># is_in wants the membership collection as one list value (imploded);</span>
+        <span class="c1"># precompute per class so thousands of rule plans share them.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_class_ids_imploded</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">ids</span><span class="o">.</span><span class="n">implode</span><span class="p">()</span>
+                                    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">ids</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_ids</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_all_ids</span> <span class="o">=</span> <span class="n">frame</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">implode</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_frame</span> <span class="o">=</span> <span class="n">frame</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_subjects</span> <span class="o">=</span> <span class="p">{}</span>   <span class="c1"># KEY → (ids, imploded) for sh:targetSubjectsOf focus</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">class_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_class</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Flat ID Series (plan *data*, e.g. focus_frame).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_ids</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">target_class</span><span class="p">,</span> <span class="n">_NO_IDS</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">class_ids_in</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_class</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Imploded ID Series for is_in membership tests.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_ids_imploded</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">target_class</span><span class="p">,</span> <span class="n">_NO_IDS_IMPLODED</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">all_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_all_ids</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_subjects_of</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_subjects</span><span class="p">:</span>
+            <span class="n">ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_frame</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">key</span><span class="p">)[</span><span class="s2">&quot;ID&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_subjects</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">ids</span><span class="p">,</span> <span class="n">ids</span><span class="o">.</span><span class="n">implode</span><span class="p">())</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_subjects</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">focus_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Flat focus ID Series (plan data, e.g. focus_frame).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">&quot;target_kind&quot;</span><span class="p">,</span> <span class="s2">&quot;class&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;subjectsOf&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_subjects_of</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_ids</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">focus_ids_in</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Imploded focus IDs for is_in membership tests.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">&quot;target_kind&quot;</span><span class="p">,</span> <span class="s2">&quot;class&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;subjectsOf&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_subjects_of</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_ids_in</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">path_rows</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The rule&#39;s path as a lazy (FOCUS, PATH_VALUE) plan, restricted to the rule&#39;s focus.&quot;&quot;&quot;</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">base</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">focus_ids_in</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">inverse</span><span class="p">:</span>
+            <span class="n">plan</span> <span class="o">=</span> <span class="n">rows</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">ids</span><span class="p">))</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">),</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">plan</span> <span class="o">=</span> <span class="n">rows</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">ids</span><span class="p">))</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">),</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">&quot;via_type&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="c1"># ( assoc rdf:type ) sequence path: PATH_VALUE = referenced object&#39;s</span>
+            <span class="c1"># type; a target without a Type row yields no value node (inner join)</span>
+            <span class="n">plan</span> <span class="o">=</span> <span class="p">(</span><span class="n">plan</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">membership</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span>
+                    <span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">,</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;CLASS&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">plan</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">focus_frame</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">polars</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">({</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">focus_ids</span><span class="p">(</span><span class="n">rule</span><span class="p">)},</span>
+                                <span class="n">schema</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">:</span> <span class="n">polars</span><span class="o">.</span><span class="n">Utf8</span><span class="p">})</span>
+
+
+<span class="n">_NO_IDS</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="p">[],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">polars</span><span class="o">.</span><span class="n">Utf8</span><span class="p">)</span>
+<span class="n">_NO_IDS_IMPLODED</span> <span class="o">=</span> <span class="n">_NO_IDS</span><span class="o">.</span><span class="n">implode</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">violation_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">severity</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Attach the canonical violation columns to a (FOCUS[, PATH_VALUE]) plan.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">plan</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+        <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">),</span>
+        <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">polars</span><span class="o">.</span><span class="n">Utf8</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">value</span> <span class="k">else</span> <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">polars</span><span class="o">.</span><span class="n">Utf8</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">),</span>
+        <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">violation_type</span> <span class="ow">or</span> <span class="n">rule</span><span class="o">.</span><span class="n">component</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;VIOLATION_TYPE&quot;</span><span class="p">),</span>
+        <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">message</span> <span class="ow">or</span> <span class="n">message</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">polars</span><span class="o">.</span><span class="n">Utf8</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;MESSAGE&quot;</span><span class="p">),</span>
+        <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">severity</span> <span class="ow">or</span> <span class="n">rule</span><span class="o">.</span><span class="n">severity</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;SEVERITY&quot;</span><span class="p">),</span>
+        <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+
+
+<span class="c1"># ── plan builders: (context, rule) → LazyFrame in the violations schema ──────</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_counts</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span><span class="o">.</span><span class="n">group_by</span><span class="p">(</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">len</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_min_count</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">focus_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_counts</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">),</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;len&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fill_null</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2"> occurs fewer than </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2"> time(s)&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_max_count</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="n">_counts</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;len&quot;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2"> occurs more than </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2"> time(s)&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_datatype</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Two-level lexical check in one plan; VIOLATION_TYPE/SEVERITY/MESSAGE are</span>
+<span class="sd">    conditional columns (invalid form → sh:datatype, narrower form → Warning).&quot;&quot;&quot;</span>
+    <span class="n">spec</span> <span class="o">=</span> <span class="n">DATATYPES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">&quot;xsd:&quot;</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">spec</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">valid_pattern</span><span class="p">,</span> <span class="n">warn_pattern</span> <span class="o">=</span> <span class="n">spec</span>
+
+    <span class="n">invalid</span> <span class="o">=</span> <span class="o">~</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;^(?:</span><span class="si">{</span><span class="n">valid_pattern</span><span class="si">}</span><span class="s2">)$&quot;</span><span class="p">)</span>
+    <span class="n">warned</span> <span class="o">=</span> <span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;^(?:</span><span class="si">{</span><span class="n">warn_pattern</span><span class="si">}</span><span class="s2">)$&quot;</span><span class="p">)</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">invalid</span>
+              <span class="k">if</span> <span class="n">warn_pattern</span> <span class="k">else</span> <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">False</span><span class="p">))</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">with_columns</span><span class="p">(</span><span class="n">invalid</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;_invalid&quot;</span><span class="p">),</span> <span class="n">warned</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;_warned&quot;</span><span class="p">))</span>
+            <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_invalid&quot;</span><span class="p">)</span> <span class="o">|</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_warned&quot;</span><span class="p">))</span>
+            <span class="o">.</span><span class="n">select</span><span class="p">(</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_invalid&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;sh:datatype&quot;</span><span class="p">))</span>
+                      <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;triplets:lexicalForm&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;VIOLATION_TYPE&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_invalid&quot;</span><span class="p">))</span>
+                      <span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">message</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;value is not a valid </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">))</span>
+                      <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;lexical form is narrower than the declared </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2"> &quot;</span>
+                                            <span class="s2">&quot;(e.g. integer form for a float)&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;MESSAGE&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_invalid&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">severity</span><span class="p">))</span>
+                      <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;Warning&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;SEVERITY&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">),</span>
+            <span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_pattern</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="o">~</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;value does not match pattern &#39;</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_min_length</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">len_chars</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;value is shorter than </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2"> characters&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_max_length</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">len_chars</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;value is longer than </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2"> characters&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_range</span><span class="p">(</span><span class="n">comparison</span><span class="p">,</span> <span class="n">description</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Numeric range builder factory; non-castable values are the datatype check&#39;s job.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">builder</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+        <span class="n">numeric</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">Float64</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">plan</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">comparison</span><span class="p">(</span><span class="n">numeric</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">))</span>  <span class="c1"># null → dropped</span>
+        <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;value is </span><span class="si">{</span><span class="n">description</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">builder</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_in</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="n">local</span> <span class="o">=</span> <span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">list</span><span class="o">.</span><span class="n">last</span><span class="p">()</span>
+             <span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">list</span><span class="o">.</span><span class="n">last</span><span class="p">())</span>
+    <span class="n">allowed</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">]</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="o">~</span><span class="n">local</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">allowed</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;value is not one of </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">allowed</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_has_value</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="n">having</span> <span class="o">=</span> <span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+              <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="nb">str</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">))</span>
+              <span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">))</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">focus_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">having</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;anti&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2"> does not have required value &#39;</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_class</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="o">~</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">class_ids_in</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;referenced object is not of class </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_node_kind</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;IRI&quot;</span><span class="p">,</span> <span class="s2">&quot;Literal&quot;</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;sh:nodeKind </span><span class="si">%s</span><span class="s2"> not checkable on triplets — skipped (</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="c1"># via_type value nodes are the referenced objects&#39; types — always IRIs</span>
+    <span class="n">kind</span> <span class="o">=</span> <span class="s2">&quot;iri&quot;</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">&quot;via_type&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="k">else</span> <span class="n">context</span><span class="o">.</span><span class="n">key_kind</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">kind</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>                     <span class="c1"># schema decides for the whole path</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;iri&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span> <span class="o">==</span> <span class="s2">&quot;IRI&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>                      <span class="c1"># every value conforms — no plan at all</span>
+        <span class="n">plan</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>       <span class="c1"># every value violates</span>
+    <span class="k">else</span><span class="p">:</span>                                    <span class="c1"># value-form heuristic</span>
+        <span class="n">is_iri</span> <span class="o">=</span> <span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;^(?:</span><span class="si">{</span><span class="n">_REFERENCE_LIKE</span><span class="o">.</span><span class="n">pattern</span><span class="si">}</span><span class="s2">)$&quot;</span><span class="p">)</span>
+                  <span class="o">|</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">all_ids</span><span class="p">))</span>
+        <span class="n">plan</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="o">~</span><span class="n">is_iri</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span> <span class="o">==</span> <span class="s2">&quot;IRI&quot;</span> <span class="k">else</span> <span class="n">is_iri</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;value is not of node kind sh:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_pair</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">other_path</span><span class="p">):</span>
+    <span class="n">left</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+    <span class="n">right</span> <span class="o">=</span> <span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">base</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">other_path</span><span class="p">)</span>
+             <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">focus_ids_in</span><span class="p">(</span><span class="n">rule</span><span class="p">)))</span>
+             <span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">),</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;OTHER&quot;</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">left</span><span class="p">,</span> <span class="n">right</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_equals</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;sh:equals is set equality per focus node: a value present at only one</span>
+<span class="sd">    of the two properties is a violation; matching multi-valued sets conform.&quot;&quot;&quot;</span>
+    <span class="n">left</span><span class="p">,</span> <span class="n">right</span> <span class="o">=</span> <span class="n">_pair</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+    <span class="n">right</span> <span class="o">=</span> <span class="n">right</span><span class="o">.</span><span class="n">rename</span><span class="p">({</span><span class="s2">&quot;OTHER&quot;</span><span class="p">:</span> <span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">})</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">left</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">right</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">,</span> <span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;anti&quot;</span><span class="p">),</span>
+                          <span class="n">right</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">,</span> <span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;anti&quot;</span><span class="p">)])</span>
+    <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2"> does not equal </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_disjoint</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="n">left</span><span class="p">,</span> <span class="n">right</span> <span class="o">=</span> <span class="n">_pair</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="p">(</span><span class="n">left</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">right</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;OTHER&quot;</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2"> shares a value with </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_pair_compare</span><span class="p">(</span><span class="n">operator</span><span class="p">,</span> <span class="n">description</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;sh:lessThan(-OrEquals): violation when the comparison does not hold</span>
+<span class="sd">    (incl. non-numeric pairs — null comparisons count as failed, like pandas).&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">builder</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+        <span class="n">left</span><span class="p">,</span> <span class="n">right</span> <span class="o">=</span> <span class="n">_pair</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PATH_VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">Float64</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;OTHER&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">Float64</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">plan</span> <span class="o">=</span> <span class="n">left</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">right</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;FOCUS&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="o">~</span><span class="n">operator</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span><span class="o">.</span><span class="n">fill_null</span><span class="p">(</span><span class="kc">False</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2"> is not </span><span class="si">{</span><span class="n">description</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">builder</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_closed</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+    <span class="n">allowed</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span> <span class="o">|</span> <span class="p">{</span><span class="s2">&quot;Type&quot;</span><span class="p">})</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">base</span>
+            <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">focus_ids_in</span><span class="p">(</span><span class="n">rule</span><span class="p">))</span>
+                    <span class="o">&amp;</span> <span class="o">~</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">allowed</span><span class="p">))</span>
+            <span class="o">.</span><span class="n">select</span><span class="p">(</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">component</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;VIOLATION_TYPE&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">message</span> <span class="ow">or</span> <span class="s2">&quot;property is not allowed on a closed shape&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;MESSAGE&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">severity</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;SEVERITY&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">),</span>
+            <span class="p">))</span>
+    <span class="k">return</span> <span class="n">plan</span>
+
+
+<span class="c1"># component → lazy plan builder (FALLBACK_COMPONENTS run via shacl_pandas)</span>
+<span class="n">PLAN_BUILDERS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;sh:minCount&quot;</span><span class="p">:</span> <span class="n">_min_count</span><span class="p">,</span>
+    <span class="s2">&quot;sh:maxCount&quot;</span><span class="p">:</span> <span class="n">_max_count</span><span class="p">,</span>
+    <span class="s2">&quot;sh:datatype&quot;</span><span class="p">:</span> <span class="n">_datatype</span><span class="p">,</span>
+    <span class="s2">&quot;sh:pattern&quot;</span><span class="p">:</span> <span class="n">_pattern</span><span class="p">,</span>
+    <span class="s2">&quot;sh:minLength&quot;</span><span class="p">:</span> <span class="n">_min_length</span><span class="p">,</span>
+    <span class="s2">&quot;sh:maxLength&quot;</span><span class="p">:</span> <span class="n">_max_length</span><span class="p">,</span>
+    <span class="s2">&quot;sh:minInclusive&quot;</span><span class="p">:</span> <span class="n">_range</span><span class="p">(</span><span class="k">lambda</span> <span class="n">v</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="n">v</span> <span class="o">&lt;</span> <span class="n">limit</span><span class="p">,</span> <span class="s2">&quot;less than the minimum&quot;</span><span class="p">),</span>
+    <span class="s2">&quot;sh:maxInclusive&quot;</span><span class="p">:</span> <span class="n">_range</span><span class="p">(</span><span class="k">lambda</span> <span class="n">v</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="n">v</span> <span class="o">&gt;</span> <span class="n">limit</span><span class="p">,</span> <span class="s2">&quot;greater than the maximum&quot;</span><span class="p">),</span>
+    <span class="s2">&quot;sh:minExclusive&quot;</span><span class="p">:</span> <span class="n">_range</span><span class="p">(</span><span class="k">lambda</span> <span class="n">v</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="n">v</span> <span class="o">&lt;=</span> <span class="n">limit</span><span class="p">,</span> <span class="s2">&quot;not greater than the exclusive minimum&quot;</span><span class="p">),</span>
+    <span class="s2">&quot;sh:maxExclusive&quot;</span><span class="p">:</span> <span class="n">_range</span><span class="p">(</span><span class="k">lambda</span> <span class="n">v</span><span class="p">,</span> <span class="n">limit</span><span class="p">:</span> <span class="n">v</span> <span class="o">&gt;=</span> <span class="n">limit</span><span class="p">,</span> <span class="s2">&quot;not less than the exclusive maximum&quot;</span><span class="p">),</span>
+    <span class="s2">&quot;sh:in&quot;</span><span class="p">:</span> <span class="n">_in</span><span class="p">,</span>
+    <span class="s2">&quot;sh:hasValue&quot;</span><span class="p">:</span> <span class="n">_has_value</span><span class="p">,</span>
+    <span class="s2">&quot;sh:class&quot;</span><span class="p">:</span> <span class="n">_class</span><span class="p">,</span>
+    <span class="s2">&quot;sh:nodeKind&quot;</span><span class="p">:</span> <span class="n">_node_kind</span><span class="p">,</span>
+    <span class="s2">&quot;sh:equals&quot;</span><span class="p">:</span> <span class="n">_equals</span><span class="p">,</span>
+    <span class="s2">&quot;sh:disjoint&quot;</span><span class="p">:</span> <span class="n">_disjoint</span><span class="p">,</span>
+    <span class="s2">&quot;sh:lessThan&quot;</span><span class="p">:</span> <span class="n">_pair_compare</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">&lt;</span> <span class="n">b</span><span class="p">,</span> <span class="s2">&quot;less than&quot;</span><span class="p">),</span>
+    <span class="s2">&quot;sh:lessThanOrEquals&quot;</span><span class="p">:</span> <span class="n">_pair_compare</span><span class="p">(</span><span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">&lt;=</span> <span class="n">b</span><span class="p">,</span> <span class="s2">&quot;less than or equal to&quot;</span><span class="p">),</span>
+    <span class="s2">&quot;sh:closed&quot;</span><span class="p">:</span> <span class="n">_closed</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<span class="c1"># ── batched builders: (context, rules) → [LazyFrame] ─────────────────────────</span>
+<span class="c1"># One join-plan per component instead of one plan per rule: the rules become</span>
+<span class="c1"># plan *data* (a frame joined on KEY + class membership) and the per-rule</span>
+<span class="c1"># metadata rides along as columns, so the output rows are identical to the</span>
+<span class="c1"># per-rule builders&#39;. On the real Equipment profiles this turns ~4,300 plans</span>
+<span class="c1"># into a handful (~6x less time in polars, plan construction O(components)).</span>
+<span class="c1"># Inverse rules and the tail components keep the per-rule path.</span>
+
+<span class="n">_RULE_COLUMNS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;CLASS&quot;</span><span class="p">,</span> <span class="s2">&quot;MESSAGE&quot;</span><span class="p">,</span> <span class="s2">&quot;SEVERITY&quot;</span><span class="p">,</span> <span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_rules_frame</span><span class="p">(</span><span class="n">rules</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="o">**</span><span class="n">extra</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The rules of one component as plan data (message = default-text builder).&quot;&quot;&quot;</span>
+    <span class="n">columns</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;KEY&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">],</span>
+        <span class="s2">&quot;CLASS&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">],</span>
+        <span class="s2">&quot;MESSAGE&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">message</span> <span class="ow">or</span> <span class="n">message</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">],</span>
+        <span class="s2">&quot;SEVERITY&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">severity</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">],</span>
+        <span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">],</span>
+    <span class="p">}</span>
+    <span class="n">columns</span> <span class="o">|=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="p">[</span><span class="n">fn</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">]</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">fn</span> <span class="ow">in</span> <span class="n">extra</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+    <span class="k">return</span> <span class="n">polars</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">(</span><span class="n">columns</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_batch_path_rows</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules_frame</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Every rule&#39;s path rows in one plan: (row × matching rule), focus in class.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">base</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rules_frame</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;KEY&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">membership</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;CLASS&quot;</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;semi&quot;</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_batch_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="n">violation_type</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">plan</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
+        <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">),</span>
+        <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">value</span> <span class="k">else</span> <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">polars</span><span class="o">.</span><span class="n">Utf8</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">),</span>
+        <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="n">violation_type</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">polars</span><span class="o">.</span><span class="n">Utf8</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;VIOLATION_TYPE&quot;</span><span class="p">),</span>
+        <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;MESSAGE&quot;</span><span class="p">),</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;SEVERITY&quot;</span><span class="p">),</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_batch_max_count</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules</span><span class="p">):</span>
+    <span class="n">rules_frame</span> <span class="o">=</span> <span class="n">_rules_frame</span><span class="p">(</span><span class="n">rules</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2"> occurs more than </span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2"> time(s)&quot;</span><span class="p">,</span>
+                               <span class="n">PARAM</span><span class="o">=</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">params</span><span class="p">))</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="p">(</span><span class="n">_batch_path_rows</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules_frame</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">group_by</span><span class="p">([</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="o">*</span><span class="n">_RULE_COLUMNS</span><span class="p">,</span> <span class="s2">&quot;PARAM&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">len</span><span class="p">()</span>
+            <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;len&quot;</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PARAM&quot;</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">_batch_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="s2">&quot;sh:maxCount&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">False</span><span class="p">)]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_batch_min_count</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules</span><span class="p">):</span>
+    <span class="n">rules_frame</span> <span class="o">=</span> <span class="n">_rules_frame</span><span class="p">(</span><span class="n">rules</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2"> occurs fewer than </span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2"> time(s)&quot;</span><span class="p">,</span>
+                               <span class="n">PARAM</span><span class="o">=</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">params</span><span class="p">))</span>
+    <span class="n">keys</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="o">*</span><span class="n">_RULE_COLUMNS</span><span class="p">,</span> <span class="s2">&quot;PARAM&quot;</span><span class="p">]</span>
+    <span class="n">counts</span> <span class="o">=</span> <span class="n">_batch_path_rows</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules_frame</span><span class="p">)</span><span class="o">.</span><span class="n">group_by</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span><span class="o">.</span><span class="n">len</span><span class="p">()</span>
+    <span class="n">universe</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">membership</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rules_frame</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">&quot;CLASS&quot;</span><span class="p">)</span>   <span class="c1"># every focus × its rules</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="p">(</span><span class="n">universe</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">counts</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="n">keys</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;len&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fill_null</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;PARAM&quot;</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">_batch_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="kc">False</span><span class="p">)]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_batch_datatype</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One plan per distinct datatype spec (a handful) — the regex is per spec,</span>
+<span class="sd">    the two-level message/severity/type stay per rule via conditional columns.&quot;&quot;&quot;</span>
+    <span class="n">groups</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">:</span>
+        <span class="n">spec</span> <span class="o">=</span> <span class="n">DATATYPES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">&quot;xsd:&quot;</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">spec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">groups</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">spec</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+    <span class="n">plans</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">valid_pattern</span><span class="p">,</span> <span class="n">warn_pattern</span><span class="p">),</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">groups</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">rules_frame</span> <span class="o">=</span> <span class="n">_rules_frame</span><span class="p">(</span>
+            <span class="n">group</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;value is not a valid </span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">MESSAGE_WARN</span><span class="o">=</span><span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;lexical form is narrower than the declared </span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2"> &quot;</span>
+                                    <span class="s2">&quot;(e.g. integer form for a float)&quot;</span><span class="p">))</span>
+        <span class="n">invalid</span> <span class="o">=</span> <span class="o">~</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;^(?:</span><span class="si">{</span><span class="n">valid_pattern</span><span class="si">}</span><span class="s2">)$&quot;</span><span class="p">)</span>
+        <span class="n">warned</span> <span class="o">=</span> <span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;^(?:</span><span class="si">{</span><span class="n">warn_pattern</span><span class="si">}</span><span class="s2">)$&quot;</span><span class="p">)</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">invalid</span>
+                  <span class="k">if</span> <span class="n">warn_pattern</span> <span class="k">else</span> <span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="kc">False</span><span class="p">))</span>
+        <span class="n">plans</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">_batch_path_rows</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules_frame</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">with_columns</span><span class="p">(</span><span class="n">invalid</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;_invalid&quot;</span><span class="p">),</span> <span class="n">warned</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;_warned&quot;</span><span class="p">))</span>
+            <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_invalid&quot;</span><span class="p">)</span> <span class="o">|</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_warned&quot;</span><span class="p">))</span>
+            <span class="o">.</span><span class="n">select</span><span class="p">(</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">),</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">),</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_invalid&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;sh:datatype&quot;</span><span class="p">))</span>
+                      <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;triplets:lexicalForm&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;VIOLATION_TYPE&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_invalid&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;MESSAGE&quot;</span><span class="p">))</span>
+                      <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;MESSAGE_WARN&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;MESSAGE&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">when</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;_invalid&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">then</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;SEVERITY&quot;</span><span class="p">))</span>
+                      <span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">lit</span><span class="p">(</span><span class="s2">&quot;Warning&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;SEVERITY&quot;</span><span class="p">),</span>
+                <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">),</span>
+            <span class="p">))</span>
+    <span class="k">return</span> <span class="n">plans</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_batch_node_kind</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Schema-decided rules collapse to skip / violate-all; heuristic rules</span>
+<span class="sd">    share one is_iri expression per expected kind (two plans at most).&quot;&quot;&quot;</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;value is not of node kind sh:</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">&quot;</span>   <span class="c1"># noqa: E731</span>
+    <span class="n">always</span><span class="p">,</span> <span class="n">heuristic</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;IRI&quot;</span><span class="p">,</span> <span class="s2">&quot;Literal&quot;</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;sh:nodeKind </span><span class="si">%s</span><span class="s2"> not checkable on triplets — skipped (</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span>
+                         <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">)</span>
+            <span class="k">continue</span>
+        <span class="n">kind</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">key_kind</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">kind</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>                 <span class="c1"># schema decides for the whole path</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;iri&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span> <span class="o">==</span> <span class="s2">&quot;IRI&quot;</span><span class="p">):</span>
+                <span class="k">continue</span>                     <span class="c1"># every value conforms — no plan at all</span>
+            <span class="n">always</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>              <span class="c1"># every value violates</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">heuristic</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+    <span class="n">plans</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">always</span><span class="p">:</span>
+        <span class="n">plans</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_batch_emit</span><span class="p">(</span>
+            <span class="n">_batch_path_rows</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">_rules_frame</span><span class="p">(</span><span class="n">always</span><span class="p">,</span> <span class="n">message</span><span class="p">)),</span> <span class="s2">&quot;sh:nodeKind&quot;</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">expected</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;IRI&quot;</span><span class="p">,</span> <span class="s2">&quot;Literal&quot;</span><span class="p">):</span>
+        <span class="n">group</span> <span class="o">=</span> <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">heuristic</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span> <span class="o">==</span> <span class="n">expected</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">group</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">is_iri</span> <span class="o">=</span> <span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;^(?:</span><span class="si">{</span><span class="n">_REFERENCE_LIKE</span><span class="o">.</span><span class="n">pattern</span><span class="si">}</span><span class="s2">)$&quot;</span><span class="p">)</span>
+                  <span class="o">|</span> <span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">all_ids</span><span class="p">))</span>
+        <span class="n">plan</span> <span class="o">=</span> <span class="p">(</span><span class="n">_batch_path_rows</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">_rules_frame</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="n">message</span><span class="p">))</span>
+                <span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="o">~</span><span class="n">is_iri</span> <span class="k">if</span> <span class="n">expected</span> <span class="o">==</span> <span class="s2">&quot;IRI&quot;</span> <span class="k">else</span> <span class="n">is_iri</span><span class="p">))</span>
+        <span class="n">plans</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_batch_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="s2">&quot;sh:nodeKind&quot;</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">plans</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_batch_in</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Anti-join against the exploded allowed values: a path row with no</span>
+<span class="sd">    (rule, allowed-value) match is a violation.&quot;&quot;&quot;</span>
+    <span class="n">rules_frame</span> <span class="o">=</span> <span class="n">_rules_frame</span><span class="p">(</span>
+        <span class="n">rules</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;value is not one of </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">r</span><span class="o">.</span><span class="n">params</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">allowed</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">LazyFrame</span><span class="p">({</span>
+        <span class="s2">&quot;KEY&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">],</span>
+        <span class="s2">&quot;CLASS&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">],</span>
+        <span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">],</span>
+        <span class="s2">&quot;_LOCAL&quot;</span><span class="p">:</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">],</span>
+    <span class="p">})</span>
+    <span class="n">local</span> <span class="o">=</span> <span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">list</span><span class="o">.</span><span class="n">last</span><span class="p">()</span>
+             <span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">list</span><span class="o">.</span><span class="n">last</span><span class="p">())</span>
+    <span class="n">plan</span> <span class="o">=</span> <span class="p">(</span><span class="n">_batch_path_rows</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules_frame</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">with_columns</span><span class="p">(</span><span class="n">local</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;_LOCAL&quot;</span><span class="p">))</span>
+            <span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">allowed</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;CLASS&quot;</span><span class="p">,</span> <span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">,</span> <span class="s2">&quot;_LOCAL&quot;</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;anti&quot;</span><span class="p">))</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">_batch_emit</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span> <span class="s2">&quot;sh:in&quot;</span><span class="p">)]</span>
+
+
+<span class="n">BATCH_BUILDERS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;sh:maxCount&quot;</span><span class="p">:</span> <span class="n">_batch_max_count</span><span class="p">,</span>
+    <span class="s2">&quot;sh:minCount&quot;</span><span class="p">:</span> <span class="n">_batch_min_count</span><span class="p">,</span>
+    <span class="s2">&quot;sh:datatype&quot;</span><span class="p">:</span> <span class="n">_batch_datatype</span><span class="p">,</span>
+    <span class="s2">&quot;sh:nodeKind&quot;</span><span class="p">:</span> <span class="n">_batch_node_kind</span><span class="p">,</span>
+    <span class="s2">&quot;sh:in&quot;</span><span class="p">:</span> <span class="n">_batch_in</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="validate">
+<a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_polars.validate">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_workers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate triplet data against the compiled constraint table (lazy polars).</span>
+
+<span class="sd">    Parameters mirror shacl_pandas.validate. Vectorized components run as one</span>
+<span class="sd">    ``polars.collect_all`` over per-constraint LazyFrame plans; the nested and</span>
+<span class="sd">    query components (FALLBACK_COMPONENTS) are delegated to the pandas engine</span>
+<span class="sd">    so results are identical across both.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">frame</span> <span class="o">=</span> <span class="n">_to_polars</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">frame</span> <span class="o">=</span> <span class="n">frame</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_in</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">]))</span>
+
+    <span class="k">if</span> <span class="s2">&quot;polars&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">compiled</span><span class="o">.</span><span class="n">plans</span><span class="p">:</span>   <span class="c1"># setdefault would re-split on every call</span>
+        <span class="n">compiled</span><span class="o">.</span><span class="n">plans</span><span class="p">[</span><span class="s2">&quot;polars&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">split_rules</span><span class="p">(</span><span class="n">compiled</span><span class="o">.</span><span class="n">ir</span><span class="p">,</span> <span class="n">PLAN_BUILDERS</span><span class="p">,</span> <span class="n">FALLBACK_COMPONENTS</span><span class="p">,</span> <span class="s2">&quot;polars&quot;</span><span class="p">)</span>
+    <span class="n">vectorized</span><span class="p">,</span> <span class="n">fallback</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">plans</span><span class="p">[</span><span class="s2">&quot;polars&quot;</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">components</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">vectorized</span> <span class="o">=</span> <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">vectorized</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="ow">in</span> <span class="n">components</span><span class="p">]</span>
+        <span class="n">fallback</span> <span class="o">=</span> <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">fallback</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="ow">in</span> <span class="n">components</span><span class="p">]</span>
+
+    <span class="n">context</span> <span class="o">=</span> <span class="n">_Context</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">)</span>
+    <span class="n">batched</span><span class="p">,</span> <span class="n">plans</span> <span class="o">=</span> <span class="p">{},</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">vectorized</span><span class="p">:</span>
+        <span class="c1"># batching joins on class membership — subjectsOf targets and two-hop</span>
+        <span class="c1"># (via_type) paths take the per-rule path</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="ow">in</span> <span class="n">BATCH_BUILDERS</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">rule</span><span class="o">.</span><span class="n">inverse</span>
+                <span class="ow">and</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">&quot;via_type&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+                <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">&quot;target_kind&quot;</span><span class="p">,</span> <span class="s2">&quot;class&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;class&quot;</span><span class="p">):</span>
+            <span class="n">batched</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">component</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="p">(</span><span class="n">plan</span> <span class="o">:=</span> <span class="n">PLAN_BUILDERS</span><span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">component</span><span class="p">](</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">plans</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">plan</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">component</span><span class="p">,</span> <span class="n">rules</span> <span class="ow">in</span> <span class="n">batched</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">plans</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">BATCH_BUILDERS</span><span class="p">[</span><span class="n">component</span><span class="p">](</span><span class="n">context</span><span class="p">,</span> <span class="n">rules</span><span class="p">))</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">collect_all</span><span class="p">(</span><span class="n">plans</span><span class="p">)</span>
+    <span class="n">frames</span> <span class="o">=</span> <span class="p">[</span><span class="n">result</span> <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span> <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">height</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">frames</span><span class="p">:</span>
+        <span class="n">violations</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">frames</span><span class="p">)</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
+        <span class="c1"># canonical schema convention: object columns, nulls as None (like the other engines)</span>
+        <span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">object</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">violations</span><span class="o">.</span><span class="n">notna</span><span class="p">(),</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">violations</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">VIOLATION_COLUMNS</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">fallback</span><span class="p">:</span>
+        <span class="c1"># pass the already-converted-and-scoped frame — the pandas engine</span>
+        <span class="c1"># would otherwise redo both from the original input</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">shacl_pandas</span>
+        <span class="n">supplement</span> <span class="o">=</span> <span class="n">shacl_pandas</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span>
+                                           <span class="n">components</span><span class="o">=</span><span class="p">{</span><span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">fallback</span><span class="p">},</span>
+                                           <span class="n">max_workers</span><span class="o">=</span><span class="n">max_workers</span><span class="p">)</span>
+        <span class="n">violations</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">violations</span><span class="p">,</span> <span class="n">supplement</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">violations</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_to_polars</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Any supported flavor → polars DataFrame with Utf8 columns.&quot;&quot;&quot;</span>
+    <span class="n">kind</span> <span class="o">=</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span><span class="p">:</span>
+        <span class="n">frame</span> <span class="o">=</span> <span class="n">data</span>
+    <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;pyarrow&quot;</span><span class="p">:</span>
+        <span class="n">frame</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">from_arrow</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;duckdb&quot;</span><span class="p">:</span>
+        <span class="n">frame</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">from_arrow</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT * FROM triplets&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">arrow</span><span class="p">())</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">frame</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">from_pandas</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="nb">list</span><span class="p">(</span><span class="n">_COLUMNS</span><span class="p">)])</span>
+    <span class="k">return</span> <span class="n">frame</span><span class="o">.</span><span class="n">with_columns</span><span class="p">([</span><span class="n">polars</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="n">column</span><span class="p">)</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">polars</span><span class="o">.</span><span class="n">Utf8</span><span class="p">)</span> <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">_COLUMNS</span><span class="p">])</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, Kristjan Vilgo
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=dbde671a"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>
