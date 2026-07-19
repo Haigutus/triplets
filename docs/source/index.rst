@@ -33,6 +33,8 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.
    Parser <triplets.parser>
    Tools <triplets.tools>
    Export <triplets.export>
+   SPARQL <triplets.sparql>
+   Validation <triplets.validation>
    CLI <triplets.cli>
    CGMES Tools <triplets.cgmes_tools>
    RDFS Tools <triplets.rdfs_tools>

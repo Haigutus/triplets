@@ -44,6 +44,19 @@ autodoc_default_options = {
     'show-inheritance': True,
 }
 
+# Optional runtime deps and compiled extensions are not installed in the docs
+# build; mock them so autodoc can import every module. Without this, an
+# ImportError fallback like ``polars_engine = None`` leaves a module-level
+# ``None`` that Sphinx 9.1+ autodoc crashes on while documenting members.
+autodoc_mock_imports = [
+    "polars", "duckdb", "pyarrow", "rdflib", "pyshacl",
+    "pyoxigraph", "oxrdflib", "networkx", "openpyxl",
+    # compiled extensions (built only in wheels / local qlever build)
+    "triplets.sparql._qlever",
+    "triplets.parser.cython_pugixml_arrow",
+    "triplets.export.cimxml_cython_pugixml",
+]
+
 # -- HTML output (furo theme) -------------------------------------------------
 
 html_theme = 'furo'
