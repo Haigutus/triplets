@@ -6,6 +6,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Shared flavor conversion** (`triplets._engine_detect`): `to_pandas` /
+  `to_arrow` / `to_polars` / `as_frame` / `match_flavor` are the single choke
+  point for materializing pandas/polars/pyarrow/DuckDB inputs (rdflib loader,
+  SHACL, SPARQL, cgmes_tools, export, DuckDB export wrappers). Prefer these
+  over local if-flavor blocks.
+
 ### Added
 - **DuckDB per-connection table/schema** (`duckdb.connect(table=..., schema=...)`,
   `con.set_triplets_table(...)`, `con.read_rdf(..., table=..., schema=...)`):

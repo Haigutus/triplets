@@ -146,7 +146,7 @@ contract.
 Cross-*parse* sharing is limited by the parser generating fresh INSTANCE_IDs
 per parse (they name the graphs, so they must be in the key — see TODO.md).
 Every engine accepts bare pyarrow `Table`/`RecordBatch` input: non-registered
-input (no `content_hash` method) is routed through `_to_loadable`, which
+input (no `content_hash` method) is routed through `to_pandas` / `as_frame`, which
 converts arrow/duckdb to pandas before loading. Custom engines register via
 `triplets.sparql.register_engine(name, module)`.
 

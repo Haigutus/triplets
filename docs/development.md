@@ -5,6 +5,24 @@ engine or a change to an existing one must respect. User-facing behavior is
 documented in the reference guides ([validation.md](validation.md),
 [sparql.md](sparql.md), ...).
 
+## Flavor conversion
+
+Triplet data arrives as pandas, polars, pyarrow, or a DuckDB connection. Convert
+at subsystem boundaries with **`triplets._engine_detect`** — do not add local
+`if polars / if duckdb` materialization blocks:
+
+| Helper | Role |
+|--------|------|
+| `flavor(data)` | `"pandas"` / `"polars"` / `"pyarrow"` / `"duckdb"` |
+| `to_pandas(data, plain=False, …)` | any → pandas (`plain=True` for mutation-safe cgmes frames) |
+| `to_arrow(data, columns=…, …)` | any → pyarrow (DuckDB uses native arrow, no pandas) |
+| `to_polars(data, …)` | any → polars (Arrow path for duckdb/pyarrow) |
+| `as_frame(data)` | pandas/polars unchanged; arrow/duckdb → pandas |
+| `match_flavor(result, template)` | pandas result → template's flavor (cgmes dispatch) |
+
+DuckDB table/schema defaults stay in `tools.duckdb_engine`; converters pass
+optional `table` / `schema` / `table_name` through `_resolve_table`.
+
 ## Polars Engine Guidance
 
 The lazy validation engine's design rules. Speed always wins over memory:

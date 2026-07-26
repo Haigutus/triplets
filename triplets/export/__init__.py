@@ -34,23 +34,15 @@ from .networkx_pandas import export_to_networkx as _export_to_networkx
 logger = logging.getLogger(__name__)
 
 
-from .._engine_detect import is_polars as _is_polars
-
-
-def _to_pandas_input(data):
-    """The Excel/NetworkX exporters are pandas-only; accept any flavor by converting
-    first (like export_to_cimxml does for polars input)."""
-    if _is_polars(data):
-        return data.to_pandas()
-    return data
+from .._engine_detect import is_polars as _is_polars, to_arrow as _to_arrow, to_pandas as _to_pandas
 
 
 def export_to_excel(data, *args, **kwargs):
-    return _export_to_excel(_to_pandas_input(data), *args, **kwargs)
+    return _export_to_excel(_to_pandas(data), *args, **kwargs)
 
 
 def export_to_networkx(data, *args, **kwargs):
-    return _export_to_networkx(_to_pandas_input(data), *args, **kwargs)
+    return _export_to_networkx(_to_pandas(data), *args, **kwargs)
 
 
 export_to_excel.__doc__ = _export_to_excel.__doc__
@@ -72,15 +64,20 @@ def export_to_arrow(data):
     """Triplet columns (ID, KEY, VALUE, INSTANCE_ID) as a pyarrow.Table.
 
     Zero-copy where the backing store allows it (arrow-backed pandas from
-    read_RDF, polars); dictionary-encoded (categorical) columns pass through
-    undecoded. This is the columnar interchange consumed by engines with a
-    native Arrow ingest (the qlever SPARQL engine's index builder).
+    read_RDF, polars, DuckDB native arrow); dictionary-encoded columns pass
+    through undecoded. Columnar interchange for engines with native Arrow
+    ingest (the qlever SPARQL engine's index builder).
     """
-    _check_columns(data)
-    if _is_polars(data):
-        return data.select(list(REQUIRED_COLUMNS)).to_arrow()
-    import pyarrow
-    return pyarrow.Table.from_pandas(data[list(REQUIRED_COLUMNS)], preserve_index=False)
+    from .._engine_detect import flavor
+    kind = flavor(data)
+    if kind in ("pandas", "polars"):
+        _check_columns(data)
+    elif kind == "pyarrow":
+        missing = [c for c in REQUIRED_COLUMNS if c not in data.column_names]
+        if missing:
+            raise ValueError(f"Not a triplets dataset — missing columns {missing}, "
+                             f"expected {list(REQUIRED_COLUMNS)}, got {list(data.column_names)}")
+    return _to_arrow(data, columns=list(REQUIRED_COLUMNS))
 
 
 def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):

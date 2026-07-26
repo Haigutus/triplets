@@ -39,8 +39,7 @@ from pyoxigraph import NamedNode, QueryResultsFormat, RdfFormat
 
 from .._caches import register_cache
 from .._content_key import content_key
-from .._engine_detect import is_polars
-from .._rdflib_loader import _to_loadable
+from .._engine_detect import as_frame, is_polars, to_pandas
 from ..export import export_to_nquads
 from ..parser.nquads import read_nquads
 
@@ -90,7 +89,7 @@ def _store_for(data, rdf_map, data_unchanged=False):
     query as protocol default graphs).
     """
     if not hasattr(data, "content_hash"):  # pyarrow — no registered methods
-        data = _to_loadable(data)
+        data = to_pandas(data)
     key = content_key(data, rdf_map, b"triplets-oxigraph-1", data_unchanged)
     if key in _STORES:
         cached = _STORES[key]
@@ -98,7 +97,7 @@ def _store_for(data, rdf_map, data_unchanged=False):
             raise cached
         return cached
 
-    buffer = export_to_nquads(_to_loadable(data), rdf_map=rdf_map, export_to_memory=True)
+    buffer = export_to_nquads(as_frame(data), rdf_map=rdf_map, export_to_memory=True)
     buffer.seek(0)
     store = pyoxigraph.Store()   # in-memory
     try:

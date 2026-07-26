@@ -26,7 +26,6 @@ import logging
 import pandas
 import polars
 
-from .._engine_detect import flavor
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_ir import split_rules
 from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
@@ -524,15 +523,8 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
 
 def _to_polars(data):
     """Any supported flavor → polars DataFrame with Utf8 columns."""
-    kind = flavor(data)
-    if kind == "polars":
-        frame = data
-    elif kind == "pyarrow":
-        frame = polars.from_arrow(data)
-    elif kind == "duckdb":
-        from ..tools.duckdb_engine import _resolve_table
-        frame = polars.from_arrow(
-            data.execute(f"SELECT * FROM {_resolve_table(data)}").arrow())
-    else:
-        frame = polars.from_pandas(data[list(_COLUMNS)])
+    from .._engine_detect import to_polars
+    frame = to_polars(data)
+    if list(frame.columns) != list(_COLUMNS):
+        frame = frame.select(list(_COLUMNS))
     return frame.with_columns([polars.col(column).cast(polars.Utf8) for column in _COLUMNS])

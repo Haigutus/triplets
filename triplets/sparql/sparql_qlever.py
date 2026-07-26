@@ -51,8 +51,7 @@ import pyarrow
 from . import _qlever  # ImportError here → the registry falls back to rdflib
 from .._caches import register_cache
 from .._content_key import content_key
-from .._engine_detect import is_polars, to_return_type
-from .._rdflib_loader import _to_loadable
+from .._engine_detect import is_polars, to_pandas, to_return_type
 from ..export.nquads_utils import CIM_NS, build_key_metadata
 from ..parser.nquads import terms_to_triplets
 
@@ -129,7 +128,7 @@ def _index_for(data, rdf_map, data_unchanged=False):
     as dataset clauses).
     """
     if not hasattr(data, "content_hash"):  # pyarrow — no registered methods
-        data = _to_loadable(data)
+        data = to_pandas(data)
     key = content_key(data, rdf_map, b"triplets-qlever-2", data_unchanged)
 
     if key in _INDEXES:

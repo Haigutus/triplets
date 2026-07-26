@@ -119,6 +119,8 @@ else:
 if duckdb:
     from .tools import duckdb_engine
 
+    from ._engine_detect import to_arrow as _to_arrow, to_pandas as _to_pandas
+
     def _duckdb_export_fn(name):
         """A connection-first export callable: fetch the triplets table, run the export.
 
@@ -128,9 +130,7 @@ if duckdb:
         function = getattr(export, name)
 
         def fn(connection, *args, table=None, schema=None, table_name=None, **kwargs):
-            ref = duckdb_engine._resolve_table(
-                connection, table=table, schema=schema, table_name=table_name)
-            df = connection.execute(f"SELECT * FROM {ref}").df()
+            df = _to_pandas(connection, table=table, schema=schema, table_name=table_name)
             return function(df, *args, **kwargs)
 
         fn.__name__ = name
@@ -140,10 +140,8 @@ if duckdb:
     def _duckdb_export_to_arrow(connection, table=None, schema=None, table_name=None):
         """Triplet columns as a pyarrow.Table, straight from duckdb's native
         arrow result path (no pandas materialization)."""
-        ref = duckdb_engine._resolve_table(
-            connection, table=table, schema=schema, table_name=table_name)
-        return connection.execute(
-            f"SELECT ID, KEY, VALUE, INSTANCE_ID FROM {ref}").fetch_arrow_table()
+        return _to_arrow(connection, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"],
+                         table=table, schema=schema, table_name=table_name)
 
     # duckdb has no register_*_namespace API — attach the accessor via a property
     # (accepted on the C-extension type). None of the method names is "triplets".
