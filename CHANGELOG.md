@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **DuckDB per-connection table/schema** (`duckdb.connect(table=..., schema=...)`,
+  `con.set_triplets_table(...)`, `con.read_rdf(..., table=..., schema=...)`):
+  each connection stores the default triplets relation; tools/export/SHACL use
+  it when call kwargs omit `table`/`schema` (legacy `table_name=` still works).
+  Identifiers are always double-quoted in generated SQL.
 - **SHACL validation** (`df.shacl.validate(shapes)`, `triplets.validation`):
   shapes compile once into a constraint IR (content-hash cached), executed by
   four engines — `pyshacl` (spec reference), `pandas` (complete constraint

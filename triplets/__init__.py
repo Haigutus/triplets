@@ -52,21 +52,46 @@ except ImportError:
     logging.getLogger(__name__).debug("polars not installed, skipping read_rdf registration")
     pass
 
-# Register read_rdf on DuckDB connections (if duckdb is installed)
+# Register read_rdf + connect(table=, schema=) on DuckDB (if duckdb is installed)
 try:
     import duckdb as _duckdb
     import logging as _logging
+    from .tools.duckdb_table import (
+        install_connect as _install_duckdb_connect,
+        quote as _duckdb_quote,
+        resolve as _duckdb_resolve,
+        set as _duckdb_set_table,
+        get as _duckdb_get_table,
+        set_triplets_table as _set_triplets_table,
+    )
 
     _duckdb_logger = _logging.getLogger(__name__)
+    _install_duckdb_connect(_duckdb)
+    _duckdb.DuckDBPyConnection.set_triplets_table = _set_triplets_table
 
-    def _duckdb_read_rdf(self, paths, table_name="triplets", **kwargs):
-        """Parse RDF/XML files and load into DuckDB table via Arrow (zero-copy)."""
+    def _duckdb_read_rdf(self, paths, table=None, schema=None, table_name=None, **kwargs):
+        """Parse RDF/XML into the connection's triplets table (Arrow zero-copy).
+
+        Optional ``table`` / ``schema`` (or legacy ``table_name``) update this
+        connection's defaults, then the load targets that quoted relation.
+        """
+        if table_name is not None and table is None:
+            table = table_name
+        if table is not None or schema is not None:
+            cfg_schema, cfg_table = _duckdb_get_table(self)
+            _duckdb_set_table(self,
+                              table=table if table is not None else cfg_table,
+                              schema=schema if schema is not None else cfg_schema)
+        ref = _duckdb_resolve(self)
+        sch, _ = _duckdb_get_table(self)
+        if sch is not None:
+            self.execute(f"CREATE SCHEMA IF NOT EXISTS {_duckdb_quote(sch)}")
         arrow_table = parse(paths, return_type="arrow", **kwargs)
         self.register("_arrow_import", arrow_table)
-        self.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM _arrow_import")
+        self.execute(f"CREATE OR REPLACE TABLE {ref} AS SELECT * FROM _arrow_import")
         self.unregister("_arrow_import")
-        row_count = self.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
-        _duckdb_logger.info(f"Loaded {row_count} rows into {table_name}")
+        row_count = self.execute(f"SELECT COUNT(*) FROM {ref}").fetchone()[0]
+        _duckdb_logger.info("Loaded %s rows into %s", row_count, ref)
         return row_count
 
     _duckdb.DuckDBPyConnection.read_rdf = _duckdb_read_rdf

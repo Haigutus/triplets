@@ -120,20 +120,21 @@ is also exposed top-level as `triplets.read_nquads`.
 import duckdb
 import triplets
 
-data = duckdb.connect()                              # in-memory
-data = duckdb.connect("grid.duckdb")                 # persistent (no re-parsing next session)
+data = duckdb.connect()                              # default table "triplets"
+data = duckdb.connect("grid.duckdb", table="grid", schema="cim")  # per-connection defaults
 
-data.read_rdf(["grid_EQ.xml", "data.zip"])           # parse via Arrow (zero-copy into DuckDB)
-data.get_types_count()                                     # → dict
-data.tableview_by_type("ACLineSegment").df()             # → pandas DataFrame
-data.tableview_by_type("ACLineSegment").pl()             # → polars DataFrame
+data.read_rdf(["grid_EQ.xml", "data.zip"])           # loads into the connection's table
+data.get_types_count()                               # uses connection table/schema
+data.tableview_by_type("ACLineSegment").df()
 data.filter_triplets(KEY="Type", VALUE=".*Sub.*", regex=True).df()
-data.filter_triplets_by_type("Terminal").df()
 data.references_to("some-uuid").df()
 data.export_to_nquads("/tmp/output.nq")
 
-# Direct SQL (full DuckDB SQL on the triplets table)
-data.sql("SELECT VALUE, COUNT(*) FROM triplets WHERE KEY = 'Type' GROUP BY VALUE").df()
+# Per-call override; rebind defaults with set_triplets_table(...)
+data.types_dict(table="other", schema="main")
+
+# Direct SQL (your identifiers — tools always quote theirs)
+data.sql('SELECT VALUE, COUNT(*) FROM "cim"."grid" WHERE KEY = \'Type\' GROUP BY VALUE').df()
 
 # The same tools are also on the `.triplets` namespace (parity with pandas/polars)
 data.triplets.tableview_by_type("ACLineSegment").df()

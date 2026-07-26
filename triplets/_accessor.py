@@ -119,27 +119,31 @@ else:
 if duckdb:
     from .tools import duckdb_engine
 
+    from .tools.duckdb_table import resolve as _duckdb_resolve
+
     def _duckdb_export_fn(name):
         """A connection-first export callable: fetch the triplets table, run the export.
 
-        Note: this materialises the whole `triplets` table into a pandas DataFrame
-        (``SELECT * FROM triplets``) before exporting — a memory spike for large grids.
+        Materialises the configured triplets table into a pandas DataFrame
+        before exporting — a memory spike for large grids.
         """
         function = getattr(export, name)
 
-        def fn(connection, *args, table_name="triplets", **kwargs):
-            df = connection.execute(f"SELECT * FROM {table_name}").df()
+        def fn(connection, *args, table=None, schema=None, table_name=None, **kwargs):
+            ref = _duckdb_resolve(connection, table=table, schema=schema, table_name=table_name)
+            df = connection.execute(f"SELECT * FROM {ref}").df()
             return function(df, *args, **kwargs)
 
         fn.__name__ = name
         fn.__doc__ = function.__doc__
         return fn
 
-    def _duckdb_export_to_arrow(connection, table_name="triplets"):
+    def _duckdb_export_to_arrow(connection, table=None, schema=None, table_name=None):
         """Triplet columns as a pyarrow.Table, straight from duckdb's native
         arrow result path (no pandas materialization)."""
+        ref = _duckdb_resolve(connection, table=table, schema=schema, table_name=table_name)
         return connection.execute(
-            f"SELECT ID, KEY, VALUE, INSTANCE_ID FROM {table_name}").fetch_arrow_table()
+            f"SELECT ID, KEY, VALUE, INSTANCE_ID FROM {ref}").fetch_arrow_table()
 
     # duckdb has no register_*_namespace API — attach the accessor via a property
     # (accepted on the C-extension type). None of the method names is "triplets".
