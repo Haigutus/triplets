@@ -1,4 +1,6 @@
 """Tests for the sh:ValidationReport export (validation/shacl_report.py)."""
+from pathlib import Path
+
 import pandas
 import pytest
 
@@ -63,6 +65,52 @@ def test_export_paths_memory_and_accessor(tmp_path):
     buffer = VIOLATIONS.shacl.to_shacl_report(export_to_memory=True)
     assert buffer.name == "report.ttl"
     assert rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
+
+
+def test_format_from_path_suffix(tmp_path):
+    """path suffix selects the rdflib format when format is None."""
+    import rdflib
+
+    xml_path = export_to_shacl_report(VIOLATIONS, path=tmp_path / "report.xml")
+    assert rdflib.Graph().parse(xml_path, format="xml")
+
+    ttl_path = export_to_shacl_report(VIOLATIONS, path=tmp_path / "report.ttl")
+    assert rdflib.Graph().parse(ttl_path, format="turtle")
+
+
+def test_explicit_format_wins_over_suffix(tmp_path):
+    """format= always overrides path-derived format."""
+    import rdflib
+
+    path = export_to_shacl_report(VIOLATIONS, path=tmp_path / "report.ttl", format="pretty-xml")
+    text = Path(path).read_text()
+    assert "<rdf:RDF" in text or "rdf:RDF" in text
+    assert rdflib.Graph().parse(path, format="xml")
+
+
+def test_export_to_memory_default_turtle():
+    buffer = export_to_shacl_report(VIOLATIONS, export_to_memory=True)
+    assert buffer.name.endswith(".ttl")
+    import rdflib
+    assert rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
+
+
+def test_report_metadata():
+    import rdflib
+    from triplets.validation.shacl_report import violations_to_report_graph
+
+    prov = rdflib.Namespace("http://www.w3.org/ns/prov#")
+    dcterms = rdflib.Namespace("http://purl.org/dc/terms/")
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+
+    graph = violations_to_report_graph(
+        VIOLATIONS, source="file.xml", shapes=["a.ttl", "b.ttl"])
+    report = next(graph.subjects(rdflib.RDF.type, sh.ValidationReport))
+
+    assert graph.value(report, prov.generatedAtTime) is not None
+    assert "triplets" in str(graph.value(report, prov.wasGeneratedBy))
+    assert {str(v) for v in graph.objects(report, dcterms.source)} == {"file.xml"}
+    assert {str(v) for v in graph.objects(report, dcterms.conformsTo)} == {"a.ttl", "b.ttl"}
 
 
 def test_multi_messages_from_context_and_location_columns():

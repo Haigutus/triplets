@@ -154,6 +154,12 @@ pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS`
 (`SOURCE_URI`, `SOURCE_LINE`, `SOURCE_COLUMN`) onto the frame; both exports run it
 automatically when given `sources=`, or reuse the columns when already present.
 
+The SHACL report serializes via rdflib: `format=None` (default) derives the format
+from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an explicit
+`format=` always wins. The report node always carries `prov:generatedAtTime` and
+`prov:wasGeneratedBy`; optional `source=` / `shapes=` become `dcterms:source` /
+`dcterms:conformsTo`.
+
 ## Shared Loading (`_rdflib_loader.py`)
 
 SHACL and SPARQL reach rdflib through the same two helpers, so a validation and
@@ -195,7 +201,7 @@ triplets/
     |-- shacl_pandas.py      # compiled-IR executor (full registry; eager, debugging)
     |-- shacl_polars.py      # compiled-IR executor (lazy plans + collect_all, performance)
     |-- shacl_duckdb.py      # compiled-IR executor (SQL per constraint, larger-than-memory)
-    |-- shacl_report.py      # ValidationReport graph -> violations DataFrame
+    |-- shacl_report.py      # ValidationReport <-> violations; multi-format export
     |-- context.py           # optional enrichment pass (instance/object/shape/schema context)
     |-- locations.py         # violations -> source line/column (the sources= grep pass)
     '-- sarif.py             # violations -> SARIF 2.1.0 (grouped by default)
@@ -238,10 +244,13 @@ violations = violations.shacl.enrich(data=data, shapes=compiled, rdf_map=...)  #
 # SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer
 violations.shacl.to_sarif(path="report.sarif")
 
-# standard sh:ValidationReport (turtle) for SHACL tooling; sources= adds a
-# "Source: file line N column M" message per result (SHACL has no location
-# vocabulary — plain-text messages travel everywhere)
-violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"])
+# standard sh:ValidationReport for SHACL tooling (format from path suffix,
+# or format=); sources= adds a "Source: file line N column M" message per
+# result (SHACL has no location vocabulary — plain-text messages travel
+# everywhere); source=/shapes= become dcterms metadata on the report node
+violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"],
+                                 source="grid.zip", shapes="shapes.ttl")
+violations.shacl.to_shacl_report(path="report.xml")  # RDF/XML via .xml
 
 # the location pass standalone — SOURCE_URI/SOURCE_LINE/SOURCE_COLUMN columns,
 # reused by both report exports

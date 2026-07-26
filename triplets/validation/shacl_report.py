@@ -8,6 +8,8 @@ engines, so the later vectorized engines can produce it natively):
 import io
 import logging
 import os
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas
 
@@ -19,6 +21,13 @@ VIOLATION_COLUMNS = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERIT
 
 _UUID_PREFIX = "urn:uuid:"
 _SH = "http://www.w3.org/ns/shacl#"
+_PROV = "http://www.w3.org/ns/prov#"
+_DCTERMS = "http://purl.org/dc/terms/"
+_XSD = "http://www.w3.org/2001/XMLSchema#"
+
+# path suffix → rdflib serialize format (traverse values for the reverse)
+_EXT = {".ttl": "turtle", ".rdf": "xml", ".xml": "xml",
+        ".nt": "nt", ".n3": "n3", ".jsonld": "json-ld", ".json-ld": "json-ld"}
 
 # sh:sourceConstraintComponent URI suffix → short violation type
 _COMPONENT_MAP = {
@@ -120,7 +129,7 @@ _COMPONENT_URI = {short: f"{_SH}{suffix}" for suffix, short in _COMPONENT_MAP.it
 _TRIPLETS_NS = "http://triplets#"
 
 
-def violations_to_report_graph(violations):
+def violations_to_report_graph(violations, source=None, shapes=None):
     """Violations DataFrame → sh:ValidationReport rdflib graph (inverse of
     report_to_violations; KEYs expand to the CIM namespace unless already URIs).
 
@@ -129,16 +138,34 @@ def violations_to_report_graph(violations):
     schema descriptions (context.enrich) and the source position
     (locations.locate_violations) — SHACL has no location vocabulary, so a
     message is the interoperable carrier.
+
+    Report-level metadata (always): ``prov:generatedAtTime``,
+    ``prov:wasGeneratedBy``. Optional: ``dcterms:source`` / ``dcterms:conformsTo``
+    from ``source`` / ``shapes`` (str or sequence).
     """
     import rdflib
+    import triplets
 
     sh = rdflib.Namespace(_SH)
+    prov = rdflib.Namespace(_PROV)
+    dcterms = rdflib.Namespace(_DCTERMS)
     graph = rdflib.Graph()
     graph.bind("sh", sh)
+    graph.bind("prov", prov)
+    graph.bind("dcterms", dcterms)
 
     report = rdflib.BNode()
     graph.add((report, rdflib.RDF.type, sh.ValidationReport))
     graph.add((report, sh.conforms, rdflib.Literal(violations.empty)))
+    graph.add((report, prov.generatedAtTime,
+               rdflib.Literal(datetime.now(timezone.utc).isoformat(),
+                              datatype=rdflib.URIRef(f"{_XSD}dateTime"))))
+    graph.add((report, prov.wasGeneratedBy,
+               rdflib.Literal(f"triplets {triplets.__version__}")))
+    for value in _as_list(source):
+        graph.add((report, dcterms.source, rdflib.Literal(value)))
+    for value in _as_list(shapes):
+        graph.add((report, dcterms.conformsTo, rdflib.Literal(value)))
 
     for row in violations.itertuples(index=False):
         result = rdflib.BNode()
@@ -161,6 +188,14 @@ def violations_to_report_graph(violations):
                        rdflib.URIRef(shape) if "://" in shape or shape.startswith("urn:") else rdflib.BNode(shape)))
 
     return graph
+
+
+def _as_list(value):
+    if value is None:
+        return ()
+    if isinstance(value, (str, Path, bytes)):
+        return (os.fspath(value) if not isinstance(value, bytes) else value.decode(),)
+    return tuple(value)
 
 
 def _messages(row):
@@ -199,8 +234,26 @@ def _expand(value):
     return f"{CIM_NS}{value}"
 
 
-def export_to_shacl_report(violations, sources=None, path=None, export_to_memory=False):
-    """Violations frame → standard sh:ValidationReport, serialized as turtle.
+def _resolve_format(path, format):
+    """Explicit rdflib format wins; else path suffix via ``_EXT``; else turtle."""
+    if format is not None:
+        return format
+    if path is not None:
+        return _EXT.get(Path(path).suffix.lower(), "turtle")
+    return "turtle"
+
+
+def _default_path(fmt):
+    """First suffix in ``_EXT`` that maps to ``fmt``, else ``.ttl``."""
+    for suffix, name in _EXT.items():
+        if name == fmt:
+            return f"report{suffix}"
+    return "report.ttl"
+
+
+def export_to_shacl_report(violations, sources=None, path=None, export_to_memory=False,
+                           format=None, source=None, shapes=None):
+    """Violations frame → standard sh:ValidationReport (any rdflib format).
 
     Parameters
     ----------
@@ -212,22 +265,37 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         result carries a "Source: file line N column M" message (a frame
         already carrying LOCATION_COLUMNS is used as-is).
     path : str or Path, optional
-        Output file (default "report.ttl"). Ignored with export_to_memory.
+        Output file. Default ``report.<ext>`` from the resolved format.
+        Suffix selects format when ``format`` is None (``.xml``/``.rdf`` →
+        RDF/XML, ``.ttl`` → turtle, …).
     export_to_memory : bool, default False
         Return a BytesIO (with .name) instead of writing to disk.
+    format : str or None, default None
+        rdflib serialize format. When None, derived from ``path`` suffix
+        (unknown/missing → turtle). Explicit value always wins.
+    source : str or sequence, optional
+        ``dcterms:source`` on the ValidationReport (validated file name(s)).
+    shapes : str or sequence, optional
+        ``dcterms:conformsTo`` on the ValidationReport (shape file name(s)).
     """
     if sources is not None:
         from .locations import LOCATION_COLUMNS, locate_violations
         if not set(LOCATION_COLUMNS) <= set(violations.columns):
             violations = locate_violations(violations, sources)
-    payload = violations_to_report_graph(violations).serialize(format="turtle").encode("utf-8")
+    fmt = _resolve_format(path, format)
+    if path is None:
+        path = _default_path(fmt)
+    else:
+        path = os.fspath(path)
+    payload = (violations_to_report_graph(violations, source=source, shapes=shapes)
+               .serialize(format=fmt).encode("utf-8"))
     if export_to_memory:
         buffer = io.BytesIO(payload)
-        buffer.name = "report.ttl"
+        buffer.name = os.path.basename(path)
         return buffer
 
-    path = "report.ttl" if path is None else os.fspath(path)
     with open(path, "wb") as file:
         file.write(payload)
     logger.info("Saved %s", path)
     return path
+

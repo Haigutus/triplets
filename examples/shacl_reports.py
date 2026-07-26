@@ -19,8 +19,8 @@ oxigraph SPARQL engine for the sh:sparql rules.
 
 Pristine Svedala conforms, so three issues are introduced deliberately and the
 validation must find exactly those. Violations stay in the console; the full
-report is exported as a standard sh:ValidationReport (turtle) and as SARIF 2.1.0
-carrying exact source locations (file + line of the violated element).
+report is exported as a standard sh:ValidationReport (turtle + RDF/XML) and as
+SARIF 2.1.0 carrying exact source locations (file + line of the violated element).
 
 The ENTSO-E shapes are taken from $TRIPLETS_CGMES_SHACL (a local clone of
 github.com/entsoe/application-profiles-library) or downloaded once next to
@@ -104,10 +104,15 @@ print(located.loc[located["SEVERITY"] == "Violation",
                   ["ID", "OBJECT_TYPE", "OBJECT_NAME", "SOURCE_LINE", "SOURCE_COLUMN"]]
       .to_string(index=False))
 
-# >>> export 1: standard sh:ValidationReport (turtle) — each result carries
-# >>> the engine message plus Description/Schema/Source messages
-report_ttl = located.shacl.to_shacl_report(path=HERE / "shacl_reports.ttl")
+# >>> export 1: standard sh:ValidationReport — format from path suffix;
+# >>> each result carries engine + Description/Schema/Source messages;
+# >>> report node has prov/dcterms metadata
+report_ttl = located.shacl.to_shacl_report(
+    path=HERE / "shacl_reports.ttl", source=Path(EQ).name, shapes=SHACL_FILES)
 print(f"\nwrote {report_ttl}")
+report_xml = located.shacl.to_shacl_report(
+    path=HERE / "shacl_reports.xml", source=Path(EQ).name, shapes=SHACL_FILES)
+print(f"wrote {report_xml}")
 
 # >>> export 2: SARIF 2.1.0 — grouped (one result per rule + occurrenceCount);
 # >>> results carry file + startLine/startColumn of the violated element
