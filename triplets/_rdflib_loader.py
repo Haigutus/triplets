@@ -99,8 +99,8 @@ def _to_loadable(data):
         import pandas
         return data.to_pandas(types_mapper=pandas.ArrowDtype)
     if kind == "duckdb":
-        from .tools.duckdb_table import resolve
-        return data.execute(f"SELECT * FROM {resolve(data)}").df()
+        from .tools.duckdb_engine import _resolve_table
+        return data.execute(f"SELECT * FROM {_resolve_table(data)}").df()
     return data  # pandas / polars — export_to_nquads takes these directly
 
 

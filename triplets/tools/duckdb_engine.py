@@ -9,9 +9,68 @@ triplets_to_tableviews returns a dict.
 The connection holds the dataset in one table (default ``triplets``; per-
 connection ``table``/``schema`` from ``duckdb.connect`` / ``set_triplets_table``).
 Mutating helpers rewrite that table in place and return the connection for chaining.
-"""
 
-from .duckdb_table import resolve
+Per-connection defaults live in a WeakKeyDictionary (DuckDBPyConnection has no
+``__dict__``). Call kwargs → connection config → package defaults; SQL always
+uses double-quoted identifiers.
+"""
+from weakref import WeakKeyDictionary
+
+_DEFAULT_TABLE = "triplets"
+_DEFAULT_SCHEMA = None
+_config = WeakKeyDictionary()  # connection → (schema, table)
+
+
+def _quote(name):
+    """Quote a DuckDB identifier (double quotes; escape by doubling)."""
+    return '"' + str(name).replace('"', '""') + '"'
+
+
+def _sql_name(schema, table):
+    if schema is None:
+        return _quote(table)
+    return f"{_quote(schema)}.{_quote(table)}"
+
+
+def _get_table(connection):
+    """``(schema, table)`` for *connection* (package defaults if unset)."""
+    return _config.get(connection, (_DEFAULT_SCHEMA, _DEFAULT_TABLE))
+
+
+def _set_table(connection, table=_DEFAULT_TABLE, schema=_DEFAULT_SCHEMA):
+    _config[connection] = (schema, table)
+
+
+def _resolve_table(connection, table=None, schema=None, table_name=None):
+    """Quoted SQL table ref: call kwargs → connection → package defaults.
+
+    ``table_name`` is a legacy alias for a bare table name (no schema).
+    """
+    cfg_schema, cfg_table = _get_table(connection)
+    if table is None:
+        table = table_name if table_name is not None else cfg_table
+    if schema is None:
+        schema = cfg_schema
+    return _sql_name(schema, table)
+
+
+def _set_triplets_table(connection, table=_DEFAULT_TABLE, schema=_DEFAULT_SCHEMA):
+    """Set this connection's default triplets table/schema. Returns the connection."""
+    _set_table(connection, table=table, schema=schema)
+    return connection
+
+
+def _install_connect(duckdb_module):
+    """Wrap ``duckdb.connect`` so it accepts ``table=`` / ``schema=``."""
+    original = duckdb_module.connect
+
+    def connect(*args, table=_DEFAULT_TABLE, schema=_DEFAULT_SCHEMA, **kwargs):
+        connection = original(*args, **kwargs)
+        _set_table(connection, table=table, schema=schema)
+        return connection
+
+    duckdb_module.connect = connect
+    return connect
 
 
 def _lit(value):
@@ -72,7 +131,7 @@ def types_dict(self, contains=None, case_insensitive=True, table=None, schema=No
     With ``contains``, keep only types whose name contains that substring
     (case-insensitive unless ``case_insensitive=False``).
     """
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     rows = self.execute(f"""
         SELECT VALUE, COUNT(DISTINCT ID) as count
         FROM {table_name}
@@ -92,7 +151,7 @@ def types_dict(self, contains=None, case_insensitive=True, table=None, schema=No
 def type_tableview(self, type_name, table=None, schema=None, table_name=None, view_name=None):
     """Create a named SQL view pivoting all objects of a type; return a relation
     over it. The view defaults to the type name (override with view_name)."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     ids = f"SELECT DISTINCT ID FROM {table_name} WHERE KEY = 'Type' AND VALUE = {_lit(type_name)}"
     return _pivot_view(self, view_name or type_name, ids, table_name)
 
@@ -104,7 +163,7 @@ def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
     A list value keeps rows matching any of its values; with regex=True the
     value(s) are SIMILAR TO patterns.
     """
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     conditions = []
     for col, val in [("ID", ID), ("KEY", KEY), ("VALUE", VALUE), ("INSTANCE_ID", INSTANCE_ID)]:
         if val is None:
@@ -127,7 +186,7 @@ def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
 
 def filter_triplets_by_type(self, type_name, table=None, schema=None, table_name=None):
     """Filter to only objects of a specific type. Returns DuckDBPyRelation (lazy)."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     return self.sql(f"""
         SELECT d.* FROM {table_name} d
         WHERE d.ID IN (
@@ -145,7 +204,7 @@ def filter_triplets_by_value(self, VALUE, detailed=False, type_key="Type",
     `VALUE`. With detailed=True, returns all their triplets; otherwise the matching
     rows plus each matched object's `type_key` row, type row first within each ID.
     """
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     match = f"VALUE SIMILAR TO {_lit(VALUE)}" if regex else f"VALUE = {_lit(VALUE)}"
     probe_ids = f"SELECT DISTINCT ID FROM {table_name} WHERE {match}"
     if detailed:
@@ -212,13 +271,13 @@ def _references_sql(reference, levels, table_name, keep_ord=False):
 
 def references_to(self, reference, levels=1, table=None, schema=None, table_name=None):
     """Objects that reference the given ID, multi-level. Returns DuckDBPyRelation."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     return self.sql(f"SELECT * EXCLUDE (_ord) FROM ({_refs_to_sql(reference, levels, table_name)})")
 
 
 def references_from(self, reference, levels=1, table=None, schema=None, table_name=None):
     """Objects referenced BY the given ID, multi-level. Returns DuckDBPyRelation."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     return self.sql(f"SELECT * EXCLUDE (_ord) FROM ({_refs_from_sql(reference, levels, table_name)})")
 
 
@@ -227,7 +286,7 @@ def references_from(self, reference, levels=1, table=None, schema=None, table_na
 def key_tableview(self, key, table=None, schema=None, table_name=None, view_name=None):
     """Create a named SQL view pivoting objects carrying a given KEY; return a
     relation over it. The view defaults to the key name (override with view_name)."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     ids = f"SELECT DISTINCT ID FROM {table_name} WHERE KEY = {_lit(key)}"
     return _pivot_view(self, view_name or key, ids, table_name)
 
@@ -236,7 +295,7 @@ def id_tableview(self, id, table=None, schema=None, table_name=None, view_name=N
     """Create a named SQL view pivoting the given ID(s) — a single id or an
     iterable — and return a relation over it. The view defaults to the id when a
     single one is given, else 'id_tableview' (override with view_name)."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     ids = [id] if isinstance(id, str) else list(id)
     if view_name is None:
         view_name = ids[0] if len(ids) == 1 else "id_tableview"
@@ -245,13 +304,13 @@ def id_tableview(self, id, table=None, schema=None, table_name=None, view_name=N
 
 def get_object_data(self, object_UUID, table=None, schema=None, table_name=None):
     """All (KEY, VALUE) rows for one object. Returns DuckDBPyRelation (lazy)."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     return self.sql(f"SELECT KEY, VALUE FROM {table_name} WHERE ID = {_lit(object_UUID)}")
 
 
 def get_namespace_map(self, table=None, schema=None, table_name=None):
     """Return (namespace_map dict, xml_base) from the NamespaceMap object."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     rows = self.execute(f"""
         SELECT KEY, VALUE FROM {table_name}
         WHERE KEY != 'Type' AND ID IN (
@@ -273,7 +332,7 @@ def triplets_to_tableviews(self, table=None, schema=None, table_name=None):
 
 def references(self, ID, levels=1, table=None, schema=None, table_name=None):
     """All references to and from an object (both directions). Returns DuckDBPyRelation."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     return self.sql(_references_sql(ID, levels, table_name))
 
 
@@ -292,20 +351,20 @@ def _pivot_refs(self, refs_sql, index, columns):
 
 def references_to_simple(self, reference, columns=["Type"], table=None, schema=None, table_name=None):
     """Pivot of objects referencing `reference` (index ID_FROM), limited to `columns`."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     return _pivot_refs(self, _refs_to_sql(reference, 1, table_name), "ID_FROM", columns)
 
 
 def references_from_simple(self, reference, columns=["Type"], table=None, schema=None, table_name=None):
     """Pivot of objects referenced BY `reference` (index ID_TO), limited to `columns`."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     return _pivot_refs(self, _refs_from_sql(reference, 1, table_name), "ID_TO", columns)
 
 
 def references_simple(self, reference, columns=None, levels=1, table=None, schema=None, table_name=None):
     """Pivot of the object and everything linked to/from it (index ID), with the
     level/ID_FROM/ID_TO metadata merged back, matching pandas."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     refs_sql = _references_sql(reference, levels, table_name, keep_ord=True)
     pivoted = self.sql(f"""PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE
                                   FROM ({refs_sql}) GROUP BY ID, KEY)
@@ -328,7 +387,7 @@ def references_simple(self, reference, columns=None, levels=1, table=None, schem
 
 def references_all(self, table=None, schema=None, table_name=None):
     """All reference links as (ID_FROM, KEY, ID_TO). Returns DuckDBPyRelation."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     return self.sql(f"""
         SELECT DISTINCT a.ID AS ID_FROM, a.KEY, a.VALUE AS ID_TO
         FROM {table_name} a
@@ -340,7 +399,7 @@ def references_all(self, table=None, schema=None, table_name=None):
 
 def filter_triplets_by_triplets(self, filter_triplet, table=None, schema=None, table_name=None):
     """Keep triplets whose ID appears in `filter_triplet`. Returns DuckDBPyRelation."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     _materialize(self, filter_triplet, "_filter_triplet")
     return self.sql(f"""
         SELECT * FROM {table_name}
@@ -352,7 +411,7 @@ def filter_triplets_by_triplets(self, filter_triplet, table=None, schema=None, t
 
 def set_value_at_key(self, key, value, table=None, schema=None, table_name=None):
     """Set VALUE for every row with the given KEY. Mutates the table; returns self."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     self.execute(f"""
         CREATE OR REPLACE TABLE {table_name} AS
         SELECT ID, KEY,
@@ -365,7 +424,7 @@ def set_value_at_key(self, key, value, table=None, schema=None, table_name=None)
 
 def set_value_at_key_and_id(self, key, value, id, table=None, schema=None, table_name=None):
     """Set VALUE for the row with the given KEY and ID. Mutates the table; returns self."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     self.execute(f"""
         CREATE OR REPLACE TABLE {table_name} AS
         SELECT ID, KEY,
@@ -401,7 +460,7 @@ def _apply_update(self, has_instance, update, add, table_name):
 def update_triplets_from_triplets(self, update_data, update=True, add=True, table=None, schema=None, table_name=None):
     """Update existing and/or add new rows from another triplet dataset. Merges on
     ID+KEY (plus INSTANCE_ID when update_data has it). Mutates the table; returns self."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     self.register("_reg_update", update_data)
     has_instance = "INSTANCE_ID" in self.sql("SELECT * FROM _reg_update").columns
     instance_expr = "INSTANCE_ID" if has_instance else "NULL"
@@ -417,7 +476,7 @@ def update_triplets_from_tableview(self, tableview, update=True, add=True, insta
                                    table=None, schema=None, table_name=None):
     """Unpivot a tableview to triplets, then update/add them. When instance_id is
     None the merge is on ID+KEY only (mirrors the pandas engine). Mutates; returns self."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     self.register("_reg_tv", tableview)
     has_instance = instance_id is not None
     instance_expr = _lit(instance_id) if has_instance else "NULL"
@@ -434,7 +493,7 @@ def update_triplets_from_tableview(self, tableview, update=True, add=True, insta
 def remove_triplets_from_triplets(self, what_triplet, columns=["ID", "KEY", "VALUE"],
                                   table=None, schema=None, table_name=None):
     """Remove rows matching `what_triplet` on `columns`. Mutates the table; returns self."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     _materialize(self, what_triplet, "_what_triplet")
     on = " AND ".join(f"t.{c} = w.{c}" for c in columns)
     self.execute(f"""
@@ -450,7 +509,7 @@ def remove_triplets_from_triplets(self, what_triplet, columns=["ID", "KEY", "VAL
 def diff_triplets(self, new_data, table=None, schema=None, table_name=None):
     """Rows unique to the table (left_only) or to new_data (right_only), with a
     _merge column. Returns DuckDBPyRelation."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     _materialize(self, new_data, "_new_data")
     return self.sql(f"""
         SELECT ID, KEY, VALUE, INSTANCE_ID AS INSTANCE_ID_OLD, NULL AS INSTANCE_ID_NEW,
@@ -467,7 +526,7 @@ def diff_triplets(self, new_data, table=None, schema=None, table_name=None):
 
 def diff_triplets_by_instance(self, INSTANCE_ID_1, INSTANCE_ID_2, table=None, schema=None, table_name=None):
     """Triplets that differ between two instances in the table. Returns DuckDBPyRelation."""
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     scope = f"INSTANCE_ID IN ({_lit(INSTANCE_ID_1)}, {_lit(INSTANCE_ID_2)})"
     return self.sql(f"""
         SELECT * FROM {table_name}
@@ -501,7 +560,7 @@ def tableview_to_triplets(self, table=None, schema=None, table_name=None, multiv
     Pass ``instance_id`` to stamp an ``INSTANCE_ID`` column, the same way
     ``update_triplets_from_tableview`` does. Returns DuckDBPyRelation.
     """
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     instance_col = f", {_lit(instance_id)} AS INSTANCE_ID" if instance_id is not None else ""
     return self.sql(f"""
         SELECT ID, KEY, VALUE{instance_col} FROM (
@@ -522,7 +581,7 @@ def content_hash(self, ignore_types=("Distribution", "NamespaceMap", "FullModel"
     not comparable across engines (see pandas_engine)."""
     import hashlib
 
-    table_name = resolve(self, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     # no coalesce: hash() distinguishes NULL from '' natively — coalescing
     # to '' would collide a missing VALUE with an empty one
     hashed = ", ".join(f"CAST({column} AS VARCHAR)" for column in columns)

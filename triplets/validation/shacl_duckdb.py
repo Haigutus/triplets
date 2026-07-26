@@ -331,11 +331,11 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
 def _connection(data, table=None, schema=None, table_name=None):
     """DuckDB connection holding the triplets table; other flavors are registered."""
     import duckdb
-    from ..tools.duckdb_table import resolve
+    from ..tools.duckdb_engine import _resolve_table
 
     if flavor(data) == "duckdb":
-        return data, resolve(data, table=table, schema=schema, table_name=table_name)
+        return data, _resolve_table(data, table=table, schema=schema, table_name=table_name)
     connection = duckdb.connect()
     bare = table if table is not None else (table_name if table_name is not None else "triplets")
     connection.register(bare, data)  # pandas / polars / arrow — zero-copy via Arrow
-    return connection, resolve(connection, table=bare)
+    return connection, _resolve_table(connection, table=bare)

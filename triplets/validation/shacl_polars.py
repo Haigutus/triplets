@@ -530,8 +530,9 @@ def _to_polars(data):
     elif kind == "pyarrow":
         frame = polars.from_arrow(data)
     elif kind == "duckdb":
-        from ..tools.duckdb_table import resolve
-        frame = polars.from_arrow(data.execute(f"SELECT * FROM {resolve(data)}").arrow())
+        from ..tools.duckdb_engine import _resolve_table
+        frame = polars.from_arrow(
+            data.execute(f"SELECT * FROM {_resolve_table(data)}").arrow())
     else:
         frame = polars.from_pandas(data[list(_COLUMNS)])
     return frame.with_columns([polars.col(column).cast(polars.Utf8) for column in _COLUMNS])

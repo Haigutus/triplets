@@ -119,8 +119,6 @@ else:
 if duckdb:
     from .tools import duckdb_engine
 
-    from .tools.duckdb_table import resolve as _duckdb_resolve
-
     def _duckdb_export_fn(name):
         """A connection-first export callable: fetch the triplets table, run the export.
 
@@ -130,7 +128,8 @@ if duckdb:
         function = getattr(export, name)
 
         def fn(connection, *args, table=None, schema=None, table_name=None, **kwargs):
-            ref = _duckdb_resolve(connection, table=table, schema=schema, table_name=table_name)
+            ref = duckdb_engine._resolve_table(
+                connection, table=table, schema=schema, table_name=table_name)
             df = connection.execute(f"SELECT * FROM {ref}").df()
             return function(df, *args, **kwargs)
 
@@ -141,7 +140,8 @@ if duckdb:
     def _duckdb_export_to_arrow(connection, table=None, schema=None, table_name=None):
         """Triplet columns as a pyarrow.Table, straight from duckdb's native
         arrow result path (no pandas materialization)."""
-        ref = _duckdb_resolve(connection, table=table, schema=schema, table_name=table_name)
+        ref = duckdb_engine._resolve_table(
+            connection, table=table, schema=schema, table_name=table_name)
         return connection.execute(
             f"SELECT ID, KEY, VALUE, INSTANCE_ID FROM {ref}").fetch_arrow_table()
 

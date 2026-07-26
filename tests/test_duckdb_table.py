@@ -1,10 +1,10 @@
-"""Per-connection DuckDB table/schema defaults (tools.duckdb_table)."""
+"""Per-connection DuckDB table/schema defaults (tools.duckdb_engine)."""
 import pandas
 import pytest
 
 duckdb = pytest.importorskip("duckdb")
 import triplets  # noqa: E402, F401 — wraps connect + registers tools
-from triplets.tools.duckdb_table import get, quote, resolve, set, sql_name
+from triplets.tools.duckdb_engine import _get_table, _quote, _resolve_table, _sql_name
 
 
 def _frame():
@@ -17,21 +17,21 @@ def _frame():
 
 
 def test_quote_and_sql_name():
-    assert quote('a"b') == '"a""b"'
-    assert sql_name(None, "triplets") == '"triplets"'
-    assert sql_name("cim", "grid") == '"cim"."grid"'
+    assert _quote('a"b') == '"a""b"'
+    assert _sql_name(None, "triplets") == '"triplets"'
+    assert _sql_name("cim", "grid") == '"cim"."grid"'
 
 
 def test_connect_kwargs_set_defaults():
     con = duckdb.connect(table="grid", schema="cim")
-    assert get(con) == ("cim", "grid")
-    assert resolve(con) == '"cim"."grid"'
+    assert _get_table(con) == ("cim", "grid")
+    assert _resolve_table(con) == '"cim"."grid"'
 
 
 def test_default_connect():
     con = duckdb.connect()
-    assert get(con) == (None, "triplets")
-    assert resolve(con) == '"triplets"'
+    assert _get_table(con) == (None, "triplets")
+    assert _resolve_table(con) == '"triplets"'
 
 
 def test_set_triplets_table_and_tools():
@@ -50,11 +50,11 @@ def test_set_triplets_table_and_tools():
     assert con.types_dict(table="other") == {"BusbarSection": 1}
     con.execute('CREATE TABLE "plain" AS SELECT * FROM _other')
     assert con.types_dict(table="plain", schema="main") == {"BusbarSection": 1}
-    assert get(con) == ("my schema", "my-table")
+    assert _get_table(con) == ("my schema", "my-table")
 
 
 def test_resolve_call_kwargs_win():
     con = duckdb.connect(table="grid", schema="cim")
-    assert resolve(con, table="x") == '"cim"."x"'
-    assert resolve(con, table="x", schema="s") == '"s"."x"'
-    assert resolve(con, table_name="legacy") == '"cim"."legacy"'
+    assert _resolve_table(con, table="x") == '"cim"."x"'
+    assert _resolve_table(con, table="x", schema="s") == '"s"."x"'
+    assert _resolve_table(con, table_name="legacy") == '"cim"."legacy"'

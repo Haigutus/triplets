@@ -78,9 +78,9 @@ def _to_pandas(data):
             data = data.replace_schema_metadata(None)
         return data.to_pandas()
     if module.startswith(("duckdb", "_duckdb")):
-        from ..tools.duckdb_table import resolve
+        from ..tools.duckdb_engine import _resolve_table
         logger.debug("cgmes_tools input: duckdb triplets table → pandas")
-        return data.execute(f"SELECT * FROM {resolve(data)}").df()
+        return data.execute(f"SELECT * FROM {_resolve_table(data)}").df()
     return data  # trust pandas-compatible input
 
 

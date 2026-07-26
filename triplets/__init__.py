@@ -56,18 +56,11 @@ except ImportError:
 try:
     import duckdb as _duckdb
     import logging as _logging
-    from .tools.duckdb_table import (
-        install_connect as _install_duckdb_connect,
-        quote as _duckdb_quote,
-        resolve as _duckdb_resolve,
-        set as _duckdb_set_table,
-        get as _duckdb_get_table,
-        set_triplets_table as _set_triplets_table,
-    )
+    from .tools import duckdb_engine as _duckdb_engine
 
     _duckdb_logger = _logging.getLogger(__name__)
-    _install_duckdb_connect(_duckdb)
-    _duckdb.DuckDBPyConnection.set_triplets_table = _set_triplets_table
+    _duckdb_engine._install_connect(_duckdb)
+    _duckdb.DuckDBPyConnection.set_triplets_table = _duckdb_engine._set_triplets_table
 
     def _duckdb_read_rdf(self, paths, table=None, schema=None, table_name=None, **kwargs):
         """Parse RDF/XML into the connection's triplets table (Arrow zero-copy).
@@ -78,14 +71,16 @@ try:
         if table_name is not None and table is None:
             table = table_name
         if table is not None or schema is not None:
-            cfg_schema, cfg_table = _duckdb_get_table(self)
-            _duckdb_set_table(self,
-                              table=table if table is not None else cfg_table,
-                              schema=schema if schema is not None else cfg_schema)
-        ref = _duckdb_resolve(self)
-        sch, _ = _duckdb_get_table(self)
+            cfg_schema, cfg_table = _duckdb_engine._get_table(self)
+            _duckdb_engine._set_table(
+                self,
+                table=table if table is not None else cfg_table,
+                schema=schema if schema is not None else cfg_schema,
+            )
+        ref = _duckdb_engine._resolve_table(self)
+        sch, _ = _duckdb_engine._get_table(self)
         if sch is not None:
-            self.execute(f"CREATE SCHEMA IF NOT EXISTS {_duckdb_quote(sch)}")
+            self.execute(f"CREATE SCHEMA IF NOT EXISTS {_duckdb_engine._quote(sch)}")
         arrow_table = parse(paths, return_type="arrow", **kwargs)
         self.register("_arrow_import", arrow_table)
         self.execute(f"CREATE OR REPLACE TABLE {ref} AS SELECT * FROM _arrow_import")
