@@ -220,3 +220,27 @@ def test_cimxml_polars_input_parallel(svedala_pandas):
                                   engine="cython_pugixml", max_workers=2,
                                   export_type="xml_per_instance", export_to_memory=True)
     assert len(out) == svedala_pandas["INSTANCE_ID"].nunique()
+
+
+def test_cimxml_threaded_matches_sequential(svedala_pandas):
+    """threads>=2 hash-partitions objects across per-thread pugixml documents:
+    content must be identical to the sequential build (order is hash-grouped)."""
+    _require(FORMATS["cimxml"], "cython_pugixml")
+    from triplets.export import get_cimxml_engine
+    engine = get_cimxml_engine("cython_pugixml")[1]
+
+    instance_id = svedala_pandas["INSTANCE_ID"].value_counts().index[0]
+    instance = svedala_pandas[svedala_pandas["INSTANCE_ID"] == instance_id]
+    seq = engine.generate_xml(instance, rdf_map=RDF_MAP, threads=0)
+    par = engine.generate_xml(instance, rdf_map=RDF_MAP, threads=4)
+
+    def canonical(document):
+        bio = __import__("io").BytesIO(document["file"])
+        bio.name = document["filename"]
+        return _canon_cimxml([bio])
+
+    assert canonical(seq) == canonical(par)
+    # the FullModel header object stays first in the parallel output
+    if b"FullModel" in seq["file"]:
+        head = par["file"][:2000]
+        assert b"FullModel" in head

@@ -82,11 +82,18 @@ def generate_xml(instance_data,
                  export_undefined=False,
                  comment=None,
                  debug=False,
-                 datatypes=False):
+                 datatypes=False,
+                 threads=0):
     """Generate an RDF XML file from a triplet dataset instance.
 
     Same parameters and return value as :func:`cimxml_pandas.generate_xml`;
     see there for full documentation.
+
+    ``threads >= 2`` builds and serializes the XML in parallel (one pugixml
+    document per thread over hash-partitioned objects, concatenated into one
+    output). Content is identical; **element order changes** from input order
+    to hash-grouped order (the FullModel header object stays first). ~3x on
+    large instances at 4 threads.
 
     Returns
     -------
@@ -109,7 +116,8 @@ def generate_xml(instance_data,
     batch = _string_batch(instance_data)
 
     xml = generate_xml_from_arrow(batch, rdf_map, namespace_map, instance_rdf_map, file_name,
-                                  class_KEY=class_KEY, export_undefined=export_undefined, comment=comment)
+                                  class_KEY=class_KEY, export_undefined=export_undefined,
+                                  comment=comment, debug=debug, threads=threads)
 
     logger.info("Exporting RDF to {}".format(file_name))
 

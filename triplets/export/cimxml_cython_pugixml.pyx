@@ -103,6 +103,160 @@ cdef extern from *:
         std::string id_attr;     // "rdf:ID"
         std::string id_prefix;   // "_"
     };
+
+    // ── Parallel export: hash-partitioned chunks, one pugixml doc per thread ──
+    // pugixml is thread-safe only across distinct documents (the page allocator
+    // of one document is shared and unlocked), so each thread builds and
+    // serializes its own fragment; the caller concatenates in thread order.
+    // Rows are assigned to threads by hash(ID): always correct even when an
+    // object's rows are non-contiguous — output order becomes hash-grouped.
+    #include <thread>
+    #include <string_view>
+    #include <functional>
+    #include "string_column.h"
+
+    struct SvHash {
+        using is_transparent = void;
+        size_t operator()(std::string_view s) const { return std::hash<std::string_view>{}(s); }
+    };
+    template <class V>
+    using SvMap = std::unordered_map<std::string, V, SvHash, std::equal_to<>>;
+
+    struct ExportTables {
+        std::vector<TagDef> tags;
+        SvMap<int> tag_index;          // KEY -> tags idx
+        std::vector<ClassDef> classes;
+        SvMap<int> class_index;        // class VALUE -> classes idx
+        SvMap<std::string> enum_ns;    // enum VALUE -> namespace text prefix
+        std::string class_key;
+        bool export_undefined = false;
+
+        void add_class(const std::string& name, const ClassDef& cd) {
+            class_index.emplace(name, (int)classes.size());
+            classes.push_back(cd);
+        }
+        void add_tag(const std::string& key, const TagDef& td) {
+            tag_index.emplace(key, (int)tags.size());
+            tags.push_back(td);
+        }
+        void add_enum(const std::string& name, const std::string& ns) {
+            enum_ns.emplace(name, ns);
+        }
+    };
+
+    static void export_chunk(const triplets_arrow::StringColumn* idc,
+                             const triplets_arrow::StringColumn* keyc,
+                             const triplets_arrow::StringColumn* valc,
+                             int64_t n, unsigned nthreads, unsigned self,
+                             std::string_view fullmodel_id,
+                             const ExportTables* T,
+                             std::string* out) {
+        pugi::xml_document doc;
+        SvMap<pugi::xml_node> objects;
+        std::hash<std::string_view> hasher;
+        std::string_view class_key{T->class_key};
+        auto owner = [&](std::string_view id) -> unsigned {
+            if (!fullmodel_id.empty() && id == fullmodel_id) return 0;   // FullModel first
+            return (unsigned)(hasher(id) % nthreads);
+        };
+        std::string scratch, keybuf;
+        // pass 1: class elements owned by this thread
+        for (int64_t i = 0; i < n; ++i) {
+            if (keyc->is_null(i) || idc->is_null(i) || valc->is_null(i)) continue;
+            if (keyc->value(i) != class_key) continue;
+            std::string_view id = idc->value(i);
+            if (owner(id) != self) continue;
+            std::string_view value = valc->value(i);
+            pugi::xml_node node;
+            auto found = T->class_index.find(value);
+            if (found != T->class_index.end()) {
+                const ClassDef& cd = T->classes[found->second];
+                node = doc.append_child(cd.tag.c_str());
+                scratch.assign(cd.id_prefix); scratch.append(id.data(), id.size());
+                node.append_attribute(cd.id_attr.c_str()).set_value(scratch.c_str());
+            } else if (T->export_undefined) {
+                scratch.assign(value.data(), value.size());
+                node = doc.append_child(scratch.c_str());
+                scratch.assign("urn:uuid:"); scratch.append(id.data(), id.size());
+                node.append_attribute("rdf:about").set_value(scratch.c_str());
+            } else {
+                continue;
+            }
+            objects.emplace(std::string(id), node);
+        }
+        // pass 2: attribute rows owned by this thread
+        for (int64_t i = 0; i < n; ++i) {
+            if (keyc->is_null(i) || idc->is_null(i) || valc->is_null(i)) continue;
+            std::string_view key = keyc->value(i);
+            if (key == class_key) continue;
+            std::string_view id = idc->value(i);
+            if (owner(id) != self) continue;
+            auto obj = objects.find(id);
+            if (obj == objects.end()) continue;
+            std::string_view value = valc->value(i);
+            auto found = T->tag_index.find(key);
+            if (found != T->tag_index.end()) {
+                const TagDef& td = T->tags[found->second];
+                pugi::xml_node attr_node = obj->second.append_child(td.tag.c_str());
+                if (td.is_ref) {
+                    if (td.needs_enum_lookup) {
+                        auto ns = T->enum_ns.find(value);
+                        scratch.assign(ns != T->enum_ns.end() ? ns->second : std::string());
+                    } else {
+                        scratch.assign(td.value_prefix);
+                    }
+                    scratch.append(value.data(), value.size());
+                    attr_node.append_attribute(td.attr_name.c_str()).set_value(scratch.c_str());
+                } else {
+                    scratch.assign(td.text_prefix);
+                    scratch.append(value.data(), value.size());
+                    attr_node.append_child(pugi::node_pcdata).set_value(scratch.c_str());
+                }
+            } else if (T->export_undefined) {
+                keybuf.assign(key.data(), key.size());
+                pugi::xml_node attr_node = obj->second.append_child(keybuf.c_str());
+                scratch.assign(value.data(), value.size());
+                attr_node.append_child(pugi::node_pcdata).set_value(scratch.c_str());
+            }
+        }
+        // serialize this fragment: children printed at depth 1 (root indentation)
+        string_writer writer;
+        for (pugi::xml_node child = doc.first_child(); child; child = child.next_sibling()) {
+            child.print(writer, "  ", pugi::format_indent, pugi::encoding_utf8, 1);
+        }
+        *out = std::move(writer.result);
+    }
+
+    static std::string run_export_threads(const triplets_arrow::StringColumn& idc,
+                                          const triplets_arrow::StringColumn& keyc,
+                                          const triplets_arrow::StringColumn& valc,
+                                          int64_t n, unsigned nthreads,
+                                          const ExportTables& T) {
+        // FullModel is pinned to thread 0 so the header object serializes first.
+        std::string fullmodel;
+        std::string_view class_key{T.class_key};
+        for (int64_t i = 0; i < n; ++i) {
+            if (keyc.is_null(i) || idc.is_null(i) || valc.is_null(i)) continue;
+            if (keyc.value(i) == class_key && valc.value(i) == std::string_view("FullModel")) {
+                auto id = idc.value(i);
+                fullmodel.assign(id.data(), id.size());
+                break;
+            }
+        }
+        std::vector<std::string> parts(nthreads);
+        std::vector<std::thread> workers;
+        for (unsigned t = 0; t < nthreads; ++t) {
+            workers.emplace_back(export_chunk, &idc, &keyc, &valc, n, nthreads, t,
+                                 std::string_view(fullmodel), &T, &parts[t]);
+        }
+        for (auto& worker : workers) worker.join();
+        size_t total = 0;
+        for (auto& part : parts) total += part.size();
+        std::string out;
+        out.reserve(total);
+        for (auto& part : parts) out += part;
+        return out;
+    }
     """
     cdef cppclass string_writer(xml_writer):
         string_writer() except +
@@ -148,6 +302,21 @@ cdef extern from "string_column.h" namespace "triplets_arrow":
         shared_ptr[CArray] array, const string& name) except +
 
 
+# Parallel export bridge (defined in the inline C++ block above)
+cdef extern from *:
+    cdef cppclass ExportTables:
+        ExportTables() except +
+        string class_key
+        cbool export_undefined
+        void add_class(const string& name, const ClassDef& cd)
+        void add_tag(const string& key, const TagDef& td)
+        void add_enum(const string& name, const string& ns)
+
+    string run_export_threads(
+        const StringColumn& idc, const StringColumn& keyc, const StringColumn& valc,
+        int64_t n, unsigned int nthreads, const ExportTables& T) nogil except +
+
+
 def generate_xml_from_arrow(arrow_table_or_batch,
                             dict rdf_map,
                             dict namespace_map,
@@ -155,7 +324,9 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                             str file_name,
                             str class_KEY="Type",
                             cbool export_undefined=True,
-                            comment=None):
+                            comment=None,
+                            cbool debug=False,
+                            int threads=0):
     """Generate CIM RDF/XML bytes directly from Arrow columnar data.
 
     Reads Arrow string arrays at C++ level (zero-copy GetString),
@@ -180,6 +351,14 @@ def generate_xml_from_arrow(arrow_table_or_batch,
     """
     import pyarrow as pa
 
+    cdef object _t = None
+    if debug:
+        import time as _time
+        _t = [_time.perf_counter()]
+        def _phase(name):
+            now = _time.perf_counter()
+            print(f"[cimxml pyx] {name}: {(now - _t[0]) * 1000:.1f} ms")
+            _t[0] = now
     # Convert Table to RecordBatch if needed
     if isinstance(arrow_table_or_batch, pa.Table):
         batch = arrow_table_or_batch.to_batches()[0] if arrow_table_or_batch.num_rows > 0 else None
@@ -235,6 +414,10 @@ def generate_xml_from_arrow(arrow_table_or_batch,
 
     cdef ClassDef cd
     cdef TagDef td
+    cdef ExportTables tables
+    cdef string parallel_body
+    cdef string_writer header_writer
+    cdef unsigned int nthreads
 
     for key, defn in instance_rdf_map.items():
         if not isinstance(defn, dict):
@@ -245,6 +428,11 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             cd.id_prefix = defn["attrib"]["value_prefix"].encode('utf-8')
             class_defs_idx[key] = class_defs_vec.size()
             class_defs_vec.push_back(cd)
+            if threads >= 2:
+                tables.add_class(str(key).encode('utf-8'), cd)
+                ns = defn.get("namespace")
+                if ns:
+                    tables.add_enum(str(key).encode('utf-8'), str(ns).encode('utf-8'))
         elif defn.get("namespace"):
             td.tag = _make_prefixed(defn["namespace"], key).encode('utf-8')
             attrib = defn.get("attrib")
@@ -262,7 +450,14 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                 td.needs_enum_lookup = False
             tag_defs_idx[key] = tag_defs_vec.size()
             tag_defs_vec.push_back(td)
+            if threads >= 2:
+                tables.add_tag(str(key).encode('utf-8'), td)
+                ns = defn.get("namespace")
+                if ns:
+                    tables.add_enum(str(key).encode('utf-8'), str(ns).encode('utf-8'))
 
+    if debug:
+        _phase("setup (defs)")
     # Build pugixml document
     cdef xml_document doc
     cdef xml_node decl_node, rdf_root, obj_node, attr_node
@@ -282,6 +477,26 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         ns_attr_name = f"xmlns:{prefix}".encode('utf-8')
         uri_bytes = uri.encode('utf-8')
         rdf_root.append_attribute(<const char*>ns_attr_name).set_value(<const char*>uri_bytes)
+
+    # ── Parallel path: hash-partitioned per-thread documents, ordered concat ──
+    # Output is the same XML content grouped by ID hash instead of input order
+    # (FullModel pinned first); the sequential path below preserves input order.
+    if threads >= 2:
+        tables.class_key = class_KEY.encode('utf-8')
+        tables.export_undefined = export_undefined
+        nthreads = <unsigned int>threads
+        if debug:
+            _phase("setup (defs)")
+        with nogil:
+            parallel_body = run_export_threads(id_col, key_col, val_col, n, nthreads, tables)
+        if debug:
+            _phase(f"parallel build+serialize ({threads} threads)")
+        doc.save(header_writer, b"  ", format_indent, encoding_utf8)
+        header = <bytes>header_writer.result
+        head, sep, _ = header.rpartition(b"/>")
+        if not sep:
+            raise RuntimeError("unexpected empty-root serialization")
+        return head.rstrip(b" ") + b">\n" + <bytes>parallel_body + b"</rdf:RDF>\n"
 
     # Node store for class elements
     cdef node_store store
@@ -332,6 +547,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         py_id = s_id.decode('utf-8')
         obj_index[py_id] = store_idx
 
+    if debug:
+        _phase("pass1 (class elements)")
     # ── Second pass: add attributes ──────────────────────────────
     for i in range(n):
         if key_col.is_null(i) or id_col.is_null(i) or val_col.is_null(i):
@@ -382,8 +599,12 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             attr_node = store.append_child_to(<int>py_store_idx, s_key.c_str())
             attr_node.append_child(node_pcdata).set_value(s_value.c_str())
 
+    if debug:
+        _phase("pass2 (attributes)")
     # Serialize
     cdef string_writer writer
     doc.save(writer, b"  ", format_indent, encoding_utf8)
+    if debug:
+        _phase("serialize")
 
     return writer.result
