@@ -93,3 +93,48 @@ def test_read_rdf_empty_input_creates_standard_table():
     assert con.read_rdf([]) == 0
     columns = [row[0] for row in con.execute("DESCRIBE triplets").fetchall()]
     assert columns == ["ID", "KEY", "VALUE", "INSTANCE_ID"]
+
+
+# ── config persistence across reopen (file-backed DBs) ───────────────────────
+
+def test_config_survives_reopen(tmp_path):
+    db = str(tmp_path / "g.duckdb")
+    con = duckdb.connect(db, table="grid", schema="cim")
+    con.read_rdf("tests/data/minimal_cim.xml")
+    con.close()
+
+    reopened = duckdb.connect(db)          # no kwargs — config comes from the DB
+    assert _get_table(reopened) == ("cim", "grid")
+    assert "Substation" in reopened.types_dict()
+    cursor = reopened.cursor()             # cursors share the database → same config
+    assert _get_table(cursor) == ("cim", "grid")
+    reopened.close()
+
+
+def test_explicit_reopen_kwargs_override_and_repersist(tmp_path):
+    db = str(tmp_path / "g.duckdb")
+    duckdb.connect(db, table="grid", schema="cim").close()
+    duckdb.connect(db, table="grid2").close()          # override re-persists
+    reopened = duckdb.connect(db)
+    assert _get_table(reopened) == (None, "grid2")
+    reopened.close()
+
+
+def test_read_only_connection_resolves_stored_config(tmp_path):
+    db = str(tmp_path / "g.duckdb")
+    duckdb.connect(db, table="grid", schema="cim").close()
+    con = duckdb.connect(db, read_only=True)
+    assert _get_table(con) == ("cim", "grid")
+    con.set_triplets_table(table="other")   # in-process only — must not write
+    assert _get_table(con) == (None, "other")
+    con.close()
+    fresh = duckdb.connect(db)
+    assert _get_table(fresh) == ("cim", "grid")   # DB config untouched
+    fresh.close()
+
+
+def test_bare_connect_writes_no_config():
+    con = duckdb.connect()
+    count = con.execute("SELECT COUNT(*) FROM duckdb_tables() "
+                        "WHERE table_name = '_triplets_config'").fetchone()[0]
+    assert count == 0

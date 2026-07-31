@@ -11,14 +11,23 @@ connection ``table``/``schema`` from ``duckdb.connect`` / ``set_triplets_table``
 Mutating helpers rewrite that table in place and return the connection for chaining.
 
 Per-connection defaults live in a WeakKeyDictionary (DuckDBPyConnection has no
-``__dict__``). Call kwargs → connection config → package defaults; SQL always
-uses double-quoted identifiers.
+``__dict__``) and, once explicitly configured, in a tiny ``main."_triplets_config"``
+key/value table inside the database itself — so a persisted file remembers its
+table/schema across reopen, and cursors/duplicates resolve the same config.
+A bare ``duckdb.connect()`` never writes anything (keeps :memory: clean);
+read-only connections update the in-process config only. Resolution order:
+call kwargs → in-process config → DB-stored config → package defaults; SQL
+always uses double-quoted identifiers. ATTACHed extra catalogs are out of
+scope — the config lives in the default catalog.
 """
 from weakref import WeakKeyDictionary
 
 _DEFAULT_TABLE = "triplets"
 _DEFAULT_SCHEMA = None
+_UNSET = object()              # "caller passed nothing" (None is a real schema value)
 _config = WeakKeyDictionary()  # connection → (schema, table)
+
+_CONFIG_TABLE = 'main."_triplets_config"'
 
 
 def _quote(name):
@@ -32,13 +41,44 @@ def _sql_name(schema, table):
     return f"{_quote(schema)}.{_quote(table)}"
 
 
+def _is_read_only(connection):
+    row = connection.execute(
+        "SELECT value FROM duckdb_settings() WHERE name = 'access_mode'").fetchone()
+    return row is not None and str(row[0]).lower() == "read_only"
+
+
+def _load_config(connection):
+    """(schema, table) stored in the database, or None when never configured."""
+    exists = connection.execute(
+        "SELECT 1 FROM duckdb_tables() "
+        "WHERE schema_name = 'main' AND table_name = '_triplets_config'").fetchone()
+    if exists is None:
+        return None
+    stored = dict(connection.execute(f"SELECT key, value FROM {_CONFIG_TABLE}").fetchall())
+    return stored.get("schema"), stored.get("table", _DEFAULT_TABLE)
+
+
+def _store_config(connection, schema, table):
+    connection.execute(f'CREATE TABLE IF NOT EXISTS {_CONFIG_TABLE} '
+                       f'("key" VARCHAR PRIMARY KEY, "value" VARCHAR)')
+    connection.execute(f"INSERT OR REPLACE INTO {_CONFIG_TABLE} "
+                       f"VALUES ('table', ?), ('schema', ?)", [table, schema])
+
+
 def _get_table(connection):
-    """``(schema, table)`` for *connection* (package defaults if unset)."""
-    return _config.get(connection, (_DEFAULT_SCHEMA, _DEFAULT_TABLE))
+    """``(schema, table)`` for *connection*: in-process config → DB-stored →
+    package defaults. The DB probe runs once per connection (cached)."""
+    if connection in _config:
+        return _config[connection]
+    resolved = _load_config(connection) or (_DEFAULT_SCHEMA, _DEFAULT_TABLE)
+    _config[connection] = resolved
+    return resolved
 
 
-def _set_table(connection, table=_DEFAULT_TABLE, schema=_DEFAULT_SCHEMA):
+def _set_table(connection, table=_DEFAULT_TABLE, schema=_DEFAULT_SCHEMA, persist=False):
     _config[connection] = (schema, table)
+    if persist and not _is_read_only(connection):
+        _store_config(connection, schema, table)
 
 
 def _resolve_table(connection, table=None, schema=None, table_name=None):
@@ -55,8 +95,9 @@ def _resolve_table(connection, table=None, schema=None, table_name=None):
 
 
 def _set_triplets_table(connection, table=_DEFAULT_TABLE, schema=_DEFAULT_SCHEMA):
-    """Set this connection's default triplets table/schema. Returns the connection."""
-    _set_table(connection, table=table, schema=schema)
+    """Set this connection's default triplets table/schema (persisted in the
+    database for file-backed connections). Returns the connection."""
+    _set_table(connection, table=table, schema=schema, persist=True)
     return connection
 
 
@@ -64,9 +105,13 @@ def _install_connect(duckdb_module):
     """Wrap ``duckdb.connect`` so it accepts ``table=`` / ``schema=``."""
     original = duckdb_module.connect
 
-    def connect(*args, table=_DEFAULT_TABLE, schema=_DEFAULT_SCHEMA, **kwargs):
+    def connect(*args, table=_UNSET, schema=_UNSET, **kwargs):
         connection = original(*args, **kwargs)
-        _set_table(connection, table=table, schema=schema)
+        if table is not _UNSET or schema is not _UNSET:
+            _set_table(connection,
+                       table=table if table is not _UNSET else _DEFAULT_TABLE,
+                       schema=schema if schema is not _UNSET else _DEFAULT_SCHEMA,
+                       persist=True)
         return connection
 
     duckdb_module.connect = connect

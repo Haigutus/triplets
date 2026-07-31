@@ -85,6 +85,7 @@ try:
                 self,
                 table=table if table is not None else cfg_table,
                 schema=schema if schema is not None else cfg_schema,
+                persist=True,
             )
         ref = _duckdb_engine._resolve_table(self)
         sch, _ = _duckdb_engine._get_table(self)
