@@ -161,3 +161,48 @@ def test_mutators_preserve_extra_columns():
     assert con.execute("SELECT COUNT(*) FROM triplets").fetchone()[0] == 2
     values = con.execute("SELECT VALUE FROM triplets WHERE ID = 'a'").fetchall()
     assert values == [("renamed",)]                 # update applied on the surviving row
+
+
+# ── rowid robustness: views and registered frames as table= targets ──────────
+
+def _loaded_connection():
+    con = duckdb.connect()
+    con.register("_src", _frame())
+    con.execute("CREATE TABLE triplets AS SELECT * FROM _src")
+    return con
+
+
+def test_tools_work_on_view_target():
+    con = _loaded_connection()
+    con.execute("CREATE VIEW v AS SELECT * FROM triplets")
+    tv = con.type_tableview("Breaker", table="v", view_name="tv_v")
+    assert tv.df()["ID"].tolist() == ["a"]
+    refs = con.references_to("a", table="v")
+    assert refs.df().shape[0] >= 0            # no BinderException on rowid
+    assert con.content_hash(table="v") == con.content_hash()   # order-invariant matches
+
+
+def test_tools_work_on_registered_frame_target():
+    con = duckdb.connect()
+    con.register("reg", _frame())
+    tv = con.type_tableview("Breaker", table="reg", view_name="tv_reg")
+    assert tv.df()["ID"].tolist() == ["a"]
+
+
+def test_order_sensitive_hash_requires_base_table():
+    con = _loaded_connection()
+    con.execute("CREATE VIEW v AS SELECT * FROM triplets")
+    assert con.content_hash(order_sensitive=True)              # base table fine
+    with pytest.raises(ValueError, match="requires a base table"):
+        con.content_hash(order_sensitive=True, table="v")
+
+
+def test_views_created_in_configured_schema():
+    con = duckdb.connect(table="grid", schema="cim")
+    con.execute("CREATE SCHEMA cim")
+    con.register("_src", _frame())
+    con.execute("CREATE TABLE cim.grid AS SELECT * FROM _src")
+    con.type_tableview("Breaker")
+    row = con.execute("SELECT schema_name FROM duckdb_views() "
+                      "WHERE view_name = 'Breaker'").fetchone()
+    assert row == ("cim",)

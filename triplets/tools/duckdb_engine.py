@@ -21,7 +21,11 @@ call kwargs → in-process config → DB-stored config → package defaults; SQL
 always uses double-quoted identifiers. ATTACHed extra catalogs are out of
 scope — the config lives in the default catalog.
 """
+import logging
+
 from weakref import WeakKeyDictionary
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_TABLE = "triplets"
 _DEFAULT_SCHEMA = None
@@ -82,17 +86,35 @@ def _set_table(connection, table=_DEFAULT_TABLE, schema=_DEFAULT_SCHEMA, persist
         _store_config(connection, schema, table)
 
 
-def _resolve_table(connection, table=None, schema=None, table_name=None):
-    """Quoted SQL table ref: call kwargs → connection → package defaults.
-
-    ``table_name`` is a legacy alias for a bare table name (no schema).
-    """
+def _table_parts(connection, table=None, schema=None, table_name=None):
+    """``(schema, table)`` for one call: call kwargs → connection → package
+    defaults. ``table_name`` is a legacy alias for a bare table name (no schema)."""
     cfg_schema, cfg_table = _get_table(connection)
     if table is None:
         table = table_name if table_name is not None else cfg_table
     if schema is None:
         schema = cfg_schema
-    return _sql_name(schema, table)
+    return schema, table
+
+
+def _resolve_table(connection, table=None, schema=None, table_name=None):
+    """Quoted SQL table ref: call kwargs → connection → package defaults."""
+    return _sql_name(*_table_parts(connection, table=table, schema=schema, table_name=table_name))
+
+
+def _ord_expr(connection, schema, table):
+    """Load-order expression for first-value picks: ``rowid`` on base tables,
+    ``row_number() OVER ()`` when the target has none (a VIEW or a registered
+    frame) — order then follows scan order, so only tie-breaks among duplicate
+    (ID, KEY) rows are affected."""
+    row = connection.execute(
+        "SELECT 1 FROM duckdb_tables() "
+        "WHERE table_name = ? AND schema_name = COALESCE(?, current_schema())",
+        [table, schema]).fetchone()
+    if row is not None:
+        return "rowid"
+    logger.debug("%s has no rowid (view/registered frame) — using row_number()", table)
+    return "row_number() OVER ()"
 
 
 def _set_triplets_table(connection, table=_DEFAULT_TABLE, schema=_DEFAULT_SCHEMA):
@@ -139,18 +161,21 @@ def _materialize(self, data, name):
     self.unregister(f"_reg_{name}")
 
 
-def _create_view(self, view_name, query):
+def _create_view(self, view_name, query, schema=None):
     """Create (or replace) a named SQL view and return a relation over it.
 
     The view is named and re-queryable (SELECT * FROM "<view_name>") and stays
-    lazy — it reflects later changes to the underlying triplets table.
+    lazy — it reflects later changes to the underlying triplets table. It is
+    created next to the data: in *schema* when given, else the default schema.
+    Default view names come from the data (type/key names), so they can collide
+    with user objects — pass ``view_name=`` to control the name.
     """
-    safe = view_name.replace('"', '""')
-    self.execute(f'CREATE OR REPLACE VIEW "{safe}" AS {query}')
-    return self.sql(f'SELECT * FROM "{safe}"')
+    ref = _sql_name(schema, view_name)
+    self.execute(f"CREATE OR REPLACE VIEW {ref} AS {query}")
+    return self.sql(f"SELECT * FROM {ref}")
 
 
-def _pivot_view(self, view_name, id_predicate, table_name):
+def _pivot_view(self, view_name, id_predicate, table_name, ord_expr, schema=None):
     """Create a named view pivoting the triplets of the IDs selected by
     id_predicate (a subquery or literal list usable inside ``ID IN (...)``).
 
@@ -160,15 +185,19 @@ def _pivot_view(self, view_name, id_predicate, table_name):
     keys = [row[0] for row in self.execute(
         f"SELECT DISTINCT KEY FROM {table_name} WHERE ID IN ({id_predicate})").fetchall()]
     if not keys:
-        return _create_view(self, view_name, f"SELECT ID FROM {table_name} WHERE ID IN ({id_predicate})")
+        return _create_view(self, view_name,
+                            f"SELECT ID FROM {table_name} WHERE ID IN ({id_predicate})", schema)
     in_list = ", ".join(_lit(k) for k in keys)
-    # Multi-valued keys take the load-order-first value (arg_min by rowid) so the
-    # single-value pick matches pandas/polars; this also makes the view deterministic.
+    # Multi-valued keys take the load-order-first value (arg_min by ord_expr) so
+    # the single-value pick matches pandas/polars and the view is deterministic.
+    # ord_expr is computed in a subquery: a window (row_number fallback) can't
+    # sit inside the aggregate directly.
     return _create_view(self, view_name, f"""
-        WITH d AS (SELECT ID, KEY, arg_min(VALUE, rowid) AS VALUE FROM {table_name}
+        WITH s AS (SELECT ID, KEY, VALUE, {ord_expr} AS _view_ord FROM {table_name}),
+             d AS (SELECT ID, KEY, arg_min(VALUE, _view_ord) AS VALUE FROM s
                    WHERE ID IN ({id_predicate}) GROUP BY ID, KEY)
         PIVOT d ON KEY IN ({in_list}) USING FIRST(VALUE) GROUP BY ID
-    """)
+    """, schema)
 
 
 def types_dict(self, contains=None, case_insensitive=True, table=None, schema=None, table_name=None):
@@ -196,10 +225,12 @@ def types_dict(self, contains=None, case_insensitive=True, table=None, schema=No
 
 def type_tableview(self, type_name, table=None, schema=None, table_name=None, view_name=None):
     """Create a named SQL view pivoting all objects of a type; return a relation
-    over it. The view defaults to the type name (override with view_name)."""
-    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    ids = f"SELECT DISTINCT ID FROM {table_name} WHERE KEY = 'Type' AND VALUE = {_lit(type_name)}"
-    return _pivot_view(self, view_name or type_name, ids, table_name)
+    over it. The view defaults to the type name (override with view_name) and is
+    created in the resolved schema, next to the data."""
+    sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
+    ref = _sql_name(sch, tbl)
+    ids = f"SELECT DISTINCT ID FROM {ref} WHERE KEY = 'Type' AND VALUE = {_lit(type_name)}"
+    return _pivot_view(self, view_name or type_name, ids, ref, _ord_expr(self, sch, tbl), sch)
 
 
 def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
@@ -268,7 +299,7 @@ def filter_triplets_by_value(self, VALUE, detailed=False, type_key="Type",
     """)
 
 
-def _refs_to_sql(reference, levels, table_name):
+def _refs_to_sql(reference, levels, table_name, ord_expr="rowid"):
     """SQL for references_to: object (level 0) + multi-level referrers, with
     level/ID_TO/ID_FROM — matches the pandas engine."""
     return f"""
@@ -280,12 +311,14 @@ def _refs_to_sql(reference, levels, table_name):
             WHERE n.lvl < {int(levels)}
         )
         SELECT t.ID, t.KEY, t.VALUE, t.INSTANCE_ID, n.lvl AS level,
-               n.id_to AS ID_TO, n.id_from AS ID_FROM, t.rowid AS _ord
-        FROM nodes n JOIN {table_name} t ON t.ID = n.node
+               n.id_to AS ID_TO, n.id_from AS ID_FROM, t._ord
+        FROM nodes n
+        JOIN (SELECT ID, KEY, VALUE, INSTANCE_ID, {ord_expr} AS _ord FROM {table_name}) t
+        ON t.ID = n.node
     """
 
 
-def _refs_from_sql(reference, levels, table_name):
+def _refs_from_sql(reference, levels, table_name, ord_expr="rowid"):
     """SQL for references_from: object (level 0) + multi-level referenced objects."""
     return f"""
         WITH RECURSIVE nodes(node, lvl, id_to, id_from) AS (
@@ -296,12 +329,14 @@ def _refs_from_sql(reference, levels, table_name):
             WHERE n.lvl < {int(levels)} AND t.VALUE IN (SELECT ID FROM {table_name})
         )
         SELECT t.ID, t.KEY, t.VALUE, t.INSTANCE_ID, n.lvl AS level,
-               n.id_to AS ID_TO, n.id_from AS ID_FROM, t.rowid AS _ord
-        FROM nodes n JOIN {table_name} t ON t.ID = n.node
+               n.id_to AS ID_TO, n.id_from AS ID_FROM, t._ord
+        FROM nodes n
+        JOIN (SELECT ID, KEY, VALUE, INSTANCE_ID, {ord_expr} AS _ord FROM {table_name}) t
+        ON t.ID = n.node
     """
 
 
-def _references_sql(reference, levels, table_name, keep_ord=False):
+def _references_sql(reference, levels, table_name, keep_ord=False, ord_expr="rowid"):
     """references_from + references_to, deduped on (ID,KEY,VALUE,INSTANCE_ID)
     keeping the FROM side first — matches pandas concat+drop_duplicates. _ord is
     the base-table load order (kept only when a downstream pivot needs it)."""
@@ -310,9 +345,9 @@ def _references_sql(reference, levels, table_name, keep_ord=False):
         SELECT * EXCLUDE ({drop}) FROM (
             SELECT *, row_number() OVER (PARTITION BY ID, KEY, VALUE, INSTANCE_ID ORDER BY _src, _ord) AS _rn
             FROM (
-                SELECT *, 0 AS _src FROM ({_refs_from_sql(reference, levels, table_name)})
+                SELECT *, 0 AS _src FROM ({_refs_from_sql(reference, levels, table_name, ord_expr)})
                 UNION ALL
-                SELECT *, 1 AS _src FROM ({_refs_to_sql(reference, levels, table_name)})
+                SELECT *, 1 AS _src FROM ({_refs_to_sql(reference, levels, table_name, ord_expr)})
             )
         ) WHERE _rn = 1
     """
@@ -320,14 +355,16 @@ def _references_sql(reference, levels, table_name, keep_ord=False):
 
 def references_to(self, reference, levels=1, table=None, schema=None, table_name=None):
     """Objects that reference the given ID, multi-level. Returns DuckDBPyRelation."""
-    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    return self.sql(f"SELECT * EXCLUDE (_ord) FROM ({_refs_to_sql(reference, levels, table_name)})")
+    sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
+    refs = _refs_to_sql(reference, levels, _sql_name(sch, tbl), _ord_expr(self, sch, tbl))
+    return self.sql(f"SELECT * EXCLUDE (_ord) FROM ({refs})")
 
 
 def references_from(self, reference, levels=1, table=None, schema=None, table_name=None):
     """Objects referenced BY the given ID, multi-level. Returns DuckDBPyRelation."""
-    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    return self.sql(f"SELECT * EXCLUDE (_ord) FROM ({_refs_from_sql(reference, levels, table_name)})")
+    sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
+    refs = _refs_from_sql(reference, levels, _sql_name(sch, tbl), _ord_expr(self, sch, tbl))
+    return self.sql(f"SELECT * EXCLUDE (_ord) FROM ({refs})")
 
 
 # ── Query / view ─────────────────────────────────────────────────────────────
@@ -335,20 +372,22 @@ def references_from(self, reference, levels=1, table=None, schema=None, table_na
 def key_tableview(self, key, table=None, schema=None, table_name=None, view_name=None):
     """Create a named SQL view pivoting objects carrying a given KEY; return a
     relation over it. The view defaults to the key name (override with view_name)."""
-    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    ids = f"SELECT DISTINCT ID FROM {table_name} WHERE KEY = {_lit(key)}"
-    return _pivot_view(self, view_name or key, ids, table_name)
+    sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
+    ref = _sql_name(sch, tbl)
+    ids = f"SELECT DISTINCT ID FROM {ref} WHERE KEY = {_lit(key)}"
+    return _pivot_view(self, view_name or key, ids, ref, _ord_expr(self, sch, tbl), sch)
 
 
 def id_tableview(self, id, table=None, schema=None, table_name=None, view_name=None):
     """Create a named SQL view pivoting the given ID(s) — a single id or an
     iterable — and return a relation over it. The view defaults to the id when a
     single one is given, else 'id_tableview' (override with view_name)."""
-    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
+    sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
     ids = [id] if isinstance(id, str) else list(id)
     if view_name is None:
         view_name = ids[0] if len(ids) == 1 else "id_tableview"
-    return _pivot_view(self, view_name, _in_list(ids), table_name)
+    return _pivot_view(self, view_name, _in_list(ids), _sql_name(sch, tbl),
+                       _ord_expr(self, sch, tbl), sch)
 
 
 def get_object_data(self, object_UUID, table=None, schema=None, table_name=None):
@@ -381,8 +420,9 @@ def triplets_to_tableviews(self, table=None, schema=None, table_name=None):
 
 def references(self, ID, levels=1, table=None, schema=None, table_name=None):
     """All references to and from an object (both directions). Returns DuckDBPyRelation."""
-    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    return self.sql(_references_sql(ID, levels, table_name))
+    sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
+    return self.sql(_references_sql(ID, levels, _sql_name(sch, tbl),
+                                    ord_expr=_ord_expr(self, sch, tbl)))
 
 
 def _pivot_refs(self, refs_sql, index, columns):
@@ -400,21 +440,24 @@ def _pivot_refs(self, refs_sql, index, columns):
 
 def references_to_simple(self, reference, columns=["Type"], table=None, schema=None, table_name=None):
     """Pivot of objects referencing `reference` (index ID_FROM), limited to `columns`."""
-    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    return _pivot_refs(self, _refs_to_sql(reference, 1, table_name), "ID_FROM", columns)
+    sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
+    refs = _refs_to_sql(reference, 1, _sql_name(sch, tbl), _ord_expr(self, sch, tbl))
+    return _pivot_refs(self, refs, "ID_FROM", columns)
 
 
 def references_from_simple(self, reference, columns=["Type"], table=None, schema=None, table_name=None):
     """Pivot of objects referenced BY `reference` (index ID_TO), limited to `columns`."""
-    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    return _pivot_refs(self, _refs_from_sql(reference, 1, table_name), "ID_TO", columns)
+    sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
+    refs = _refs_from_sql(reference, 1, _sql_name(sch, tbl), _ord_expr(self, sch, tbl))
+    return _pivot_refs(self, refs, "ID_TO", columns)
 
 
 def references_simple(self, reference, columns=None, levels=1, table=None, schema=None, table_name=None):
     """Pivot of the object and everything linked to/from it (index ID), with the
     level/ID_FROM/ID_TO metadata merged back, matching pandas."""
-    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    refs_sql = _references_sql(reference, levels, table_name, keep_ord=True)
+    sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
+    refs_sql = _references_sql(reference, levels, _sql_name(sch, tbl), keep_ord=True,
+                               ord_expr=_ord_expr(self, sch, tbl))
     pivoted = self.sql(f"""PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE
                                   FROM ({refs_sql}) GROUP BY ID, KEY)
                            ON KEY USING FIRST(VALUE) GROUP BY ID""")
@@ -615,11 +658,15 @@ def content_hash(self, ignore_types=("Distribution", "NamespaceMap", "FullModel"
     not comparable across engines (see pandas_engine)."""
     import hashlib
 
-    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
+    sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
+    table_name = _sql_name(sch, tbl)
     # no coalesce: hash() distinguishes NULL from '' natively — coalescing
     # to '' would collide a missing VALUE with an empty one
     hashed = ", ".join(f"CAST({column} AS VARCHAR)" for column in columns)
     if order_sensitive:
+        if _ord_expr(self, sch, tbl) != "rowid":
+            raise ValueError(f"order_sensitive content_hash requires a base table (rowid); "
+                             f"{table_name} is a view or registered frame with no stable row order")
         hashed = f"row_number() OVER (ORDER BY rowid), {hashed}"
     source = f"SELECT hash({hashed}) AS h FROM {table_name}"
     if ignore_types:
