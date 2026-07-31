@@ -161,6 +161,17 @@ EXTRA_SPECS = {
 SPECS = {**CALL_SPECS, **EXTRA_SPECS}
 
 
+# ── module-level dispatch: triplets.tools.<fn>(obj), all flavors ──────────────
+# The accessor methods above bind the engine by object type; these go through
+# tools._get_engine, which must route duckdb connections to the duckdb engine.
+MODULE_DISPATCH_SPECS = {
+    "types_dict": lambda e, d, c: triplets.tools.types_dict(d),
+    "type_tableview": lambda e, d, c: triplets.tools.type_tableview(d, c["type"], **_tv_kwargs(e)),
+    "filter_triplets": lambda e, d, c: triplets.tools.filter_triplets(d, KEY="Type", VALUE=c["type"]),
+    "references_all": lambda e, d, c: triplets.tools.references_all(d),
+}
+
+
 # ── fixtures ──────────────────────────────────────────────────────────────────
 @pytest.fixture(scope="module")
 def svedala_pandas():
@@ -205,6 +216,17 @@ def test_parity(svedala_pandas, svedala_ctx, func, engine):
         f"{engine}.{func} output differs from pandas\n"
         f"  pandas: {type(ref).__name__} {shape(ref)}\n"
         f"  {engine}: {type(out).__name__} {shape(out)}")
+
+
+@pytest.mark.parametrize("func,engine", [pytest.param(f, e, id=f"{f}-{e}")
+                                         for f in sorted(MODULE_DISPATCH_SPECS)
+                                         for e in ("polars", "duckdb")])
+def test_module_dispatch_parity(svedala_pandas, svedala_ctx, func, engine):
+    pytest.importorskip(engine)
+    spec = MODULE_DISPATCH_SPECS[func]
+    ref = run_quiet(spec, "pandas", svedala_pandas.copy(), svedala_ctx)
+    out = run_quiet(spec, engine, build_engine(engine, svedala_pandas), svedala_ctx)
+    assert parity(ref, out), f"tools.{func}({engine}) differs from pandas"
 
 
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────

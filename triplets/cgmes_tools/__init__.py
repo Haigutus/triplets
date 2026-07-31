@@ -20,7 +20,7 @@ import logging
 import pandas
 
 from . import pandas_engine
-from .._engine_detect import is_polars, match_flavor, to_pandas
+from .._engine_detect import flavor, is_polars, match_flavor, to_pandas
 from ..tools import _engine_functions, _deprecated_alias
 from .pandas_engine import (  # noqa: F401 — no triplet-data argument, re-exported as-is
     dependencies,
@@ -71,11 +71,8 @@ def _match_input_flavor(result, data):
 def _resolve_engine(engine, data):
     if engine != "auto":
         return engine
-    if is_polars(data):
-        return "polars"
-    if isinstance(data, pandas.DataFrame):
-        return "pandas"
-    return "other"                                    # pyarrow / duckdb → pandas boundary
+    kind = flavor(data)
+    return kind if kind in ("polars", "pandas") else "other"   # pyarrow / duckdb → pandas boundary
 
 
 def _data_dispatch(name):
@@ -91,6 +88,9 @@ def _data_dispatch(name):
 
     @functools.wraps(pandas_fn)
     def wrapper(data, *args, engine="auto", **kwargs):
+        if engine not in ("auto", "pandas", "polars"):
+            raise ValueError(f"cgmes_tools supports engine='pandas'/'polars' (got {engine!r}); "
+                             f"duckdb/arrow input runs via the pandas boundary")
         eng = _resolve_engine(engine, data)
         native_polars = polars_engine is not None and hasattr(polars_engine, name)
         if eng == "polars" and engine != "auto":

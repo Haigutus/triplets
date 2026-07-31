@@ -1,4 +1,4 @@
-"""Triplet data manipulation tools with pandas/polars engine support.
+"""Triplet data manipulation tools with pandas/polars/duckdb engine support.
 
 Provides query, filter, diff, transform, and mutate operations on triplet
 DataFrames ([ID, KEY, VALUE, INSTANCE_ID]).
@@ -6,12 +6,14 @@ DataFrames ([ID, KEY, VALUE, INSTANCE_ID]).
 Engines:
 - pandas_engine (default, always available)
 - polars_engine (optional, uses polars-native operations for speed)
-- duckdb_engine (optional, connection-first; bound to connections by _accessor)
+- duckdb_engine (optional, connection-first: functions take the connection)
 
-Every public function here dispatches by the input DataFrame type, or by an
-explicit engine="pandas" / engine="polars". Methods registered on DataFrames
-and connections (see triplets._accessor) bind the engine functions directly —
-the object a method is called on already determines the engine.
+Every public function here dispatches by the input object's flavor (pandas /
+polars DataFrame or DuckDB connection), or by an explicit engine= name that
+must match the input. Frame ops always run in the input's engine — never
+auto-hop flavors. Methods registered on DataFrames and connections (see
+triplets._accessor) bind the engine functions directly — the object a method
+is called on already determines the engine.
 """
 
 import logging
@@ -19,9 +21,18 @@ import inspect
 import functools
 import warnings
 
-from .._engine_detect import is_polars
+from .._engine_detect import flavor, is_polars  # noqa: F401 — is_polars kept as a public re-export
+from .._registry import EngineRegistry
 
 logger = logging.getLogger(__name__)
+
+_REGISTRY = EngineRegistry(
+    "tools", __package__, policy="input",
+    modules={"pandas": ".pandas_engine", "polars": ".polars_engine", "duckdb": ".duckdb_engine"},
+    requires={"polars": ("polars",), "duckdb": ("duckdb",)},
+    hints={"polars": "Install with: pip install triplets[polars].",
+           "duckdb": "Install with: pip install triplets[duckdb]."},
+)
 
 
 def _engine_functions(module):
@@ -36,38 +47,26 @@ def _engine_functions(module):
             if not name.startswith("_") and obj.__module__ == module.__name__}
 
 
-def _auto_engine(data):
-    """Pick engine based on DataFrame type."""
-    if is_polars(data):
-        logger.debug("engine auto-selected: polars (input is polars DataFrame)")
-        return "polars"
-    logger.debug("engine auto-selected: pandas")
-    return "pandas"
-
-
 def _get_engine(engine, data=None):
-    """Resolve engine name and return the module.
+    """Resolve the engine module: auto = the input object's flavor.
 
-    With ``engine="auto"`` the engine is picked from the input type. With an explicit
-    engine, the input type is validated so a mismatch fails clearly at the boundary
-    rather than deep inside the engine.
+    Frame ops never hop engines — with ``engine="auto"`` the input's flavor
+    (pandas/polars DataFrame or DuckDB connection) picks the module; an
+    explicit engine must match the input, failing with TypeError at the
+    boundary rather than deep inside the engine.
     """
     if isinstance(data, dict):  # tableviews: detect/validate from the first frame
         data = next(iter(data.values()), None)
+    kind = flavor(data) if data is not None else None
+    if kind == "pyarrow":
+        kind = "pandas"                      # arrow input rides the pandas engine
     if engine == "auto":
-        engine = _auto_engine(data) if data is not None else "pandas"
-    else:
-        logger.debug(f"engine set: {engine}")
-        if data is not None:
-            if engine == "polars" and not is_polars(data):
-                raise TypeError("engine='polars' but the input is not a polars DataFrame")
-            if engine == "pandas" and is_polars(data):
-                raise TypeError("engine='pandas' but the input is a polars DataFrame")
-    if engine == "polars":
-        from . import polars_engine
-        return polars_engine
-    from . import pandas_engine
-    return pandas_engine
+        engine = kind or "pandas"
+        logger.debug("engine auto-selected: %s (input flavor)", engine)
+    elif kind is not None and engine in _REGISTRY.modules and engine != kind:
+        what = "a DuckDB connection" if kind == "duckdb" else f"a {kind} DataFrame"
+        raise TypeError(f"engine={engine!r} but the input is {what}")
+    return _REGISTRY.get(engine)[1]
 
 
 # ── Dispatchers ──────────────────────────────────────────────────────────────
@@ -83,7 +82,12 @@ def _dispatcher(name, target, reference):
     @functools.wraps(reference)
     def dispatcher(*args, engine="auto", **kwargs):
         data = args[0] if args else kwargs.get(first_param)
-        return getattr(_get_engine(engine, data), target)(*args, **kwargs)
+        module = _get_engine(engine, data)
+        target_fn = getattr(module, target, None)
+        if target_fn is None:
+            engine_name = module.__name__.rsplit(".", 1)[-1].removesuffix("_engine")
+            raise NotImplementedError(f"tools.{name} has no {engine_name} engine")
+        return target_fn(*args, **kwargs)
 
     dispatcher.__name__ = dispatcher.__qualname__ = name
     dispatcher.__module__ = __name__  # else pydoc/Sphinx hide it as an imported name
