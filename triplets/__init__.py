@@ -10,6 +10,7 @@ from . import sparql
 from . import validation
 from . import _accessor  # registers df.triplets / df.sparql / df.shacl namespaces  # noqa: F401
 from ._caches import clear_caches, cache_scope  # noqa: F401 — engine-state lifecycle
+from ._registry import engines, set_engine  # noqa: F401 — engine selection report/override
 
 __all__ = [
     'cgmes_tools',
@@ -21,6 +22,8 @@ __all__ = [
     'validation',
     'clear_caches',
     'cache_scope',
+    'engines',
+    'set_engine',
 ]
 
 from ._version import get_versions

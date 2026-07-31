@@ -40,6 +40,7 @@ _REGISTRY = EngineRegistry(
     },
     hints={"cython_pugixml_arrow": "Build with: pixi run build-cython-pugixml-arrow "
                                    "(or python setup_cython_parser.py build_ext --inplace)."},
+    requires={"cython_pugixml_arrow": ("pyarrow",), "python_lxml_arrow": ("pyarrow",)},
 )
 
 # Engines whose load_rdf_to_dataframe returns Arrow RecordBatches

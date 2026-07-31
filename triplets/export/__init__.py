@@ -22,7 +22,6 @@ import datetime
 
 from io import BytesIO
 from enum import StrEnum
-from importlib import import_module
 from concurrent.futures import ProcessPoolExecutor
 
 import pandas
@@ -35,6 +34,32 @@ logger = logging.getLogger(__name__)
 
 
 from .._engine_detect import is_polars as _is_polars, to_arrow as _to_arrow, to_pandas as _to_pandas
+from .._registry import EngineRegistry
+
+# ── per-format engine registries ─────────────────────────────────────────────
+# nquads/cimxml auto-pick the fastest available engine (their results are
+# flavor-independent bytes). csv is policy="input": each engine is fastest for
+# its own input flavor, so the caller picks by flavor(data), never by probe.
+_CIMXML = EngineRegistry(
+    "cimxml", __package__,
+    modules={"cython_pugixml": ".cimxml_pugixml",  # compiled extension, fastest
+             "python_lxml": ".cimxml_pandas"},     # pure python, always available
+    aliases={"performance": "cython_pugixml", "pugixml": "cython_pugixml",
+             "lxml": "python_lxml", "pandas": "python_lxml"},
+    requires={"cython_pugixml": (".cimxml_cython_pugixml", "pyarrow")},
+    hints={"cython_pugixml": "Build with: pixi run build-cython-pugixml-arrow."},
+)
+_NQUADS = EngineRegistry(
+    "nquads", __package__,
+    modules={"polars": ".nquads_polars", "pandas": ".nquads_pandas"},
+    requires={"polars": ("polars",)},
+    hints={"polars": "Install with: pip install triplets[polars]."},
+)
+_CSV = EngineRegistry(
+    "csv", __package__, policy="input",
+    modules={"pandas": ".csv_pandas", "polars": ".csv_polars"},
+    requires={"polars": ("polars",)},
+)
 
 
 def export_to_excel(data, *args, **kwargs):
@@ -85,12 +110,9 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
 
     Auto-detects engine: polars if input is polars DataFrame, else pandas.
     """
-    if _is_polars(data):
-        logger.debug("format=csv, engine=polars (auto-detected)")
-        from .csv_polars import export_to_csv as _fn
-    else:
-        logger.debug("format=csv, engine=pandas (auto-detected)")
-        from .csv_pandas import export_to_csv as _fn
+    engine = "polars" if _is_polars(data) else "pandas"
+    logger.debug("format=csv, engine=%s (input flavor)", engine)
+    _fn = _CSV.get(engine)[1].export_to_csv
     return _fn(data, path=path, multivalue=multivalue, export_to_memory=export_to_memory, single_file=single_file, base_filename=base_filename)
 
 
@@ -116,65 +138,20 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
     _check_columns(data)
     if not export_to_memory:
         path = "export.nq" if path is None else os.fspath(path)
-    if engine == "auto":
-        try:
-            import polars  # noqa: F401
-            engine = "polars"
-        except ImportError:
-            engine = "pandas"
-    logger.debug(f"format=nquads, engine={engine}")
+    engine_name, engine_module = _NQUADS.get(engine)
+    logger.debug(f"format=nquads, engine={engine_name}")
 
-    if engine == "polars":
-        import polars
-        from .nquads_polars import export_to_nquads as _fn
-        if not _is_polars(data):
-            data = polars.from_pandas(data)
-        return _fn(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory)
-
-    from .nquads_pandas import export_to_nquads as _fn
-    if _is_polars(data):
-        data = data.to_pandas(use_pyarrow_extension_array=True)
-    return _fn(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory)
-
-
-# ── CIM XML engine dispatch ──────────────────────────────────────────────────
-# Engine name → module (lazy import). Auto preference: first importable.
-_CIMXML_ENGINE_MODULES = {
-    "cython_pugixml": ".cimxml_pugixml",  # compiled extension, fastest
-    "python_lxml": ".cimxml_pandas",      # pure python, always available
-}
-_CIMXML_ENGINE_ALIASES = {
-    "performance": "cython_pugixml",
-    "pugixml": "cython_pugixml",
-    "lxml": "python_lxml",
-    "pandas": "python_lxml",
-}
-_cimxml_engines = {}  # loaded module cache
+    if engine_name == "polars" and not _is_polars(data):
+        from .._engine_detect import to_polars
+        data = to_polars(data)
+    elif engine_name == "pandas" and _is_polars(data):
+        data = _to_pandas(data)
+    return engine_module.export_to_nquads(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory)
 
 
 def get_cimxml_engine(name="auto"):
     """Resolve CIM XML engine name (with aliases) and return (name, module)."""
-    if name == "auto":
-        for candidate in _CIMXML_ENGINE_MODULES:
-            try:
-                logger.debug(f"cimxml auto - test engine availability: {candidate}")
-                return candidate, _load_cimxml_engine(candidate)
-            except ImportError:
-                continue
-
-    resolved = _CIMXML_ENGINE_ALIASES.get(name, name)
-    logger.debug(f"cimxml engine set: {resolved}")
-    return resolved, _load_cimxml_engine(resolved)
-
-
-def _load_cimxml_engine(name):
-    """Import CIM XML engine module on demand."""
-    module_name = _CIMXML_ENGINE_MODULES.get(name)
-    if module_name is None:
-        raise ValueError(f"Unknown cimxml engine: {name}. Known: {', '.join(_CIMXML_ENGINE_MODULES)}")
-    if name not in _cimxml_engines:
-        _cimxml_engines[name] = import_module(module_name, __package__)
-    return _cimxml_engines[name]
+    return _CIMXML.get(name)
 
 
 class ExportType(StrEnum):

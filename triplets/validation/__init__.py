@@ -63,6 +63,8 @@ _REGISTRY = EngineRegistry(
     },
     default_hint="Install with: pip install triplets[validation].",
     auto=["polars", "pandas", "pyshacl"],
+    requires={"polars": ("polars",), "duckdb": ("duckdb",),
+              "pyshacl": ("pyshacl", "rdflib")},
 )
 # engines whose datatype check already emits the lexical findings itself
 _LEXICAL_BUILTIN = {"polars", "pandas", "duckdb"}
