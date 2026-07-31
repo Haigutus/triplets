@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import inspect
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Union, List, Any, Optional, Sequence
@@ -71,6 +72,7 @@ def parse(
     return_type: str = "pandas",
     categorical_columns: Optional[Sequence[str]] = ("INSTANCE_ID", "KEY"),
     shorten_resources: bool = True,
+    string_type: str = "auto",
     **kwargs: Any,
 ) -> Any:
     """Main entry: parse CIM RDF/XML (or zips) using chosen engine.
@@ -92,10 +94,19 @@ def parse(
         Shorten http(s) resource values to their #fragment (CIM instance data convention).
         Pass False for lossless URIs (e.g. RDFS schema parsing); only the python engines
         support this.
+    string_type : str, default "auto"
+        Arrow layout of the ID and VALUE string columns (arrow/polars output,
+        and pandas via ArrowDtype): "utf8" (32-bit offsets), "large_utf8"
+        (64-bit), or "string_view" (polars' native layout, adopted zero-copy;
+        needs pyarrow >= 16). "auto" picks the layout the return_type adopts
+        zero-copy: string_view for polars, utf8 otherwise. Dictionary-encoded
+        columns are unaffected (consumers use the indices). Ignored by the
+        pandas engine (python_lxml_pandas).
     """
     debug = debug or logger.isEnabledFor(logging.DEBUG)
     engine_name, engine_mod = get_engine(engine)
     is_arrow_engine = engine_name in _ARROW_ENGINES
+    string_type = _resolve_string_type(string_type, return_type)
 
     if not shorten_resources and engine_name == "cython_pugixml_arrow":
         raise ValueError("shorten_resources=False is not supported by the cython_pugixml_arrow engine, "
@@ -104,6 +115,9 @@ def parse(
     parse_one = getattr(engine_mod, "load_rdf_to_dataframe", None)
     if parse_one is None:
         raise RuntimeError(f"Engine {engine_name} missing load_rdf_to_dataframe entrypoint")
+    # Engines that build the requested layout natively take string_type; the
+    # rest are cast once at finalize (one pass over the combined table).
+    native_string_type = "string_type" in inspect.signature(parse_one).parameters
 
     # Normalize input to list for find_all_xml
     if (isinstance(list_of_paths_to_zip_globalzip_xml, (str, bytes, os.PathLike))
@@ -115,12 +129,13 @@ def parse(
     xml_files = find_all_xml(items, debug=debug)
 
     if not xml_files:
-        return _empty(return_type, categorical_columns)
+        return _empty(return_type, categorical_columns, string_type)
 
     def _one(f: Any):
+        one_kwargs = {"string_type": string_type} if native_string_type else {}
         if not shorten_resources:
-            return parse_one(f, debug=debug, shorten_resources=False)
-        return parse_one(f, debug=debug)
+            one_kwargs["shorten_resources"] = False
+        return parse_one(f, debug=debug, **one_kwargs)
 
     if max_workers and len(xml_files) > 1:
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
@@ -130,15 +145,42 @@ def parse(
 
     if not results:
         # Fallback empty after file list processing (should be rare; engines return DataFrames/Batches)
-        return _empty(return_type, categorical_columns)
+        return _empty(return_type, categorical_columns, string_type)
 
     if is_arrow_engine:
-        return _finalize_arrow(results, return_type, categorical_columns, debug)
+        return _finalize_arrow(results, return_type, categorical_columns, debug, string_type)
     else:
         return _finalize_pandas(results, return_type, categorical_columns, debug)
 
 
-def _empty(return_type, categorical_columns=()):
+_STRING_TYPES = ("utf8", "large_utf8", "string_view")
+
+
+def _string_view_available():
+    import pyarrow as pa
+    return hasattr(pa, "string_view")
+
+
+def _resolve_string_type(string_type, return_type):
+    """"auto" = the layout the return_type adopts zero-copy: string_view for
+    polars (its native layout), utf8 otherwise (the stable default contract)."""
+    if string_type == "auto":
+        return "string_view" if return_type == "polars" and _string_view_available() else "utf8"
+    if string_type not in _STRING_TYPES:
+        raise ValueError(f"Unknown string_type: {string_type!r}. "
+                         f"Known: auto, {', '.join(_STRING_TYPES)}")
+    if string_type == "string_view" and not _string_view_available():
+        raise ValueError('string_type="string_view" requires pyarrow >= 16')
+    return string_type
+
+
+def _string_target(string_type):
+    import pyarrow as pa
+    return {"utf8": pa.string(), "large_utf8": pa.large_string(),
+            "string_view": pa.string_view()}[string_type]
+
+
+def _empty(return_type, categorical_columns=(), string_type="utf8"):
     """Empty result with the standard triplet columns, matching the non-empty schema.
 
     Arrow/polars empties carry the same string / dictionary-encoded columns as a
@@ -149,7 +191,8 @@ def _empty(return_type, categorical_columns=()):
         return pd.DataFrame(columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
     import pyarrow as pa
     cats = set(categorical_columns or ())
-    schema = pa.schema([(c, pa.dictionary(pa.int32(), pa.string()) if c in cats else pa.string())
+    target = _string_target(string_type)
+    schema = pa.schema([(c, pa.dictionary(pa.int32(), pa.string()) if c in cats else target)
                         for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
     table = schema.empty_table()
     if return_type == "polars":
@@ -158,7 +201,7 @@ def _empty(return_type, categorical_columns=()):
     return table
 
 
-def _finalize_arrow(batches, return_type, categorical_columns, debug):
+def _finalize_arrow(batches, return_type, categorical_columns, debug, string_type="utf8"):
     """Combine Arrow RecordBatches, dictionary-encode, and convert to return_type."""
     import pyarrow as pa
 
@@ -174,6 +217,16 @@ def _finalize_arrow(batches, return_type, categorical_columns, debug):
                 except Exception as e:
                     if debug:
                         logger.debug("Could not dictionary-encode %s: %s", col_name, e)
+
+    # Cast plain string columns to the requested layout (no-op when the engine
+    # already built it natively; one pass for engines that emit utf8 only)
+    target = _string_target(string_type)
+    string_family = {pa.string(), pa.large_string()} | ({pa.string_view()} if _string_view_available() else set())
+    for col_name in table.column_names:
+        field_type = table.schema.field(col_name).type
+        if field_type in string_family and field_type != target:
+            index = table.schema.get_field_index(col_name)
+            table = table.set_column(index, col_name, table[col_name].cast(target))
 
     if return_type == "pandas":
         import pandas as pd

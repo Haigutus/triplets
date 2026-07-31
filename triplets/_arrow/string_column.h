@@ -7,10 +7,6 @@
 //
 // Consumers: sparql/_qlever_arrow_parser (index ingest) and
 // export/cimxml_cython_pugixml.pyx (XML export).
-//
-// NOTE(string_view): when the parser contract adds arrow::StringViewArray
-// output, add the member + resolve/value branches HERE — both consumers pick
-// it up without changes.
 
 #ifndef TRIPLETS_ARROW_STRING_COLUMN_H
 #define TRIPLETS_ARROW_STRING_COLUMN_H
@@ -23,13 +19,21 @@
 #include <utility>
 
 #include "arrow/array.h"
+#include "arrow/util/config.h"
+
+// arrow::StringViewArray (the "German string" layout, polars/duckdb native)
+// exists since Arrow C++ 16; older toolchains compile without the branch.
+#define TRIPLETS_ARROW_HAS_STRING_VIEW (ARROW_VERSION_MAJOR >= 16)
 
 namespace triplets_arrow {
 
 struct StringColumn {
   std::shared_ptr<arrow::Array> array;           // owns; also the null source
-  const arrow::StringArray* utf8 = nullptr;      // exactly one of utf8/large set
+  const arrow::StringArray* utf8 = nullptr;      // exactly one of utf8/large/view set
   const arrow::LargeStringArray* large = nullptr;
+#if TRIPLETS_ARROW_HAS_STRING_VIEW
+  const arrow::StringViewArray* view = nullptr;
+#endif
   const arrow::DictionaryArray* dict = nullptr;  // set when dictionary-encoded
 
   static StringColumn resolve(std::shared_ptr<arrow::Array> array,
@@ -45,6 +49,10 @@ struct StringColumn {
       column.utf8 = static_cast<const arrow::StringArray*>(values);
     } else if (values->type_id() == arrow::Type::LARGE_STRING) {
       column.large = static_cast<const arrow::LargeStringArray*>(values);
+#if TRIPLETS_ARROW_HAS_STRING_VIEW
+    } else if (values->type_id() == arrow::Type::STRING_VIEW) {
+      column.view = static_cast<const arrow::StringViewArray*>(values);
+#endif
     } else {
       throw std::runtime_error(
           "column '" + name +
@@ -60,6 +68,9 @@ struct StringColumn {
   std::string_view value(int64_t row) const {
     int64_t index = dict ? dict->GetValueIndex(row) : row;
     if (utf8) return std::string_view{utf8->GetView(index)};
+#if TRIPLETS_ARROW_HAS_STRING_VIEW
+    if (view) return std::string_view{view->GetView(index)};
+#endif
     return std::string_view{large->GetView(index)};
   }
 
