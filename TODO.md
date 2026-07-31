@@ -120,8 +120,14 @@ qlever (auto when built, performance).
   checked out in the main worktree — retag/delete from there).
 - [x] `performance` pytest marker deselected by default (`addopts = '-m "not
   performance"'`; run them with `pytest -m performance`). Plain suite ≈ 30 s.
-- [ ] Pre-existing tools follow-ups (unrelated to SHACL): duckdb `multivalue` no-op,
-  polars eval in `tableview_to_triplets`, lossy `INSTANCE_ID` round-trip.
+- [ ] Pre-existing tools follow-ups (unrelated to SHACL): polars eval in
+  `tableview_to_triplets`, lossy `INSTANCE_ID` round-trip. (duckdb `multivalue`
+  implemented 2026-08-01 — encoding matches polars, parity-tested; duckdb
+  `string_to_number=True` still raises, TRY_CAST implementation open.)
+- [ ] Chunked duckdb export (deferred design): `con.execute("SELECT ... ORDER BY
+  INSTANCE_ID, ID").fetch_record_batch(1_000_000)` per-batch into the nquads
+  writer — one carry-over object group between batches; take up when a real
+  larger-than-RAM export need lands.
 
 ## ENTSO-E SHACL findings (application-profiles-library)
 

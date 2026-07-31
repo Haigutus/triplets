@@ -38,9 +38,18 @@ def make_context(df: pandas.DataFrame) -> dict:
     subset = df[(df["KEY"] == "Type") & (df["VALUE"] == type_name)][["ID", "KEY", "VALUE"]]
     update_data = pandas.DataFrame({"ID": [reference, "NEWID"], "KEY": [key, "Type"],
                                     "VALUE": ["UPDATED", "NewClass"]})
+    # Synthetic multi-valued (ID, KEY) rows — Svedala has no genuine multivalues,
+    # and the multivalue encoding must be exercised across all three engines.
+    multi_data = pandas.DataFrame({
+        "ID": ["m1"] * 3 + ["m2"] * 2,
+        "KEY": ["Type", "IdentifiedObject.name", "IdentifiedObject.name", "Type",
+                "IdentifiedObject.name"],
+        "VALUE": ["MultiThing", "first", "second", "MultiThing", "solo"],
+        "INSTANCE_ID": ["mi"] * 5,
+    })
     return {"type": type_name, "key": key, "name": name, "id": reference, "reference": reference,
             "instances": instances, "subset": subset, "update_data": update_data,
-            "new_data": df.iloc[100:]}
+            "new_data": df.iloc[100:], "multi_data": multi_data, "multi_type": "MultiThing"}
 
 
 # ── engine helpers ────────────────────────────────────────────────────────────
@@ -74,7 +83,7 @@ def _duckdb_wide_table(data, ctx):
 
 
 def _tv_kwargs(engine):
-    return {} if engine == "duckdb" else {"string_to_number": False}
+    return {"string_to_number": False}
 
 
 def _content_hash_spec(engine, data, ctx):
@@ -153,10 +162,29 @@ def _name_pattern(ctx):
     return re.escape(ctx["name"][1:-1] or ctx["name"])
 
 
+def _multivalue_tableview(e, d, c):
+    """Multi-valued keys render as ['a', 'b'] text (single values bare) — same
+    encoding across engines (pandas list cells stringify to the same text)."""
+    data = build_engine(e, c["multi_data"])
+    return data.type_tableview(c["multi_type"], string_to_number=False, multivalue=True)
+
+
+def _multivalue_roundtrip(e, d, c):
+    """tableview(multivalue=True) → tableview_to_triplets(multivalue=True)."""
+    data = build_engine(e, c["multi_data"])
+    tv = data.type_tableview(c["multi_type"], string_to_number=False, multivalue=True)
+    if e == "duckdb":
+        data.execute(f'CREATE OR REPLACE TABLE _mtv AS SELECT * FROM "{c["multi_type"]}"')
+        return data.tableview_to_triplets(table_name="_mtv", multivalue=True)
+    return tv.tableview_to_triplets(multivalue=True)
+
+
 EXTRA_SPECS = {
     "filter_triplets[regex]": lambda e, d, c: d.filter_triplets(KEY=c["key"], VALUE=_name_pattern(c), regex=True),
     "filter_triplets[regex-list]": lambda e, d, c: d.filter_triplets(VALUE=[_name_pattern(c), "^no-such-value$"], regex=True),
     "filter_triplets_by_value[regex]": lambda e, d, c: d.filter_triplets_by_value(_name_pattern(c), regex=True),
+    "type_tableview[multivalue]": _multivalue_tableview,
+    "tableview_to_triplets[multivalue]": _multivalue_roundtrip,
 }
 SPECS = {**CALL_SPECS, **EXTRA_SPECS}
 

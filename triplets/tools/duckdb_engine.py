@@ -175,12 +175,22 @@ def _create_view(self, view_name, query, schema=None):
     return self.sql(f"SELECT * FROM {ref}")
 
 
-def _pivot_view(self, view_name, id_predicate, table_name, ord_expr, schema=None):
+def _check_string_to_number(string_to_number):
+    if string_to_number:
+        raise ValueError("string_to_number=True is not implemented for the duckdb engine "
+                         "(tableview columns are VARCHAR); pass string_to_number=False")
+
+
+def _pivot_view(self, view_name, id_predicate, table_name, ord_expr, schema=None,
+                multivalue=False):
     """Create a named view pivoting the triplets of the IDs selected by
     id_predicate (a subquery or literal list usable inside ``ID IN (...)``).
 
     PIVOT inside a view needs explicit columns, so the distinct KEYs are resolved
     up front: the column set is fixed at creation time, while the values stay lazy.
+    With ``multivalue=True`` a key holding several values renders the literal
+    ``['a', 'b']`` text (single values stay bare) — the same string encoding the
+    pandas/polars engines produce.
     """
     keys = [row[0] for row in self.execute(
         f"SELECT DISTINCT KEY FROM {table_name} WHERE ID IN ({id_predicate})").fetchall()]
@@ -188,13 +198,19 @@ def _pivot_view(self, view_name, id_predicate, table_name, ord_expr, schema=None
         return _create_view(self, view_name,
                             f"SELECT ID FROM {table_name} WHERE ID IN ({id_predicate})", schema)
     in_list = ", ".join(_lit(k) for k in keys)
-    # Multi-valued keys take the load-order-first value (arg_min by ord_expr) so
-    # the single-value pick matches pandas/polars and the view is deterministic.
+    if multivalue:
+        # element order = load order (matches pandas/polars maintain_order)
+        value = ("CASE WHEN count(*) = 1 THEN any_value(VALUE) "
+                 "ELSE '[''' || string_agg(VALUE, ''', ''' ORDER BY _view_ord) || ''']' END")
+    else:
+        # Multi-valued keys take the load-order-first value so the single-value
+        # pick matches pandas/polars and the view is deterministic.
+        value = "arg_min(VALUE, _view_ord)"
     # ord_expr is computed in a subquery: a window (row_number fallback) can't
     # sit inside the aggregate directly.
     return _create_view(self, view_name, f"""
         WITH s AS (SELECT ID, KEY, VALUE, {ord_expr} AS _view_ord FROM {table_name}),
-             d AS (SELECT ID, KEY, arg_min(VALUE, _view_ord) AS VALUE FROM s
+             d AS (SELECT ID, KEY, {value} AS VALUE FROM s
                    WHERE ID IN ({id_predicate}) GROUP BY ID, KEY)
         PIVOT d ON KEY IN ({in_list}) USING FIRST(VALUE) GROUP BY ID
     """, schema)
@@ -223,14 +239,19 @@ def types_dict(self, contains=None, case_insensitive=True, table=None, schema=No
     return {t: n for t, n in types_dictionary.items() if needle in key(t)}
 
 
-def type_tableview(self, type_name, table=None, schema=None, table_name=None, view_name=None):
+def type_tableview(self, type_name, table=None, schema=None, table_name=None, view_name=None,
+                   string_to_number=False, multivalue=False):
     """Create a named SQL view pivoting all objects of a type; return a relation
     over it. The view defaults to the type name (override with view_name) and is
-    created in the resolved schema, next to the data."""
+    created in the resolved schema, next to the data. multivalue=True renders
+    multi-valued keys as the literal ['a', 'b'] text (pandas/polars encoding);
+    string_to_number is accepted for signature parity but not implemented."""
+    _check_string_to_number(string_to_number)
     sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
     ref = _sql_name(sch, tbl)
     ids = f"SELECT DISTINCT ID FROM {ref} WHERE KEY = 'Type' AND VALUE = {_lit(type_name)}"
-    return _pivot_view(self, view_name or type_name, ids, ref, _ord_expr(self, sch, tbl), sch)
+    return _pivot_view(self, view_name or type_name, ids, ref, _ord_expr(self, sch, tbl), sch,
+                       multivalue=multivalue)
 
 
 def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
@@ -369,25 +390,30 @@ def references_from(self, reference, levels=1, table=None, schema=None, table_na
 
 # ── Query / view ─────────────────────────────────────────────────────────────
 
-def key_tableview(self, key, table=None, schema=None, table_name=None, view_name=None):
+def key_tableview(self, key, table=None, schema=None, table_name=None, view_name=None,
+                  string_to_number=False, multivalue=False):
     """Create a named SQL view pivoting objects carrying a given KEY; return a
     relation over it. The view defaults to the key name (override with view_name)."""
+    _check_string_to_number(string_to_number)
     sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
     ref = _sql_name(sch, tbl)
     ids = f"SELECT DISTINCT ID FROM {ref} WHERE KEY = {_lit(key)}"
-    return _pivot_view(self, view_name or key, ids, ref, _ord_expr(self, sch, tbl), sch)
+    return _pivot_view(self, view_name or key, ids, ref, _ord_expr(self, sch, tbl), sch,
+                       multivalue=multivalue)
 
 
-def id_tableview(self, id, table=None, schema=None, table_name=None, view_name=None):
+def id_tableview(self, id, table=None, schema=None, table_name=None, view_name=None,
+                 string_to_number=False, multivalue=False):
     """Create a named SQL view pivoting the given ID(s) — a single id or an
     iterable — and return a relation over it. The view defaults to the id when a
     single one is given, else 'id_tableview' (override with view_name)."""
+    _check_string_to_number(string_to_number)
     sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
     ids = [id] if isinstance(id, str) else list(id)
     if view_name is None:
         view_name = ids[0] if len(ids) == 1 else "id_tableview"
     return _pivot_view(self, view_name, _in_list(ids), _sql_name(sch, tbl),
-                       _ord_expr(self, sch, tbl), sch)
+                       _ord_expr(self, sch, tbl), sch, multivalue=multivalue)
 
 
 def get_object_data(self, object_UUID, table=None, schema=None, table_name=None):
@@ -410,9 +436,11 @@ def get_namespace_map(self, table=None, schema=None, table_name=None):
     return namespace_map, xml_base
 
 
-def triplets_to_tableviews(self, table=None, schema=None, table_name=None):
+def triplets_to_tableviews(self, table=None, schema=None, table_name=None,
+                           string_to_number=False, multivalue=False):
     """Return {type_name: tableview relation} for every type in the dataset."""
-    return {name: type_tableview(self, name, table=table, schema=schema, table_name=table_name)
+    return {name: type_tableview(self, name, table=table, schema=schema, table_name=table_name,
+                                 string_to_number=string_to_number, multivalue=multivalue)
             for name in types_dict(self, table=table, schema=schema, table_name=table_name)}
 
 
@@ -639,10 +667,24 @@ def tableview_to_triplets(self, table=None, schema=None, table_name=None, multiv
     """
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     instance_col = f", {_lit(instance_id)} AS INSTANCE_ID" if instance_id is not None else ""
+    if not multivalue:
+        return self.sql(f"""
+            SELECT ID, KEY, VALUE{instance_col} FROM (
+                UNPIVOT {table_name} ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE
+            ) WHERE VALUE IS NOT NULL
+        """)
+    # decode the pandas/polars list encoding: "['a', 'b']" cells explode into one
+    # triplet per element (strip whitespace + quotes per element); bare cells pass
+    # through. Same embedded-comma/quote limitation as the polars decoder.
     return self.sql(f"""
-        SELECT ID, KEY, VALUE{instance_col} FROM (
-            UNPIVOT {table_name} ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE
-        ) WHERE VALUE IS NOT NULL
+        SELECT ID, KEY, unnest(vals) AS VALUE{instance_col} FROM (
+            SELECT ID, KEY,
+                   CASE WHEN trim(VALUE) LIKE '[%' AND trim(VALUE) LIKE '%]'
+                        THEN list_transform(string_split(trim(trim(VALUE), ' []'), ','),
+                                            x -> trim(x, ' ''"'))
+                        ELSE [VALUE] END AS vals
+            FROM (UNPIVOT {table_name} ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE)
+            WHERE VALUE IS NOT NULL)
     """)
 
 
