@@ -76,10 +76,12 @@ qlever (auto when built, performance).
   Arrow dictionary columns for repetitive result columns — possible future decode
   optimization. qlever's `IndexRebuilder`/`materializeToIndex` (delta updates without
   re-parse) is the machinery for a future incremental-update story.
-- [ ] `cimxml_cython_pugixml.pyx` could reuse the offset/dictionary/large_utf8-aware
-  Arrow column accessors from `_qlever_arrow_parser.cpp` (it currently copies every
-  cell via `GetString`, holds the GIL for per-row dict lookups, and `combine_chunks()`s
-  multi-chunk tables); lift the accessor into a shared header when touching it next.
+- [x] `cimxml_cython_pugixml.pyx` reuses the offset/dictionary/large_utf8-aware Arrow
+  column accessor, lifted into the shared header `triplets/_arrow/string_column.h`
+  (2026-07-31) — polars input now exports without a pandas hop. Still open from that
+  note: the per-row Python dict lookups hold the GIL (a `dict_code` fast path exists
+  on the accessor but is unused), and a possible string_view branch in the shared
+  header once the parser emits it (see the string_view exploration follow-up).
 
 ## Build / packaging / CI
 

@@ -12,8 +12,48 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   point for materializing pandas/polars/pyarrow/DuckDB inputs (rdflib loader,
   SHACL, SPARQL, cgmes_tools, export, DuckDB export wrappers). Prefer these
   over local if-flavor blocks.
+- **One engine registry everywhere** (`triplets._registry.EngineRegistry`):
+  parser, sparql, validation, nquads, cimxml, csv and tools dispatch now share
+  a single mechanism — eager `find_spec` availability probing at import, lazy
+  module import on first use. The hand-rolled cimxml engine map and the
+  ad-hoc nquads/csv dispatch in `triplets.export` are folded in; all public
+  names and behavior unchanged.
+- **CIM XML export consumes polars input directly** (cython engine): the
+  compiled extension reads Arrow `utf8` / `large_utf8` / dictionary string
+  columns through the shared accessor `triplets/_arrow/string_column.h`
+  (lifted from the qlever Arrow ingest), so polars frames export without a
+  pandas hop; per-instance splitting runs in the input's own flavor. Output is
+  byte-identical across input flavors. The `python_lxml` engine remains
+  pandas-only (auto-picked for `datatypes=True`).
+
+### Fixed
+- **DuckDB `regex=True` semantics**: `filter_triplets` /
+  `filter_triplets_by_value` used SQL `SIMILAR TO` (full-match); they now use
+  `regexp_matches()` — search semantics anywhere in the value, matching the
+  pandas/polars `str.contains` engines. Covered by new regex parity tests.
+- **DuckDB type-name quoting**: `filter_triplets_by_type` interpolated the
+  type name unescaped into SQL; it now goes through the shared literal quoting
+  (a name containing `'` filters correctly instead of breaking the query).
+- **Empty-parse schema**: `parse([], return_type="arrow"/"polars")` now
+  returns the same string / dictionary-encoded column schema as a non-empty
+  parse, so empty results concatenate cleanly with real ones.
+- **Tools dispatcher engine mismatches**: `triplets.tools.<fn>(df,
+  engine="duckdb")` and other input/engine mismatches now raise a clear
+  `TypeError` at the boundary (previously they silently ran the pandas engine
+  and failed deep inside); unknown engine names raise `ValueError`.
 
 ### Added
+- **`triplets.engines()` / `triplets.set_engine(...)`**: inspect what
+  `engine="auto"` resolves to per subsystem (selected engine, availability,
+  aliases) and override it globally (`set_engine(parser="python_lxml_arrow")`;
+  `"auto"`/`None` restores). Precedence: per-call `engine=` > `set_engine` >
+  auto. Input-bound subsystems (tools, csv) follow the input flavor and cannot
+  be overridden.
+- **DuckDB connections in `triplets.tools` module functions**:
+  `triplets.tools.type_tableview(con, ...)` and friends now route to the
+  duckdb engine (previously only bound methods `con.type_tableview(...)`
+  worked; the module dispatcher fell through to pandas and raised
+  `AttributeError`).
 - **DuckDB per-connection table/schema** (`duckdb.connect(table=..., schema=...)`,
   `con.set_triplets_table(...)`, `con.read_rdf(..., table=..., schema=...)`):
   each connection stores the default triplets relation; tools/export/SHACL use

@@ -28,6 +28,13 @@ Two engines with automatic fallback, mirroring the parser engine setup:
 
 Fallback order: `cython_pugixml` -> `python_lxml`
 
+Input flavor: the cython engine consumes polars input directly — per-instance
+frames stay polars and reach the extension as Arrow `large_string` /
+dictionary columns through the shared accessor (`triplets/_arrow/
+string_column.h`), no pandas hop. The python_lxml engine is pandas-only, so
+polars input converts first; `datatypes=True` implies python_lxml under
+`engine="auto"`.
+
 Both engines expose the same interface:
 `generate_xml(instance_data, rdf_map, namespace_map, class_KEY, export_undefined, comment, debug)`
 returning `{"filename": str, "file": bytes}` for one instance. They produce
@@ -64,7 +71,7 @@ data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
     |       |
     |       |  python_lxml                     cython_pugixml
     |       |  -----------                     --------------
-    |       |  lxml ElementMaker               Arrow string arrays (32-bit offsets)
+    |       |  lxml ElementMaker               Arrow string arrays (utf8/large_utf8/dict)
     |       |  per-row Python loop             C++ loop over Arrow buffers
     |       |  etree.tostring()                pugixml DOM -> serialize
     |       |        |                                |

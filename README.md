@@ -94,6 +94,20 @@ It requires pyarrow at runtime, so install with `triplets[arrow]` to enable it.
 
 The cython engine is pre-built in published wheels — no compilation needed.
 
+Engine selection is automatic across the library (parser, exports, SPARQL,
+validation): installing an extra makes everything that can use it faster, with
+no code changes. Inspect and steer it globally:
+
+```python
+triplets.engines()                        # what "auto" resolved to, per subsystem
+triplets.set_engine(parser="python_lxml_pandas", sparql="rdflib")
+triplets.set_engine(parser="auto")        # restore auto-selection
+```
+
+Per-call `engine=` arguments always win over `set_engine`. Operations on your
+DataFrame itself (filters, tableviews, references) always run in the engine of
+the object you call them on — pandas frames stay pandas, polars stays polars.
+
 
 ## Polars
 

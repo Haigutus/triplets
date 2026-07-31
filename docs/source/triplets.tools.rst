@@ -17,3 +17,9 @@ triplets.tools.polars\_engine
 
 .. automodule:: triplets.tools.polars_engine
    :members:
+
+triplets.tools.duckdb\_engine
+-----------------------------
+
+.. automodule:: triplets.tools.duckdb_engine
+   :members:
