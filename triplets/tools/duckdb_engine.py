@@ -8,7 +8,8 @@ triplets_to_tableviews returns a dict.
 
 The connection holds the dataset in one table (default ``triplets``; per-
 connection ``table``/``schema`` from ``duckdb.connect`` / ``set_triplets_table``).
-Mutating helpers rewrite that table in place and return the connection for chaining.
+Mutating helpers run in-place DML (UPDATE/DELETE/INSERT — no full-table
+rewrites, extra user columns survive) and return the connection for chaining.
 
 Per-connection defaults live in a WeakKeyDictionary (DuckDBPyConnection has no
 ``__dict__``) and, once explicitly configured, in a tiny ``main."_triplets_config"``
@@ -455,31 +456,23 @@ def filter_triplets_by_triplets(self, filter_triplet, table=None, schema=None, t
     """)
 
 
-# ── Mutate (rewrite the triplets table in place, return self for chaining) ─────
+# ── Mutate (in-place DML on the triplets table, return self for chaining) ──────
+# Plain UPDATE/DELETE/INSERT rather than full-table CREATE OR REPLACE: works on
+# arbitrarily large tables, preserves extra user columns (INSERTed rows get NULL
+# extras), and keeps rowids/load order stable across mutations.
 
 def set_value_at_key(self, key, value, table=None, schema=None, table_name=None):
     """Set VALUE for every row with the given KEY. Mutates the table; returns self."""
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    self.execute(f"""
-        CREATE OR REPLACE TABLE {table_name} AS
-        SELECT ID, KEY,
-               CASE WHEN KEY = {_lit(key)} THEN {_lit(value)} ELSE VALUE END AS VALUE,
-               INSTANCE_ID
-        FROM {table_name}
-    """)
+    self.execute(f"UPDATE {table_name} SET VALUE = {_lit(value)} WHERE KEY = {_lit(key)}")
     return self
 
 
 def set_value_at_key_and_id(self, key, value, id, table=None, schema=None, table_name=None):
     """Set VALUE for the row with the given KEY and ID. Mutates the table; returns self."""
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    self.execute(f"""
-        CREATE OR REPLACE TABLE {table_name} AS
-        SELECT ID, KEY,
-               CASE WHEN KEY = {_lit(key)} AND ID = {_lit(id)} THEN {_lit(value)} ELSE VALUE END AS VALUE,
-               INSTANCE_ID
-        FROM {table_name}
-    """)
+    self.execute(f"UPDATE {table_name} SET VALUE = {_lit(value)} "
+                 f"WHERE KEY = {_lit(key)} AND ID = {_lit(id)}")
     return self
 
 
@@ -488,20 +481,16 @@ def _apply_update(self, has_instance, update, add, table_name):
     into table_name. Merge keys are ID+KEY, plus INSTANCE_ID when has_instance.
 
     Like pandas, update overwrites only VALUE on matched rows (preserving their
-    original INSTANCE_ID); add appends rows with no existing match.
+    original INSTANCE_ID); add appends rows with no existing match. UPDATE runs
+    before INSERT so updated rows are never re-inserted.
     """
-    if not update and not add:
-        return self
     on = "u.ID = t.ID AND u.KEY = t.KEY" + (" AND u.INSTANCE_ID = t.INSTANCE_ID" if has_instance else "")
     if update:
-        base = (f"SELECT t.ID, t.KEY, COALESCE(u.VALUE, t.VALUE) AS VALUE, t.INSTANCE_ID "
-                f"FROM {table_name} t LEFT JOIN _update_data u ON {on}")
-    else:
-        base = f"SELECT * FROM {table_name}"
-    addition = ("" if not add else
-                f" UNION ALL BY NAME SELECT u.ID, u.KEY, u.VALUE, u.INSTANCE_ID FROM _update_data u "
-                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} t WHERE {on})")
-    self.execute(f"CREATE OR REPLACE TABLE {table_name} AS {base}{addition}")
+        self.execute(f"UPDATE {table_name} t SET VALUE = u.VALUE FROM _update_data u WHERE {on}")
+    if add:
+        self.execute(f"INSERT INTO {table_name} BY NAME "
+                     f"SELECT u.ID, u.KEY, u.VALUE, u.INSTANCE_ID FROM _update_data u "
+                     f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} t WHERE {on})")
     return self
 
 
@@ -544,11 +533,8 @@ def remove_triplets_from_triplets(self, what_triplet, columns=["ID", "KEY", "VAL
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     _materialize(self, what_triplet, "_what_triplet")
     on = " AND ".join(f"t.{c} = w.{c}" for c in columns)
-    self.execute(f"""
-        CREATE OR REPLACE TABLE {table_name} AS
-        SELECT t.* FROM {table_name} t
-        WHERE NOT EXISTS (SELECT 1 FROM _what_triplet w WHERE {on})
-    """)
+    self.execute(f"DELETE FROM {table_name} t "
+                 f"WHERE EXISTS (SELECT 1 FROM _what_triplet w WHERE {on})")
     return self
 
 

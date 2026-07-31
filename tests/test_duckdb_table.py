@@ -138,3 +138,26 @@ def test_bare_connect_writes_no_config():
     count = con.execute("SELECT COUNT(*) FROM duckdb_tables() "
                         "WHERE table_name = '_triplets_config'").fetchone()[0]
     assert count == 0
+
+
+# ── mutators are in-place DML: extra user columns survive ────────────────────
+
+def test_mutators_preserve_extra_columns():
+    con = duckdb.connect()
+    con.register("_src", _frame().assign(note=["keep-a", "keep-b"]))
+    con.execute("CREATE TABLE triplets AS SELECT * FROM _src")
+    update = pandas.DataFrame({"ID": ["a", "new"], "KEY": ["IdentifiedObject.name", "Type"],
+                               "VALUE": ["renamed", "Switch"]})
+
+    con.set_value_at_key("IdentifiedObject.name", "x")
+    con.set_value_at_key_and_id("Type", "Disconnector", "a")
+    con.update_triplets_from_triplets(update)
+    con.remove_triplets_from_triplets(pandas.DataFrame(
+        {"ID": ["a"], "KEY": ["Type"], "VALUE": ["Disconnector"]}))
+
+    rows = con.execute("SELECT ID, note FROM triplets ORDER BY ID").fetchall()
+    assert ("a", "keep-b") in rows                  # extra column survived every mutator
+    assert ("new", None) in rows                    # inserted rows get NULL extras
+    assert con.execute("SELECT COUNT(*) FROM triplets").fetchone()[0] == 2
+    values = con.execute("SELECT VALUE FROM triplets WHERE ID = 'a'").fetchall()
+    assert values == [("renamed",)]                 # update applied on the surviving row
