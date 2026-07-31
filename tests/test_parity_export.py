@@ -80,8 +80,14 @@ FORMATS = {
         "variants": {
             "python_lxml": lambda d: export.export_to_cimxml(d, rdf_map=RDF_MAP, engine="python_lxml", export_to_memory=True),
             "cython_pugixml": lambda d: export.export_to_cimxml(d, rdf_map=RDF_MAP, engine="cython_pugixml", export_to_memory=True),
+            # polars input: cython consumes it directly (arrow large_utf8 via the
+            # shared accessor), python_lxml converts to pandas — both must match
+            "cython_pugixml_polars_input": lambda d: export.export_to_cimxml(_polars(d), rdf_map=RDF_MAP, engine="cython_pugixml", export_to_memory=True),
+            "python_lxml_polars_input": lambda d: export.export_to_cimxml(_polars(d), rdf_map=RDF_MAP, engine="python_lxml", export_to_memory=True),
         },
-        "needs": {"cython_pugixml": ["pyarrow", "triplets.export.cimxml_cython_pugixml"]},
+        "needs": {"cython_pugixml": ["pyarrow", "triplets.export.cimxml_cython_pugixml"],
+                  "cython_pugixml_polars_input": ["polars", "pyarrow", "triplets.export.cimxml_cython_pugixml"],
+                  "python_lxml_polars_input": ["polars"]},
         "canon": _canon_cimxml,
     },
     "nquads": {
@@ -182,3 +188,35 @@ def test_benchmark(benchmark, fmt, variant):
         pytest.skip(f"{fmt}/{variant} errors: {type(exc).__name__}")
     benchmark.extra_info.update({"format": fmt, "variant": variant})
     benchmark(lambda: producer(data.copy()))
+
+
+# ── cimxml: polars-native path specifics ──────────────────────────────────────
+
+def test_cimxml_cython_byte_identical_across_input_flavors(svedala_pandas):
+    """Same data as pandas vs polars input → byte-identical cython XML output."""
+    _require(FORMATS["cimxml"], "cython_pugixml", "cython_pugixml_polars_input")
+    kwargs = dict(rdf_map=RDF_MAP, engine="cython_pugixml",
+                  export_type="xml_per_instance", export_to_memory=True)
+    from_pandas = export.export_to_cimxml(svedala_pandas, **kwargs)
+    from_polars = export.export_to_cimxml(_polars(svedala_pandas), **kwargs)
+    assert len(from_pandas) == len(from_polars)
+    by_name = {f.name: f.getvalue() for f in from_pandas}
+    for f in from_polars:
+        assert f.getvalue() == by_name[f.name]
+
+
+def test_cimxml_datatypes_polars_routes_to_lxml(svedala_pandas):
+    """datatypes=True on polars input auto-picks python_lxml and still works."""
+    pytest.importorskip("polars")
+    out = export.export_to_cimxml(_polars(svedala_pandas), rdf_map=RDF_MAP, datatypes=True,
+                                  export_type="xml_per_instance", export_to_memory=True)
+    assert out and b"rdf:datatype" in out[0].getvalue()
+
+
+def test_cimxml_polars_input_parallel(svedala_pandas):
+    """polars per-instance frames survive the ProcessPoolExecutor round-trip."""
+    _require(FORMATS["cimxml"], "cython_pugixml", "cython_pugixml_polars_input")
+    out = export.export_to_cimxml(_polars(svedala_pandas), rdf_map=RDF_MAP,
+                                  engine="cython_pugixml", max_workers=2,
+                                  export_type="xml_per_instance", export_to_memory=True)
+    assert len(out) == svedala_pandas["INSTANCE_ID"].nunique()

@@ -59,16 +59,6 @@ TripleComponent plainLiteral(std::string_view value) {
 }  // namespace
 
 // ____________________________________________________________________________
-std::string_view ArrowTripleParser::Column::value(int64_t row) const {
-  if (dict) {
-    int64_t index = dict->GetValueIndex(row);
-    if (utf8) return utf8->GetView(index);
-    return large->GetView(index);
-  }
-  if (utf8) return utf8->GetView(row);
-  return large->GetView(row);
-}
-
 namespace {
 
 // Task-local term construction: the per-KEY / per-INSTANCE_ID caches and the
@@ -208,24 +198,7 @@ ArrowTripleParser::Columns ArrowTripleParser::resolveColumns(
       throw std::runtime_error(
           absl::StrCat("arrow ingest: required column '", name, "' missing"));
     }
-    Column column;
-    column.array = array;
-    const arrow::Array* values = array.get();
-    if (array->type_id() == arrow::Type::DICTIONARY) {
-      column.dict = static_cast<const arrow::DictionaryArray*>(array.get());
-      values = column.dict->dictionary().get();
-    }
-    if (values->type_id() == arrow::Type::STRING) {
-      column.utf8 = static_cast<const arrow::StringArray*>(values);
-    } else if (values->type_id() == arrow::Type::LARGE_STRING) {
-      column.large = static_cast<const arrow::LargeStringArray*>(values);
-    } else {
-      throw std::runtime_error(
-          absl::StrCat("arrow ingest: column '", name,
-                       "' must be a (dictionary-encoded) string column, got ",
-                       array->type()->ToString()));
-    }
-    return column;
+    return Column::resolve(std::move(array), name);
   };
   return Columns{resolve("ID"), resolve("KEY"), resolve("VALUE"),
                  resolve("INSTANCE_ID"), firstRow};
@@ -308,8 +281,8 @@ std::vector<TurtleTriple> ArrowTripleParser::convertRange(
     // Null VALUE rows are dropped — same as the N-Quads exporters. Null in
     // any other column has no defined export today (the exporters emit
     // broken lines); fail loud instead of silently diverging.
-    if (c.value.isNull(row)) continue;
-    if (c.id.isNull(row) || c.key.isNull(row) || c.instance.isNull(row)) {
+    if (c.value.is_null(row)) continue;
+    if (c.id.is_null(row) || c.key.is_null(row) || c.instance.is_null(row)) {
       throw std::runtime_error(absl::StrCat(
           "arrow ingest: null ID/KEY/INSTANCE_ID at row ", c.firstRow + row));
     }
@@ -318,7 +291,7 @@ std::vector<TurtleTriple> ArrowTripleParser::convertRange(
     triple.subject_ = converter.subject(c.id.value(row));
 
     const RangeConverter::KeyInfo* info;
-    if (int64_t code = c.key.code(row); code >= 0) {
+    if (int64_t code = c.key.dict_code(row); code >= 0) {
       info = keyByCode[code];
       if (info == nullptr)
         info = keyByCode[code] = &converter.keyInfo(c.key.value(row));
@@ -328,7 +301,7 @@ std::vector<TurtleTriple> ArrowTripleParser::convertRange(
     triple.predicate_ = info->predicate;
     triple.object_ = converter.makeObject(*info, c.value.value(row));
 
-    if (int64_t code = c.instance.code(row); code >= 0) {
+    if (int64_t code = c.instance.dict_code(row); code >= 0) {
       const TripleComponent* graph = graphByCode[code];
       if (graph == nullptr)
         graph = graphByCode[code] =

@@ -26,6 +26,7 @@
 #include "arrow/record_batch.h"
 #include "index/ConstantsIndexBuilding.h"
 #include "parser/RdfParser.h"
+#include "string_column.h"  // triplets/_arrow — shared string-column accessor
 #include "util/TaskQueue.h"
 #include "util/ThreadSafeQueue.h"
 #include "util/jthread.h"
@@ -49,20 +50,10 @@ class ArrowTripleParser : public RdfParserBase {
   size_t getParsePosition() const override { return rowsConverted_.load(); }
 
  private:
-  // One column of a batch: utf8 / large_utf8, optionally dictionary-encoded
-  // (any index width), offset- and null-aware. Read-only after construction,
-  // so safe to share across worker tasks.
-  struct Column {
-    std::shared_ptr<arrow::Array> array;         // owns; also the null source
-    const arrow::StringArray* utf8 = nullptr;    // exactly one of these two
-    const arrow::LargeStringArray* large = nullptr;
-    const arrow::DictionaryArray* dict = nullptr;  // set when dictionary-encoded
-
-    bool isNull(int64_t row) const { return array->IsNull(row); }
-    std::string_view value(int64_t row) const;
-    // Dictionary code for this row, or -1 for non-dictionary columns.
-    int64_t code(int64_t row) const { return dict ? dict->GetValueIndex(row) : -1; }
-  };
+  // One column of a batch — the shared accessor from triplets/_arrow
+  // (utf8 / large_utf8, optionally dictionary-encoded, null-aware; read-only
+  // after resolve, so safe to share across worker tasks).
+  using Column = triplets_arrow::StringColumn;
 
   // The four resolved columns of one RecordBatch plus the batch's global
   // starting row (for deterministic row numbers in error messages).

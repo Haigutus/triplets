@@ -19,6 +19,7 @@ import os
 import logging
 import zipfile
 import datetime
+import multiprocessing
 
 from io import BytesIO
 from enum import StrEnum
@@ -154,6 +155,13 @@ def get_cimxml_engine(name="auto"):
     return _CIMXML.get(name)
 
 
+def _split_instances(data):
+    """Per-INSTANCE_ID frames in the input's own flavor (frame ops bind to input flavor)."""
+    if _is_polars(data):
+        return data.partition_by("INSTANCE_ID", maintain_order=True)
+    return (frame for _, frame in data.groupby("INSTANCE_ID", observed=True))
+
+
 class ExportType(StrEnum):
     XML_PER_INSTANCE = "xml_per_instance"
     XML_PER_INSTANCE_ZIP_PER_ALL = "xml_per_instance_zip_per_all"
@@ -250,34 +258,39 @@ def export_to_cimxml(data,
         init_time = start_time
 
     _check_columns(data)
-    if _is_polars(data):
-        # the per-instance pipeline is pandas (groupby + engine contract)
-        logger.debug("format=cimxml: polars input → pandas")
-        data = data.to_pandas(use_pyarrow_extension_array=True)
     if datatypes and engine == "auto":
         logger.debug("cimxml engine set: python_lxml (datatypes=True not yet in cython engine)")
         engine = "python_lxml"
     engine_name, engine_module = get_cimxml_engine(engine)
     generate = engine_module.generate_xml
 
-    instances = data.groupby("INSTANCE_ID", observed=True)
+    if engine_name == "python_lxml" and _is_polars(data):
+        # the lxml engine's per-instance pipeline is pandas; the cython engine
+        # consumes polars frames directly (arrow large_utf8 via the shared accessor)
+        logger.debug("format=cimxml: polars input → pandas (python_lxml engine)")
+        data = data.to_pandas(use_pyarrow_extension_array=True)
+
+    instances = _split_instances(data)
 
     if debug:
         _, start_time = _print_duration("All file instance ID-s identified", start_time)
 
     # Generate one XML document per instance
     if max_workers:
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        # polars is incompatible with fork (its rayon thread-pool locks are held
+        # in the forked child) — spawn fresh workers when the frames are polars
+        mp_context = multiprocessing.get_context("spawn") if _is_polars(data) else None
+        with ProcessPoolExecutor(max_workers=max_workers, mp_context=mp_context) as executor:
             futures = [executor.submit(generate, instance, rdf_map, namespace_map,
                                        class_KEY=class_KEY, export_undefined=export_undefined,
                                        comment=comment, debug=debug, datatypes=datatypes)
-                       for _, instance in instances]
+                       for instance in instances]
             xml_documents = [future.result() for future in futures]
     else:
         xml_documents = [generate(instance, rdf_map, namespace_map,
                                   class_KEY=class_KEY, export_undefined=export_undefined,
                                   comment=comment, debug=debug, datatypes=datatypes)
-                         for _, instance in instances]
+                         for instance in instances]
 
     # generate returns None for instances skipped due to missing mapping
     xml_documents = [document for document in xml_documents if document is not None]

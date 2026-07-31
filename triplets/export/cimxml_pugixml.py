@@ -10,28 +10,69 @@ compiled extension (Arrow string arrays → pugixml DOM → bytes) instead of lx
 """
 import logging
 
+import pandas
 import pyarrow
 
 from .cimxml_cython_pugixml import generate_xml_from_arrow
 from .cimxml_utils import load_rdf_map, resolve_instance_config
+from .._engine_detect import to_arrow
 
 logger = logging.getLogger(__name__)
 
 
-def _string_array(series):
-    """Pandas column → flat Arrow string array (32-bit offsets, as the extension expects).
+def _string_like(arrow_type):
+    """utf8 / large_utf8, or a dictionary of either — what the extension reads."""
+    if pyarrow.types.is_dictionary(arrow_type):
+        arrow_type = arrow_type.value_type
+    return pyarrow.types.is_string(arrow_type) or pyarrow.types.is_large_string(arrow_type)
 
-    series is always pandas here: the export_to_cimxml orchestrator groups with
-    pandas groupby before calling the engine. astype("string[pyarrow]") accepts
-    any input dtype — numbers become text (as the lxml engine formats them),
-    nulls stay null — and is near zero-copy for already-arrow-backed columns.
+
+def _flat(column):
+    """ChunkedArray/Array → one contiguous Array (zero-copy for a single chunk).
+
+    The compiled extension reads the buffers of ONE contiguous array; arrow-backed
+    pandas columns arrive as a ChunkedArray (one chunk per parsed file after concat).
     """
-    array = pyarrow.array(series.astype("string[pyarrow]"), type=pyarrow.string())
-    # Arrow-backed pandas columns are stored as a ChunkedArray (one chunk per
-    # parsed file after concat); pyarrow.array() passes that through unchanged.
-    # The compiled extension pointer-casts the buffers of ONE contiguous array,
-    # so flatten: zero-copy for a single chunk, one concatenation otherwise.
-    return array.combine_chunks() if isinstance(array, pyarrow.ChunkedArray) else array
+    if isinstance(column, pyarrow.ChunkedArray):
+        return column.chunk(0) if column.num_chunks == 1 else column.combine_chunks()
+    return column
+
+
+def _pandas_string_column(series):
+    """Pandas column → contiguous Arrow string-ish array.
+
+    Already-string columns (arrow-backed string / dictionary-of-string, pandas
+    string dtype, categorical of strings) pass through zero-copy and undecoded.
+    Everything else — numeric, object, mixed — takes the legacy
+    astype("string[pyarrow]") formatting path, so numbers render exactly as the
+    lxml engine formats them and nulls stay null.
+    """
+    dtype = series.dtype
+    passthrough = (
+        (isinstance(dtype, pandas.ArrowDtype) and _string_like(dtype.pyarrow_dtype))
+        or isinstance(dtype, pandas.StringDtype)
+        or (isinstance(dtype, pandas.CategoricalDtype)
+            and dtype.categories.inferred_type == "string")
+    )
+    if not passthrough:
+        series = series.astype("string[pyarrow]")
+    return _flat(pyarrow.Array.from_pandas(series))
+
+
+def _string_batch(instance_data):
+    """ID/KEY/VALUE of any frame flavor as one contiguous string RecordBatch.
+
+    pandas goes per-column (see _pandas_string_column); polars exports
+    large_utf8/dictionary zero-copy, with an arrow cast for the rare
+    non-string column.
+    """
+    if isinstance(instance_data, pandas.DataFrame):
+        arrays = [_pandas_string_column(instance_data[name]) for name in ("ID", "KEY", "VALUE")]
+    else:
+        table = to_arrow(instance_data, columns=["ID", "KEY", "VALUE"])
+        arrays = [_flat(table.column(name)) for name in ("ID", "KEY", "VALUE")]
+        arrays = [a if _string_like(a.type) else a.cast(pyarrow.string()) for a in arrays]
+    return pyarrow.RecordBatch.from_arrays(arrays, names=["ID", "KEY", "VALUE"])
 
 
 def generate_xml(instance_data,
@@ -65,10 +106,7 @@ def generate_xml(instance_data,
             logger.warning("File not created for {}".format(file_name))
             return
 
-    batch = pyarrow.RecordBatch.from_arrays(
-        [_string_array(instance_data[column]) for column in ("ID", "KEY", "VALUE")],
-        names=["ID", "KEY", "VALUE"],
-    )
+    batch = _string_batch(instance_data)
 
     xml = generate_xml_from_arrow(batch, rdf_map, namespace_map, instance_rdf_map, file_name,
                                   class_KEY=class_KEY, export_undefined=export_undefined, comment=comment)

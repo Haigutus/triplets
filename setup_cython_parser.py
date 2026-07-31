@@ -40,7 +40,8 @@ else:
     runtime_library_dirs = pa_lib_dirs
     libraries = ["arrow_python"]
 
-include_dirs = [PUGIXML_SRC, pa_include] + ([np_include] if np_include else [])
+TRIPLETS_ARROW_INCLUDE = os.path.abspath(os.path.join("triplets", "_arrow"))
+include_dirs = [PUGIXML_SRC, pa_include, TRIPLETS_ARROW_INCLUDE] + ([np_include] if np_include else [])
 
 # Parser extension
 parser_ext = Extension(
@@ -76,6 +77,7 @@ if os.path.exists(cimxml_pyx):
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,
         runtime_library_dirs=runtime_library_dirs,
+        depends=[os.path.join(TRIPLETS_ARROW_INCLUDE, "string_column.h")],
     )
     extensions.append(export_ext)
 

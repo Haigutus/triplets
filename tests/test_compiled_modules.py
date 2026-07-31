@@ -15,3 +15,11 @@ pytestmark = pytest.mark.skipif(not os.environ.get("TRIPLETS_REQUIRE_COMPILED"),
                                     "triplets.export.cimxml_cython_pugixml"])
 def test_compiled_module_imports(module):
     importlib.import_module(module)
+
+
+def test_cimxml_extension_rejects_non_string_column():
+    pyarrow = pytest.importorskip("pyarrow")
+    ext = pytest.importorskip("triplets.export.cimxml_cython_pugixml")
+    bad = pyarrow.record_batch({"ID": ["a"], "KEY": ["Type"], "VALUE": pyarrow.array([1.5])})
+    with pytest.raises(RuntimeError, match="column 'VALUE' must be a .*string column"):
+        ext.generate_xml_from_arrow(bad, {}, {}, {}, "f.xml")

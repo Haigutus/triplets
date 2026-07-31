@@ -44,6 +44,7 @@ if not static_libs:
 
 include_dirs = [
     os.path.join("triplets", "sparql"),                # _qlever_wrapper.h
+    os.path.join("triplets", "_arrow"),               # string_column.h (shared accessor)
     os.path.join(QLEVER_SRC, "src"),
     os.path.join(QLEVER_BUILD, "_deps", "nlohmann-json-src", "include"),
     os.path.join(QLEVER_BUILD, "_deps", "abseil-src"),
