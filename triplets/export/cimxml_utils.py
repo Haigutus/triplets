@@ -7,7 +7,7 @@ import uuid
 import logging
 
 from triplets.tools import get_namespace_map
-from triplets._engine_detect import is_polars
+from triplets._engine_detect import flavor
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ def _profile_identity_index(rdf_map):
 
 def _values_for_key(instance_data, key):
     """VALUEs of rows with the given KEY (pandas or polars frame), nulls dropped."""
-    if is_polars(instance_data):
+    if flavor(instance_data) == "polars":
         import polars
         values = instance_data.filter(polars.col("KEY") == key)["VALUE"].to_list()
     else:

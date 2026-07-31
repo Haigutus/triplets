@@ -21,7 +21,7 @@ from importlib.util import find_spec
 
 import pandas
 
-from .._engine_detect import is_polars, to_return_type
+from .._engine_detect import flavor, to_return_type
 from .._rdflib_loader import load_dataset, scoped_graph
 from ..export.nquads_utils import CIM_NS, RDF_TYPE
 
@@ -39,7 +39,7 @@ def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data
     graph = scoped_graph(dataset, scope)
     result = graph.query(query_string)
     if return_type == "auto":
-        return_type = "polars" if is_polars(data) else "pandas"
+        return_type = "polars" if flavor(data) == "polars" else "pandas"
 
     if result.type == "ASK":
         return bool(result.askAnswer)

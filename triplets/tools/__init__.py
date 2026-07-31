@@ -21,7 +21,7 @@ import inspect
 import functools
 import warnings
 
-from .._engine_detect import flavor, is_polars  # noqa: F401 — is_polars kept as a public re-export
+from .._engine_detect import flavor
 from .._registry import EngineRegistry
 
 logger = logging.getLogger(__name__)

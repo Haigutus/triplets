@@ -22,19 +22,30 @@ constructed at import time and probe availability with `find_spec`
 use. An engine module must raise `ImportError` on import when its backend is
 missing — that is what makes `"auto"` fall through.
 
+Kind names carry a role prefix when the subsystem is format-specific
+(`parser_`/`exporter_`), so "cimxml" is never ambiguous between the parser
+and the exporter:
+
 | Kind | Policy | Auto order | Availability probes (`requires`) |
 |------|--------|-----------|----------------------------------|
-| parser | auto | cython_pugixml_arrow → python_lxml_arrow → python_lxml_pandas | compiled ext, pyarrow |
+| parser_cimxml | auto | cython_pugixml_arrow → python_lxml_arrow → python_lxml_pandas | compiled ext, pyarrow |
 | sparql | auto | qlever → oxigraph → rdflib | `._qlever`+pyarrow, pyoxigraph, rdflib |
 | validation | auto | polars → pandas → pyshacl (duckdb explicit-only) | polars, duckdb, pyshacl+rdflib |
-| nquads | auto | polars → pandas | polars |
-| cimxml | auto | cython_pugixml → python_lxml | compiled ext, pyarrow |
-| csv | **input** | — (engine = input flavor) | polars |
+| exporter_nquads | auto | polars → pandas | polars |
+| exporter_cimxml | auto | cython_pugixml → python_lxml | compiled ext, pyarrow |
+| exporter_csv | **input** | — (engine = input flavor) | polars |
 | tools | **input** | — (engine = input flavor) | polars, duckdb |
 
 `policy="input"` marks the frame-bound subsystems: csv exists as two engines
 because each is fastest for its own input flavor, and tools operates on the
-caller's frame — neither may be steered by a global override.
+caller's frame — neither may be steered by a global override, and their
+`engines()` row reports `engine: None, source: "input"`.
+
+`cgmes_tools` is deliberately NOT a registry: its data functions run natively
+for pandas and polars input, while duckdb/arrow input crosses the pandas
+boundary (`to_pandas(plain=True)` → pandas engine → `match_flavor` back) —
+the engines mutate VALUE in place, which needs a plain materialized frame.
+That is a design decision, not an unfinished migration.
 
 User-facing controls: `triplets.engines()` reports what `"auto"` resolved to
 per subsystem (plus available alternatives); `triplets.set_engine(parser=...,

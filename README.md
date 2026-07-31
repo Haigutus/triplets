@@ -100,8 +100,8 @@ no code changes. Inspect and steer it globally:
 
 ```python
 triplets.engines()                        # what "auto" resolved to, per subsystem
-triplets.set_engine(parser="python_lxml_pandas", sparql="rdflib")
-triplets.set_engine(parser="auto")        # restore auto-selection
+triplets.set_engine(parser_cimxml="python_lxml_pandas", sparql="rdflib")
+triplets.set_engine(parser_cimxml="auto") # restore auto-selection
 ```
 
 Per-call `engine=` arguments always win over `set_engine`. Operations on your

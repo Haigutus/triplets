@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Auto preference: first importable.
 _REGISTRY = EngineRegistry(
-    "parser", __package__,
+    "parser_cimxml", __package__,
     modules={
         "cython_pugixml_arrow": ".cython_pugixml_arrow",  # compiled extension, fastest
         "python_lxml_arrow": ".python_lxml_arrow",        # needs pyarrow

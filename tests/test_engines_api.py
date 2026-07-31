@@ -16,43 +16,46 @@ def _reset_overrides():
 
 def test_engines_report_covers_all_subsystems():
     info = triplets.engines()
-    assert {"parser", "sparql", "validation", "nquads", "cimxml", "csv", "tools"} <= set(info)
+    assert {"parser_cimxml", "sparql", "validation", "exporter_nquads",
+            "exporter_cimxml", "exporter_csv", "tools"} <= set(info)
     for row in info.values():
         assert set(row) == INFO_KEYS
     assert info["tools"]["policy"] == "input"
-    assert info["csv"]["policy"] == "input"
+    assert info["exporter_csv"]["policy"] == "input"
+    # input-policy kinds have no global engine — the input flavor decides per call
+    assert info["tools"]["engine"] is None and info["tools"]["source"] == "input"
 
 
 def test_selected_matches_load_outcome():
     """The find_spec probe and the actual import agree on what "auto" gives."""
-    for kind in ("parser", "cimxml", "nquads"):
+    for kind in ("parser_cimxml", "exporter_cimxml", "exporter_nquads"):
         registry = REGISTRIES[kind]
         assert registry.get("auto")[0] == triplets.engines()[kind]["engine"]
 
 
 def test_set_engine_steers_auto_and_restores():
-    triplets.set_engine(parser="python_lxml_pandas")
-    assert triplets.engines()["parser"]["engine"] == "python_lxml_pandas"
-    assert triplets.engines()["parser"]["source"] == "set_engine"
-    assert REGISTRIES["parser"].get("auto")[0] == "python_lxml_pandas"
+    triplets.set_engine(parser_cimxml="python_lxml_pandas")
+    assert triplets.engines()["parser_cimxml"]["engine"] == "python_lxml_pandas"
+    assert triplets.engines()["parser_cimxml"]["source"] == "set_engine"
+    assert REGISTRIES["parser_cimxml"].get("auto")[0] == "python_lxml_pandas"
 
-    triplets.set_engine(parser="auto")
-    assert triplets.engines()["parser"]["source"] == "auto"
-    assert REGISTRIES["parser"].get("auto")[0] == REGISTRIES["parser"].selected
+    triplets.set_engine(parser_cimxml="auto")
+    assert triplets.engines()["parser_cimxml"]["source"] == "auto"
+    assert REGISTRIES["parser_cimxml"].get("auto")[0] == REGISTRIES["parser_cimxml"].selected
 
 
 def test_per_call_engine_bypasses_override():
-    triplets.set_engine(parser="python_lxml_pandas")
-    name, _ = REGISTRIES["parser"].get("python_lxml_arrow" if
-                                       REGISTRIES["parser"].available("python_lxml_arrow")
+    triplets.set_engine(parser_cimxml="python_lxml_pandas")
+    name, _ = REGISTRIES["parser_cimxml"].get("python_lxml_arrow" if
+                                       REGISTRIES["parser_cimxml"].available("python_lxml_arrow")
                                        else "python_lxml_pandas")
     assert name != "auto"   # explicit names resolve directly, never through the override
 
 
 def test_set_engine_resolves_aliases():
     # the "pandas" alias targets the always-available lxml engine
-    triplets.set_engine(cimxml="pandas")
-    assert triplets.engines()["cimxml"]["engine"] == "python_lxml"
+    triplets.set_engine(exporter_cimxml="pandas")
+    assert triplets.engines()["exporter_cimxml"]["engine"] == "python_lxml"
 
 
 def test_get_cimxml_engine_compat_aliases():
@@ -60,14 +63,14 @@ def test_get_cimxml_engine_compat_aliases():
     assert get_cimxml_engine("pandas")[0] == "python_lxml"
     assert get_cimxml_engine("lxml")[0] == "python_lxml"
     # compiled-engine aliases resolve without requiring a loadable build
-    assert REGISTRIES["cimxml"].aliases["pugixml"] == "cython_pugixml"
-    assert REGISTRIES["cimxml"].aliases["performance"] == "cython_pugixml"
+    assert REGISTRIES["exporter_cimxml"].aliases["pugixml"] == "cython_pugixml"
+    assert REGISTRIES["exporter_cimxml"].aliases["performance"] == "cython_pugixml"
 
 
 def test_broken_build_falls_through_and_corrects_report():
     """A probe-available engine whose import fails is skipped by "auto" and
     dropped from the availability report afterwards."""
-    registry = REGISTRIES["cimxml"]
+    registry = REGISTRIES["exporter_cimxml"]
     name, _ = registry.get("auto")
     assert name in registry.modules
     assert registry.selected == name        # report agrees with the load outcome
@@ -76,10 +79,10 @@ def test_broken_build_falls_through_and_corrects_report():
 def test_set_engine_errors():
     with pytest.raises(ValueError, match="unknown subsystem"):
         triplets.set_engine(bogus="x")
-    with pytest.raises(ValueError, match="Unknown parser engine"):
-        triplets.set_engine(parser="nonexistent")
+    with pytest.raises(ValueError, match="Unknown parser_cimxml engine"):
+        triplets.set_engine(parser_cimxml="nonexistent")
     with pytest.raises(ValueError, match="follows the input flavor"):
-        triplets.set_engine(csv="polars")
+        triplets.set_engine(exporter_csv="polars")
 
 
 def test_available_never_lists_missing_backend():
@@ -94,13 +97,13 @@ def test_available_never_lists_missing_backend():
 
 def test_relative_find_spec_resolves_against_package():
     """Relative probe targets (compiled extensions) resolve during normal use."""
-    assert REGISTRIES["parser"].available("python_lxml_pandas")   # module probe
+    assert REGISTRIES["parser_cimxml"].available("python_lxml_pandas")   # module probe
     # cimxml's compiled requires target is relative (".cimxml_cython_pugixml")
-    assert isinstance(REGISTRIES["cimxml"].available("cython_pugixml"), bool)
+    assert isinstance(REGISTRIES["exporter_cimxml"].available("cython_pugixml"), bool)
 
 
 def test_custom_registered_engine_is_available():
-    registry = REGISTRIES["nquads"]
+    registry = REGISTRIES["exporter_nquads"]
     sentinel = object()
     registry.register("custom", sentinel)
     try:

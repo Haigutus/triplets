@@ -3,16 +3,8 @@
 Used by tools dispatch, export auto-select, SPARQL/validation input handling,
 and result finalization so "which flavor is this?" and "turn it into X" live
 in one place. Prefer these helpers over local if-polars/if-duckdb blocks.
+flavor() is the single detector — no per-flavor is_polars/is_pandas helpers.
 """
-
-
-def is_polars(data) -> bool:
-    """True if *data* is a polars DataFrame."""
-    try:
-        import polars
-    except ImportError:
-        return False
-    return isinstance(data, polars.DataFrame)
 
 
 def flavor(data) -> str:

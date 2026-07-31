@@ -56,7 +56,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   layouts, so CIM XML export and qlever ingest accept every variant.
 - **`triplets.engines()` / `triplets.set_engine(...)`**: inspect what
   `engine="auto"` resolves to per subsystem (selected engine, availability,
-  aliases) and override it globally (`set_engine(parser="python_lxml_arrow")`;
+  aliases) and override it globally (`set_engine(parser_cimxml="python_lxml_arrow")`;
   `"auto"`/`None` restores). Precedence: per-call `engine=` > `set_engine` >
   auto. Input-bound subsystems (tools, csv) follow the input flavor and cannot
   be overridden.

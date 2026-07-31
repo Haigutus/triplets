@@ -49,7 +49,8 @@ class EngineRegistry:
     def __init__(self, kind: str, package: str, modules: dict, aliases: dict | None = None,
                  hints: dict | None = None, default_hint: str = "", auto: list | None = None,
                  requires: dict | None = None, policy: str = "auto"):
-        self.kind = kind              # "parser" / "sparql" / … — for messages and engines()
+        self.kind = kind              # "parser_cimxml" / "sparql" / … — for messages and engines();
+                                      # format-specific kinds carry a role prefix (parser_/exporter_)
         self.package = package        # anchor for the relative module imports
         self.modules = dict(modules)  # engine name → relative module name
         self.aliases = dict(aliases or {})
@@ -141,9 +142,19 @@ class EngineRegistry:
         self.override = resolved
 
     def info(self) -> dict:
-        """One engines() row."""
-        return {"engine": self.selected,
-                "source": "set_engine" if self.override else "auto",
+        """One engines() row.
+
+        ``policy="input"`` kinds have no global engine — the input object's
+        flavor decides per call — so ``engine`` is None and ``source`` is
+        ``"input"`` instead of pretending an auto pick exists.
+        """
+        if self.policy == "input":
+            engine, source = None, "input"
+        else:
+            engine = self.selected
+            source = "set_engine" if self.override else "auto"
+        return {"engine": engine,
+                "source": source,
                 "policy": self.policy,
                 "auto_order": list(self.auto),
                 "available": self.available_engines(),
@@ -163,7 +174,7 @@ def engines() -> dict[str, dict]:
 
 
 def set_engine(**engines_by_kind) -> None:
-    """Global engine override per subsystem, e.g. ``set_engine(parser="python_lxml_arrow",
+    """Global engine override per subsystem, e.g. ``set_engine(parser_cimxml="python_lxml_arrow",
     sparql="rdflib")``. ``None`` or ``"auto"`` restores auto-selection.
 
     Per-call ``engine=`` still wins over this. Process-global and intended for

@@ -20,7 +20,7 @@ import logging
 import pandas
 
 from . import pandas_engine
-from .._engine_detect import flavor, is_polars, match_flavor, to_pandas
+from .._engine_detect import flavor, match_flavor, to_pandas
 from ..tools import _engine_functions, _deprecated_alias
 from .pandas_engine import (  # noqa: F401 — no triplet-data argument, re-exported as-is
     dependencies,
@@ -94,7 +94,7 @@ def _data_dispatch(name):
         eng = _resolve_engine(engine, data)
         native_polars = polars_engine is not None and hasattr(polars_engine, name)
         if eng == "polars" and engine != "auto":
-            if not is_polars(data):
+            if flavor(data) != "polars":
                 raise TypeError("engine='polars' but the input is not a polars DataFrame")
             if not native_polars:
                 raise NotImplementedError(f"cgmes_tools.{name} has no polars engine")

@@ -51,7 +51,7 @@ import pyarrow
 from . import _qlever  # ImportError here → the registry falls back to rdflib
 from .._caches import register_cache
 from .._content_key import content_key
-from .._engine_detect import is_polars, to_pandas, to_return_type
+from .._engine_detect import flavor, to_pandas, to_return_type
 from ..export.nquads_utils import CIM_NS, build_key_metadata
 from ..parser.nquads import terms_to_triplets
 
@@ -87,7 +87,7 @@ def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data
     graphs = [f"urn:uuid:{instance}" for instance in scope] if scope is not None else None
     form = _query_form(query_string)
     if return_type == "auto":
-        return_type = "polars" if is_polars(data) else "pandas"
+        return_type = "polars" if flavor(data) == "polars" else "pandas"
 
     if form == "ask":
         return bool(json.loads(_run(index.query, query_string, "sparqljson", graphs))["boolean"])

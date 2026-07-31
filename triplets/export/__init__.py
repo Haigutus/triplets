@@ -34,7 +34,7 @@ from .networkx_pandas import export_to_networkx as _export_to_networkx
 logger = logging.getLogger(__name__)
 
 
-from .._engine_detect import is_polars as _is_polars, to_arrow as _to_arrow, to_pandas as _to_pandas
+from .._engine_detect import flavor as _flavor, to_arrow as _to_arrow, to_pandas as _to_pandas
 from .._registry import EngineRegistry
 
 # ── per-format engine registries ─────────────────────────────────────────────
@@ -42,7 +42,7 @@ from .._registry import EngineRegistry
 # flavor-independent bytes). csv is policy="input": each engine is fastest for
 # its own input flavor, so the caller picks by flavor(data), never by probe.
 _CIMXML = EngineRegistry(
-    "cimxml", __package__,
+    "exporter_cimxml", __package__,
     modules={"cython_pugixml": ".cimxml_pugixml",  # compiled extension, fastest
              "python_lxml": ".cimxml_pandas"},     # pure python, always available
     aliases={"performance": "cython_pugixml", "pugixml": "cython_pugixml",
@@ -51,13 +51,13 @@ _CIMXML = EngineRegistry(
     hints={"cython_pugixml": "Build with: pixi run build-cython-pugixml-arrow."},
 )
 _NQUADS = EngineRegistry(
-    "nquads", __package__,
+    "exporter_nquads", __package__,
     modules={"polars": ".nquads_polars", "pandas": ".nquads_pandas"},
     requires={"polars": ("polars",)},
     hints={"polars": "Install with: pip install triplets[polars]."},
 )
 _CSV = EngineRegistry(
-    "csv", __package__, policy="input",
+    "exporter_csv", __package__, policy="input",
     modules={"pandas": ".csv_pandas", "polars": ".csv_polars"},
     requires={"polars": ("polars",)},
 )
@@ -111,7 +111,7 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
 
     Auto-detects engine: polars if input is polars DataFrame, else pandas.
     """
-    engine = "polars" if _is_polars(data) else "pandas"
+    engine = "polars" if _flavor(data) == "polars" else "pandas"
     logger.debug("format=csv, engine=%s (input flavor)", engine)
     _fn = _CSV.get(engine)[1].export_to_csv
     return _fn(data, path=path, multivalue=multivalue, export_to_memory=export_to_memory, single_file=single_file, base_filename=base_filename)
@@ -142,11 +142,9 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
     engine_name, engine_module = _NQUADS.get(engine)
     logger.debug(f"format=nquads, engine={engine_name}")
 
-    if engine_name == "polars" and not _is_polars(data):
+    if engine_name != _flavor(data):
         from .._engine_detect import to_polars
-        data = to_polars(data)
-    elif engine_name == "pandas" and _is_polars(data):
-        data = _to_pandas(data)
+        data = to_polars(data) if engine_name == "polars" else _to_pandas(data)
     return engine_module.export_to_nquads(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory)
 
 
@@ -157,7 +155,7 @@ def get_cimxml_engine(name="auto"):
 
 def _split_instances(data):
     """Per-INSTANCE_ID frames in the input's own flavor (frame ops bind to input flavor)."""
-    if _is_polars(data):
+    if _flavor(data) == "polars":
         return data.partition_by("INSTANCE_ID", maintain_order=True)
     return (frame for _, frame in data.groupby("INSTANCE_ID", observed=True))
 
@@ -264,7 +262,7 @@ def export_to_cimxml(data,
     engine_name, engine_module = get_cimxml_engine(engine)
     generate = engine_module.generate_xml
 
-    if engine_name == "python_lxml" and _is_polars(data):
+    if engine_name == "python_lxml" and _flavor(data) == "polars":
         # the lxml engine's per-instance pipeline is pandas; the cython engine
         # consumes polars frames directly (arrow large_utf8 via the shared accessor)
         logger.debug("format=cimxml: polars input → pandas (python_lxml engine)")
@@ -279,7 +277,7 @@ def export_to_cimxml(data,
     if max_workers:
         # polars is incompatible with fork (its rayon thread-pool locks are held
         # in the forked child) — spawn fresh workers when the frames are polars
-        mp_context = multiprocessing.get_context("spawn") if _is_polars(data) else None
+        mp_context = multiprocessing.get_context("spawn") if _flavor(data) == "polars" else None
         with ProcessPoolExecutor(max_workers=max_workers, mp_context=mp_context) as executor:
             futures = [executor.submit(generate, instance, rdf_map, namespace_map,
                                        class_KEY=class_KEY, export_undefined=export_undefined,

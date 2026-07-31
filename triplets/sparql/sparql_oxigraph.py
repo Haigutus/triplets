@@ -39,7 +39,7 @@ from pyoxigraph import NamedNode, QueryResultsFormat, RdfFormat
 
 from .._caches import register_cache
 from .._content_key import content_key
-from .._engine_detect import as_frame, is_polars, to_pandas
+from .._engine_detect import as_frame, flavor, to_pandas
 from ..export import export_to_nquads
 from ..parser.nquads import read_nquads
 
@@ -63,7 +63,7 @@ def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data
     store = _store_for(data, rdf_map, data_unchanged)
     graphs = [NamedNode(f"urn:uuid:{instance}") for instance in scope] if scope is not None else None
     if return_type == "auto":
-        return_type = "polars" if is_polars(data) else "pandas"
+        return_type = "polars" if flavor(data) == "polars" else "pandas"
 
     result = _run(store, query_string, graphs)
     if isinstance(result, pyoxigraph.QueryBoolean):
