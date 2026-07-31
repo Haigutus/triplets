@@ -73,7 +73,6 @@ def parse(
     categorical_columns: Optional[Sequence[str]] = ("INSTANCE_ID", "KEY"),
     shorten_resources: bool = True,
     string_type: str = "auto",
-    **kwargs: Any,
 ) -> Any:
     """Main entry: parse CIM RDF/XML (or zips) using chosen engine.
 

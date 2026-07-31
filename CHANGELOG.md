@@ -41,8 +41,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   engine="duckdb")` and other input/engine mismatches now raise a clear
   `TypeError` at the boundary (previously they silently ran the pandas engine
   and failed deep inside); unknown engine names raise `ValueError`.
+- **`parse()` rejects unknown keyword arguments**: the unused `**kwargs`
+  swallowed typos silently (a misspelled option looked like it worked while
+  doing nothing); mistakes now raise `TypeError`.
 
 ### Added
+- **Configurable Arrow string layout** (`parse(..., string_type=...)`): the
+  ID/VALUE columns can be produced as `utf8` (32-bit offsets, default),
+  `large_utf8` (64-bit) or `string_view` (polars'/duckdb's native layout,
+  adopted zero-copy by polars; pyarrow >= 16). `"auto"` picks per
+  return_type: string_view for polars, utf8 otherwise. The cython engine
+  builds the layout natively (no measured hot-loop cost); the lxml arrow
+  engine casts once at finalize. The shared Arrow accessor handles all
+  layouts, so CIM XML export and qlever ingest accept every variant.
 - **`triplets.engines()` / `triplets.set_engine(...)`**: inspect what
   `engine="auto"` resolves to per subsystem (selected engine, availability,
   aliases) and override it globally (`set_engine(parser="python_lxml_arrow")`;
