@@ -31,7 +31,7 @@ __version__ = get_versions()['version']
 del get_versions
 
 # Expose the new parser API at top level
-from .parser import parse, read_rdf as read_rdf_func, read_nquads  # noqa: F401
+from .parser import parse, parse_batches, read_rdf as read_rdf_func, read_nquads  # noqa: F401
 
 # Register read_rdf on pandas and polars (monkey-patch, standard approach)
 # There is no official plugin API for top-level read functions in either library.
@@ -65,11 +65,17 @@ try:
     _duckdb_engine._install_connect(_duckdb)
     _duckdb.DuckDBPyConnection.set_triplets_table = _duckdb_engine._set_triplets_table
 
-    def _duckdb_read_rdf(self, paths, table=None, schema=None, table_name=None, **kwargs):
-        """Parse RDF/XML into the connection's triplets table (Arrow zero-copy).
+    def _duckdb_read_rdf(self, paths, table=None, schema=None, table_name=None,
+                         append=False, **kwargs):
+        """Parse RDF/XML into the connection's triplets table, streaming.
 
-        Optional ``table`` / ``schema`` (or legacy ``table_name``) update this
-        connection's defaults, then the load targets that quoted relation.
+        One Arrow RecordBatch per XML file flows straight into DuckDB — the
+        dataset is never materialized in Python (out-of-core ingest). With
+        ``append=True`` rows are added to the existing table (created if
+        missing); the default replaces it. Optional ``table`` / ``schema``
+        (or legacy ``table_name``) update this connection's defaults first.
+        The load is one transactional statement: a mid-stream parse failure
+        leaves the previous table intact. Returns the rows loaded by this call.
         """
         if table_name is not None and table is None:
             table = table_name
@@ -84,11 +90,16 @@ try:
         sch, _ = _duckdb_engine._get_table(self)
         if sch is not None:
             self.execute(f"CREATE SCHEMA IF NOT EXISTS {_duckdb_engine._quote(sch)}")
-        arrow_table = parse(paths, return_type="arrow", **kwargs)
-        self.register("_arrow_import", arrow_table)
-        self.execute(f"CREATE OR REPLACE TABLE {ref} AS SELECT * FROM _arrow_import")
+        reader = parse_batches(paths, **kwargs)
+        self.register("_arrow_import", reader)
+        if append:
+            self.execute(f"CREATE TABLE IF NOT EXISTS {ref} "
+                         f"(ID VARCHAR, KEY VARCHAR, VALUE VARCHAR, INSTANCE_ID VARCHAR)")
+            row_count = self.execute(f"INSERT INTO {ref} BY NAME SELECT * FROM _arrow_import").fetchone()[0]
+        else:
+            self.execute(f"CREATE OR REPLACE TABLE {ref} AS SELECT * FROM _arrow_import")
+            row_count = self.execute(f"SELECT COUNT(*) FROM {ref}").fetchone()[0]
         self.unregister("_arrow_import")
-        row_count = self.execute(f"SELECT COUNT(*) FROM {ref}").fetchone()[0]
         _duckdb_logger.info("Loaded %s rows into %s", row_count, ref)
         return row_count
 

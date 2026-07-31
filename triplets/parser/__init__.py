@@ -59,7 +59,7 @@ def get_engine(name: str = "auto"):
 
 
 # Re-exports for compat layer (rdf_parser.py)
-from .utils import find_all_xml, clean_ID  # noqa: F401
+from .utils import find_all_xml, iter_all_xml, clean_ID  # noqa: F401
 
 from .nquads import read_nquads  # noqa: F401
 
@@ -150,6 +150,48 @@ def parse(
         return _finalize_arrow(results, return_type, categorical_columns, debug, string_type)
     else:
         return _finalize_pandas(results, return_type, categorical_columns, debug)
+
+
+def parse_batches(
+    list_of_paths_to_zip_globalzip_xml: Union[str, List, Any],
+    debug: bool = False,
+    engine: str = "auto",
+    shorten_resources: bool = True,
+) -> Any:
+    """Parse CIM RDF/XML lazily into a ``pyarrow.RecordBatchReader``.
+
+    One RecordBatch per XML file, produced as the reader is consumed — the
+    dataset is never materialized in Python (out-of-core ingest, e.g. the
+    duckdb ``read_rdf``). Fixed all-utf8 schema [ID, KEY, VALUE, INSTANCE_ID]:
+    no dictionary encoding and no string_type layout, because per-file
+    dictionaries would differ batch to batch and database consumers re-encode
+    internally anyway. Files are parsed sequentially (no max_workers; a
+    bounded prefetch would be a separate change).
+
+    Requires an arrow parser engine ("auto" resolves one whenever pyarrow is
+    installed); raises ValueError otherwise — no silent pandas fallback.
+    """
+    import pyarrow as pa
+
+    debug = debug or logger.isEnabledFor(logging.DEBUG)
+    engine_name, engine_mod = get_engine(engine)
+    if engine_name not in _ARROW_ENGINES:
+        raise ValueError(f"parse_batches requires an arrow parser engine, got {engine_name!r}. "
+                         f"Install with: pip install triplets[arrow].")
+    if not shorten_resources and engine_name == "cython_pugixml_arrow":
+        raise ValueError("shorten_resources=False is not supported by the cython_pugixml_arrow engine, "
+                         "use engine='python_lxml_arrow'")
+    parse_one = engine_mod.load_rdf_to_dataframe
+
+    schema = pa.schema([(c, pa.string()) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
+
+    def batches():
+        one_kwargs = {} if shorten_resources else {"shorten_resources": False}
+        for xml_file in iter_all_xml(list_of_paths_to_zip_globalzip_xml, debug=debug):
+            batch = parse_one(xml_file, debug=debug, **one_kwargs)
+            yield batch if batch.schema == schema else batch.cast(schema)
+
+    return pa.RecordBatchReader.from_batches(schema, batches())
 
 
 _STRING_TYPES = ("utf8", "large_utf8", "string_view")

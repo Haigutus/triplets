@@ -67,3 +67,29 @@ def test_filter_triplets_by_type_quoted_value():
     con.execute("CREATE TABLE triplets AS SELECT * FROM _src")
     assert con.filter_triplets_by_type("O'Brien").df()["ID"].tolist() == ["a", "a"]
     assert con.filter_triplets_by_type("No'Such").df().empty
+
+
+def test_read_rdf_append_and_replace():
+    """append=True adds rows to the existing table; the default replaces."""
+    con = duckdb.connect()
+    n1 = con.read_rdf("tests/data/minimal_cim.xml")
+    n2 = con.read_rdf("tests/data/minimal_cim.xml", append=True)
+    assert n1 == n2 > 0
+    assert con.execute("SELECT COUNT(*) FROM triplets").fetchone()[0] == n1 + n2
+    assert con.execute("SELECT COUNT(DISTINCT INSTANCE_ID) FROM triplets").fetchone()[0] == 2
+
+    n3 = con.read_rdf("tests/data/minimal_cim.xml")   # default: replace
+    assert con.execute("SELECT COUNT(*) FROM triplets").fetchone()[0] == n3
+
+
+def test_read_rdf_append_creates_missing_table():
+    con = duckdb.connect()
+    rows = con.read_rdf("tests/data/minimal_cim.xml", append=True)
+    assert con.execute("SELECT COUNT(*) FROM triplets").fetchone()[0] == rows > 0
+
+
+def test_read_rdf_empty_input_creates_standard_table():
+    con = duckdb.connect()
+    assert con.read_rdf([]) == 0
+    columns = [row[0] for row in con.execute("DESCRIBE triplets").fetchall()]
+    assert columns == ["ID", "KEY", "VALUE", "INSTANCE_ID"]

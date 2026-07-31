@@ -94,6 +94,38 @@ def test_parse_returns_arrow_and_polars():
     assert len(pdf) > 0
 
 
+# ── parse_batches: lazy RecordBatchReader for out-of-core ingest ─────────────
+
+def test_parse_batches_matches_parse():
+    pa = pytest.importorskip("pyarrow")
+    reader = triplets.parser.parse_batches(MINIMAL)
+    table = reader.read_all()
+    assert table.schema == pa.schema([(c, pa.string())
+                                      for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
+    assert table.num_rows == len(parse(MINIMAL))
+
+
+def test_parse_batches_zip_one_batch_per_file(tmp_path):
+    pytest.importorskip("pyarrow")
+    import zipfile
+    archive = tmp_path / "model.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.write(MINIMAL, "a.xml")
+        bundle.write(MINIMAL, "b.xml")
+    batches = list(triplets.parser.parse_batches(archive))
+    assert len(batches) == 2
+    assert sum(b.num_rows for b in batches) == 2 * len(parse(MINIMAL))
+
+
+def test_parse_batches_empty_and_errors():
+    pa = pytest.importorskip("pyarrow")
+    empty = triplets.parser.parse_batches([]).read_all()
+    assert empty.num_rows == 0
+    assert empty.schema.names == ["ID", "KEY", "VALUE", "INSTANCE_ID"]
+    with pytest.raises(ValueError, match="arrow parser engine"):
+        triplets.parser.parse_batches(MINIMAL, engine="python_lxml_pandas")
+
+
 @pytest.mark.parametrize("cols,engine", [
     (("INSTANCE_ID", "KEY"), "auto"),
     # the cython engine dictionary-encodes KEY/INSTANCE_ID structurally, so the
