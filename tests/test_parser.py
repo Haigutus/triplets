@@ -94,6 +94,27 @@ def test_parse_returns_arrow_and_polars():
     assert len(pdf) > 0
 
 
+@pytest.mark.parametrize("cols,engine", [
+    (("INSTANCE_ID", "KEY"), "auto"),
+    # the cython engine dictionary-encodes KEY/INSTANCE_ID structurally, so the
+    # no-categoricals (all plain string) contract only holds for the lxml engine
+    (None, "python_lxml_arrow"),
+])
+def test_empty_parse_schema_matches_nonempty(cols, engine):
+    """An empty parse carries the same arrow/polars schema as a non-empty one."""
+    pa = pytest.importorskip("pyarrow")
+    empty = parse([], return_type="arrow", categorical_columns=cols)
+    full = parse(MINIMAL, return_type="arrow", categorical_columns=cols, engine=engine)
+    assert empty.schema == full.schema
+    assert pa.concat_tables([empty, full]).num_rows == full.num_rows
+
+    polars = pytest.importorskip("polars")
+    empty_pl = parse([], return_type="polars", categorical_columns=cols)
+    full_pl = parse(MINIMAL, return_type="polars", categorical_columns=cols, engine=engine)
+    assert empty_pl.schema == full_pl.schema
+    assert len(polars.concat([empty_pl, full_pl])) == len(full_pl)
+
+
 # ── Per-engine tests ────────────────────────────────────────────────────────
 
 class TestPythonLxmlPandas:

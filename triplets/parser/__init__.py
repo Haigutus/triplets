@@ -114,7 +114,7 @@ def parse(
     xml_files = find_all_xml(items, debug=debug)
 
     if not xml_files:
-        return _empty(return_type)
+        return _empty(return_type, categorical_columns)
 
     def _one(f: Any):
         if not shorten_resources:
@@ -129,7 +129,7 @@ def parse(
 
     if not results:
         # Fallback empty after file list processing (should be rare; engines return DataFrames/Batches)
-        return _empty(return_type)
+        return _empty(return_type, categorical_columns)
 
     if is_arrow_engine:
         return _finalize_arrow(results, return_type, categorical_columns, debug)
@@ -137,17 +137,24 @@ def parse(
         return _finalize_pandas(results, return_type, categorical_columns, debug)
 
 
-def _empty(return_type):
-    """Empty result with the standard triplet columns in the requested return_type."""
-    import pandas as pd
-    empty = pd.DataFrame(columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    if return_type == "arrow":
-        import pyarrow as pa
-        return pa.Table.from_pandas(empty)
+def _empty(return_type, categorical_columns=()):
+    """Empty result with the standard triplet columns, matching the non-empty schema.
+
+    Arrow/polars empties carry the same string / dictionary-encoded columns as a
+    non-empty parse, so they concatenate cleanly with real results.
+    """
+    if return_type == "pandas":
+        import pandas as pd
+        return pd.DataFrame(columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import pyarrow as pa
+    cats = set(categorical_columns or ())
+    schema = pa.schema([(c, pa.dictionary(pa.int32(), pa.string()) if c in cats else pa.string())
+                        for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
+    table = schema.empty_table()
     if return_type == "polars":
         import polars as pl
-        return pl.from_pandas(empty)
-    return empty
+        return pl.from_arrow(table)
+    return table
 
 
 def _finalize_arrow(batches, return_type, categorical_columns, debug):

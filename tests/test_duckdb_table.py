@@ -58,3 +58,12 @@ def test_resolve_call_kwargs_win():
     assert _resolve_table(con, table="x") == '"cim"."x"'
     assert _resolve_table(con, table="x", schema="s") == '"s"."x"'
     assert _resolve_table(con, table_name="legacy") == '"cim"."legacy"'
+
+
+def test_filter_triplets_by_type_quoted_value():
+    """A type name containing a quote is escaped, not interpolated raw."""
+    con = duckdb.connect()
+    con.register("_src", _frame().assign(VALUE=["O'Brien", "b1"]))
+    con.execute("CREATE TABLE triplets AS SELECT * FROM _src")
+    assert con.filter_triplets_by_type("O'Brien").df()["ID"].tolist() == ["a", "a"]
+    assert con.filter_triplets_by_type("No'Such").df().empty

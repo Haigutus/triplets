@@ -161,7 +161,8 @@ def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
     """Filter triplets by any combination of columns. Returns DuckDBPyRelation (lazy).
 
     A list value keeps rows matching any of its values; with regex=True the
-    value(s) are SIMILAR TO patterns.
+    value(s) are regex patterns matched anywhere in the value, like pandas
+    str.contains.
     """
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     conditions = []
@@ -173,11 +174,11 @@ def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
             if not values:
                 conditions.append("FALSE")
             elif regex:
-                conditions.append("(" + " OR ".join(f"{col} SIMILAR TO {_lit(v)}" for v in values) + ")")
+                conditions.append("(" + " OR ".join(f"regexp_matches({col}, {_lit(v)})" for v in values) + ")")
             else:
                 conditions.append(f"{col} IN ({_in_list(values)})")
         elif regex:
-            conditions.append(f"{col} SIMILAR TO {_lit(val)}")
+            conditions.append(f"regexp_matches({col}, {_lit(val)})")
         else:
             conditions.append(f"{col} = {_lit(val)}")
     where = " AND ".join(conditions) if conditions else "TRUE"
@@ -191,7 +192,7 @@ def filter_triplets_by_type(self, type_name, table=None, schema=None, table_name
         SELECT d.* FROM {table_name} d
         WHERE d.ID IN (
             SELECT ID FROM {table_name}
-            WHERE KEY = 'Type' AND VALUE = '{type_name}'
+            WHERE KEY = 'Type' AND VALUE = {_lit(type_name)}
         )
     """)
 
@@ -201,11 +202,13 @@ def filter_triplets_by_value(self, VALUE, detailed=False, type_key="Type",
     """Filter to objects that have any triplet matching VALUE. Returns DuckDBPyRelation.
 
     Selects every object (ID) with at least one triplet whose VALUE matches
-    `VALUE`. With detailed=True, returns all their triplets; otherwise the matching
-    rows plus each matched object's `type_key` row, type row first within each ID.
+    `VALUE` (with regex=True, a regex pattern matched anywhere in the value,
+    like pandas str.contains). With detailed=True, returns all their triplets;
+    otherwise the matching rows plus each matched object's `type_key` row, type
+    row first within each ID.
     """
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    match = f"VALUE SIMILAR TO {_lit(VALUE)}" if regex else f"VALUE = {_lit(VALUE)}"
+    match = f"regexp_matches(VALUE, {_lit(VALUE)})" if regex else f"VALUE = {_lit(VALUE)}"
     probe_ids = f"SELECT DISTINCT ID FROM {table_name} WHERE {match}"
     if detailed:
         return self.sql(f"SELECT * FROM {table_name} WHERE ID IN ({probe_ids})")

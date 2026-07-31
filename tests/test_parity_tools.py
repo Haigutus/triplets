@@ -7,6 +7,8 @@ IGM model; the ``-m performance`` timing test runs on RealGrid (~1.14M rows).
 
 Shared discovery/normalisation/comparison helpers live in ``tests/_parity.py``.
 """
+import re
+
 import pandas
 import pytest
 
@@ -143,6 +145,22 @@ CALL_SPECS = {
 }
 
 
+# ── regex variants: search semantics, like pandas str.contains ────────────────
+# Kept out of CALL_SPECS so the coverage guard still checks exact function names.
+# The escaped mid-substring of a real IdentifiedObject.name only matches under
+# search semantics — a full-match engine (duckdb SIMILAR TO) would return nothing.
+def _name_pattern(ctx):
+    return re.escape(ctx["name"][1:-1] or ctx["name"])
+
+
+EXTRA_SPECS = {
+    "filter_triplets[regex]": lambda e, d, c: d.filter_triplets(KEY=c["key"], VALUE=_name_pattern(c), regex=True),
+    "filter_triplets[regex-list]": lambda e, d, c: d.filter_triplets(VALUE=[_name_pattern(c), "^no-such-value$"], regex=True),
+    "filter_triplets_by_value[regex]": lambda e, d, c: d.filter_triplets_by_value(_name_pattern(c), regex=True),
+}
+SPECS = {**CALL_SPECS, **EXTRA_SPECS}
+
+
 # ── fixtures ──────────────────────────────────────────────────────────────────
 @pytest.fixture(scope="module")
 def svedala_pandas():
@@ -165,13 +183,13 @@ def test_call_specs_cover_all_functions():
 
 # ── Test 1: parity (Svedala) — no xfails, mismatches FAIL ─────────────────────
 PARITY_PARAMS = [pytest.param(f, e, id=f"{f}-{e}")
-                 for f in sorted(ALL_FUNCTIONS) for e in ("polars", "duckdb")]
+                 for f in sorted(SPECS) for e in ("polars", "duckdb")]
 
 
 @pytest.mark.parametrize("func,engine", PARITY_PARAMS)
 def test_parity(svedala_pandas, svedala_ctx, func, engine):
     pytest.importorskip(engine)
-    spec = CALL_SPECS[func]
+    spec = SPECS[func]
 
     try:
         ref = run_quiet(spec, "pandas", svedala_pandas.copy(), svedala_ctx)
