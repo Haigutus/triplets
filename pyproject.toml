@@ -105,6 +105,18 @@ markers = [
     "performance: marks performance tests (run with '-m performance')",
     "requires_perf_backend: needs the compiled cython_pugixml extension",
 ]
+filterwarnings = [
+    # keep real resource leaks visible (Python hides ResourceWarning by default)
+    "always::ResourceWarning",
+    # rdflib 7.6.0 deprecated Dataset.default_context/.identifier but its own
+    # inherited ConjunctiveGraph/Graph code (and pyshacl's graph cloning) still
+    # calls them — every parse/match/hash warns. Upstream bug, nothing to fix
+    # here; drop the ignores when rdflib migrates its internal callers.
+    "ignore:Dataset.default_context is deprecated:DeprecationWarning:rdflib",
+    "ignore:Dataset.identifier is deprecated:DeprecationWarning:rdflib",
+    "ignore:Dataset.default_context is deprecated:DeprecationWarning:pyshacl",
+    "ignore:Dataset.identifier is deprecated:DeprecationWarning:pyshacl",
+]
 
 [tool.uv]
 exclude-newer = "P14D"

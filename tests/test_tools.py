@@ -11,6 +11,12 @@ import pandas
 import triplets
 from pathlib import Path
 
+# This file deliberately exercises the legacy rdf_parser.* aliases as the
+# compat shim's regression net — their DeprecationWarnings are the point,
+# asserted explicitly where relevant (pytest.warns) and muted otherwise.
+pytestmark = pytest.mark.filterwarnings(
+    r"ignore:.*is deprecated, use triplets\.:DeprecationWarning")
+
 SVEDALA_DIR = Path("test_data/relicapgrid/Instance/Grid/IGM_Svedala")
 SVEDALA_FILES = [
     str(SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"),
@@ -244,7 +250,7 @@ class TestFilterByType:
 
     @pytest.mark.benchmark(group="tools-filter")
     def test_benchmark(self, benchmark, svedala_data):
-        benchmark(triplets.rdf_parser.filter_by_type, svedala_data, "ACLineSegment")
+        benchmark(triplets.tools.filter_triplets_by_type, svedala_data, "ACLineSegment")
 
 
 class TestFilterByTriplet:
@@ -691,7 +697,7 @@ class TestExportToCimxml:
                 engine=engine,
             )
             outputs[engine] = pandas.read_RDF([result[0]])
-        diff = triplets.tools.diff_between_triplet(outputs["python_lxml"], outputs["cython_pugixml"])
+        diff = triplets.tools.diff_triplets(outputs["python_lxml"], outputs["cython_pugixml"])
         # Distribution/NamespaceMap meta objects get fresh IDs per parse — exclude them
         meta_ids = set(diff[(diff["KEY"] == "Type") & diff["VALUE"].isin(["Distribution", "NamespaceMap"])]["ID"])
         real_diff = diff[~diff["ID"].isin(meta_ids) & (diff["KEY"] != "label")]

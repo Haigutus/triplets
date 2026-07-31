@@ -136,8 +136,11 @@ import triplets
 
 data = duckdb.connect()                              # default table "triplets"
 data = duckdb.connect("grid.duckdb", table="grid", schema="cim")  # per-connection defaults
+# explicit table/schema config is stored in the database file — reopening
+# duckdb.connect("grid.duckdb") later resolves cim.grid automatically
 
-data.read_rdf(["grid_EQ.xml", "data.zip"])           # loads into the connection's table
+data.read_rdf(["grid_EQ.xml", "data.zip"])           # streams into the connection's table
+data.read_rdf(["update.zip"], append=True)           # adds rows instead of replacing
 data.get_types_count()                               # uses connection table/schema
 data.tableview_by_type("ACLineSegment").df()
 data.filter_triplets(KEY="Type", VALUE=".*Sub.*", regex=True).df()

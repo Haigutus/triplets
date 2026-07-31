@@ -44,8 +44,37 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`parse()` rejects unknown keyword arguments**: the unused `**kwargs`
   swallowed typos silently (a misspelled option looked like it worked while
   doing nothing); mistakes now raise `TypeError`.
+- **DuckDB mutators preserve extra columns**: the five mutating helpers run
+  in-place DML (UPDATE/DELETE/INSERT) instead of full-table rewrites — user
+  columns beyond ID/KEY/VALUE/INSTANCE_ID were previously dropped silently
+  on the first mutation, and load order is now stable across mutations.
+- **File-handle leaks in zip parsing**: `find_all_xml`/`iter_all_xml` close
+  the zip handles they open; the test suite runs with `always::ResourceWarning`
+  and zero warnings (rdflib 7.6.0's internal Dataset deprecation noise is
+  filtered as a documented upstream issue).
 
 ### Added
+- **Streaming out-of-core DuckDB ingest** (`parser.parse_batches(...)`,
+  `con.read_rdf(paths, append=...)`): one Arrow RecordBatch per XML file
+  flows straight into DuckDB — the dataset is never materialized in Python.
+  `append=True` adds to the existing table (created if missing); the default
+  replaces. Zip members are read lazily, one at a time.
+- **DuckDB config persists in the database**: explicitly configured
+  table/schema (via `connect(table=/schema=)`, `set_triplets_table`,
+  `read_rdf(table=/schema=)`) is stored in a tiny `main."_triplets_config"`
+  table, so reopening a persisted file resolves it automatically (cursors
+  too). A bare `connect()` writes nothing; read-only opens resolve stored
+  config without writing.
+- **DuckDB multivalue tableviews**: `type/key/id_tableview` and
+  `triplets_to_tableviews` gain `multivalue=` (renders `['a', 'b']` cells,
+  matching pandas/polars) and `string_to_number=` (accepted for signature
+  parity; `True` raises — VARCHAR views, TRY_CAST is a follow-up);
+  `tableview_to_triplets(multivalue=True)` decodes the list encoding.
+- **DuckDB tools on views and registered frames**: tableviews, references
+  and order-invariant `content_hash` now work when `table=` targets a VIEW
+  or a registered frame (`row_number()` fallback where `rowid` doesn't
+  exist); `content_hash(order_sensitive=True)` on such targets raises a
+  clear error. Tableview views are created in the resolved schema.
 - **Configurable Arrow string layout** (`parse(..., string_type=...)`): the
   ID/VALUE columns can be produced as `utf8` (32-bit offsets, default),
   `large_utf8` (64-bit) or `string_view` (polars'/duckdb's native layout,
