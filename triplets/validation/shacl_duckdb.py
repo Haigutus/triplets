@@ -1,6 +1,6 @@
 """SHACL DuckDB engine — compiled-IR executor for larger-than-memory data.
 
-Every constraint compiles to one SQL query against the ``triplets`` table
+Every constraint compiles to one SQL query against the connection's configured triplets table
 (``[ID, KEY, VALUE, INSTANCE_ID]``), so validation streams through DuckDB's
 vectorized executor and spills to disk instead of requiring the dataset in
 RAM. Input is a DuckDB connection holding the table (``con.read_rdf(...)``);
@@ -23,10 +23,9 @@ import logging
 import pandas
 
 from .._engine_detect import flavor
-from .shacl_ir import split_rules
+from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
-from .shacl_polars import FALLBACK_COMPONENTS
 
 logger = logging.getLogger(__name__)
 

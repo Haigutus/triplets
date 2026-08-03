@@ -95,6 +95,12 @@ def _content_hash(shapes):
     return digest.hexdigest()
 
 
+# Nested/query components every vectorized engine delegates to the pandas
+# implementations — part of the shared IR contract, defined here so no engine
+# needs to import another engine for a constant.
+FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:not", "sh:node", "sh:sparql"}
+
+
 def split_rules(ir, implemented, fallback_components, engine):
     """IR rows → (vectorized, fallback) rule lists against an engine's registries.
 
@@ -183,11 +189,15 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
                 target_kind="class"):
     """One property shape → IR rows (one per constraint component present).
 
-    *visited* tracks named shapes already expanded through sh:node, so shape
-    graphs that reference each other cannot recurse forever. *parent* is the
-    owning NodeShape's meta — a property shape without its own sh:name /
-    sh:description inherits them (authors commonly title the node shape).
+    *visited* tracks shapes already expanded through sh:node / sh:or / sh:and /
+    sh:not, so shape graphs that reference each other cannot recurse forever.
+    *parent* is the owning NodeShape's meta — a property shape without its own
+    sh:name / sh:description inherits them (authors commonly title the node shape).
     """
+    if str(shape_uri) in visited:
+        logger.warning("shape reference cycle at %s — constraint dropped", shape_uri)
+        return []
+    visited = visited | {str(shape_uri)}
     path_node = graph.value(shape_uri, SH.path)
     path, inverse, via_type = _resolve_path(graph, SH, path_node)
     if path_node is not None and path is None:

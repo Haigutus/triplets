@@ -27,13 +27,10 @@ import pandas
 import polars
 
 from .shacl_report import VIOLATION_COLUMNS
-from .shacl_ir import split_rules
+from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
 from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
 
 logger = logging.getLogger(__name__)
-
-# nested/query components — delegated to the pandas implementations
-FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:not", "sh:node", "sh:sparql"}
 
 _COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 
