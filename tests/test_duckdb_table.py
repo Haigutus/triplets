@@ -219,3 +219,25 @@ def test_connection_exports_ride_native_arrow():
     import triplets as t
     from_frame = t.export.export_to_nquads(_frame(), export_to_memory=True).getvalue()
     assert sorted(from_connection.splitlines()) == sorted(from_frame.splitlines())
+
+
+
+def test_connection_nquads_streams_to_disk(tmp_path):
+    """con.export_to_nquads streams batch-by-batch to the file — content equals
+    the whole-frame export (line order may differ; N-Quads lines are independent)."""
+    import triplets as t
+    con = duckdb.connect()
+    con.register("_src", _frame())
+    con.execute("CREATE TABLE triplets AS SELECT * FROM _src")
+    out = tmp_path / "x.nq"
+    con.export_to_nquads(str(out))
+    from_frame = t.export.export_to_nquads(_frame(), export_to_memory=True).getvalue()
+    assert sorted(out.read_bytes().splitlines()) == sorted(from_frame.splitlines())
+
+
+def test_reader_input_requires_polars_engine():
+    import pyarrow
+    import triplets as t
+    table = pyarrow.Table.from_pandas(_frame(), preserve_index=False)
+    with pytest.raises(ValueError, match="requires.*polars engine"):
+        t.export.export_to_nquads(table.to_reader(), engine="pandas", export_to_memory=True)

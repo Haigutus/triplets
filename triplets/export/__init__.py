@@ -80,7 +80,8 @@ REQUIRED_COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 
 def _check_columns(data):
     """Fail early with a clear message when the input is not a triplets dataset."""
-    names = data.column_names if _flavor(data) == "pyarrow" else data.columns
+    # pyarrow Table/RecordBatch/RecordBatchReader all expose .schema.names
+    names = data.schema.names if _flavor(data) == "pyarrow" else data.columns
     missing = [column for column in REQUIRED_COLUMNS if column not in names]
     if missing:
         raise ValueError(f"Not a triplets dataset — missing columns {missing}, "
@@ -137,6 +138,22 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
         path = "export.nq" if path is None else os.fspath(path)
     engine_name, engine_module = _NQUADS.get(engine)
     logger.debug(f"format=nquads, engine={engine_name}")
+
+    if hasattr(data, "read_next_batch"):
+        # pyarrow.RecordBatchReader: stream one batch at a time — memory stays
+        # bounded by a single batch (out-of-core export, e.g. a large duckdb table)
+        if engine_name != "polars":
+            raise ValueError("streaming N-Quads export (RecordBatchReader input) requires "
+                             "the polars engine. Install with: pip install triplets[polars].")
+        if export_to_memory:
+            buffer = BytesIO()
+            engine_module.write_nquads_batches(data, buffer, rdf_map=rdf_map)
+            buffer.name = "export.nq"
+            buffer.seek(0)
+            return buffer
+        with open(path, "wb") as handle:
+            engine_module.write_nquads_batches(data, handle, rdf_map=rdf_map)
+        return None
 
     if engine_name != _flavor(data):
         from .._engine_detect import to_polars

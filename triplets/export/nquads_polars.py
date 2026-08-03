@@ -20,23 +20,13 @@ def _iri_or_uuid(column):
             .otherwise(pl.format("<urn:uuid:{}>", pl.col(column))))
 
 
-def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
-    """Export triplet DataFrame to N-Quads file.
+def _quads(data, enum_keys, key_namespaces, key_datatypes):
+    """Triplets frame → collected quads frame [s, p, o, g, end].
 
-    Parameters
-    ----------
-    data : polars.DataFrame
-        Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
-    path : str, optional
-        Output file path (.nq). Ignored when export_to_memory=True.
-    rdf_map : dict or str, optional
-        Export schema for proper enum/association detection and literal
-        datatype annotations ("400"^^<...XMLSchema#float>).
-    export_to_memory : bool, default False
-        If True, return an in-memory BytesIO (with .name) instead of writing to disk.
-    """
-    enum_keys, key_namespaces, key_datatypes = build_key_metadata(rdf_map) if rdf_map else (set(), {}, {})
-
+    The shared formatting core: the whole-frame export and the per-batch
+    streaming writer run the same expression plan. Every output line depends
+    only on its own row plus the static schema metadata, which is what makes
+    N-Quads chunkable."""
     is_type = pl.col("KEY") == "Type"
     val_is_uri = pl.any_horizontal(*[pl.col("VALUE").str.starts_with(p) for p in URI_PREFIXES])
     val_is_uuid = pl.col("VALUE").str.contains(UUID_RE.pattern)
@@ -77,12 +67,34 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     # null VALUE rows, build the four quad terms + the "." terminator as
     # separate columns, collect once. The aliases are required (not cosmetic):
     # several terms auto-name to "literal" and collide in select otherwise.
-    quads = (data.lazy()
-             .with_columns(pl.col("ID", "KEY", "VALUE", "INSTANCE_ID").cast(pl.Utf8))
-             .filter(pl.col("VALUE").is_not_null())
-             .select(subject.alias("s"), predicate.alias("p"), objects.alias("o"),
-                     graph.alias("g"), pl.lit(".").alias("end"))
-             .collect())
+    return (data.lazy()
+            .with_columns(pl.col("ID", "KEY", "VALUE", "INSTANCE_ID").cast(pl.Utf8))
+            .filter(pl.col("VALUE").is_not_null())
+            .select(subject.alias("s"), predicate.alias("p"), objects.alias("o"),
+                    graph.alias("g"), pl.lit(".").alias("end"))
+            .collect())
+
+
+def _key_metadata(rdf_map):
+    return build_key_metadata(rdf_map) if rdf_map else (set(), {}, {})
+
+
+def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
+    """Export triplet DataFrame to N-Quads file.
+
+    Parameters
+    ----------
+    data : polars.DataFrame
+        Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
+    path : str, optional
+        Output file path (.nq). Ignored when export_to_memory=True.
+    rdf_map : dict or str, optional
+        Export schema for proper enum/association detection and literal
+        datatype annotations ("400"^^<...XMLSchema#float>).
+    export_to_memory : bool, default False
+        If True, return an in-memory BytesIO (with .name) instead of writing to disk.
+    """
+    quads = _quads(data, *_key_metadata(rdf_map))
 
     # write straight from Rust with a space separator — the CSV writer joins
     # the columns into "<s> <p> <o> <g> ." per row. No Python string
@@ -97,3 +109,16 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
         return buffer
 
     quads.write_csv(path, include_header=False, quote_style="never", separator=" ")
+
+
+def write_nquads_batches(reader, handle, rdf_map=None):
+    """Stream a ``pyarrow.RecordBatchReader`` into an open binary handle.
+
+    One batch is formatted and written at a time, so memory stays bounded by
+    a single batch regardless of the total size — the out-of-core export
+    counterpart of ``parse_batches``. The schema metadata is resolved once.
+    """
+    metadata = _key_metadata(rdf_map)
+    for batch in reader:
+        _quads(pl.from_arrow(batch), *metadata).write_csv(
+            handle, include_header=False, quote_style="never", separator=" ")

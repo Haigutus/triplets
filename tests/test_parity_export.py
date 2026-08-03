@@ -103,8 +103,10 @@ FORMATS = {
             "pandas": lambda d: export.export_to_nquads(d, rdf_map=RDF_MAP, engine="pandas", export_to_memory=True),
             "polars": lambda d: export.export_to_nquads(d, rdf_map=RDF_MAP, engine="polars", export_to_memory=True),
             "arrow_input": lambda d: export.export_to_nquads(_arrow(d), rdf_map=RDF_MAP, export_to_memory=True),
+            "reader_input": lambda d: export.export_to_nquads(_arrow(d).to_reader(), rdf_map=RDF_MAP, export_to_memory=True),
         },
-        "needs": {"polars": ["polars"], "arrow_input": ["pyarrow"]},
+        "needs": {"polars": ["polars"], "arrow_input": ["pyarrow"],
+                  "reader_input": ["pyarrow", "polars"]},
         "canon": _canon_nquads,
     },
     "csv": {

@@ -119,19 +119,39 @@ else:
 if duckdb:
     from .tools import duckdb_engine
 
+    from importlib.util import find_spec
+
     from ._engine_detect import to_arrow as _to_arrow, to_pandas as _to_pandas
+
+    _STREAM_BATCH_ROWS = 1_000_000
 
     def _duckdb_export_fn(name):
         """A connection-first export callable: fetch the triplets table, run the export.
 
-        Fetches the configured triplets table through duckdb's native arrow
-        result path (~4x cheaper than materialising pandas; the exporters
-        adopt arrow near zero-copy). The whole table is still in memory —
-        larger-than-RAM export needs the chunked design in TODO.md.
+        N-Quads streams through duckdb's record-batch reader (one ~1M-row
+        batch in memory at a time — works larger-than-RAM; needs the polars
+        engine). The other formats fetch the table through duckdb's native
+        arrow result path (~4x cheaper than materialising pandas), whole-table
+        in memory.
         """
         function = getattr(export, name)
+        streams = name == "export_to_nquads"
 
         def fn(connection, *args, table=None, schema=None, table_name=None, **kwargs):
+            if streams and find_spec("polars"):
+                ref = duckdb_engine._resolve_table(connection, table=table, schema=schema,
+                                                   table_name=table_name)
+                cursor = connection.cursor()   # streaming pins a connection; isolate it
+                try:
+                    # no ORDER BY: every N-Quads line is row-local, so duckdb
+                    # streams straight off the table scan (an ORDER BY would
+                    # buffer the sort; it is only needed for grouped formats)
+                    reader = cursor.execute(
+                        f"SELECT ID, KEY, VALUE, INSTANCE_ID FROM {ref}"
+                    ).to_arrow_reader(_STREAM_BATCH_ROWS)
+                    return function(reader, *args, **kwargs)
+                finally:
+                    cursor.close()
             data = _to_arrow(connection, table=table, schema=schema, table_name=table_name)
             return function(data, *args, **kwargs)
 
