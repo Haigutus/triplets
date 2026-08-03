@@ -156,3 +156,9 @@ Checked against the issue tracker on 2026-07-06:
   non-canonical lexical forms (`"1"` under `xsd:float` — 2,187 occurrences in the
   Svedala grid alone); would need explicit `sh:pattern` on float paths. Our
   `triplets:lexicalForm` check covers it locally.
+- [ ] Multithreaded pugixml CIM XML export — prototype on
+  `explore/cimxml-export-threading` (~3x at 4 threads on RealGrid EQ, content
+  identical, element order hash-grouped, FullModel pinned first). Kept as a
+  documented experiment; open decisions in
+  https://github.com/Haigutus/triplets/issues/87. The GIL-free C++ lookup
+  tables from the prototype would also speed the sequential path (order kept).
