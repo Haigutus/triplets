@@ -26,8 +26,9 @@ Engine aliases: `performance` / `pugixml` -> `cython_pugixml_arrow`, `native` ->
 producing one batch per XML file as the reader is consumed — the dataset is
 never materialized in Python. Fixed all-utf8 schema (no dictionary encoding, no
 `string_type` — per-file dictionaries would differ and database consumers
-re-encode internally); requires an arrow engine (no pandas fallback); files
-parse sequentially (`max_workers` does not apply). This is the ingest path
+re-encode internally); requires an arrow engine (no pandas fallback).
+`max_workers` parses up to that many files ahead — a bounded, in-order
+prefetch, so memory stays bounded by max_workers+1 batches. This is the ingest path
 behind the DuckDB `con.read_rdf(...)` / `append=True`. File discovery goes
 through the lazy `iter_all_xml()` generator (zip members are read one at a
 time and handles are closed); `find_all_xml()` is its eager list form.

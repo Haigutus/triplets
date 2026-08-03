@@ -60,10 +60,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `con.read_rdf(paths, append=...)`): one Arrow RecordBatch per XML file
   flows straight into DuckDB — the dataset is never materialized in Python.
   `append=True` adds to the existing table (created if missing); the default
-  replaces. Zip members are read lazily, one at a time. This path now
-  requires an arrow parser engine and parses files sequentially:
-  `max_workers`, non-arrow `engine=`, `string_type` and `categorical_columns`
-  no longer apply to `con.read_rdf` and raise instead of being accepted.
+  replaces. Zip members are read lazily, one at a time; `max_workers`
+  parses up to that many files ahead (bounded, in-order prefetch — memory
+  stays bounded while multi-file ingest parallelizes). This path requires an
+  arrow parser engine; `string_type` and `categorical_columns` no longer
+  apply to `con.read_rdf` and raise instead of being accepted.
 - **DuckDB config persists in the database**: explicitly configured
   table/schema (via `connect(table=/schema=)`, `set_triplets_table`,
   `read_rdf(table=/schema=)`) is stored in a tiny `main."_triplets_config"`

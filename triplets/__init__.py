@@ -77,11 +77,11 @@ try:
 
         The replace load is one transactional statement, so a mid-stream parse
         failure leaves the previous table intact (a failed ``append=True`` adds
-        no rows, but may leave a newly created empty table behind). Files are
-        parsed sequentially (see :func:`triplets.parser.parse_batches`) and an
-        arrow parser engine is required — ``max_workers`` / non-arrow
-        ``engine=`` / ``string_type`` / ``categorical_columns`` do not apply on
-        this path and raise. Returns the rows loaded by this call.
+        no rows, but may leave a newly created empty table behind).
+        ``max_workers`` parses up to that many files ahead (bounded, in-order
+        prefetch — see :func:`triplets.parser.parse_batches`). An arrow parser
+        engine is required; ``string_type`` / ``categorical_columns`` do not
+        apply on this path and raise. Returns the rows loaded by this call.
         """
         if table_name is not None and table is None:
             table = table_name

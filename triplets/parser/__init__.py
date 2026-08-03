@@ -157,6 +157,7 @@ def parse_batches(
     debug: bool = False,
     engine: str = "auto",
     shorten_resources: bool = True,
+    max_workers: Optional[int] = None,
 ) -> Any:
     """Parse CIM RDF/XML lazily into a ``pyarrow.RecordBatchReader``.
 
@@ -165,8 +166,12 @@ def parse_batches(
     duckdb ``read_rdf``). Fixed all-utf8 schema [ID, KEY, VALUE, INSTANCE_ID]:
     no dictionary encoding and no string_type layout, because per-file
     dictionaries would differ batch to batch and database consumers re-encode
-    internally anyway. Files are parsed sequentially (no max_workers; a
-    bounded prefetch would be a separate change).
+    internally anyway.
+
+    ``max_workers`` parses up to that many files ahead on a thread pool — a
+    bounded, in-order prefetch: multi-file ingest parallelizes while memory
+    stays bounded by max_workers+1 batches (None = fully sequential, one
+    batch alive at a time). Batch order always follows file order.
 
     Requires an arrow parser engine ("auto" resolves one whenever pyarrow is
     installed); raises ValueError otherwise — no silent pandas fallback.
@@ -184,12 +189,27 @@ def parse_batches(
     parse_one = engine_mod.load_rdf_to_dataframe
 
     schema = pa.schema([(c, pa.string()) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
+    one_kwargs = {} if shorten_resources else {"shorten_resources": False}
+
+    def one(xml_file):
+        batch = parse_one(xml_file, debug=debug, **one_kwargs)
+        return batch if batch.schema == schema else batch.cast(schema)
 
     def batches():
-        one_kwargs = {} if shorten_resources else {"shorten_resources": False}
-        for xml_file in iter_all_xml(list_of_paths_to_zip_globalzip_xml, debug=debug):
-            batch = parse_one(xml_file, debug=debug, **one_kwargs)
-            yield batch if batch.schema == schema else batch.cast(schema)
+        xml_files = iter_all_xml(list_of_paths_to_zip_globalzip_xml, debug=debug)
+        if not max_workers:
+            for xml_file in xml_files:
+                yield one(xml_file)
+            return
+        from collections import deque
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            window = deque()
+            for xml_file in xml_files:
+                window.append(pool.submit(one, xml_file))
+                if len(window) > max_workers:
+                    yield window.popleft().result()
+            while window:
+                yield window.popleft().result()
 
     return pa.RecordBatchReader.from_batches(schema, batches())
 

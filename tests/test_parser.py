@@ -233,3 +233,17 @@ def test_realgrid_parse_and_meta(realgrid_data):
     assert len(realgrid_data) > 1_000_000
     assert "ACLineSegment" in set(realgrid_data[realgrid_data["KEY"] == "Type"]["VALUE"])
     assert "Distribution" in realgrid_data["VALUE"].values
+
+
+def test_parse_batches_parallel_prefetch(tmp_path):
+    """max_workers keeps batch order (in-order bounded prefetch) and row parity."""
+    pytest.importorskip("pyarrow")
+    import zipfile
+    archive = tmp_path / "many.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        for i in range(6):
+            bundle.write(MINIMAL, f"f{i}.xml")
+    sequential = list(triplets.parser.parse_batches(archive))
+    parallel = list(triplets.parser.parse_batches(archive, max_workers=3))
+    assert len(parallel) == len(sequential) == 6
+    assert [b.num_rows for b in parallel] == [b.num_rows for b in sequential]
