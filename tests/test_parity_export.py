@@ -31,6 +31,11 @@ def _polars(df):
     return polars.from_pandas(df)
 
 
+def _arrow(df):
+    import pyarrow
+    return pyarrow.Table.from_pandas(df, preserve_index=False)
+
+
 # ── per-format canonicalisers → a comparable string ───────────────────────────
 def _frame_str(df):
     cf = canon_frame(df)
@@ -84,9 +89,11 @@ FORMATS = {
             # shared accessor), python_lxml converts to pandas — both must match
             "cython_pugixml_polars_input": lambda d: export.export_to_cimxml(_polars(d), rdf_map=RDF_MAP, engine="cython_pugixml", export_to_memory=True),
             "python_lxml_polars_input": lambda d: export.export_to_cimxml(_polars(d), rdf_map=RDF_MAP, engine="python_lxml", export_to_memory=True),
+            "arrow_input": lambda d: export.export_to_cimxml(_arrow(d), rdf_map=RDF_MAP, export_to_memory=True),
         },
         "needs": {"cython_pugixml": ["pyarrow", "triplets.export.cimxml_cython_pugixml"],
                   "cython_pugixml_polars_input": ["polars", "pyarrow", "triplets.export.cimxml_cython_pugixml"],
+                  "arrow_input": ["pyarrow"],
                   "python_lxml_polars_input": ["polars"]},
         "canon": _canon_cimxml,
     },
@@ -95,8 +102,9 @@ FORMATS = {
         "variants": {
             "pandas": lambda d: export.export_to_nquads(d, rdf_map=RDF_MAP, engine="pandas", export_to_memory=True),
             "polars": lambda d: export.export_to_nquads(d, rdf_map=RDF_MAP, engine="polars", export_to_memory=True),
+            "arrow_input": lambda d: export.export_to_nquads(_arrow(d), rdf_map=RDF_MAP, export_to_memory=True),
         },
-        "needs": {"polars": ["polars"]},
+        "needs": {"polars": ["polars"], "arrow_input": ["pyarrow"]},
         "canon": _canon_nquads,
     },
     "csv": {
@@ -104,8 +112,9 @@ FORMATS = {
         "variants": {
             "pandas_input": lambda d: export.export_to_csv(d, export_to_memory=True),
             "polars_input": lambda d: export.export_to_csv(_polars(d), export_to_memory=True),
+            "arrow_input": lambda d: export.export_to_csv(_arrow(d), export_to_memory=True),
         },
-        "needs": {"polars_input": ["polars"]},
+        "needs": {"polars_input": ["polars"], "arrow_input": ["pyarrow"]},
         "canon": _canon_csv,
     },
     "excel": {

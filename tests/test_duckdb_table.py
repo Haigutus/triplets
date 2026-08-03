@@ -206,3 +206,16 @@ def test_views_created_in_configured_schema():
     row = con.execute("SELECT schema_name FROM duckdb_views() "
                       "WHERE view_name = 'Breaker'").fetchone()
     assert row == ("cim",)
+
+
+
+def test_connection_exports_ride_native_arrow():
+    """con.export_to_* fetches through duckdb's native arrow result path and
+    produces the same bytes as exporting the equivalent frame."""
+    con = duckdb.connect()
+    con.register("_src", _frame())
+    con.execute("CREATE TABLE triplets AS SELECT * FROM _src")
+    from_connection = con.export_to_nquads(export_to_memory=True).getvalue()
+    import triplets as t
+    from_frame = t.export.export_to_nquads(_frame(), export_to_memory=True).getvalue()
+    assert sorted(from_connection.splitlines()) == sorted(from_frame.splitlines())

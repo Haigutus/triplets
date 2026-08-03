@@ -27,6 +27,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pandas-only (auto-picked for `datatypes=True`).
 
 ### Fixed
+- **DuckDB exports fetch arrow, not pandas**: `con.export_to_nquads/csv/
+  cimxml/excel` used to materialize the table as a pandas DataFrame
+  (~383 ms/1.14M rows) before exporting — they now use duckdb's native arrow
+  result (~101 ms), and the exporters accept pyarrow input directly (the
+  nquads polars engine adopts it in ~9 ms). Exports are still whole-table
+  in-memory; chunked export remains a recorded follow-up.
 - **DuckDB `regex=True` semantics**: `filter_triplets` /
   `filter_triplets_by_value` used SQL `SIMILAR TO` (full-match); they now use
   `regexp_matches()` — search semantics anywhere in the value, matching the

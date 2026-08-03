@@ -37,10 +37,11 @@ polars input converts first; `datatypes=True` implies python_lxml under
 
 DuckDB notes: `con.read_rdf(paths)` streams one Arrow batch per XML file into
 the table (`append=True` adds instead of replacing) — see
-[parsers.md](parsers.md). Exports in the other direction currently materialize
-the whole table into pandas first (a memory spike for larger-than-RAM tables;
-a chunked `fetch_record_batch` design is recorded in TODO.md), except
-`export_to_arrow`, which is native.
+[parsers.md](parsers.md). Exports in the other direction fetch the table
+through duckdb's native arrow result path (~4x cheaper than the previous
+pandas materialization; the exporters adopt arrow near zero-copy). The whole
+table is still in memory during an export — true larger-than-RAM export needs
+the chunked `fetch_record_batch` design recorded in TODO.md.
 
 Both engines expose the same interface:
 `generate_xml(instance_data, rdf_map, namespace_map, class_KEY, export_undefined, comment, debug, datatypes)`

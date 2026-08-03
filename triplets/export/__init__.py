@@ -80,10 +80,11 @@ REQUIRED_COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 
 def _check_columns(data):
     """Fail early with a clear message when the input is not a triplets dataset."""
-    missing = [column for column in REQUIRED_COLUMNS if column not in data.columns]
+    names = data.column_names if _flavor(data) == "pyarrow" else data.columns
+    missing = [column for column in REQUIRED_COLUMNS if column not in names]
     if missing:
         raise ValueError(f"Not a triplets dataset — missing columns {missing}, "
-                         f"expected {list(REQUIRED_COLUMNS)}, got {list(data.columns)}")
+                         f"expected {list(REQUIRED_COLUMNS)}, got {list(names)}")
 
 
 def export_to_arrow(data):
@@ -94,15 +95,8 @@ def export_to_arrow(data):
     through undecoded. Columnar interchange for engines with native Arrow
     ingest (the qlever SPARQL engine's index builder).
     """
-    from .._engine_detect import flavor
-    kind = flavor(data)
-    if kind in ("pandas", "polars"):
+    if _flavor(data) in ("pandas", "polars", "pyarrow"):
         _check_columns(data)
-    elif kind == "pyarrow":
-        missing = [c for c in REQUIRED_COLUMNS if c not in data.column_names]
-        if missing:
-            raise ValueError(f"Not a triplets dataset — missing columns {missing}, "
-                             f"expected {list(REQUIRED_COLUMNS)}, got {list(data.column_names)}")
     return _to_arrow(data, columns=list(REQUIRED_COLUMNS))
 
 
@@ -111,6 +105,8 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
 
     Auto-detects engine: polars if input is polars DataFrame, else pandas.
     """
+    if _flavor(data) not in ("pandas", "polars"):
+        data = _to_pandas(data)          # arrow-backed dtypes — near zero-copy for arrow input
     engine = "polars" if _flavor(data) == "polars" else "pandas"
     logger.debug("format=csv, engine=%s (input flavor)", engine)
     _fn = _CSV.get(engine)[1].export_to_csv
@@ -256,6 +252,8 @@ def export_to_cimxml(data,
         init_time = start_time
 
     _check_columns(data)
+    if _flavor(data) == "pyarrow":
+        data = _to_pandas(data)          # arrow-backed dtypes — near zero-copy
     if datatypes and engine == "auto":
         logger.debug("cimxml engine set: python_lxml (datatypes=True not yet in cython engine)")
         engine = "python_lxml"

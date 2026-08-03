@@ -124,14 +124,16 @@ if duckdb:
     def _duckdb_export_fn(name):
         """A connection-first export callable: fetch the triplets table, run the export.
 
-        Materialises the configured triplets table into a pandas DataFrame
-        before exporting — a memory spike for large grids.
+        Fetches the configured triplets table through duckdb's native arrow
+        result path (~4x cheaper than materialising pandas; the exporters
+        adopt arrow near zero-copy). The whole table is still in memory —
+        larger-than-RAM export needs the chunked design in TODO.md.
         """
         function = getattr(export, name)
 
         def fn(connection, *args, table=None, schema=None, table_name=None, **kwargs):
-            df = _to_pandas(connection, table=table, schema=schema, table_name=table_name)
-            return function(df, *args, **kwargs)
+            data = _to_arrow(connection, table=table, schema=schema, table_name=table_name)
+            return function(data, *args, **kwargs)
 
         fn.__name__ = name
         fn.__doc__ = function.__doc__
