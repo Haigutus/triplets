@@ -61,8 +61,8 @@ for data:
 
 - **Arrow in (index build)** — the triplet columns go to the index builder as
   Arrow batches (`pyarrow_unwrap_batch`), consumed by `ArrowTripleParser`
-  (`_qlever_arrow_parser.cpp`): an `RdfParserBase` that yields `TurtleTriple`s
-  straight from the Arrow buffers (utf8 / large_utf8 / dictionary-encoded,
+  (`triplets/_arrow/string_column.h (shared accessor, used by _qlever_arrow_parser.cpp)`): an `RdfParserBase` that yields `TurtleTriple`s
+  straight from the Arrow buffers (utf8 / large_utf8 / string_view / dictionary-encoded,
   offset-aware). No N-Quads serialization, no text re-parsing, and the
   conversion runs in parallel using qlever's own worker/queue machinery
   (the `RdfMultifileParser` pattern: 100k-row ranges on a `TaskQueue`,

@@ -48,7 +48,7 @@ the engines mutate VALUE in place, which needs a plain materialized frame.
 That is a design decision, not an unfinished migration.
 
 User-facing controls: `triplets.engines()` reports what `"auto"` resolved to
-per subsystem (plus available alternatives); `triplets.set_engine(parser=...,
+per subsystem (plus available alternatives); `triplets.set_engine(parser_cimxml=...,
 sparql=..., ...)` overrides it globally (loads eagerly, fails fast).
 Precedence: per-call `engine=` > `set_engine()` > auto probe order.
 `set_engine` is process-global startup configuration, not a per-thread
@@ -71,6 +71,7 @@ at subsystem boundaries with **`triplets._engine_detect`** — do not add local
 | `to_polars(data, …)` | any → polars (Arrow path for duckdb/pyarrow) |
 | `as_frame(data)` | pandas/polars unchanged; arrow/duckdb → pandas |
 | `match_flavor(result, template)` | pandas result → template's flavor (cgmes dispatch) |
+| `to_return_type(frame, return_type)` | pandas frame → "pandas"/"polars"/"arrow" (explicit return_type params) |
 
 DuckDB table/schema defaults stay in `tools.duckdb_engine`; converters pass
 optional `table` / `schema` / `table_name` through `_resolve_table`.

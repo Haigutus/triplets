@@ -238,3 +238,18 @@ print(engine_name)  # "cython_pugixml_arrow" if the wheel has it
 from triplets.parser import cython_pugixml_arrow
 print("cython engine available")
 ```
+
+## Warnings policy
+
+The suite runs **warning-free** and must stay that way: `pyproject.toml`
+`filterwarnings` enables `always::ResourceWarning` (so unclosed handles fail
+review even though Python hides them by default) and ignores exactly two
+rdflib 7.6.0 self-deprecations (its own internals call its own deprecated
+`Dataset.default_context`/`Dataset.identifier`; drop the ignores when rdflib
+migrates). A test that legitimately exercises a deprecated triplets alias
+should assert it with `pytest.warns` or carry a scoped
+`pytest.mark.filterwarnings`, not leak it into the summary.
+
+Markers: `performance` (deselected by default, `pytest -m performance`) and
+`requires_perf_backend` (needs the compiled cython extension). CI runs the
+suite with `pytest -n auto` (pytest-xdist) on Python 3.11/3.13/3.14.

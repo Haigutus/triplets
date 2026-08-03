@@ -94,6 +94,8 @@ docs = [
 ]
 duckdb = [
     "duckdb>=1.5.3",
+    # con.read_rdf streams through parse_batches, which requires an arrow parser engine
+    "pyarrow>=14.0",
 ]
 
 [tool.pytest.ini_options]

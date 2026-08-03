@@ -1,6 +1,6 @@
 # TODO — SHACL / SPARQL engine work
 
-State as of 2026-07-16, branch `feat/shacl-sparql` (phases A–D + embedded qlever + oxigraph
+SHACL/SPARQL state as of 2026-07-16 (branch `feat/shacl-sparql`, since merged); engine/duckdb items below dated 2026-07-31..08-03 are from `feat/arrow-string-type` (phases A–D + embedded qlever + oxigraph
 complete; code-review fixes, shared engine registry and explicit cache lifecycle
 (`triplets.clear_caches()` / `cache_scope()`) landed 2026-07-14..16).
 Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, speed) / duckdb
@@ -78,10 +78,11 @@ qlever (auto when built, performance).
   re-parse) is the machinery for a future incremental-update story.
 - [x] `cimxml_cython_pugixml.pyx` reuses the offset/dictionary/large_utf8-aware Arrow
   column accessor, lifted into the shared header `triplets/_arrow/string_column.h`
-  (2026-07-31) — polars input now exports without a pandas hop. Still open from that
-  note: the per-row Python dict lookups hold the GIL (a `dict_code` fast path exists
-  on the accessor but is unused), and a possible string_view branch in the shared
-  header once the parser emits it (see the string_view exploration follow-up).
+  (2026-07-31) — polars input now exports without a pandas hop; the header gained the
+  string_view branch and the parser emits it (parse(string_type=...), 2026-08-01).
+  Still open: the sequential export path's per-row Python dict lookups hold the GIL —
+  the GIL-free C++ ExportTables from the threaded-export experiment (issue #87,
+  branch explore/cimxml-export-threading) would fix that with order preserved.
 
 ## Build / packaging / CI
 
@@ -114,12 +115,13 @@ qlever (auto when built, performance).
 
 ## Process
 
-- [ ] Full-suite run + PR of `feat/shacl-sparql` to main — CHANGELOG entries done
+- [x] Full-suite run + PR of `feat/shacl-sparql` to main — merged; the current open
+  branch is `feat/arrow-string-type`
   (Unreleased section); version bump = release tag (versioneer), alpha as `0.2.0a1`.
 - [ ] Archive `dev_shacl` (everything worth porting has been ported; the branch is
   checked out in the main worktree — retag/delete from there).
 - [x] `performance` pytest marker deselected by default (`addopts = '-m "not
-  performance"'`; run them with `pytest -m performance`). Plain suite ≈ 30 s.
+  performance"'`; run them with `pytest -m performance`). Plain suite ≈ 100 s serial / ≈ 40 s with `-n auto`.
 - [ ] Pre-existing tools follow-ups (unrelated to SHACL): polars eval in
   `tableview_to_triplets`, lossy `INSTANCE_ID` round-trip. (duckdb `multivalue`
   implemented 2026-08-01 — encoding matches polars, parity-tested; duckdb

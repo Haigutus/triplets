@@ -47,3 +47,21 @@ triplets.export.networkx\_pandas
 
 .. automodule:: triplets.export.networkx_pandas
    :members:
+
+triplets.export.cimxml\_pugixml
+--------------------------------
+
+.. automodule:: triplets.export.cimxml_pugixml
+   :members:
+
+triplets.export.cimxml\_utils
+------------------------------
+
+.. automodule:: triplets.export.cimxml_utils
+   :members:
+
+triplets.export.nquads\_utils
+------------------------------
+
+.. automodule:: triplets.export.nquads_utils
+   :members:

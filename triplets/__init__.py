@@ -74,8 +74,14 @@ try:
         ``append=True`` rows are added to the existing table (created if
         missing); the default replaces it. Optional ``table`` / ``schema``
         (or legacy ``table_name``) update this connection's defaults first.
-        The load is one transactional statement: a mid-stream parse failure
-        leaves the previous table intact. Returns the rows loaded by this call.
+
+        The replace load is one transactional statement, so a mid-stream parse
+        failure leaves the previous table intact (a failed ``append=True`` adds
+        no rows, but may leave a newly created empty table behind). Files are
+        parsed sequentially (see :func:`triplets.parser.parse_batches`) and an
+        arrow parser engine is required — ``max_workers`` / non-arrow
+        ``engine=`` / ``string_type`` / ``categorical_columns`` do not apply on
+        this path and raise. Returns the rows loaded by this call.
         """
         if table_name is not None and table is None:
             table = table_name

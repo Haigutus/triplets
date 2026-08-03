@@ -166,9 +166,9 @@ def engines() -> dict[str, dict]:
     """What each subsystem's "auto" resolves to, plus the available alternatives.
 
     Returns {kind: {engine, source, policy, auto_order, available, unavailable,
-    aliases}}. ``policy="input"`` subsystems (tools, csv) follow the input
-    object's flavor instead of an auto pick — their "engine" is the first
-    available name, shown for completeness.
+    aliases}}. ``policy="input"`` subsystems (tools, exporter_csv) follow the
+    input object's flavor per call, so they report ``engine: None`` and
+    ``source: "input"`` — there is no global pick to show.
     """
     return {kind: registry.info() for kind, registry in sorted(REGISTRIES.items())}
 

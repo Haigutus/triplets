@@ -20,6 +20,18 @@ All three engines expose the same interface: `load_rdf_to_dataframe(path_or_file
 
 Engine aliases: `performance` / `pugixml` -> `cython_pugixml_arrow`, `native` -> `python_lxml_pandas`
 
+## Streaming — `parse_batches()`
+
+`parse_batches(paths, engine="auto", ...)` returns a `pyarrow.RecordBatchReader`
+producing one batch per XML file as the reader is consumed — the dataset is
+never materialized in Python. Fixed all-utf8 schema (no dictionary encoding, no
+`string_type` — per-file dictionaries would differ and database consumers
+re-encode internally); requires an arrow engine (no pandas fallback); files
+parse sequentially (`max_workers` does not apply). This is the ingest path
+behind the DuckDB `con.read_rdf(...)` / `append=True`. File discovery goes
+through the lazy `iter_all_xml()` generator (zip members are read one at a
+time and handles are closed); `find_all_xml()` is its eager list form.
+
 ## String layout — `parse(..., string_type=...)`
 
 The Arrow layout of the ID and VALUE columns is selectable: `"utf8"` (32-bit

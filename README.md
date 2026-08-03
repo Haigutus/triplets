@@ -16,7 +16,7 @@ Upgrading from 0.0.x? See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0
 # Core (python_lxml_pandas engine, no extra deps)
 pip install triplets
 
-# With pyarrow (enables python_lxml_arrow + cython_pugixml_arrow engines, ~12x faster)
+# With pyarrow (enables python_lxml_arrow + cython_pugixml_arrow engines, ~10x faster)
 pip install triplets[arrow]
 ```
 
@@ -24,7 +24,7 @@ Install extras by feature:
 
 | Extra | Enables |
 |-------|---------|
-| `arrow` | compiled Arrow parser engines (~12x faster parsing) |
+| `arrow` | compiled Arrow parser engines (~10x faster parsing) |
 | `polars` | polars DataFrames (`polars.read_rdf`, `.triplets` namespace) |
 | `duckdb` | DuckDB connections (`con.read_rdf`, SQL over triplets) |
 | `sparql` | SPARQL queries (rdflib reference engine) |
@@ -87,7 +87,7 @@ Three parser engines with automatic fallback (fastest available):
 |--------|---------|-------|
 | `python_lxml_pandas` | `pip install triplets` | 1x baseline, **always works** |
 | `python_lxml_arrow` | `pip install triplets[arrow]` | ~1x, better interop |
-| `cython_pugixml_arrow` | `pip install triplets[arrow]` (included in wheels) | **12x faster** |
+| `cython_pugixml_arrow` | `pip install triplets[arrow]` (included in wheels) | **~10x faster** |
 
 The `cython_pugixml_arrow` engine is a compiled C++ extension included in published wheels.
 It requires pyarrow at runtime, so install with `triplets[arrow]` to enable it.
@@ -251,10 +251,14 @@ cim-diff original.xml modified.xml
 
 ## Performance (RealGrid, 1.14M rows)
 
+Committed benchmark results live in `tests/performance_results/`; re-run with
+`pytest -m performance`. Representative numbers (cython parse 1.47s → 0.157s
+vs the lxml engine = ~9.4x):
+
 | Operation | pandas | polars | DuckDB |
 |-----------|--------|--------|--------|
-| Parse (cython engine) | 128ms | 156ms | 283ms |
-| tableview_by_type | 72ms | **21ms** | 53ms |
+| Parse (cython engine) | 157ms | 180ms | streams (see duckdb section) |
+| tableview_by_type | 72ms | **15ms** | 53ms |
 | filter_triplets_by_type | 103ms | **9ms** | 50ms |
 | get_types_count | 21ms | **11ms** | 18ms |
 

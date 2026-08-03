@@ -1,7 +1,7 @@
 """CGMES tools — metadata, visualization, and data quality utilities.
 
 Functions accept triplet data in any supported flavor: pandas, polars, pyarrow
-Table/RecordBatch, or a DuckDB connection holding a `triplets` table. A dispatcher
+Table/RecordBatch, or a DuckDB connection holding a triplets table (the connection's configured one). A dispatcher
 routes each call by input type:
 
 - polars input → native polars engine (polars_engine.py), no pandas round-trip;

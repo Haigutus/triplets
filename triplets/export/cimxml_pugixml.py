@@ -21,10 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 def _string_like(arrow_type):
-    """utf8 / large_utf8, or a dictionary of either — what the extension reads."""
+    """utf8 / large_utf8 / string_view, or a dictionary of these — what the
+    extension's shared accessor reads without any re-encode."""
     if pyarrow.types.is_dictionary(arrow_type):
         arrow_type = arrow_type.value_type
-    return pyarrow.types.is_string(arrow_type) or pyarrow.types.is_large_string(arrow_type)
+    return (pyarrow.types.is_string(arrow_type) or pyarrow.types.is_large_string(arrow_type)
+            or (hasattr(pyarrow.types, "is_string_view") and pyarrow.types.is_string_view(arrow_type)))
 
 
 def _flat(column):

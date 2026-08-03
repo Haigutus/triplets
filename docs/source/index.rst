@@ -30,6 +30,7 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.
    :maxdepth: 2
    :caption: API Reference
 
+   Package (engines, parse, caches) <triplets>
    Parser <triplets.parser>
    Tools <triplets.tools>
    Export <triplets.export>

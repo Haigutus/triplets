@@ -19,8 +19,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ad-hoc nquads/csv dispatch in `triplets.export` are folded in; all public
   names and behavior unchanged.
 - **CIM XML export consumes polars input directly** (cython engine): the
-  compiled extension reads Arrow `utf8` / `large_utf8` / dictionary string
-  columns through the shared accessor `triplets/_arrow/string_column.h`
+  compiled extension reads Arrow `utf8` / `large_utf8` / `string_view` /
+  dictionary string columns through the shared accessor `triplets/_arrow/string_column.h`
   (lifted from the qlever Arrow ingest), so polars frames export without a
   pandas hop; per-instance splitting runs in the input's own flavor. Output is
   byte-identical across input flavors. The `python_lxml` engine remains
@@ -40,7 +40,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Tools dispatcher engine mismatches**: `triplets.tools.<fn>(df,
   engine="duckdb")` and other input/engine mismatches now raise a clear
   `TypeError` at the boundary (previously they silently ran the pandas engine
-  and failed deep inside); unknown engine names raise `ValueError`.
+  and failed deep inside); unknown engine names raise `ValueError`. Likewise
+  `cgmes_tools` data functions reject `engine=` outside pandas/polars with a
+  `ValueError` (duckdb/arrow input still runs via the pandas boundary).
 - **`parse()` rejects unknown keyword arguments**: the unused `**kwargs`
   swallowed typos silently (a misspelled option looked like it worked while
   doing nothing); mistakes now raise `TypeError`.
@@ -58,7 +60,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `con.read_rdf(paths, append=...)`): one Arrow RecordBatch per XML file
   flows straight into DuckDB — the dataset is never materialized in Python.
   `append=True` adds to the existing table (created if missing); the default
-  replaces. Zip members are read lazily, one at a time.
+  replaces. Zip members are read lazily, one at a time. This path now
+  requires an arrow parser engine and parses files sequentially:
+  `max_workers`, non-arrow `engine=`, `string_type` and `categorical_columns`
+  no longer apply to `con.read_rdf` and raise instead of being accepted.
 - **DuckDB config persists in the database**: explicitly configured
   table/schema (via `connect(table=/schema=)`, `set_triplets_table`,
   `read_rdf(table=/schema=)`) is stored in a tiny `main."_triplets_config"`
