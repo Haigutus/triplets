@@ -27,6 +27,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pandas-only (auto-picked for `datatypes=True`).
 
 ### Fixed
+- **Out-of-core DuckDB N-Quads export**: `con.export_to_nquads` streams the
+  table through duckdb's record-batch reader into the polars formatter, one
+  ~1M-row batch at a time — peak memory stays flat regardless of table size
+  (measured: ~350-400 MB delta from 1.1M to 4.6M rows vs linear growth
+  before), same speed. `export_to_nquads` also accepts a
+  `pyarrow.RecordBatchReader` directly (polars engine required). Line order
+  follows the table scan; N-Quads consumers are order-independent.
 - **DuckDB exports fetch arrow, not pandas**: `con.export_to_nquads/csv/
   cimxml/excel` used to materialize the table as a pandas DataFrame
   (~383 ms/1.14M rows) before exporting — they now use duckdb's native arrow

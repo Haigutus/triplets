@@ -126,10 +126,19 @@ qlever (auto when built, performance).
   `tableview_to_triplets`, lossy `INSTANCE_ID` round-trip. (duckdb `multivalue`
   implemented 2026-08-01 — encoding matches polars, parity-tested; duckdb
   `string_to_number=True` still raises, TRY_CAST implementation open.)
-- [ ] Chunked duckdb export (deferred design): `con.execute("SELECT ... ORDER BY
-  INSTANCE_ID, ID").fetch_record_batch(1_000_000)` per-batch into the nquads
-  writer — one carry-over object group between batches; take up when a real
-  larger-than-RAM export need lands.
+- [x] Chunked duckdb export — N-Quads DONE (2026-08-04, merged from
+  `explore/duckdb-chunked-export`): `con.export_to_nquads` streams via
+  `to_arrow_reader(1M rows)` + per-batch polars writer; peak-RSS delta flat
+  (~350-400 MB) from 1.1M to 4.6M rows vs linear growth whole-table, same
+  speed. No ORDER BY (N-Quads lines are row-local).
+- [ ] Chunked duckdb export — cimxml still open: needs `ORDER BY INSTANCE_ID`
+  (contiguity) + a batch accumulator yielding one instance frame at a time
+  into the existing `generate_xml` + packaging loops (turn the
+  `xml_documents` list into a generator); memory bound = largest instance.
+  Sequential (streaming and `max_workers` process-parallelism don't compose).
+- [ ] Streaming exports require the polars engine (clear ValueError otherwise);
+  a per-batch pandas fallback writer is possible if a polars-free
+  larger-than-RAM need ever appears.
 
 ## ENTSO-E SHACL findings (application-profiles-library)
 
