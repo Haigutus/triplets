@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Constructs REJECTED by conforming RDF/XML parsers (withdrawn in 2004) and
+     spec-invalid content. rdflib refuses this file, so it is NOT oracle-checked —
+     it exists to prove the capture contract: parser_rdfxml must not fail and must
+     record the raw attributes in context.rdf_attributes for downstream handling. -->
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:ex="http://example.org/schema#"
+         xml:base="http://example.org/withdrawn.xml">
+
+  <ex:Old rdf:aboutEach="#_grp1">
+    <ex:tag>applies to each</ex:tag>
+  </ex:Old>
+
+  <ex:Old rdf:aboutEachPrefix="http://example.org/">
+    <ex:tag>prefix targeted</ex:tag>
+  </ex:Old>
+
+  <ex:Bagged rdf:ID="_bagged1" rdf:bagID="_bag1">
+    <ex:name>bagID carrier</ex:name>
+  </ex:Bagged>
+
+  <!-- mixed content without parseType (spec-invalid) -->
+  <ex:Mixed rdf:ID="_mixed1">
+    <ex:content>leading text<ex:child>inner</ex:child>tail text</ex:content>
+  </ex:Mixed>
+
+  <!-- text AND resource on one property element (spec-invalid) -->
+  <ex:Conflict rdf:ID="_conflict1">
+    <ex:both rdf:resource="#_bagged1">also text</ex:both>
+  </ex:Conflict>
+
+</rdf:RDF>

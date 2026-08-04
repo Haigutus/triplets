@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Adversarial RDF/XML fixture for the parser_rdfxml oracle tests.
+     Every section exercises one feature; the whole file MUST parse under
+     rdflib (mixed content and withdrawn constructs live in
+     rdf_features_withdrawn.xml, which rdflib rejects). -->
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:ex="http://example.org/schema#"
+         xmlns:other="http://other.example/ns/"
+         xml:base="http://example.org/data.xml">
+
+  <!-- §lang: element-level tag, inherited tag, lang="" cancel -->
+  <ex:Thing rdf:ID="_lang1">
+    <ex:label xml:lang="en">English text</ex:label>
+    <ex:label xml:lang="et">Eesti tekst</ex:label>
+    <ex:plain>untagged</ex:plain>
+  </ex:Thing>
+  <ex:Thing rdf:ID="_lang2" xml:lang="de">
+    <ex:label>geerbt</ex:label>
+    <ex:label xml:lang="">cancelled</ex:label>
+  </ex:Thing>
+
+  <!-- §datatype -->
+  <ex:Measurement rdf:ID="_dt1">
+    <ex:value rdf:datatype="http://www.w3.org/2001/XMLSchema#float">400.5</ex:value>
+    <ex:count rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">7</ex:count>
+  </ex:Measurement>
+
+  <!-- §base: rdf:ID resolves against xml:base; nested xml:base on an element -->
+  <ex:Based rdf:ID="_based1">
+    <ex:ref rdf:resource="#_dt1"/>
+  </ex:Based>
+  <ex:Based rdf:about="relative-about">
+    <ex:name>relative subject</ex:name>
+  </ex:Based>
+  <ex:Based rdf:ID="_rebased" xml:base="http://rebased.example/inner.xml">
+    <ex:name>inner base</ex:name>
+  </ex:Based>
+
+  <!-- §nodeID: blank subject + blank object; the "_x" collision pair -->
+  <rdf:Description rdf:nodeID="bnodeA">
+    <ex:name>anonymous A</ex:name>
+    <ex:peer rdf:nodeID="bnodeB"/>
+  </rdf:Description>
+  <rdf:Description rdf:nodeID="bnodeB">
+    <ex:name>anonymous B</ex:name>
+  </rdf:Description>
+  <ex:Collide rdf:ID="_x">
+    <ex:name>iri x</ex:name>
+  </ex:Collide>
+  <rdf:Description rdf:nodeID="_x">
+    <ex:name>blank x</ex:name>
+  </rdf:Description>
+
+  <!-- §nested: named nested node, anonymous nested node -->
+  <ex:Outer rdf:ID="_outer1">
+    <ex:nested>
+      <ex:Inner rdf:ID="_inner1">
+        <ex:name>named inner</ex:name>
+      </ex:Inner>
+    </ex:nested>
+    <ex:anon>
+      <ex:Inner>
+        <ex:name>anonymous inner</ex:name>
+      </ex:Inner>
+    </ex:anon>
+  </ex:Outer>
+
+  <!-- §parseType=Resource -->
+  <ex:Holder rdf:ID="_holder1">
+    <ex:struct rdf:parseType="Resource">
+      <ex:a>alpha</ex:a>
+      <ex:b rdf:resource="#_dt1"/>
+    </ex:struct>
+  </ex:Holder>
+
+  <!-- §parseType=Collection: 0, 1, 3 items -->
+  <ex:Lists rdf:ID="_lists1">
+    <ex:empty rdf:parseType="Collection"></ex:empty>
+    <ex:single rdf:parseType="Collection">
+      <rdf:Description rdf:about="#_dt1"/>
+    </ex:single>
+    <ex:triple rdf:parseType="Collection">
+      <rdf:Description rdf:about="#_lang1"/>
+      <rdf:Description rdf:about="#_lang2"/>
+      <rdf:Description rdf:about="#_dt1"/>
+    </ex:triple>
+  </ex:Lists>
+
+  <!-- §parseType=Literal: mixed markup captured as XMLLiteral -->
+  <ex:Doc rdf:ID="_doc1">
+    <ex:body rdf:parseType="Literal">text <ex:b>bold</ex:b> tail</ex:body>
+  </ex:Doc>
+
+  <!-- §containers: Bag/Seq/Alt with rdf:li -->
+  <ex:Grouping rdf:ID="_grp1">
+    <ex:bag>
+      <rdf:Bag>
+        <rdf:li>one</rdf:li>
+        <rdf:li>two</rdf:li>
+      </rdf:Bag>
+    </ex:bag>
+    <ex:seq>
+      <rdf:Seq>
+        <rdf:li rdf:resource="#_lang1"/>
+        <rdf:li rdf:resource="#_lang2"/>
+      </rdf:Seq>
+    </ex:seq>
+    <ex:alt>
+      <rdf:Alt>
+        <rdf:li xml:lang="en">choice</rdf:li>
+      </rdf:Alt>
+    </ex:alt>
+  </ex:Grouping>
+
+  <!-- §property attributes on a node element -->
+  <ex:Attributed rdf:ID="_attr1" ex:name="via attribute" ex:kind="compact"/>
+
+  <!-- §property attributes on an empty property element (blank object) -->
+  <ex:Wrapper rdf:ID="_wrap1">
+    <ex:point ex:x="1" ex:y="2"/>
+  </ex:Wrapper>
+
+  <!-- §rdf:type as child element -->
+  <rdf:Description rdf:ID="_typed1">
+    <rdf:type rdf:resource="http://example.org/schema#Special"/>
+    <ex:name>typed via child</ex:name>
+  </rdf:Description>
+
+  <!-- §bare rdf:Description (untyped) -->
+  <rdf:Description rdf:ID="_untyped1">
+    <ex:name>no type at all</ex:name>
+  </rdf:Description>
+
+  <!-- §CDATA -->
+  <ex:Raw rdf:ID="_cdata1">
+    <ex:markup><![CDATA[<b>bold</b> & stuff]]></ex:markup>
+  </ex:Raw>
+
+  <!-- §inner xmlns declaration (prefix not on root) -->
+  <ex:Deep rdf:ID="_deep1" xmlns:inner="http://inner.example/ns#">
+    <inner:prop>inner namespaced</inner:prop>
+  </ex:Deep>
+
+  <!-- §cross-namespace same local name -->
+  <ex:Clash rdf:ID="_clash1">
+    <ex:name>from ex</ex:name>
+    <other:name>from other</other:name>
+  </ex:Clash>
+
+  <!-- §reification: rdf:ID on a property element -->
+  <ex:Stated rdf:ID="_stated1">
+    <ex:claim rdf:ID="_stmt1">reified literal</ex:claim>
+  </ex:Stated>
+
+  <!-- §escapes, unicode, quotes, newlines -->
+  <ex:Escapes rdf:ID="_esc1">
+    <ex:text>quotes " and ' backslash \ ampersand &amp; lt &lt;</ex:text>
+    <ex:uni>tõõtäjä 電力 ⚡</ex:uni>
+    <ex:multiline>line one
+line two</ex:multiline>
+  </ex:Escapes>
+
+</rdf:RDF>
