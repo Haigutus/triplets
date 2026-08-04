@@ -11,6 +11,7 @@ import triplets
 from triplets.parser import parse
 
 rdflib = pytest.importorskip("rdflib")
+pytest.importorskip("rdflib.compare")
 pytest.importorskip("pyarrow")
 
 FIXTURE = "tests/data/rdf_features.xml"
@@ -135,7 +136,6 @@ def test_withdrawn_constructs_do_not_fail_and_are_captured():
 
 # ── phase 2: nested/blank nodes ───────────────────────────────────────────────
 
-@phase2
 def test_nested_nodes_materialize():
     table = parse_full()
     names = [r["VALUE"] for r in rows_for(table, "name")]
@@ -152,13 +152,11 @@ def test_blank_label_collision_resolved_and_label_preserved():
     assert iri_x[0]["ID"] != blank_x[0]["ID"]    # no collision
 
 
-@phase2
 def test_parse_type_resource():
     table = parse_full()
     assert any(r["VALUE"] == "alpha" for r in rows_for(table, "a"))
 
 
-@phase2
 def test_property_attributes_become_rows():
     table = parse_full()
     assert any(r["VALUE"] == "via attribute" for r in rows_for(table, "name"))
@@ -169,10 +167,35 @@ def test_rdf_description_has_no_fake_type():
     assert not any(r["VALUE"] == "Description" for r in rows_for(table, "Type"))
 
 
-@phase2
-def test_flat_sections_isomorphic():
-    """Whole-file oracle needs phases 1+2 (nested content dominates the fixture)."""
-    assert_isomorphic()
+NESTED_DOC = b"""<?xml version="1.0"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:ex="http://example.org/schema#" xml:base="http://example.org/data.xml">
+  <ex:Thing rdf:ID="_top" ex:code="42">
+    <ex:label xml:lang="en">top</ex:label>
+    <ex:child>
+      <ex:Inner rdf:nodeID="a"><ex:name>named inner</ex:name></ex:Inner>
+    </ex:child>
+    <ex:child><rdf:Description><ex:name>anon inner</ex:name></rdf:Description></ex:child>
+    <ex:pair rdf:parseType="Resource">
+      <ex:a>alpha</ex:a>
+      <ex:b rdf:resource="#_top"/>
+    </ex:pair>
+    <ex:tag ex:name="via attribute"/>
+    <rdf:type rdf:resource="http://example.org/schema#Special"/>
+  </ex:Thing>
+</rdf:RDF>"""
+
+
+def test_nested_document_isomorphic():
+    """Phase-2 oracle: flat + nested + parseType=Resource + property attributes
+    + rdf:type child, no phase-3 constructs."""
+    import io
+    doc = io.BytesIO(NESTED_DOC)
+    doc.name = "nested.xml"
+    ours = graph_from_triplets(parse_full(doc))
+    reference = rdflib.Graph().parse(io.BytesIO(NESTED_DOC), format="xml")
+    assert rdflib.compare.isomorphic(ours, reference), (
+        f"ours={len(ours)} vs rdflib={len(reference)}")
 
 
 # ── phase 3: containers, collections, parseType=Literal ──────────────────────

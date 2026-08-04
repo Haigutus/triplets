@@ -153,12 +153,21 @@ def _tag_parts(element):
 
 
 def _extra_attributes(element):
-    """JSON catch-all of attributes without dedicated handling (property
-    attributes until Phase 2 materializes them, withdrawn rdf:* constructs,
-    anything future) — capture-complete from day one."""
+    """JSON catch-all of attributes with no dedicated handling AND no row of
+    their own (withdrawn rdf:* constructs, anything future) — property
+    attributes are materialized as literal rows instead (see
+    _property_attribute_rows) and excluded here."""
     extra = {name: value for name, value in element.attrib.items()
-             if name not in _HANDLED}
+             if name not in _HANDLED and name.startswith("{" + RDF_NS + "}")}
     return json.dumps(extra, sort_keys=True) if extra else None
+
+
+def _property_attributes(element):
+    """Non-rdf, non-xml attributes on a node element are RDF property
+    attributes: each is one literal triple about the subject."""
+    return [(name, value) for name, value in element.attrib.items()
+            if name not in _HANDLED and not name.startswith("{" + RDF_NS + "}")
+            and not name.startswith("{http://www.w3.org/XML/1998/namespace}")]
 
 
 def _language(element, inherited):
@@ -170,12 +179,8 @@ def _language(element, inherited):
 
 
 def _emit_subject(state, element, subject, subject_prefix, id_source, node_label, lang):
-    """Emit one node element: Type row + one row per property element.
-
-    Phase 1 scope: flat documents — nested node elements and parseType
-    content produce a placeholder row (VALUE "") with everything about them
-    captured in context; Phases 2-3 materialize them recursively.
-    """
+    """Emit one node element: Type row + property-attribute rows + one row
+    per property element (nested node elements recurse as new subjects)."""
     lang = _language(element, lang)
     type_local, type_ns = _tag_parts(element)
     is_description = type_ns == RDF_NS and type_local == "Description"
@@ -184,13 +189,34 @@ def _emit_subject(state, element, subject, subject_prefix, id_source, node_label
                   id_prefix=subject_prefix, value_prefix=type_ns, kind="iri",
                   id_source=id_source, node_id=node_label,
                   attributes=_extra_attributes(element), line=element.sourceline)
-    elif _extra_attributes(element) is not None or id_source in ("nodeID", "minted"):
-        # untyped node: no fake Type row, but its element-level capture
-        # (attributes, blank-ness, line) must not be lost — carried on the
-        # first property row below via the subject-level fields
-        pass
 
     emitted_any = not is_description
+    # property attributes: literal triples in compact form
+    for attribute_name, attribute_value in _property_attributes(element):
+        qname = etree.QName(attribute_name)
+        state.row(subject, qname.localname, attribute_value,
+                  id_prefix=subject_prefix, key_prefix=qname.namespace,
+                  kind="literal", lang=lang, id_source=id_source,
+                  node_id=node_label, line=element.sourceline)
+        emitted_any = True
+
+    emitted_any |= _emit_properties(state, element, subject, subject_prefix,
+                                    id_source, node_label, lang)
+
+    if not emitted_any:
+        # a bare untyped node with no properties still exists as a subject —
+        # keep it visible (rare; capture-complete)
+        state.row(subject, "Type", "",
+                  id_prefix=subject_prefix, kind=None, id_source=id_source,
+                  node_id=node_label, attributes=_extra_attributes(element),
+                  line=element.sourceline)
+
+
+def _emit_properties(state, element, subject, subject_prefix, id_source,
+                     node_label, lang):
+    """Emit the property elements of one subject (also the body of
+    parseType="Resource", where *element* is the property element itself)."""
+    emitted_any = False
     for prop in element.iterchildren(etree.Element):
         prop_lang = _language(prop, lang)
         key_local, key_ns = _tag_parts(prop)
@@ -202,13 +228,33 @@ def _emit_subject(state, element, subject, subject_prefix, id_source, node_label
         prop_node = prop.get(_RDF + "nodeID")
         datatype = prop.get(_RDF + "datatype")
 
-        if parse_type is not None:
-            # Phases 2-3: Resource/Collection/Literal materialization
+        if parse_type == "Resource":
+            # anonymous node whose properties are this element's children
+            minted = str(uuid_module.uuid4())
+            state.row(subject, key_local, minted, value_prefix="_:", kind="blank",
+                      parse_type=parse_type, **common)
+            _emit_properties(state, prop, minted, "_:", "minted", None, prop_lang)
+        elif parse_type is not None:
+            # Phase 3: Collection / Literal materialization
             state.row(subject, key_local, "", kind=None,
                       parse_type=parse_type, **common)
         elif len(prop):
-            # Phase 2: nested node element(s)
-            state.row(subject, key_local, "", kind=None, **common)
+            # nested node element(s): each child is its own subject; this row
+            # references it. rdf:type children become proper Type rows.
+            for child in prop.iterchildren(etree.Element):
+                child_subject, child_prefix, child_source, child_label = _subject(state, child)
+                state.row(subject, key_local, child_subject,
+                          value_prefix=child_prefix,
+                          kind="blank" if child_prefix == "_:" else "iri", **common)
+                _emit_subject(state, child, child_subject, child_prefix,
+                              child_source, child_label, prop_lang)
+        elif key_ns == RDF_NS and key_local == "type" and resource is not None:
+            # rdf:type as a child element → a proper Type row (no lowercase dup)
+            local, prefix = _clean_value(state, _resolve(prop, resource))
+            state.row(subject, "Type", local,
+                      id_prefix=subject_prefix, value_prefix=prefix, kind="iri",
+                      id_source=id_source, node_id=node_label,
+                      attributes=_extra_attributes(prop), line=prop.sourceline)
         elif resource is not None:
             local, prefix = _clean_value(state, _resolve(prop, resource))
             state.row(subject, key_local, local, value_prefix=prefix,
@@ -217,18 +263,22 @@ def _emit_subject(state, element, subject, subject_prefix, id_source, node_label
             minted = state.node_ids.setdefault(prop_node, str(uuid_module.uuid4()))
             state.row(subject, key_local, minted, value_prefix="_:", kind="blank",
                       **{**common, "node_id": prop_node})
+        elif _property_attributes(prop):
+            # empty property element with property attributes: blank object
+            # carrying one literal row per attribute
+            minted = str(uuid_module.uuid4())
+            state.row(subject, key_local, minted, value_prefix="_:", kind="blank", **common)
+            for attribute_name, attribute_value in _property_attributes(prop):
+                qname = etree.QName(attribute_name)
+                state.row(minted, qname.localname, attribute_value,
+                          id_prefix="_:", key_prefix=qname.namespace,
+                          kind="literal", lang=prop_lang, id_source="minted",
+                          line=prop.sourceline)
         else:
             state.row(subject, key_local, prop.text or "", kind="literal",
                       lang=prop_lang, datatype=datatype, **common)
         emitted_any = True
-
-    if not emitted_any:
-        # a bare untyped node with no properties still exists as a subject —
-        # keep it visible (rare; capture-complete)
-        state.row(subject, "Type", "",
-                  id_prefix=subject_prefix, kind=None, id_source=id_source,
-                  node_id=node_label, attributes=_extra_attributes(element),
-                  line=element.sourceline)
+    return emitted_any
 
 
 def load_rdf_to_dataframe(path_or_fileobject, debug=False, clean_rules=None,
