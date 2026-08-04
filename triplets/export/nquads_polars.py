@@ -63,6 +63,36 @@ def _quads(data, enum_keys, key_namespaces, key_datatypes):
                .when(val_is_uuid).then(pl.format("<urn:uuid:{}>", pl.col("VALUE")))
                .otherwise(plain_literal))
 
+    if "context" in data.columns:
+        # context frames (parser_rdfxml): the captured term metadata replaces
+        # the CIM heuristics wherever it is present; null context rows (meta
+        # rows, mixed frames) fall through to the plans above
+        ctx = pl.col("context")
+        id_prefix = ctx.struct.field("ID_PREFIX")
+        key_prefix = ctx.struct.field("KEY_PREFIX")
+        value_prefix = ctx.struct.field("VALUE_PREFIX")
+        kind = ctx.struct.field("rdf_value_kind")
+        language = ctx.struct.field("rdf_language")
+        value_datatype = ctx.struct.field("rdf_datatype")
+        subject = (pl.when(id_prefix == "_:").then(pl.format("_:{}", pl.col("ID")))
+                   .when(id_prefix.is_not_null())
+                   .then(pl.format("<{}{}>", id_prefix, pl.col("ID")))
+                   .otherwise(subject))
+        predicate = (pl.when(is_type).then(pl.lit(f"<{RDF_TYPE}>"))
+                     .when(key_prefix.is_not_null())
+                     .then(pl.format("<{}{}>", key_prefix, pl.col("KEY")))
+                     .otherwise(predicate))
+        objects = (pl.when(kind == "blank").then(pl.format("_:{}", pl.col("VALUE")))
+                   .when((kind == "iri") & value_prefix.is_not_null())
+                   .then(pl.format("<{}{}>", value_prefix, pl.col("VALUE")))
+                   .when(kind == "iri").then(pl.format("<{}>", pl.col("VALUE")))
+                   .when((kind == "literal") & language.is_not_null())
+                   .then(pl.format('"{}"@{}', escaped, language))
+                   .when((kind == "literal") & value_datatype.is_not_null())
+                   .then(pl.format('"{}"^^<{}>', escaped, value_datatype))
+                   .when(kind == "literal").then(plain_literal)
+                   .otherwise(objects))
+
     # one lazy plan: stringify (KEY/INSTANCE_ID may be Categorical), filter
     # null VALUE rows, build the four quad terms + the "." terminator as
     # separate columns, collect once. The aliases are required (not cosmetic):

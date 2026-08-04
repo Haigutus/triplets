@@ -225,18 +225,38 @@ def test_full_fixture_isomorphic():
 
 # ── phase 4: round-trip ───────────────────────────────────────────────────────
 
-@phase4
-def test_nquads_roundtrip_isomorphic():
-    import io
-    table = parse_full()
-    nq = triplets.export.export_to_nquads(table, export_to_memory=True)
+def _data_rows(table):
+    """The fixture's RDF content: meta rows (Distribution/NamespaceMap) out."""
+    import pyarrow
+    rows = table.to_pylist()
+    meta_ids = {r["ID"] for r in rows if r["KEY"] == "Type" and r["VALUE"] in META_TYPES}
+    return table.filter(pyarrow.array([r["ID"] not in meta_ids for r in rows]))
+
+
+def _graph_from_nquads(nq_buffer):
     dataset = rdflib.Dataset(default_union=True)
-    dataset.parse(io.BytesIO(nq.getvalue()), format="nquads")
-    exported = rdflib.Graph()
-    for s, p, o in dataset:
-        exported.add((s, p, o))
+    dataset.parse(nq_buffer, format="nquads")
+    graph = rdflib.Graph()
+    for s, p, o, _ in dataset:
+        graph.add((s, p, o))
+    return graph
+
+
+def test_nquads_roundtrip_isomorphic():
+    nq = triplets.export.export_to_nquads(_data_rows(parse_full()), export_to_memory=True)
+    exported = _graph_from_nquads(nq)
     reference = rdflib.Graph().parse(FIXTURE, format="xml")
-    assert rdflib.compare.isomorphic(exported, reference)
+    assert rdflib.compare.isomorphic(exported, reference), (
+        f"exported={len(exported)} vs reference={len(reference)}")
+
+
+def test_read_nquads_context_fixpoint():
+    """export → read_nquads(context=True) → export again reaches a fixpoint:
+    both serializations parse to isomorphic graphs."""
+    nq = triplets.export.export_to_nquads(_data_rows(parse_full()), export_to_memory=True)
+    reread = triplets.read_nquads(nq.getvalue(), context=True, return_type="polars")
+    again = triplets.export.export_to_nquads(reread, export_to_memory=True)
+    assert rdflib.compare.isomorphic(_graph_from_nquads(nq), _graph_from_nquads(again))
 
 
 # ── phase 5: reification + completeness ───────────────────────────────────────

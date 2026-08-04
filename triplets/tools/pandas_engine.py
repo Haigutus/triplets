@@ -1115,7 +1115,11 @@ def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"
         # join-based membership is for LARGE value sets, as in filter_triplets
         drop = data.loc[(data["KEY"] == "Type") & data["VALUE"].isin(ignore_types), "ID"]
         data = data[~data["ID"].isin(drop)]
-    hashes = pandas.util.hash_pandas_object(data[list(columns)], index=False).to_numpy()
+    frame = data[list(columns)]
+    if "context" in columns:
+        # struct rows are unhashable dicts; the string form is deterministic
+        frame = frame.assign(context=frame["context"].astype(str))
+    hashes = pandas.util.hash_pandas_object(frame, index=False).to_numpy()
     if order_sensitive:
         return hashlib.blake2b(hashes.tobytes(), digest_size=16).hexdigest()
     combined = (len(hashes), int(hashes.sum(dtype=numpy.uint64)),

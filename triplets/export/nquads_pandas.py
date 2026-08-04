@@ -26,6 +26,9 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     export_to_memory : bool, default False
         If True, return an in-memory BytesIO (with .name) instead of writing to disk.
     """
+    if "context" in data.columns:
+        raise ValueError("context-aware N-Quads export requires the polars engine. "
+                         "Install with: pip install triplets[polars].")
     enum_keys, key_namespaces, key_datatypes = build_key_metadata(rdf_map) if rdf_map else (set(), {}, {})
 
     data = data[data["VALUE"].notna()]  # no object to state (parity with the polars engine)

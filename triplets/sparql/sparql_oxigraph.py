@@ -90,7 +90,7 @@ def _store_for(data, rdf_map, data_unchanged=False):
     """
     if not hasattr(data, "content_hash"):  # pyarrow — no registered methods
         data = to_pandas(data)
-    key = content_key(data, rdf_map, b"triplets-oxigraph-1", data_unchanged)
+    key = content_key(data, rdf_map, b"triplets-oxigraph-2", data_unchanged)
     if key in _STORES:
         cached = _STORES[key]
         if isinstance(cached, Exception):   # this exact data+schema already failed to load

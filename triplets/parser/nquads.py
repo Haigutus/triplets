@@ -23,16 +23,19 @@ from ..export.nquads_utils import CIM_NS, RDF_TYPE
 _UUID_PREFIX = "urn:uuid:"
 
 # subject predicate object [graph] . — subject/predicate are space-free terms,
-# the object may contain spaces inside a quoted literal, the graph is an IRI
-# or a blank-node label.
-_QUAD_PATTERN = r'^\s*(\S+)\s+(\S+)\s+(.+?)(?:\s+(<[^>]*>|_:[^\s"<]+))?\s*\.\s*$'
+# the object is a quoted literal (escapes honored, so embedded "<" or "\""
+# cannot bleed into the graph term) with an optional ^^/@ suffix, or a
+# space-free term; the graph is an IRI or a blank-node label.
+_QUAD_PATTERN = (r'^\s*(\S+)\s+(\S+)\s+'
+                 r'("(?:[^"\\]|\\.)*"(?:\^\^<[^>]*>|@[\w-]+)?|\S+)'
+                 r'(?:\s+(<[^>]*>|_:[^\s"<]+))?\s*\.\s*$')
 
 # N-Triples string escapes: \uXXXX / \UXXXXXXXX and single-char (\n \t \" \\ ...)
 _ESCAPE = re.compile(r'\\u([0-9A-Fa-f]{4})|\\U([0-9A-Fa-f]{8})|\\(.)')
 _CONTROL_ESCAPES = {"n": "\n", "r": "\r", "t": "\t", "b": "\b", "f": "\f"}
 
 
-def read_nquads(source, return_type="pandas"):
+def read_nquads(source, return_type="pandas", context=False):
     """Parse N-Quads (or N-Triples) into a triplet DataFrame.
 
     Parameters
@@ -42,13 +45,18 @@ def read_nquads(source, return_type="pandas"):
         open file object (text or binary).
     return_type : str, default "pandas"
         "pandas", "polars", or "arrow".
+    context : bool, default False
+        Capture term metadata into a ``context`` struct column instead of
+        discarding it (the parser_rdfxml convention): stripped IRI prefixes,
+        term kind, ``@lang`` / ``^^datatype`` annotations. Values still keep
+        their lexical form either way.
 
     Returns
     -------
     Triplet DataFrame [ID, KEY, VALUE, INSTANCE_ID] — the round-trip inverse
-    of export_to_nquads (datatype annotations drop to lexical form, which is
-    the triplets convention: everything is a string). Lines without a graph
-    term (N-Triples) get INSTANCE_ID null.
+    of export_to_nquads (without ``context``, datatype annotations drop to
+    lexical form, which is the triplets convention: everything is a string).
+    Lines without a graph term (N-Triples) get INSTANCE_ID null.
     """
     lines = pandas.Series(_read_text(source).splitlines(), dtype="object")
     lines = lines[lines.str.strip().ne("") & ~lines.str.lstrip().str.startswith("#")]
@@ -59,7 +67,56 @@ def read_nquads(source, return_type="pandas"):
     if bad.any():
         raise ValueError(f"not N-Quads: {lines[bad].iloc[0][:200]!r}")
 
-    return to_return_type(terms_to_triplets(terms).reset_index(drop=True), return_type)
+    captured = _capture_context(terms) if context else None
+    frame = terms_to_triplets(terms).reset_index(drop=True)
+    if captured is not None:
+        frame["context"] = captured
+    return to_return_type(frame, return_type)
+
+
+def _capture_context(terms):
+    """Raw quad terms → the parser_rdfxml context struct (ArrowDtype column).
+
+    Mirrors what terms_to_triplets strips: prefixes land in *_PREFIX fields
+    (``prefix + column`` reconstructs the term), the object's shape becomes
+    rdf_value_kind, and ``@lang`` / ``^^<datatype>`` suffixes are extracted.
+    Position-only fields (rdf_id_source, source_line …) stay null."""
+    import pyarrow
+    from .rdfxml_lxml_arrow import CONTEXT_FIELDS, context_struct_type
+
+    def prefixes(column):
+        """The chain _iri strips, recorded: (prefix, is_blank)."""
+        remaining = column.str.replace(r"^<(.*)>$", r"\1", regex=True)
+        prefix = pandas.Series("", index=column.index, dtype="object")
+        for rule in ("_:", _UUID_PREFIX, CIM_NS):
+            hit = remaining.str.startswith(rule).fillna(False)
+            prefix = prefix.mask(hit, prefix + rule)
+            remaining = remaining.mask(hit, remaining.str.slice(len(rule)))
+        return prefix.mask(prefix == "", None).where(column.notna(), None)
+
+    value = terms["VALUE"]
+    is_literal = value.str.startswith('"')
+    is_blank = value.str.startswith("_:")
+    kind = pandas.Series("iri", index=terms.index, dtype="object").mask(
+        is_literal, "literal").mask(is_blank, "blank")
+    annotated = value.where(is_literal)
+    fields = {
+        "ID_PREFIX": prefixes(terms["ID"]),
+        "KEY_PREFIX": prefixes(terms["KEY"]).mask(
+            terms["KEY"] == f"<{RDF_TYPE}>", None),
+        "VALUE_PREFIX": prefixes(value).where(~is_literal, None),
+        "rdf_value_kind": kind,
+        "rdf_language": annotated.str.extract(r'@([A-Za-z0-9-]+)$', expand=False),
+        "rdf_datatype": annotated.str.extract(r'\^\^<([^>]*)>$', expand=False),
+        "rdf_node_id": terms["ID"].str.removeprefix("_:").where(
+            terms["ID"].str.startswith("_:"), None),
+    }
+    arrays = [pyarrow.array(fields.get(name, [None] * len(terms)),
+                            type=pyarrow.int32() if name == "source_line" else pyarrow.string(),
+                            from_pandas=True)
+              for name in CONTEXT_FIELDS]
+    struct = pyarrow.StructArray.from_arrays(arrays, fields=list(context_struct_type()))
+    return pandas.arrays.ArrowExtensionArray(struct)
 
 
 def terms_to_triplets(frame):

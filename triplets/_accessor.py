@@ -146,8 +146,12 @@ if duckdb:
                     # no ORDER BY: every N-Quads line is row-local, so duckdb
                     # streams straight off the table scan (an ORDER BY would
                     # buffer the sort; it is only needed for grouped formats)
+                    columns = "ID, KEY, VALUE, INSTANCE_ID"
+                    if any(row[0] == "context"
+                           for row in cursor.execute(f"DESCRIBE {ref}").fetchall()):
+                        columns += ", context"
                     reader = cursor.execute(
-                        f"SELECT ID, KEY, VALUE, INSTANCE_ID FROM {ref}"
+                        f"SELECT {columns} FROM {ref}"
                     ).to_arrow_reader(_STREAM_BATCH_ROWS)
                     return function(reader, *args, **kwargs)
                 finally:

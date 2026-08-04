@@ -38,7 +38,22 @@ def _content_hash(data, data_unchanged):
     entry = _HASHES.get(id(data))
     if data_unchanged and entry is not None and entry[0]() is data:
         return entry[1]
-    digest = data.content_hash(ignore_types=(), columns=("ID", "KEY", "VALUE", "INSTANCE_ID"))
+    columns = ("ID", "KEY", "VALUE", "INSTANCE_ID")
+    if "context" in _column_names(data):
+        columns += ("context",)      # lang/datatype/prefixes change the loaded quads
+    digest = data.content_hash(ignore_types=(), columns=columns)
     oid = id(data)
     _HASHES[oid] = (weakref.ref(data, lambda _: _HASHES.pop(oid, None)), digest)
     return digest
+
+
+def _column_names(data):
+    """Column names for any supported flavor (duckdb hashes its own table)."""
+    from ._engine_detect import flavor
+    kind = flavor(data)
+    if kind == "pyarrow":
+        return data.column_names
+    if kind == "duckdb":
+        from .tools.duckdb_engine import _resolve_table
+        return [row[0] for row in data.execute(f"DESCRIBE {_resolve_table(data)}").fetchall()]
+    return list(data.columns)
