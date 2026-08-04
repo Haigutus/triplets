@@ -78,7 +78,6 @@ def assert_isomorphic(path=FIXTURE, **kwargs):
 
 # ── phase 1: flat context (lang/datatype/prefixes/kinds/base) ────────────────
 
-@phase1
 def test_language_tags_captured():
     labels = [r for r in rows_for(parse_full(), "label")
               if (r.get("context") or {}).get("rdf_language")]
@@ -88,14 +87,12 @@ def test_language_tags_captured():
     assert (cancelled[0].get("context") or {}).get("rdf_language") is None
 
 
-@phase1
 def test_datatype_captured():
     values = rows_for(parse_full(), "value")
     assert values[0]["context"]["rdf_datatype"] == "http://www.w3.org/2001/XMLSchema#float"
     assert values[0]["VALUE"] == "400.5"
 
 
-@phase1
 def test_prefix_concatenation_reconstructs_terms():
     """The core invariant: PREFIX + column == the full term, byte-exact."""
     table = parse_full()
@@ -105,7 +102,6 @@ def test_prefix_concatenation_reconstructs_terms():
             assert (ctx["KEY_PREFIX"] + r["KEY"]).startswith("http")
 
 
-@phase1
 def test_base_applied_to_rdf_id():
     table = parse_full()
     lang1 = [r for r in rows_for(table, "Type") if r["VALUE"] == "Thing"][0]
@@ -113,26 +109,22 @@ def test_base_applied_to_rdf_id():
     assert (ctx["ID_PREFIX"] or "") + lang1["ID"] == "http://example.org/data.xml#_lang1"
 
 
-@phase1
 def test_rdf_id_source_captured():
     table = parse_full()
     sources = {(r.get("context") or {}).get("rdf_id_source") for r in rows_for(table)}
     assert {"ID", "about", "nodeID"} <= {s for s in sources if s}
 
 
-@phase1
 def test_custom_clean_rules():
     table = parse_full(clean_rules={"ID": ("#",)})
     # base-stripped locals keep their underscore with the "#"-only rule
     assert any(r["ID"].startswith("_lang1") for r in rows_for(table, "Type"))
 
 
-@phase1
 def test_engines_lists_rdfxml_registry():
     assert "parser_rdfxml" in triplets.engines()
 
 
-@phase1
 def test_withdrawn_constructs_do_not_fail_and_are_captured():
     """Parse = pure capture: no exception, raw rdf:* attributes recorded."""
     table = parse_full(WITHDRAWN)
@@ -150,7 +142,6 @@ def test_nested_nodes_materialize():
     assert "named inner" in names and "anonymous inner" in names
 
 
-@phase2
 def test_blank_label_collision_resolved_and_label_preserved():
     table = parse_full()
     blanks = [r for r in rows_for(table) if (r.get("context") or {}).get("ID_PREFIX") == "_:"]
@@ -173,7 +164,6 @@ def test_property_attributes_become_rows():
     assert any(r["VALUE"] == "via attribute" for r in rows_for(table, "name"))
 
 
-@phase2
 def test_rdf_description_has_no_fake_type():
     table = parse_full()
     assert not any(r["VALUE"] == "Description" for r in rows_for(table, "Type"))

@@ -106,6 +106,8 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
 
     Auto-detects engine: polars if input is polars DataFrame, else pandas.
     """
+    from .._engine_detect import drop_context
+    data = drop_context(data)            # CSV writers reject nested columns
     if _flavor(data) not in ("pandas", "polars"):
         data = _to_pandas(data)          # arrow-backed dtypes — near zero-copy for arrow input
     engine = "polars" if _flavor(data) == "polars" else "pandas"

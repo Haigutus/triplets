@@ -138,3 +138,20 @@ def to_return_type(frame, return_type):
         import pyarrow
         return pyarrow.Table.from_pandas(frame, preserve_index=False)
     return frame
+
+
+def drop_context(data):
+    """Remove the parser_rdfxml ``context`` column if present (zero-copy).
+
+    The drop-at-boundary primitive: context is guaranteed on parse output and
+    honored by context-aware consumers (nquads); everything else may drop it.
+    These deliberate drops protect operations a struct column would break.
+    """
+    kind = flavor(data)
+    if kind == "pandas" and "context" in data.columns:
+        return data.drop(columns=["context"])
+    if kind == "polars" and "context" in data.columns:
+        return data.drop("context")
+    if kind == "pyarrow" and "context" in getattr(data, "column_names", ()):
+        return data.drop_columns(["context"])
+    return data

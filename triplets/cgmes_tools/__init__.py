@@ -59,8 +59,12 @@ DEPRECATED_ALIASES = {
 
 
 def _to_pandas(data):
-    """Any flavor → plain pandas (safe for in-place VALUE mutation in the engine)."""
-    return to_pandas(data, plain=True)
+    """Any flavor → plain pandas (safe for in-place VALUE mutation in the engine).
+
+    Drops the parser_rdfxml context column: plain pandas turns a struct into
+    object dicts, which all-column ops downstream cannot handle."""
+    from .._engine_detect import drop_context
+    return drop_context(to_pandas(data, plain=True))
 
 
 def _match_input_flavor(result, data):

@@ -685,6 +685,8 @@ def tableview_to_triplets(data, multivalue=False, instance_id=None):
         triplet_df["VALUE"] = triplet_df["VALUE"].apply(_ensure_list)
         triplet_df = triplet_df.explode("VALUE")
 
+    from .._engine_detect import drop_context
+    triplet_df = drop_context(triplet_df)        # astype("string") would stringify a struct
     # nullable string dtype: numbers become text, melt's NaN holes stay null
     # (plain astype(str) made them literal "nan" strings / mixed nan objects)
     triplet_df = triplet_df.astype("string")
@@ -723,7 +725,10 @@ def update_triplets_from_triplets(data, update_data, update=True, add=True):
     --------
     >>> updated_data = data.update_triplets_from_triplets(update_data)
     """
-    write_columns = ["ID", "KEY", "VALUE", "INSTANCE_ID"]
+    from .._engine_detect import drop_context
+    data = drop_context(data)
+    update_data = drop_context(update_data)
+    write_columns = list(data.columns)          # the frame's actual columns
 
     # Choose what columns to use for final merge
     merge_columns = ["ID", "KEY"]
@@ -923,6 +928,8 @@ def filter_triplets_by_value(data, VALUE, detailed=False, type_key="Type", regex
     --------
     >>> filter_triplets_by_value(data, "DOWGEN_LD1", regex=True)
     """
+    from .._engine_detect import drop_context
+    data = drop_context(data)                    # concat+drop_duplicates below is struct-unsafe
     probe = filter_triplets(data, VALUE=VALUE, regex=regex)
     detailed_data = filter_triplets_by_triplets(data, probe)
 

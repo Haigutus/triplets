@@ -47,6 +47,16 @@ _REGISTRY = EngineRegistry(
 # Engines whose load_rdf_to_dataframe returns Arrow RecordBatches
 _ARROW_ENGINES = {"python_lxml_arrow", "cython_pugixml_arrow"}
 
+# The RDF-compliant sibling parser: full-capture RDF/XML (context struct on
+# every row). Same registry mechanics; the caller picks the dialect, the
+# registry picks the engine.
+_RDFXML_REGISTRY = EngineRegistry(
+    "parser_rdfxml", __package__,
+    modules={"python_lxml_arrow": ".rdfxml_lxml_arrow"},
+    requires={"python_lxml_arrow": ("pyarrow",)},
+    default_hint="Install with: pip install triplets[arrow].",
+)
+
 
 def register_engine(name: str, module_or_factory: Any) -> None:
     """Register a custom engine for future extensibility."""
@@ -73,6 +83,8 @@ def parse(
     categorical_columns: Optional[Sequence[str]] = ("INSTANCE_ID", "KEY"),
     shorten_resources: bool = True,
     string_type: str = "auto",
+    dialect: str = "cimxml",
+    clean_rules: Optional[dict] = None,
 ) -> Any:
     """Main entry: parse CIM RDF/XML (or zips) using chosen engine.
 
@@ -93,6 +105,14 @@ def parse(
         Shorten http(s) resource values to their #fragment (CIM instance data convention).
         Pass False for lossless URIs (e.g. RDFS schema parsing); only the python engines
         support this.
+    dialect : str, default "cimxml"
+        Parser dialect: "cimxml" (the lossy-by-design CIM parser, all current
+        engines) or "rdfxml" (full-capture RDF/XML — every row carries a
+        `context` struct; see triplets/parser/rdfxml_lxml_arrow.py).
+    clean_rules : dict, optional (dialect="rdfxml" only)
+        Per-column ordered prefix tuples to strip, e.g. {"ID": ("#",)} —
+        defaults to the CIM cleaning chain; whatever is stripped is recorded
+        in the matching context *_PREFIX field, so cleaning is reversible.
     string_type : str, default "auto"
         Arrow layout of the ID and VALUE string columns (arrow/polars output,
         and pandas via ArrowDtype): "utf8" (32-bit offsets), "large_utf8"
@@ -103,9 +123,21 @@ def parse(
         pandas engine (python_lxml_pandas).
     """
     debug = debug or logger.isEnabledFor(logging.DEBUG)
-    engine_name, engine_mod = get_engine(engine)
-    is_arrow_engine = engine_name in _ARROW_ENGINES
-    string_type = _resolve_string_type(string_type, return_type)
+    if dialect == "rdfxml":
+        if string_type != "auto":
+            raise ValueError("string_type applies to dialect='cimxml'; the rdfxml "
+                             "dialect emits utf8 base columns + a context struct")
+        engine_name, engine_mod = _RDFXML_REGISTRY.get(engine)
+        is_arrow_engine = True
+        string_type = "utf8"
+    elif dialect == "cimxml":
+        if clean_rules is not None:
+            raise ValueError("clean_rules applies to dialect='rdfxml'")
+        engine_name, engine_mod = get_engine(engine)
+        is_arrow_engine = engine_name in _ARROW_ENGINES
+        string_type = _resolve_string_type(string_type, return_type)
+    else:
+        raise ValueError(f"Unknown dialect: {dialect!r}. Known: cimxml, rdfxml")
 
     if not shorten_resources and engine_name == "cython_pugixml_arrow":
         raise ValueError("shorten_resources=False is not supported by the cython_pugixml_arrow engine, "
@@ -128,10 +160,12 @@ def parse(
     xml_files = find_all_xml(items, debug=debug)
 
     if not xml_files:
-        return _empty(return_type, categorical_columns, string_type)
+        return _empty(return_type, categorical_columns, string_type, dialect)
 
     def _one(f: Any):
         one_kwargs = {"string_type": string_type} if native_string_type else {}
+        if dialect == "rdfxml" and clean_rules is not None:
+            one_kwargs["clean_rules"] = clean_rules
         if not shorten_resources:
             one_kwargs["shorten_resources"] = False
         return parse_one(f, debug=debug, **one_kwargs)
@@ -144,7 +178,7 @@ def parse(
 
     if not results:
         # Fallback empty after file list processing (should be rare; engines return DataFrames/Batches)
-        return _empty(return_type, categorical_columns, string_type)
+        return _empty(return_type, categorical_columns, string_type, dialect)
 
     if is_arrow_engine:
         return _finalize_arrow(results, return_type, categorical_columns, debug, string_type)
@@ -158,6 +192,8 @@ def parse_batches(
     engine: str = "auto",
     shorten_resources: bool = True,
     max_workers: Optional[int] = None,
+    dialect: str = "cimxml",
+    clean_rules: Optional[dict] = None,
 ) -> Any:
     """Parse CIM RDF/XML lazily into a ``pyarrow.RecordBatchReader``.
 
@@ -179,17 +215,30 @@ def parse_batches(
     import pyarrow as pa
 
     debug = debug or logger.isEnabledFor(logging.DEBUG)
-    engine_name, engine_mod = get_engine(engine)
-    if engine_name not in _ARROW_ENGINES:
-        raise ValueError(f"parse_batches requires an arrow parser engine, got {engine_name!r}. "
-                         f"Install with: pip install triplets[arrow].")
+    if dialect == "rdfxml":
+        engine_name, engine_mod = _RDFXML_REGISTRY.get(engine)
+    elif dialect == "cimxml":
+        if clean_rules is not None:
+            raise ValueError("clean_rules applies to dialect='rdfxml'")
+        engine_name, engine_mod = get_engine(engine)
+        if engine_name not in _ARROW_ENGINES:
+            raise ValueError(f"parse_batches requires an arrow parser engine, got {engine_name!r}. "
+                             f"Install with: pip install triplets[arrow].")
+    else:
+        raise ValueError(f"Unknown dialect: {dialect!r}. Known: cimxml, rdfxml")
     if not shorten_resources and engine_name == "cython_pugixml_arrow":
         raise ValueError("shorten_resources=False is not supported by the cython_pugixml_arrow engine, "
                          "use engine='python_lxml_arrow'")
     parse_one = engine_mod.load_rdf_to_dataframe
 
-    schema = pa.schema([(c, pa.string()) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
+    fields = [(c, pa.string()) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")]
+    if dialect == "rdfxml":
+        from .rdfxml_lxml_arrow import context_struct_type
+        fields.append(("context", context_struct_type()))
+    schema = pa.schema(fields)
     one_kwargs = {} if shorten_resources else {"shorten_resources": False}
+    if dialect == "rdfxml" and clean_rules is not None:
+        one_kwargs["clean_rules"] = clean_rules
 
     def one(xml_file):
         batch = parse_one(xml_file, debug=debug, **one_kwargs)
@@ -241,21 +290,28 @@ def _string_target(string_type):
             "string_view": pa.string_view()}[string_type]
 
 
-def _empty(return_type, categorical_columns=(), string_type="utf8"):
+def _empty(return_type, categorical_columns=(), string_type="utf8", dialect="cimxml"):
     """Empty result with the standard triplet columns, matching the non-empty schema.
 
     Arrow/polars empties carry the same string / dictionary-encoded columns as a
     non-empty parse, so they concatenate cleanly with real results.
     """
-    if return_type == "pandas":
+    if return_type == "pandas" and dialect == "cimxml":
         import pandas as pd
         return pd.DataFrame(columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
     import pyarrow as pa
     cats = set(categorical_columns or ())
     target = _string_target(string_type)
-    schema = pa.schema([(c, pa.dictionary(pa.int32(), pa.string()) if c in cats else target)
-                        for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
+    fields = [(c, pa.dictionary(pa.int32(), pa.string()) if c in cats else target)
+              for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")]
+    if dialect == "rdfxml":
+        from .rdfxml_lxml_arrow import context_struct_type
+        fields.append(("context", context_struct_type()))
+    schema = pa.schema(fields)
     table = schema.empty_table()
+    if return_type == "pandas":
+        import pandas as pd
+        return table.to_pandas(types_mapper=pd.ArrowDtype)
     if return_type == "polars":
         import polars as pl
         return pl.from_arrow(table)

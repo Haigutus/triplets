@@ -19,6 +19,24 @@ RDF_NODEID = f"{{{RDF_NS}}}nodeID"
 RDF_RESOURCE = f"{{{RDF_NS}}}resource"
 
 
+# The CIM parser's cleaning chain, expressed as data (parser_rdfxml records
+# what each rule strips, making the cleaning reversible: PREFIX + local = term).
+DEFAULT_CLEAN_RULES = {"ID": ("urn:uuid:", "#_", "_"), "VALUE": ("urn:uuid:", "#_", "_")}
+
+
+def clean_with_prefix(term: str, rules) -> tuple:
+    """clean_ID's chained strip, recording what was removed.
+
+    Returns ``(local, prefix)`` with ``prefix + local == term`` byte-exact.
+    Rules apply in order, each against what the previous ones left.
+    """
+    cut = 0
+    for rule in rules:
+        if term.startswith(rule, cut):
+            cut += len(rule)
+    return term[cut:], term[:cut]
+
+
 def clean_ID(ID: Any) -> str:
     """Removes ID prefixes used in CIM - urn:uuid:, #_, _ ."""
     if not ID:

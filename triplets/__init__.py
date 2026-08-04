@@ -99,11 +99,16 @@ try:
             self.execute(f"CREATE SCHEMA IF NOT EXISTS {_duckdb_engine._quote(sch)}")
         reader = parse_batches(paths, **kwargs)
         self.register("_arrow_import", reader)
-        if append:
-            self.execute(f"CREATE TABLE IF NOT EXISTS {ref} "
-                         f"(ID VARCHAR, KEY VARCHAR, VALUE VARCHAR, INSTANCE_ID VARCHAR)")
+        cfg_schema, cfg_table = _duckdb_engine._table_parts(self)
+        exists = self.execute(
+            "SELECT 1 FROM duckdb_tables() "
+            "WHERE table_name = ? AND schema_name = COALESCE(?, current_schema())",
+            [cfg_table, cfg_schema]).fetchone()
+        if append and exists:
             row_count = self.execute(f"INSERT INTO {ref} BY NAME SELECT * FROM _arrow_import").fetchone()[0]
         else:
+            # append into a missing table degrades to create — schema-generic
+            # (works for any reader schema, incl. the rdfxml context struct)
             self.execute(f"CREATE OR REPLACE TABLE {ref} AS SELECT * FROM _arrow_import")
             row_count = self.execute(f"SELECT COUNT(*) FROM {ref}").fetchone()[0]
         self.unregister("_arrow_import")
