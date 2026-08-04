@@ -98,16 +98,39 @@ class _State:
         context["source_line"].append(line)
 
 
-def _resolve(element, reference):
-    """Base-resolve a reference (lxml .base carries scoped xml:base, resolved)."""
-    base = element.base
-    return urljoin(base, reference) if base else reference
+_XML_BASE = "{http://www.w3.org/XML/1998/namespace}base"
+
+
+def _defrag(base):
+    return base.split("#", 1)[0] if base else base
+
+
+def _rebase(element, base):
+    """Scoped xml:base: the element's own attribute (resolved against the
+    outer base) replaces it. Bases are kept fragment-free so resolving a
+    "#ref" is a plain concat (the RFC 3986 result), not a urljoin."""
+    own = element.get(_XML_BASE)
+    if own is None:
+        return base
+    return _defrag(urljoin(base, own) if base else own)
+
+
+def _resolve(base, reference):
+    """Base-resolve a reference (base is threaded through the emitters —
+    lxml's element.base walks the ancestor chain per call, too slow)."""
+    if base is None or reference.startswith(("http://", "https://", "urn:")):
+        return reference
+    if reference.startswith("#"):
+        return base + reference
+    return urljoin(base, reference)
 
 
 def _split_fragment(term):
-    """(local, prefix) at the last '#' of an http(s)/base-resolved IRI."""
-    if term.startswith(("http://", "https://")) and "#" in term:
-        cut = term.rfind("#") + 1
+    """(local, prefix) at the last '#' of an IRI — any scheme, including
+    relative document bases (zip members), so fragment ids clean the same
+    everywhere; the prefix keeps the strip lossless."""
+    cut = term.rfind("#") + 1
+    if cut:
         return term[cut:], term[:cut]
     return term, ""
 
@@ -128,15 +151,15 @@ def _clean_value(state, full):
     return local, (prefix + stripped) or None
 
 
-def _subject(state, element):
+def _subject(state, element, base):
     """Node element → (local, prefix, id_source, original_node_label)."""
     rdf_id = element.get(_RDF + "ID")
     if rdf_id is not None:
-        local, prefix = _clean_id(state, _resolve(element, "#" + rdf_id))
+        local, prefix = _clean_id(state, _resolve(base, "#" + rdf_id))
         return local, prefix, "ID", None
     about = element.get(_RDF + "about")
     if about is not None:
-        local, prefix = _clean_id(state, _resolve(element, about))
+        local, prefix = _clean_id(state, _resolve(base, about))
         return local, prefix, "about", None
     node = element.get(_RDF + "nodeID")
     if node is not None:
@@ -145,11 +168,13 @@ def _subject(state, element):
     return str(uuid_module.uuid4()), "_:", "minted", None
 
 
-def _tag_parts(element):
-    """Element tag → (local name, namespace) — namespace kept verbatim so
-    namespace + local == the full IRI (RDF/XML concatenation rule)."""
-    qname = etree.QName(element)
-    return qname.localname, qname.namespace
+def _tag_parts(tag):
+    """Clark-notation tag → (local name, namespace) — namespace kept verbatim
+    so namespace + local == the full IRI (RDF/XML concatenation rule)."""
+    if tag[0] == "{":
+        cut = tag.rfind("}")
+        return tag[cut + 1:], tag[1:cut]
+    return tag, None
 
 
 def _extra_attributes(element):
@@ -157,7 +182,10 @@ def _extra_attributes(element):
     their own (withdrawn rdf:* constructs, anything future) — property
     attributes are materialized as literal rows instead (see
     _property_attribute_rows) and excluded here."""
-    extra = {name: value for name, value in element.attrib.items()
+    attrib = element.attrib
+    if not attrib:
+        return None
+    extra = {name: value for name, value in attrib.items()
              if name not in _HANDLED and name.startswith("{" + RDF_NS + "}")}
     return json.dumps(extra, sort_keys=True) if extra else None
 
@@ -178,11 +206,13 @@ def _language(element, inherited):
     return lang or None
 
 
-def _emit_subject(state, element, subject, subject_prefix, id_source, node_label, lang):
+def _emit_subject(state, element, subject, subject_prefix, id_source, node_label,
+                  lang, base):
     """Emit one node element: Type row + property-attribute rows + one row
-    per property element (nested node elements recurse as new subjects)."""
+    per property element (nested node elements recurse as new subjects).
+    *base* is the element's own in-scope xml:base (callers rebase)."""
     lang = _language(element, lang)
-    type_local, type_ns = _tag_parts(element)
+    type_local, type_ns = _tag_parts(element.tag)
     is_description = type_ns == RDF_NS and type_local == "Description"
     if not is_description:
         state.row(subject, "Type", type_local,
@@ -193,15 +223,15 @@ def _emit_subject(state, element, subject, subject_prefix, id_source, node_label
     emitted_any = not is_description
     # property attributes: literal triples in compact form
     for attribute_name, attribute_value in _property_attributes(element):
-        qname = etree.QName(attribute_name)
-        state.row(subject, qname.localname, attribute_value,
-                  id_prefix=subject_prefix, key_prefix=qname.namespace,
+        attr_local, attr_ns = _tag_parts(attribute_name)
+        state.row(subject, attr_local, attribute_value,
+                  id_prefix=subject_prefix, key_prefix=attr_ns,
                   kind="literal", lang=lang, id_source=id_source,
                   node_id=node_label, line=element.sourceline)
         emitted_any = True
 
     emitted_any |= _emit_properties(state, element, subject, subject_prefix,
-                                    id_source, node_label, lang)
+                                    id_source, node_label, lang, base)
 
     if not emitted_any and _extra_attributes(element) is not None:
         # a bare untyped node asserts no triples; emit a capture row only for
@@ -213,22 +243,46 @@ def _emit_subject(state, element, subject, subject_prefix, id_source, node_label
 
 
 def _emit_properties(state, element, subject, subject_prefix, id_source,
-                     node_label, lang):
+                     node_label, lang, base):
     """Emit the property elements of one subject (also the body of
     parseType="Resource", where *element* is the property element itself)."""
     emitted_any = False
     li_counter = 0
+    resource_key = _RDF + "resource"
     for prop in element.iterchildren(etree.Element):
-        prop_lang = _language(prop, lang)
-        key_local, key_ns = _tag_parts(prop)
+        key_local, key_ns = _tag_parts(prop.tag)
         if key_ns == RDF_NS and key_local == "li":
             li_counter += 1
             key_local = f"_{li_counter}"     # per-parent numbering (RDF/XML spec)
+        attrib = prop.attrib
+
+        # the two dominant row shapes skip the full attribute machinery:
+        if not attrib:
+            if prop.text is not None:        # plain literal, no attributes
+                state.row(subject, key_local, prop.text,
+                          id_prefix=subject_prefix, key_prefix=key_ns,
+                          kind="literal", lang=lang, id_source=id_source,
+                          node_id=node_label, line=prop.sourceline)
+                emitted_any = True
+                continue
+        elif len(attrib) == 1 and not len(prop):
+            resource = attrib.get(resource_key)
+            if resource is not None:         # pure reference (the CIM shape)
+                local, prefix = _clean_value(state, _resolve(base, resource))
+                state.row(subject, key_local, local,
+                          id_prefix=subject_prefix, key_prefix=key_ns,
+                          value_prefix=prefix, kind="iri", id_source=id_source,
+                          node_id=node_label, line=prop.sourceline)
+                emitted_any = True
+                continue
+
+        prop_lang = _language(prop, lang)
+        prop_base = _rebase(prop, base)
         common = dict(id_prefix=subject_prefix, key_prefix=key_ns,
                       id_source=id_source, node_id=node_label,
                       attributes=_extra_attributes(prop), line=prop.sourceline)
         parse_type = prop.get(_RDF + "parseType")
-        resource = prop.get(_RDF + "resource")
+        resource = prop.get(resource_key)
         prop_node = prop.get(_RDF + "nodeID")
         datatype = prop.get(_RDF + "datatype")
         reify = prop.get(_RDF + "ID")
@@ -239,7 +293,8 @@ def _emit_properties(state, element, subject, subject_prefix, id_source,
             minted = str(uuid_module.uuid4())
             state.row(subject, key_local, minted, value_prefix="_:", kind="blank",
                       parse_type=parse_type, **common)
-            _emit_properties(state, prop, minted, "_:", "minted", None, prop_lang)
+            _emit_properties(state, prop, minted, "_:", "minted", None,
+                             prop_lang, prop_base)
         elif parse_type == "Collection":
             # rdf:List chain of minted blanks: first → member, rest → next/nil
             children = list(prop.iterchildren(etree.Element))
@@ -253,11 +308,12 @@ def _emit_properties(state, element, subject, subject_prefix, id_source,
                 state.row(subject, key_local, heads[0], value_prefix="_:",
                           kind="blank", parse_type=parse_type, **common)
             for index, child in enumerate(children):
-                member, member_prefix, member_source, member_label = _subject(state, child)
+                child_base = _rebase(child, prop_base)
+                member, member_prefix, member_source, member_label = _subject(state, child, child_base)
                 state.row(heads[index], "first", member, value_prefix=member_prefix,
                           kind="blank" if member_prefix == "_:" else "iri", **links)
                 _emit_subject(state, child, member, member_prefix,
-                              member_source, member_label, prop_lang)
+                              member_source, member_label, prop_lang, child_base)
                 if index + 1 < len(children):
                     state.row(heads[index], "rest", heads[index + 1],
                               value_prefix="_:", kind="blank", **links)
@@ -279,21 +335,22 @@ def _emit_properties(state, element, subject, subject_prefix, id_source,
             # nested node element(s): each child is its own subject; this row
             # references it. rdf:type children become proper Type rows.
             for child in prop.iterchildren(etree.Element):
-                child_subject, child_prefix, child_source, child_label = _subject(state, child)
+                child_base = _rebase(child, prop_base)
+                child_subject, child_prefix, child_source, child_label = _subject(state, child, child_base)
                 state.row(subject, key_local, child_subject,
                           value_prefix=child_prefix,
                           kind="blank" if child_prefix == "_:" else "iri", **common)
                 _emit_subject(state, child, child_subject, child_prefix,
-                              child_source, child_label, prop_lang)
+                              child_source, child_label, prop_lang, child_base)
         elif key_ns == RDF_NS and key_local == "type" and resource is not None:
             # rdf:type as a child element → a proper Type row (no lowercase dup)
-            local, prefix = _clean_value(state, _resolve(prop, resource))
+            local, prefix = _clean_value(state, _resolve(prop_base, resource))
             state.row(subject, "Type", local,
                       id_prefix=subject_prefix, value_prefix=prefix, kind="iri",
                       id_source=id_source, node_id=node_label,
                       attributes=_extra_attributes(prop), line=prop.sourceline)
         elif resource is not None:
-            local, prefix = _clean_value(state, _resolve(prop, resource))
+            local, prefix = _clean_value(state, _resolve(prop_base, resource))
             state.row(subject, key_local, local, value_prefix=prefix,
                       kind="iri", **common)
         elif prop_node is not None:
@@ -306,9 +363,9 @@ def _emit_properties(state, element, subject, subject_prefix, id_source,
             minted = str(uuid_module.uuid4())
             state.row(subject, key_local, minted, value_prefix="_:", kind="blank", **common)
             for attribute_name, attribute_value in _property_attributes(prop):
-                qname = etree.QName(attribute_name)
-                state.row(minted, qname.localname, attribute_value,
-                          id_prefix="_:", key_prefix=qname.namespace,
+                attr_local, attr_ns = _tag_parts(attribute_name)
+                state.row(minted, attr_local, attribute_value,
+                          id_prefix="_:", key_prefix=attr_ns,
                           kind="literal", lang=prop_lang, id_source="minted",
                           line=prop.sourceline)
         else:
@@ -317,7 +374,7 @@ def _emit_properties(state, element, subject, subject_prefix, id_source,
 
         if reify is not None and len(state.columns["ID"]) > mark:
             # rdf:ID on a property element reifies its base triple (row *mark*)
-            statement, statement_prefix = _clean_id(state, _resolve(prop, "#" + reify))
+            statement, statement_prefix = _clean_id(state, _resolve(prop_base, "#" + reify))
             object_context = {name: state.context[name][mark] for name in CONTEXT_FIELDS}
             links = dict(id_prefix=statement_prefix, key_prefix=RDF_NS,
                          id_source="ID", line=prop.sourceline)
@@ -367,9 +424,12 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, clean_rules=None,
         state.row(nsmap_id, "xml_base", root.base)
 
     root_lang = _language(root, None)
+    root_base = _defrag(root.base)
     for node in root.iterchildren(etree.Element):
-        subject, prefix, id_source, node_label = _subject(state, node)
-        _emit_subject(state, node, subject, prefix, id_source, node_label, root_lang)
+        node_base = _rebase(node, root_base)
+        subject, prefix, id_source, node_label = _subject(state, node, node_base)
+        _emit_subject(state, node, subject, prefix, id_source, node_label,
+                      root_lang, node_base)
 
     base_arrays = [pa.array(state.columns[c], type=pa.string())
                    for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")]
