@@ -6,6 +6,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **RDF/XML-compliant parser** (`parse(..., dialect="rdfxml")`, registry kind
+  `parser_rdfxml`): the fully compliant sibling of the CIM parser. Same base
+  columns (cleaned identically), plus a `context` arrow struct column that
+  makes every cleaning reversible (`PREFIX + column` reconstructs the full
+  term byte-exact) and captures all term metadata: language tags, datatypes,
+  term kinds, blank-node labels, `rdf:ID`/`about`/`nodeID` provenance,
+  unhandled `rdf:*` attributes (raw JSON), source lines. Handles nested/blank
+  nodes, `xml:base`, containers (`rdf:li` → `rdf:_n`), collections,
+  `parseType` Resource/Collection/Literal (exclusive-C14N), property
+  attributes and reification — verified rdflib-isomorphic on an adversarial
+  fixture. ~9.6x faster than `rdflib.Graph.parse` on RealGrid.
+  `read_nquads(..., context=True)` captures the same struct back from
+  N-Quads, and `export_to_nquads` writes `@lang`/`^^datatype`/blank-node
+  terms from it (round-trip isomorphic). `drop_context()` boundary helper;
+  context-unsafe operations drop the column deliberately.
+
 ### Changed
 - **Shared flavor conversion** (`triplets._engine_detect`): `to_pandas` /
   `to_arrow` / `to_polars` / `as_frame` / `match_flavor` are the single choke

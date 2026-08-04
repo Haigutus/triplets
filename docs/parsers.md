@@ -20,6 +20,54 @@ All three engines expose the same interface: `load_rdf_to_dataframe(path_or_file
 
 Engine aliases: `performance` / `pugixml` -> `cython_pugixml_arrow`, `native` -> `python_lxml_pandas`
 
+## Dialects — `parse(..., dialect=)`
+
+Two parser kinds share the upper abstraction; the `dialect` parameter selects
+the registry, `engine="auto"` resolves within it:
+
+| Dialect | Registry kind | Contract |
+|---------|--------------|----------|
+| `"cimxml"` (default) | `parser_cimxml` | CIM-ergonomic, deliberately lossy: local names, no term metadata. Byte-identical to historic behavior. |
+| `"rdfxml"` | `parser_rdfxml` | Fully RDF/XML-compliant capture: same base columns (cleaned identically, familiar to CIM tooling) **plus a `context` struct column** that makes every cleaning reversible. |
+
+`dialect="rdfxml"` accepts `clean_rules=` (per-column ordered prefix tuples,
+default = the CIM `clean_ID` chain); cimxml-only params (`string_type`,
+`categorical_columns`) raise there, and vice versa.
+
+**Parse = pure capture, zero policy.** The rdfxml parser never warns about or
+drops RDF constructs — everything lands in the base columns or the context
+struct; interpretation/validation is downstream work. Context fields
+(UPPERCASE reconstructs a base column: `PREFIX + column` == full term
+byte-exact; lowercase `rdf_*` is term metadata): `ID_PREFIX`, `KEY_PREFIX`,
+`VALUE_PREFIX` (`"_:"` marks blank nodes), `rdf_value_kind`
+{iri, blank, literal}, `rdf_language`, `rdf_datatype`, `rdf_id_source`
+{ID, about, nodeID, minted}, `rdf_node_id` (original author nodeID label;
+subjects are remapped to minted uuids for collision-free scoping),
+`rdf_parse_type`, `rdf_attributes` (JSON catch-all — withdrawn constructs
+like `rdf:aboutEach` parse without error and are captured raw), `source_line`.
+
+**Drop-at-boundary contract.** Context is guaranteed on parse output and
+honored by context-aware consumers (`export_to_nquads` writes `_:` subjects,
+prefix-reconstructed IRIs and `@lang`/`^^datatype` literals from it;
+`read_nquads(context=True)` captures it back). Everything else may drop it;
+operations a struct column would break drop it deliberately via
+`_engine_detect.drop_context` (pandas update/dedup paths, CSV export, cgmes
+boundary). No promise that context survives transformations.
+
+Acceptance oracle: reconstructing an `rdflib.Graph` from base columns +
+context is isomorphic with rdflib's own parse of the same file
+(`tests/test_rdfxml_parser.py`), including nested/blank nodes, containers,
+collections, `parseType=Literal` (exclusive-C14N, byte-exact vs rdflib) and
+reification. Performance on RealGrid (1.15M rows): ~1.5x the cimxml lxml
+engine, ~9.6x faster than `rdflib.Graph.parse`.
+
+Out of scope (true non-capture items only): exact XMLLiteral exclusive-C14N
+*equality semantics* (the serialized XML is captured verbatim), semantic
+*processing* of withdrawn constructs (captured raw, never interpreted),
+additional rdfxml engines (a cython port is a registry drop-in later),
+cimxml writers consuming context (nquads only for now), BCP47 *validation*
+(tags captured verbatim), source *column* numbers (lxml exposes lines only).
+
 ## Streaming — `parse_batches()`
 
 `parse_batches(paths, engine="auto", ...)` returns a `pyarrow.RecordBatchReader`
