@@ -200,21 +200,18 @@ def test_nested_document_isomorphic():
 
 # ── phase 3: containers, collections, parseType=Literal ──────────────────────
 
-@phase3
 def test_containers_li_numbering():
     table = parse_full()
     assert any(r["KEY"] == "_1" for r in rows_for(table))
     assert any(r["KEY"] == "_2" for r in rows_for(table))
 
 
-@phase3
 def test_collections_first_rest_nil():
     table = parse_full()
     assert any(r["KEY"] == "first" for r in rows_for(table))
     assert any(r["VALUE"] == "nil" for r in rows_for(table, "rest"))
 
 
-@phase3
 def test_xml_literal_captured():
     table = parse_full()
     bodies = rows_for(table, "body")
@@ -222,7 +219,6 @@ def test_xml_literal_captured():
     assert bodies[0]["context"]["rdf_datatype"].endswith("XMLLiteral")
 
 
-@phase3
 def test_full_fixture_isomorphic():
     assert_isomorphic()
 
@@ -245,13 +241,11 @@ def test_nquads_roundtrip_isomorphic():
 
 # ── phase 5: reification + completeness ───────────────────────────────────────
 
-@phase5
 def test_reification_rows():
     table = parse_full()
     assert any(r["VALUE"] == "Statement" for r in rows_for(table, "Type"))
 
 
-@phase5
 def test_nothing_lost_property():
     """Every rdf-visible attribute in the fixture is recoverable from
     base columns + context (the capture-completeness property)."""

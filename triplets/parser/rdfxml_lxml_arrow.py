@@ -203,9 +203,9 @@ def _emit_subject(state, element, subject, subject_prefix, id_source, node_label
     emitted_any |= _emit_properties(state, element, subject, subject_prefix,
                                     id_source, node_label, lang)
 
-    if not emitted_any:
-        # a bare untyped node with no properties still exists as a subject —
-        # keep it visible (rare; capture-complete)
+    if not emitted_any and _extra_attributes(element) is not None:
+        # a bare untyped node asserts no triples; emit a capture row only for
+        # its unhandled rdf:* attributes (withdrawn constructs must not vanish)
         state.row(subject, "Type", "",
                   id_prefix=subject_prefix, kind=None, id_source=id_source,
                   node_id=node_label, attributes=_extra_attributes(element),
@@ -217,9 +217,13 @@ def _emit_properties(state, element, subject, subject_prefix, id_source,
     """Emit the property elements of one subject (also the body of
     parseType="Resource", where *element* is the property element itself)."""
     emitted_any = False
+    li_counter = 0
     for prop in element.iterchildren(etree.Element):
         prop_lang = _language(prop, lang)
         key_local, key_ns = _tag_parts(prop)
+        if key_ns == RDF_NS and key_local == "li":
+            li_counter += 1
+            key_local = f"_{li_counter}"     # per-parent numbering (RDF/XML spec)
         common = dict(id_prefix=subject_prefix, key_prefix=key_ns,
                       id_source=id_source, node_id=node_label,
                       attributes=_extra_attributes(prop), line=prop.sourceline)
@@ -227,6 +231,8 @@ def _emit_properties(state, element, subject, subject_prefix, id_source,
         resource = prop.get(_RDF + "resource")
         prop_node = prop.get(_RDF + "nodeID")
         datatype = prop.get(_RDF + "datatype")
+        reify = prop.get(_RDF + "ID")
+        mark = len(state.columns["ID"])          # base-triple row index, for reification
 
         if parse_type == "Resource":
             # anonymous node whose properties are this element's children
@@ -234,9 +240,40 @@ def _emit_properties(state, element, subject, subject_prefix, id_source,
             state.row(subject, key_local, minted, value_prefix="_:", kind="blank",
                       parse_type=parse_type, **common)
             _emit_properties(state, prop, minted, "_:", "minted", None, prop_lang)
+        elif parse_type == "Collection":
+            # rdf:List chain of minted blanks: first → member, rest → next/nil
+            children = list(prop.iterchildren(etree.Element))
+            heads = [str(uuid_module.uuid4()) for _ in children]
+            links = dict(id_prefix="_:", key_prefix=RDF_NS, id_source="minted",
+                         line=prop.sourceline)
+            if not children:
+                state.row(subject, key_local, "nil", value_prefix=RDF_NS,
+                          kind="iri", parse_type=parse_type, **common)
+            else:
+                state.row(subject, key_local, heads[0], value_prefix="_:",
+                          kind="blank", parse_type=parse_type, **common)
+            for index, child in enumerate(children):
+                member, member_prefix, member_source, member_label = _subject(state, child)
+                state.row(heads[index], "first", member, value_prefix=member_prefix,
+                          kind="blank" if member_prefix == "_:" else "iri", **links)
+                _emit_subject(state, child, member, member_prefix,
+                              member_source, member_label, prop_lang)
+                if index + 1 < len(children):
+                    state.row(heads[index], "rest", heads[index + 1],
+                              value_prefix="_:", kind="blank", **links)
+                else:
+                    state.row(heads[index], "rest", "nil",
+                              value_prefix=RDF_NS, kind="iri", **links)
         elif parse_type is not None:
-            # Phase 3: Collection / Literal materialization
-            state.row(subject, key_local, "", kind=None,
+            # "Literal" (or any unknown parseType, treated as Literal per spec):
+            # the inner XML verbatim, tails included
+            body = [prop.text or ""]
+            for child in prop.iterchildren():
+                body.append(etree.tostring(child, method="c14n", exclusive=True,
+                                           with_tail=False).decode())
+                body.append(child.tail or "")
+            state.row(subject, key_local, "".join(body), kind="literal",
+                      datatype=RDF_NS + "XMLLiteral",
                       parse_type=parse_type, **common)
         elif len(prop):
             # nested node element(s): each child is its own subject; this row
@@ -277,6 +314,25 @@ def _emit_properties(state, element, subject, subject_prefix, id_source,
         else:
             state.row(subject, key_local, prop.text or "", kind="literal",
                       lang=prop_lang, datatype=datatype, **common)
+
+        if reify is not None and len(state.columns["ID"]) > mark:
+            # rdf:ID on a property element reifies its base triple (row *mark*)
+            statement, statement_prefix = _clean_id(state, _resolve(prop, "#" + reify))
+            object_context = {name: state.context[name][mark] for name in CONTEXT_FIELDS}
+            links = dict(id_prefix=statement_prefix, key_prefix=RDF_NS,
+                         id_source="ID", line=prop.sourceline)
+            state.row(statement, "Type", "Statement", id_prefix=statement_prefix,
+                      value_prefix=RDF_NS, kind="iri", id_source="ID",
+                      line=prop.sourceline)
+            state.row(statement, "subject", subject, value_prefix=subject_prefix,
+                      kind="blank" if subject_prefix == "_:" else "iri", **links)
+            state.row(statement, "predicate", key_local, value_prefix=key_ns,
+                      kind="iri", **links)
+            state.row(statement, "object", state.columns["VALUE"][mark],
+                      value_prefix=object_context["VALUE_PREFIX"],
+                      kind=object_context["rdf_value_kind"],
+                      lang=object_context["rdf_language"],
+                      datatype=object_context["rdf_datatype"], **links)
         emitted_any = True
     return emitted_any
 
