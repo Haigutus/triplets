@@ -185,6 +185,11 @@ a blank-valued row.
 | `to_csv` | a `<name>_meta.<ext>` sidecar file with KEY,VALUE rows |
 | `to_excel` | a second `metadata` sheet |
 
+Every report export takes `export_to_memory=True` and returns BytesIO
+object(s) with `.name` instead of touching the filesystem — the same
+convention as `export_to_cimxml`/`export_to_csv` (`to_csv` returns a list:
+data file + sidecar).
+
 `enrich` and `locate` preserve the attrs. On `to_shacl_report`, explicit
 `report_source=` / `report_references=` override the stamped values (plain
 labels — distinct from the `sources=` locate pass and the shapes object

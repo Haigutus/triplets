@@ -301,6 +301,24 @@ def test_csv_export_writes_meta_sidecar(tmp_path):
     assert not (tmp_path / "bare_meta.csv").exists()
 
 
+def test_tabular_exports_to_memory():
+    """csv/excel exports return BytesIO objects with .name — no filesystem
+    required, same convention as the cimxml/csv exports."""
+    from triplets.validation import violations_to_csv, violations_to_excel
+
+    files = violations_to_csv(_with_meta(VIOLATIONS), export_to_memory=True)
+    assert [f.name for f in files] == ["violations.csv", "violations_meta.csv"]
+    meta = pandas.read_csv(files[1])
+    assert ("creator", "triplets test") in set(zip(meta["KEY"], meta["VALUE"]))
+    assert [f.name for f in violations_to_csv(VIOLATIONS, export_to_memory=True)] \
+        == ["violations.csv"]                      # bare frame → no sidecar
+
+    pytest.importorskip("openpyxl")
+    buffer = violations_to_excel(_with_meta(VIOLATIONS), export_to_memory=True)
+    assert buffer.name == "violations.xlsx"
+    assert set(pandas.read_excel(buffer, sheet_name=None)) == {"violations", "metadata"}
+
+
 def test_excel_export_writes_metadata_sheet(tmp_path):
     pytest.importorskip("openpyxl")
     from triplets.validation import violations_to_excel

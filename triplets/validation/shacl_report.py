@@ -9,7 +9,6 @@ import io
 import logging
 import os
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pandas
 
@@ -204,10 +203,11 @@ def violations_to_report_graph(violations, report_source=None, report_references
 
 
 def _as_list(value):
-    """None / single name / sequence of names → tuple of str (Path/bytes coerced)."""
+    """None / single name / sequence of names → tuple of str (paths/bytes coerced)."""
     if value is None:
         return ()
-    values = (value,) if isinstance(value, (str, Path, bytes)) else tuple(value)
+    single = isinstance(value, (str, bytes)) or hasattr(value, "__fspath__")
+    values = (value,) if single else tuple(value)
     return tuple(v.decode() if isinstance(v, bytes) else os.fspath(v) for v in values)
 
 
@@ -252,7 +252,7 @@ def _resolve_format(path, format):
     if format is not None:
         return format
     if path is not None:
-        return _EXT.get(Path(path).suffix.lower(), "turtle")
+        return _EXT.get(os.path.splitext(os.fspath(path))[1].lower(), "turtle")
     return "turtle"
 
 
@@ -325,30 +325,57 @@ def _meta_rows(meta):
             for item in ((value or ("",)) if isinstance(value, (list, tuple)) else (value,))]
 
 
-def violations_to_csv(violations, path="violations.csv"):
+def _buffer(name, payload):
+    """BytesIO with .name — the in-memory file convention every export shares."""
+    buffer = io.BytesIO(payload)
+    buffer.name = name
+    return buffer
+
+
+def _meta_frame(meta):
+    return pandas.DataFrame(_meta_rows(meta), columns=["KEY", "VALUE"])
+
+
+def violations_to_csv(violations, path="violations.csv", export_to_memory=False):
     """Violations frame → CSV, plus a ``<name>_meta.<ext>`` sidecar carrying
     the validation metadata (``violations.attrs["validation"]``) as KEY,VALUE
-    rows. No sidecar when the frame carries no metadata."""
-    path = Path(path)
-    violations.to_csv(path, index=False)
-    logger.info("Saved %s", path)
+    rows (no sidecar when the frame carries none). ``export_to_memory=True``
+    returns the BytesIO objects (with .name) instead of writing to disk —
+    same convention as the other exports."""
+    path = os.fspath(path)
+    stem, suffix = os.path.splitext(os.path.basename(path))
+    files = [_buffer(os.path.basename(path), violations.to_csv(index=False).encode("utf-8"))]
     meta = violations.attrs.get("validation")
     if meta:
-        meta_path = path.with_name(f"{path.stem}_meta{path.suffix}")
-        pandas.DataFrame(_meta_rows(meta), columns=["KEY", "VALUE"]).to_csv(meta_path, index=False)
-        logger.info("Saved %s", meta_path)
-    return str(path)
+        files.append(_buffer(f"{stem}_meta{suffix}",
+                             _meta_frame(meta).to_csv(index=False).encode("utf-8")))
+    if export_to_memory:
+        return files
+    directory = os.path.dirname(path)
+    for file in files:
+        target = os.path.join(directory, file.name)
+        with open(target, "wb") as handle:
+            handle.write(file.getvalue())
+        logger.info("Saved %s", target)
+    return path
 
 
-def violations_to_excel(violations, path="violations.xlsx"):
+def violations_to_excel(violations, path="violations.xlsx", export_to_memory=False):
     """Violations frame → Excel; the validation metadata
-    (``violations.attrs["validation"]``) goes to a second "metadata" sheet."""
-    path = Path(path)
+    (``violations.attrs["validation"]``) goes to a second "metadata" sheet.
+    ``export_to_memory=True`` returns a BytesIO (with .name)."""
+    path = os.fspath(path)
     meta = violations.attrs.get("validation")
-    with pandas.ExcelWriter(path, engine="openpyxl") as writer:
+    buffer = io.BytesIO()
+    with pandas.ExcelWriter(buffer, engine="openpyxl") as writer:
         violations.to_excel(writer, sheet_name="violations", index=False)
         if meta:
-            pandas.DataFrame(_meta_rows(meta), columns=["KEY", "VALUE"]).to_excel(
-                writer, sheet_name="metadata", index=False)
+            _meta_frame(meta).to_excel(writer, sheet_name="metadata", index=False)
+    buffer.name = os.path.basename(path)
+    buffer.seek(0)
+    if export_to_memory:
+        return buffer
+    with open(path, "wb") as handle:
+        handle.write(buffer.getvalue())
     logger.info("Saved %s", path)
-    return str(path)
+    return path
