@@ -241,3 +241,16 @@ def test_reader_input_requires_polars_engine():
     table = pyarrow.Table.from_pandas(_frame(), preserve_index=False)
     with pytest.raises(ValueError, match="requires.*polars engine"):
         t.export.export_to_nquads(table.to_reader(), engine="pandas", export_to_memory=True)
+
+
+def test_connection_nquads_explicit_pandas_engine():
+    """engine="pandas" skips the streaming reader (polars-only) and exports
+    through the whole-table path — same content, no ValueError."""
+    pytest.importorskip("polars")
+    import triplets as t
+    con = duckdb.connect()
+    con.register("_src", _frame())
+    con.execute("CREATE TABLE triplets AS SELECT * FROM _src")
+    from_connection = con.export_to_nquads(engine="pandas", export_to_memory=True).getvalue()
+    from_frame = t.export.export_to_nquads(_frame(), engine="pandas", export_to_memory=True).getvalue()
+    assert sorted(from_connection.splitlines()) == sorted(from_frame.splitlines())

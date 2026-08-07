@@ -68,6 +68,9 @@ def as_frame(data, *, plain=False, table=None, schema=None, table_name=None):
 def to_arrow(data, *, columns=None, table=None, schema=None, table_name=None):
     """Any supported flavor → pyarrow.Table.
 
+    pyarrow input passes through as-is (a RecordBatch is not upgraded to a
+    Table) — callers that require Table-only APIs must normalize themselves.
+
     columns
         Optional column names to project; None keeps all columns.
     table / schema / table_name

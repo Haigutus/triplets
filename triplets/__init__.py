@@ -99,14 +99,16 @@ try:
             self.execute(f"CREATE SCHEMA IF NOT EXISTS {_duckdb_engine._quote(sch)}")
         reader = parse_batches(paths, **kwargs)
         self.register("_arrow_import", reader)
-        if append:
-            self.execute(f"CREATE TABLE IF NOT EXISTS {ref} "
-                         f"(ID VARCHAR, KEY VARCHAR, VALUE VARCHAR, INSTANCE_ID VARCHAR)")
-            row_count = self.execute(f"INSERT INTO {ref} BY NAME SELECT * FROM _arrow_import").fetchone()[0]
-        else:
-            self.execute(f"CREATE OR REPLACE TABLE {ref} AS SELECT * FROM _arrow_import")
-            row_count = self.execute(f"SELECT COUNT(*) FROM {ref}").fetchone()[0]
-        self.unregister("_arrow_import")
+        try:
+            if append:
+                self.execute(f"CREATE TABLE IF NOT EXISTS {ref} "
+                             f"(ID VARCHAR, KEY VARCHAR, VALUE VARCHAR, INSTANCE_ID VARCHAR)")
+                row_count = self.execute(f"INSERT INTO {ref} BY NAME SELECT * FROM _arrow_import").fetchone()[0]
+            else:
+                self.execute(f"CREATE OR REPLACE TABLE {ref} AS SELECT * FROM _arrow_import")
+                row_count = self.execute(f"SELECT COUNT(*) FROM {ref}").fetchone()[0]
+        finally:
+            self.unregister("_arrow_import")
         _duckdb_logger.info("Loaded %s rows into %s", row_count, ref)
         return row_count
 

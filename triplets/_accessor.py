@@ -119,8 +119,6 @@ else:
 if duckdb:
     from .tools import duckdb_engine
 
-    from importlib.util import find_spec
-
     from ._engine_detect import to_arrow as _to_arrow, to_pandas as _to_pandas
 
     _STREAM_BATCH_ROWS = 1_000_000
@@ -130,15 +128,16 @@ if duckdb:
 
         N-Quads streams through duckdb's record-batch reader (one ~1M-row
         batch in memory at a time — works larger-than-RAM; needs the polars
-        engine). The other formats fetch the table through duckdb's native
-        arrow result path (~4x cheaper than materialising pandas), whole-table
-        in memory.
+        engine, so it runs only when the nquads registry resolves to polars —
+        an explicit engine="pandas" gets the whole-table path). The other
+        formats fetch the table through duckdb's native arrow result path
+        (~4x cheaper than materialising pandas), whole-table in memory.
         """
         function = getattr(export, name)
         streams = name == "export_to_nquads"
 
         def fn(connection, *args, table=None, schema=None, table_name=None, **kwargs):
-            if streams and find_spec("polars"):
+            if streams and export._NQUADS.get(kwargs.get("engine", "auto"))[0] == "polars":
                 ref = duckdb_engine._resolve_table(connection, table=table, schema=schema,
                                                    table_name=table_name)
                 cursor = connection.cursor()   # streaming pins a connection; isolate it

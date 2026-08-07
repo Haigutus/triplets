@@ -57,14 +57,14 @@ def _get_engine(engine, data=None):
     """
     if isinstance(data, dict):  # tableviews: detect/validate from the first frame
         data = next(iter(data.values()), None)
-    kind = flavor(data) if data is not None else None
-    if kind == "pyarrow":
-        kind = "pandas"                      # arrow input rides the pandas engine
+    input_flavor = flavor(data) if data is not None else None
+    kind = "pandas" if input_flavor == "pyarrow" else input_flavor  # arrow rides the pandas engine
     if engine == "auto":
         engine = kind or "pandas"
         logger.debug("engine auto-selected: %s (input flavor)", engine)
     elif kind is not None and engine in _REGISTRY.modules and engine != kind:
-        what = "a DuckDB connection" if kind == "duckdb" else f"a {kind} DataFrame"
+        what = {"duckdb": "a DuckDB connection",
+                "pyarrow": "a pyarrow Table"}.get(input_flavor, f"a {input_flavor} DataFrame")
         raise TypeError(f"engine={engine!r} but the input is {what}")
     return _REGISTRY.get(engine)[1]
 
