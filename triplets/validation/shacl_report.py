@@ -157,7 +157,8 @@ def violations_to_report_graph(violations, report_source=None, report_references
         report_source = meta.get("source")
     if report_references is None:
         report_references = meta.get("references")
-    generated_at = meta.get("generated_at") or datetime.now(timezone.utc).isoformat()
+    generated_at = (meta.get("generated_at")
+                    or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
     creator = meta.get("creator") or f"triplets {triplets.__version__}"
 
     sh = rdflib.Namespace(_SH)
@@ -318,9 +319,10 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
 # ── tabular exports (csv / excel) — same metadata as the RDF/SARIF reports ───
 
 def _meta_rows(meta):
-    """The attrs["validation"] dict as (KEY, VALUE) rows — lists fan out."""
+    """The attrs["validation"] dict as (KEY, VALUE) rows — lists fan out; an
+    empty list keeps one blank row so "none" is stated, not implied."""
     return [(key, item) for key, value in meta.items()
-            for item in (value if isinstance(value, (list, tuple)) else (value,))]
+            for item in ((value or ("",)) if isinstance(value, (list, tuple)) else (value,))]
 
 
 def violations_to_csv(violations, path="violations.csv"):

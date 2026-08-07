@@ -162,8 +162,6 @@ def test_sources_add_location_message(tmp_path):
 
 # ── validation-run metadata (violations.attrs["validation"]) ─────────────────
 
-from pathlib import Path
-
 SHAPE_TTL = """
 @prefix sh:  <http://www.w3.org/ns/shacl#> .
 @prefix cim: <http://iec.ch/TC57/CIM100#> .
@@ -224,6 +222,31 @@ def test_metadata_reports_skipped_coverage(tmp_path):
     assert meta["node_shapes"] == 2
     assert any("sh:targetNode" in entry for entry in meta["skipped_shapes"])
     assert any("unsupported sh:path" in entry for entry in meta["skipped_shapes"])
+
+
+def test_run_stats_reach_sarif_and_csv(tmp_path):
+    """The full validate() stamp — engine, duration, counts, coverage —
+    round-trips into the SARIF run properties and the CSV sidecar; empty
+    coverage is stated explicitly, not implied by absence."""
+    from triplets.validation import violations_to_csv
+    from triplets.validation.sarif import build_sarif
+
+    shapes = tmp_path / "coverage_shapes.ttl"
+    shapes.write_text(SKIPPED_TTL)
+    violations = triplets.validation.validate(DATA, shapes, engine="pandas")
+
+    properties = build_sarif(violations)["runs"][0]["properties"]
+    assert properties["engine"] == "pandas"
+    assert properties["node_shapes"] == 2 and properties["duration_seconds"] >= 0
+    assert any("sh:targetNode" in entry for entry in properties["skipped_shapes"])
+    assert properties["skipped_components"] == []       # empty list survives
+
+    violations_to_csv(violations, tmp_path / "report.csv")
+    meta = pandas.read_csv(tmp_path / "report_meta.csv", keep_default_na=False)
+    keys = set(meta["KEY"])
+    assert {"engine", "duration_seconds", "node_shapes", "constraints",
+            "skipped_shapes", "skipped_components"} <= keys
+    assert (meta.loc[meta["KEY"] == "skipped_components", "VALUE"] == "").all()
 
 
 def test_enrich_and_locate_preserve_metadata(tmp_path):

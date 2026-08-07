@@ -77,6 +77,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sh:ValidationReport and the new `violations.shacl.to_csv()` (writes a
   `<name>_meta.<ext>` sidecar) / `to_excel()` (metadata sheet) all carry the
   same facts. Explicit `report_source=` / `report_references=` still override.
+  Internal engine API: `shacl_ir.split_rules` now returns a 3-tuple
+  `(vectorized, fallback, skipped components)`.
 - `examples/shacl_reports.py`: uv-runnable (PEP 723) end-to-end demo — Svedala
   EQ with three deliberately introduced issues validated against the official
   ENTSO-E Equipment SHACL (Simple + Complex, downloaded on first run), report

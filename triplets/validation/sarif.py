@@ -119,9 +119,10 @@ def build_sarif(violations, group=True, sources=None):
             "startTimeUtc": _utc(meta.get("started_at")),
             "endTimeUtc": _utc(meta.get("generated_at")),
         })] if meta.get("generated_at") else None,
+        # empty coverage lists stay in — a clean run STATES full coverage
         "properties": {key: value for key, value in meta.items()
                        if key not in ("started_at", "generated_at", "creator")
-                       and value is not None and value != []} or None,
+                       and value is not None} or None,
         "results": results,
     })
     return {

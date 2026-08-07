@@ -115,8 +115,8 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     it, so SARIF, the sh:ValidationReport and the csv/excel exports tell the
     same story.
     """
-    started = datetime.now(timezone.utc)
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
+    started = datetime.now(timezone.utc)   # after compile — duration is the run, cache-independent
     engine_name, engine_mod = get_engine(engine)
     violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, scope=scope, **kwargs)
 
@@ -151,8 +151,8 @@ def _report_metadata(data, compiled, engine_name, started, table_name="triplets"
         skipped_components = sorted({*compiled.stats.get("unknown_components", ()),
                                      *compiled.plans.get(engine_name, ((), (), ()))[2]})
     return {
-        "started_at": started.isoformat(),
-        "generated_at": finished.isoformat(),
+        "started_at": _iso(started),
+        "generated_at": _iso(finished),
         "duration_seconds": round((finished - started).total_seconds(), 3),
         "engine": engine_name,
         "creator": f"triplets {triplets.__version__}",
@@ -163,6 +163,11 @@ def _report_metadata(data, compiled, engine_name, started, table_name="triplets"
         "skipped_shapes": skipped_shapes,
         "skipped_components": skipped_components,
     }
+
+
+def _iso(moment):
+    """UTC datetime → Zulu ISO string — one lexical form across RDF and SARIF."""
+    return moment.isoformat().replace("+00:00", "Z")
 
 
 def _source_labels(data, table_name="triplets"):

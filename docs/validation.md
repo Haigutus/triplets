@@ -164,17 +164,19 @@ all formats tell the same story:
 
 | key | meaning |
 |-----|---------|
-| `started_at` / `generated_at` / `duration_seconds` | validation start/end (UTC) and wall-clock duration |
+| `started_at` / `generated_at` / `duration_seconds` | validation start/end (UTC, Zulu form) and wall-clock duration of the engine run (shapes compilation excluded — cache-independent) |
 | `engine` | the engine that produced the report |
 | `creator` | tool + version |
 | `source` | data file names (from the data's Distribution label meta rows) |
 | `references` | shape file names (recorded at compile) |
 | `node_shapes` / `constraints` | shape count / compiled IR constraint rows |
-| `skipped_shapes` | shapes THIS run did not evaluate: unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms — empty for `engine="pyshacl"` (spec-complete) and empty when coverage is full |
+| `skipped_shapes` | feature-level gaps THIS run did not evaluate: unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — empty for `engine="pyshacl"` (spec-complete) and empty when coverage is full |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates |
 
 The coverage keys turn the compile/engine warnings into data: a report that
-says "0 violations" also says whether every shape actually ran.
+says "0 violations" also says whether every shape actually ran. Empty coverage
+is stated, not implied — SARIF keeps the `[]`, the csv/excel metadata rows keep
+a blank-valued row.
 
 | exporter | carries the metadata as |
 |----------|-------------------------|
@@ -187,7 +189,10 @@ says "0 violations" also says whether every shape actually ran.
 `report_source=` / `report_references=` override the stamped values (plain
 labels — distinct from the `sources=` locate pass and the shapes object
 `to_sarif(shapes=)` takes). Frames without the attrs (bare frames,
-`report_to_violations` output) export exactly as before.
+`report_to_violations` output) carry no run metadata in SARIF/csv/excel; the
+SHACL report node still gets `prov:generatedAtTime` (export time) and
+`dcterms:creator` — a standard report always says when and by what it was
+written.
 
 ## Shared Loading (`_rdflib_loader.py`)
 
