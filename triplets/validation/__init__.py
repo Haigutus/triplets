@@ -31,13 +31,16 @@ those findings are appended to any engine's report.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas
 
+from .._engine_detect import flavor
 from .._registry import EngineRegistry
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
-from .shacl_report import VIOLATION_COLUMNS, export_to_shacl_report  # noqa: F401 — public API
+from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
+                           violations_to_csv, violations_to_excel)
 from .context import ENRICHMENT_COLUMNS, enrich  # noqa: F401 — public API
 from .locations import LOCATION_COLUMNS, locate_violations  # noqa: F401 — public API
 from .sarif import export_to_sarif  # noqa: F401 — public API
@@ -104,8 +107,16 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         Run the slower enrichment pass (triplets.validation.context.enrich):
         adds instance/file, object type/name, shape name/description and
         schema definition columns to the report.
+
+    The returned frame carries the validation-run metadata in
+    ``violations.attrs["validation"]`` (start/end timestamps and duration,
+    engine, tool version, data/shape file names, shape and constraint counts,
+    and any shapes/components the run skipped) — every report exporter reads
+    it, so SARIF, the sh:ValidationReport and the csv/excel exports tell the
+    same story.
     """
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
+    started = datetime.now(timezone.utc)   # after compile — duration is the run, cache-independent
     engine_name, engine_mod = get_engine(engine)
     violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, scope=scope, **kwargs)
 
@@ -118,4 +129,58 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
                                                "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
     if context:
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
+    violations.attrs["validation"] = _report_metadata(
+        data, compiled, engine_name, started, table_name=kwargs.get("table_name", "triplets"))
     return violations
+
+
+def _report_metadata(data, compiled, engine_name, started, table_name="triplets"):
+    """The validation-run facts every report exporter reads (violations.attrs).
+
+    Coverage (skipped_shapes / skipped_components) is what THIS run did not
+    evaluate: compile-level skips plus the engine's own gaps for vectorized
+    engines; empty for the spec-complete pyshacl reference engine.
+    """
+    import triplets
+
+    finished = datetime.now(timezone.utc)
+    if engine_name == "pyshacl":
+        skipped_shapes, skipped_components = [], []
+    else:
+        skipped_shapes = compiled.stats.get("skipped_shapes", [])
+        skipped_components = sorted({*compiled.stats.get("unknown_components", ()),
+                                     *compiled.plans.get(engine_name, ((), (), ()))[2]})
+    return {
+        "started_at": _iso(started),
+        "generated_at": _iso(finished),
+        "duration_seconds": round((finished - started).total_seconds(), 3),
+        "engine": engine_name,
+        "creator": f"triplets {triplets.__version__}",
+        "source": _source_labels(data, table_name=table_name),
+        "references": list(compiled.sources),
+        "node_shapes": compiled.stats.get("node_shapes", 0),
+        "constraints": compiled.stats.get("constraints", 0),
+        "skipped_shapes": skipped_shapes,
+        "skipped_components": skipped_components,
+    }
+
+
+def _iso(moment):
+    """UTC datetime → Zulu ISO string — one lexical form across RDF and SARIF."""
+    return moment.isoformat().replace("+00:00", "Z")
+
+
+def _source_labels(data, table_name="triplets"):
+    """File names from the data's Distribution meta rows (``KEY="label"``, the
+    parser convention — the same lookup context.enrich uses), any input flavor."""
+    kind = flavor(data)
+    if kind == "duckdb":
+        rows = data.execute(f"SELECT VALUE FROM {table_name} WHERE KEY = 'label'").fetchall()
+        labels = (value for (value,) in rows)
+    elif kind == "polars":
+        labels = data.filter(data["KEY"] == "label")["VALUE"]
+    else:   # pandas — and pyarrow through its arrow-backed pandas view
+        if kind == "pyarrow":
+            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+        labels = data.loc[data["KEY"] == "label", "VALUE"]
+    return [label for label in dict.fromkeys(labels) if label]

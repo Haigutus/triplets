@@ -154,6 +154,51 @@ pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS`
 (`SOURCE_URI`, `SOURCE_LINE`, `SOURCE_COLUMN`) onto the frame; both exports run it
 automatically when given `sources=`, or reuse the columns when already present.
 
+The SHACL report serializes via rdflib: `format=None` (default) derives the format
+from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an explicit
+`format=` always wins.
+
+**Validation-run metadata** is stamped once, by `validate()`, onto the returned
+frame as `violations.attrs["validation"]`. Every report exporter reads it, so
+all formats tell the same story:
+
+| key | meaning |
+|-----|---------|
+| `started_at` / `generated_at` / `duration_seconds` | validation start/end (UTC, Zulu form) and wall-clock duration of the engine run (shapes compilation excluded — cache-independent) |
+| `engine` | the engine that produced the report |
+| `creator` | tool + version |
+| `source` | data file names (from the data's Distribution label meta rows) |
+| `references` | shape file names (recorded at compile) |
+| `node_shapes` / `constraints` | shape count / compiled IR constraint rows |
+| `skipped_shapes` | feature-level gaps THIS run did not evaluate: unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — empty for `engine="pyshacl"` (spec-complete) and empty when coverage is full |
+| `skipped_components` | constraint components the engine neither vectorizes nor delegates |
+
+The coverage keys turn the compile/engine warnings into data: a report that
+says "0 violations" also says whether every shape actually ran. Empty coverage
+is stated, not implied — SARIF keeps the `[]`, the csv/excel metadata rows keep
+a blank-valued row.
+
+| exporter | carries the metadata as |
+|----------|-------------------------|
+| `to_shacl_report` | `prov:generatedAtTime`, `dcterms:creator` / `source` / `references` on the report node (standard vocabulary only — counts/coverage stay in the tabular/SARIF forms) |
+| `to_sarif` | `invocations[].startTimeUtc`/`endTimeUtc` + the full run `properties` bag (engine, duration, counts, coverage) |
+| `to_csv` | a `<name>_meta.<ext>` sidecar file with KEY,VALUE rows |
+| `to_excel` | a second `metadata` sheet |
+
+Every report export takes `export_to_memory=True` and returns BytesIO
+object(s) with `.name` instead of touching the filesystem — the same
+convention as `export_to_cimxml`/`export_to_csv` (`to_csv` returns a list:
+data file + sidecar).
+
+`enrich` and `locate` preserve the attrs. On `to_shacl_report`, explicit
+`report_source=` / `report_references=` override the stamped values (plain
+labels — distinct from the `sources=` locate pass and the shapes object
+`to_sarif(shapes=)` takes). Frames without the attrs (bare frames,
+`report_to_violations` output) carry no run metadata in SARIF/csv/excel; the
+SHACL report node still gets `prov:generatedAtTime` (export time) and
+`dcterms:creator` — a standard report always says when and by what it was
+written.
+
 ## Shared Loading (`_rdflib_loader.py`)
 
 SHACL and SPARQL reach rdflib through the same two helpers, so a validation and
@@ -195,7 +240,7 @@ triplets/
     |-- shacl_pandas.py      # compiled-IR executor (full registry; eager, debugging)
     |-- shacl_polars.py      # compiled-IR executor (lazy plans + collect_all, performance)
     |-- shacl_duckdb.py      # compiled-IR executor (SQL per constraint, larger-than-memory)
-    |-- shacl_report.py      # ValidationReport graph -> violations DataFrame
+    |-- shacl_report.py      # ValidationReport <-> violations; multi-format export
     |-- context.py           # optional enrichment pass (instance/object/shape/schema context)
     |-- locations.py         # violations -> source line/column (the sources= grep pass)
     '-- sarif.py             # violations -> SARIF 2.1.0 (grouped by default)
@@ -238,10 +283,19 @@ violations = violations.shacl.enrich(data=data, shapes=compiled, rdf_map=...)  #
 # SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer
 violations.shacl.to_sarif(path="report.sarif")
 
-# standard sh:ValidationReport (turtle) for SHACL tooling; sources= adds a
-# "Source: file line N column M" message per result (SHACL has no location
-# vocabulary — plain-text messages travel everywhere)
+# standard sh:ValidationReport for SHACL tooling (format from path suffix,
+# or format=); sources= adds a "Source: file line N column M" message per
+# result (SHACL has no location vocabulary — plain-text messages travel
+# everywhere); the dcterms metadata (timestamp, creator, data/shape file
+# names) comes from violations.attrs — stamped by validate(), overridable
+# with report_source=/report_references=
 violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"])
+violations.shacl.to_shacl_report(path="report.xml")  # RDF/XML via .xml
+
+# tabular exports with the same metadata: CSV writes a report_meta.csv
+# sidecar, Excel a second "metadata" sheet
+violations.shacl.to_csv(path="report.csv")
+violations.shacl.to_excel(path="report.xlsx")
 
 # the location pass standalone — SOURCE_URI/SOURCE_LINE/SOURCE_COLUMN columns,
 # reused by both report exports

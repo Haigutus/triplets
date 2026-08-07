@@ -8,6 +8,7 @@ engines, so the later vectorized engines can produce it natively):
 import io
 import logging
 import os
+from datetime import datetime, timezone
 
 import pandas
 
@@ -19,6 +20,14 @@ VIOLATION_COLUMNS = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERIT
 
 _UUID_PREFIX = "urn:uuid:"
 _SH = "http://www.w3.org/ns/shacl#"
+_PROV = "http://www.w3.org/ns/prov#"
+_DCTERMS = "http://purl.org/dc/terms/"
+_XSD = "http://www.w3.org/2001/XMLSchema#"
+
+# path suffix → rdflib serialize format (traversed in order for the reverse,
+# so .xml — the suffix the docs push for RDF/XML — is the default before .rdf)
+_EXT = {".ttl": "turtle", ".xml": "xml", ".rdf": "xml",
+        ".nt": "nt", ".n3": "n3", ".jsonld": "json-ld", ".json-ld": "json-ld"}
 
 # sh:sourceConstraintComponent URI suffix → short violation type
 _COMPONENT_MAP = {
@@ -120,7 +129,7 @@ _COMPONENT_URI = {short: f"{_SH}{suffix}" for suffix, short in _COMPONENT_MAP.it
 _TRIPLETS_NS = "http://triplets#"
 
 
-def violations_to_report_graph(violations):
+def violations_to_report_graph(violations, report_source=None, report_references=None):
     """Violations DataFrame → sh:ValidationReport rdflib graph (inverse of
     report_to_violations; KEYs expand to the CIM namespace unless already URIs).
 
@@ -129,16 +138,46 @@ def violations_to_report_graph(violations):
     schema descriptions (context.enrich) and the source position
     (locations.locate_violations) — SHACL has no location vocabulary, so a
     message is the interoperable carrier.
+
+    Report-level metadata (always): ``prov:generatedAtTime``,
+    ``dcterms:creator`` (tool + version). Optional: ``dcterms:source`` /
+    ``dcterms:references`` from ``report_source`` / ``report_references``
+    (str or sequence — validated file name(s) / shape file name(s)).
+
+    Defaults come from ``violations.attrs["validation"]`` — the metadata
+    ``validate()`` stamps on the frame (timestamp of the validation run, tool
+    version, data/shape file names). Explicit arguments override it.
     """
     import rdflib
+    import triplets
+
+    meta = violations.attrs.get("validation", {})
+    if report_source is None:
+        report_source = meta.get("source")
+    if report_references is None:
+        report_references = meta.get("references")
+    generated_at = (meta.get("generated_at")
+                    or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+    creator = meta.get("creator") or f"triplets {triplets.__version__}"
 
     sh = rdflib.Namespace(_SH)
+    prov = rdflib.Namespace(_PROV)
+    dcterms = rdflib.Namespace(_DCTERMS)
     graph = rdflib.Graph()
     graph.bind("sh", sh)
+    graph.bind("prov", prov)
+    graph.bind("dcterms", dcterms)
 
     report = rdflib.BNode()
     graph.add((report, rdflib.RDF.type, sh.ValidationReport))
     graph.add((report, sh.conforms, rdflib.Literal(violations.empty)))
+    graph.add((report, prov.generatedAtTime,
+               rdflib.Literal(generated_at, datatype=rdflib.URIRef(f"{_XSD}dateTime"))))
+    graph.add((report, dcterms.creator, rdflib.Literal(creator)))
+    for value in _as_list(report_source):
+        graph.add((report, dcterms.source, rdflib.Literal(value)))
+    for value in _as_list(report_references):
+        graph.add((report, dcterms.references, rdflib.Literal(value)))
 
     for row in violations.itertuples(index=False):
         result = rdflib.BNode()
@@ -161,6 +200,15 @@ def violations_to_report_graph(violations):
                        rdflib.URIRef(shape) if "://" in shape or shape.startswith("urn:") else rdflib.BNode(shape)))
 
     return graph
+
+
+def _as_list(value):
+    """None / single name / sequence of names → tuple of str (paths/bytes coerced)."""
+    if value is None:
+        return ()
+    single = isinstance(value, (str, bytes)) or hasattr(value, "__fspath__")
+    values = (value,) if single else tuple(value)
+    return tuple(v.decode() if isinstance(v, bytes) else os.fspath(v) for v in values)
 
 
 def _messages(row):
@@ -199,8 +247,26 @@ def _expand(value):
     return f"{CIM_NS}{value}"
 
 
-def export_to_shacl_report(violations, sources=None, path=None, export_to_memory=False):
-    """Violations frame → standard sh:ValidationReport, serialized as turtle.
+def _resolve_format(path, format):
+    """Explicit rdflib format wins; else path suffix via ``_EXT``; else turtle."""
+    if format is not None:
+        return format
+    if path is not None:
+        return _EXT.get(os.path.splitext(os.fspath(path))[1].lower(), "turtle")
+    return "turtle"
+
+
+def _default_path(fmt):
+    """First suffix in ``_EXT`` that maps to ``fmt``, else ``.ttl``."""
+    for suffix, name in _EXT.items():
+        if name == fmt:
+            return f"report{suffix}"
+    return "report.ttl"
+
+
+def export_to_shacl_report(violations, sources=None, path=None, export_to_memory=False,
+                           format=None, report_source=None, report_references=None):
+    """Violations frame → standard sh:ValidationReport (any rdflib format).
 
     Parameters
     ----------
@@ -212,22 +278,104 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         result carries a "Source: file line N column M" message (a frame
         already carrying LOCATION_COLUMNS is used as-is).
     path : str or Path, optional
-        Output file (default "report.ttl"). Ignored with export_to_memory.
+        Output file. Default ``report.<ext>`` from the resolved format.
+        Suffix selects format when ``format`` is None (``.xml``/``.rdf`` →
+        RDF/XML, ``.ttl`` → turtle, …).
     export_to_memory : bool, default False
         Return a BytesIO (with .name) instead of writing to disk.
+    format : str or None, default None
+        rdflib serialize format. When None, derived from ``path`` suffix
+        (unknown/missing → turtle). Explicit value always wins.
+    report_source : str or sequence, optional
+        ``dcterms:source`` on the ValidationReport (validated file name(s)).
+        Metadata only — ``sources`` is the one that runs the locate pass.
+        Default: the data file names ``validate()`` stamped in
+        ``violations.attrs["validation"]``.
+    report_references : str or sequence, optional
+        ``dcterms:references`` on the ValidationReport (shape file name(s)).
+        Plain labels — not the shapes object ``to_sarif(shapes=)`` takes.
+        Default: the shape file names from ``violations.attrs["validation"]``.
     """
     if sources is not None:
         from .locations import LOCATION_COLUMNS, locate_violations
         if not set(LOCATION_COLUMNS) <= set(violations.columns):
             violations = locate_violations(violations, sources)
-    payload = violations_to_report_graph(violations).serialize(format="turtle").encode("utf-8")
+    fmt = _resolve_format(path, format)
+    path = _default_path(fmt) if path is None else os.fspath(path)
+    payload = (violations_to_report_graph(violations, report_source=report_source,
+                                          report_references=report_references)
+               .serialize(format=fmt).encode("utf-8"))
     if export_to_memory:
         buffer = io.BytesIO(payload)
-        buffer.name = "report.ttl"
+        buffer.name = os.path.basename(path)
         return buffer
 
-    path = "report.ttl" if path is None else os.fspath(path)
     with open(path, "wb") as file:
         file.write(payload)
+    logger.info("Saved %s", path)
+    return path
+
+
+# ── tabular exports (csv / excel) — same metadata as the RDF/SARIF reports ───
+
+def _meta_rows(meta):
+    """The attrs["validation"] dict as (KEY, VALUE) rows — lists fan out; an
+    empty list keeps one blank row so "none" is stated, not implied."""
+    return [(key, item) for key, value in meta.items()
+            for item in ((value or ("",)) if isinstance(value, (list, tuple)) else (value,))]
+
+
+def _buffer(name, payload):
+    """BytesIO with .name — the in-memory file convention every export shares."""
+    buffer = io.BytesIO(payload)
+    buffer.name = name
+    return buffer
+
+
+def _meta_frame(meta):
+    return pandas.DataFrame(_meta_rows(meta), columns=["KEY", "VALUE"])
+
+
+def violations_to_csv(violations, path="violations.csv", export_to_memory=False):
+    """Violations frame → CSV, plus a ``<name>_meta.<ext>`` sidecar carrying
+    the validation metadata (``violations.attrs["validation"]``) as KEY,VALUE
+    rows (no sidecar when the frame carries none). ``export_to_memory=True``
+    returns the BytesIO objects (with .name) instead of writing to disk —
+    same convention as the other exports."""
+    path = os.fspath(path)
+    stem, suffix = os.path.splitext(os.path.basename(path))
+    files = [_buffer(os.path.basename(path), violations.to_csv(index=False).encode("utf-8"))]
+    meta = violations.attrs.get("validation")
+    if meta:
+        files.append(_buffer(f"{stem}_meta{suffix}",
+                             _meta_frame(meta).to_csv(index=False).encode("utf-8")))
+    if export_to_memory:
+        return files
+    directory = os.path.dirname(path)
+    for file in files:
+        target = os.path.join(directory, file.name)
+        with open(target, "wb") as handle:
+            handle.write(file.getvalue())
+        logger.info("Saved %s", target)
+    return path
+
+
+def violations_to_excel(violations, path="violations.xlsx", export_to_memory=False):
+    """Violations frame → Excel; the validation metadata
+    (``violations.attrs["validation"]``) goes to a second "metadata" sheet.
+    ``export_to_memory=True`` returns a BytesIO (with .name)."""
+    path = os.fspath(path)
+    meta = violations.attrs.get("validation")
+    buffer = io.BytesIO()
+    with pandas.ExcelWriter(buffer, engine="openpyxl") as writer:
+        violations.to_excel(writer, sheet_name="violations", index=False)
+        if meta:
+            _meta_frame(meta).to_excel(writer, sheet_name="metadata", index=False)
+    buffer.name = os.path.basename(path)
+    buffer.seek(0)
+    if export_to_memory:
+        return buffer
+    with open(path, "wb") as handle:
+        handle.write(buffer.getvalue())
     logger.info("Saved %s", path)
     return path

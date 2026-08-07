@@ -102,18 +102,33 @@ def build_sarif(violations, group=True, sources=None):
             results.extend(_result(rule["id"], rule_index, record) for record in records)
 
     import triplets
+    meta = violations.attrs.get("validation", {})
+    run = _prune({
+        "tool": {"driver": _prune({
+            "name": "triplets-shacl",
+            "informationUri": "https://github.com/Haigutus/triplets",
+            "version": getattr(triplets, "__version__", None),
+            "rules": rules,
+        })},
+        # the validation-run metadata validate() stamps on the frame — the
+        # same facts the sh:ValidationReport carries as prov/dcterms terms;
+        # timestamps go to the invocation, everything else (engine, duration,
+        # shape/constraint counts, coverage) to the run property bag
+        "invocations": [_prune({
+            "executionSuccessful": True,
+            "startTimeUtc": _utc(meta.get("started_at")),
+            "endTimeUtc": _utc(meta.get("generated_at")),
+        })] if meta.get("generated_at") else None,
+        # empty coverage lists stay in — a clean run STATES full coverage
+        "properties": {key: value for key, value in meta.items()
+                       if key not in ("started_at", "generated_at", "creator")
+                       and value is not None} or None,
+        "results": results,
+    })
     return {
         "$schema": _SCHEMA,
         "version": "2.1.0",
-        "runs": [{
-            "tool": {"driver": _prune({
-                "name": "triplets-shacl",
-                "informationUri": "https://github.com/Haigutus/triplets",
-                "version": getattr(triplets, "__version__", None),
-                "rules": rules,
-            })},
-            "results": results,
-        }],
+        "runs": [run],
     }
 
 
@@ -248,6 +263,11 @@ def _location(record):
         location["physicalLocation"] = {
             "artifactLocation": {"uri": quote(str(record["INSTANCE_LABEL"]))}}
     return location
+
+
+def _utc(timestamp):
+    """ISO timestamp → the Z-suffixed form SARIF expects (None passes through)."""
+    return timestamp.replace("+00:00", "Z") if timestamp else None
 
 
 def _value(cell):

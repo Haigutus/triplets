@@ -181,8 +181,10 @@ violations = data.shacl.validate(shapes, context=True)
 # (one result per rule with occurrenceCount + sample instances)
 violations.shacl.to_sarif(path="report.sarif")
 
-# standard SHACL sh:ValidationReport (Turtle) for any SHACL-aware tooling
+# standard SHACL sh:ValidationReport — format from path suffix (or format=)
 violations.shacl.to_shacl_report(path="report.ttl")
+violations.shacl.to_shacl_report(path="report.xml", report_source="model.xml",
+                                 report_references=["equipment.ttl"])
 ```
 
 Engines: `polars` (auto, real profiles in ~2 s) → `pandas` → `pyshacl`
