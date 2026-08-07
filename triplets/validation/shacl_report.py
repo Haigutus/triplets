@@ -25,8 +25,9 @@ _PROV = "http://www.w3.org/ns/prov#"
 _DCTERMS = "http://purl.org/dc/terms/"
 _XSD = "http://www.w3.org/2001/XMLSchema#"
 
-# path suffix → rdflib serialize format (traverse values for the reverse)
-_EXT = {".ttl": "turtle", ".rdf": "xml", ".xml": "xml",
+# path suffix → rdflib serialize format (traversed in order for the reverse,
+# so .xml — the suffix the docs push for RDF/XML — is the default before .rdf)
+_EXT = {".ttl": "turtle", ".xml": "xml", ".rdf": "xml",
         ".nt": "nt", ".n3": "n3", ".jsonld": "json-ld", ".json-ld": "json-ld"}
 
 # sh:sourceConstraintComponent URI suffix → short violation type
@@ -129,7 +130,7 @@ _COMPONENT_URI = {short: f"{_SH}{suffix}" for suffix, short in _COMPONENT_MAP.it
 _TRIPLETS_NS = "http://triplets#"
 
 
-def violations_to_report_graph(violations, source=None, shapes=None):
+def violations_to_report_graph(violations, report_source=None, report_references=None):
     """Violations DataFrame → sh:ValidationReport rdflib graph (inverse of
     report_to_violations; KEYs expand to the CIM namespace unless already URIs).
 
@@ -140,8 +141,9 @@ def violations_to_report_graph(violations, source=None, shapes=None):
     message is the interoperable carrier.
 
     Report-level metadata (always): ``prov:generatedAtTime``,
-    ``prov:wasGeneratedBy``. Optional: ``dcterms:source`` / ``dcterms:conformsTo``
-    from ``source`` / ``shapes`` (str or sequence).
+    ``dcterms:creator`` (tool + version). Optional: ``dcterms:source`` /
+    ``dcterms:references`` from ``report_source`` / ``report_references``
+    (str or sequence — validated file name(s) / shape file name(s)).
     """
     import rdflib
     import triplets
@@ -160,12 +162,12 @@ def violations_to_report_graph(violations, source=None, shapes=None):
     graph.add((report, prov.generatedAtTime,
                rdflib.Literal(datetime.now(timezone.utc).isoformat(),
                               datatype=rdflib.URIRef(f"{_XSD}dateTime"))))
-    graph.add((report, prov.wasGeneratedBy,
+    graph.add((report, dcterms.creator,
                rdflib.Literal(f"triplets {triplets.__version__}")))
-    for value in _as_list(source):
+    for value in _as_list(report_source):
         graph.add((report, dcterms.source, rdflib.Literal(value)))
-    for value in _as_list(shapes):
-        graph.add((report, dcterms.conformsTo, rdflib.Literal(value)))
+    for value in _as_list(report_references):
+        graph.add((report, dcterms.references, rdflib.Literal(value)))
 
     for row in violations.itertuples(index=False):
         result = rdflib.BNode()
@@ -194,8 +196,9 @@ def _as_list(value):
     if value is None:
         return ()
     if isinstance(value, (str, Path, bytes)):
-        return (os.fspath(value) if not isinstance(value, bytes) else value.decode(),)
-    return tuple(value)
+        value = (value,)
+    return tuple(v.decode() if isinstance(v, bytes) else os.fspath(v) if isinstance(v, Path) else v
+                 for v in value)
 
 
 def _messages(row):
@@ -252,7 +255,7 @@ def _default_path(fmt):
 
 
 def export_to_shacl_report(violations, sources=None, path=None, export_to_memory=False,
-                           format=None, source=None, shapes=None):
+                           format=None, report_source=None, report_references=None):
     """Violations frame → standard sh:ValidationReport (any rdflib format).
 
     Parameters
@@ -273,10 +276,12 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
     format : str or None, default None
         rdflib serialize format. When None, derived from ``path`` suffix
         (unknown/missing → turtle). Explicit value always wins.
-    source : str or sequence, optional
+    report_source : str or sequence, optional
         ``dcterms:source`` on the ValidationReport (validated file name(s)).
-    shapes : str or sequence, optional
-        ``dcterms:conformsTo`` on the ValidationReport (shape file name(s)).
+        Metadata only — ``sources`` is the one that runs the locate pass.
+    report_references : str or sequence, optional
+        ``dcterms:references`` on the ValidationReport (shape file name(s)).
+        Plain labels — not the shapes object ``to_sarif(shapes=)`` takes.
     """
     if sources is not None:
         from .locations import LOCATION_COLUMNS, locate_violations
@@ -287,7 +292,8 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         path = _default_path(fmt)
     else:
         path = os.fspath(path)
-    payload = (violations_to_report_graph(violations, source=source, shapes=shapes)
+    payload = (violations_to_report_graph(violations, report_source=report_source,
+                                          report_references=report_references)
                .serialize(format=fmt).encode("utf-8"))
     if export_to_memory:
         buffer = io.BytesIO(payload)

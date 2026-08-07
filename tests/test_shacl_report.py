@@ -95,6 +95,11 @@ def test_export_to_memory_default_turtle():
     assert rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
 
 
+def test_default_path_prefers_xml_suffix():
+    buffer = export_to_shacl_report(VIOLATIONS, export_to_memory=True, format="xml")
+    assert buffer.name == "report.xml"
+
+
 def test_report_metadata():
     import rdflib
     from triplets.validation.shacl_report import violations_to_report_graph
@@ -104,13 +109,13 @@ def test_report_metadata():
     sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
 
     graph = violations_to_report_graph(
-        VIOLATIONS, source="file.xml", shapes=["a.ttl", "b.ttl"])
+        VIOLATIONS, report_source="file.xml", report_references=[Path("a.ttl"), "b.ttl"])
     report = next(graph.subjects(rdflib.RDF.type, sh.ValidationReport))
 
     assert graph.value(report, prov.generatedAtTime) is not None
-    assert "triplets" in str(graph.value(report, prov.wasGeneratedBy))
+    assert "triplets" in str(graph.value(report, dcterms.creator))
     assert {str(v) for v in graph.objects(report, dcterms.source)} == {"file.xml"}
-    assert {str(v) for v in graph.objects(report, dcterms.conformsTo)} == {"a.ttl", "b.ttl"}
+    assert {str(v) for v in graph.objects(report, dcterms.references)} == {"a.ttl", "b.ttl"}
 
 
 def test_multi_messages_from_context_and_location_columns():

@@ -157,8 +157,10 @@ automatically when given `sources=`, or reuse the columns when already present.
 The SHACL report serializes via rdflib: `format=None` (default) derives the format
 from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an explicit
 `format=` always wins. The report node always carries `prov:generatedAtTime` and
-`prov:wasGeneratedBy`; optional `source=` / `shapes=` become `dcterms:source` /
-`dcterms:conformsTo`.
+`dcterms:creator` (tool + version); optional `report_source=` / `report_references=`
+become `dcterms:source` / `dcterms:references` (validated file name(s) / shape file
+name(s) — plain labels, distinct from the `sources=` locate pass and the shapes
+object `to_sarif(shapes=)` takes).
 
 ## Shared Loading (`_rdflib_loader.py`)
 
@@ -247,9 +249,11 @@ violations.shacl.to_sarif(path="report.sarif")
 # standard sh:ValidationReport for SHACL tooling (format from path suffix,
 # or format=); sources= adds a "Source: file line N column M" message per
 # result (SHACL has no location vocabulary — plain-text messages travel
-# everywhere); source=/shapes= become dcterms metadata on the report node
+# everywhere); report_source=/report_references= become dcterms metadata
+# on the report node
 violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"],
-                                 source="grid.zip", shapes="shapes.ttl")
+                                 report_source="grid.zip",
+                                 report_references="shapes.ttl")
 violations.shacl.to_shacl_report(path="report.xml")  # RDF/XML via .xml
 
 # the location pass standalone — SOURCE_URI/SOURCE_LINE/SOURCE_COLUMN columns,

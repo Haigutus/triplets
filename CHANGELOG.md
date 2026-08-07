@@ -66,8 +66,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`sh:ValidationReport` export** (`violations.shacl.to_shacl_report(...)`,
   `triplets.validation.export_to_shacl_report`): violations frame → standard
   SHACL report (any rdflib format — default from path suffix, or `format=`);
-  report metadata: `prov:generatedAtTime`, `prov:wasGeneratedBy`, optional
-  `dcterms:source` / `dcterms:conformsTo` via `source=` / `shapes=`.
+  report metadata: `prov:generatedAtTime`, `dcterms:creator`, optional
+  `dcterms:source` / `dcterms:references` via `report_source=` / `report_references=`.
 - `examples/shacl_reports.py`: uv-runnable (PEP 723) end-to-end demo — Svedala
   EQ with three deliberately introduced issues validated against the official
   ENTSO-E Equipment SHACL (Simple + Complex, downloaded on first run), report

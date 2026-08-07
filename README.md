@@ -183,8 +183,8 @@ violations.shacl.to_sarif(path="report.sarif")
 
 # standard SHACL sh:ValidationReport — format from path suffix (or format=)
 violations.shacl.to_shacl_report(path="report.ttl")
-violations.shacl.to_shacl_report(path="report.xml", source="model.xml",
-                                 shapes=["equipment.ttl"])
+violations.shacl.to_shacl_report(path="report.xml", report_source="model.xml",
+                                 report_references=["equipment.ttl"])
 ```
 
 Engines: `polars` (auto, real profiles in ~2 s) → `pandas` → `pyshacl`

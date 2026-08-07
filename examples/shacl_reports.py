@@ -108,10 +108,12 @@ print(located.loc[located["SEVERITY"] == "Violation",
 # >>> each result carries engine + Description/Schema/Source messages;
 # >>> report node has prov/dcterms metadata
 report_ttl = located.shacl.to_shacl_report(
-    path=HERE / "shacl_reports.ttl", source=Path(EQ).name, shapes=SHACL_FILES)
+    path=HERE / "shacl_reports.ttl", report_source=Path(EQ).name,
+    report_references=SHACL_FILES)
 print(f"\nwrote {report_ttl}")
 report_xml = located.shacl.to_shacl_report(
-    path=HERE / "shacl_reports.xml", source=Path(EQ).name, shapes=SHACL_FILES)
+    path=HERE / "shacl_reports.xml", report_source=Path(EQ).name,
+    report_references=SHACL_FILES)
 print(f"wrote {report_xml}")
 
 # >>> export 2: SARIF 2.1.0 — grouped (one result per rule + occurrenceCount);
