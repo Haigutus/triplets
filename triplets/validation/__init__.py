@@ -31,6 +31,7 @@ those findings are appended to any engine's report.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas
@@ -114,8 +115,6 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     it, so SARIF, the sh:ValidationReport and the csv/excel exports tell the
     same story.
     """
-    from datetime import datetime, timezone
-
     started = datetime.now(timezone.utc)
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
     engine_name, engine_mod = get_engine(engine)
@@ -142,17 +141,15 @@ def _report_metadata(data, compiled, engine_name, started, table_name="triplets"
     evaluate: compile-level skips plus the engine's own gaps for vectorized
     engines; empty for the spec-complete pyshacl reference engine.
     """
-    from datetime import datetime, timezone
     import triplets
 
     finished = datetime.now(timezone.utc)
     if engine_name == "pyshacl":
         skipped_shapes, skipped_components = [], []
     else:
-        engine_skips = compiled.plans[engine_name][2] if engine_name in compiled.plans else []
         skipped_shapes = compiled.stats.get("skipped_shapes", [])
-        skipped_components = sorted(set(compiled.stats.get("unknown_components", []))
-                                    | set(engine_skips))
+        skipped_components = sorted({*compiled.stats.get("unknown_components", ()),
+                                     *compiled.plans.get(engine_name, ((), (), ()))[2]})
     return {
         "started_at": started.isoformat(),
         "generated_at": finished.isoformat(),
@@ -169,24 +166,16 @@ def _report_metadata(data, compiled, engine_name, started, table_name="triplets"
 
 
 def _source_labels(data, table_name="triplets"):
-    """File names from the data's Distribution label meta rows (any flavor)."""
+    """File names from the data's Distribution meta rows (``KEY="label"``, the
+    parser convention — the same lookup context.enrich uses), any input flavor."""
     kind = flavor(data)
     if kind == "duckdb":
-        rows = data.execute(
-            f"SELECT VALUE FROM {table_name} WHERE KEY = 'label' AND ID IN "
-            f"(SELECT ID FROM {table_name} WHERE KEY = 'Type' AND VALUE = 'Distribution')"
-        ).fetchall()
-        return [value for (value,) in rows if value]
-    if kind == "pyarrow":
-        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-        kind = "pandas"
-    if kind == "polars":
-        import polars
-        ids = data.filter((polars.col("KEY") == "Type")
-                          & (polars.col("VALUE") == "Distribution"))["ID"]
-        labels = data.filter((polars.col("KEY") == "label")
-                             & polars.col("ID").is_in(ids))["VALUE"].to_list()
-        return [value for value in labels if value]
-    ids = data.loc[(data["KEY"] == "Type") & (data["VALUE"] == "Distribution"), "ID"]
-    labels = data.loc[(data["KEY"] == "label") & data["ID"].isin(ids), "VALUE"].tolist()
-    return [value for value in labels if value]
+        rows = data.execute(f"SELECT VALUE FROM {table_name} WHERE KEY = 'label'").fetchall()
+        labels = (value for (value,) in rows)
+    elif kind == "polars":
+        labels = data.filter(data["KEY"] == "label")["VALUE"]
+    else:   # pandas — and pyarrow through its arrow-backed pandas view
+        if kind == "pyarrow":
+            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+        labels = data.loc[data["KEY"] == "label", "VALUE"]
+    return [label for label in dict.fromkeys(labels) if label]

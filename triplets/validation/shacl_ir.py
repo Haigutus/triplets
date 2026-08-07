@@ -94,6 +94,12 @@ def _shape_stats(graph, ir):
     }
 
 
+def _paths(shapes):
+    """Shape source(s) → list of paths (single str/bytes/PathLike or sequence)."""
+    return ([shapes] if isinstance(shapes, (str, bytes)) or hasattr(shapes, "__fspath__")
+            else list(shapes))
+
+
 def _source_names(shapes):
     """Shape file basenames for report metadata (a cache hit keeps the names
     of the first compile — content identity, not path identity)."""
@@ -101,8 +107,7 @@ def _source_names(shapes):
 
     if isinstance(shapes, rdflib.Graph):
         return ()
-    paths = [shapes] if isinstance(shapes, (str, bytes)) or hasattr(shapes, "__fspath__") else list(shapes)
-    return tuple(os.path.basename(str(path)) for path in paths)
+    return tuple(os.path.basename(str(path)) for path in _paths(shapes))
 
 
 def _load_shapes(shapes):
@@ -112,9 +117,8 @@ def _load_shapes(shapes):
     if isinstance(shapes, rdflib.Graph):
         return shapes
 
-    paths = [shapes] if isinstance(shapes, (str, bytes)) or hasattr(shapes, "__fspath__") else list(shapes)
     graph = rdflib.Graph()
-    for path in paths:
+    for path in _paths(shapes):
         suffix = str(path)[str(path).rfind("."):].lower()
         graph.parse(str(path), format=_SHAPE_FORMATS.get(suffix, "turtle"))
     return graph
@@ -128,8 +132,7 @@ def _content_hash(shapes):
         digest.update(b"\n".join(sorted(shapes.serialize(format="nt").encode().splitlines())))
         return digest.hexdigest()
 
-    paths = [shapes] if isinstance(shapes, (str, bytes)) or hasattr(shapes, "__fspath__") else list(shapes)
-    for path in paths:
+    for path in _paths(shapes):
         with open(path, "rb") as file:
             digest.update(file.read())
     return digest.hexdigest()

@@ -203,12 +203,11 @@ def violations_to_report_graph(violations, report_source=None, report_references
 
 
 def _as_list(value):
+    """None / single name / sequence of names → tuple of str (Path/bytes coerced)."""
     if value is None:
         return ()
-    if isinstance(value, (str, Path, bytes)):
-        value = (value,)
-    return tuple(v.decode() if isinstance(v, bytes) else os.fspath(v) if isinstance(v, Path) else v
-                 for v in value)
+    values = (value,) if isinstance(value, (str, Path, bytes)) else tuple(value)
+    return tuple(v.decode() if isinstance(v, bytes) else os.fspath(v) for v in values)
 
 
 def _messages(row):
@@ -301,10 +300,7 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         if not set(LOCATION_COLUMNS) <= set(violations.columns):
             violations = locate_violations(violations, sources)
     fmt = _resolve_format(path, format)
-    if path is None:
-        path = _default_path(fmt)
-    else:
-        path = os.fspath(path)
+    path = _default_path(fmt) if path is None else os.fspath(path)
     payload = (violations_to_report_graph(violations, report_source=report_source,
                                           report_references=report_references)
                .serialize(format=fmt).encode("utf-8"))
@@ -317,7 +313,6 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         file.write(payload)
     logger.info("Saved %s", path)
     return path
-
 
 
 # ── tabular exports (csv / excel) — same metadata as the RDF/SARIF reports ───
