@@ -158,3 +158,104 @@ def test_sources_add_location_message(tmp_path):
     graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
     messages = {str(message) for message in graph.objects(None, sh.resultMessage)}
     assert any(message.startswith("Source: ") and "line 4" in message for message in messages)
+
+
+# ── validation-run metadata (violations.attrs["validation"]) ─────────────────
+
+from pathlib import Path
+
+SHAPE_TTL = """
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+"""
+
+DATA = pandas.DataFrame([
+    ("d1", "Type", "Distribution", "i1"),
+    ("d1", "label", "grid.xml", "i1"),
+    ("b1", "Type", "Breaker", "i1"),
+], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+META = {"generated_at": "2026-08-07T10:00:00+00:00", "creator": "triplets test",
+        "source": ["grid.xml"], "references": ["shapes.ttl"]}
+
+
+def _with_meta(frame):
+    frame = frame.copy()
+    frame.attrs["validation"] = dict(META)
+    return frame
+
+
+def test_validate_stamps_metadata(tmp_path):
+    shapes = tmp_path / "breaker_shapes.ttl"
+    shapes.write_text(SHAPE_TTL)
+    violations = triplets.validation.validate(DATA, shapes, engine="pandas")
+    meta = violations.attrs["validation"]
+    assert meta["source"] == ["grid.xml"]
+    assert meta["references"] == ["breaker_shapes.ttl"]
+    assert meta["creator"].startswith("triplets ")
+    assert "T" in meta["generated_at"]
+    assert len(violations) == 1  # b1 has no name
+
+
+def test_enrich_and_locate_preserve_metadata(tmp_path):
+    violations = _with_meta(VIOLATIONS)
+    enriched = triplets.validation.enrich(violations, data=DATA)
+    assert enriched.attrs["validation"] == META
+    xml = tmp_path / "grid.xml"
+    xml.write_text("<rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'/>")
+    located = triplets.validation.locate_violations(violations, [str(xml)])
+    assert located.attrs["validation"] == META
+
+
+def test_report_defaults_from_metadata_and_override():
+    import rdflib
+    prov = rdflib.Namespace("http://www.w3.org/ns/prov#")
+    dcterms = rdflib.Namespace("http://purl.org/dc/terms/")
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+
+    graph = violations_to_report_graph(_with_meta(VIOLATIONS))
+    report = next(graph.subjects(rdflib.RDF.type, sh.ValidationReport))
+    assert str(graph.value(report, prov.generatedAtTime)) == META["generated_at"]
+    assert str(graph.value(report, dcterms.creator)) == "triplets test"
+    assert {str(v) for v in graph.objects(report, dcterms.source)} == {"grid.xml"}
+    assert {str(v) for v in graph.objects(report, dcterms.references)} == {"shapes.ttl"}
+
+    override = violations_to_report_graph(_with_meta(VIOLATIONS), report_source="other.zip")
+    report = next(override.subjects(rdflib.RDF.type, sh.ValidationReport))
+    assert {str(v) for v in override.objects(report, dcterms.source)} == {"other.zip"}
+
+
+def test_sarif_carries_metadata():
+    from triplets.validation.sarif import build_sarif
+    run = build_sarif(_with_meta(VIOLATIONS))["runs"][0]
+    assert run["invocations"] == [{"executionSuccessful": True,
+                                   "endTimeUtc": "2026-08-07T10:00:00Z"}]
+    assert run["properties"] == {"source": ["grid.xml"], "references": ["shapes.ttl"]}
+    assert "invocations" not in build_sarif(VIOLATIONS)["runs"][0]
+
+
+def test_csv_export_writes_meta_sidecar(tmp_path):
+    from triplets.validation import violations_to_csv
+    path = violations_to_csv(_with_meta(VIOLATIONS), tmp_path / "report.csv")
+    assert Path(path).exists()
+    sidecar = tmp_path / "report_meta.csv"
+    meta = pandas.read_csv(sidecar)
+    assert list(meta.columns) == ["KEY", "VALUE"]
+    rows = set(zip(meta["KEY"], meta["VALUE"]))
+    assert ("source", "grid.xml") in rows and ("references", "shapes.ttl") in rows
+    assert ("creator", "triplets test") in rows
+
+    violations_to_csv(VIOLATIONS, tmp_path / "bare.csv")   # no metadata → no sidecar
+    assert not (tmp_path / "bare_meta.csv").exists()
+
+
+def test_excel_export_writes_metadata_sheet(tmp_path):
+    pytest.importorskip("openpyxl")
+    from triplets.validation import violations_to_excel
+    path = violations_to_excel(_with_meta(VIOLATIONS), tmp_path / "report.xlsx")
+    sheets = pandas.read_excel(path, sheet_name=None)
+    assert set(sheets) == {"violations", "metadata"}
+    meta = sheets["metadata"]
+    assert ("references", "shapes.ttl") in set(zip(meta["KEY"], meta["VALUE"]))

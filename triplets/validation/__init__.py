@@ -35,9 +35,11 @@ from typing import Any
 
 import pandas
 
+from .._engine_detect import flavor
 from .._registry import EngineRegistry
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
-from .shacl_report import VIOLATION_COLUMNS, export_to_shacl_report  # noqa: F401 — public API
+from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
+                           violations_to_csv, violations_to_excel)
 from .context import ENRICHMENT_COLUMNS, enrich  # noqa: F401 — public API
 from .locations import LOCATION_COLUMNS, locate_violations  # noqa: F401 — public API
 from .sarif import export_to_sarif  # noqa: F401 — public API
@@ -104,6 +106,11 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         Run the slower enrichment pass (triplets.validation.context.enrich):
         adds instance/file, object type/name, shape name/description and
         schema definition columns to the report.
+
+    The returned frame carries the validation-run metadata in
+    ``violations.attrs["validation"]`` (generated_at, creator, source file
+    names, shape file names) — every report exporter reads it, so SARIF, the
+    sh:ValidationReport and the csv/excel exports tell the same story.
     """
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
     engine_name, engine_mod = get_engine(engine)
@@ -118,4 +125,43 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
                                                "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
     if context:
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
+    violations.attrs["validation"] = _report_metadata(
+        data, compiled, table_name=kwargs.get("table_name", "triplets"))
     return violations
+
+
+def _report_metadata(data, compiled, table_name="triplets"):
+    """The validation-run facts every report exporter reads (violations.attrs)."""
+    from datetime import datetime, timezone
+    import triplets
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "creator": f"triplets {triplets.__version__}",
+        "source": _source_labels(data, table_name=table_name),
+        "references": list(compiled.sources),
+    }
+
+
+def _source_labels(data, table_name="triplets"):
+    """File names from the data's Distribution label meta rows (any flavor)."""
+    kind = flavor(data)
+    if kind == "duckdb":
+        rows = data.execute(
+            f"SELECT VALUE FROM {table_name} WHERE KEY = 'label' AND ID IN "
+            f"(SELECT ID FROM {table_name} WHERE KEY = 'Type' AND VALUE = 'Distribution')"
+        ).fetchall()
+        return [value for (value,) in rows if value]
+    if kind == "pyarrow":
+        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+        kind = "pandas"
+    if kind == "polars":
+        import polars
+        ids = data.filter((polars.col("KEY") == "Type")
+                          & (polars.col("VALUE") == "Distribution"))["ID"]
+        labels = data.filter((polars.col("KEY") == "label")
+                             & polars.col("ID").is_in(ids))["VALUE"].to_list()
+        return [value for value in labels if value]
+    ids = data.loc[(data["KEY"] == "Type") & (data["VALUE"] == "Distribution"), "ID"]
+    labels = data.loc[(data["KEY"] == "label") & data["ID"].isin(ids), "VALUE"].tolist()
+    return [value for value in labels if value]

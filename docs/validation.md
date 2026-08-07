@@ -156,11 +156,26 @@ automatically when given `sources=`, or reuse the columns when already present.
 
 The SHACL report serializes via rdflib: `format=None` (default) derives the format
 from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an explicit
-`format=` always wins. The report node always carries `prov:generatedAtTime` and
-`dcterms:creator` (tool + version); optional `report_source=` / `report_references=`
-become `dcterms:source` / `dcterms:references` (validated file name(s) / shape file
-name(s) — plain labels, distinct from the `sources=` locate pass and the shapes
-object `to_sarif(shapes=)` takes).
+`format=` always wins.
+
+**Validation-run metadata** is stamped once, by `validate()`, onto the returned
+frame as `violations.attrs["validation"]`: `generated_at` (validation time, UTC),
+`creator` (tool + version), `source` (the data file names, from the data's
+Distribution label meta rows) and `references` (the shape file names). Every
+report exporter reads it, so all formats tell the same story:
+
+| exporter | carries the metadata as |
+|----------|-------------------------|
+| `to_shacl_report` | `prov:generatedAtTime`, `dcterms:creator` / `source` / `references` on the report node |
+| `to_sarif` | `invocations[].endTimeUtc` + run `properties` (tool.driver has name/version as before) |
+| `to_csv` | a `<name>_meta.<ext>` sidecar file with KEY,VALUE rows |
+| `to_excel` | a second `metadata` sheet |
+
+`enrich` and `locate` preserve the attrs. On `to_shacl_report`, explicit
+`report_source=` / `report_references=` override the stamped values (plain
+labels — distinct from the `sources=` locate pass and the shapes object
+`to_sarif(shapes=)` takes). Frames without the attrs (bare frames,
+`report_to_violations` output) export exactly as before.
 
 ## Shared Loading (`_rdflib_loader.py`)
 
@@ -249,12 +264,16 @@ violations.shacl.to_sarif(path="report.sarif")
 # standard sh:ValidationReport for SHACL tooling (format from path suffix,
 # or format=); sources= adds a "Source: file line N column M" message per
 # result (SHACL has no location vocabulary — plain-text messages travel
-# everywhere); report_source=/report_references= become dcterms metadata
-# on the report node
-violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"],
-                                 report_source="grid.zip",
-                                 report_references="shapes.ttl")
+# everywhere); the dcterms metadata (timestamp, creator, data/shape file
+# names) comes from violations.attrs — stamped by validate(), overridable
+# with report_source=/report_references=
+violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"])
 violations.shacl.to_shacl_report(path="report.xml")  # RDF/XML via .xml
+
+# tabular exports with the same metadata: CSV writes a report_meta.csv
+# sidecar, Excel a second "metadata" sheet
+violations.shacl.to_csv(path="report.csv")
+violations.shacl.to_excel(path="report.xlsx")
 
 # the location pass standalone — SOURCE_URI/SOURCE_LINE/SOURCE_COLUMN columns,
 # reused by both report exports

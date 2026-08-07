@@ -166,7 +166,9 @@ _QUERY_NAMESPACES = {
                "enrich": validation.enrich,
                "locate": validation.locate_violations,
                "to_sarif": validation.export_to_sarif,
-               "to_shacl_report": validation.export_to_shacl_report},
+               "to_shacl_report": validation.export_to_shacl_report,
+               "to_csv": validation.violations_to_csv,
+               "to_excel": validation.violations_to_excel},
               "SHACL validation via the `shacl` namespace."),
 }
 

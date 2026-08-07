@@ -102,18 +102,27 @@ def build_sarif(violations, group=True, sources=None):
             results.extend(_result(rule["id"], rule_index, record) for record in records)
 
     import triplets
+    meta = violations.attrs.get("validation", {})
+    run = _prune({
+        "tool": {"driver": _prune({
+            "name": "triplets-shacl",
+            "informationUri": "https://github.com/Haigutus/triplets",
+            "version": getattr(triplets, "__version__", None),
+            "rules": rules,
+        })},
+        # the validation-run metadata validate() stamps on the frame — the
+        # same facts the sh:ValidationReport carries as prov/dcterms terms
+        "invocations": [{"executionSuccessful": True,
+                         "endTimeUtc": meta["generated_at"].replace("+00:00", "Z")}]
+                        if meta.get("generated_at") else None,
+        "properties": _prune({"source": meta.get("source") or None,
+                              "references": meta.get("references") or None}) or None,
+        "results": results,
+    })
     return {
         "$schema": _SCHEMA,
         "version": "2.1.0",
-        "runs": [{
-            "tool": {"driver": _prune({
-                "name": "triplets-shacl",
-                "informationUri": "https://github.com/Haigutus/triplets",
-                "version": getattr(triplets, "__version__", None),
-                "rules": rules,
-            })},
-            "results": results,
-        }],
+        "runs": [run],
     }
 
 

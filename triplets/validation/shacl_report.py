@@ -144,9 +144,21 @@ def violations_to_report_graph(violations, report_source=None, report_references
     ``dcterms:creator`` (tool + version). Optional: ``dcterms:source`` /
     ``dcterms:references`` from ``report_source`` / ``report_references``
     (str or sequence — validated file name(s) / shape file name(s)).
+
+    Defaults come from ``violations.attrs["validation"]`` — the metadata
+    ``validate()`` stamps on the frame (timestamp of the validation run, tool
+    version, data/shape file names). Explicit arguments override it.
     """
     import rdflib
     import triplets
+
+    meta = violations.attrs.get("validation", {})
+    if report_source is None:
+        report_source = meta.get("source")
+    if report_references is None:
+        report_references = meta.get("references")
+    generated_at = meta.get("generated_at") or datetime.now(timezone.utc).isoformat()
+    creator = meta.get("creator") or f"triplets {triplets.__version__}"
 
     sh = rdflib.Namespace(_SH)
     prov = rdflib.Namespace(_PROV)
@@ -160,10 +172,8 @@ def violations_to_report_graph(violations, report_source=None, report_references
     graph.add((report, rdflib.RDF.type, sh.ValidationReport))
     graph.add((report, sh.conforms, rdflib.Literal(violations.empty)))
     graph.add((report, prov.generatedAtTime,
-               rdflib.Literal(datetime.now(timezone.utc).isoformat(),
-                              datatype=rdflib.URIRef(f"{_XSD}dateTime"))))
-    graph.add((report, dcterms.creator,
-               rdflib.Literal(f"triplets {triplets.__version__}")))
+               rdflib.Literal(generated_at, datatype=rdflib.URIRef(f"{_XSD}dateTime"))))
+    graph.add((report, dcterms.creator, rdflib.Literal(creator)))
     for value in _as_list(report_source):
         graph.add((report, dcterms.source, rdflib.Literal(value)))
     for value in _as_list(report_references):
@@ -279,9 +289,12 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
     report_source : str or sequence, optional
         ``dcterms:source`` on the ValidationReport (validated file name(s)).
         Metadata only — ``sources`` is the one that runs the locate pass.
+        Default: the data file names ``validate()`` stamped in
+        ``violations.attrs["validation"]``.
     report_references : str or sequence, optional
         ``dcterms:references`` on the ValidationReport (shape file name(s)).
         Plain labels — not the shapes object ``to_sarif(shapes=)`` takes.
+        Default: the shape file names from ``violations.attrs["validation"]``.
     """
     if sources is not None:
         from .locations import LOCATION_COLUMNS, locate_violations
@@ -305,3 +318,40 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
     logger.info("Saved %s", path)
     return path
 
+
+
+# ── tabular exports (csv / excel) — same metadata as the RDF/SARIF reports ───
+
+def _meta_rows(meta):
+    """The attrs["validation"] dict as (KEY, VALUE) rows — lists fan out."""
+    return [(key, item) for key, value in meta.items()
+            for item in (value if isinstance(value, (list, tuple)) else (value,))]
+
+
+def violations_to_csv(violations, path="violations.csv"):
+    """Violations frame → CSV, plus a ``<name>_meta.<ext>`` sidecar carrying
+    the validation metadata (``violations.attrs["validation"]``) as KEY,VALUE
+    rows. No sidecar when the frame carries no metadata."""
+    path = Path(path)
+    violations.to_csv(path, index=False)
+    logger.info("Saved %s", path)
+    meta = violations.attrs.get("validation")
+    if meta:
+        meta_path = path.with_name(f"{path.stem}_meta{path.suffix}")
+        pandas.DataFrame(_meta_rows(meta), columns=["KEY", "VALUE"]).to_csv(meta_path, index=False)
+        logger.info("Saved %s", meta_path)
+    return str(path)
+
+
+def violations_to_excel(violations, path="violations.xlsx"):
+    """Violations frame → Excel; the validation metadata
+    (``violations.attrs["validation"]``) goes to a second "metadata" sheet."""
+    path = Path(path)
+    meta = violations.attrs.get("validation")
+    with pandas.ExcelWriter(path, engine="openpyxl") as writer:
+        violations.to_excel(writer, sheet_name="violations", index=False)
+        if meta:
+            pandas.DataFrame(_meta_rows(meta), columns=["KEY", "VALUE"]).to_excel(
+                writer, sheet_name="metadata", index=False)
+    logger.info("Saved %s", path)
+    return str(path)

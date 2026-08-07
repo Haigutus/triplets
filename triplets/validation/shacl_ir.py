@@ -18,6 +18,7 @@ implement; pyshacl still covers the full spec.
 """
 import hashlib
 import logging
+import os
 
 from dataclasses import dataclass, field
 
@@ -40,6 +41,7 @@ class CompiledShapes:
     graph: object                 # rdflib.Graph — what pyshacl consumes
     ir: pandas.DataFrame          # constraint table — what the vectorized engines consume
     hash: str                     # content hash of the shape sources (cache key)
+    sources: tuple = ()           # shape file basenames (report metadata; () for a Graph)
     plans: dict = field(default_factory=dict)  # engine name → compiled artifact (lazy)
 
 
@@ -60,9 +62,20 @@ def compile_shapes(shapes) -> CompiledShapes:
     graph = _load_shapes(shapes)
     ir = parse_ir(graph)
     logger.debug("compiled %d constraint rows from %d shape triples", len(ir), len(graph))
-    compiled = CompiledShapes(graph=graph, ir=ir, hash=key)
+    compiled = CompiledShapes(graph=graph, ir=ir, hash=key, sources=_source_names(shapes))
     _COMPILE_CACHE[key] = compiled
     return compiled
+
+
+def _source_names(shapes):
+    """Shape file basenames for report metadata (a cache hit keeps the names
+    of the first compile — content identity, not path identity)."""
+    import rdflib
+
+    if isinstance(shapes, rdflib.Graph):
+        return ()
+    paths = [shapes] if isinstance(shapes, (str, bytes)) or hasattr(shapes, "__fspath__") else list(shapes)
+    return tuple(os.path.basename(str(path)) for path in paths)
 
 
 def _load_shapes(shapes):
