@@ -69,12 +69,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   report metadata: `prov:generatedAtTime`, `dcterms:creator`, optional
   `dcterms:source` / `dcterms:references` via `report_source=` / `report_references=`.
 - **Shared validation-run metadata**: `validate()` stamps
-  `violations.attrs["validation"]` (generated_at, creator, data file names from
-  the Distribution meta rows, shape file names) — read by every report exporter,
-  so SARIF (`invocations`/`properties`), the sh:ValidationReport and the new
-  `violations.shacl.to_csv()` (writes a `<name>_meta.<ext>` sidecar) /
-  `to_excel()` (metadata sheet) all carry the same facts. Explicit
-  `report_source=` / `report_references=` still override.
+  `violations.attrs["validation"]` (start/end timestamps + duration, engine,
+  creator, data file names from the Distribution meta rows, shape file names,
+  shape/constraint counts, and coverage: `skipped_shapes` /
+  `skipped_components` — what the run did NOT evaluate, empty for pyshacl) —
+  read by every report exporter, so SARIF (`invocations`/`properties`), the
+  sh:ValidationReport and the new `violations.shacl.to_csv()` (writes a
+  `<name>_meta.<ext>` sidecar) / `to_excel()` (metadata sheet) all carry the
+  same facts. Explicit `report_source=` / `report_references=` still override.
 - `examples/shacl_reports.py`: uv-runnable (PEP 723) end-to-end demo — Svedala
   EQ with three deliberately introduced issues validated against the official
   ENTSO-E Equipment SHACL (Simple + Complex, downloaded on first run), report

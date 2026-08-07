@@ -42,6 +42,7 @@ class CompiledShapes:
     ir: pandas.DataFrame          # constraint table — what the vectorized engines consume
     hash: str                     # content hash of the shape sources (cache key)
     sources: tuple = ()           # shape file basenames (report metadata; () for a Graph)
+    stats: dict = field(default_factory=dict)  # coverage facts (see _shape_stats)
     plans: dict = field(default_factory=dict)  # engine name → compiled artifact (lazy)
 
 
@@ -62,9 +63,35 @@ def compile_shapes(shapes) -> CompiledShapes:
     graph = _load_shapes(shapes)
     ir = parse_ir(graph)
     logger.debug("compiled %d constraint rows from %d shape triples", len(ir), len(graph))
-    compiled = CompiledShapes(graph=graph, ir=ir, hash=key, sources=_source_names(shapes))
+    compiled = CompiledShapes(graph=graph, ir=ir, hash=key, sources=_source_names(shapes),
+                              stats=_shape_stats(graph, ir))
     _COMPILE_CACHE[key] = compiled
     return compiled
+
+
+def _shape_stats(graph, ir):
+    """Coverage facts for the report metadata: shape/constraint counts plus
+    what the vectorized engines skip (mirrors the parse_ir warnings as data —
+    the pyshacl reference engine covers everything, so validate() reports
+    these only for vectorized runs)."""
+    import rdflib
+
+    SH = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    skipped = set()
+    for term in (SH.targetNode, SH.targetObjectsOf, SH.target, SH.xone):
+        skipped |= {f"{subject}: sh:{_local(term)} not walked"
+                    for subject, _ in graph.subject_objects(term)}
+    for subject in set(graph.subjects(SH.path)):
+        path_node = graph.value(subject, SH.path)
+        if path_node is not None and _resolve_path(graph, SH, path_node)[0] is None:
+            skipped.add(f"{subject}: unsupported sh:path form")
+    unknown = ir.loc[~ir["component"].isin(KNOWN_COMPONENTS), "component"].unique()
+    return {
+        "node_shapes": sum(1 for _ in graph.subjects(rdflib.RDF.type, SH.NodeShape)),
+        "constraints": len(ir),
+        "skipped_shapes": sorted(skipped),
+        "unknown_components": sorted(unknown),
+    }
 
 
 def _source_names(shapes):
@@ -109,10 +136,12 @@ def _content_hash(shapes):
 
 
 def split_rules(ir, implemented, fallback_components, engine):
-    """IR rows → (vectorized, fallback) rule lists against an engine's registries.
+    """IR rows → (vectorized, fallback, skipped components) against an
+    engine's registries.
 
     Engines cache the result in ``CompiledShapes.plans[engine]`` so the split
-    runs once per compiled shapes, not once per validate call.
+    runs once per compiled shapes, not once per validate call; validate()
+    reads the skipped components into the report metadata.
     """
     rules = list(ir.itertuples())
     vectorized = [rule for rule in rules if rule.component in implemented]
@@ -121,7 +150,7 @@ def split_rules(ir, implemented, fallback_components, engine):
     if skipped:
         logger.debug("%s engine skips components: %s (pyshacl covers them)",
                      engine, ", ".join(sorted(skipped)))
-    return vectorized, fallback
+    return vectorized, fallback, sorted(skipped)
 
 
 # ── shapes graph → constraint table ──────────────────────────────────────────

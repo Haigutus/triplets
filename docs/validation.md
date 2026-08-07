@@ -159,15 +159,27 @@ from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an exp
 `format=` always wins.
 
 **Validation-run metadata** is stamped once, by `validate()`, onto the returned
-frame as `violations.attrs["validation"]`: `generated_at` (validation time, UTC),
-`creator` (tool + version), `source` (the data file names, from the data's
-Distribution label meta rows) and `references` (the shape file names). Every
-report exporter reads it, so all formats tell the same story:
+frame as `violations.attrs["validation"]`. Every report exporter reads it, so
+all formats tell the same story:
+
+| key | meaning |
+|-----|---------|
+| `started_at` / `generated_at` / `duration_seconds` | validation start/end (UTC) and wall-clock duration |
+| `engine` | the engine that produced the report |
+| `creator` | tool + version |
+| `source` | data file names (from the data's Distribution label meta rows) |
+| `references` | shape file names (recorded at compile) |
+| `node_shapes` / `constraints` | shape count / compiled IR constraint rows |
+| `skipped_shapes` | shapes THIS run did not evaluate: unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms — empty for `engine="pyshacl"` (spec-complete) and empty when coverage is full |
+| `skipped_components` | constraint components the engine neither vectorizes nor delegates |
+
+The coverage keys turn the compile/engine warnings into data: a report that
+says "0 violations" also says whether every shape actually ran.
 
 | exporter | carries the metadata as |
 |----------|-------------------------|
-| `to_shacl_report` | `prov:generatedAtTime`, `dcterms:creator` / `source` / `references` on the report node |
-| `to_sarif` | `invocations[].endTimeUtc` + run `properties` (tool.driver has name/version as before) |
+| `to_shacl_report` | `prov:generatedAtTime`, `dcterms:creator` / `source` / `references` on the report node (standard vocabulary only — counts/coverage stay in the tabular/SARIF forms) |
+| `to_sarif` | `invocations[].startTimeUtc`/`endTimeUtc` + the full run `properties` bag (engine, duration, counts, coverage) |
 | `to_csv` | a `<name>_meta.<ext>` sidecar file with KEY,VALUE rows |
 | `to_excel` | a second `metadata` sheet |
 

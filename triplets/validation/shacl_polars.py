@@ -483,7 +483,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
 
     if "polars" not in compiled.plans:   # setdefault would re-split on every call
         compiled.plans["polars"] = split_rules(compiled.ir, PLAN_BUILDERS, FALLBACK_COMPONENTS, "polars")
-    vectorized, fallback = compiled.plans["polars"]
+    vectorized, fallback, _ = compiled.plans["polars"]
     if components is not None:
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]

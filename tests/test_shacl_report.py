@@ -195,8 +195,35 @@ def test_validate_stamps_metadata(tmp_path):
     assert meta["source"] == ["grid.xml"]
     assert meta["references"] == ["breaker_shapes.ttl"]
     assert meta["creator"].startswith("triplets ")
-    assert "T" in meta["generated_at"]
+    assert meta["engine"] == "pandas"
+    assert meta["started_at"] <= meta["generated_at"]
+    assert meta["duration_seconds"] >= 0
+    assert meta["node_shapes"] == 1 and meta["constraints"] == 1
+    assert meta["skipped_shapes"] == [] and meta["skipped_components"] == []
     assert len(violations) == 1  # b1 has no name
+
+
+SKIPPED_TTL = """
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix ex:  <http://example.org/#> .
+ex:NodeTargeted a sh:NodeShape ; sh:targetNode ex:n1 ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+ex:DeepPath a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path ( cim:a cim:b cim:c ) ; sh:minCount 1 ] .
+"""
+
+
+def test_metadata_reports_skipped_coverage(tmp_path):
+    """Shapes a vectorized run cannot evaluate land in the metadata — the
+    report says what was NOT validated, not just what failed."""
+    shapes = tmp_path / "partial_shapes.ttl"
+    shapes.write_text(SKIPPED_TTL)
+    violations = triplets.validation.validate(DATA, shapes, engine="pandas")
+    meta = violations.attrs["validation"]
+    assert meta["node_shapes"] == 2
+    assert any("sh:targetNode" in entry for entry in meta["skipped_shapes"])
+    assert any("unsupported sh:path" in entry for entry in meta["skipped_shapes"])
 
 
 def test_enrich_and_locate_preserve_metadata(tmp_path):

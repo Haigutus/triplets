@@ -108,10 +108,15 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         schema definition columns to the report.
 
     The returned frame carries the validation-run metadata in
-    ``violations.attrs["validation"]`` (generated_at, creator, source file
-    names, shape file names) — every report exporter reads it, so SARIF, the
-    sh:ValidationReport and the csv/excel exports tell the same story.
+    ``violations.attrs["validation"]`` (start/end timestamps and duration,
+    engine, tool version, data/shape file names, shape and constraint counts,
+    and any shapes/components the run skipped) — every report exporter reads
+    it, so SARIF, the sh:ValidationReport and the csv/excel exports tell the
+    same story.
     """
+    from datetime import datetime, timezone
+
+    started = datetime.now(timezone.utc)
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
     engine_name, engine_mod = get_engine(engine)
     violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, scope=scope, **kwargs)
@@ -126,20 +131,40 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     if context:
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
     violations.attrs["validation"] = _report_metadata(
-        data, compiled, table_name=kwargs.get("table_name", "triplets"))
+        data, compiled, engine_name, started, table_name=kwargs.get("table_name", "triplets"))
     return violations
 
 
-def _report_metadata(data, compiled, table_name="triplets"):
-    """The validation-run facts every report exporter reads (violations.attrs)."""
+def _report_metadata(data, compiled, engine_name, started, table_name="triplets"):
+    """The validation-run facts every report exporter reads (violations.attrs).
+
+    Coverage (skipped_shapes / skipped_components) is what THIS run did not
+    evaluate: compile-level skips plus the engine's own gaps for vectorized
+    engines; empty for the spec-complete pyshacl reference engine.
+    """
     from datetime import datetime, timezone
     import triplets
 
+    finished = datetime.now(timezone.utc)
+    if engine_name == "pyshacl":
+        skipped_shapes, skipped_components = [], []
+    else:
+        engine_skips = compiled.plans[engine_name][2] if engine_name in compiled.plans else []
+        skipped_shapes = compiled.stats.get("skipped_shapes", [])
+        skipped_components = sorted(set(compiled.stats.get("unknown_components", []))
+                                    | set(engine_skips))
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": started.isoformat(),
+        "generated_at": finished.isoformat(),
+        "duration_seconds": round((finished - started).total_seconds(), 3),
+        "engine": engine_name,
         "creator": f"triplets {triplets.__version__}",
         "source": _source_labels(data, table_name=table_name),
         "references": list(compiled.sources),
+        "node_shapes": compiled.stats.get("node_shapes", 0),
+        "constraints": compiled.stats.get("constraints", 0),
+        "skipped_shapes": skipped_shapes,
+        "skipped_components": skipped_components,
     }
 
 
