@@ -250,3 +250,10 @@ class TestStatisticsGeneratingUnitTypes:
     def test_returns_dataframe(self, svedala_data):
         result = cgmes_tools.count_GeneratingUnit_types(svedala_data)
         assert isinstance(result, pandas.DataFrame)
+
+
+def test_unsupported_explicit_engine_rejected():
+    tiny = pandas.DataFrame({"ID": ["a"], "KEY": ["Type"],
+                             "VALUE": ["Breaker"], "INSTANCE_ID": ["i1"]})
+    with pytest.raises(ValueError, match="cgmes_tools supports engine="):
+        cgmes_tools.get_loaded_models(tiny, engine="duckdb")

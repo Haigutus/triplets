@@ -23,3 +23,9 @@ triplets.parser.utils
 
 .. automodule:: triplets.parser.utils
    :members:
+
+triplets.parser.nquads
+----------------------
+
+.. automodule:: triplets.parser.nquads
+   :members:

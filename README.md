@@ -16,7 +16,7 @@ Upgrading from 0.0.x? See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0
 # Core (python_lxml_pandas engine, no extra deps)
 pip install triplets
 
-# With pyarrow (enables python_lxml_arrow + cython_pugixml_arrow engines, ~12x faster)
+# With pyarrow (enables python_lxml_arrow + cython_pugixml_arrow engines, ~10x faster)
 pip install triplets[arrow]
 ```
 
@@ -24,7 +24,7 @@ Install extras by feature:
 
 | Extra | Enables |
 |-------|---------|
-| `arrow` | compiled Arrow parser engines (~12x faster parsing) |
+| `arrow` | compiled Arrow parser engines (~10x faster parsing) |
 | `polars` | polars DataFrames (`polars.read_rdf`, `.triplets` namespace) |
 | `duckdb` | DuckDB connections (`con.read_rdf`, SQL over triplets) |
 | `sparql` | SPARQL queries (rdflib reference engine) |
@@ -87,12 +87,26 @@ Three parser engines with automatic fallback (fastest available):
 |--------|---------|-------|
 | `python_lxml_pandas` | `pip install triplets` | 1x baseline, **always works** |
 | `python_lxml_arrow` | `pip install triplets[arrow]` | ~1x, better interop |
-| `cython_pugixml_arrow` | `pip install triplets[arrow]` (included in wheels) | **12x faster** |
+| `cython_pugixml_arrow` | `pip install triplets[arrow]` (included in wheels) | **~10x faster** |
 
 The `cython_pugixml_arrow` engine is a compiled C++ extension included in published wheels.
 It requires pyarrow at runtime, so install with `triplets[arrow]` to enable it.
 
 The cython engine is pre-built in published wheels — no compilation needed.
+
+Engine selection is automatic across the library (parser, exports, SPARQL,
+validation): installing an extra makes everything that can use it faster, with
+no code changes. Inspect and steer it globally:
+
+```python
+triplets.engines()                        # what "auto" resolved to, per subsystem
+triplets.set_engine(parser_cimxml="python_lxml_pandas", sparql="rdflib")
+triplets.set_engine(parser_cimxml="auto") # restore auto-selection
+```
+
+Per-call `engine=` arguments always win over `set_engine`. Operations on your
+DataFrame itself (filters, tableviews, references) always run in the engine of
+the object you call them on — pandas frames stay pandas, polars stays polars.
 
 
 ## Polars
@@ -120,20 +134,24 @@ is also exposed top-level as `triplets.read_nquads`.
 import duckdb
 import triplets
 
-data = duckdb.connect()                              # in-memory
-data = duckdb.connect("grid.duckdb")                 # persistent (no re-parsing next session)
+data = duckdb.connect()                              # default table "triplets"
+data = duckdb.connect("grid.duckdb", table="grid", schema="cim")  # per-connection defaults
+# explicit table/schema config is stored in the database file — reopening
+# duckdb.connect("grid.duckdb") later resolves cim.grid automatically
 
-data.read_rdf(["grid_EQ.xml", "data.zip"])           # parse via Arrow (zero-copy into DuckDB)
-data.get_types_count()                                     # → dict
-data.tableview_by_type("ACLineSegment").df()             # → pandas DataFrame
-data.tableview_by_type("ACLineSegment").pl()             # → polars DataFrame
+data.read_rdf(["grid_EQ.xml", "data.zip"])           # streams into the connection's table
+data.read_rdf(["update.zip"], append=True)           # adds rows instead of replacing
+data.get_types_count()                               # uses connection table/schema
+data.tableview_by_type("ACLineSegment").df()
 data.filter_triplets(KEY="Type", VALUE=".*Sub.*", regex=True).df()
-data.filter_triplets_by_type("Terminal").df()
 data.references_to("some-uuid").df()
 data.export_to_nquads("/tmp/output.nq")
 
-# Direct SQL (full DuckDB SQL on the triplets table)
-data.sql("SELECT VALUE, COUNT(*) FROM triplets WHERE KEY = 'Type' GROUP BY VALUE").df()
+# Per-call override; rebind defaults with set_triplets_table(...)
+data.types_dict(table="other", schema="main")
+
+# Direct SQL (your identifiers — tools always quote theirs)
+data.sql('SELECT VALUE, COUNT(*) FROM "cim"."grid" WHERE KEY = \'Type\' GROUP BY VALUE').df()
 
 # The same tools are also on the `.triplets` namespace (parity with pandas/polars)
 data.triplets.tableview_by_type("ACLineSegment").df()
@@ -235,10 +253,14 @@ cim-diff original.xml modified.xml
 
 ## Performance (RealGrid, 1.14M rows)
 
+Committed benchmark results live in `tests/performance_results/`; re-run with
+`pytest -m performance`. Representative numbers (cython parse 1.47s → 0.157s
+vs the lxml engine = ~9.4x):
+
 | Operation | pandas | polars | DuckDB |
 |-----------|--------|--------|--------|
-| Parse (cython engine) | 128ms | 156ms | 283ms |
-| tableview_by_type | 72ms | **21ms** | 53ms |
+| Parse (cython engine) | 157ms | 180ms | streams (see duckdb section) |
+| tableview_by_type | 72ms | **15ms** | 53ms |
 | filter_triplets_by_type | 103ms | **9ms** | 50ms |
 | get_types_count | 21ms | **11ms** | 18ms |
 

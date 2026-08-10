@@ -154,3 +154,11 @@ Windows `delvewheel` can't find arrow DLLs. Add `--no-dll arrow.dll --no-dll arr
 Windows versioneer cp1252 errors — set `PYTHONUTF8=1`. macOS delocate can't find
 arrow dylibs — skip it (macosx_* tags need no repair). `pyarrow` not yet installed
 when `CIBW_ENVIRONMENT` is evaluated — set `LD_LIBRARY_PATH` inline in the repair command.
+
+## Shared Arrow accessor header
+
+`triplets/_arrow/string_column.h` is a build input for all three compiled
+extensions (parser, CIM XML export, qlever): the include dir is added in
+`setup.py`, `setup_cython_parser.py` and `setup_qlever.py`, and the header
+ships in the sdist (`MANIFEST.in`). Editing it triggers rebuilds via the
+extensions' `depends=`.

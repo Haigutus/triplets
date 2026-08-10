@@ -7,6 +7,7 @@ import uuid
 import logging
 
 from triplets.tools import get_namespace_map
+from triplets._engine_detect import flavor
 
 logger = logging.getLogger(__name__)
 
@@ -55,23 +56,30 @@ def _profile_identity_index(rdf_map):
     return index
 
 
+def _values_for_key(instance_data, key):
+    """VALUEs of rows with the given KEY (pandas or polars frame), nulls dropped."""
+    if flavor(instance_data) == "polars":
+        import polars
+        values = instance_data.filter(polars.col("KEY") == key)["VALUE"].to_list()
+    else:
+        values = instance_data.loc[instance_data["KEY"] == key, "VALUE"].tolist()
+    return [value for value in values if value is not None]
+
+
 def _instance_profile_hints(instance_data):
     """Profile references the instance header may carry, in priority order:
     old header messageType, new dcat:Dataset keyword, then the URI fields
     (both can repeat — e.g. multiple Model.profile rows)."""
     hints = []
     for key in ("Model.messageType", "keyword", "Model.profile", "conformsTo"):
-        rows = instance_data[instance_data["KEY"] == key]
-        hints.extend(str(value) for value in rows["VALUE"] if value is not None)
+        hints.extend(str(value) for value in _values_for_key(instance_data, key))
     return hints
 
 
 def _first_value(instance_data, key):
     """VALUE of the first row with the given KEY, or None."""
-    rows = instance_data[instance_data["KEY"] == key]
-    if rows.empty:
-        return None
-    return rows.at[rows.index[0], "VALUE"]
+    values = _values_for_key(instance_data, key)
+    return values[0] if values else None
 
 
 def resolve_instance_config(instance_data, rdf_map, namespace_map=None):

@@ -11,6 +11,12 @@ import pandas
 import triplets
 from pathlib import Path
 
+# This file deliberately exercises the legacy rdf_parser.* aliases as the
+# compat shim's regression net — their DeprecationWarnings are the point,
+# asserted explicitly where relevant (pytest.warns) and muted otherwise.
+pytestmark = pytest.mark.filterwarnings(
+    r"ignore:.*is deprecated, use triplets\.:DeprecationWarning")
+
 SVEDALA_DIR = Path("test_data/relicapgrid/Instance/Grid/IGM_Svedala")
 SVEDALA_FILES = [
     str(SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"),
@@ -244,7 +250,7 @@ class TestFilterByType:
 
     @pytest.mark.benchmark(group="tools-filter")
     def test_benchmark(self, benchmark, svedala_data):
-        benchmark(triplets.rdf_parser.filter_by_type, svedala_data, "ACLineSegment")
+        benchmark(triplets.tools.filter_triplets_by_type, svedala_data, "ACLineSegment")
 
 
 class TestFilterByTriplet:
@@ -691,7 +697,7 @@ class TestExportToCimxml:
                 engine=engine,
             )
             outputs[engine] = pandas.read_RDF([result[0]])
-        diff = triplets.tools.diff_between_triplet(outputs["python_lxml"], outputs["cython_pugixml"])
+        diff = triplets.tools.diff_triplets(outputs["python_lxml"], outputs["cython_pugixml"])
         # Distribution/NamespaceMap meta objects get fresh IDs per parse — exclude them
         meta_ids = set(diff[(diff["KEY"] == "Type") & diff["VALUE"].isin(["Distribution", "NamespaceMap"])]["ID"])
         real_diff = diff[~diff["ID"].isin(meta_ids) & (diff["KEY"] != "label")]
@@ -1150,3 +1156,39 @@ class TestDuckdbTools:
         trip = fresh_db.tableview_to_triplets(table_name="tv").df()
         assert list(trip.columns) == ["ID", "KEY", "VALUE"]
         assert (trip["KEY"] == "Type").any()
+
+
+# ── module dispatcher boundary errors ────────────────────────────────────────
+
+class TestDispatchBoundary:
+    """triplets.tools.<fn> rejects mismatched or unknown explicit engines."""
+
+    @pytest.fixture()
+    def tiny(self):
+        return pandas.DataFrame({"ID": ["a"], "KEY": ["Type"],
+                                 "VALUE": ["Breaker"], "INSTANCE_ID": ["i1"]})
+
+    @pytest.fixture()
+    def con(self, tiny):
+        duckdb = pytest.importorskip("duckdb")
+        con = duckdb.connect()
+        con.register("_src", tiny)
+        con.execute("CREATE TABLE triplets AS SELECT * FROM _src")
+        return con
+
+    def test_connection_routes_to_duckdb_engine(self, con):
+        assert triplets.tools.types_dict(con) == {"Breaker": 1}
+
+    def test_explicit_engine_mismatch(self, tiny, con):
+        with pytest.raises(TypeError, match="the input is a pandas DataFrame"):
+            triplets.tools.types_dict(tiny, engine="duckdb")
+        with pytest.raises(TypeError, match="the input is a DuckDB connection"):
+            triplets.tools.types_dict(con, engine="pandas")
+
+    def test_unknown_engine(self, tiny):
+        with pytest.raises(ValueError, match="Unknown tools engine: sqlite"):
+            triplets.tools.types_dict(tiny, engine="sqlite")
+
+    def test_surface_gap_raises_not_implemented(self, con):
+        with pytest.raises(NotImplementedError, match="has no duckdb engine"):
+            triplets.tools.tableviews_to_triplets({"T": con.sql("SELECT 1 AS ID")})

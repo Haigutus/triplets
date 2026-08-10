@@ -13,7 +13,7 @@ import logging
 
 from ._caches import register_cache
 from ._content_key import content_key
-from ._engine_detect import flavor
+from ._engine_detect import as_frame, to_pandas
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory"):
         return data
 
     if not hasattr(data, "content_hash"):  # pyarrow — no registered methods
-        data = _to_loadable(data)
+        data = to_pandas(data)
     backend = _resolve_store(store)
     key = backend + ":" + content_key(data, rdf_map, b"triplets-rdflib-1", data_unchanged)
     if key in _DATASETS:
@@ -73,7 +73,8 @@ def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory"):
         dataset = rdflib.Dataset(store=OxigraphStore(store=_store_for(data, rdf_map, data_unchanged)),
                                  default_union=False)
     else:
-        buffer = export_to_nquads(_to_loadable(data), rdf_map=rdf_map, export_to_memory=True)
+        # nquads accepts pandas/polars; materialize arrow/duckdb only
+        buffer = export_to_nquads(as_frame(data), rdf_map=rdf_map, export_to_memory=True)
         buffer.seek(0)
         dataset = rdflib.Dataset(default_union=True)
         dataset.parse(source=buffer, format="nquads")
@@ -90,17 +91,6 @@ def _resolve_store(store):
     if store not in ("memory", "oxigraph"):
         raise ValueError(f"Unknown rdflib store backend: {store}. Known: memory, oxigraph, auto")
     return store
-
-
-def _to_loadable(data):
-    """export_to_nquads handles pandas/polars; convert arrow/duckdb to pandas first."""
-    kind = flavor(data)
-    if kind == "pyarrow":
-        import pandas
-        return data.to_pandas(types_mapper=pandas.ArrowDtype)
-    if kind == "duckdb":
-        return data.execute("SELECT * FROM triplets").df()
-    return data  # pandas / polars — export_to_nquads takes these directly
 
 
 def scoped_graph(dataset, scope=None):

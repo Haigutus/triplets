@@ -1,6 +1,6 @@
 """SHACL DuckDB engine — compiled-IR executor for larger-than-memory data.
 
-Every constraint compiles to one SQL query against the ``triplets`` table
+Every constraint compiles to one SQL query against the connection's configured triplets table
 (``[ID, KEY, VALUE, INSTANCE_ID]``), so validation streams through DuckDB's
 vectorized executor and spills to disk instead of requiring the dataset in
 RAM. Input is a DuckDB connection holding the table (``con.read_rdf(...)``);
@@ -23,14 +23,12 @@ import logging
 import pandas
 
 from .._engine_detect import flavor
-from .shacl_ir import split_rules
+from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
-from .shacl_polars import FALLBACK_COMPONENTS
 
 logger = logging.getLogger(__name__)
 
-TABLE_NAME = "triplets"
 _BATCH_SIZE = 100  # constraints per UNION ALL statement
 
 
@@ -274,20 +272,21 @@ class _Context(SchemaKind):
 
 
 def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
-             table_name=TABLE_NAME, **kwargs):
+             table=None, schema=None, table_name=None, **kwargs):
     """Validate triplet data against the compiled constraint table (DuckDB SQL).
 
     Parameters mirror shacl_pandas.validate, plus:
 
-    table_name : str, default "triplets"
-        Table holding the triplets when *data* is a DuckDB connection.
+    table / schema / table_name
+        Triplets relation when *data* is a DuckDB connection (defaults from
+        the connection, else ``triplets``).
     """
-    connection, table = _connection(data, table_name)
+    connection, table = _connection(data, table=table, schema=schema, table_name=table_name)
     if scope is not None:
         values = ", ".join("'" + str(instance).replace("'", "''") + "'" for instance in scope)
         connection.execute(f"CREATE OR REPLACE TEMP VIEW _shacl_scoped AS "
                            f"SELECT * FROM {table} WHERE INSTANCE_ID IN ({values})")
-        table = "_shacl_scoped"
+        table = '"_shacl_scoped"'
 
     if "duckdb" not in compiled.plans:   # setdefault would re-split on every call
         compiled.plans["duckdb"] = split_rules(compiled.ir, SQL_BUILDERS, FALLBACK_COMPONENTS, "duckdb")
@@ -328,12 +327,14 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     return violations
 
 
-def _connection(data, table_name):
+def _connection(data, table=None, schema=None, table_name=None):
     """DuckDB connection holding the triplets table; other flavors are registered."""
     import duckdb
+    from ..tools.duckdb_engine import _resolve_table
 
     if flavor(data) == "duckdb":
-        return data, table_name
+        return data, _resolve_table(data, table=table, schema=schema, table_name=table_name)
     connection = duckdb.connect()
-    connection.register(table_name, data)   # pandas / polars / arrow — zero-copy via Arrow
-    return connection, table_name
+    bare = table if table is not None else (table_name if table_name is not None else "triplets")
+    connection.register(bare, data)  # pandas / polars / arrow — zero-copy via Arrow
+    return connection, _resolve_table(connection, table=bare)

@@ -19,10 +19,10 @@ import os
 import logging
 import zipfile
 import datetime
+import multiprocessing
 
 from io import BytesIO
 from enum import StrEnum
-from importlib import import_module
 from concurrent.futures import ProcessPoolExecutor
 
 import pandas
@@ -34,23 +34,41 @@ from .networkx_pandas import export_to_networkx as _export_to_networkx
 logger = logging.getLogger(__name__)
 
 
-from .._engine_detect import is_polars as _is_polars
+from .._engine_detect import flavor as _flavor, to_arrow as _to_arrow, to_pandas as _to_pandas
+from .._registry import EngineRegistry
 
-
-def _to_pandas_input(data):
-    """The Excel/NetworkX exporters are pandas-only; accept any flavor by converting
-    first (like export_to_cimxml does for polars input)."""
-    if _is_polars(data):
-        return data.to_pandas()
-    return data
+# ── per-format engine registries ─────────────────────────────────────────────
+# nquads/cimxml auto-pick the fastest available engine (their results are
+# flavor-independent bytes). csv is policy="input": each engine is fastest for
+# its own input flavor, so the caller picks by flavor(data), never by probe.
+_CIMXML = EngineRegistry(
+    "exporter_cimxml", __package__,
+    modules={"cython_pugixml": ".cimxml_pugixml",  # compiled extension, fastest
+             "python_lxml": ".cimxml_pandas"},     # pure python, always available
+    aliases={"performance": "cython_pugixml", "pugixml": "cython_pugixml",
+             "lxml": "python_lxml", "pandas": "python_lxml"},
+    requires={"cython_pugixml": (".cimxml_cython_pugixml", "pyarrow")},
+    hints={"cython_pugixml": "Build with: pixi run build-cython-pugixml-arrow."},
+)
+_NQUADS = EngineRegistry(
+    "exporter_nquads", __package__,
+    modules={"polars": ".nquads_polars", "pandas": ".nquads_pandas"},
+    requires={"polars": ("polars",)},
+    hints={"polars": "Install with: pip install triplets[polars]."},
+)
+_CSV = EngineRegistry(
+    "exporter_csv", __package__, policy="input",
+    modules={"pandas": ".csv_pandas", "polars": ".csv_polars"},
+    requires={"polars": ("polars",)},
+)
 
 
 def export_to_excel(data, *args, **kwargs):
-    return _export_to_excel(_to_pandas_input(data), *args, **kwargs)
+    return _export_to_excel(_to_pandas(data), *args, **kwargs)
 
 
 def export_to_networkx(data, *args, **kwargs):
-    return _export_to_networkx(_to_pandas_input(data), *args, **kwargs)
+    return _export_to_networkx(_to_pandas(data), *args, **kwargs)
 
 
 export_to_excel.__doc__ = _export_to_excel.__doc__
@@ -62,25 +80,25 @@ REQUIRED_COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 
 def _check_columns(data):
     """Fail early with a clear message when the input is not a triplets dataset."""
-    missing = [column for column in REQUIRED_COLUMNS if column not in data.columns]
+    # pyarrow Table/RecordBatch/RecordBatchReader all expose .schema.names
+    names = data.schema.names if _flavor(data) == "pyarrow" else data.columns
+    missing = [column for column in REQUIRED_COLUMNS if column not in names]
     if missing:
         raise ValueError(f"Not a triplets dataset — missing columns {missing}, "
-                         f"expected {list(REQUIRED_COLUMNS)}, got {list(data.columns)}")
+                         f"expected {list(REQUIRED_COLUMNS)}, got {list(names)}")
 
 
 def export_to_arrow(data):
     """Triplet columns (ID, KEY, VALUE, INSTANCE_ID) as a pyarrow.Table.
 
     Zero-copy where the backing store allows it (arrow-backed pandas from
-    read_RDF, polars); dictionary-encoded (categorical) columns pass through
-    undecoded. This is the columnar interchange consumed by engines with a
-    native Arrow ingest (the qlever SPARQL engine's index builder).
+    read_RDF, polars, DuckDB native arrow); dictionary-encoded columns pass
+    through undecoded. Columnar interchange for engines with native Arrow
+    ingest (the qlever SPARQL engine's index builder).
     """
-    _check_columns(data)
-    if _is_polars(data):
-        return data.select(list(REQUIRED_COLUMNS)).to_arrow()
-    import pyarrow
-    return pyarrow.Table.from_pandas(data[list(REQUIRED_COLUMNS)], preserve_index=False)
+    if _flavor(data) in ("pandas", "polars", "pyarrow"):
+        _check_columns(data)
+    return _to_arrow(data, columns=list(REQUIRED_COLUMNS))
 
 
 def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):
@@ -88,12 +106,11 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
 
     Auto-detects engine: polars if input is polars DataFrame, else pandas.
     """
-    if _is_polars(data):
-        logger.debug("format=csv, engine=polars (auto-detected)")
-        from .csv_polars import export_to_csv as _fn
-    else:
-        logger.debug("format=csv, engine=pandas (auto-detected)")
-        from .csv_pandas import export_to_csv as _fn
+    if _flavor(data) not in ("pandas", "polars"):
+        data = _to_pandas(data)          # arrow-backed dtypes — near zero-copy for arrow input
+    engine = "polars" if _flavor(data) == "polars" else "pandas"
+    logger.debug("format=csv, engine=%s (input flavor)", engine)
+    _fn = _CSV.get(engine)[1].export_to_csv
     return _fn(data, path=path, multivalue=multivalue, export_to_memory=export_to_memory, single_file=single_file, base_filename=base_filename)
 
 
@@ -119,65 +136,41 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
     _check_columns(data)
     if not export_to_memory:
         path = "export.nq" if path is None else os.fspath(path)
-    if engine == "auto":
-        try:
-            import polars  # noqa: F401
-            engine = "polars"
-        except ImportError:
-            engine = "pandas"
-    logger.debug(f"format=nquads, engine={engine}")
+    engine_name, engine_module = _NQUADS.get(engine)
+    logger.debug(f"format=nquads, engine={engine_name}")
 
-    if engine == "polars":
-        import polars
-        from .nquads_polars import export_to_nquads as _fn
-        if not _is_polars(data):
-            data = polars.from_pandas(data)
-        return _fn(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory)
+    if hasattr(data, "read_next_batch"):
+        # pyarrow.RecordBatchReader: stream one batch at a time — memory stays
+        # bounded by a single batch (out-of-core export, e.g. a large duckdb table)
+        if engine_name != "polars":
+            raise ValueError("streaming N-Quads export (RecordBatchReader input) requires "
+                             "the polars engine. Install with: pip install triplets[polars].")
+        if export_to_memory:
+            buffer = BytesIO()
+            engine_module.write_nquads_batches(data, buffer, rdf_map=rdf_map)
+            buffer.name = "export.nq"
+            buffer.seek(0)
+            return buffer
+        with open(path, "wb") as handle:
+            engine_module.write_nquads_batches(data, handle, rdf_map=rdf_map)
+        return None
 
-    from .nquads_pandas import export_to_nquads as _fn
-    if _is_polars(data):
-        data = data.to_pandas(use_pyarrow_extension_array=True)
-    return _fn(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory)
-
-
-# ── CIM XML engine dispatch ──────────────────────────────────────────────────
-# Engine name → module (lazy import). Auto preference: first importable.
-_CIMXML_ENGINE_MODULES = {
-    "cython_pugixml": ".cimxml_pugixml",  # compiled extension, fastest
-    "python_lxml": ".cimxml_pandas",      # pure python, always available
-}
-_CIMXML_ENGINE_ALIASES = {
-    "performance": "cython_pugixml",
-    "pugixml": "cython_pugixml",
-    "lxml": "python_lxml",
-    "pandas": "python_lxml",
-}
-_cimxml_engines = {}  # loaded module cache
+    if engine_name != _flavor(data):
+        from .._engine_detect import to_polars
+        data = to_polars(data) if engine_name == "polars" else _to_pandas(data)
+    return engine_module.export_to_nquads(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory)
 
 
 def get_cimxml_engine(name="auto"):
     """Resolve CIM XML engine name (with aliases) and return (name, module)."""
-    if name == "auto":
-        for candidate in _CIMXML_ENGINE_MODULES:
-            try:
-                logger.debug(f"cimxml auto - test engine availability: {candidate}")
-                return candidate, _load_cimxml_engine(candidate)
-            except ImportError:
-                continue
-
-    resolved = _CIMXML_ENGINE_ALIASES.get(name, name)
-    logger.debug(f"cimxml engine set: {resolved}")
-    return resolved, _load_cimxml_engine(resolved)
+    return _CIMXML.get(name)
 
 
-def _load_cimxml_engine(name):
-    """Import CIM XML engine module on demand."""
-    module_name = _CIMXML_ENGINE_MODULES.get(name)
-    if module_name is None:
-        raise ValueError(f"Unknown cimxml engine: {name}. Known: {', '.join(_CIMXML_ENGINE_MODULES)}")
-    if name not in _cimxml_engines:
-        _cimxml_engines[name] = import_module(module_name, __package__)
-    return _cimxml_engines[name]
+def _split_instances(data):
+    """Per-INSTANCE_ID frames in the input's own flavor (frame ops bind to input flavor)."""
+    if _flavor(data) == "polars":
+        return data.partition_by("INSTANCE_ID", maintain_order=True)
+    return (frame for _, frame in data.groupby("INSTANCE_ID", observed=True))
 
 
 class ExportType(StrEnum):
@@ -276,34 +269,41 @@ def export_to_cimxml(data,
         init_time = start_time
 
     _check_columns(data)
-    if _is_polars(data):
-        # the per-instance pipeline is pandas (groupby + engine contract)
-        logger.debug("format=cimxml: polars input → pandas")
-        data = data.to_pandas(use_pyarrow_extension_array=True)
+    if _flavor(data) == "pyarrow":
+        data = _to_pandas(data)          # arrow-backed dtypes — near zero-copy
     if datatypes and engine == "auto":
         logger.debug("cimxml engine set: python_lxml (datatypes=True not yet in cython engine)")
         engine = "python_lxml"
     engine_name, engine_module = get_cimxml_engine(engine)
     generate = engine_module.generate_xml
 
-    instances = data.groupby("INSTANCE_ID", observed=True)
+    if engine_name == "python_lxml" and _flavor(data) == "polars":
+        # the lxml engine's per-instance pipeline is pandas; the cython engine
+        # consumes polars frames directly (arrow large_utf8 via the shared accessor)
+        logger.debug("format=cimxml: polars input → pandas (python_lxml engine)")
+        data = data.to_pandas(use_pyarrow_extension_array=True)
+
+    instances = _split_instances(data)
 
     if debug:
         _, start_time = _print_duration("All file instance ID-s identified", start_time)
 
     # Generate one XML document per instance
     if max_workers:
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        # polars is incompatible with fork (its rayon thread-pool locks are held
+        # in the forked child) — spawn fresh workers when the frames are polars
+        mp_context = multiprocessing.get_context("spawn") if _flavor(data) == "polars" else None
+        with ProcessPoolExecutor(max_workers=max_workers, mp_context=mp_context) as executor:
             futures = [executor.submit(generate, instance, rdf_map, namespace_map,
                                        class_KEY=class_KEY, export_undefined=export_undefined,
                                        comment=comment, debug=debug, datatypes=datatypes)
-                       for _, instance in instances]
+                       for instance in instances]
             xml_documents = [future.result() for future in futures]
     else:
         xml_documents = [generate(instance, rdf_map, namespace_map,
                                   class_KEY=class_KEY, export_undefined=export_undefined,
                                   comment=comment, debug=debug, datatypes=datatypes)
-                         for _, instance in instances]
+                         for instance in instances]
 
     # generate returns None for instances skipped due to missing mapping
     xml_documents = [document for document in xml_documents if document is not None]

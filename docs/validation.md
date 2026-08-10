@@ -33,7 +33,7 @@ touching the public API:
 | `pyshacl` | `validation/shacl_pyshacl.py` | pyshacl + rdflib (`pip install triplets[validation]`) | **reference** — spec-complete, rdflib-based. `store="oxigraph"` loads the data graph through the oxigraph SPARQL engine's cached store (identical results; opt in only when the store is already loaded for SPARQL) |
 | `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; **complete registry** — `sh:sparql` delegated to `triplets.sparql` (`max_workers` parallelizes those queries), `sh:node` expanded at compile time and run against the referenced value nodes, `sh:nodeKind` decided by the rdf_map schema (value form when schema is silent). Explicit `engine="pandas"` |
 | `polars` | `validation/shacl_polars.py` | polars | compiled-IR executor for performance: one LazyFrame plan per constraint, single `polars.collect_all` (parallel, common subplans eliminated). Same semantics as pandas; nested/query components delegate to the pandas implementations. The fast in-memory default |
-| `duckdb` | `validation/shacl_duckdb.py` | duckdb | compiled-IR executor for **larger-than-memory** data: one SQL query per constraint against the `triplets` table (streams/spills via DuckDB's executor). Accepts a connection (`table_name=` selectable) or registers any frame. Constraints batch 100-per-`UNION ALL` statement — it is the explicit choice (`engine="duckdb"`, not in auto) when the data does not fit in memory |
+| `duckdb` | `validation/shacl_duckdb.py` | duckdb | compiled-IR executor for **larger-than-memory** data: one SQL query per constraint against the connection's triplets table (streams/spills via DuckDB's executor). Defaults come from the connection (`duckdb.connect(table=..., schema=...)`); call kwargs `table`/`schema`/`table_name` override. Accepts a connection or registers any frame. Constraints batch 100-per-`UNION ALL` statement — explicit choice (`engine="duckdb"`, not in auto) when the data does not fit in memory |
 
 Auto order: `polars → pandas → pyshacl` (first importable).
 `engine="reference"` always gives the pure pyshacl view. Custom
@@ -52,24 +52,65 @@ shapes.ttl ──rdflib──► CompiledShapes
                         └── plans  {engine name → compiled artifact, filled lazily}
 ```
 
-The IR is a pandas DataFrame, one row per shape × path × constraint component:
+The IR is a pandas DataFrame, one row per shape × target × constraint component.
+`compiled.ir` is inspectable (see `examples/shacl_validation.py`); the engine
+registries that consume it are internal.
 
-```
-shape_id, target_class, target_kind, path, inverse, via_type, component, params, severity, message, name, description
-```
+| field | type | meaning |
+|-------|------|---------|
+| `shape_id` | str | full shape IRI (blank-node id for anonymous property shapes) — becomes `SOURCE_SHAPE` in reports and the join key for `enrich` |
+| `target_class` | str | local name: the class for `target_kind="class"`, the property KEY for `"subjectsOf"` |
+| `target_kind` | `"class"` / `"subjectsOf"` | which target declaration produced the row |
+| `path` | str \| None | the property as one triplet KEY (local name); None for node-level constraints (`sh:closed`, node-level `sh:sparql`) |
+| `inverse` | bool | `sh:inversePath` — engines swap the FOCUS/VALUE direction |
+| `via_type` | bool | the `( assoc rdf:type )` sequence path: the value nodes are the referenced objects' *types* |
+| `component` | str | the dispatch key (`"sh:minCount"`, …) — see the matrix below |
+| `params` | object | component parameter, shape varies (next table) |
+| `severity` | str | local name of `sh:severity`, default `"Violation"` applied at compile time |
+| `message` | str \| None | `sh:message`; engines substitute their own default text when None |
+| `name`, `description` | str \| None | `sh:name`/`sh:description` with parent-NodeShape inheritance — read only by `context.enrich`, never by engines |
 
-`target_kind` is `class` for `sh:targetClass` and `subjectsOf` for
-`sh:targetSubjectsOf`; `via_type` marks the `( assoc rdf:type )` sequence path
-(the constraint applies to the referenced object's type). `params` holds the component's parameter — a scalar (`sh:minCount`), a list
-(`sh:in`, `sh:closed` ignored properties), the SELECT text (`sh:sparql`), or
-nested row lists (`sh:or` / `sh:and` / `sh:not`). A NodeShape with several
-`sh:targetClass` (the ENTSO-E profiles do this) emits every row once per target
-class. Unknown components are kept and logged — engines skip what they don't
-implement; pyshacl still covers the full spec.
+`params` per component:
 
-`CompiledShapes.plans` is where each future engine caches its own compiled
-artifact (polars LazyFrame builders, duckdb SQL) — re-validating new data
-against the same shapes never recompiles anything.
+| components | `params` shape |
+|------------|----------------|
+| `sh:minCount` `sh:maxCount` `sh:minLength` `sh:maxLength` | int |
+| `sh:minInclusive` `sh:maxInclusive` `sh:minExclusive` `sh:maxExclusive` | float (integer bounds are coerced) |
+| `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern`, `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str |
+| `sh:in` | list[str] (IRIs shortened to local names) |
+| `sh:closed` | list[str] — the **fully resolved** allowed KEY list: `sh:ignoredProperties` + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included) |
+| `sh:or` / `sh:and` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
+| `sh:not` | list[dict] — nested IR row dicts |
+| `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time |
+| `sh:sparql` | `{"select": SELECT text with `$this`/`$PATH` placeholders, "prefixes": resolved `PREFIX` header, "path": full IRI of the owning `sh:path` or None}` |
+
+Compile-time behaviors worth knowing: a NodeShape with several `sh:targetClass`
+(the ENTSO-E profiles do this) emits every row once per target class; shape
+reference cycles through `sh:node` / `sh:or` / `sh:and` / `sh:not` are detected,
+warned about, and dropped; supported `sh:path` forms are a direct IRI,
+`sh:inversePath`, the `( assoc rdf:type )` sequence, and `sh:alternativePath`
+only when one member carries a nested inverse (any other path form warns and
+skips the property shape — pyshacl covers it). Unknown components are kept and
+logged — engines skip what they don't implement.
+
+`CompiledShapes.plans` is where each engine caches its own compiled artifact
+(the polars/duckdb `split_rules` partition) — re-validating new data against
+the same shapes never recompiles anything.
+
+### Component coverage per engine
+
+The shared contract lives in `shacl_ir`: `KNOWN_COMPONENTS` (all 24 keys) and
+`FALLBACK_COMPONENTS` (`sh:or/and/not/node/sparql` — the nested/query components
+every vectorized engine delegates to the pandas implementations via
+`split_rules`). A test (`test_shacl_ir.py::test_component_registries_agree`)
+pins the registries together:
+
+| engine | registry | coverage |
+|--------|----------|----------|
+| pandas | `CONSTRAINT_VALIDATORS` | all 24 (the fallback target) |
+| polars | `PLAN_BUILDERS` (+ `BATCH_BUILDERS` fast path) | 19 vectorized + 5 delegated |
+| duckdb | `SQL_BUILDERS` | 19 vectorized + 5 delegated |
+| pyshacl | consumes `compiled.graph`, not the IR | full spec; report vocabulary mapped back via `shacl_report._COMPONENT_MAP` |
 
 The compile cache participates in the shared engine-state lifecycle:
 `triplets.clear_caches()` drops cached `CompiledShapes` (with their plans)
@@ -123,7 +164,8 @@ engines see the raw lexical form and can judge it. Two levels:
 | valid but narrower/non-canonical form | `"1"` (integer form) | `triplets:lexicalForm` | `Warning` |
 
 `validate(..., lexical=True)` (the default) appends these findings to any
-engine's report (duplicates dropped on `[ID, KEY, VALUE, VIOLATION_TYPE]`).
+engine's report (duplicates dropped on
+`[ID, KEY, VALUE, VIOLATION_TYPE, SOURCE_SHAPE, SEVERITY]`).
 Parity tests treat `triplets:lexicalForm` rows as documented extras: engines
 must never *lose* a violation pyshacl reports.
 
@@ -220,7 +262,7 @@ data.shacl.validate(shapes)
     |   '-> _load_shapes -> parse_ir           # rdflib parses ONCE
     |
     |-> get_engine("auto")                     # polars (first importable)
-    |   '-> shacl_polars.validate(data, compiled.ir, rdf_map)
+    |   '-> shacl_polars.validate(data, compiled, rdf_map)
     |       # reads raw VALUEs; lexical findings emitted inline
     |       # (pyshacl path instead: load_dataset -> scoped_graph ->
     |       #  pyshacl.validate(compiled.graph) -> report_to_violations)

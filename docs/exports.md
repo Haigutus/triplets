@@ -13,7 +13,7 @@ Each format has its own `{format}_{engine}.py` file. The dispatcher in
 | CIM XML | `export_to_cimxml` | `cython_pugixml`, `python_lxml` | `engine` parameter, auto = fastest available |
 | N-Quads | `export_to_nquads` | polars (lazy plan, ~4x), pandas | `engine` parameter, auto = polars when installed |
 | CSV | `export_to_csv` | polars, pandas | by input DataFrame type |
-| Arrow | `export_to_arrow` | polars, pandas (→ `pyarrow.Table`) | by input DataFrame type; columnar interchange feeding qlever's Arrow ingest |
+| Arrow | `export_to_arrow` | polars, pandas, DuckDB (→ `pyarrow.Table`; DuckDB native, no pandas hop) | by input flavor; columnar interchange feeding qlever's Arrow ingest |
 | Excel | `export_to_excel` | pandas | polars input converted to pandas first |
 | NetworkX | `export_to_networkx` | pandas | polars input converted to pandas first |
 
@@ -28,8 +28,24 @@ Two engines with automatic fallback, mirroring the parser engine setup:
 
 Fallback order: `cython_pugixml` -> `python_lxml`
 
+Input flavor: the cython engine consumes polars input directly — per-instance
+frames stay polars and reach the extension as Arrow `large_string` /
+dictionary columns through the shared accessor (`triplets/_arrow/
+string_column.h`), no pandas hop. The python_lxml engine is pandas-only, so
+polars input converts first; `datatypes=True` implies python_lxml under
+`engine="auto"`.
+
+DuckDB notes: `con.read_rdf(paths)` streams one Arrow batch per XML file into
+the table (`append=True` adds instead of replacing) — see
+[parsers.md](parsers.md). In the other direction `con.export_to_nquads`
+streams batch-by-batch through duckdb's record-batch reader (bounded memory —
+works larger-than-RAM; needs the polars engine). The remaining formats fetch
+the table through duckdb's native arrow result path (~4x cheaper than a
+pandas materialization) but hold the whole table in memory during the export;
+streaming cimxml is the recorded TODO follow-up.
+
 Both engines expose the same interface:
-`generate_xml(instance_data, rdf_map, namespace_map, class_KEY, export_undefined, comment, debug)`
+`generate_xml(instance_data, rdf_map, namespace_map, class_KEY, export_undefined, comment, debug, datatypes)`
 returning `{"filename": str, "file": bytes}` for one instance. They produce
 data-identical XML (verified by an engine-equivalence test); only whitespace
 formatting differs.
@@ -52,7 +68,8 @@ data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
     |   try cython_pugixml -> ImportError (not compiled)
     |   fall back python_lxml -> always works
     |
-    |-> data.groupby("INSTANCE_ID")   # one XML document per instance
+    |-> _split_instances(data)        # one XML document per instance,
+    |                                 # in the input's own flavor (polars partition_by / pandas groupby)
     |
     |-> for each instance:
     |   '-> engine.generate_xml(instance, rdf_map, ...)
@@ -64,7 +81,7 @@ data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
     |       |
     |       |  python_lxml                     cython_pugixml
     |       |  -----------                     --------------
-    |       |  lxml ElementMaker               Arrow string arrays (32-bit offsets)
+    |       |  lxml ElementMaker               Arrow string arrays (utf8/large_utf8/string_view/dict)
     |       |  per-row Python loop             C++ loop over Arrow buffers
     |       |  etree.tostring()                pugixml DOM -> serialize
     |       |        |                                |

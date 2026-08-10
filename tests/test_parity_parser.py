@@ -86,6 +86,38 @@ def test_parity(parser_files, engine, return_type):
         f"  reference: {shape(ref)}\n  {engine}/{return_type}: {shape(out)}")
 
 
+# ── string_type: every layout carries the same content, in the right schema ───
+STRING_TYPES = ["utf8", "large_utf8", "string_view"]
+ARROW_ENGINES = [e for e in AVAILABLE_ENGINES if e in parser._ARROW_ENGINES]
+
+
+@pytest.mark.parametrize("engine", ARROW_ENGINES)
+@pytest.mark.parametrize("string_type", STRING_TYPES)
+def test_string_type_parity(minimal_cim, engine, string_type):
+    pyarrow = pytest.importorskip("pyarrow")
+    if string_type == "string_view" and not hasattr(pyarrow, "string_view"):
+        pytest.skip("string_view needs pyarrow >= 16")
+    ref = parse([minimal_cim], engine=REFERENCE[0], return_type=REFERENCE[1])
+    out = parse([minimal_cim], engine=engine, return_type="arrow", string_type=string_type)
+    target = {"utf8": pyarrow.string(), "large_utf8": pyarrow.large_string(),
+              "string_view": pyarrow.string_view()}[string_type]
+    assert out.schema.field("ID").type == target
+    assert out.schema.field("VALUE").type == target
+    assert frames_equal(_content(ref), _content(out)), f"{engine}/{string_type} content differs"
+
+
+def test_string_type_auto_and_errors(minimal_cim):
+    pyarrow = pytest.importorskip("pyarrow")
+    # auto: arrow output keeps the stable utf8 contract
+    out = parse([minimal_cim], return_type="arrow")
+    assert out.schema.field("ID").type == pyarrow.string()
+    # auto: polars output gets its native layout (zero-copy adoption)
+    if hasattr(pyarrow, "string_view"):
+        assert parser._resolve_string_type("auto", "polars") == "string_view"
+    with pytest.raises(ValueError, match="Unknown string_type"):
+        parse([minimal_cim], string_type="bogus")
+
+
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(e, r, id=f"{e}-{r}")
                  for e in AVAILABLE_ENGINES for r in RETURN_TYPES]

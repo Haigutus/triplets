@@ -1,6 +1,6 @@
 # TODO — SHACL / SPARQL engine work
 
-State as of 2026-07-16, branch `feat/shacl-sparql` (phases A–D + embedded qlever + oxigraph
+SHACL/SPARQL state as of 2026-07-16 (branch `feat/shacl-sparql`, since merged); engine/duckdb items below dated 2026-07-31..08-03 are from `feat/arrow-string-type` (phases A–D + embedded qlever + oxigraph
 complete; code-review fixes, shared engine registry and explicit cache lifecycle
 (`triplets.clear_caches()` / `cache_scope()`) landed 2026-07-14..16).
 Engines: SHACL — pyshacl (reference) / pandas (debugging) / polars (auto, speed) / duckdb
@@ -76,10 +76,13 @@ qlever (auto when built, performance).
   Arrow dictionary columns for repetitive result columns — possible future decode
   optimization. qlever's `IndexRebuilder`/`materializeToIndex` (delta updates without
   re-parse) is the machinery for a future incremental-update story.
-- [ ] `cimxml_cython_pugixml.pyx` could reuse the offset/dictionary/large_utf8-aware
-  Arrow column accessors from `_qlever_arrow_parser.cpp` (it currently copies every
-  cell via `GetString`, holds the GIL for per-row dict lookups, and `combine_chunks()`s
-  multi-chunk tables); lift the accessor into a shared header when touching it next.
+- [x] `cimxml_cython_pugixml.pyx` reuses the offset/dictionary/large_utf8-aware Arrow
+  column accessor, lifted into the shared header `triplets/_arrow/string_column.h`
+  (2026-07-31) — polars input now exports without a pandas hop; the header gained the
+  string_view branch and the parser emits it (parse(string_type=...), 2026-08-01).
+  Still open: the sequential export path's per-row Python dict lookups hold the GIL —
+  the GIL-free C++ ExportTables from the threaded-export experiment (issue #87,
+  branch explore/cimxml-export-threading) would fix that with order preserved.
 
 ## Build / packaging / CI
 
@@ -112,14 +115,30 @@ qlever (auto when built, performance).
 
 ## Process
 
-- [ ] Full-suite run + PR of `feat/shacl-sparql` to main — CHANGELOG entries done
+- [x] Full-suite run + PR of `feat/shacl-sparql` to main — merged; the current open
+  branch is `feat/arrow-string-type`
   (Unreleased section); version bump = release tag (versioneer), alpha as `0.2.0a1`.
 - [ ] Archive `dev_shacl` (everything worth porting has been ported; the branch is
   checked out in the main worktree — retag/delete from there).
 - [x] `performance` pytest marker deselected by default (`addopts = '-m "not
-  performance"'`; run them with `pytest -m performance`). Plain suite ≈ 30 s.
-- [ ] Pre-existing tools follow-ups (unrelated to SHACL): duckdb `multivalue` no-op,
-  polars eval in `tableview_to_triplets`, lossy `INSTANCE_ID` round-trip.
+  performance"'`; run them with `pytest -m performance`). Plain suite ≈ 100 s serial / ≈ 40 s with `-n auto`.
+- [ ] Pre-existing tools follow-ups (unrelated to SHACL): polars eval in
+  `tableview_to_triplets`, lossy `INSTANCE_ID` round-trip. (duckdb `multivalue`
+  implemented 2026-08-01 — encoding matches polars, parity-tested; duckdb
+  `string_to_number=True` still raises, TRY_CAST implementation open.)
+- [x] Chunked duckdb export — N-Quads DONE (2026-08-04, merged from
+  `explore/duckdb-chunked-export`): `con.export_to_nquads` streams via
+  `to_arrow_reader(1M rows)` + per-batch polars writer; peak-RSS delta flat
+  (~350-400 MB) from 1.1M to 4.6M rows vs linear growth whole-table, same
+  speed. No ORDER BY (N-Quads lines are row-local).
+- [ ] Chunked duckdb export — cimxml still open: needs `ORDER BY INSTANCE_ID`
+  (contiguity) + a batch accumulator yielding one instance frame at a time
+  into the existing `generate_xml` + packaging loops (turn the
+  `xml_documents` list into a generator); memory bound = largest instance.
+  Sequential (streaming and `max_workers` process-parallelism don't compose).
+- [ ] Streaming exports require the polars engine (clear ValueError otherwise);
+  a per-batch pandas fallback writer is possible if a polars-free
+  larger-than-RAM need ever appears.
 
 ## ENTSO-E SHACL findings (application-profiles-library)
 
@@ -148,3 +167,9 @@ Checked against the issue tracker on 2026-07-06:
   non-canonical lexical forms (`"1"` under `xsd:float` — 2,187 occurrences in the
   Svedala grid alone); would need explicit `sh:pattern` on float paths. Our
   `triplets:lexicalForm` check covers it locally.
+- [ ] Multithreaded pugixml CIM XML export — prototype on
+  `explore/cimxml-export-threading` (~3x at 4 threads on RealGrid EQ, content
+  identical, element order hash-grouped, FullModel pinned first). Kept as a
+  documented experiment; open decisions in
+  https://github.com/Haigutus/triplets/issues/87. The GIL-free C++ lookup
+  tables from the prototype would also speed the sequential path (order kept).

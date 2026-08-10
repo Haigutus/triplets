@@ -7,8 +7,9 @@ This is the fastest "pugixml parser" / performance backend for triplets CIMXML p
 It uses pugixml C++ directly + Arrow C++ builders (via Cython) for minimal overhead.
 
 IMPORTANT FOR MAINTAINERS:
-  The hot loop uses very low-level Arrow C++ (CStringBuilder + a thin wrapper
-  around StringDictionary32Builder) and direct char* Append paths. This is
+  The hot loop uses very low-level Arrow C++ (StringColBuilder, a layout-
+  selecting wrapper over Arrow's string builders, + a thin wrapper around
+  StringDictionary32Builder) and direct char* Append paths. This is
   intentional for the ~9x speedup on large models. Readability of the *per-row*
   path is deliberately sacrificed a bit for speed; surrounding code and comments
   try to compensate.
@@ -34,7 +35,6 @@ from libc.stdint cimport int64_t
 from pyarrow.includes.common cimport CStatus
 from pyarrow.includes.libarrow cimport (
     CArray,
-    CStringBuilder,
     CRecordBatch,
     CSchema,
     CField,
@@ -65,8 +65,15 @@ cdef extern from "arrow/type.h" namespace "arrow":
 # (no post-hoc pa.compute.dictionary_encode on 1M+ rows).
 cdef extern from *:
     """
+    #include <stdexcept>
+    #include <string_view>
+
     #include "arrow/array/builder_dict.h"
-    #include "arrow/array/builder_binary.h"   // brings in arrow::StringBuilder (what CStringBuilder is typedef'd to)
+    #include "arrow/array/builder_binary.h"   // StringBuilder / LargeStringBuilder / StringViewBuilder
+    #include "arrow/util/config.h"            // ARROW_VERSION_MAJOR
+
+    // arrow::StringViewBuilder exists since Arrow C++ 16.
+    #define TRIPLETS_HAS_STRING_VIEW (ARROW_VERSION_MAJOR >= 16)
 
     // Thin wrapper so Cython code stays readable and insulated from Arrow internals.
     class KeyDictBuilder {
@@ -82,6 +89,52 @@ cdef extern from *:
         arrow::StringDictionary32Builder inner_;
     };
 
+    // One string column builder with a runtime-selected Arrow layout:
+    //   0 = utf8 (32-bit offsets), 1 = large_utf8 (64-bit), 2 = string_view.
+    // The layout is constant for the whole parse, so the branch in Append is
+    // perfectly predicted — measured indistinguishable from a direct builder.
+    class StringColBuilder {
+    public:
+        StringColBuilder(arrow::MemoryPool* pool, int layout)
+            : layout_(layout), utf8_(pool), large_(pool)
+    #if TRIPLETS_HAS_STRING_VIEW
+            , view_(pool)
+    #endif
+        {
+    #if !TRIPLETS_HAS_STRING_VIEW
+            if (layout_ == 2) {
+                throw std::runtime_error(
+                    "string_type=\"string_view\" needs the extension built against Arrow >= 16");
+            }
+    #endif
+        }
+        arrow::Status Append(const char* s, int len) {
+            if (layout_ == 0) return utf8_.Append(s, len);
+            if (layout_ == 1) return large_.Append(s, (int64_t)len);
+    #if TRIPLETS_HAS_STRING_VIEW
+            return view_.Append(std::string_view(s, (size_t)len));
+    #else
+            return arrow::Status::NotImplemented("string_view");
+    #endif
+        }
+        arrow::Status Finish(std::shared_ptr<arrow::Array>* out) {
+            if (layout_ == 0) return utf8_.Finish(out);
+            if (layout_ == 1) return large_.Finish(out);
+    #if TRIPLETS_HAS_STRING_VIEW
+            return view_.Finish(out);
+    #else
+            return arrow::Status::NotImplemented("string_view");
+    #endif
+        }
+    private:
+        int layout_;
+        arrow::StringBuilder utf8_;
+        arrow::LargeStringBuilder large_;
+    #if TRIPLETS_HAS_STRING_VIEW
+        arrow::StringViewBuilder view_;
+    #endif
+    };
+
     // ------------------------------------------------------------------
     // Ergonomic Append helpers
     // These let us write Append(builder, some_string) or Append(builder, b"Literal")
@@ -91,12 +144,8 @@ cdef extern from *:
     // from strlen(local_name(...)).
     // ------------------------------------------------------------------
 
-    // We use the real Arrow type arrow::StringBuilder here (CStringBuilder is
-    // just a Cython convenience typedef from pyarrow.includes).
-    // We must include the header so the name is known inside this inline block.
-
     // std::string version - length comes from the string itself
-    inline arrow::Status Append(arrow::StringBuilder* b, const std::string& s) {
+    inline arrow::Status Append(StringColBuilder* b, const std::string& s) {
         return b->Append(s.c_str(), (int)s.size());
     }
     inline arrow::Status Append(KeyDictBuilder* b, const std::string& s) {
@@ -105,7 +154,7 @@ cdef extern from *:
 
     // const char* version - for C string literals (b"Type" etc.).
     // strlen on a string literal is basically free (often constant-folded).
-    inline arrow::Status Append(arrow::StringBuilder* b, const char* s) {
+    inline arrow::Status Append(StringColBuilder* b, const char* s) {
         return b->Append(s, (int)strlen(s));
     }
     inline arrow::Status Append(KeyDictBuilder* b, const char* s) {
@@ -114,7 +163,7 @@ cdef extern from *:
 
     // Explicit length version - when we already know the length
     // (dynamic names from XML, Python bytes objects, etc.)
-    inline arrow::Status Append(arrow::StringBuilder* b, const char* s, int len) {
+    inline arrow::Status Append(StringColBuilder* b, const char* s, int len) {
         return b->Append(s, len);
     }
     inline arrow::Status Append(KeyDictBuilder* b, const char* s, int len) {
@@ -123,7 +172,7 @@ cdef extern from *:
 
     // Convenience for Python bytes objects (used for file_name_bytes etc.)
     // This is only for the few non-hot-path appends.
-    inline arrow::Status Append(arrow::StringBuilder* b, PyObject* pybytes) {
+    inline arrow::Status Append(StringColBuilder* b, PyObject* pybytes) {
         if (PyBytes_Check(pybytes)) {
             return b->Append(PyBytes_AS_STRING(pybytes), (int)PyBytes_GET_SIZE(pybytes));
         }
@@ -135,19 +184,24 @@ cdef extern from *:
         CStatus Append(const char* value, int length)
         CStatus Finish(shared_ptr[CArray]* out)
 
+    cdef cppclass StringColBuilder:
+        StringColBuilder(CMemoryPool* pool, int layout) except +
+        CStatus Append(const char* value, int length)
+        CStatus Finish(shared_ptr[CArray]* out)
+
     # Overloads for the ergonomic Append helpers defined above.
     # Cython has decent support for C++ overload resolution here.
-    CStatus Append(CStringBuilder* b, const string& s)
+    CStatus Append(StringColBuilder* b, const string& s)
     CStatus Append(KeyDictBuilder* b, const string& s)
 
-    CStatus Append(CStringBuilder* b, const char* s)
+    CStatus Append(StringColBuilder* b, const char* s)
     CStatus Append(KeyDictBuilder* b, const char* s)
 
-    CStatus Append(CStringBuilder* b, const char* s, int len)
+    CStatus Append(StringColBuilder* b, const char* s, int len)
     CStatus Append(KeyDictBuilder* b, const char* s, int len)
 
     # Overload for Python bytes (so we can write Append(val_b, file_name_bytes) directly)
-    CStatus Append(CStringBuilder* b, object pybytes)
+    CStatus Append(StringColBuilder* b, object pybytes)
 
 # pugixml C++ types (compiled from source via setup_cython.py)
 cdef extern from "pugixml.hpp" namespace "pugi":
@@ -233,11 +287,20 @@ cdef extern from *:
 cdef unsigned int PARSE_FLAGS = parse_minimal | parse_embed_pcdata | parse_escapes
 
 
-def load_rdf_to_dataframe(path_or_fileobject, debug=False):
+_STRING_TYPE_LAYOUTS = {"utf8": 0, "large_utf8": 1, "string_view": 2}
+
+
+def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
     """Parse RDF XML and return a PyArrow RecordBatch directly.
 
     The entire pipeline — XML parse, element iteration, Arrow building —
     happens in C++ via Cython. Returns a PyArrow RecordBatch (zero-copy).
+
+    string_type selects the Arrow layout of the ID and VALUE columns:
+    "utf8" (32-bit offsets, the default), "large_utf8" (64-bit) or
+    "string_view" (polars' and duckdb's native layout — adopted zero-copy).
+    KEY and INSTANCE_ID stay dictionary-encoded regardless: consumers use
+    the indices, not the value buffer layout.
 
     Special optimization: when path_or_fileobject is a str (real local filesystem path),
     the file is memory-mapped. pugixml then parses directly from the kernel page cache
@@ -245,6 +308,12 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False):
     on-disk files even faster / lower memory than reading everything into Python bytes first.
     File-like objects fall back to an explicit read() + load_buffer.
     """
+    layout_py = _STRING_TYPE_LAYOUTS.get(string_type)
+    if layout_py is None:
+        raise ValueError(f"Unknown string_type: {string_type!r}. "
+                         f"Known: {', '.join(_STRING_TYPE_LAYOUTS)}")
+    cdef int layout = layout_py
+
     # We import uuid here (inside the function) so the module can be imported
     # even if someone never calls the cython path. The import is cheap after
     # the first time.
@@ -338,17 +407,17 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False):
     # ------------------------------------------------------------------
     # Arrow column builders (allocated on the C++ heap for the hot path)
     # ------------------------------------------------------------------
-    # ID    : high cardinality (mostly unique) → plain CStringBuilder
+    # ID    : high cardinality (mostly unique) → StringColBuilder (layout-selected)
     # KEY   : very low cardinality (~hundreds of property names + "Type")
     #         → KeyDictBuilder (our wrapper around StringDictionary32Builder)
     #         builds a DictionaryArray *during* the loop. No post-processing.
-    # VALUE : mixed cardinality → plain CStringBuilder
+    # VALUE : mixed cardinality → StringColBuilder (layout-selected)
     # INSTANCE_ID : constant per file → deliberately *not* built in the loop.
     #               See the post-loop construction below for why.
     cdef CMemoryPool* pool = c_default_memory_pool()
-    cdef CStringBuilder* id_b = new CStringBuilder(pool)
+    cdef StringColBuilder* id_b = new StringColBuilder(pool, layout)
     cdef KeyDictBuilder* key_b = new KeyDictBuilder(pool)
-    cdef CStringBuilder* val_b = new CStringBuilder(pool)
+    cdef StringColBuilder* val_b = new StringColBuilder(pool, layout)
 
     # Namespace attribute prefixes (lengths derived from definitions, not hardcoded)
     cdef const char* XMLNS_COLON = b"xmlns:"
@@ -497,7 +566,7 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False):
 
         # Wrap the three C++-built arrays (ID, KEY dict, VALUE) into pyarrow objects.
         # We use the low-level pyarrow_wrap_array so we stay zero-copy from the
-        # CStringBuilder / KeyDictBuilder data.
+        # StringColBuilder / KeyDictBuilder data.
         id_col = pyarrow_wrap_array(id_arr)
         key_col = pyarrow_wrap_array(key_arr)
         val_col = pyarrow_wrap_array(val_arr)

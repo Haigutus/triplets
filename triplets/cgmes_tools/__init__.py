@@ -1,7 +1,7 @@
 """CGMES tools — metadata, visualization, and data quality utilities.
 
 Functions accept triplet data in any supported flavor: pandas, polars, pyarrow
-Table/RecordBatch, or a DuckDB connection holding a `triplets` table. A dispatcher
+Table/RecordBatch, or a DuckDB connection holding a triplets table (the connection's configured one). A dispatcher
 routes each call by input type:
 
 - polars input → native polars engine (polars_engine.py), no pandas round-trip;
@@ -20,7 +20,7 @@ import logging
 import pandas
 
 from . import pandas_engine
-from .._engine_detect import is_polars
+from .._engine_detect import flavor, match_flavor, to_pandas
 from ..tools import _engine_functions, _deprecated_alias
 from .pandas_engine import (  # noqa: F401 — no triplet-data argument, re-exported as-is
     dependencies,
@@ -59,53 +59,20 @@ DEPRECATED_ALIASES = {
 
 
 def _to_pandas(data):
-    """Triplet data in any supported flavor → standard (numpy/category-backed) pandas
-    DataFrame, matching ``pandas.read_RDF`` dtypes. ArrowDtype-backed frames are avoided:
-    the pandas engine mutates VALUE in place (``.loc[...] = value``), which pyarrow
-    dictionary columns reject (ArrowNotImplementedError)."""
-    if isinstance(data, pandas.DataFrame):
-        return data
-    module = type(data).__module__
-    if module.startswith("polars"):
-        logger.debug("cgmes_tools input: polars → pandas")
-        return data.to_pandas()
-    if module.startswith("pyarrow"):
-        logger.debug("cgmes_tools input: pyarrow → pandas")
-        # Drop pandas metadata first: it may record ArrowDtype dtypes (e.g.
-        # dictionary<…>[pyarrow]) that to_pandas() can't reconstruct, and we want
-        # plain numpy/category columns the engine can mutate anyway.
-        if hasattr(data, "replace_schema_metadata"):
-            data = data.replace_schema_metadata(None)
-        return data.to_pandas()
-    if module.startswith(("duckdb", "_duckdb")):
-        logger.debug("cgmes_tools input: duckdb triplets table → pandas")
-        return data.execute("SELECT * FROM triplets").df()
-    return data  # trust pandas-compatible input
+    """Any flavor → plain pandas (safe for in-place VALUE mutation in the engine)."""
+    return to_pandas(data, plain=True)
 
 
 def _match_input_flavor(result, data):
     """Convert a pandas DataFrame result back to the flavor of the input data."""
-    if not isinstance(result, pandas.DataFrame):
-        return result
-    keep_index = not isinstance(result.index, pandas.RangeIndex)
-    module = type(data).__module__
-    if module.startswith("polars"):
-        import polars
-        return polars.from_pandas(result, include_index=keep_index)
-    if module.startswith("pyarrow"):
-        import pyarrow
-        return pyarrow.Table.from_pandas(result, preserve_index=keep_index)
-    return result  # pandas in (and duckdb in) → pandas out
+    return match_flavor(result, data)
 
 
 def _resolve_engine(engine, data):
     if engine != "auto":
         return engine
-    if is_polars(data):
-        return "polars"
-    if isinstance(data, pandas.DataFrame):
-        return "pandas"
-    return "other"                                    # pyarrow / duckdb → pandas boundary
+    kind = flavor(data)
+    return kind if kind in ("polars", "pandas") else "other"   # pyarrow / duckdb → pandas boundary
 
 
 def _data_dispatch(name):
@@ -121,10 +88,13 @@ def _data_dispatch(name):
 
     @functools.wraps(pandas_fn)
     def wrapper(data, *args, engine="auto", **kwargs):
+        if engine not in ("auto", "pandas", "polars"):
+            raise ValueError(f"cgmes_tools supports engine='pandas'/'polars' (got {engine!r}); "
+                             f"duckdb/arrow input runs via the pandas boundary")
         eng = _resolve_engine(engine, data)
         native_polars = polars_engine is not None and hasattr(polars_engine, name)
         if eng == "polars" and engine != "auto":
-            if not is_polars(data):
+            if flavor(data) != "polars":
                 raise TypeError("engine='polars' but the input is not a polars DataFrame")
             if not native_polars:
                 raise NotImplementedError(f"cgmes_tools.{name} has no polars engine")

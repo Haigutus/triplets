@@ -6,7 +6,118 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Shared flavor conversion** (`triplets._engine_detect`): `to_pandas` /
+  `to_arrow` / `to_polars` / `as_frame` / `match_flavor` are the single choke
+  point for materializing pandas/polars/pyarrow/DuckDB inputs (rdflib loader,
+  SHACL, SPARQL, cgmes_tools, export, DuckDB export wrappers). Prefer these
+  over local if-flavor blocks.
+- **One engine registry everywhere** (`triplets._registry.EngineRegistry`):
+  parser, sparql, validation, nquads, cimxml, csv and tools dispatch now share
+  a single mechanism — eager `find_spec` availability probing at import, lazy
+  module import on first use. The hand-rolled cimxml engine map and the
+  ad-hoc nquads/csv dispatch in `triplets.export` are folded in; all public
+  names and behavior unchanged.
+- **CIM XML export consumes polars input directly** (cython engine): the
+  compiled extension reads Arrow `utf8` / `large_utf8` / `string_view` /
+  dictionary string columns through the shared accessor `triplets/_arrow/string_column.h`
+  (lifted from the qlever Arrow ingest), so polars frames export without a
+  pandas hop; per-instance splitting runs in the input's own flavor. Output is
+  byte-identical across input flavors. The `python_lxml` engine remains
+  pandas-only (auto-picked for `datatypes=True`).
+
+### Fixed
+- **Out-of-core DuckDB N-Quads export**: `con.export_to_nquads` streams the
+  table through duckdb's record-batch reader into the polars formatter, one
+  ~1M-row batch at a time — peak memory stays flat regardless of table size
+  (measured: ~350-400 MB delta from 1.1M to 4.6M rows vs linear growth
+  before), same speed. `export_to_nquads` also accepts a
+  `pyarrow.RecordBatchReader` directly (polars engine required). Line order
+  follows the table scan; N-Quads consumers are order-independent.
+- **DuckDB exports fetch arrow, not pandas**: `con.export_to_nquads/csv/
+  cimxml/excel` used to materialize the table as a pandas DataFrame
+  (~383 ms/1.14M rows) before exporting — they now use duckdb's native arrow
+  result (~101 ms), and the exporters accept pyarrow input directly (the
+  nquads polars engine adopts it in ~9 ms). Exports are still whole-table
+  in-memory; chunked export remains a recorded follow-up.
+- **DuckDB `regex=True` semantics**: `filter_triplets` /
+  `filter_triplets_by_value` used SQL `SIMILAR TO` (full-match); they now use
+  `regexp_matches()` — search semantics anywhere in the value, matching the
+  pandas/polars `str.contains` engines. Covered by new regex parity tests.
+- **DuckDB type-name quoting**: `filter_triplets_by_type` interpolated the
+  type name unescaped into SQL; it now goes through the shared literal quoting
+  (a name containing `'` filters correctly instead of breaking the query).
+- **Empty-parse schema**: `parse([], return_type="arrow"/"polars")` now
+  returns the same string / dictionary-encoded column schema as a non-empty
+  parse, so empty results concatenate cleanly with real ones.
+- **Tools dispatcher engine mismatches**: `triplets.tools.<fn>(df,
+  engine="duckdb")` and other input/engine mismatches now raise a clear
+  `TypeError` at the boundary (previously they silently ran the pandas engine
+  and failed deep inside); unknown engine names raise `ValueError`. Likewise
+  `cgmes_tools` data functions reject `engine=` outside pandas/polars with a
+  `ValueError` (duckdb/arrow input still runs via the pandas boundary).
+- **`parse()` rejects unknown keyword arguments**: the unused `**kwargs`
+  swallowed typos silently (a misspelled option looked like it worked while
+  doing nothing); mistakes now raise `TypeError`.
+- **DuckDB mutators preserve extra columns**: the five mutating helpers run
+  in-place DML (UPDATE/DELETE/INSERT) instead of full-table rewrites — user
+  columns beyond ID/KEY/VALUE/INSTANCE_ID were previously dropped silently
+  on the first mutation, and load order is now stable across mutations.
+- **File-handle leaks in zip parsing**: `find_all_xml`/`iter_all_xml` close
+  the zip handles they open; the test suite runs with `always::ResourceWarning`
+  and zero warnings (rdflib 7.6.0's internal Dataset deprecation noise is
+  filtered as a documented upstream issue).
+
 ### Added
+- **Streaming out-of-core DuckDB ingest** (`parser.parse_batches(...)`,
+  `con.read_rdf(paths, append=...)`): one Arrow RecordBatch per XML file
+  flows straight into DuckDB — the dataset is never materialized in Python.
+  `append=True` adds to the existing table (created if missing); the default
+  replaces. Zip members are read lazily, one at a time; `max_workers`
+  parses up to that many files ahead (bounded, in-order prefetch — memory
+  stays bounded while multi-file ingest parallelizes). This path requires an
+  arrow parser engine; `string_type` and `categorical_columns` no longer
+  apply to `con.read_rdf` and raise instead of being accepted.
+- **DuckDB config persists in the database**: explicitly configured
+  table/schema (via `connect(table=/schema=)`, `set_triplets_table`,
+  `read_rdf(table=/schema=)`) is stored in a tiny `main."_triplets_config"`
+  table, so reopening a persisted file resolves it automatically (cursors
+  too). A bare `connect()` writes nothing; read-only opens resolve stored
+  config without writing.
+- **DuckDB multivalue tableviews**: `type/key/id_tableview` and
+  `triplets_to_tableviews` gain `multivalue=` (renders `['a', 'b']` cells,
+  matching pandas/polars) and `string_to_number=` (accepted for signature
+  parity; `True` raises — VARCHAR views, TRY_CAST is a follow-up);
+  `tableview_to_triplets(multivalue=True)` decodes the list encoding.
+- **DuckDB tools on views and registered frames**: tableviews, references
+  and order-invariant `content_hash` now work when `table=` targets a VIEW
+  or a registered frame (`row_number()` fallback where `rowid` doesn't
+  exist); `content_hash(order_sensitive=True)` on such targets raises a
+  clear error. Tableview views are created in the resolved schema.
+- **Configurable Arrow string layout** (`parse(..., string_type=...)`): the
+  ID/VALUE columns can be produced as `utf8` (32-bit offsets, default),
+  `large_utf8` (64-bit) or `string_view` (polars'/duckdb's native layout,
+  adopted zero-copy by polars; pyarrow >= 16). `"auto"` picks per
+  return_type: string_view for polars, utf8 otherwise. The cython engine
+  builds the layout natively (no measured hot-loop cost); the lxml arrow
+  engine casts once at finalize. The shared Arrow accessor handles all
+  layouts, so CIM XML export and qlever ingest accept every variant.
+- **`triplets.engines()` / `triplets.set_engine(...)`**: inspect what
+  `engine="auto"` resolves to per subsystem (selected engine, availability,
+  aliases) and override it globally (`set_engine(parser_cimxml="python_lxml_arrow")`;
+  `"auto"`/`None` restores). Precedence: per-call `engine=` > `set_engine` >
+  auto. Input-bound subsystems (tools, csv) follow the input flavor and cannot
+  be overridden.
+- **DuckDB connections in `triplets.tools` module functions**:
+  `triplets.tools.type_tableview(con, ...)` and friends now route to the
+  duckdb engine (previously only bound methods `con.type_tableview(...)`
+  worked; the module dispatcher fell through to pandas and raised
+  `AttributeError`).
+- **DuckDB per-connection table/schema** (`duckdb.connect(table=..., schema=...)`,
+  `con.set_triplets_table(...)`, `con.read_rdf(..., table=..., schema=...)`):
+  each connection stores the default triplets relation; tools/export/SHACL use
+  it when call kwargs omit `table`/`schema` (legacy `table_name=` still works).
+  Identifiers are always double-quoted in generated SQL.
 - **SHACL validation** (`df.shacl.validate(shapes)`, `triplets.validation`):
   shapes compile once into a constraint IR (content-hash cached), executed by
   four engines — `pyshacl` (spec reference), `pandas` (complete constraint

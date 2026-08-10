@@ -673,10 +673,5 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
 
 def _to_pandas(data):
     """Any supported flavor → pandas triplet DataFrame."""
-    from .._rdflib_loader import _to_loadable
-    from .._engine_detect import is_polars
-
-    data = _to_loadable(data)  # arrow / duckdb → pandas
-    if is_polars(data):
-        return data.to_pandas()
-    return data
+    from .._engine_detect import to_pandas
+    return to_pandas(data)

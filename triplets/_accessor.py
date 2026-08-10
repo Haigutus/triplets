@@ -119,27 +119,50 @@ else:
 if duckdb:
     from .tools import duckdb_engine
 
+    from ._engine_detect import to_arrow as _to_arrow, to_pandas as _to_pandas
+
+    _STREAM_BATCH_ROWS = 1_000_000
+
     def _duckdb_export_fn(name):
         """A connection-first export callable: fetch the triplets table, run the export.
 
-        Note: this materialises the whole `triplets` table into a pandas DataFrame
-        (``SELECT * FROM triplets``) before exporting — a memory spike for large grids.
+        N-Quads streams through duckdb's record-batch reader (one ~1M-row
+        batch in memory at a time — works larger-than-RAM; needs the polars
+        engine, so it runs only when the nquads registry resolves to polars —
+        an explicit engine="pandas" gets the whole-table path). The other
+        formats fetch the table through duckdb's native arrow result path
+        (~4x cheaper than materialising pandas), whole-table in memory.
         """
         function = getattr(export, name)
+        streams = name == "export_to_nquads"
 
-        def fn(connection, *args, table_name="triplets", **kwargs):
-            df = connection.execute(f"SELECT * FROM {table_name}").df()
-            return function(df, *args, **kwargs)
+        def fn(connection, *args, table=None, schema=None, table_name=None, **kwargs):
+            if streams and export._NQUADS.get(kwargs.get("engine", "auto"))[0] == "polars":
+                ref = duckdb_engine._resolve_table(connection, table=table, schema=schema,
+                                                   table_name=table_name)
+                cursor = connection.cursor()   # streaming pins a connection; isolate it
+                try:
+                    # no ORDER BY: every N-Quads line is row-local, so duckdb
+                    # streams straight off the table scan (an ORDER BY would
+                    # buffer the sort; it is only needed for grouped formats)
+                    reader = cursor.execute(
+                        f"SELECT ID, KEY, VALUE, INSTANCE_ID FROM {ref}"
+                    ).to_arrow_reader(_STREAM_BATCH_ROWS)
+                    return function(reader, *args, **kwargs)
+                finally:
+                    cursor.close()
+            data = _to_arrow(connection, table=table, schema=schema, table_name=table_name)
+            return function(data, *args, **kwargs)
 
         fn.__name__ = name
         fn.__doc__ = function.__doc__
         return fn
 
-    def _duckdb_export_to_arrow(connection, table_name="triplets"):
+    def _duckdb_export_to_arrow(connection, table=None, schema=None, table_name=None):
         """Triplet columns as a pyarrow.Table, straight from duckdb's native
         arrow result path (no pandas materialization)."""
-        return connection.execute(
-            f"SELECT ID, KEY, VALUE, INSTANCE_ID FROM {table_name}").fetch_arrow_table()
+        return _to_arrow(connection, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"],
+                         table=table, schema=schema, table_name=table_name)
 
     # duckdb has no register_*_namespace API — attach the accessor via a property
     # (accepted on the C-extension type). None of the method names is "triplets".

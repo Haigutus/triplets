@@ -7,6 +7,8 @@ IGM model; the ``-m performance`` timing test runs on RealGrid (~1.14M rows).
 
 Shared discovery/normalisation/comparison helpers live in ``tests/_parity.py``.
 """
+import re
+
 import pandas
 import pytest
 
@@ -36,9 +38,18 @@ def make_context(df: pandas.DataFrame) -> dict:
     subset = df[(df["KEY"] == "Type") & (df["VALUE"] == type_name)][["ID", "KEY", "VALUE"]]
     update_data = pandas.DataFrame({"ID": [reference, "NEWID"], "KEY": [key, "Type"],
                                     "VALUE": ["UPDATED", "NewClass"]})
+    # Synthetic multi-valued (ID, KEY) rows — Svedala has no genuine multivalues,
+    # and the multivalue encoding must be exercised across all three engines.
+    multi_data = pandas.DataFrame({
+        "ID": ["m1"] * 3 + ["m2"] * 2,
+        "KEY": ["Type", "IdentifiedObject.name", "IdentifiedObject.name", "Type",
+                "IdentifiedObject.name"],
+        "VALUE": ["MultiThing", "first", "second", "MultiThing", "solo"],
+        "INSTANCE_ID": ["mi"] * 5,
+    })
     return {"type": type_name, "key": key, "name": name, "id": reference, "reference": reference,
             "instances": instances, "subset": subset, "update_data": update_data,
-            "new_data": df.iloc[100:]}
+            "new_data": df.iloc[100:], "multi_data": multi_data, "multi_type": "MultiThing"}
 
 
 # ── engine helpers ────────────────────────────────────────────────────────────
@@ -72,7 +83,7 @@ def _duckdb_wide_table(data, ctx):
 
 
 def _tv_kwargs(engine):
-    return {} if engine == "duckdb" else {"string_to_number": False}
+    return {"string_to_number": False}
 
 
 def _content_hash_spec(engine, data, ctx):
@@ -143,6 +154,52 @@ CALL_SPECS = {
 }
 
 
+# ── regex variants: search semantics, like pandas str.contains ────────────────
+# Kept out of CALL_SPECS so the coverage guard still checks exact function names.
+# The escaped mid-substring of a real IdentifiedObject.name only matches under
+# search semantics — a full-match engine (duckdb SIMILAR TO) would return nothing.
+def _name_pattern(ctx):
+    return re.escape(ctx["name"][1:-1] or ctx["name"])
+
+
+def _multivalue_tableview(e, d, c):
+    """Multi-valued keys render as ['a', 'b'] text (single values bare) — same
+    encoding across engines (pandas list cells stringify to the same text)."""
+    data = build_engine(e, c["multi_data"])
+    return data.type_tableview(c["multi_type"], string_to_number=False, multivalue=True)
+
+
+def _multivalue_roundtrip(e, d, c):
+    """tableview(multivalue=True) → tableview_to_triplets(multivalue=True)."""
+    data = build_engine(e, c["multi_data"])
+    tv = data.type_tableview(c["multi_type"], string_to_number=False, multivalue=True)
+    if e == "duckdb":
+        data.execute(f'CREATE OR REPLACE TABLE _mtv AS SELECT * FROM "{c["multi_type"]}"')
+        return data.tableview_to_triplets(table_name="_mtv", multivalue=True)
+    return tv.tableview_to_triplets(multivalue=True)
+
+
+EXTRA_SPECS = {
+    "filter_triplets[regex]": lambda e, d, c: d.filter_triplets(KEY=c["key"], VALUE=_name_pattern(c), regex=True),
+    "filter_triplets[regex-list]": lambda e, d, c: d.filter_triplets(VALUE=[_name_pattern(c), "^no-such-value$"], regex=True),
+    "filter_triplets_by_value[regex]": lambda e, d, c: d.filter_triplets_by_value(_name_pattern(c), regex=True),
+    "type_tableview[multivalue]": _multivalue_tableview,
+    "tableview_to_triplets[multivalue]": _multivalue_roundtrip,
+}
+SPECS = {**CALL_SPECS, **EXTRA_SPECS}
+
+
+# ── module-level dispatch: triplets.tools.<fn>(obj), all flavors ──────────────
+# The accessor methods above bind the engine by object type; these go through
+# tools._get_engine, which must route duckdb connections to the duckdb engine.
+MODULE_DISPATCH_SPECS = {
+    "types_dict": lambda e, d, c: triplets.tools.types_dict(d),
+    "type_tableview": lambda e, d, c: triplets.tools.type_tableview(d, c["type"], **_tv_kwargs(e)),
+    "filter_triplets": lambda e, d, c: triplets.tools.filter_triplets(d, KEY="Type", VALUE=c["type"]),
+    "references_all": lambda e, d, c: triplets.tools.references_all(d),
+}
+
+
 # ── fixtures ──────────────────────────────────────────────────────────────────
 @pytest.fixture(scope="module")
 def svedala_pandas():
@@ -165,13 +222,13 @@ def test_call_specs_cover_all_functions():
 
 # ── Test 1: parity (Svedala) — no xfails, mismatches FAIL ─────────────────────
 PARITY_PARAMS = [pytest.param(f, e, id=f"{f}-{e}")
-                 for f in sorted(ALL_FUNCTIONS) for e in ("polars", "duckdb")]
+                 for f in sorted(SPECS) for e in ("polars", "duckdb")]
 
 
 @pytest.mark.parametrize("func,engine", PARITY_PARAMS)
 def test_parity(svedala_pandas, svedala_ctx, func, engine):
     pytest.importorskip(engine)
-    spec = CALL_SPECS[func]
+    spec = SPECS[func]
 
     try:
         ref = run_quiet(spec, "pandas", svedala_pandas.copy(), svedala_ctx)
@@ -187,6 +244,17 @@ def test_parity(svedala_pandas, svedala_ctx, func, engine):
         f"{engine}.{func} output differs from pandas\n"
         f"  pandas: {type(ref).__name__} {shape(ref)}\n"
         f"  {engine}: {type(out).__name__} {shape(out)}")
+
+
+@pytest.mark.parametrize("func,engine", [pytest.param(f, e, id=f"{f}-{e}")
+                                         for f in sorted(MODULE_DISPATCH_SPECS)
+                                         for e in ("polars", "duckdb")])
+def test_module_dispatch_parity(svedala_pandas, svedala_ctx, func, engine):
+    pytest.importorskip(engine)
+    spec = MODULE_DISPATCH_SPECS[func]
+    ref = run_quiet(spec, "pandas", svedala_pandas.copy(), svedala_ctx)
+    out = run_quiet(spec, engine, build_engine(engine, svedala_pandas), svedala_ctx)
+    assert parity(ref, out), f"tools.{func}({engine}) differs from pandas"
 
 
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────

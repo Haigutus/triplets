@@ -37,6 +37,8 @@ _REGISTRY = EngineRegistry(
     },
     hints={"oxigraph": "Install with: pip install triplets[oxigraph]."},
     default_hint="Install with: pip install triplets[sparql].",
+    requires={"qlever": ("._qlever", "pyarrow"), "oxigraph": ("pyoxigraph",),
+              "rdflib": ("rdflib",)},
 )
 
 

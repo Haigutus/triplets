@@ -35,12 +35,16 @@ def reference():
 @pytest.mark.parametrize("form", ["path", "bare_path", "path_list", "file_like"])
 def test_parse_input_forms(reference, form):
     source = {
-        "path": Path(XML),
-        "bare_path": Path(XML),
-        "path_list": [Path(XML)],
-        "file_like": open(XML, "rb"),
-    }[form]
-    result = triplets.parse(source)
+        "path": lambda: Path(XML),
+        "bare_path": lambda: Path(XML),
+        "path_list": lambda: [Path(XML)],
+        "file_like": lambda: open(XML, "rb"),
+    }[form]()
+    try:
+        result = triplets.parse(source)
+    finally:
+        if hasattr(source, "close"):
+            source.close()
     assert rows(result) == rows(reference) > 0
 
 

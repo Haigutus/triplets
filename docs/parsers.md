@@ -16,8 +16,40 @@ Three parser engines with automatic fallback (fastest available):
 Fallback order: `cython_pugixml_arrow` -> `python_lxml_arrow` -> `python_lxml_pandas`
 
 All three engines expose the same interface: `load_rdf_to_dataframe(path_or_fileobject, debug=False)`
+(the cython engine additionally accepts `string_type`, see below).
 
 Engine aliases: `performance` / `pugixml` -> `cython_pugixml_arrow`, `native` -> `python_lxml_pandas`
+
+## Streaming — `parse_batches()`
+
+`parse_batches(paths, engine="auto", ...)` returns a `pyarrow.RecordBatchReader`
+producing one batch per XML file as the reader is consumed — the dataset is
+never materialized in Python. Fixed all-utf8 schema (no dictionary encoding, no
+`string_type` — per-file dictionaries would differ and database consumers
+re-encode internally); requires an arrow engine (no pandas fallback).
+`max_workers` parses up to that many files ahead — a bounded, in-order
+prefetch, so memory stays bounded by max_workers+1 batches. This is the ingest path
+behind the DuckDB `con.read_rdf(...)` / `append=True`. File discovery goes
+through the lazy `iter_all_xml()` generator (zip members are read one at a
+time and handles are closed); `find_all_xml()` is its eager list form.
+
+## String layout — `parse(..., string_type=...)`
+
+The Arrow layout of the ID and VALUE columns is selectable: `"utf8"` (32-bit
+offsets, the stable default), `"large_utf8"` (64-bit) or `"string_view"`
+(polars'/duckdb's native 16-byte view layout, adopted zero-copy by polars;
+needs pyarrow >= 16). `"auto"` picks the layout the return_type adopts
+zero-copy: `string_view` for polars, `utf8` otherwise. KEY and INSTANCE_ID
+stay dictionary-encoded regardless — consumers use the indices.
+
+The cython engine builds the requested layout natively (a layout-selecting
+`StringColBuilder` — zero measured cost on the hot loop); `python_lxml_arrow`
+gets a single cast on the combined table at finalize. Measured on RealGrid
+(1.14M rows): parse→arrow identical across layouts; parse→polars ~2-4% faster
+with string_view — the polars import is currently bounded by the
+dictionary→Categorical conversion of KEY/INSTANCE_ID (~11 ms/column), not the
+plain string columns, so the zero-copy adoption win is small until that
+bottleneck moves.
 
 ## Call Sequence
 

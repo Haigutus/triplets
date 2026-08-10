@@ -94,6 +94,59 @@ def test_parse_returns_arrow_and_polars():
     assert len(pdf) > 0
 
 
+# ── parse_batches: lazy RecordBatchReader for out-of-core ingest ─────────────
+
+def test_parse_batches_matches_parse():
+    pa = pytest.importorskip("pyarrow")
+    reader = triplets.parser.parse_batches(MINIMAL)
+    table = reader.read_all()
+    assert table.schema == pa.schema([(c, pa.string())
+                                      for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
+    assert table.num_rows == len(parse(MINIMAL))
+
+
+def test_parse_batches_zip_one_batch_per_file(tmp_path):
+    pytest.importorskip("pyarrow")
+    import zipfile
+    archive = tmp_path / "model.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.write(MINIMAL, "a.xml")
+        bundle.write(MINIMAL, "b.xml")
+    batches = list(triplets.parser.parse_batches(archive))
+    assert len(batches) == 2
+    assert sum(b.num_rows for b in batches) == 2 * len(parse(MINIMAL))
+
+
+def test_parse_batches_empty_and_errors():
+    pa = pytest.importorskip("pyarrow")
+    empty = triplets.parser.parse_batches([]).read_all()
+    assert empty.num_rows == 0
+    assert empty.schema.names == ["ID", "KEY", "VALUE", "INSTANCE_ID"]
+    with pytest.raises(ValueError, match="arrow parser engine"):
+        triplets.parser.parse_batches(MINIMAL, engine="python_lxml_pandas")
+
+
+@pytest.mark.parametrize("cols,engine", [
+    (("INSTANCE_ID", "KEY"), "auto"),
+    # the cython engine dictionary-encodes KEY/INSTANCE_ID structurally, so the
+    # no-categoricals (all plain string) contract only holds for the lxml engine
+    (None, "python_lxml_arrow"),
+])
+def test_empty_parse_schema_matches_nonempty(cols, engine):
+    """An empty parse carries the same arrow/polars schema as a non-empty one."""
+    pa = pytest.importorskip("pyarrow")
+    empty = parse([], return_type="arrow", categorical_columns=cols)
+    full = parse(MINIMAL, return_type="arrow", categorical_columns=cols, engine=engine)
+    assert empty.schema == full.schema
+    assert pa.concat_tables([empty, full]).num_rows == full.num_rows
+
+    polars = pytest.importorskip("polars")
+    empty_pl = parse([], return_type="polars", categorical_columns=cols)
+    full_pl = parse(MINIMAL, return_type="polars", categorical_columns=cols, engine=engine)
+    assert empty_pl.schema == full_pl.schema
+    assert len(polars.concat([empty_pl, full_pl])) == len(full_pl)
+
+
 # ── Per-engine tests ────────────────────────────────────────────────────────
 
 class TestPythonLxmlPandas:
@@ -180,3 +233,17 @@ def test_realgrid_parse_and_meta(realgrid_data):
     assert len(realgrid_data) > 1_000_000
     assert "ACLineSegment" in set(realgrid_data[realgrid_data["KEY"] == "Type"]["VALUE"])
     assert "Distribution" in realgrid_data["VALUE"].values
+
+
+def test_parse_batches_parallel_prefetch(tmp_path):
+    """max_workers keeps batch order (in-order bounded prefetch) and row parity."""
+    pytest.importorskip("pyarrow")
+    import zipfile
+    archive = tmp_path / "many.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        for i in range(6):
+            bundle.write(MINIMAL, f"f{i}.xml")
+    sequential = list(triplets.parser.parse_batches(archive))
+    parallel = list(triplets.parser.parse_batches(archive, max_workers=3))
+    assert len(parallel) == len(sequential) == 6
+    assert [b.num_rows for b in parallel] == [b.num_rows for b in sequential]

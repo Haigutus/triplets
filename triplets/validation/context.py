@@ -116,5 +116,5 @@ def _add_schema_context(violations, key_info, class_info):
 
 
 def _to_pandas(data):
-    from .shacl_pandas import _to_pandas as convert
-    return convert(data)
+    from .._engine_detect import to_pandas
+    return to_pandas(data)

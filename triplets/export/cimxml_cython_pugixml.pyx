@@ -2,24 +2,24 @@
 # cython: language_level=3, boundscheck=False, wraparound=False
 """CIM XML export: Arrow columns → pugixml DOM → XML bytes (zero-copy read).
 
-Reads ID/KEY/VALUE columns directly from Arrow string arrays using
-GetView() (pointer arithmetic into contiguous Arrow buffers), builds
-the XML tree via pugixml C++ DOM, then serializes.
-
-The inner loop never creates Python objects — all string data flows
-from Arrow buffers through C++ string_views into pugixml nodes.
+Reads ID/KEY/VALUE columns directly from Arrow string arrays through the
+shared triplets/_arrow accessor (utf8 / large_utf8, optionally
+dictionary-encoded), builds the XML tree via pugixml C++ DOM, then
+serializes. String data flows from Arrow buffers through C++ string_views
+into pugixml nodes.
 """
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.memory cimport shared_ptr
 from libcpp cimport bool as cbool
 from libc.string cimport memcmp, strlen, strcmp
 from libc.stdint cimport int64_t
+from libc.stddef cimport size_t
 
 # Arrow C++ types from pyarrow Cython API
 from pyarrow.includes.libarrow cimport (
     CArray,
     CRecordBatch,
-    CStringArray,
 )
 from pyarrow.lib cimport pyarrow_unwrap_array, pyarrow_unwrap_batch
 
@@ -127,12 +127,25 @@ cdef extern from *:
         string id_prefix
 
 
-# Direct access to Arrow StringArray GetString
-cdef extern from "arrow/array/array_binary.h" namespace "arrow":
-    cdef cppclass CArrowStringArray "arrow::StringArray":
-        string GetString(int64_t i) const
-        cbool IsNull(int64_t i) const
-        int64_t length() const
+# std::string_view (minimal — declared by hand, not via a Cython stdlib pxd)
+cdef extern from "<string_view>" namespace "std":
+    cdef cppclass string_view "std::string_view":
+        string_view() except +
+        const char* data() const
+        size_t size() const
+
+
+# Shared Arrow string-column accessor (triplets/_arrow/string_column.h):
+# utf8 / large_utf8, optionally dictionary-encoded, null-aware.
+cdef extern from "string_column.h" namespace "triplets_arrow":
+    cdef cppclass StringColumn:
+        StringColumn() except +
+        cbool is_null(int64_t row) const
+        string_view value(int64_t row) const
+        int64_t dict_code(int64_t row) const
+
+    StringColumn resolve_string_column "triplets_arrow::StringColumn::resolve" (
+        shared_ptr[CArray] array, const string& name) except +
 
 
 def generate_xml_from_arrow(arrow_table_or_batch,
@@ -151,7 +164,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
     Parameters
     ----------
     arrow_table_or_batch : pyarrow.RecordBatch or pyarrow.Table
-        Must have columns: ID, KEY, VALUE (string type)
+        Must have columns: ID, KEY, VALUE — utf8 or large_utf8 string
+        columns, optionally dictionary-encoded (any index width)
     rdf_map : dict
     namespace_map : dict
     instance_rdf_map : dict
@@ -183,12 +197,12 @@ def generate_xml_from_arrow(arrow_table_or_batch,
     key_idx = schema.get_field_index("KEY")
     val_idx = schema.get_field_index("VALUE")
 
-    # Unwrap to C++ Arrow arrays
-    cdef CArrowStringArray* id_arr = <CArrowStringArray*>(pyarrow_unwrap_array(batch.column(id_idx)).get())
-    cdef CArrowStringArray* key_arr = <CArrowStringArray*>(pyarrow_unwrap_array(batch.column(key_idx)).get())
-    cdef CArrowStringArray* val_arr = <CArrowStringArray*>(pyarrow_unwrap_array(batch.column(val_idx)).get())
+    # Resolve to the shared C++ accessor (validates the column types)
+    cdef StringColumn id_col = resolve_string_column(pyarrow_unwrap_array(batch.column(id_idx)), b"ID")
+    cdef StringColumn key_col = resolve_string_column(pyarrow_unwrap_array(batch.column(key_idx)), b"KEY")
+    cdef StringColumn val_col = resolve_string_column(pyarrow_unwrap_array(batch.column(val_idx)), b"VALUE")
 
-    cdef int64_t n = id_arr.length()
+    cdef int64_t n = batch.num_rows
     cdef int64_t i
 
     # Build reverse namespace map
@@ -277,18 +291,23 @@ def generate_xml_from_arrow(arrow_table_or_batch,
 
     # Temp C++ strings for reading Arrow data
     cdef string s_id, s_key, s_value, s_combined
+    cdef string_view sv_id, sv_key, sv_value
     cdef bytes class_key_bytes = class_KEY.encode('utf-8')
+    cdef const char* class_key_ptr = class_key_bytes
+    cdef size_t class_key_len = len(class_key_bytes)
 
     # ── First pass: create class elements ──────────────────────────
     for i in range(n):
-        s_key = key_arr.GetString(i)
-        if s_key != <string>class_key_bytes:
+        if key_col.is_null(i) or id_col.is_null(i) or val_col.is_null(i):
+            continue
+        sv_key = key_col.value(i)
+        if sv_key.size() != class_key_len or memcmp(sv_key.data(), class_key_ptr, class_key_len) != 0:
             continue
 
-        s_id = id_arr.GetString(i)
-        if val_arr.IsNull(i):
-            continue
-        s_value = val_arr.GetString(i)
+        sv_id = id_col.value(i)
+        s_id.assign(sv_id.data(), sv_id.size())
+        sv_value = val_col.value(i)
+        s_value.assign(sv_value.data(), sv_value.size())
 
         # Look up class definition
         py_class_name = s_value.decode('utf-8')
@@ -315,23 +334,24 @@ def generate_xml_from_arrow(arrow_table_or_batch,
 
     # ── Second pass: add attributes ──────────────────────────────
     for i in range(n):
-        s_key = key_arr.GetString(i)
-        if s_key == <string>class_key_bytes:
+        if key_col.is_null(i) or id_col.is_null(i) or val_col.is_null(i):
+            continue
+        sv_key = key_col.value(i)
+        if sv_key.size() == class_key_len and memcmp(sv_key.data(), class_key_ptr, class_key_len) == 0:
             continue
 
-        # Check for null VALUE
-        if val_arr.IsNull(i):
-            continue
-
-        s_id = id_arr.GetString(i)
+        sv_id = id_col.value(i)
+        s_id.assign(sv_id.data(), sv_id.size())
         py_id = s_id.decode('utf-8')
 
         py_store_idx = obj_index.get(py_id)
         if py_store_idx is None:
             continue
 
-        s_value = val_arr.GetString(i)
+        sv_value = val_col.value(i)
+        s_value.assign(sv_value.data(), sv_value.size())
 
+        s_key.assign(sv_key.data(), sv_key.size())
         py_key = s_key.decode('utf-8')
         py_td_idx = tag_defs_idx.get(py_key)
 

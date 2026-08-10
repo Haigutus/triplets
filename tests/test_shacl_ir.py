@@ -1,5 +1,6 @@
 """Tests for the SHACL IR compiler (triplets.validation.shacl_ir)."""
 import os
+import importlib.util
 
 import pytest
 
@@ -170,3 +171,44 @@ cim:PickedNodeShape a sh:NodeShape ;
     assert len(compiled.ir) == 0                           # invisible to the IR
     assert any("sh:targetNode" in record.getMessage()
                for record in caplog.records if record.levelname == "WARNING")
+
+
+def test_component_registries_agree():
+    """The stringly-typed component keys live in several registries — they must
+    describe the same universe: pandas is complete; polars/duckdb + the shared
+    fallback set cover everything; pyshacl's report vocabulary maps onto it."""
+    from triplets.validation import shacl_ir, shacl_pandas, shacl_report
+
+    known = set(shacl_ir.KNOWN_COMPONENTS)
+    assert set(shacl_pandas.CONSTRAINT_VALIDATORS) == known
+    assert shacl_ir.FALLBACK_COMPONENTS <= known
+    assert set(shacl_report._COMPONENT_MAP.values()) == known
+
+    if importlib.util.find_spec("polars"):
+        from triplets.validation import shacl_polars
+        assert set(shacl_polars.PLAN_BUILDERS) | shacl_ir.FALLBACK_COMPONENTS == known
+        assert set(shacl_polars.BATCH_BUILDERS) <= set(shacl_polars.PLAN_BUILDERS)
+    if importlib.util.find_spec("duckdb"):
+        from triplets.validation import shacl_duckdb
+        assert set(shacl_duckdb.SQL_BUILDERS) | shacl_ir.FALLBACK_COMPONENTS == known
+
+
+def test_logical_operator_cycle_dropped(caplog):
+    """Mutually recursive sh:or shapes compile with a warning instead of
+    RecursionError (sh:node already had this guard; sh:or/and/not gained it)."""
+    import io
+    shapes = io.StringIO("""
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix ex: <http://example.org/> .
+        ex:AShape a sh:NodeShape ; sh:targetClass ex:Thing ;
+            sh:property ex:P1 .
+        ex:P1 sh:path ex:name ; sh:or ( ex:P2 ) .
+        ex:P2 sh:path ex:name ; sh:or ( ex:P1 ) .
+    """)
+    import rdflib
+    graph = rdflib.Graph().parse(shapes, format="turtle")
+    from triplets.validation.shacl_ir import parse_ir
+    with caplog.at_level("WARNING"):
+        ir = parse_ir(graph)
+    assert any("cycle" in record.message for record in caplog.records)
+    assert (ir["component"] == "sh:or").any()          # the outer constraint survives
