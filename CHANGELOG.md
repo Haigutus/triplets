@@ -6,6 +6,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0rc1] - 2026-08-10
+
+Everything below was developed across the 0.2.0a1/a2 alphas and this
+release candidate; 0.2.0rc1 is the first API-frozen cut of the 0.2 line.
+
 ### Changed
 - **Shared flavor conversion** (`triplets._engine_detect`): `to_pandas` /
   `to_arrow` / `to_polars` / `as_frame` / `match_flavor` are the single choke
@@ -299,4 +304,5 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   modules. Several `tools` and `cgmes_tools` functions were renamed; the old names keep
   working with a warning. All of these will be removed in 0.2.
 
+[0.2.0rc1]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc1
 [0.1.0]: https://github.com/Haigutus/triplets/releases/tag/0.1.0
