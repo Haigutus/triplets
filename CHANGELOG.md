@@ -206,11 +206,14 @@ release candidate; 0.2.0rc1 is the first API-frozen cut of the 0.2 line.
   property paths keep the compile warning + pyshacl coverage.
 - **Standalone source-location pass** (`violations.shacl.locate(sources=...)`,
   `triplets.validation.locate_violations`): stamps `SOURCE_URI`/`SOURCE_LINE`/
-  `SOURCE_COLUMN` onto the violations frame in one grep-style pass; SARIF and
-  the sh:ValidationReport export run it automatically when given `sources=`
-  (SARIF regions gain `startColumn`; the SHACL report carries plain-text
+  `SOURCE_COLUMN`/`SOURCE_COLUMN_END` onto the violations frame in one
+  grep-style pass; SARIF and the sh:ValidationReport export run it
+  automatically when given `sources=`. SARIF regions are fully bounded
+  (`startLine`/`startColumn`/`endLine`/`endColumn`, UTF-16 columns — GitHub
+  cannot display a start-only region and tries to load the whole file from
+  the error onward); the SHACL report carries plain-text
   "Source: file line N column M" messages, alongside Description/Schema
-  messages from the enrichment columns).
+  messages from the enrichment columns.
 
 ### Fixed
 - `pathlib.Path` inputs are accepted everywhere: `read_rdf`/`parse` (all

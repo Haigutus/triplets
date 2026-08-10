@@ -9,23 +9,25 @@ searched inside that object's text window, so the annotation lands on the
 offending property element, not just the object.
 
 ``locate_violations`` is the public pass: it stamps ``LOCATION_COLUMNS``
-(SOURCE_URI, SOURCE_LINE, SOURCE_COLUMN) onto a violations frame — both the
-SARIF and the sh:ValidationReport exports call it when given ``sources=``,
-and it is exposed as ``violations.shacl.locate(sources=...)``.
+(SOURCE_URI, SOURCE_LINE, SOURCE_COLUMN, SOURCE_COLUMN_END) onto a violations
+frame — both the SARIF and the sh:ValidationReport exports call it when given
+``sources=``, and it is exposed as ``violations.shacl.locate(sources=...)``.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
 are handed to an export. When the same object is defined in several files
 (``rdf:about`` continuation across profiles), the first definition wins — a
 violated KEY living in a later profile file falls back to the definition
-position. Lines and columns are 1-based; columns count bytes (a multi-byte
-UTF-8 character earlier on the line shifts them).
+position. Lines and columns are 1-based; columns count UTF-16 code units
+(SARIF's unit — what GitHub anchors annotations on). A position is a bounded
+single-line region: the element's ``<`` through the end of its line —
+SARIF viewers cannot display a region without an end.
 """
 import re
 import logging
 
 logger = logging.getLogger(__name__)
 
-LOCATION_COLUMNS = ["SOURCE_URI", "SOURCE_LINE", "SOURCE_COLUMN"]
+LOCATION_COLUMNS = ["SOURCE_URI", "SOURCE_LINE", "SOURCE_COLUMN", "SOURCE_COLUMN_END"]
 
 # an object definition: <cim:Breaker rdf:ID="_uuid"> / rdf:about="#_uuid" /
 # rdf:about="urn:uuid:uuid" — group(1) is the bare ID, triplets conventions
@@ -46,7 +48,7 @@ def locate(wanted, sources):
     Returns
     -------
     dict {ID: {"uri": str, "startLine": int, "startColumn": int,
-               "keyLines": {KEY: (line, column)}}}
+               "endColumn": int, "keyLines": {KEY: (line, column, end_column)}}}
         IDs not present in the sources are absent from the result.
     """
     from ..parser.utils import find_all_xml
@@ -67,8 +69,10 @@ def locate(wanted, sources):
                 continue
             window_end = matches[position + 1].start() if position + 1 < len(matches) else len(text)
             element_start = max(text.rfind(b"<", 0, match.start()), 0)
+            start_column, end_column = _span(text, element_start)
             located[object_id] = {
-                "uri": uri, "startLine": line, "startColumn": _column(text, element_start),
+                "uri": uri, "startLine": line, "startColumn": start_column,
+                "endColumn": end_column,
                 "keyLines": _key_lines(text, match.start(), window_end, line, wanted[object_id]),
             }
     if remaining:
@@ -94,10 +98,11 @@ def locate_violations(violations, sources):
     def position(object_id, key):
         entry = located.get(str(object_id)) if not pandas.isna(object_id) else None
         if entry is None:
-            return None, None, None
+            return None, None, None, None
         key = None if pandas.isna(key) else str(key)
-        line, column = entry["keyLines"].get(key, (entry["startLine"], entry["startColumn"]))
-        return entry["uri"], line, column
+        line, column, end = entry["keyLines"].get(
+            key, (entry["startLine"], entry["startColumn"], entry["endColumn"]))
+        return entry["uri"], line, column, end
 
     frame = violations.copy()
     positions = [position(object_id, key) for object_id, key in zip(frame["ID"], frame["KEY"])]
@@ -110,13 +115,27 @@ def locate_violations(violations, sources):
     return frame
 
 
-def _column(text, position):
-    """1-based byte column of *position* on its line."""
-    return position - text.rfind(b"\n", 0, position)
+def _span(text, start):
+    """1-based UTF-16 columns of *start* and of its line's end.
+
+    The region is *start* through the end of the line (endColumn points one
+    past the last character, per SARIF); UTF-16 code units are SARIF's column
+    unit — byte columns overshoot on non-ASCII lines and break annotation.
+    """
+    line_start = text.rfind(b"\n", 0, start) + 1
+    line_end = text.find(b"\n", start)
+    line_end = len(text) if line_end == -1 else line_end
+    line_end -= text.endswith(b"\r", line_start, line_end)
+
+    def utf16_column(position):
+        prefix = text[line_start:position].decode("utf-8", "replace")
+        return len(prefix.encode("utf-16-le")) // 2 + 1
+
+    return utf16_column(start), utf16_column(line_end)
 
 
 def _key_lines(text, definition_start, window_end, definition_line, keys):
-    """(line, column) of each violated property element inside the object's window."""
+    """(line, column, end_column) of each violated property element inside the object's window."""
     lines = {}
     for key in keys:
         if not key or key == "Type":         # the type is the definition element itself
@@ -126,7 +145,7 @@ def _key_lines(text, definition_start, window_end, definition_line, keys):
         if match is not None:
             start = definition_start + match.start()
             lines[key] = (definition_line + text.count(b"\n", definition_start, start),
-                          _column(text, start))
+                          *_span(text, start))
     return lines
 
 

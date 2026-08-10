@@ -193,7 +193,7 @@ as a standard `sh:ValidationReport` (`violations.shacl.to_shacl_report(...)` —
 exact inverse of the pyshacl report mapping in `shacl_report.py`) or as SARIF 2.1.0
 (`violations.shacl.to_sarif(...)`, see below). Source positions come from one shared
 pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS`
-(`SOURCE_URI`, `SOURCE_LINE`, `SOURCE_COLUMN`) onto the frame; both exports run it
+(`SOURCE_URI`, `SOURCE_LINE`, `SOURCE_COLUMN`, `SOURCE_COLUMN_END`) onto the frame; both exports run it
 automatically when given `sources=`, or reuse the columns when already present.
 
 The SHACL report serializes via rdflib: `format=None` (default) derives the format
@@ -339,7 +339,7 @@ violations.shacl.to_shacl_report(path="report.xml")  # RDF/XML via .xml
 violations.shacl.to_csv(path="report.csv")
 violations.shacl.to_excel(path="report.xlsx")
 
-# the location pass standalone — SOURCE_URI/SOURCE_LINE/SOURCE_COLUMN columns,
+# the location pass standalone — SOURCE_URI/LINE/COLUMN/COLUMN_END columns,
 # reused by both report exports
 violations = violations.shacl.locate(sources=["grid.zip"])
 ```
@@ -388,14 +388,17 @@ enrichment pass first (an already-enriched frame is used as-is).
   results always point at the model via `logicalLocations` (`Type/ID` +
   object name). Passing `sources=` (the original CIM/XML files — paths,
   zips or file-likes) runs the shared `locate_violations` pass
-  (`validation/locations.py`) and adds `physicalLocation.region.startLine`
-  / `startColumn` on the violated property element (or the object
+  (`validation/locations.py`) and adds a fully bounded
+  `physicalLocation.region` (`startLine`/`startColumn` through
+  `endLine`/`endColumn`) on the violated property element's line (or the object
   definition) — what GitHub code scanning needs to annotate lines. One
   grep-style pass per file; the parse/validate hot paths are untouched.
   A frame already carrying `LOCATION_COLUMNS` (from
   `violations.shacl.locate(sources=...)`) is used as-is. Without either,
   `artifactLocation.uri` falls back to the enrichment-traced file label,
-  region-less. Columns are 1-based byte columns.
+  region-less. Columns are 1-based UTF-16 code units (SARIF's unit) — a
+  start-only region cannot be displayed by GitHub, so regions always carry
+  their end.
 - Everything domain-specific (triplet coordinates, schema descriptions,
   sample IDs) rides in the `properties` bags.
 
