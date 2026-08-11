@@ -33,8 +33,8 @@ def xml_path(tmp_path):
 def test_definition_and_key_positions(xml_path):
     located = locate({"aaaa": {"Conductor.length"}, "bbbb": set()}, [xml_path])
     line = located["aaaa"]
-    assert (line["uri"], line["startLine"], line["startColumn"]) == (xml_path, 3, 3)
-    assert line["keyLines"]["Conductor.length"] == (5, 5)
+    assert (line["uri"], line["startLine"]) == (xml_path, 3)
+    assert line["keyLines"]["Conductor.length"] == 5
     assert located["bbbb"]["startLine"] == 7
 
 
@@ -70,8 +70,8 @@ def test_locate_violations_columns(xml_path):
     ], columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
 
     frame = violations.shacl.locate(sources=[xml_path])
-    assert list(frame.columns[-3:]) == LOCATION_COLUMNS
-    assert frame.loc[0, "SOURCE_LINE"] == 5 and frame.loc[0, "SOURCE_COLUMN"] == 5
+    assert list(frame.columns[-len(LOCATION_COLUMNS):]) == LOCATION_COLUMNS
+    assert frame.loc[0, "SOURCE_LINE"] == 5
     assert frame.loc[1, "SOURCE_LINE"] == 4
     assert frame.loc[2, "SOURCE_LINE"] == 7          # object definition
     assert frame.loc[3, "SOURCE_URI"] is None        # object not in sources

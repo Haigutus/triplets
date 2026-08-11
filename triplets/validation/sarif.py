@@ -50,9 +50,9 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
         The original CIM/XML files (paths/zips/file-likes, same shapes
         read_rdf accepts). When given, the reported instances are located
         in the text (one grep-style pass per file, at export time only) and
-        results carry physicalLocation.region.startLine pointing at the
-        violated property element (or the object definition) — what GitHub
-        code scanning needs to annotate lines.
+        results carry a whole-line physicalLocation.region (startLine ==
+        endLine) on the violated property element's line (or the object
+        definition's) — what GitHub code scanning needs to annotate lines.
     path : str or Path, optional
         Output file (default "report.sarif"). Ignored with export_to_memory.
     export_to_memory : bool, default False
@@ -252,12 +252,13 @@ def _location(record):
         "kind": "object",
     })]}
     if not pandas.isna(record["SOURCE_URI"]):
-        region = {"startLine": int(record["SOURCE_LINE"])}
-        if not pandas.isna(record["SOURCE_COLUMN"]):
-            region["startColumn"] = int(record["SOURCE_COLUMN"])
+        # whole-line region, explicitly bounded (endLine given) — columns are
+        # per-format anchor rules that broke SARIF viewers for no information
+        # gain; a start-only region makes GitHub render from the error onward
+        line = int(record["SOURCE_LINE"])
         location["physicalLocation"] = {
             "artifactLocation": {"uri": quote(str(record["SOURCE_URI"]), safe="/")},
-            "region": region,
+            "region": {"startLine": line, "endLine": line},
         }
     elif not pandas.isna(record["INSTANCE_LABEL"]):
         location["physicalLocation"] = {

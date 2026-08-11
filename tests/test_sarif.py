@@ -251,9 +251,9 @@ cim:ShortName a sh:NodeShape ; sh:targetClass cim:ACLineSegment ;
     violations = triplets.validation.validate(data, graph, engine="pandas", context=True)
 
     run = build_sarif(violations, sources=[str(xml)])["runs"][0]
-    location = run["results"][0]["locations"][0]["physicalLocation"]
-    assert location["region"]["startLine"] == 5          # the name property line, not line 4
-    assert location["region"]["startColumn"] == 5        # the '<' of the property element
+    region = run["results"][0]["locations"][0]["physicalLocation"]["region"]
+    # whole-line region, explicitly bounded — start-only regions break GitHub
+    assert region == {"startLine": 5, "endLine": 5}
 
 
 def test_regions_schema_and_github_shape(shapes, tmp_path):

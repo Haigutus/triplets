@@ -94,14 +94,14 @@ print(found[["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE"]].to_string(index
 
 # >>> enrich with context (object type/name, source file, shape + schema
 # >>> descriptions), then locate: one grep-style pass over the original XML
-# >>> stamps SOURCE_URI / SOURCE_LINE / SOURCE_COLUMN onto every violation —
+# >>> stamps SOURCE_URI / SOURCE_LINE onto every violation —
 # >>> both report exports below reuse the same columns
 enriched = violations.shacl.enrich(data=broken, shapes=shapes,
                                    rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
 located = enriched.shacl.locate(sources=[EQ])
 print("\nenriched + located Violations (what/where):")
 print(located.loc[located["SEVERITY"] == "Violation",
-                  ["ID", "OBJECT_TYPE", "OBJECT_NAME", "SOURCE_LINE", "SOURCE_COLUMN"]]
+                  ["ID", "OBJECT_TYPE", "OBJECT_NAME", "SOURCE_LINE"]]
       .to_string(index=False))
 
 # >>> export 1: standard sh:ValidationReport — format from path suffix;
@@ -117,7 +117,7 @@ report_xml = located.shacl.to_shacl_report(
 print(f"wrote {report_xml}")
 
 # >>> export 2: SARIF 2.1.0 — grouped (one result per rule + occurrenceCount);
-# >>> results carry file + startLine/startColumn of the violated element
+# >>> results carry file + the whole-line region of the violated element
 report_sarif = located.shacl.to_sarif(path=HERE / "shacl_reports.sarif")
 print(f"wrote {report_sarif}")
 
