@@ -129,11 +129,59 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         violations = (pandas.concat([violations, supplement], ignore_index=True)
                       .drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
                                                "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
+    violations = _describe_associations(violations, data, compiled,
+                                        table_name=kwargs.get("table_name", "triplets"))
     if context:
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
     violations.attrs["validation"] = _report_metadata(
         data, compiled, engine_name, started, table_name=kwargs.get("table_name", "triplets"))
     return violations
+
+
+def _describe_associations(violations, data, compiled, table_name="triplets"):
+    """Association type-check messages state what the reference points at.
+
+    ``sh:class`` rows carry the referenced id in VALUE — append the target's
+    actual Type, or the fact that no such object exists in the data.
+    valueType rows (``via_type`` paths) carry the found type in VALUE — name
+    it. One shared pass over the violations frame; no per-engine message code.
+    """
+    if violations.empty or compiled.ir.empty:
+        return violations
+    via_rules = set(zip(compiled.ir.loc[compiled.ir["via_type"], "shape_id"],
+                        compiled.ir.loc[compiled.ir["via_type"], "path"]))
+    keys = pandas.Series(list(zip(violations["SOURCE_SHAPE"], violations["KEY"])),
+                         index=violations.index)
+    described = violations["VALUE"].notna()
+    via = described & keys.isin(via_rules)
+    of_class = described & ~via & violations["VIOLATION_TYPE"].eq("sh:class")
+    if via.any():
+        violations.loc[via, "MESSAGE"] = (
+            violations.loc[via, "MESSAGE"].fillna("") + " — association target found, of type "
+            + violations.loc[via, "VALUE"].astype(str))
+    if of_class.any():
+        found = violations.loc[of_class, "VALUE"].astype(str).map(_type_map(data, table_name))
+        suffix = (" — referenced object found, of type " + found).where(
+            found.notna(), " — referenced object not found in the data")
+        violations.loc[of_class, "MESSAGE"] = (
+            violations.loc[of_class, "MESSAGE"].fillna("") + suffix)
+    return violations
+
+
+def _type_map(data, table_name="triplets"):
+    """{ID: Type} from the data's Type rows (any input flavor)."""
+    kind = flavor(data)
+    if kind == "duckdb":
+        return dict(data.execute(
+            f"SELECT ID, VALUE FROM {table_name} WHERE KEY = 'Type'").fetchall())
+    if kind == "pyarrow":
+        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+        kind = "pandas"
+    if kind == "polars":
+        rows = data.filter(data["KEY"] == "Type")
+        return dict(zip(rows["ID"].to_list(), rows["VALUE"].to_list()))
+    rows = data.loc[data["KEY"] == "Type"]
+    return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
 
 
 def _report_metadata(data, compiled, engine_name, started, table_name="triplets"):

@@ -6,6 +6,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Association type-check messages say what the reference points at**:
+  `sh:class` findings name the target's actual Type — or state that no such
+  object exists in the data (dangling reference) — and valueType findings
+  (`sh:path ( assoc rdf:type )`) name the found type next to the shape's
+  authored message. One shared pass in `validate()`, all engines.
+- **`triplets:invalidSparql` reports say what actually happened**: a query
+  rejected by a strict engine notes it WAS still evaluated via the rdflib
+  fallback; a query no engine can run is a Violation naming the shape and its
+  target/path and stating the constraint went unchecked (a shapes bug, not a
+  data finding). A defective query no longer crashes `validate()` when rdflib
+  is the auto SPARQL engine. SARIF drops the misleading "N object(s)
+  affected" wording for such shape-level notes.
+
 ## [0.2.0rc1] - 2026-08-10
 
 Everything below was developed across the 0.2.0a1/a2 alphas and this

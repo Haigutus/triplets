@@ -165,7 +165,12 @@ def _grouped_result(rule_id, rule_index, records):
     described = f"{head} … {tail}" if total > 2 * _SAMPLES else ", ".join(filter(None, (head, tail)))
 
     message = _message(records[0])
-    text = f"{message} — {total} object(s) affected." + (f" Examples: {described}" if described else "")
+    # shape-level notes (e.g. triplets:invalidSparql, ID always null) are not
+    # about affected objects — "N object(s) affected" would only mislead
+    objects = sum(not pandas.isna(record["ID"]) for record in records)
+    text = (f"{message} — {total} object(s) affected."
+            + (f" Examples: {described}" if described else "")
+            if objects else message)
     locations = [location for location in (_location(record) for record in samples)
                  if location]
     return _prune({

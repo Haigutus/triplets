@@ -44,6 +44,7 @@ import numpy
 import pandas
 
 from ..export.nquads_utils import CIM_NS, make_subject
+from .shacl_ir import _local
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -446,7 +447,11 @@ def _sparql(context, rule):
     query_text = _sparql_query_text(rule, focus_ids)
     engine_name = sparql.get_engine("auto")[0]
     if engine_name == "rdflib":
-        return _sparql_violations(rule, sparql.query(context.dataset(), query_text))
+        try:
+            return _sparql_violations(rule, sparql.query(context.dataset(), query_text))
+        except Exception as error:                        # noqa: BLE001 — defective authored query
+            logger.error("sh:sparql constraint %s fails on rdflib: %s", rule.shape_id, error)
+            return _invalid_sparql(rule, _not_evaluated(rule, error), severity="Violation")
 
     try:
         result = sparql.query(context.data, query_text, rdf_map=context.rdf_map,
@@ -463,27 +468,39 @@ def _sparql(context, rule):
             logger.warning("sh:sparql constraint %s rejected by %s — evaluating with rdflib "
                            "and flagging the shape (fix the rule upstream):\n%s",
                            rule.shape_id, engine_name, error)
-        note = _empty() if repeated else _invalid_sparql(rule, error)
+        note = _empty() if repeated else _invalid_sparql(
+            rule, f"{str(error).splitlines()[0]} — the constraint WAS still evaluated "
+                  f"via the rdflib fallback; fix the shape/data upstream")
         try:
             violations = _sparql_violations(
                 rule, sparql.query(context.dataset(), query_text, engine="rdflib"))
         except Exception as rdflib_error:                 # noqa: BLE001 — truly broken query
             logger.error("sh:sparql constraint %s also fails on rdflib: %s",
                          rule.shape_id, rdflib_error)
-            return _invalid_sparql(rule, f"fails on every engine — rdflib: {rdflib_error}",
-                                   severity="Violation")
+            return _invalid_sparql(rule, _not_evaluated(rule, rdflib_error), severity="Violation")
         return pandas.concat([violations, note], ignore_index=True)
 
 
-def _invalid_sparql(rule, error, severity="Warning"):
-    """One report row flagging a constraint query an engine rejected (the error's
-    first line already names the engine — see sparql_qlever._run)."""
+def _not_evaluated(rule, error):
+    """The message for a constraint no engine could run: name the shape and
+    its target/path (anonymous property shapes only have a blank-node id),
+    say plainly that nothing was checked — a shapes bug, not a data finding."""
+    where = f"{rule.target_class}/{rule.path}" if rule.path else rule.target_class
+    return (f"sh:sparql constraint of shape {_local(str(rule.shape_id))} ({where}) was "
+            f"NOT evaluated — the query is defective on every engine "
+            f"(rdflib: {str(error).splitlines()[0]}). "
+            f"A shapes bug, not a data finding; this constraint went unchecked.")
+
+
+def _invalid_sparql(rule, message, severity="Warning"):
+    """One report row flagging a constraint query an engine rejected — the
+    caller words the message (rejected-but-evaluated vs not evaluated at all)."""
     return pandas.DataFrame({
         "ID": [None],
         "KEY": rule.path,
         "VALUE": None,
         "VIOLATION_TYPE": "triplets:invalidSparql",
-        "MESSAGE": str(error).splitlines()[0],
+        "MESSAGE": message,
         "SEVERITY": severity,
         "SOURCE_SHAPE": rule.shape_id,
     }, columns=VIOLATION_COLUMNS)
