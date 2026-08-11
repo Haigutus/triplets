@@ -130,14 +130,13 @@ def test_multi_messages_from_context_and_location_columns():
     enriched["SCHEMA_MULTIPLICITY"] = "0..1"
     enriched["SOURCE_URI"] = "grid.xml"
     enriched["SOURCE_LINE"] = 5
-    enriched["SOURCE_COLUMN"] = 3
 
     graph = violations_to_report_graph(enriched)
     assert {str(message) for message in graph.objects(None, sh.resultMessage)} == {
         "too long",
         "Description: Line length plausibility.",
         "Schema: Total length of the line. [0..1]",
-        "Source: grid.xml line 5 column 3",
+        "Source: grid.xml line 5",
     }
 
 

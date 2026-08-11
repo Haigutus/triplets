@@ -50,10 +50,9 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
         The original CIM/XML files (paths/zips/file-likes, same shapes
         read_rdf accepts). When given, the reported instances are located
         in the text (one grep-style pass per file, at export time only) and
-        results carry a fully bounded physicalLocation.region (startLine/
-        startColumn through endLine/endColumn, UTF-16 columns) on the violated
-        property element's line (or the object definition's) — what GitHub
-        code scanning needs to annotate lines.
+        results carry a whole-line physicalLocation.region (startLine ==
+        endLine) on the violated property element's line (or the object
+        definition's) — what GitHub code scanning needs to annotate lines.
     path : str or Path, optional
         Output file (default "report.sarif"). Ignored with export_to_memory.
     export_to_memory : bool, default False
@@ -253,17 +252,13 @@ def _location(record):
         "kind": "object",
     })]}
     if not pandas.isna(record["SOURCE_URI"]):
-        # fully bounded region (start AND end, UTF-16 columns) — GitHub cannot
-        # display a region without an end and falls back to loading the whole
-        # file from the error onward
+        # whole-line region, explicitly bounded (endLine given) — columns are
+        # per-format anchor rules that broke SARIF viewers for no information
+        # gain; a start-only region makes GitHub render from the error onward
         line = int(record["SOURCE_LINE"])
-        region = {"startLine": line, "endLine": line}
-        if not pandas.isna(record["SOURCE_COLUMN"]) and not pandas.isna(record["SOURCE_COLUMN_END"]):
-            region["startColumn"] = int(record["SOURCE_COLUMN"])
-            region["endColumn"] = int(record["SOURCE_COLUMN_END"])
         location["physicalLocation"] = {
             "artifactLocation": {"uri": quote(str(record["SOURCE_URI"]), safe="/")},
-            "region": region,
+            "region": {"startLine": line, "endLine": line},
         }
     elif not pandas.isna(record["INSTANCE_LABEL"]):
         location["physicalLocation"] = {

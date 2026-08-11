@@ -33,29 +33,9 @@ def xml_path(tmp_path):
 def test_definition_and_key_positions(xml_path):
     located = locate({"aaaa": {"Conductor.length"}, "bbbb": set()}, [xml_path])
     line = located["aaaa"]
-    assert (line["uri"], line["startLine"], line["startColumn"]) == (xml_path, 3, 3)
-    assert line["endColumn"] == len(XML.splitlines()[2]) + 1     # region ends with its line
-    length_line = XML.splitlines()[4]
-    assert line["keyLines"]["Conductor.length"] == (5, 5, len(length_line) + 1)
+    assert (line["uri"], line["startLine"]) == (xml_path, 3)
+    assert line["keyLines"]["Conductor.length"] == 5
     assert located["bbbb"]["startLine"] == 7
-
-
-def test_columns_count_utf16_units_not_bytes(tmp_path):
-    """A multi-byte character before the element must not shift the column —
-    SARIF columns are UTF-16 code units, byte columns overshoot and break
-    GitHub's annotation anchoring."""
-    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
-           '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" '
-           'xmlns:cim="http://iec.ch/TC57/CIM100#">\n'
-           '  <!-- õäöü --><cim:Breaker rdf:ID="_dddd">\n'
-           '  </cim:Breaker>\n'
-           '</rdf:RDF>\n')
-    path = tmp_path / "unicode.xml"
-    path.write_text(xml, encoding="utf-8")
-    located = locate({"dddd": set()}, [str(path)])
-    line = xml.splitlines()[2]
-    assert located["dddd"]["startColumn"] == line.index("<cim:") + 1   # characters, not bytes
-    assert located["dddd"]["endColumn"] == len(line) + 1
 
 
 def test_missing_key_and_missing_object(xml_path):
@@ -91,7 +71,7 @@ def test_locate_violations_columns(xml_path):
 
     frame = violations.shacl.locate(sources=[xml_path])
     assert list(frame.columns[-len(LOCATION_COLUMNS):]) == LOCATION_COLUMNS
-    assert frame.loc[0, "SOURCE_LINE"] == 5 and frame.loc[0, "SOURCE_COLUMN"] == 5
+    assert frame.loc[0, "SOURCE_LINE"] == 5
     assert frame.loc[1, "SOURCE_LINE"] == 4
     assert frame.loc[2, "SOURCE_LINE"] == 7          # object definition
     assert frame.loc[3, "SOURCE_URI"] is None        # object not in sources

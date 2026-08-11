@@ -252,10 +252,8 @@ cim:ShortName a sh:NodeShape ; sh:targetClass cim:ACLineSegment ;
 
     run = build_sarif(violations, sources=[str(xml)])["runs"][0]
     region = run["results"][0]["locations"][0]["physicalLocation"]["region"]
-    # fully bounded single-line region — GitHub cannot display start-only regions
-    assert region == {"startLine": 5, "endLine": 5,
-                      "startColumn": 5,                  # the '<' of the property element
-                      "endColumn": len(XML.splitlines()[4]) + 1}
+    # whole-line region, explicitly bounded — start-only regions break GitHub
+    assert region == {"startLine": 5, "endLine": 5}
 
 
 def test_regions_schema_and_github_shape(shapes, tmp_path):

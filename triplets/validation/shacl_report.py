@@ -229,8 +229,7 @@ def _messages(row):
         multiplicity = f" [{row.SCHEMA_MULTIPLICITY}]" if cell("SCHEMA_MULTIPLICITY") is not None else ""
         messages.append(f"Schema: {row.SCHEMA_DESCRIPTION}{multiplicity}")
     if cell("SOURCE_URI") is not None:
-        column = f" column {int(row.SOURCE_COLUMN)}" if cell("SOURCE_COLUMN") is not None else ""
-        messages.append(f"Source: {row.SOURCE_URI} line {int(row.SOURCE_LINE)}{column}")
+        messages.append(f"Source: {row.SOURCE_URI} line {int(row.SOURCE_LINE)}")
     return messages
 
 
@@ -278,7 +277,7 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         ``sh:resultMessage``s (Description/Schema/Source).
     sources : optional
         The original CIM/XML files — runs the locate_violations pass so each
-        result carries a "Source: file line N column M" message (a frame
+        result carries a "Source: file line N" message (a frame
         already carrying LOCATION_COLUMNS is used as-is).
     path : str or Path, optional
         Output file. Default ``report.<ext>`` from the resolved format.

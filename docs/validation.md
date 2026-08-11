@@ -193,7 +193,7 @@ as a standard `sh:ValidationReport` (`violations.shacl.to_shacl_report(...)` —
 exact inverse of the pyshacl report mapping in `shacl_report.py`) or as SARIF 2.1.0
 (`violations.shacl.to_sarif(...)`, see below). Source positions come from one shared
 pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS`
-(`SOURCE_URI`, `SOURCE_LINE`, `SOURCE_COLUMN`, `SOURCE_COLUMN_END`) onto the frame; both exports run it
+(`SOURCE_URI`, `SOURCE_LINE`) onto the frame; both exports run it
 automatically when given `sources=`, or reuse the columns when already present.
 
 The SHACL report serializes via rdflib: `format=None` (default) derives the format
@@ -326,7 +326,7 @@ violations = violations.shacl.enrich(data=data, shapes=compiled, rdf_map=...)  #
 violations.shacl.to_sarif(path="report.sarif")
 
 # standard sh:ValidationReport for SHACL tooling (format from path suffix,
-# or format=); sources= adds a "Source: file line N column M" message per
+# or format=); sources= adds a "Source: file line N" message per
 # result (SHACL has no location vocabulary — plain-text messages travel
 # everywhere); the dcterms metadata (timestamp, creator, data/shape file
 # names) comes from violations.attrs — stamped by validate(), overridable
@@ -389,8 +389,8 @@ enrichment pass first (an already-enriched frame is used as-is).
   object name). Passing `sources=` (the original CIM/XML files — paths,
   zips or file-likes) runs the shared `locate_violations` pass
   (`validation/locations.py`) and adds a fully bounded
-  `physicalLocation.region` (`startLine`/`startColumn` through
-  `endLine`/`endColumn`) on the violated property element's line (or the object
+  whole-line `physicalLocation.region` (`startLine` == `endLine`)
+  on the violated property element's line (or the object
   definition) — what GitHub code scanning needs to annotate lines. One
   grep-style pass per file; the parse/validate hot paths are untouched.
   A frame already carrying `LOCATION_COLUMNS` (from
