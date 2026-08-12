@@ -252,6 +252,14 @@ text has one author.
 | `[context_location]` / `[context_snippet]` | source file + line, and the located line's text (locate pass) |
 | `[shacl_path]` / `[context_count]` / `[context_examples]` | SARIF text only: the shape's declared path, grouped totals, sample objects |
 
+Report size is controlled by existing dials, no dedicated flags: SARIF groups
+by default (`group=True` — repeated entries like `[schema_class]` appear once
+per rule, not per violation; `group=False` opts into the verbose per-violation
+form). The SHACL report cannot group (one `sh:result` per focus node is spec
+semantics), but every message entry is column-driven — drop a column
+(`violations.drop(columns=["CLASS_DESCRIPTION"])`) and its entry disappears;
+enrichment itself is opt-in.
+
 The SHACL report additionally **embeds the violated shapes' defining triples**
 (CBD, stamped by `validate()` into the run metadata), so `sh:sourceShape` is
 never an empty blank node — the `sh:in` list and every other constraint
