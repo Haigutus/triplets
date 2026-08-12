@@ -250,7 +250,7 @@ text has one author.
 | `[schema_property]` | the rdf_map property (attribute/association) definition + multiplicity (context.enrich with `rdf_map=`) |
 | `[schema_class]` | the rdf_map description of the object's class (context.enrich with `rdf_map=`) |
 | `[context_location]` / `[context_snippet]` | source file + line, and the located line's text (locate pass) |
-| `[path]` / `[count]` / `[examples]` | SARIF text only: violated property, grouped totals, sample objects |
+| `[shacl_path]` / `[context_count]` / `[context_examples]` | SARIF text only: the shape's declared path, grouped totals, sample objects |
 
 The SHACL report additionally **embeds the violated shapes' defining triples**
 (CBD, stamped by `validate()` into the run metadata), so `sh:sourceShape` is

@@ -107,9 +107,9 @@ def test_message_blocks_prefixed(violations):
     assert texts["error"].startswith("[shacl_message] every line needs a name")  # authored, verbatim
     assert texts["warning"].startswith("[engine_message] ")                        # engine default text
     lines = texts["error"].split("\n")
-    assert "[path] IdentifiedObject.name" in lines
-    assert any(line == "[count] 8 object(s) affected" for line in lines)
-    assert any(line.startswith("[examples] ") for line in lines)
+    assert "[shacl_path] IdentifiedObject.name" in lines
+    assert any(line == "[context_count] 8 object(s) affected" for line in lines)
+    assert any(line.startswith("[context_examples] ") for line in lines)
 
 
 def test_rules_metadata(violations):

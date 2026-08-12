@@ -17,7 +17,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `[context_location]`/`[context_snippet]` (file + line and the located
   line's text — SARIF carries the snippet natively as
   `region.snippet.text`), `[schema_property]`/`[schema_class]` (rdf_map
-  definitions), plus SARIF-only `[path]`/`[count]`/`[examples]`. The SHACL
+  definitions), plus SARIF-only `[shacl_path]`/`[context_count]`/`[context_examples]`. The SHACL
   report embeds the violated shapes' defining triples (CBD), so
   `sh:sourceShape` is never an empty node and constraint parameters are
   machine-recoverable from the report alone; `dcterms:creator` names the

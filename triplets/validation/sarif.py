@@ -175,12 +175,12 @@ def _grouped_result(rule_id, rule_index, records):
     # newline-separated blocks, each prefixed with its origin — same tags as
     # the sh:ValidationReport's resultMessages. Shape-level notes (e.g.
     # triplets:invalidSparql, ID always null) are not about affected objects,
-    # so they carry no [count]/[examples] blocks.
+    # so they carry no [context_count]/[context_examples] blocks.
     blocks = _message_blocks(records[0], targets=[r.get("TARGET") for r in samples])
     if any(not pandas.isna(record["ID"]) for record in records):
-        blocks.append(f"[count] {total} object(s) affected")
+        blocks.append(f"[context_count] {total} object(s) affected")
         if described:
-            blocks.append(f"[examples] {described}")
+            blocks.append(f"[context_examples] {described}")
     text = "\n".join(blocks)
     locations = [location for location in (_location(record) for record in samples)
                  if location]
@@ -233,14 +233,14 @@ def _result(rule_id, rule_index, record):
 def _message_blocks(record, targets=None):
     """The prefixed message lines a result carries: the constraint message
     verbatim ([shacl_message]/[engine_message] — exactly one of the two), the violated
-    path ([path]), what the constraint requires ([shacl_expected]), the referenced
+    path ([shacl_path]), what the constraint requires ([shacl_expected]), the referenced
     object's state ([context_message] — per group: the distinct ones) and the schema
     definition ([schema_property]) when enriched — file position and snippet go to
     physicalLocation, shape description to the rule."""
     blocks = [f"{message_prefix(record['VIOLATION_TYPE'], record.get('MESSAGE_SOURCE'))} "
               f"{_message(record)}"]
     if not pandas.isna(record["KEY"]):
-        blocks.append(f"[path] {record['KEY']}")
+        blocks.append(f"[shacl_path] {record['KEY']}")
     if not pandas.isna(record.get("EXPECTED")):
         blocks.append(f"[shacl_expected] {record['EXPECTED']}")
     targets = [record.get("TARGET")] if targets is None else targets
