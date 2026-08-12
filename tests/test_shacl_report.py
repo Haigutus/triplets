@@ -133,10 +133,10 @@ def test_multi_messages_from_context_and_location_columns():
 
     graph = violations_to_report_graph(enriched)
     assert {str(message) for message in graph.objects(None, sh.resultMessage)} == {
-        "[message] too long",
-        "[description] Line length plausibility.",
-        "[schema] Total length of the line. [0..1]",
-        "[instance] grid.xml line 5",
+        "[shacl_message] too long",
+        "[shacl_description] Line length plausibility.",
+        "[schema_property] Total length of the line. [0..1]",
+        "[context_location] grid.xml line 5",
     }
 
 
@@ -156,7 +156,7 @@ def test_sources_add_location_message(tmp_path):
     buffer = VIOLATIONS.head(1).shacl.to_shacl_report(sources=[str(xml)], export_to_memory=True)
     graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
     messages = {str(message) for message in graph.objects(None, sh.resultMessage)}
-    assert any(message.startswith("[instance] ") and "line 4" in message for message in messages)
+    assert any(message.startswith("[context_location] ") and "line 4" in message for message in messages)
 
 
 # ── validation-run metadata (violations.attrs["validation"]) ─────────────────
@@ -213,9 +213,9 @@ ex:DeepPath a sh:NodeShape ; sh:targetClass cim:Breaker ;
 
 def test_minimal_run_exports_both_formats(tmp_path):
     """A bare validate() — no rdf_map, no context enrichment, no sources= —
-    still exports both formats: the constraint message plus [expected]
+    still exports both formats: the constraint message plus [shacl_expected]
     (known from the compiled IR, no extra input needed), never empty
-    [schema]/[description]/[object]/[instance]/[snippet] entries."""
+    [schema_property]/[shacl_description]/[context_object]/[context_location]/[context_snippet] entries."""
     import rdflib
     from triplets.validation.sarif import build_sarif
 
@@ -228,14 +228,14 @@ def test_minimal_run_exports_both_formats(tmp_path):
     graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
     sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
     messages = sorted(str(m) for m in graph.objects(None, sh.resultMessage))
-    assert messages[0].startswith("[engine] ")
-    assert messages[1] == "[expected] at least 1 value(s)"
+    assert messages[0].startswith("[engine_message] ")
+    assert messages[1] == "[shacl_expected] at least 1 value(s)"
     assert len(messages) == 2
 
     text = build_sarif(violations)["runs"][0]["results"][0]["message"]["text"]
-    assert text.split("\n")[0].startswith("[engine] ")
-    assert "[expected] at least 1 value(s)" in text
-    for absent in ("[schema]", "[description]", "[object]", "[instance]", "[snippet]", "[target]"):
+    assert text.split("\n")[0].startswith("[engine_message] ")
+    assert "[shacl_expected] at least 1 value(s)" in text
+    for absent in ("[schema_property]", "[shacl_description]", "[context_object]", "[context_location]", "[context_snippet]", "[context_message]"):
         assert absent not in text
 
 
@@ -273,7 +273,7 @@ cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
 
 
 def test_message_source_distinguishes_authored_from_engine(tmp_path):
-    """[message] = the shape's own sh:message verbatim, [engine] =
+    """[shacl_message] = the shape's own sh:message verbatim, [engine_message] =
     engine-worded text — stamped by validate() (MESSAGE_SOURCE)."""
     import rdflib
     shapes = tmp_path / "authored_shapes.ttl"
@@ -296,8 +296,8 @@ cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
     report = next(graph.subjects(rdflib.RDF.type, sh.ValidationReport))
     assert str(graph.value(report, dcterms.creator)).endswith("(engine: pandas)")
     messages = {str(m) for m in graph.objects(None, sh.resultMessage)}
-    assert "[message] every breaker needs a name" in messages
-    assert any(m.startswith("[engine] Breaker.inTransit") for m in messages)
+    assert "[shacl_message] every breaker needs a name" in messages
+    assert any(m.startswith("[engine_message] Breaker.inTransit") for m in messages)
 
 
 def test_metadata_reports_skipped_coverage(tmp_path):

@@ -87,11 +87,11 @@ def report_to_violations(report_graph):
 
 def _constraint_message(messages):
     """The constraint's own message among a result's prefixed set — the
-    [message]/[engine] entry with the prefix stripped (inverse of _messages);
+    [shacl_message]/[engine_message] entry with the prefix stripped (inverse of _messages);
     first alphabetically for reports written by other tools."""
     texts = sorted(str(message) for message in messages)
     for text in texts:
-        for prefix in ("[message] ", "[engine] "):
+        for prefix in ("[shacl_message] ", "[engine_message] "):
             if text.startswith(prefix):
                 return text[len(prefix):]
     return texts[0] if texts else None
@@ -237,12 +237,12 @@ def _as_list(value):
 
 def _messages(row):
     """The result's message set — one entry per fact, each prefixed with
-    what it is: the constraint message verbatim ([message] when authored,
-    [engine] when the engine worded it — exactly one of the two), what the
-    constraint requires ([expected]), the referenced object's state
-    ([target]), the validated object ([object] — context.enrich), the shape
-    and schema descriptions ([description]/[schema]), the source position
-    and line text ([instance]/[snippet] — locations.locate_violations)."""
+    what it is: the constraint message verbatim ([shacl_message] when authored,
+    [engine_message] when the engine worded it — exactly one of the two), what the
+    constraint requires ([shacl_expected]), the referenced object's state
+    ([context_message]), the validated object ([context_object] — context.enrich), the shape
+    and schema descriptions ([shacl_description]/[schema_property]), the source position
+    and line text ([context_location]/[context_snippet] — locations.locate_violations)."""
     def cell(name):
         value = getattr(row, name, None)
         return None if value is None or pandas.isna(value) else value
@@ -252,33 +252,35 @@ def _messages(row):
         messages.append(f"{message_prefix(row.VIOLATION_TYPE, cell('MESSAGE_SOURCE'))} "
                         f"{row.MESSAGE}")
     if cell("EXPECTED") is not None:
-        messages.append(f"[expected] {row.EXPECTED}")
+        messages.append(f"[shacl_expected] {row.EXPECTED}")
     if cell("TARGET") is not None:
-        messages.append(f"[target] {row.TARGET}")
+        messages.append(f"[context_message] {row.TARGET}")
     if cell("OBJECT_TYPE") is not None or cell("OBJECT_NAME") is not None:
         label = " ".join(str(part) for part in (cell("OBJECT_TYPE"), cell("OBJECT_NAME"))
                          if part is not None)
-        messages.append(f"[object] {label}")
+        messages.append(f"[context_object] {label}")
     if cell("SHAPE_DESCRIPTION") is not None:
-        messages.append(f"[description] {row.SHAPE_DESCRIPTION}")
+        messages.append(f"[shacl_description] {row.SHAPE_DESCRIPTION}")
     if cell("SCHEMA_DESCRIPTION") is not None:
         multiplicity = f" [{row.SCHEMA_MULTIPLICITY}]" if cell("SCHEMA_MULTIPLICITY") is not None else ""
-        messages.append(f"[schema] {row.SCHEMA_DESCRIPTION}{multiplicity}")
+        messages.append(f"[schema_property] {row.SCHEMA_DESCRIPTION}{multiplicity}")
+    if cell("CLASS_DESCRIPTION") is not None:
+        messages.append(f"[schema_class] {row.CLASS_DESCRIPTION}")
     if cell("SOURCE_URI") is not None:
-        messages.append(f"[instance] {row.SOURCE_URI} line {int(row.SOURCE_LINE)}")
+        messages.append(f"[context_location] {row.SOURCE_URI} line {int(row.SOURCE_LINE)}")
     if cell("SOURCE_SNIPPET") is not None:
-        messages.append(f"[snippet] {row.SOURCE_SNIPPET}")
+        messages.append(f"[context_snippet] {row.SOURCE_SNIPPET}")
     return messages
 
 
 def message_prefix(violation_type, source=None):
-    """[message] = the text is the shape's own sh:message; [engine] = the
+    """[shacl_message] = the text is the shape's own sh:message; [engine_message] = the
     engine worded it. validate() stamps MESSAGE_SOURCE on every row; frames
     without it fall back to the violation-type namespace (triplets:* →
     engine). Shared with the SARIF exporter so both formats tag identically."""
     if source is not None and not pandas.isna(source):
-        return "[message]" if source == "shacl" else "[engine]"
-    return "[engine]" if str(violation_type).startswith("triplets:") else "[message]"
+        return "[shacl_message]" if source == "shacl" else "[engine_message]"
+    return "[engine_message]" if str(violation_type).startswith("triplets:") else "[shacl_message]"
 
 
 def _expand(value):

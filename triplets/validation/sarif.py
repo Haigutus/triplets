@@ -232,25 +232,27 @@ def _result(rule_id, rule_index, record):
 
 def _message_blocks(record, targets=None):
     """The prefixed message lines a result carries: the constraint message
-    verbatim ([message]/[engine] — exactly one of the two), the violated
-    path ([path]), what the constraint requires ([expected]), the referenced
-    object's state ([target] — per group: the distinct ones) and the schema
-    definition ([schema]) when enriched — file position and snippet go to
+    verbatim ([shacl_message]/[engine_message] — exactly one of the two), the violated
+    path ([path]), what the constraint requires ([shacl_expected]), the referenced
+    object's state ([context_message] — per group: the distinct ones) and the schema
+    definition ([schema_property]) when enriched — file position and snippet go to
     physicalLocation, shape description to the rule."""
     blocks = [f"{message_prefix(record['VIOLATION_TYPE'], record.get('MESSAGE_SOURCE'))} "
               f"{_message(record)}"]
     if not pandas.isna(record["KEY"]):
         blocks.append(f"[path] {record['KEY']}")
     if not pandas.isna(record.get("EXPECTED")):
-        blocks.append(f"[expected] {record['EXPECTED']}")
+        blocks.append(f"[shacl_expected] {record['EXPECTED']}")
     targets = [record.get("TARGET")] if targets is None else targets
     targets = list(dict.fromkeys(t for t in targets if not pandas.isna(t)))
     if targets:
-        blocks.append(f"[target] {'; '.join(targets)}")
+        blocks.append(f"[context_message] {'; '.join(targets)}")
     if not pandas.isna(record["SCHEMA_DESCRIPTION"]):
         multiplicity = (f" [{record['SCHEMA_MULTIPLICITY']}]"
                         if not pandas.isna(record["SCHEMA_MULTIPLICITY"]) else "")
-        blocks.append(f"[schema] {record['SCHEMA_DESCRIPTION']}{multiplicity}")
+        blocks.append(f"[schema_property] {record['SCHEMA_DESCRIPTION']}{multiplicity}")
+    if not pandas.isna(record["CLASS_DESCRIPTION"]):
+        blocks.append(f"[schema_class] {record['CLASS_DESCRIPTION']}")
     return blocks
 
 

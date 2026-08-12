@@ -7,36 +7,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
-- **Report messages state their origin, raw text stays verbatim**: every
-  message element is prefixed with where it came from — `[message]` = the
-  shape's own `sh:message` verbatim, `[engine]` = engine-worded (defaults,
-  `triplets:*` tool findings), `[detail]` = the engine's observation about
-  the data (association target types / dangling refs — a `DETAIL` column,
-  no longer appended into the message), `[description]`/`[schema]`
-  enrichment, `[instance]` file position, plus SARIF-only `[path]`/
-  `[count]`/`[examples]`. The enrich pass no longer appends the violated
-  property into generic messages (it travels as `sh:resultPath` / `[path]`).
-  `validate()` stamps `MESSAGE_SOURCE`; the SHACL report's `dcterms:creator`
-  names the engine (`"triplets 0.2.0 (engine: polars)"`). Fixed along the
-  way: the compiled IR stored unauthored `sh:message` as NaN (truthy), so
-  the vectorized engines emitted NaN instead of their default message text.
-- **Reports are self-sufficient for debugging** (all outside the engine hot
-  path): `[expected]` states the violated constraint's requirement worded
-  from the IR parameter (`EXPECTED` column, even on minimal runs);
-  `[target]` (renamed from `[detail]`) states the referenced object's state;
-  `[object]` names the validated object in the SHACL report; the locate pass
-  extracts the located line's text (`SOURCE_SNIPPET` → SARIF-native
-  `region.snippet.text`, `[snippet]` entry); and the SHACL report embeds the
-  violated shapes' defining triples so `sh:sourceShape` is never an empty
-  blank node — constraint parameters are machine-recoverable from the
-  report alone. The sh:ValidationReport carries them as separate
-  prefixed `sh:resultMessage`s (`report_to_violations` picks the
-  `[shacl]`/`[engine]` entry back out); SARIF joins them as newline-separated
-  blocks plus `[count]`/`[examples]` for grouped results, and grouped rule
-  titles carry the occurrence count (`Line completeness (8×)`). The SHACL
-  report's `dcterms:creator` now names the engine that produced the result
-  (`"triplets 0.2.0 (engine: polars)"` — SARIF already carried it in the run
-  properties).
+- **Report messages: one self-describing `[source_kind]` entry per fact,
+  raw text verbatim**: `[shacl_message]` (authored `sh:message`) or
+  `[engine_message]` (engine-worded — exactly one of the two per result),
+  `[shacl_expected]` (the constraint's requirement worded from the IR
+  parameter — present even on minimal runs), `[shacl_description]`,
+  `[context_message]` (the referenced object's actual type / dangling
+  reference — the post-validate observation), `[context_object]`,
+  `[context_location]`/`[context_snippet]` (file + line and the located
+  line's text — SARIF carries the snippet natively as
+  `region.snippet.text`), `[schema_property]`/`[schema_class]` (rdf_map
+  definitions), plus SARIF-only `[path]`/`[count]`/`[examples]`. The SHACL
+  report embeds the violated shapes' defining triples (CBD), so
+  `sh:sourceShape` is never an empty node and constraint parameters are
+  machine-recoverable from the report alone; `dcterms:creator` names the
+  engine. `validate()` stamps `TARGET`/`EXPECTED`/`MESSAGE_SOURCE` columns;
+  the enrich pass never rewrites messages (fixed: the IR stored unauthored
+  `sh:message` as truthy NaN, so engines emitted NaN instead of default
+  text). All computed outside the engine hot path.
 - **Association type-check messages say what the reference points at**:
   `sh:class` findings name the target's actual Type — or state that no such
   object exists in the data (dangling reference) — and valueType findings

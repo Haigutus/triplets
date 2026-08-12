@@ -100,12 +100,12 @@ def test_ungrouped(violations):
 
 def test_message_blocks_prefixed(violations):
     """One line per origin, each prefixed with where it came from — same tags
-    as the sh:ValidationReport resultMessages. [message] marks text taken
-    verbatim from the shape's own sh:message; engine-worded text is [engine]."""
+    as the sh:ValidationReport resultMessages. [shacl_message] marks text taken
+    verbatim from the shape's own sh:message; engine-worded text is [engine_message]."""
     results = build_sarif(violations)["runs"][0]["results"]
     texts = {result["level"]: result["message"]["text"] for result in results}
-    assert texts["error"].startswith("[message] every line needs a name")  # authored, verbatim
-    assert texts["warning"].startswith("[engine] ")                        # engine default text
+    assert texts["error"].startswith("[shacl_message] every line needs a name")  # authored, verbatim
+    assert texts["warning"].startswith("[engine_message] ")                        # engine default text
     lines = texts["error"].split("\n")
     assert "[path] IdentifiedObject.name" in lines
     assert any(line == "[count] 8 object(s) affected" for line in lines)
@@ -130,7 +130,7 @@ def test_unenriched_frame_and_null_id():
     result = build_sarif(violations)["runs"][0]["results"][0]
     assert result["level"] == "warning"
     assert "locations" not in result                     # no ID → no locations
-    assert result["message"]["text"].startswith("[engine] oxigraph rejected")
+    assert result["message"]["text"].startswith("[engine_message] oxigraph rejected")
 
 
 def test_message_fallback_generated():
