@@ -133,10 +133,10 @@ def test_multi_messages_from_context_and_location_columns():
 
     graph = violations_to_report_graph(enriched)
     assert {str(message) for message in graph.objects(None, sh.resultMessage)} == {
-        "too long",
-        "Description: Line length plausibility.",
-        "Schema: Total length of the line. [0..1]",
-        "Source: grid.xml line 5",
+        "[shacl] too long",
+        "[shape] Line length plausibility.",
+        "[schema] Total length of the line. [0..1]",
+        "[instance] grid.xml line 5",
     }
 
 
@@ -156,7 +156,7 @@ def test_sources_add_location_message(tmp_path):
     buffer = VIOLATIONS.head(1).shacl.to_shacl_report(sources=[str(xml)], export_to_memory=True)
     graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
     messages = {str(message) for message in graph.objects(None, sh.resultMessage)}
-    assert any(message.startswith("Source: ") and "line 4" in message for message in messages)
+    assert any(message.startswith("[instance] ") and "line 4" in message for message in messages)
 
 
 # ── validation-run metadata (violations.attrs["validation"]) ─────────────────

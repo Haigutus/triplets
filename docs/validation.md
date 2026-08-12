@@ -232,6 +232,16 @@ object(s) with `.name` instead of touching the filesystem — the same
 convention as `export_to_cimxml`/`export_to_csv` (`to_csv` returns a list:
 data file + sidecar).
 
+Every message states its origin with a prefix — `[shacl]` for the constraint
+result (`[engine]` for `triplets:*` tool findings), `[shape]` / `[schema]` for
+the enrichment descriptions, `[instance]` for the file position. The SHACL
+report carries them as separate `sh:resultMessage`s (results stay one per
+violation — merging them would break sh:ValidationReport semantics); SARIF
+carries them as newline-separated blocks in one `message.text`, adds
+`[count]` / `[examples]` blocks for grouped results, and puts the occurrence
+count in the rule title (`Line completeness (8×)` — the ruleId stays stable,
+so GitHub alert matching is unaffected).
+
 `enrich` and `locate` preserve the attrs. On `to_shacl_report`, explicit
 `report_source=` / `report_references=` override the stamped values (plain
 labels — distinct from the `sources=` locate pass and the shapes object
@@ -326,7 +336,7 @@ violations = violations.shacl.enrich(data=data, shapes=compiled, rdf_map=...)  #
 violations.shacl.to_sarif(path="report.sarif")
 
 # standard sh:ValidationReport for SHACL tooling (format from path suffix,
-# or format=); sources= adds a "Source: file line N" message per
+# or format=); sources= adds an "[instance] file line N" message per
 # result (SHACL has no location vocabulary — plain-text messages travel
 # everywhere); the dcterms metadata (timestamp, creator, data/shape file
 # names) comes from violations.attrs — stamped by validate(), overridable

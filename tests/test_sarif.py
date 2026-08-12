@@ -98,12 +98,22 @@ def test_ungrouped(violations):
     assert "value" not in result["properties"]           # nulls dropped
 
 
+def test_message_blocks_prefixed(violations):
+    """One line per origin, each prefixed with where it came from — same tags
+    as the sh:ValidationReport resultMessages."""
+    text = build_sarif(violations)["runs"][0]["results"][0]["message"]["text"]
+    lines = text.split("\n")
+    assert lines[0].startswith("[shacl] ")
+    assert any(line == "[count] 8 object(s) affected" for line in lines)
+    assert any(line.startswith("[examples] ") for line in lines)
+
+
 def test_rules_metadata(violations):
     rules = build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"]
     assert len(rules) == 2
     for rule in rules:
         assert rule["id"].endswith("/sh:minCount")
-        assert rule["shortDescription"]["text"] == "Line completeness"      # inherited sh:name
+        assert rule["shortDescription"]["text"] == "Line completeness (8×)"  # sh:name + grouped count
         assert rule["fullDescription"]["text"] == "Lines carry a name and a length."
         assert rule["properties"]["constraint"] == "sh:minCount"
 
@@ -116,7 +126,7 @@ def test_unenriched_frame_and_null_id():
     result = build_sarif(violations)["runs"][0]["results"][0]
     assert result["level"] == "warning"
     assert "locations" not in result                     # no ID → no locations
-    assert result["message"]["text"].startswith("oxigraph rejected")
+    assert result["message"]["text"].startswith("[engine] oxigraph rejected")
 
 
 def test_message_fallback_generated():
@@ -152,7 +162,7 @@ def test_exporter_runs_enrichment(shapes):
     buffer = export_to_sarif(violations, data=data, shapes=shapes, export_to_memory=True)
     document = json.loads(buffer.read().decode("utf-8"))
     rule = document["runs"][0]["tool"]["driver"]["rules"][0]
-    assert rule["shortDescription"]["text"] == "Line completeness"
+    assert rule["shortDescription"]["text"] == "Line completeness (2×)"
     uri = document["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
     assert uri == "Svedala%20EQ.xml"
 

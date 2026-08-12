@@ -72,17 +72,29 @@ def report_to_violations(report_graph):
         component = report_graph.value(result, sh.sourceConstraintComponent)
         severity = report_graph.value(result, sh.resultSeverity)
         shape = report_graph.value(result, sh.sourceShape)
-        message = report_graph.value(result, sh.resultMessage)
+        message = _constraint_message(report_graph.objects(result, sh.resultMessage))
 
         columns["ID"].append(_strip_uuid(report_graph.value(result, sh.focusNode)))
         columns["KEY"].append(_shorten(path))
         columns["VALUE"].append(_term_value(value))
         columns["VIOLATION_TYPE"].append(_component(component))
-        columns["MESSAGE"].append(str(message) if message is not None else None)
+        columns["MESSAGE"].append(message)
         columns["SEVERITY"].append(_local_name(severity) if severity is not None else "Violation")
         columns["SOURCE_SHAPE"].append(str(shape) if shape is not None else None)
 
     return pandas.DataFrame(columns, columns=VIOLATION_COLUMNS)
+
+
+def _constraint_message(messages):
+    """The constraint's own message among a result's prefixed set — the
+    [shacl]/[engine] entry with the prefix stripped (inverse of _messages);
+    first alphabetically for reports written by other tools."""
+    texts = sorted(str(message) for message in messages)
+    for text in texts:
+        for prefix in ("[shacl] ", "[engine] "):
+            if text.startswith(prefix):
+                return text[len(prefix):]
+    return texts[0] if texts else None
 
 
 def _strip_uuid(term):
@@ -215,22 +227,32 @@ def _as_list(value):
 
 
 def _messages(row):
-    """The result's message set — engine message + optional context/location."""
+    """The result's message set — one entry per origin, each prefixed with
+    where it came from: the constraint message ([shacl]; [engine] for
+    triplets:* tool findings), the shape and schema descriptions
+    ([shape]/[schema] — context.enrich) and the source position
+    ([instance] — locations.locate_violations)."""
     def cell(name):
         value = getattr(row, name, None)
         return None if value is None or pandas.isna(value) else value
 
     messages = []
     if cell("MESSAGE") is not None:
-        messages.append(str(row.MESSAGE))
+        messages.append(f"{message_prefix(row.VIOLATION_TYPE)} {row.MESSAGE}")
     if cell("SHAPE_DESCRIPTION") is not None:
-        messages.append(f"Description: {row.SHAPE_DESCRIPTION}")
+        messages.append(f"[shape] {row.SHAPE_DESCRIPTION}")
     if cell("SCHEMA_DESCRIPTION") is not None:
         multiplicity = f" [{row.SCHEMA_MULTIPLICITY}]" if cell("SCHEMA_MULTIPLICITY") is not None else ""
-        messages.append(f"Schema: {row.SCHEMA_DESCRIPTION}{multiplicity}")
+        messages.append(f"[schema] {row.SCHEMA_DESCRIPTION}{multiplicity}")
     if cell("SOURCE_URI") is not None:
-        messages.append(f"Source: {row.SOURCE_URI} line {int(row.SOURCE_LINE)}")
+        messages.append(f"[instance] {row.SOURCE_URI} line {int(row.SOURCE_LINE)}")
     return messages
+
+
+def message_prefix(violation_type):
+    """[engine] for tool findings (triplets:*), [shacl] for constraint results —
+    shared with the SARIF exporter so both formats tag origins identically."""
+    return "[engine]" if str(violation_type).startswith("triplets:") else "[shacl]"
 
 
 def _expand(value):

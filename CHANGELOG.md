@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **Report messages state their origin**: every message element is prefixed
+  with where it came from — `[shacl]` constraint result (`[engine]` for
+  `triplets:*` tool findings), `[shape]`/`[schema]` enrichment descriptions,
+  `[instance]` file position. The sh:ValidationReport carries them as separate
+  prefixed `sh:resultMessage`s (`report_to_violations` picks the
+  `[shacl]`/`[engine]` entry back out); SARIF joins them as newline-separated
+  blocks plus `[count]`/`[examples]` for grouped results, and grouped rule
+  titles carry the occurrence count (`Line completeness (8×)`).
 - **Association type-check messages say what the reference points at**:
   `sh:class` findings name the target's actual Type — or state that no such
   object exists in the data (dangling reference) — and valueType findings
