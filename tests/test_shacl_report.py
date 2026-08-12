@@ -211,6 +211,31 @@ ex:DeepPath a sh:NodeShape ; sh:targetClass cim:Breaker ;
 """
 
 
+def test_minimal_run_exports_both_formats(tmp_path):
+    """A bare validate() — no rdf_map, no context enrichment, no sources= —
+    still exports both formats: results carry only the constraint message
+    (and [detail] where applicable), never empty [schema]/[description]/
+    [instance] entries."""
+    import rdflib
+    from triplets.validation.sarif import build_sarif
+
+    shapes = tmp_path / "minimal_shapes.ttl"
+    shapes.write_text(SHAPE_TTL)
+    violations = triplets.validation.validate(DATA, shapes, engine="pandas")
+    assert len(violations) == 1
+
+    buffer = violations.shacl.to_shacl_report(export_to_memory=True)
+    graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    messages = {str(m) for m in graph.objects(None, sh.resultMessage)}
+    assert len(messages) == 1 and next(iter(messages)).startswith("[engine] ")
+
+    text = build_sarif(violations)["runs"][0]["results"][0]["message"]["text"]
+    assert text.split("\n")[0].startswith("[engine] ")
+    for absent in ("[schema]", "[description]", "[instance]", "[detail]"):
+        assert absent not in text
+
+
 def test_message_source_distinguishes_authored_from_engine(tmp_path):
     """[message] = the shape's own sh:message verbatim, [engine] =
     engine-worded text — stamped by validate() (MESSAGE_SOURCE)."""
