@@ -211,6 +211,31 @@ ex:DeepPath a sh:NodeShape ; sh:targetClass cim:Breaker ;
 """
 
 
+def test_message_source_distinguishes_authored_from_engine(tmp_path):
+    """[shacl] = the shape's own sh:message, [engine] = engine-worded text —
+    stamped by validate() (MESSAGE_SOURCE), carried into the report."""
+    import rdflib
+    shapes = tmp_path / "authored_shapes.ttl"
+    shapes.write_text("""
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ;
+                  sh:message "every breaker needs a name" ] ;
+    sh:property [ sh:path cim:Breaker.inTransit ; sh:minCount 1 ] .
+""")
+    violations = triplets.validation.validate(DATA, shapes, engine="pandas")
+    sources = dict(zip(violations["KEY"], violations["MESSAGE_SOURCE"]))
+    assert sources["IdentifiedObject.name"] == "shacl"    # authored sh:message
+    assert sources["Breaker.inTransit"] == "engine"       # engine default text
+
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    graph = violations_to_report_graph(violations)
+    messages = {str(m) for m in graph.objects(None, sh.resultMessage)}
+    assert "[shacl] every breaker needs a name" in messages
+    assert any(m.startswith("[engine] Breaker.inTransit") for m in messages)
+
+
 def test_metadata_reports_skipped_coverage(tmp_path):
     """Shapes a vectorized run cannot evaluate land in the metadata — the
     report says what was NOT validated, not just what failed."""

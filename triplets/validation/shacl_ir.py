@@ -199,6 +199,10 @@ def parse_ir(graph) -> pandas.DataFrame:
             ", ".join(f"sh:{_local(term)} (x{count})" for term, count in invisible.items()))
 
     ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
+    # DataFrame construction turns None into NaN — which is TRUTHY, so the
+    # engines' `rule.message or default` would emit NaN instead of the default
+    # (object dtype: the str dtype would coerce the None straight back to NaN)
+    ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
     unknown = ir.loc[~ir["component"].isin(KNOWN_COMPONENTS), "component"].unique()
     if len(unknown):
         logger.info("IR contains components no vectorized engine implements yet: %s", ", ".join(unknown))

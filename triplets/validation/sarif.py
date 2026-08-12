@@ -233,7 +233,8 @@ def _message_blocks(record):
     """The prefixed message lines a result carries: the constraint message
     ([shacl]/[engine]) plus the schema definition ([schema]) when enriched —
     file position goes to physicalLocation, shape description to the rule."""
-    blocks = [f"{message_prefix(record['VIOLATION_TYPE'])} {_message(record)}"]
+    blocks = [f"{message_prefix(record['VIOLATION_TYPE'], record.get('MESSAGE_SOURCE'))} "
+              f"{_message(record)}"]
     if not pandas.isna(record["SCHEMA_DESCRIPTION"]):
         multiplicity = (f" [{record['SCHEMA_MULTIPLICITY']}]"
                         if not pandas.isna(record["SCHEMA_MULTIPLICITY"]) else "")

@@ -100,10 +100,13 @@ def test_ungrouped(violations):
 
 def test_message_blocks_prefixed(violations):
     """One line per origin, each prefixed with where it came from — same tags
-    as the sh:ValidationReport resultMessages."""
-    text = build_sarif(violations)["runs"][0]["results"][0]["message"]["text"]
-    lines = text.split("\n")
-    assert lines[0].startswith("[shacl] ")
+    as the sh:ValidationReport resultMessages. [shacl] marks text taken
+    verbatim from the shape's own sh:message; engine-worded text is [engine]."""
+    results = build_sarif(violations)["runs"][0]["results"]
+    texts = {result["level"]: result["message"]["text"] for result in results}
+    assert texts["error"].startswith("[shacl] every line needs a name")   # authored sh:message
+    assert texts["warning"].startswith("[engine] ")                       # engine default text
+    lines = texts["error"].split("\n")
     assert any(line == "[count] 8 object(s) affected" for line in lines)
     assert any(line.startswith("[examples] ") for line in lines)
 

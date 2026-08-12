@@ -232,9 +232,13 @@ object(s) with `.name` instead of touching the filesystem — the same
 convention as `export_to_cimxml`/`export_to_csv` (`to_csv` returns a list:
 data file + sidecar).
 
-Every message states its origin with a prefix — `[shacl]` for the constraint
-result (`[engine]` for `triplets:*` tool findings), `[shape]` / `[schema]` for
-the enrichment descriptions, `[instance]` for the file position. The SHACL
+Every message states its origin with a prefix — `[shacl]` when the text is
+the shape's own `sh:message` (verbatim), `[engine]` when the engine worded it
+(default texts, `triplets:*` tool findings), `[shape]` / `[schema]` for the
+enrichment descriptions, `[instance]` for the file position. `validate()`
+stamps the shacl/engine distinction as a `MESSAGE_SOURCE` column on the frame
+(authored messages are known from the compiled IR); bare frames fall back to
+the violation-type namespace. The SHACL
 report carries them as separate `sh:resultMessage`s (results stay one per
 violation — merging them would break sh:ValidationReport semantics); SARIF
 carries them as newline-separated blocks in one `message.text`, adds

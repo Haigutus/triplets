@@ -131,6 +131,7 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
                                                "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
     violations = _describe_associations(violations, data, compiled,
                                         table_name=kwargs.get("table_name", "triplets"))
+    violations["MESSAGE_SOURCE"] = _message_sources(violations, compiled)
     if context:
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
     violations.attrs["validation"] = _report_metadata(
@@ -166,6 +167,16 @@ def _describe_associations(violations, data, compiled, table_name="triplets"):
         violations.loc[of_class, "MESSAGE"] = (
             violations.loc[of_class, "MESSAGE"].fillna("") + suffix)
     return violations
+
+
+def _message_sources(violations, compiled):
+    """Per row: "shacl" when the text is the shape's own sh:message (engines
+    use it verbatim; post-pass suffixes append after it), else "engine"."""
+    authored = tuple(sorted({rule.message for rule in compiled.ir.itertuples()
+                             if isinstance(rule.message, str) and rule.message},
+                            key=len, reverse=True))
+    return ["shacl" if isinstance(message, str) and message.startswith(authored) else "engine"
+            for message in violations["MESSAGE"]]
 
 
 def _type_map(data, table_name="triplets"):

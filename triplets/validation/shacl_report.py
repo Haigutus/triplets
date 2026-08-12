@@ -238,7 +238,8 @@ def _messages(row):
 
     messages = []
     if cell("MESSAGE") is not None:
-        messages.append(f"{message_prefix(row.VIOLATION_TYPE)} {row.MESSAGE}")
+        messages.append(f"{message_prefix(row.VIOLATION_TYPE, cell('MESSAGE_SOURCE'))} "
+                        f"{row.MESSAGE}")
     if cell("SHAPE_DESCRIPTION") is not None:
         messages.append(f"[shape] {row.SHAPE_DESCRIPTION}")
     if cell("SCHEMA_DESCRIPTION") is not None:
@@ -249,9 +250,13 @@ def _messages(row):
     return messages
 
 
-def message_prefix(violation_type):
-    """[engine] for tool findings (triplets:*), [shacl] for constraint results —
-    shared with the SARIF exporter so both formats tag origins identically."""
+def message_prefix(violation_type, source=None):
+    """[shacl] = the text is the shape's own sh:message; [engine] = the engine
+    worded it. validate() stamps MESSAGE_SOURCE on every row; frames without
+    it fall back to the violation-type namespace (triplets:* → engine).
+    Shared with the SARIF exporter so both formats tag origins identically."""
+    if source is not None and not pandas.isna(source):
+        return f"[{source}]"
     return "[engine]" if str(violation_type).startswith("triplets:") else "[shacl]"
 
 

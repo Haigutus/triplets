@@ -8,9 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 - **Report messages state their origin**: every message element is prefixed
-  with where it came from — `[shacl]` constraint result (`[engine]` for
+  with where it came from — `[shacl]` when the text is the shape's own
+  `sh:message` (verbatim), `[engine]` when the engine worded it (defaults,
   `triplets:*` tool findings), `[shape]`/`[schema]` enrichment descriptions,
-  `[instance]` file position. The sh:ValidationReport carries them as separate
+  `[instance]` file position. `validate()` stamps a `MESSAGE_SOURCE` column
+  ("shacl"/"engine") on the frame; frames without it fall back to the
+  violation-type namespace. Fixed along the way: the compiled IR stored
+  unauthored `sh:message` as NaN (truthy), so the vectorized engines emitted
+  NaN instead of their default message text — defaults now land in MESSAGE. The sh:ValidationReport carries them as separate
   prefixed `sh:resultMessage`s (`report_to_violations` picks the
   `[shacl]`/`[engine]` entry back out); SARIF joins them as newline-separated
   blocks plus `[count]`/`[examples]` for grouped results, and grouped rule
