@@ -123,7 +123,8 @@ def build_sarif(violations, group=True, sources=None):
         })] if meta.get("generated_at") else None,
         # empty coverage lists stay in — a clean run STATES full coverage
         "properties": {key: value for key, value in meta.items()
-                       if key not in ("started_at", "generated_at", "creator")
+                       if key not in ("started_at", "generated_at", "creator",
+                                      "source_shapes")   # in-memory graphs, SHACL report only
                        and value is not None} or None,
         "results": results,
     })
@@ -175,7 +176,7 @@ def _grouped_result(rule_id, rule_index, records):
     # the sh:ValidationReport's resultMessages. Shape-level notes (e.g.
     # triplets:invalidSparql, ID always null) are not about affected objects,
     # so they carry no [count]/[examples] blocks.
-    blocks = _message_blocks(records[0], details=[r.get("DETAIL") for r in samples])
+    blocks = _message_blocks(records[0], targets=[r.get("TARGET") for r in samples])
     if any(not pandas.isna(record["ID"]) for record in records):
         blocks.append(f"[count] {total} object(s) affected")
         if described:
@@ -229,20 +230,23 @@ def _result(rule_id, rule_index, record):
     })
 
 
-def _message_blocks(record, details=None):
+def _message_blocks(record, targets=None):
     """The prefixed message lines a result carries: the constraint message
-    verbatim ([message]/[engine]), the violated path ([path]), the engine's
-    data observations ([detail] — per group: the distinct ones) and the
-    schema definition ([schema]) when enriched — file position goes to
+    verbatim ([message]/[engine] — exactly one of the two), the violated
+    path ([path]), what the constraint requires ([expected]), the referenced
+    object's state ([target] — per group: the distinct ones) and the schema
+    definition ([schema]) when enriched — file position and snippet go to
     physicalLocation, shape description to the rule."""
     blocks = [f"{message_prefix(record['VIOLATION_TYPE'], record.get('MESSAGE_SOURCE'))} "
               f"{_message(record)}"]
     if not pandas.isna(record["KEY"]):
         blocks.append(f"[path] {record['KEY']}")
-    details = [record.get("DETAIL")] if details is None else details
-    details = list(dict.fromkeys(d for d in details if not pandas.isna(d)))
-    if details:
-        blocks.append(f"[detail] {'; '.join(details)}")
+    if not pandas.isna(record.get("EXPECTED")):
+        blocks.append(f"[expected] {record['EXPECTED']}")
+    targets = [record.get("TARGET")] if targets is None else targets
+    targets = list(dict.fromkeys(t for t in targets if not pandas.isna(t)))
+    if targets:
+        blocks.append(f"[target] {'; '.join(targets)}")
     if not pandas.isna(record["SCHEMA_DESCRIPTION"]):
         multiplicity = (f" [{record['SCHEMA_MULTIPLICITY']}]"
                         if not pandas.isna(record["SCHEMA_MULTIPLICITY"]) else "")
@@ -292,9 +296,12 @@ def _location(record):
         # per-format anchor rules that broke SARIF viewers for no information
         # gain; a start-only region makes GitHub render from the error onward
         line = int(record["SOURCE_LINE"])
+        region = {"startLine": line, "endLine": line}
+        if not pandas.isna(record.get("SOURCE_SNIPPET")):
+            region["snippet"] = {"text": str(record["SOURCE_SNIPPET"])}
         location["physicalLocation"] = {
             "artifactLocation": {"uri": quote(str(record["SOURCE_URI"]), safe="/")},
-            "region": {"startLine": line, "endLine": line},
+            "region": region,
         }
     elif not pandas.isna(record["INSTANCE_LABEL"]):
         location["physicalLocation"] = {

@@ -266,8 +266,10 @@ cim:ShortName a sh:NodeShape ; sh:targetClass cim:ACLineSegment ;
 
     run = build_sarif(violations, sources=[str(xml)])["runs"][0]
     region = run["results"][0]["locations"][0]["physicalLocation"]["region"]
-    # whole-line region, explicitly bounded — start-only regions break GitHub
-    assert region == {"startLine": 5, "endLine": 5}
+    # whole-line region, explicitly bounded — start-only regions break GitHub;
+    # the located line's text rides along as the SARIF-native snippet
+    assert region == {"startLine": 5, "endLine": 5,
+                      "snippet": {"text": "<cim:IdentifiedObject.name>L1</cim:IdentifiedObject.name>"}}
 
 
 def test_regions_schema_and_github_shape(shapes, tmp_path):

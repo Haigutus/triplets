@@ -19,7 +19,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `validate()` stamps `MESSAGE_SOURCE`; the SHACL report's `dcterms:creator`
   names the engine (`"triplets 0.2.0 (engine: polars)"`). Fixed along the
   way: the compiled IR stored unauthored `sh:message` as NaN (truthy), so
-  the vectorized engines emitted NaN instead of their default message text. The sh:ValidationReport carries them as separate
+  the vectorized engines emitted NaN instead of their default message text.
+- **Reports are self-sufficient for debugging** (all outside the engine hot
+  path): `[expected]` states the violated constraint's requirement worded
+  from the IR parameter (`EXPECTED` column, even on minimal runs);
+  `[target]` (renamed from `[detail]`) states the referenced object's state;
+  `[object]` names the validated object in the SHACL report; the locate pass
+  extracts the located line's text (`SOURCE_SNIPPET` → SARIF-native
+  `region.snippet.text`, `[snippet]` entry); and the SHACL report embeds the
+  violated shapes' defining triples so `sh:sourceShape` is never an empty
+  blank node — constraint parameters are machine-recoverable from the
+  report alone. The sh:ValidationReport carries them as separate
   prefixed `sh:resultMessage`s (`report_to_violations` picks the
   `[shacl]`/`[engine]` entry back out); SARIF joins them as newline-separated
   blocks plus `[count]`/`[examples]` for grouped results, and grouped rule

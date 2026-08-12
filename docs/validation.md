@@ -236,15 +236,27 @@ Every message states its origin with a prefix, and the constraint text is
 never rewritten — raw `sh:message` / engine wording stays verbatim behind its
 tag:
 
+Exactly one of `[message]`/`[engine]` appears per result — the constraint
+text has one author.
+
 | tag | carries |
 |-----|---------|
 | `[message]` | the shape's own `sh:message`, verbatim |
-| `[engine]` | engine-worded text (default messages, `triplets:*` tool findings) |
-| `[detail]` | the engine's observation about the data (association target's actual type / dangling reference) — the `DETAIL` column `validate()` stamps |
-| `[description]` | the shape's `sh:name`/`sh:description` (context.enrich) |
+| `[engine]` | engine-worded constraint text (default messages, `triplets:*` tool findings) |
+| `[expected]` | what the constraint requires, worded from the IR parameter (`one of: Bay, VoltageLevel`) — the `EXPECTED` column, stamped by `validate()`, no extra input needed |
+| `[target]` | the referenced object's state (its actual Type / dangling) — the `TARGET` column |
+| `[object]` | the validated object (`Breaker BRK-1` — context.enrich) |
+| `[description]` | the shape's `sh:description` (context.enrich) |
 | `[schema]` | the rdf_map property definition + multiplicity (context.enrich with `rdf_map=`) |
-| `[instance]` | source file + line (locate pass) |
+| `[instance]` / `[snippet]` | source file + line, and the located line's text (locate pass) |
 | `[path]` / `[count]` / `[examples]` | SARIF text only: violated property, grouped totals, sample objects |
+
+The SHACL report additionally **embeds the violated shapes' defining triples**
+(CBD, stamped by `validate()` into the run metadata), so `sh:sourceShape` is
+never an empty blank node — the `sh:in` list and every other constraint
+parameter are machine-recoverable from the report alone. SARIF carries the
+located line as the native `region.snippet.text`. All of this happens in the
+post-validate/context/locate passes — the engine hot path is untouched.
 
 `validate()` stamps the message/engine distinction as a `MESSAGE_SOURCE`
 column (authored messages are known from the compiled IR); bare frames fall

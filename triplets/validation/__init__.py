@@ -131,25 +131,27 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
                                                "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
     violations = _describe_associations(violations, data, compiled,
                                         table_name=kwargs.get("table_name", "triplets"))
+    violations["EXPECTED"] = _expected(violations, compiled)
     violations["MESSAGE_SOURCE"] = _message_sources(violations, compiled)
     if context:
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
     violations.attrs["validation"] = _report_metadata(
-        data, compiled, engine_name, started, table_name=kwargs.get("table_name", "triplets"))
+        violations, data, compiled, engine_name, started,
+        table_name=kwargs.get("table_name", "triplets"))
     return violations
 
 
 def _describe_associations(violations, data, compiled, table_name="triplets"):
-    """Association type-check findings get a DETAIL entry stating what the
+    """Association type-check findings get a TARGET entry stating what the
     reference points at — the raw MESSAGE stays verbatim (exporters emit
-    DETAIL as its own [detail]-tagged message).
+    TARGET as its own [target]-tagged message).
 
-    ``sh:class`` rows carry the referenced id in VALUE — DETAIL names the
+    ``sh:class`` rows carry the referenced id in VALUE — TARGET names the
     target's actual Type, or the fact that no such object exists in the
     data. valueType rows (``via_type`` paths) carry the found type in VALUE.
     One shared pass over the violations frame; no per-engine code.
     """
-    violations["DETAIL"] = pandas.Series(None, index=violations.index, dtype=object)
+    violations["TARGET"] = pandas.Series(None, index=violations.index, dtype=object)
     if violations.empty or compiled.ir.empty:
         return violations
     via_rules = set(zip(compiled.ir.loc[compiled.ir["via_type"], "shape_id"],
@@ -160,14 +162,69 @@ def _describe_associations(violations, data, compiled, table_name="triplets"):
     via = described & keys.isin(via_rules)
     of_class = described & ~via & violations["VIOLATION_TYPE"].eq("sh:class")
     if via.any():
-        violations.loc[via, "DETAIL"] = ("association target found, of type "
+        violations.loc[via, "TARGET"] = ("association target found, of type "
                                          + violations.loc[via, "VALUE"].astype(str))
     if of_class.any():
         found = violations.loc[of_class, "VALUE"].astype(str).map(_type_map(data, table_name))
-        violations.loc[of_class, "DETAIL"] = (
+        violations.loc[of_class, "TARGET"] = (
             "referenced object found, of type " + found).where(
             found.notna(), "referenced object not found in the data")
     return violations
+
+
+# what a violated constraint requires, worded from its IR parameter — the
+# report states what IS allowed even when the authored message does not
+_EXPECTED = {
+    "sh:minCount": "at least {} value(s)".format,
+    "sh:maxCount": "at most {} value(s)".format,
+    "sh:minLength": "length >= {}".format,
+    "sh:maxLength": "length <= {}".format,
+    "sh:minInclusive": "value >= {}".format,
+    "sh:maxInclusive": "value <= {}".format,
+    "sh:minExclusive": "value > {}".format,
+    "sh:maxExclusive": "value < {}".format,
+    "sh:pattern": "value matching {}".format,
+    "sh:datatype": "a {} value".format,
+    "sh:class": "a reference to a {}".format,
+    "sh:nodeKind": "an {} value".format,
+    "sh:hasValue": "value {}".format,
+    "sh:in": lambda params: "one of: " + ", ".join(map(str, params)),
+    "sh:equals": "equal to {}".format,
+    "sh:disjoint": "different from {}".format,
+    "sh:lessThan": "less than {}".format,
+    "sh:lessThanOrEquals": "at most {}".format,
+}
+
+
+def _expected(violations, compiled):
+    """EXPECTED column: the violated constraint's requirement in words."""
+    params = {(rule.shape_id, rule.path, rule.component): rule.params
+              for rule in compiled.ir.itertuples() if rule.component in _EXPECTED}
+
+    def lookup(shape, key, violation_type):
+        component = "sh:datatype" if violation_type == "triplets:lexicalForm" else violation_type
+        value = params.get((shape, key, component))
+        return None if value is None else _EXPECTED[component](value)
+
+    return [lookup(shape, key, violation_type) for shape, key, violation_type in
+            zip(violations["SOURCE_SHAPE"], violations["KEY"], violations["VIOLATION_TYPE"])]
+
+
+def _source_shape_graphs(violations, compiled):
+    """{shape id: rdflib CBD graph} of the violated shapes — the SHACL report
+    embeds these so sh:sourceShape is never an empty node (term identity is
+    preserved: the CBD's blank nodes ARE the compiled graph's, so they align
+    with the report's sh:sourceShape labels)."""
+    import rdflib
+
+    graphs = {}
+    for shape in set(violations["SOURCE_SHAPE"].dropna().astype(str)):
+        node = (rdflib.URIRef(shape) if "://" in shape or shape.startswith("urn:")
+                else rdflib.BNode(shape))
+        cbd = compiled.graph.cbd(node)
+        if len(cbd):
+            graphs[shape] = cbd
+    return graphs
 
 
 def _message_sources(violations, compiled):
@@ -196,7 +253,7 @@ def _type_map(data, table_name="triplets"):
     return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
 
 
-def _report_metadata(data, compiled, engine_name, started, table_name="triplets"):
+def _report_metadata(violations, data, compiled, engine_name, started, table_name="triplets"):
     """The validation-run facts every report exporter reads (violations.attrs).
 
     Coverage (skipped_shapes / skipped_components) is what THIS run did not
@@ -224,6 +281,9 @@ def _report_metadata(data, compiled, engine_name, started, table_name="triplets"
         "constraints": compiled.stats.get("constraints", 0),
         "skipped_shapes": skipped_shapes,
         "skipped_components": skipped_components,
+        # rdflib graphs, in-memory only — the SHACL report embeds them;
+        # SARIF properties and the csv/excel sidecars skip this key
+        "source_shapes": _source_shape_graphs(violations, compiled),
     }
 
 

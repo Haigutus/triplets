@@ -213,9 +213,9 @@ ex:DeepPath a sh:NodeShape ; sh:targetClass cim:Breaker ;
 
 def test_minimal_run_exports_both_formats(tmp_path):
     """A bare validate() — no rdf_map, no context enrichment, no sources= —
-    still exports both formats: results carry only the constraint message
-    (and [detail] where applicable), never empty [schema]/[description]/
-    [instance] entries."""
+    still exports both formats: the constraint message plus [expected]
+    (known from the compiled IR, no extra input needed), never empty
+    [schema]/[description]/[object]/[instance]/[snippet] entries."""
     import rdflib
     from triplets.validation.sarif import build_sarif
 
@@ -227,13 +227,49 @@ def test_minimal_run_exports_both_formats(tmp_path):
     buffer = violations.shacl.to_shacl_report(export_to_memory=True)
     graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
     sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
-    messages = {str(m) for m in graph.objects(None, sh.resultMessage)}
-    assert len(messages) == 1 and next(iter(messages)).startswith("[engine] ")
+    messages = sorted(str(m) for m in graph.objects(None, sh.resultMessage))
+    assert messages[0].startswith("[engine] ")
+    assert messages[1] == "[expected] at least 1 value(s)"
+    assert len(messages) == 2
 
     text = build_sarif(violations)["runs"][0]["results"][0]["message"]["text"]
     assert text.split("\n")[0].startswith("[engine] ")
-    for absent in ("[schema]", "[description]", "[instance]", "[detail]"):
+    assert "[expected] at least 1 value(s)" in text
+    for absent in ("[schema]", "[description]", "[object]", "[instance]", "[snippet]", "[target]"):
         assert absent not in text
+
+
+def test_report_embeds_source_shape_definitions(tmp_path):
+    """sh:sourceShape is never an empty node: the violated shapes' defining
+    triples (incl. the sh:in list) are embedded in the report, so the
+    expected values are machine-recoverable from the report alone."""
+    import rdflib
+    from rdflib.collection import Collection
+
+    shapes = tmp_path / "container_shapes.ttl"
+    shapes.write_text("""
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ;
+                  sh:in ( cim:Bay cim:VoltageLevel ) ] .
+""")
+    data = DATA.copy()
+    data.loc[len(data)] = ("b1", "Equipment.EquipmentContainer", "s1", "i1")
+    data.loc[len(data)] = ("s1", "Type", "Substation", "i1")
+    violations = triplets.validation.validate(data, shapes, engine="pandas")
+    assert len(violations) == 1
+
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    graph = violations_to_report_graph(violations)
+    result = next(graph.subjects(rdflib.RDF.type, sh.ValidationResult))
+    shape_node = graph.value(result, sh.sourceShape)
+    assert graph.value(shape_node, sh.path) is not None            # not an empty node
+    allowed = Collection(graph, graph.value(shape_node, sh["in"]))
+    assert [str(item).split("#")[-1] for item in allowed] == ["Bay", "VoltageLevel"]
+    # and the human-readable twin
+    assert (violations["EXPECTED"] == "one of: Bay, VoltageLevel").all()
 
 
 def test_message_source_distinguishes_authored_from_engine(tmp_path):

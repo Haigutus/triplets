@@ -70,8 +70,8 @@ def test_untyped_data_trips_datatype(svedala_eq, shape_file):
 def test_violations_columns(svedala_eq, shape_file):
     from triplets.validation.shacl_report import VIOLATION_COLUMNS
     violations = svedala_eq.shacl.validate(shape_file)
-    # canonical schema + the DETAIL/MESSAGE_SOURCE columns validate() adds
-    assert list(violations.columns) == VIOLATION_COLUMNS + ["DETAIL", "MESSAGE_SOURCE"]
+    # canonical schema + the columns validate() stamps
+    assert list(violations.columns) == VIOLATION_COLUMNS + ["TARGET", "EXPECTED", "MESSAGE_SOURCE"]
     # focusNode stripped to bare UUID (no urn:uuid:)
     assert not violations["ID"].str.startswith("urn:uuid:").any()
 

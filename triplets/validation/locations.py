@@ -9,9 +9,10 @@ searched inside that object's text window, so the annotation lands on the
 offending property element, not just the object.
 
 ``locate_violations`` is the public pass: it stamps ``LOCATION_COLUMNS``
-(SOURCE_URI, SOURCE_LINE) onto a violations frame — both the SARIF and the
-sh:ValidationReport exports call it when given ``sources=``, and it is
-exposed as ``violations.shacl.locate(sources=...)``.
+(SOURCE_URI, SOURCE_LINE, SOURCE_SNIPPET — the located line's text) onto a
+violations frame — both the SARIF and the sh:ValidationReport exports call
+it when given ``sources=``, and it is exposed as
+``violations.shacl.locate(sources=...)``.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
 are handed to an export. When the same object is defined in several files
@@ -29,7 +30,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-LOCATION_COLUMNS = ["SOURCE_URI", "SOURCE_LINE"]
+LOCATION_COLUMNS = ["SOURCE_URI", "SOURCE_LINE", "SOURCE_SNIPPET"]
 
 # an object definition: <cim:Breaker rdf:ID="_uuid"> / rdf:about="#_uuid" /
 # rdf:about="urn:uuid:uuid" — group(1) is the bare ID, triplets conventions
@@ -49,7 +50,8 @@ def locate(wanted, sources):
 
     Returns
     -------
-    dict {ID: {"uri": str, "startLine": int, "keyLines": {KEY: line}}}
+    dict {ID: {"uri": str, "startLine": int, "snippet": str,
+               "keyLines": {KEY: (line, snippet)}}}
         IDs not present in the sources are absent from the result.
     """
     from ..parser.utils import find_all_xml
@@ -70,7 +72,7 @@ def locate(wanted, sources):
                 continue
             window_end = matches[position + 1].start() if position + 1 < len(matches) else len(text)
             located[object_id] = {
-                "uri": uri, "startLine": line,
+                "uri": uri, "startLine": line, "snippet": _line_text(text, match.start()),
                 "keyLines": _key_lines(text, match.start(), window_end, line, wanted[object_id]),
             }
     if remaining:
@@ -96,9 +98,10 @@ def locate_violations(violations, sources):
     def position(object_id, key):
         entry = located.get(str(object_id)) if not pandas.isna(object_id) else None
         if entry is None:
-            return None, None
+            return None, None, None
         key = None if pandas.isna(key) else str(key)
-        return entry["uri"], entry["keyLines"].get(key, entry["startLine"])
+        line, snippet = entry["keyLines"].get(key, (entry["startLine"], entry["snippet"]))
+        return entry["uri"], line, snippet
 
     frame = violations.copy()
     positions = [position(object_id, key) for object_id, key in zip(frame["ID"], frame["KEY"])]
@@ -112,7 +115,7 @@ def locate_violations(violations, sources):
 
 
 def _key_lines(text, definition_start, window_end, definition_line, keys):
-    """Line of each violated property element inside the object's window."""
+    """(line, snippet) of each violated property element inside the object's window."""
     lines = {}
     for key in keys:
         if not key or key == "Type":         # the type is the definition element itself
@@ -121,8 +124,17 @@ def _key_lines(text, definition_start, window_end, definition_line, keys):
         match = re.search(pattern, text[definition_start:window_end])
         if match is not None:
             start = definition_start + match.start()
-            lines[key] = definition_line + text.count(b"\n", definition_start, start)
+            lines[key] = (definition_line + text.count(b"\n", definition_start, start),
+                          _line_text(text, start))
     return lines
+
+
+def _line_text(text, position):
+    """The stripped text of *position*'s line — the debugging snippet."""
+    line_start = text.rfind(b"\n", 0, position) + 1
+    line_end = text.find(b"\n", position)
+    line_end = len(text) if line_end == -1 else line_end
+    return text[line_start:line_end].decode("utf-8", "replace").strip()
 
 
 def _read(source):

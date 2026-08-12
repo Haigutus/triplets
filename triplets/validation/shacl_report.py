@@ -185,6 +185,13 @@ def violations_to_report_graph(violations, report_source=None, report_references
     graph.bind("prov", prov)
     graph.bind("dcterms", dcterms)
 
+    # embed the violated shapes' definitions (CBD graphs stamped by
+    # validate()) so sh:sourceShape is never an empty blank node — the
+    # constraint parameters (sh:in list, sh:minCount, ...) are IN the report
+    for shape_graph in meta.get("source_shapes", {}).values():
+        for triple in shape_graph:
+            graph.add(triple)
+
     report = rdflib.BNode()
     graph.add((report, rdflib.RDF.type, sh.ValidationReport))
     graph.add((report, sh.conforms, rdflib.Literal(violations.empty)))
@@ -229,12 +236,13 @@ def _as_list(value):
 
 
 def _messages(row):
-    """The result's message set — one entry per origin, each prefixed with
-    where it came from: the constraint message verbatim ([message] when
-    authored, [engine] when the engine worded it), the engine's observation
-    about the data ([detail]), the shape and schema descriptions
-    ([description]/[schema] — context.enrich) and the source position
-    ([instance] — locations.locate_violations)."""
+    """The result's message set — one entry per fact, each prefixed with
+    what it is: the constraint message verbatim ([message] when authored,
+    [engine] when the engine worded it — exactly one of the two), what the
+    constraint requires ([expected]), the referenced object's state
+    ([target]), the validated object ([object] — context.enrich), the shape
+    and schema descriptions ([description]/[schema]), the source position
+    and line text ([instance]/[snippet] — locations.locate_violations)."""
     def cell(name):
         value = getattr(row, name, None)
         return None if value is None or pandas.isna(value) else value
@@ -243,8 +251,14 @@ def _messages(row):
     if cell("MESSAGE") is not None:
         messages.append(f"{message_prefix(row.VIOLATION_TYPE, cell('MESSAGE_SOURCE'))} "
                         f"{row.MESSAGE}")
-    if cell("DETAIL") is not None:
-        messages.append(f"[detail] {row.DETAIL}")
+    if cell("EXPECTED") is not None:
+        messages.append(f"[expected] {row.EXPECTED}")
+    if cell("TARGET") is not None:
+        messages.append(f"[target] {row.TARGET}")
+    if cell("OBJECT_TYPE") is not None or cell("OBJECT_NAME") is not None:
+        label = " ".join(str(part) for part in (cell("OBJECT_TYPE"), cell("OBJECT_NAME"))
+                         if part is not None)
+        messages.append(f"[object] {label}")
     if cell("SHAPE_DESCRIPTION") is not None:
         messages.append(f"[description] {row.SHAPE_DESCRIPTION}")
     if cell("SCHEMA_DESCRIPTION") is not None:
@@ -252,6 +266,8 @@ def _messages(row):
         messages.append(f"[schema] {row.SCHEMA_DESCRIPTION}{multiplicity}")
     if cell("SOURCE_URI") is not None:
         messages.append(f"[instance] {row.SOURCE_URI} line {int(row.SOURCE_LINE)}")
+    if cell("SOURCE_SNIPPET") is not None:
+        messages.append(f"[snippet] {row.SOURCE_SNIPPET}")
     return messages
 
 
@@ -354,8 +370,9 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
 
 def _meta_rows(meta):
     """The attrs["validation"] dict as (KEY, VALUE) rows — lists fan out; an
-    empty list keeps one blank row so "none" is stated, not implied."""
-    return [(key, item) for key, value in meta.items()
+    empty list keeps one blank row so "none" is stated, not implied.
+    source_shapes (in-memory rdflib graphs) belongs to the SHACL report only."""
+    return [(key, item) for key, value in meta.items() if key != "source_shapes"
             for item in ((value or ("",)) if isinstance(value, (list, tuple)) else (value,))]
 
 

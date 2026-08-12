@@ -34,7 +34,9 @@ def test_definition_and_key_positions(xml_path):
     located = locate({"aaaa": {"Conductor.length"}, "bbbb": set()}, [xml_path])
     line = located["aaaa"]
     assert (line["uri"], line["startLine"]) == (xml_path, 3)
-    assert line["keyLines"]["Conductor.length"] == 5
+    assert line["snippet"] == '<cim:ACLineSegment rdf:ID="_aaaa">'
+    assert line["keyLines"]["Conductor.length"] \
+        == (5, "<cim:Conductor.length>12.5</cim:Conductor.length>")
     assert located["bbbb"]["startLine"] == 7
 
 
