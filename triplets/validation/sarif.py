@@ -175,7 +175,7 @@ def _grouped_result(rule_id, rule_index, records):
     # the sh:ValidationReport's resultMessages. Shape-level notes (e.g.
     # triplets:invalidSparql, ID always null) are not about affected objects,
     # so they carry no [count]/[examples] blocks.
-    blocks = _message_blocks(records[0])
+    blocks = _message_blocks(records[0], details=[r.get("DETAIL") for r in samples])
     if any(not pandas.isna(record["ID"]) for record in records):
         blocks.append(f"[count] {total} object(s) affected")
         if described:
@@ -229,12 +229,20 @@ def _result(rule_id, rule_index, record):
     })
 
 
-def _message_blocks(record):
+def _message_blocks(record, details=None):
     """The prefixed message lines a result carries: the constraint message
-    ([shacl]/[engine]) plus the schema definition ([schema]) when enriched —
-    file position goes to physicalLocation, shape description to the rule."""
+    verbatim ([message]/[engine]), the violated path ([path]), the engine's
+    data observations ([detail] — per group: the distinct ones) and the
+    schema definition ([schema]) when enriched — file position goes to
+    physicalLocation, shape description to the rule."""
     blocks = [f"{message_prefix(record['VIOLATION_TYPE'], record.get('MESSAGE_SOURCE'))} "
               f"{_message(record)}"]
+    if not pandas.isna(record["KEY"]):
+        blocks.append(f"[path] {record['KEY']}")
+    details = [record.get("DETAIL")] if details is None else details
+    details = list(dict.fromkeys(d for d in details if not pandas.isna(d)))
+    if details:
+        blocks.append(f"[detail] {'; '.join(details)}")
     if not pandas.isna(record["SCHEMA_DESCRIPTION"]):
         multiplicity = (f" [{record['SCHEMA_MULTIPLICITY']}]"
                         if not pandas.isna(record["SCHEMA_MULTIPLICITY"]) else "")

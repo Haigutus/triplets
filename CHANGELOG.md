@@ -7,19 +7,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
-- **Report messages state their origin**: every message element is prefixed
-  with where it came from — `[shacl]` when the text is the shape's own
-  `sh:message` (verbatim), `[engine]` when the engine worded it (defaults,
-  `triplets:*` tool findings), `[shape]`/`[schema]` enrichment descriptions,
-  `[instance]` file position. `validate()` stamps a `MESSAGE_SOURCE` column
-  ("shacl"/"engine") on the frame; frames without it fall back to the
-  violation-type namespace. Fixed along the way: the compiled IR stored
-  unauthored `sh:message` as NaN (truthy), so the vectorized engines emitted
-  NaN instead of their default message text — defaults now land in MESSAGE. The sh:ValidationReport carries them as separate
+- **Report messages state their origin, raw text stays verbatim**: every
+  message element is prefixed with where it came from — `[message]` = the
+  shape's own `sh:message` verbatim, `[engine]` = engine-worded (defaults,
+  `triplets:*` tool findings), `[detail]` = the engine's observation about
+  the data (association target types / dangling refs — a `DETAIL` column,
+  no longer appended into the message), `[description]`/`[schema]`
+  enrichment, `[instance]` file position, plus SARIF-only `[path]`/
+  `[count]`/`[examples]`. The enrich pass no longer appends the violated
+  property into generic messages (it travels as `sh:resultPath` / `[path]`).
+  `validate()` stamps `MESSAGE_SOURCE`; the SHACL report's `dcterms:creator`
+  names the engine (`"triplets 0.2.0 (engine: polars)"`). Fixed along the
+  way: the compiled IR stored unauthored `sh:message` as NaN (truthy), so
+  the vectorized engines emitted NaN instead of their default message text. The sh:ValidationReport carries them as separate
   prefixed `sh:resultMessage`s (`report_to_violations` picks the
   `[shacl]`/`[engine]` entry back out); SARIF joins them as newline-separated
   blocks plus `[count]`/`[examples]` for grouped results, and grouped rule
-  titles carry the occurrence count (`Line completeness (8×)`).
+  titles carry the occurrence count (`Line completeness (8×)`). The SHACL
+  report's `dcterms:creator` now names the engine that produced the result
+  (`"triplets 0.2.0 (engine: polars)"` — SARIF already carried it in the run
+  properties).
 - **Association type-check messages say what the reference points at**:
   `sh:class` findings name the target's actual Type — or state that no such
   object exists in the data (dangling reference) — and valueType findings

@@ -140,13 +140,16 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
 
 
 def _describe_associations(violations, data, compiled, table_name="triplets"):
-    """Association type-check messages state what the reference points at.
+    """Association type-check findings get a DETAIL entry stating what the
+    reference points at — the raw MESSAGE stays verbatim (exporters emit
+    DETAIL as its own [detail]-tagged message).
 
-    ``sh:class`` rows carry the referenced id in VALUE — append the target's
-    actual Type, or the fact that no such object exists in the data.
-    valueType rows (``via_type`` paths) carry the found type in VALUE — name
-    it. One shared pass over the violations frame; no per-engine message code.
+    ``sh:class`` rows carry the referenced id in VALUE — DETAIL names the
+    target's actual Type, or the fact that no such object exists in the
+    data. valueType rows (``via_type`` paths) carry the found type in VALUE.
+    One shared pass over the violations frame; no per-engine code.
     """
+    violations["DETAIL"] = pandas.Series(None, index=violations.index, dtype=object)
     if violations.empty or compiled.ir.empty:
         return violations
     via_rules = set(zip(compiled.ir.loc[compiled.ir["via_type"], "shape_id"],
@@ -157,15 +160,13 @@ def _describe_associations(violations, data, compiled, table_name="triplets"):
     via = described & keys.isin(via_rules)
     of_class = described & ~via & violations["VIOLATION_TYPE"].eq("sh:class")
     if via.any():
-        violations.loc[via, "MESSAGE"] = (
-            violations.loc[via, "MESSAGE"].fillna("") + " — association target found, of type "
-            + violations.loc[via, "VALUE"].astype(str))
+        violations.loc[via, "DETAIL"] = ("association target found, of type "
+                                         + violations.loc[via, "VALUE"].astype(str))
     if of_class.any():
         found = violations.loc[of_class, "VALUE"].astype(str).map(_type_map(data, table_name))
-        suffix = (" — referenced object found, of type " + found).where(
-            found.notna(), " — referenced object not found in the data")
-        violations.loc[of_class, "MESSAGE"] = (
-            violations.loc[of_class, "MESSAGE"].fillna("") + suffix)
+        violations.loc[of_class, "DETAIL"] = (
+            "referenced object found, of type " + found).where(
+            found.notna(), "referenced object not found in the data")
     return violations
 
 

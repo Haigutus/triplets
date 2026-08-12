@@ -131,16 +131,18 @@ def test_class(engine):
     assert violating(v, "sh:class") == {("b2", "sub1")}
 
 
-def test_class_message_names_target_type(engine):
-    """A type-of-association finding says what the reference points at: the
-    target's actual Type when it exists, or that the reference is dangling."""
+def test_class_detail_names_target_type(engine):
+    """A type-of-association finding says what the reference points at (the
+    DETAIL column — the raw MESSAGE stays verbatim): the target's actual
+    Type when it exists, or that the reference is dangling."""
     rows = (breaker("b1", ("Equipment.EquipmentContainer", "sub1"))
             + breaker("b2", ("Equipment.EquipmentContainer", "ghost"))
             + [("sub1", "Type", "Substation", "eq")])
     v = run(rows, SHAPE.format(body="sh:path cim:Equipment.EquipmentContainer ; sh:class cim:VoltageLevel"), engine)
-    messages = dict(zip(v["ID"], v["MESSAGE"]))
-    assert "referenced object found, of type Substation" in messages["b1"]
-    assert "referenced object not found in the data" in messages["b2"]
+    details = dict(zip(v["ID"], v["DETAIL"]))
+    assert details["b1"] == "referenced object found, of type Substation"
+    assert details["b2"] == "referenced object not found in the data"
+    assert " — " not in v["MESSAGE"].iloc[0]              # raw text untouched
 
 
 def test_node_kind_heuristic(engine):
@@ -418,10 +420,10 @@ def test_sequence_path_via_type(engine):
     v = run(rows, VALUE_TYPE_SHAPE, engine)
     assert violating(v, "sh:in") == {("b2", "Substation")}
     assert violating(v, "sh:nodeKind") == set()   # types are IRIs by definition
-    # the message names the found type next to the shape's authored text
-    message = v.loc[v["VIOLATION_TYPE"] == "sh:in", "MESSAGE"].iloc[0]
-    assert message.startswith("container must be a Bay or a VoltageLevel")
-    assert "association target found, of type Substation" in message
+    # authored text verbatim; the found type is its own DETAIL entry
+    flagged = v.loc[v["VIOLATION_TYPE"] == "sh:in"].iloc[0]
+    assert flagged["MESSAGE"] == "container must be a Bay or a VoltageLevel"
+    assert flagged["DETAIL"] == "association target found, of type Substation"
 
 
 def test_defective_sparql_reports_not_evaluated():

@@ -133,8 +133,8 @@ def test_multi_messages_from_context_and_location_columns():
 
     graph = violations_to_report_graph(enriched)
     assert {str(message) for message in graph.objects(None, sh.resultMessage)} == {
-        "[shacl] too long",
-        "[shape] Line length plausibility.",
+        "[message] too long",
+        "[description] Line length plausibility.",
         "[schema] Total length of the line. [0..1]",
         "[instance] grid.xml line 5",
     }
@@ -212,8 +212,8 @@ ex:DeepPath a sh:NodeShape ; sh:targetClass cim:Breaker ;
 
 
 def test_message_source_distinguishes_authored_from_engine(tmp_path):
-    """[shacl] = the shape's own sh:message, [engine] = engine-worded text —
-    stamped by validate() (MESSAGE_SOURCE), carried into the report."""
+    """[message] = the shape's own sh:message verbatim, [engine] =
+    engine-worded text — stamped by validate() (MESSAGE_SOURCE)."""
     import rdflib
     shapes = tmp_path / "authored_shapes.ttl"
     shapes.write_text("""
@@ -230,9 +230,12 @@ cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
     assert sources["Breaker.inTransit"] == "engine"       # engine default text
 
     sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    dcterms = rdflib.Namespace("http://purl.org/dc/terms/")
     graph = violations_to_report_graph(violations)
+    report = next(graph.subjects(rdflib.RDF.type, sh.ValidationReport))
+    assert str(graph.value(report, dcterms.creator)).endswith("(engine: pandas)")
     messages = {str(m) for m in graph.objects(None, sh.resultMessage)}
-    assert "[shacl] every breaker needs a name" in messages
+    assert "[message] every breaker needs a name" in messages
     assert any(m.startswith("[engine] Breaker.inTransit") for m in messages)
 
 

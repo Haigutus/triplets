@@ -59,22 +59,7 @@ def enrich(violations, data=None, shapes=None, rdf_map=None):
         _add_shape_context(enriched, compiled.ir)
     if rdf_map is not None:
         _add_schema_context(enriched, *flatten_schema(rdf_map))
-    _contextualize_messages(enriched)
     return enriched
-
-
-def _contextualize_messages(violations):
-    """Shape-authored messages are often generic ("Missing required property
-    (attribute).") — append the violated property so the enriched message
-    stands alone; messages that already name it stay untouched. The raw
-    engine output keeps the authored text verbatim (this runs only here,
-    in the context pass)."""
-    key = violations["KEY"].astype(str)
-    message = violations["MESSAGE"]
-    informative = message.notna() & violations["KEY"].notna() & ~key.isin(["Type", "type"])
-    unnamed = informative & pandas.Series(
-        [k not in str(m) for k, m in zip(key, message)], index=violations.index, dtype=bool)
-    violations.loc[unnamed, "MESSAGE"] = message[unnamed].astype(str) + " — " + key[unnamed]
 
 
 def _add_instance_context(violations, data):
