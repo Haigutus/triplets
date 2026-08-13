@@ -6,6 +6,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0rc2] - 2026-08-13
+
+Validation-report quality release: reports carry everything needed to fix
+the model from the report alone, in both formats.
+
 ### Changed
 - **Report messages: one self-describing `[source_kind]` entry per fact,
   raw text verbatim**: `[shacl_message]` (authored `sh:message`) or
@@ -340,5 +345,6 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   modules. Several `tools` and `cgmes_tools` functions were renamed; the old names keep
   working with a warning. All of these will be removed in 0.2.
 
+[0.2.0rc2]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc2
 [0.2.0rc1]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc1
 [0.1.0]: https://github.com/Haigutus/triplets/releases/tag/0.1.0
