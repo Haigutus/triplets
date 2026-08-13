@@ -22,6 +22,7 @@ import pandas
 
 from .context import ENRICHMENT_COLUMNS, enrich
 from .locations import LOCATION_COLUMNS, locate_violations
+from .shacl_report import message_prefix
 from .shacl_ir import _local
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,8 @@ def build_sarif(violations, group=True, sources=None):
     rules, results = [], []
     seen_ids = {}
     for (shape, constraint), records in groups:
-        rule = _rule(shape, constraint, records, seen_ids)
+        rule = _rule(shape, constraint, records, seen_ids,
+                     occurrences=len(records) if group else None)
         rule_index = len(rules)
         rules.append(rule)
         if group:
@@ -121,7 +123,8 @@ def build_sarif(violations, group=True, sources=None):
         })] if meta.get("generated_at") else None,
         # empty coverage lists stay in — a clean run STATES full coverage
         "properties": {key: value for key, value in meta.items()
-                       if key not in ("started_at", "generated_at", "creator")
+                       if key not in ("started_at", "generated_at", "creator",
+                                      "source_shapes")   # in-memory graphs, SHACL report only
                        and value is not None} or None,
         "results": results,
     })
@@ -137,7 +140,7 @@ def _samples(records):
     return records if len(records) <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
 
 
-def _rule(shape, constraint, records, seen_ids):
+def _rule(shape, constraint, records, seen_ids, occurrences=None):
     identifier = f"{_local(str(shape))}/{constraint}" if not pandas.isna(shape) else str(constraint)
     if identifier in seen_ids:                       # distinct shapes, same local name
         seen_ids[identifier] += 1
@@ -146,10 +149,15 @@ def _rule(shape, constraint, records, seen_ids):
         seen_ids[identifier] = 1
 
     first = records[0]
+    # grouped runs put the occurrence count in the rule title — what GitHub
+    # shows as the alert name (the ruleId stays stable, so alerts still match)
+    name = _value(first["SHAPE_NAME"])
+    if name and occurrences:
+        name = f"{name} ({occurrences}×)"
     return _prune({
         "id": identifier,
-        "name": _value(first["SHAPE_NAME"]),
-        "shortDescription": _text(first["SHAPE_NAME"]),
+        "name": name,
+        "shortDescription": {"text": name} if name else None,
         "fullDescription": _text(first["SHAPE_DESCRIPTION"]),
         "helpUri": str(shape) if not pandas.isna(shape) and str(shape).startswith("http") else None,
         "defaultConfiguration": {"level": _LEVELS.get(_value(first["SEVERITY"]), "warning")},
@@ -164,8 +172,16 @@ def _grouped_result(rule_id, rule_index, records):
     tail = ", ".join(filter(None, (_describe(record) for record in samples[_SAMPLES:])))
     described = f"{head} … {tail}" if total > 2 * _SAMPLES else ", ".join(filter(None, (head, tail)))
 
-    message = _message(records[0])
-    text = f"{message} — {total} object(s) affected." + (f" Examples: {described}" if described else "")
+    # newline-separated blocks, each prefixed with its origin — same tags as
+    # the sh:ValidationReport's resultMessages. Shape-level notes (e.g.
+    # triplets:invalidSparql, ID always null) are not about affected objects,
+    # so they carry no [context_count]/[context_examples] blocks.
+    blocks = _message_blocks(records[0], targets=[r.get("TARGET") for r in samples])
+    if any(not pandas.isna(record["ID"]) for record in records):
+        blocks.append(f"[context_count] {total} object(s) affected")
+        if described:
+            blocks.append(f"[context_examples] {described}")
+    text = "\n".join(blocks)
     locations = [location for location in (_location(record) for record in samples)
                  if location]
     return _prune({
@@ -196,7 +212,7 @@ def _result(rule_id, rule_index, record):
         "ruleId": rule_id,
         "ruleIndex": rule_index,
         "level": _LEVELS.get(_value(record["SEVERITY"]), "warning"),
-        "message": {"text": _message(record)},
+        "message": {"text": "\n".join(_message_blocks(record))},
         "locations": [location] if location else None,
         "properties": _prune({
             "id": _value(record["ID"]),
@@ -212,6 +228,32 @@ def _result(rule_id, rule_index, record):
             "classDescription": _value(record["CLASS_DESCRIPTION"]),
         }),
     })
+
+
+def _message_blocks(record, targets=None):
+    """The prefixed message lines a result carries: the constraint message
+    verbatim ([shacl_message]/[engine_message] — exactly one of the two), the violated
+    path ([shacl_path]), what the constraint requires ([shacl_expected]), the referenced
+    object's state ([context_message] — per group: the distinct ones) and the schema
+    definition ([schema_property]) when enriched — file position and snippet go to
+    physicalLocation, shape description to the rule."""
+    blocks = [f"{message_prefix(record['VIOLATION_TYPE'], record.get('MESSAGE_SOURCE'))} "
+              f"{_message(record)}"]
+    if not pandas.isna(record["KEY"]):
+        blocks.append(f"[shacl_path] {record['KEY']}")
+    if not pandas.isna(record.get("EXPECTED")):
+        blocks.append(f"[shacl_expected] {record['EXPECTED']}")
+    targets = [record.get("TARGET")] if targets is None else targets
+    targets = list(dict.fromkeys(t for t in targets if not pandas.isna(t)))
+    if targets:
+        blocks.append(f"[context_message] {'; '.join(targets)}")
+    if not pandas.isna(record["SCHEMA_DESCRIPTION"]):
+        multiplicity = (f" [{record['SCHEMA_MULTIPLICITY']}]"
+                        if not pandas.isna(record["SCHEMA_MULTIPLICITY"]) else "")
+        blocks.append(f"[schema_property] {record['SCHEMA_DESCRIPTION']}{multiplicity}")
+    if not pandas.isna(record["CLASS_DESCRIPTION"]):
+        blocks.append(f"[schema_class] {record['CLASS_DESCRIPTION']}")
+    return blocks
 
 
 def _message(record):
@@ -256,9 +298,12 @@ def _location(record):
         # per-format anchor rules that broke SARIF viewers for no information
         # gain; a start-only region makes GitHub render from the error onward
         line = int(record["SOURCE_LINE"])
+        region = {"startLine": line, "endLine": line}
+        if not pandas.isna(record.get("SOURCE_SNIPPET")):
+            region["snippet"] = {"text": str(record["SOURCE_SNIPPET"])}
         location["physicalLocation"] = {
             "artifactLocation": {"uri": quote(str(record["SOURCE_URI"]), safe="/")},
-            "region": {"startLine": line, "endLine": line},
+            "region": region,
         }
     elif not pandas.isna(record["INSTANCE_LABEL"]):
         location["physicalLocation"] = {

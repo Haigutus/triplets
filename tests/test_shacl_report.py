@@ -133,10 +133,10 @@ def test_multi_messages_from_context_and_location_columns():
 
     graph = violations_to_report_graph(enriched)
     assert {str(message) for message in graph.objects(None, sh.resultMessage)} == {
-        "too long",
-        "Description: Line length plausibility.",
-        "Schema: Total length of the line. [0..1]",
-        "Source: grid.xml line 5",
+        "[shacl_message] too long",
+        "[shacl_description] Line length plausibility.",
+        "[schema_property] Total length of the line. [0..1]",
+        "[context_location] grid.xml line 5",
     }
 
 
@@ -156,7 +156,7 @@ def test_sources_add_location_message(tmp_path):
     buffer = VIOLATIONS.head(1).shacl.to_shacl_report(sources=[str(xml)], export_to_memory=True)
     graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
     messages = {str(message) for message in graph.objects(None, sh.resultMessage)}
-    assert any(message.startswith("Source: ") and "line 4" in message for message in messages)
+    assert any(message.startswith("[context_location] ") and "line 4" in message for message in messages)
 
 
 # ── validation-run metadata (violations.attrs["validation"]) ─────────────────
@@ -209,6 +209,95 @@ ex:NodeTargeted a sh:NodeShape ; sh:targetNode ex:n1 ;
 ex:DeepPath a sh:NodeShape ; sh:targetClass cim:Breaker ;
     sh:property [ sh:path ( cim:a cim:b cim:c ) ; sh:minCount 1 ] .
 """
+
+
+def test_minimal_run_exports_both_formats(tmp_path):
+    """A bare validate() — no rdf_map, no context enrichment, no sources= —
+    still exports both formats: the constraint message plus [shacl_expected]
+    (known from the compiled IR, no extra input needed), never empty
+    [schema_property]/[shacl_description]/[context_object]/[context_location]/[context_snippet] entries."""
+    import rdflib
+    from triplets.validation.sarif import build_sarif
+
+    shapes = tmp_path / "minimal_shapes.ttl"
+    shapes.write_text(SHAPE_TTL)
+    violations = triplets.validation.validate(DATA, shapes, engine="pandas")
+    assert len(violations) == 1
+
+    buffer = violations.shacl.to_shacl_report(export_to_memory=True)
+    graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    messages = sorted(str(m) for m in graph.objects(None, sh.resultMessage))
+    assert messages[0].startswith("[engine_message] ")
+    assert messages[1] == "[shacl_expected] at least 1 value(s)"
+    assert len(messages) == 2
+
+    text = build_sarif(violations)["runs"][0]["results"][0]["message"]["text"]
+    assert text.split("\n")[0].startswith("[engine_message] ")
+    assert "[shacl_expected] at least 1 value(s)" in text
+    for absent in ("[schema_property]", "[shacl_description]", "[context_object]", "[context_location]", "[context_snippet]", "[context_message]"):
+        assert absent not in text
+
+
+def test_report_embeds_source_shape_definitions(tmp_path):
+    """sh:sourceShape is never an empty node: the violated shapes' defining
+    triples (incl. the sh:in list) are embedded in the report, so the
+    expected values are machine-recoverable from the report alone."""
+    import rdflib
+    from rdflib.collection import Collection
+
+    shapes = tmp_path / "container_shapes.ttl"
+    shapes.write_text("""
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ;
+                  sh:in ( cim:Bay cim:VoltageLevel ) ] .
+""")
+    data = DATA.copy()
+    data.loc[len(data)] = ("b1", "Equipment.EquipmentContainer", "s1", "i1")
+    data.loc[len(data)] = ("s1", "Type", "Substation", "i1")
+    violations = triplets.validation.validate(data, shapes, engine="pandas")
+    assert len(violations) == 1
+
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    graph = violations_to_report_graph(violations)
+    result = next(graph.subjects(rdflib.RDF.type, sh.ValidationResult))
+    shape_node = graph.value(result, sh.sourceShape)
+    assert graph.value(shape_node, sh.path) is not None            # not an empty node
+    allowed = Collection(graph, graph.value(shape_node, sh["in"]))
+    assert [str(item).split("#")[-1] for item in allowed] == ["Bay", "VoltageLevel"]
+    # and the human-readable twin
+    assert (violations["EXPECTED"] == "one of: Bay, VoltageLevel").all()
+
+
+def test_message_source_distinguishes_authored_from_engine(tmp_path):
+    """[shacl_message] = the shape's own sh:message verbatim, [engine_message] =
+    engine-worded text — stamped by validate() (MESSAGE_SOURCE)."""
+    import rdflib
+    shapes = tmp_path / "authored_shapes.ttl"
+    shapes.write_text("""
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ;
+                  sh:message "every breaker needs a name" ] ;
+    sh:property [ sh:path cim:Breaker.inTransit ; sh:minCount 1 ] .
+""")
+    violations = triplets.validation.validate(DATA, shapes, engine="pandas")
+    sources = dict(zip(violations["KEY"], violations["MESSAGE_SOURCE"]))
+    assert sources["IdentifiedObject.name"] == "shacl"    # authored sh:message
+    assert sources["Breaker.inTransit"] == "engine"       # engine default text
+
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    dcterms = rdflib.Namespace("http://purl.org/dc/terms/")
+    graph = violations_to_report_graph(violations)
+    report = next(graph.subjects(rdflib.RDF.type, sh.ValidationReport))
+    assert str(graph.value(report, dcterms.creator)).endswith("(engine: pandas)")
+    messages = {str(m) for m in graph.objects(None, sh.resultMessage)}
+    assert "[shacl_message] every breaker needs a name" in messages
+    assert any(m.startswith("[engine_message] Breaker.inTransit") for m in messages)
 
 
 def test_metadata_reports_skipped_coverage(tmp_path):

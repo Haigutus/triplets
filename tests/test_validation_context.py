@@ -114,16 +114,9 @@ def test_flatten_schema_first_wins_and_shapes():
     assert class_info["ACLineSegment"].startswith("A wire")
 
 
-def test_enrich_contextualizes_generic_messages(violations):
-    """Generic authored messages gain the violated property in the context
-    pass — ' — KEY' appended when the text does not name it; the raw engine
-    output stays verbatim (pinned in test_shacl_engines)."""
+def test_enrich_keeps_messages_verbatim(violations):
+    """The raw constraint text is never rewritten — the violated path travels
+    as sh:resultPath / SARIF [path], not appended into the message."""
     generic = violations.copy()
     generic["MESSAGE"] = "Missing required property (attribute)."
-    result = enrich(generic)
-    assert list(result["MESSAGE"]) \
-        == ["Missing required property (attribute). — Conductor.length"]
-
-    named = violations.copy()
-    named["MESSAGE"] = "Conductor.length is required."
-    assert list(enrich(named)["MESSAGE"]) == ["Conductor.length is required."]  # untouched
+    assert list(enrich(generic)["MESSAGE"]) == ["Missing required property (attribute)."]

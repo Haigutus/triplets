@@ -6,6 +6,38 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Report messages: one self-describing `[source_kind]` entry per fact,
+  raw text verbatim**: `[shacl_message]` (authored `sh:message`) or
+  `[engine_message]` (engine-worded — exactly one of the two per result),
+  `[shacl_expected]` (the constraint's requirement worded from the IR
+  parameter — present even on minimal runs), `[shacl_description]`,
+  `[context_message]` (the referenced object's actual type / dangling
+  reference — the post-validate observation), `[context_object]`,
+  `[context_location]`/`[context_snippet]` (file + line and the located
+  line's text — SARIF carries the snippet natively as
+  `region.snippet.text`), `[schema_property]`/`[schema_class]` (rdf_map
+  definitions), plus SARIF-only `[shacl_path]`/`[context_count]`/`[context_examples]`. The SHACL
+  report embeds the violated shapes' defining triples (CBD), so
+  `sh:sourceShape` is never an empty node and constraint parameters are
+  machine-recoverable from the report alone; `dcterms:creator` names the
+  engine. `validate()` stamps `TARGET`/`EXPECTED`/`MESSAGE_SOURCE` columns;
+  the enrich pass never rewrites messages (fixed: the IR stored unauthored
+  `sh:message` as truthy NaN, so engines emitted NaN instead of default
+  text). All computed outside the engine hot path.
+- **Association type-check messages say what the reference points at**:
+  `sh:class` findings name the target's actual Type — or state that no such
+  object exists in the data (dangling reference) — and valueType findings
+  (`sh:path ( assoc rdf:type )`) name the found type next to the shape's
+  authored message. One shared pass in `validate()`, all engines.
+- **`triplets:invalidSparql` reports say what actually happened**: a query
+  rejected by a strict engine notes it WAS still evaluated via the rdflib
+  fallback; a query no engine can run is a Violation naming the shape and its
+  target/path and stating the constraint went unchecked (a shapes bug, not a
+  data finding). A defective query no longer crashes `validate()` when rdflib
+  is the auto SPARQL engine. SARIF drops the misleading "N object(s)
+  affected" wording for such shape-level notes.
+
 ## [0.2.0rc1] - 2026-08-10
 
 Everything below was developed across the 0.2.0a1/a2 alphas and this

@@ -222,7 +222,7 @@ a blank-valued row.
 
 | exporter | carries the metadata as |
 |----------|-------------------------|
-| `to_shacl_report` | `prov:generatedAtTime`, `dcterms:creator` / `source` / `references` on the report node (standard vocabulary only — counts/coverage stay in the tabular/SARIF forms) |
+| `to_shacl_report` | `prov:generatedAtTime`, `dcterms:creator` (tool + version + engine, e.g. `"triplets 0.2.0 (engine: polars)"`) / `source` / `references` on the report node (standard vocabulary only — counts/coverage stay in the tabular/SARIF forms) |
 | `to_sarif` | `invocations[].startTimeUtc`/`endTimeUtc` + the full run `properties` bag (engine, duration, counts, coverage) |
 | `to_csv` | a `<name>_meta.<ext>` sidecar file with KEY,VALUE rows |
 | `to_excel` | a second `metadata` sheet |
@@ -231,6 +231,53 @@ Every report export takes `export_to_memory=True` and returns BytesIO
 object(s) with `.name` instead of touching the filesystem — the same
 convention as `export_to_cimxml`/`export_to_csv` (`to_csv` returns a list:
 data file + sidecar).
+
+Every message states its origin with a prefix, and the constraint text is
+never rewritten — raw `sh:message` / engine wording stays verbatim behind its
+tag:
+
+Exactly one of `[shacl_message]`/`[engine_message]` appears per result — the constraint
+text has one author.
+
+| tag | carries |
+|-----|---------|
+| `[shacl_message]` | the shape's own `sh:message`, verbatim |
+| `[engine_message]` | engine-worded constraint text (default messages, `triplets:*` tool findings) |
+| `[shacl_expected]` | what the constraint requires, worded from the IR parameter (`one of: Bay, VoltageLevel`) — the `EXPECTED` column, stamped by `validate()`, no extra input needed |
+| `[context_message]` | the referenced object's state (its actual Type / dangling) — the `TARGET` column |
+| `[context_object]` | the validated object (`Breaker BRK-1` — context.enrich) |
+| `[shacl_description]` | the shape's `sh:description` (context.enrich) |
+| `[schema_property]` | the rdf_map property (attribute/association) definition + multiplicity (context.enrich with `rdf_map=`) |
+| `[schema_class]` | the rdf_map description of the object's class (context.enrich with `rdf_map=`) |
+| `[context_location]` / `[context_snippet]` | source file + line, and the located line's text (locate pass) |
+| `[shacl_path]` / `[context_count]` / `[context_examples]` | SARIF text only: the shape's declared path, grouped totals, sample objects |
+
+Report size is controlled by existing dials, no dedicated flags: SARIF groups
+by default (`group=True` — repeated entries like `[schema_class]` appear once
+per rule, not per violation; `group=False` opts into the verbose per-violation
+form). The SHACL report cannot group (one `sh:result` per focus node is spec
+semantics), but every message entry is column-driven — drop a column
+(`violations.drop(columns=["CLASS_DESCRIPTION"])`) and its entry disappears;
+enrichment itself is opt-in.
+
+The SHACL report additionally **embeds the violated shapes' defining triples**
+(CBD, stamped by `validate()` into the run metadata), so `sh:sourceShape` is
+never an empty blank node — the `sh:in` list and every other constraint
+parameter are machine-recoverable from the report alone. SARIF carries the
+located line as the native `region.snippet.text`. All of this happens in the
+post-validate/context/locate passes — the engine hot path is untouched.
+
+`validate()` stamps the message/engine distinction as a `MESSAGE_SOURCE`
+column (authored messages are known from the compiled IR); bare frames fall
+back to the violation-type namespace. The SHACL report's `dcterms:creator`
+names the engine (`"triplets 0.2.0 (engine: polars)"`); SARIF carries it in
+the run properties. The SHACL
+report carries them as separate `sh:resultMessage`s (results stay one per
+violation — merging them would break sh:ValidationReport semantics); SARIF
+carries them as newline-separated blocks in one `message.text`, adds
+`[count]` / `[examples]` blocks for grouped results, and puts the occurrence
+count in the rule title (`Line completeness (8×)` — the ruleId stays stable,
+so GitHub alert matching is unaffected).
 
 `enrich` and `locate` preserve the attrs. On `to_shacl_report`, explicit
 `report_source=` / `report_references=` override the stamped values (plain
@@ -326,7 +373,7 @@ violations = violations.shacl.enrich(data=data, shapes=compiled, rdf_map=...)  #
 violations.shacl.to_sarif(path="report.sarif")
 
 # standard sh:ValidationReport for SHACL tooling (format from path suffix,
-# or format=); sources= adds a "Source: file line N" message per
+# or format=); sources= adds an "[context_location] file line N" message per
 # result (SHACL has no location vocabulary — plain-text messages travel
 # everywhere); the dcterms metadata (timestamp, creator, data/shape file
 # names) comes from violations.attrs — stamped by validate(), overridable

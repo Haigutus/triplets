@@ -131,6 +131,21 @@ def test_class(engine):
     assert violating(v, "sh:class") == {("b2", "sub1")}
 
 
+def test_class_target_names_referenced_type(engine):
+    """A type-of-association finding says what the reference points at (the
+    TARGET column — the raw MESSAGE stays verbatim): the target's actual
+    Type when it exists, or that the reference is dangling."""
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "sub1"))
+            + breaker("b2", ("Equipment.EquipmentContainer", "ghost"))
+            + [("sub1", "Type", "Substation", "eq")])
+    v = run(rows, SHAPE.format(body="sh:path cim:Equipment.EquipmentContainer ; sh:class cim:VoltageLevel"), engine)
+    targets = dict(zip(v["ID"], v["TARGET"]))
+    assert targets["b1"] == "referenced object found, of type Substation"
+    assert targets["b2"] == "referenced object not found in the data"
+    assert " — " not in v["MESSAGE"].iloc[0]              # raw text untouched
+    assert set(v["EXPECTED"]) == {"a reference to a VoltageLevel"}
+
+
 def test_node_kind_heuristic(engine):
     rows = breaker("b1", ("Equipment.EquipmentContainer", "11111111-1111-1111-1111-111111111111")) \
         + breaker("b2", ("Equipment.EquipmentContainer", "just some text"))
@@ -406,6 +421,27 @@ def test_sequence_path_via_type(engine):
     v = run(rows, VALUE_TYPE_SHAPE, engine)
     assert violating(v, "sh:in") == {("b2", "Substation")}
     assert violating(v, "sh:nodeKind") == set()   # types are IRIs by definition
+    # authored text verbatim; the found type is its own TARGET entry
+    flagged = v.loc[v["VIOLATION_TYPE"] == "sh:in"].iloc[0]
+    assert flagged["MESSAGE"] == "container must be a Bay or a VoltageLevel"
+    assert flagged["TARGET"] == "association target found, of type Substation"
+    assert flagged["EXPECTED"] == "one of: Bay, VoltageLevel"
+
+
+def test_defective_sparql_reports_not_evaluated():
+    """A query no engine can run yields ONE Violation row that names the
+    shape and says plainly the constraint went unchecked (a shapes bug)."""
+    shape = """cim:BadShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:sparql [
+            sh:select 'SELECT $this WHERE { $this nc:undeclared ?x }' ] ] ."""
+    rows = breaker("b1", ("IdentifiedObject.name", "B1"))
+    v = run(rows, shape, "pandas")
+    notes = v[v["VIOLATION_TYPE"] == "triplets:invalidSparql"]
+    assert len(notes) == 1
+    assert (notes["SEVERITY"] == "Violation").all()
+    message = notes["MESSAGE"].iloc[0]
+    assert "Breaker/IdentifiedObject.name" in message   # anonymous shape → target/path names it
+    assert "NOT evaluated" in message and "shapes bug" in message
 
 
 def test_sequence_path_via_type_pyshacl_parity(engine):
