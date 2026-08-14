@@ -167,10 +167,16 @@ def get_cimxml_engine(name="auto"):
 
 
 def _split_instances(data):
-    """Per-INSTANCE_ID frames in the input's own flavor (frame ops bind to input flavor)."""
+    """Per-INSTANCE_ID frames in the input's own flavor (frame ops bind to input flavor).
+
+    Empty groups are skipped: on ArrowDtype dictionary columns (the parser's
+    INSTANCE_ID default) groupby yields every dictionary value — including
+    values filtered out of the frame — and observed=True does not apply
+    (pandas Categorical only), so a filtered frame would otherwise export
+    phantom empty instances."""
     if _flavor(data) == "polars":
         return data.partition_by("INSTANCE_ID", maintain_order=True)
-    return (frame for _, frame in data.groupby("INSTANCE_ID", observed=True))
+    return (frame for _, frame in data.groupby("INSTANCE_ID", observed=True) if len(frame))
 
 
 class ExportType(StrEnum):
