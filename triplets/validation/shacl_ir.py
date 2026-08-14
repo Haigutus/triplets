@@ -47,6 +47,7 @@ class CompiledShapes:
 
 
 _COMPILE_CACHE: dict = register_cache({})  # content hash → CompiledShapes
+_GRAPH_CACHE: dict = register_cache({})    # file content digest → parsed rdflib.Graph
 
 
 def compile_shapes(shapes) -> CompiledShapes:
@@ -111,7 +112,14 @@ def _source_names(shapes):
 
 
 def _load_shapes(shapes):
-    """str/path | list of paths | rdflib.Graph → one rdflib.Graph of shapes."""
+    """str/path | list of paths | rdflib.Graph → one rdflib.Graph of shapes.
+
+    Each file is parsed once per content (cached) — different shape unions
+    sharing member files (the NC per-area unions) reuse the parsed graphs.
+    The union is always a FRESH graph: cached graphs are never handed out,
+    because pyshacl (advanced=True) may mutate the shapes graph it receives.
+    Cached bnode labels shared across unions are a feature — sh:sourceShape
+    labels stay stable for the same shape file everywhere."""
     import rdflib
 
     if isinstance(shapes, rdflib.Graph):
@@ -119,12 +127,36 @@ def _load_shapes(shapes):
 
     graph = rdflib.Graph()
     for path in _paths(shapes):
-        suffix = str(path)[str(path).rfind("."):].lower()
-        graph.parse(str(path), format=_SHAPE_FORMATS.get(suffix, "turtle"))
+        cached = _parsed_graph(path)
+        for triple in cached:
+            graph.add(triple)
+        for prefix, namespace in cached.namespaces():
+            graph.bind(prefix, namespace)
     return graph
 
 
+def _parsed_graph(path):
+    """The file's parsed graph, cached by content digest (path-independent)."""
+    import rdflib
+
+    key = _file_digest(path)
+    if key not in _GRAPH_CACHE:
+        suffix = str(path)[str(path).rfind("."):].lower()
+        graph = rdflib.Graph()
+        graph.parse(str(path), format=_SHAPE_FORMATS.get(suffix, "turtle"))
+        _GRAPH_CACHE[key] = graph
+    return _GRAPH_CACHE[key]
+
+
+def _file_digest(path):
+    with open(path, "rb") as file:
+        return hashlib.sha256(file.read()).hexdigest()
+
+
 def _content_hash(shapes):
+    """Union key: sha256 over the SORTED SET of per-file digests — path,
+    order and duplicates don't matter, so reordered/overlapping unions of the
+    same files hit the same compile cache entry."""
     import rdflib
 
     digest = hashlib.sha256()
@@ -132,9 +164,8 @@ def _content_hash(shapes):
         digest.update(b"\n".join(sorted(shapes.serialize(format="nt").encode().splitlines())))
         return digest.hexdigest()
 
-    for path in _paths(shapes):
-        with open(path, "rb") as file:
-            digest.update(file.read())
+    for file_digest in sorted({_file_digest(path) for path in _paths(shapes)}):
+        digest.update(file_digest.encode())
     return digest.hexdigest()
 
 

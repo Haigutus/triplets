@@ -95,7 +95,7 @@ def test_ir_columns_and_components(shape_file):
         "Equipment.EquipmentContainer"}
     assert by_component.loc["sh:in", "params"] == ["true", "false"]
     assert by_component.loc["sh:class", "params"] == "VoltageLevel"
-    assert by_component.loc["sh:datatype", "params"].tolist() == ["xsd:string", "xsd:boolean"]
+    assert sorted(by_component.loc["sh:datatype", "params"]) == ["xsd:boolean", "xsd:string"]
     sparql = by_component.loc["sh:sparql", "params"]
     assert sparql["select"].startswith("SELECT ?this")
     assert sparql["prefixes"] == "PREFIX cim: <http://iec.ch/TC57/CIM100#>\n"
@@ -212,3 +212,75 @@ def test_logical_operator_cycle_dropped(caplog):
         ir = parse_ir(graph)
     assert any("cycle" in record.message for record in caplog.records)
     assert (ir["component"] == "sh:or").any()          # the outer constraint survives
+
+
+# ── per-file graph cache ──────────────────────────────────────────────────────
+
+SHARED_TTL = """@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:SharedShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+"""
+OTHER_TTL = """@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:OtherShape a sh:NodeShape ; sh:targetClass cim:Switch ;
+    sh:property [ sh:path cim:Switch.normalOpen ; sh:maxCount 1 ] .
+"""
+
+
+def _shape_files(tmp_path):
+    shared = tmp_path / "shared.ttl"
+    shared.write_text(SHARED_TTL)
+    other = tmp_path / "other.ttl"
+    other.write_text(OTHER_TTL)
+    return shared, other
+
+
+def test_unions_share_per_file_parses(tmp_path, monkeypatch):
+    """Two unions sharing a member file parse it once — the per-file graph
+    cache is what makes many overlapping shape unions cheap."""
+    import rdflib
+    import triplets
+    from triplets.validation import shacl_ir
+
+    triplets.clear_caches()
+    shared, other = _shape_files(tmp_path)
+    parsed = []
+    original = rdflib.Graph.parse
+
+    def counting_parse(self, source=None, *args, **kwargs):
+        parsed.append(str(source))
+        return original(self, source, *args, **kwargs)
+
+    monkeypatch.setattr(rdflib.Graph, "parse", counting_parse)
+    shacl_ir.compile_shapes([str(shared)])
+    shacl_ir.compile_shapes([str(shared), str(other)])   # shared.ttl must not re-parse
+    assert parsed.count(str(shared)) == 1
+    assert parsed.count(str(other)) == 1
+
+
+def test_union_key_ignores_order_and_duplicates(tmp_path):
+    import triplets
+    from triplets.validation import shacl_ir
+
+    triplets.clear_caches()
+    shared, other = _shape_files(tmp_path)
+    forward = shacl_ir.compile_shapes([str(shared), str(other)])
+    backward = shacl_ir.compile_shapes([str(other), str(shared), str(shared)])
+    assert forward is backward                            # same cache entry
+
+
+def test_cached_graphs_survive_compiled_graph_mutation(tmp_path):
+    """pyshacl (advanced=True) may add triples to compiled.graph — that must
+    not leak into other unions sharing the cached per-file graphs."""
+    import rdflib
+    import triplets
+    from triplets.validation import shacl_ir
+
+    triplets.clear_caches()
+    shared, other = _shape_files(tmp_path)
+    first = shacl_ir.compile_shapes([str(shared)])
+    first.graph.add((rdflib.URIRef("urn:x"), rdflib.URIRef("urn:y"), rdflib.URIRef("urn:z")))
+    second = shacl_ir.compile_shapes([str(shared), str(other)])
+    assert (rdflib.URIRef("urn:x"), rdflib.URIRef("urn:y"), rdflib.URIRef("urn:z")) \
+        not in second.graph
