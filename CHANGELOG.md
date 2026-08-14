@@ -6,6 +6,39 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **SARIF: every result gets a displayable location** (GitHub rejects
+  location-less results): null-ID rows keep their stamped
+  `SOURCE_URI`/`SOURCE_LINE`; rows with nothing fall back to a whole-file
+  artifact location (`region.startLine 1`) — the shapes file for
+  `triplets:*` tool findings, else the first data file.
+- **Exports skip phantom empty instance groups**: pandas groupby on the
+  parser's ArrowDtype dictionary `INSTANCE_ID` yields every dictionary value
+  on filtered frames (`observed=True` is Categorical-only) — documented in
+  docs/parsers.md with recipes; upstream pandas issue drafted.
+- **pyarrow ABI pairing pinned**: build-system pins `pyarrow==25.0.1`,
+  runtime extras require `>=25.0.1,<26` (floor = build version, cap = next
+  libarrow soname family), and wheels bake the build version — the cython
+  engines raise a clear upgrade error instead of crashing when the runtime
+  pyarrow is older than the build.
+- **`scope=` documented truthfully**: it is a named-graph (instance) filter —
+  out-of-scope data is not loaded, references into unscoped instances count
+  as absent; include dependency instances in the scope (or validate the full
+  union) for cross-instance checks. (Scoping focus nodes instead was
+  considered and declined — scope means named-graph filtering.) The pandas
+  scope filter stays `isin` — measured 3x faster than a merge join on
+  dictionary columns.
+
+### Changed
+- **Per-file shape-graph cache**: shape files are parsed once per content;
+  overlapping shape unions (per-area NC sets) reuse the parsed graphs, and
+  the compile-cache key is now order/duplicate-insensitive. Unions always get
+  a fresh graph (cached graphs are never aliased — pyshacl may mutate the
+  shapes graph it receives). `CompiledShapes.merge()` / per-file IR caching
+  was considered and declined: `sh:node`/`sh:or` targets and `sh:closed`'s
+  resolved KEY list are whole-graph computations, so merging per-file IRs is
+  unsound.
+
 ## [0.2.0rc2] - 2026-08-13
 
 Validation-report quality release: reports carry everything needed to fix
