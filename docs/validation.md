@@ -317,7 +317,10 @@ schema-compiled IR (no SHACL graph exists). **Results do not masquerade as
 SHACL**: the constraint language is `"rdfs"` (`CompiledShapes.language`, in
 the run metadata), violation types are vocabulary-accurate —
 `xsd:minOccurs`, `xsd:maxOccurs`, `xsd:type`, `rdfs:range` (enum membership
-and association targets are both range checks), `rdfs:domain` (closed) — and
+and association targets are both range checks), `schema:domainIncludes`
+(closed — an exclusive `rdfs:domain` exists only for owned properties; the
+APL convention attaches external properties via the non-exclusive
+`schema:domainIncludes`, and that is exactly what this check asserts) — and
 the message tags follow: `[rdfs_expected]`, `[rdfs_path]`, … with
 `sh:sourceConstraintComponent` pointing at the real RDFS/XSD IRIs.
 

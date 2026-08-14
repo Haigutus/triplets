@@ -24,6 +24,7 @@ _PROV = "http://www.w3.org/ns/prov#"
 _DCTERMS = "http://purl.org/dc/terms/"
 _XSD = "http://www.w3.org/2001/XMLSchema#"
 _RDFS = "http://www.w3.org/2000/01/rdf-schema#"
+_SCHEMA_ORG = "https://schema.org/"
 
 # path suffix → rdflib serialize format (traversed in order for the reverse,
 # so .xml — the suffix the docs push for RDF/XML — is the default before .rdf)
@@ -136,6 +137,8 @@ def _component(term):
         return f"rdfs:{suffix}"
     if value.startswith(_XSD):
         return f"xsd:{suffix}"
+    if value.startswith(_SCHEMA_ORG):    # schema.org has no '#' — suffix is the path tail
+        return f"schema:{value[len(_SCHEMA_ORG):]}"
     return _COMPONENT_MAP.get(suffix, f"sh:{suffix}")
 
 
@@ -301,10 +304,12 @@ def _expand(value):
         return value
     if value in _COMPONENT_URI:
         return _COMPONENT_URI[value]
-    if value.startswith("rdfs:"):        # schema-validation types are real RDFS/XSD terms
+    if value.startswith("rdfs:"):        # schema-validation types are real vocabulary terms
         return f"{_RDFS}{value[5:]}"
     if value.startswith("xsd:"):
         return f"{_XSD}{value[4:]}"
+    if value.startswith("schema:"):
+        return f"{_SCHEMA_ORG}{value[7:]}"
     if value.startswith("sh:"):
         return f"{_SH}{value[3:]}"
     if value.startswith("triplets:"):

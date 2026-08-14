@@ -8,7 +8,13 @@ does not masquerade as SHACL (constraint language ``"rdfs"``):
 
     sh:minCount → xsd:minOccurs      sh:maxCount → xsd:maxOccurs
     sh:datatype → xsd:type           sh:in       → rdfs:range
-    sh:closed   → rdfs:domain
+    sh:closed   → schema:domainIncludes
+
+(schema:domainIncludes, not rdfs:domain: per the APL RDFS convention an
+exclusive rdfs:domain exists only for owned/same-vocabulary properties —
+external properties attach to classes via the non-exclusive
+schema:domainIncludes, and "not among this class's declared properties"
+is exactly a domainIncludes claim.)
 
 Cardinality comes from the schema's already-resolved ``xsd:minOccours`` /
 ``xsd:maxOccours`` fields, datatypes from ``xsd:type`` (the lexical registry
@@ -34,7 +40,8 @@ _PROPERTY_TYPES = ("Attribute", "Association", "Enumeration")
 
 # engine dispatch key → presented violation type (vocabulary-accurate)
 PRESENTED = {"sh:minCount": "xsd:minOccurs", "sh:maxCount": "xsd:maxOccurs",
-             "sh:datatype": "xsd:type", "sh:in": "rdfs:range", "sh:closed": "rdfs:domain"}
+             "sh:datatype": "xsd:type", "sh:in": "rdfs:range",
+             "sh:closed": "schema:domainIncludes"}
 
 
 def compile_schema(rdf_map, closed=False) -> CompiledShapes:
@@ -42,7 +49,7 @@ def compile_schema(rdf_map, closed=False) -> CompiledShapes:
 
     closed=False (default): properties the schema does not define for a class
     are not reported — multi-profile data legitimately unions properties.
-    closed=True adds one rdfs:domain check per class.
+    closed=True adds one schema:domainIncludes check per class.
     """
     schema, digest, source = _load(rdf_map)
     key = f"schema|closed={closed}|{digest}"

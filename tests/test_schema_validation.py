@@ -118,11 +118,29 @@ def test_association_range_abstract_expansion(engine):
 
 
 def test_closed_flag_reports_unknown_property(engine):
+    """schema:domainIncludes, not rdfs:domain — external properties attach to
+    classes non-exclusively (the APL rdfs:domain/domainIncludes convention),
+    so "not among this class's declared properties" is a domainIncludes claim."""
     rows = breaker("b1", *OK_PROPS, ("Breaker.madeUp", "x")) + CONTAINED
-    assert violating(run(rows, engine), "rdfs:domain") == set()        # default: off
+    assert violating(run(rows, engine), "schema:domainIncludes") == set()   # default: off
     v = run(rows, engine, closed=True)
-    flagged = v[v["VIOLATION_TYPE"] == "rdfs:domain"]
+    flagged = v[v["VIOLATION_TYPE"] == "schema:domainIncludes"]
     assert set(flagged["ID"]) == {"b1"}
+
+
+def test_closed_type_roundtrips_through_report():
+    pytest.importorskip("rdflib")
+    import rdflib
+    from triplets.validation.shacl_report import report_to_violations, violations_to_report_graph
+
+    rows = breaker("b1", *OK_PROPS, ("Breaker.madeUp", "x")) + CONTAINED
+    v = run(rows, "pandas", closed=True)
+    graph = violations_to_report_graph(v)
+    components = {str(c) for c in graph.objects(
+        None, rdflib.Namespace("http://www.w3.org/ns/shacl#").sourceConstraintComponent)}
+    assert "https://schema.org/domainIncludes" in components            # real schema.org IRI
+    back = report_to_violations(graph)
+    assert "schema:domainIncludes" in set(back["VIOLATION_TYPE"])
 
 
 def test_cross_profile_dedupe_first_wins():
