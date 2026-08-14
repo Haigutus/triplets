@@ -34,6 +34,7 @@ from .networkx_pandas import export_to_networkx as _export_to_networkx
 logger = logging.getLogger(__name__)
 
 
+from .._abi import check_pyarrow as _check_pyarrow
 from .._engine_detect import flavor as _flavor, to_arrow as _to_arrow, to_pandas as _to_pandas
 from .._registry import EngineRegistry
 
@@ -49,6 +50,7 @@ _CIMXML = EngineRegistry(
              "lxml": "python_lxml", "pandas": "python_lxml"},
     requires={"cython_pugixml": (".cimxml_cython_pugixml", "pyarrow")},
     hints={"cython_pugixml": "Build with: pixi run build-cython-pugixml-arrow."},
+    guards={"cython_pugixml": _check_pyarrow},   # ABI check before the compiled import
 )
 _NQUADS = EngineRegistry(
     "exporter_nquads", __package__,
