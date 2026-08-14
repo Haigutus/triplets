@@ -105,6 +105,16 @@ def build_sarif(violations, group=True, sources=None):
 
     import triplets
     meta = violations.attrs.get("validation", {})
+    # GitHub displays a result only if it has a location: rows with neither a
+    # focus ID nor stamped source columns fall back to a whole-file artifact —
+    # the shapes file for tool findings (triplets:*), else the first data file
+    for result in results:
+        if "locations" not in result:
+            tool_finding = str(result.get("properties", {})
+                               .get("violationType", "")).startswith("triplets:")
+            names = meta.get("references") if tool_finding else meta.get("source")
+            if names:
+                result["locations"] = [{"physicalLocation": _artifact_location(names[0])}]
     run = _prune({
         "tool": {"driver": _prune({
             "name": "triplets-shacl",
@@ -281,18 +291,21 @@ def _describe(record):
 
 
 def _location(record):
-    """Point at the model element via logicalLocations; the physical side is
-    the exact source region when the locate_violations pass found the object
-    (LOCATION_COLUMNS on the frame), else just the file the enrichment traced."""
-    if pandas.isna(record["ID"]):
-        return None
-    qualified = (f"{record['OBJECT_TYPE']}/{record['ID']}"
-                 if not pandas.isna(record["OBJECT_TYPE"]) else str(record["ID"]))
-    location = {"logicalLocations": [_prune({
-        "fullyQualifiedName": qualified,
-        "name": _value(record["OBJECT_NAME"]) or str(record["ID"]),
-        "kind": "object",
-    })]}
+    """Assemble a location from whatever the row carries: the model element
+    (logicalLocations — needs a focus ID) and/or the source position
+    (physicalLocation — the locate pass columns work even for null-ID rows,
+    e.g. externally stamped shape-level notes). GitHub displays a result only
+    with at least one location, region.startLine included — build_sarif adds
+    a run-level artifact fallback for rows that carry neither."""
+    location = {}
+    if not pandas.isna(record["ID"]):
+        qualified = (f"{record['OBJECT_TYPE']}/{record['ID']}"
+                     if not pandas.isna(record["OBJECT_TYPE"]) else str(record["ID"]))
+        location["logicalLocations"] = [_prune({
+            "fullyQualifiedName": qualified,
+            "name": _value(record["OBJECT_NAME"]) or str(record["ID"]),
+            "kind": "object",
+        })]
     if not pandas.isna(record["SOURCE_URI"]):
         # whole-line region, explicitly bounded (endLine given) — columns are
         # per-format anchor rules that broke SARIF viewers for no information
@@ -306,9 +319,16 @@ def _location(record):
             "region": region,
         }
     elif not pandas.isna(record["INSTANCE_LABEL"]):
-        location["physicalLocation"] = {
-            "artifactLocation": {"uri": quote(str(record["INSTANCE_LABEL"]))}}
-    return location
+        location["physicalLocation"] = _artifact_location(str(record["INSTANCE_LABEL"]))
+    return location or None
+
+
+def _artifact_location(uri):
+    """Whole-file physicalLocation — GitHub requires a region.startLine, and
+    line 1 is the whole-file convention (verified against the SARIF support
+    docs: a result without a location does not display at all)."""
+    return {"artifactLocation": {"uri": quote(str(uri), safe="/")},
+            "region": {"startLine": 1, "endLine": 1}}
 
 
 def _utc(timestamp):

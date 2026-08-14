@@ -178,6 +178,34 @@ def test_accessor(violations):
     assert "OBJECT_NAME" in enriched.columns
 
 
+def test_null_id_rows_keep_stamped_locations():
+    """Shape-level rows (null ID) with externally stamped source columns get a
+    physicalLocation — GitHub rejects location-less results."""
+    violations = pandas.DataFrame(
+        [[None, "IdentifiedObject.name", None, "triplets:invalidSparql",
+          "query rejected", "Warning", "urn:shape"]],
+        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
+    violations["SOURCE_URI"] = "shapes/equipment.ttl"
+    violations["SOURCE_LINE"] = 42
+    location = build_sarif(violations)["runs"][0]["results"][0]["locations"][0]
+    assert "logicalLocations" not in location                  # no focus object
+    assert location["physicalLocation"]["artifactLocation"]["uri"] == "shapes/equipment.ttl"
+    assert location["physicalLocation"]["region"]["startLine"] == 42
+
+
+def test_tool_findings_fall_back_to_shapes_artifact():
+    """A bare tool finding (no ID, no stamps) points at the shapes file from
+    the run metadata — whole-file region, so GitHub can display it."""
+    violations = pandas.DataFrame(
+        [[None, None, None, "triplets:invalidSparql", "m", "Violation", "s"]],
+        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
+    violations.attrs["validation"] = {"source": ["grid.xml"], "references": ["shapes.ttl"]}
+    result = build_sarif(violations)["runs"][0]["results"][0]
+    physical = result["locations"][0]["physicalLocation"]
+    assert physical["artifactLocation"]["uri"] == "shapes.ttl"   # not the data file
+    assert physical["region"] == {"startLine": 1, "endLine": 1}
+
+
 def test_official_schema_conformance(violations):
     """Every output shape validates against the official OASIS SARIF 2.1.0
     JSON schema (vendored in tests/data)."""
@@ -291,5 +319,6 @@ def test_sources_absent_ids_fall_back(shapes):
                                               engine="pandas", context=True)
     run = build_sarif(violations, sources=[])["runs"][0]           # nothing locatable
     location = run["results"][0]["locations"][0]
-    assert "region" not in location.get("physicalLocation", {})
     assert location["physicalLocation"]["artifactLocation"]["uri"] == "Svedala%20EQ.xml"
+    # whole-file convention — GitHub needs region.startLine to display at all
+    assert location["physicalLocation"]["region"] == {"startLine": 1, "endLine": 1}
