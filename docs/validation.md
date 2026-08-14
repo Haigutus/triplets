@@ -351,7 +351,8 @@ violations = data.shacl.validate("shapes.ttl", rdf_map=schemas.ENTSOE_CGMES_3_0_
 compiled = triplets.validation.compile(["equipment.ttl", "topology.ttl"])
 violations = data.shacl.validate(compiled)
 
-# scope restricts the validated graphs; all data stays loaded for reference resolution
+# scope filters to the named graphs (validated instances) — out-of-scope data
+# is not loaded; include dependency instances for cross-instance references
 one_instance = str(data["INSTANCE_ID"].astype(str).iloc[0])
 violations = data.shacl.validate("shapes.ttl", scope=[one_instance])
 
