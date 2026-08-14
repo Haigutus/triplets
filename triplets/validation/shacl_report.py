@@ -23,6 +23,7 @@ _SH = "http://www.w3.org/ns/shacl#"
 _PROV = "http://www.w3.org/ns/prov#"
 _DCTERMS = "http://purl.org/dc/terms/"
 _XSD = "http://www.w3.org/2001/XMLSchema#"
+_RDFS = "http://www.w3.org/2000/01/rdf-schema#"
 
 # path suffix → rdflib serialize format (traversed in order for the reverse,
 # so .xml — the suffix the docs push for RDF/XML — is the default before .rdf)
@@ -91,7 +92,7 @@ def _constraint_message(messages):
     first alphabetically for reports written by other tools."""
     texts = sorted(str(message) for message in messages)
     for text in texts:
-        for prefix in ("[shacl_message] ", "[engine_message] "):
+        for prefix in ("[shacl_message] ", "[rdfs_message] ", "[engine_message] "):
             if text.startswith(prefix):
                 return text[len(prefix):]
     return texts[0] if texts else None
@@ -131,6 +132,10 @@ def _component(term):
     suffix = value.split("#")[-1]
     if value.startswith(_TRIPLETS_NS):
         return f"triplets:{suffix}"
+    if value.startswith(_RDFS):
+        return f"rdfs:{suffix}"
+    if value.startswith(_XSD):
+        return f"xsd:{suffix}"
     return _COMPONENT_MAP.get(suffix, f"sh:{suffix}")
 
 
@@ -192,6 +197,8 @@ def violations_to_report_graph(violations, report_source=None, report_references
         for triple in shape_graph:
             graph.add(triple)
 
+    language = meta.get("language", "shacl")
+
     report = rdflib.BNode()
     graph.add((report, rdflib.RDF.type, sh.ValidationReport))
     graph.add((report, sh.conforms, rdflib.Literal(violations.empty)))
@@ -216,7 +223,7 @@ def violations_to_report_graph(violations, report_source=None, report_references
             graph.add((result, sh.value, rdflib.Literal(row.VALUE)))
         if pandas.notna(row.VIOLATION_TYPE):
             graph.add((result, sh.sourceConstraintComponent, rdflib.URIRef(_expand(row.VIOLATION_TYPE))))
-        for message in _messages(row):
+        for message in _messages(row, language):
             graph.add((result, sh.resultMessage, rdflib.Literal(message)))
         if pandas.notna(row.SOURCE_SHAPE):
             shape = str(row.SOURCE_SHAPE)   # anonymous property shapes stay blank nodes
@@ -235,7 +242,7 @@ def _as_list(value):
     return tuple(v.decode() if isinstance(v, bytes) else os.fspath(v) for v in values)
 
 
-def _messages(row):
+def _messages(row, language="shacl"):
     """The result's message set — one entry per fact, each prefixed with
     what it is: the constraint message verbatim ([shacl_message] when authored,
     [engine_message] when the engine worded it — exactly one of the two), what the
@@ -249,10 +256,10 @@ def _messages(row):
 
     messages = []
     if cell("MESSAGE") is not None:
-        messages.append(f"{message_prefix(row.VIOLATION_TYPE, cell('MESSAGE_SOURCE'))} "
+        messages.append(f"{message_prefix(row.VIOLATION_TYPE, cell('MESSAGE_SOURCE'), language)} "
                         f"{row.MESSAGE}")
     if cell("EXPECTED") is not None:
-        messages.append(f"[shacl_expected] {row.EXPECTED}")
+        messages.append(f"[{language}_expected] {row.EXPECTED}")
     if cell("TARGET") is not None:
         messages.append(f"[context_message] {row.TARGET}")
     if cell("OBJECT_TYPE") is not None or cell("OBJECT_NAME") is not None:
@@ -260,7 +267,7 @@ def _messages(row):
                          if part is not None)
         messages.append(f"[context_object] {label}")
     if cell("SHAPE_DESCRIPTION") is not None:
-        messages.append(f"[shacl_description] {row.SHAPE_DESCRIPTION}")
+        messages.append(f"[{language}_description] {row.SHAPE_DESCRIPTION}")
     if cell("SCHEMA_DESCRIPTION") is not None:
         multiplicity = f" [{row.SCHEMA_MULTIPLICITY}]" if cell("SCHEMA_MULTIPLICITY") is not None else ""
         messages.append(f"[schema_property] {row.SCHEMA_DESCRIPTION}{multiplicity}")
@@ -273,14 +280,16 @@ def _messages(row):
     return messages
 
 
-def message_prefix(violation_type, source=None):
-    """[shacl_message] = the text is the shape's own sh:message; [engine_message] = the
-    engine worded it. validate() stamps MESSAGE_SOURCE on every row; frames
-    without it fall back to the violation-type namespace (triplets:* →
-    engine). Shared with the SARIF exporter so both formats tag identically."""
+def message_prefix(violation_type, source=None, language="shacl"):
+    """[<language>_message] = the text is the shape's/schema's own message;
+    [engine_message] = the engine worded it. validate() stamps MESSAGE_SOURCE
+    on every row; frames without it fall back to the violation-type namespace
+    (triplets:* → engine). The constraint language ("shacl"; "rdfs" for
+    schema-compiled runs) names the whole tag family in both report formats."""
     if source is not None and not pandas.isna(source):
-        return "[shacl_message]" if source == "shacl" else "[engine_message]"
-    return "[engine_message]" if str(violation_type).startswith("triplets:") else "[shacl_message]"
+        return f"[{language}_message]" if source == "shacl" else "[engine_message]"
+    return ("[engine_message]" if str(violation_type).startswith("triplets:")
+            else f"[{language}_message]")
 
 
 def _expand(value):
@@ -292,6 +301,10 @@ def _expand(value):
         return value
     if value in _COMPONENT_URI:
         return _COMPONENT_URI[value]
+    if value.startswith("rdfs:"):        # schema-validation types are real RDFS/XSD terms
+        return f"{_RDFS}{value[5:]}"
+    if value.startswith("xsd:"):
+        return f"{_XSD}{value[4:]}"
     if value.startswith("sh:"):
         return f"{_SH}{value[3:]}"
     if value.startswith("triplets:"):

@@ -288,6 +288,39 @@ SHACL report node still gets `prov:generatedAtTime` (export time) and
 `dcterms:creator` — a standard report always says when and by what it was
 written.
 
+## Schema validation (`validate_schema` / `compile_schema`)
+
+Validate data directly against the export schema (rdf_map) — no SHACL shapes
+needed, no rdflib on this path:
+
+```python
+violations = triplets.validation.validate_schema(data, schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+violations = data.shacl.validate_schema(rdf_map, engine="duckdb", closed=True)
+compiled = triplets.validation.compile_schema(rdf_map)   # reuse across validations
+```
+
+`compile_schema(rdf_map, closed=False)` synthesizes the engine IR straight
+from the schema (cached by content): cardinality from the resolved
+`xsd:minOccours`/`xsd:maxOccours` fields, datatype lexical checks from
+`xsd:type`, enumeration membership from `values`, association targets from
+`range` expanded to concrete subclasses via the classes' `inheritance` lists
+(abstract ranges like `#EquipmentContainer` accept any concrete subclass;
+unexpandable ranges land in the coverage metadata). `closed=True` adds an
+unknown-property check per class (off by default — multi-profile data
+legitimately unions properties). A dangling association reference is silent
+(minOccurs catches absence), and the found target type lands in `[detail]`'s
+successor `TARGET` column as usual.
+
+The same vectorized engines run the checks (polars lazy plans, duckdb SQL,
+pandas — plans cached per compiled schema); the pyshacl engine refuses
+schema-compiled IR (no SHACL graph exists). **Results do not masquerade as
+SHACL**: the constraint language is `"rdfs"` (`CompiledShapes.language`, in
+the run metadata), violation types are vocabulary-accurate —
+`xsd:minOccurs`, `xsd:maxOccurs`, `xsd:type`, `rdfs:range` (enum membership
+and association targets are both range checks), `rdfs:domain` (closed) — and
+the message tags follow: `[rdfs_expected]`, `[rdfs_path]`, … with
+`sh:sourceConstraintComponent` pointing at the real RDFS/XSD IRIs.
+
 ## Shared Loading (`_rdflib_loader.py`)
 
 SHACL and SPARQL reach rdflib through the same two helpers, so a validation and

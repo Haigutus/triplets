@@ -39,6 +39,7 @@ import pandas
 from .._engine_detect import flavor
 from .._registry import EngineRegistry
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
+from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
                            violations_to_csv, violations_to_excel)
 from .context import ENRICHMENT_COLUMNS, enrich  # noqa: F401 — public API
@@ -135,6 +136,9 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
                                         table_name=kwargs.get("table_name", "triplets"))
     violations["EXPECTED"] = _expected(violations, compiled)
     violations["MESSAGE_SOURCE"] = _message_sources(violations, compiled)
+    if compiled.language != "shacl":     # present vocabulary-accurate types, not fake SHACL
+        violations["VIOLATION_TYPE"] = (violations["VIOLATION_TYPE"].map(_PRESENTED)
+                                        .fillna(violations["VIOLATION_TYPE"]))
     if context:
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
     violations.attrs["validation"] = _report_metadata(
@@ -220,6 +224,8 @@ def _source_shape_graphs(violations, compiled):
     import rdflib
 
     graphs = {}
+    if compiled.graph is None:           # schema-compiled IR — no shapes graph to embed
+        return graphs
     for shape in set(violations["SOURCE_SHAPE"].dropna().astype(str)):
         node = (rdflib.URIRef(shape) if "://" in shape or shape.startswith("urn:")
                 else rdflib.BNode(shape))
@@ -255,6 +261,16 @@ def _type_map(data, table_name="triplets"):
     return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
 
 
+def validate_schema(data, rdf_map, engine="auto", closed=False, **kwargs):
+    """Validate triplet data directly against the export schema — cardinality
+    (xsd:minOccurs/maxOccurs), datatypes (xsd:type), enumeration membership
+    and association ranges (rdfs:range), optionally unknown properties
+    (rdfs:domain, closed=True). Same vectorized engines, reports and metadata
+    as SHACL validation; no rdflib needed."""
+    return validate(data, compile_schema(rdf_map, closed=closed), rdf_map=rdf_map,
+                    engine=engine, **kwargs)
+
+
 def _report_metadata(violations, data, compiled, engine_name, started, table_name="triplets"):
     """The validation-run facts every report exporter reads (violations.attrs).
 
@@ -281,6 +297,7 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
         "references": list(compiled.sources),
         "node_shapes": compiled.stats.get("node_shapes", 0),
         "constraints": compiled.stats.get("constraints", 0),
+        "language": compiled.language,
         "skipped_shapes": skipped_shapes,
         "skipped_components": skipped_components,
         # rdflib graphs, in-memory only — the SHACL report embeds them;
