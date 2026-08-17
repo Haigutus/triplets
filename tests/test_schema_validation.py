@@ -248,28 +248,27 @@ def test_real_schema_smoke():
     assert results["pandas"] == results["polars"] == results["duckdb"]
 
 
-def test_mrid_min_occurs_satisfied_by_rdf_id(engine):
-    """IEC 61970-552: mRID maps to the rdf:ID/about attribute — every parsed
-    object carries it as the ID column, so no minOccurs check (issue #101);
-    an explicit duplicate element still trips maxOccurs."""
-    schema = {"EQ": {**SCHEMA["EQ"]}}
-    schema["EQ"]["Breaker"] = {**SCHEMA["EQ"]["Breaker"],
-                               "parameters": [*SCHEMA["EQ"]["Breaker"]["parameters"],
-                                              "IdentifiedObject.mRID"]}
-    schema["EQ"]["IdentifiedObject.mRID"] = {
-        "type": "Attribute", "multiplicity": "1..1", "xsd:minOccours": "1",
-        "xsd:maxOccours": "1", "xsd:type": "xsd:string", "description": "Master RID."}
+def test_mrid_validated_per_schema(engine):
+    """mRID cardinality follows the schema, no special-casing: CGMES 3.0/NCP
+    declare it 1..1 (the element is expected), CGMES 2.4 declares 0..1 (not
+    serialized) — the schemas are profile-accurate, so no code exemption."""
+    def with_mrid(min_occurs):
+        schema = {"EQ": {**SCHEMA["EQ"]}}
+        schema["EQ"]["Breaker"] = {**SCHEMA["EQ"]["Breaker"],
+                                   "parameters": [*SCHEMA["EQ"]["Breaker"]["parameters"],
+                                                  "IdentifiedObject.mRID"]}
+        schema["EQ"]["IdentifiedObject.mRID"] = {
+            "type": "Attribute", "multiplicity": f"{min_occurs}..1",
+            "xsd:minOccours": str(min_occurs), "xsd:maxOccours": "1",
+            "xsd:type": "xsd:string", "description": "Master RID."}
+        return schema
+
     data = pandas.DataFrame(breaker("b1", *OK_PROPS) + CONTAINED,
                             columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    v = validate_schema(data, schema, engine=engine)
-    assert violating(v, "xsd:minOccurs") == set()          # no mRID element needed
-
-    doubled = pandas.DataFrame(
-        breaker("b1", *OK_PROPS, ("IdentifiedObject.mRID", "x"),
-                ("IdentifiedObject.mRID", "y")) + CONTAINED,
-        columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    v = validate_schema(doubled, schema, engine=engine)
-    assert ("b1", None) in violating(v, "xsd:maxOccurs")   # maxOccurs still applies
+    v = validate_schema(data, with_mrid(1), engine=engine)          # CGMES 3.0/NCP style
+    assert ("b1", None) in violating(v, "xsd:minOccurs")            # element IS required
+    v = validate_schema(data, with_mrid(0), engine=engine)          # CGMES 2.4 style
+    assert violating(v, "xsd:minOccurs") == set()
 
 
 def test_sarif_titles_follow_rdfs_format():

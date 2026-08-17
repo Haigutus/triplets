@@ -6,6 +6,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **mRID cardinality is validated per schema again** (reverts part of
+  0.2.0rc4's #101 fix): the schemas are already profile-accurate —
+  CGMES 2.4 declares `IdentifiedObject.mRID` 0..1 (not serialized),
+  CGMES 3.0 and NCP declare 1..1 (the element is expected in the data) —
+  so the hardcoded exemption suppressed a legitimate check. #101's
+  re-declared-object findings are a scoping matter: validate the full
+  model-set union (the EQ element satisfies minOccurs for objects
+  re-declared in SSH/TP/SV); per-file validation legitimately reports
+  attributes described in another profile.
+
 ## [0.2.0rc4] - 2026-08-17
 
 Validation correctness (issues #99-#101) and self-contained errors:

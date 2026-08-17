@@ -38,12 +38,6 @@ logger = logging.getLogger(__name__)
 
 _PROPERTY_TYPES = ("Attribute", "Association", "Enumeration")
 
-# IEC 61970-552 CIMXML maps IdentifiedObject.mRID to the rdf:ID/rdf:about
-# attribute (stated in the profile RDFS) — triplets frames always carry it as
-# the ID column, so a minOccurs check would false-fire on every object that
-# skips the redundant element (issue #101). maxOccurs/datatype still apply.
-_IDENTITY_KEYS = {"IdentifiedObject.mRID"}
-
 # engine dispatch key → presented violation type (vocabulary-accurate)
 PRESENTED = {"sh:minCount": "xsd:minOccurs", "sh:maxCount": "xsd:maxOccurs",
              "sh:datatype": "xsd:type", "sh:in": "rdfs:range",
@@ -134,7 +128,10 @@ def _property_rows(meta, prop, entry, concrete, skipped):
     meta = {**meta, "path": prop, "shape_id": f"{meta['shape_id']}.{prop}"}
     rows = []
     low, high = entry.get("xsd:minOccours", ""), entry.get("xsd:maxOccours", "")
-    if low.isdigit() and int(low) > 0 and prop not in _IDENTITY_KEYS:
+    if low.isdigit() and int(low) > 0:
+        # incl. IdentifiedObject.mRID: the schemas are profile-accurate —
+        # CGMES 2.4 declares it 0..1 (not serialized), CGMES 3.0/NCP 1..1
+        # (element expected); validate what the schema says
         rows.append({**meta, "component": "sh:minCount", "params": int(low)})
     if high.isdigit():
         rows.append({**meta, "component": "sh:maxCount", "params": int(high)})
