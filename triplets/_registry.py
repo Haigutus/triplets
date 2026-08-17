@@ -48,7 +48,8 @@ class EngineRegistry:
 
     def __init__(self, kind: str, package: str, modules: dict, aliases: dict | None = None,
                  hints: dict | None = None, default_hint: str = "", auto: list | None = None,
-                 requires: dict | None = None, policy: str = "auto"):
+                 requires: dict | None = None, policy: str = "auto",
+                 guards: dict | None = None):
         self.kind = kind              # "parser_cimxml" / "sparql" / … — for messages and engines();
                                       # format-specific kinds carry a role prefix (parser_/exporter_)
         self.package = package        # anchor for the relative module imports
@@ -58,6 +59,7 @@ class EngineRegistry:
         self.default_hint = default_hint
         self.auto = list(auto if auto is not None else self.modules)
         self.requires = dict(requires or {})  # engine name → extra find_spec targets
+        self.guards = dict(guards or {})      # engine name → callable run before load (ABI checks)
         self.policy = policy                  # "auto" (fastest wins) | "input" (bound to input flavor)
         self.override = None                  # set_engine() target (resolved name)
         self.loaded: dict[str, Any] = {}      # engine name → module (incl. custom engines)
@@ -99,6 +101,8 @@ class EngineRegistry:
         module_name = self.modules.get(name)
         if module_name is None:
             raise ValueError(f"Unknown {self.kind} engine: {name}. Known: {', '.join(self.modules)}")
+        if name in self.guards:
+            self.guards[name]()      # e.g. pyarrow ABI check before a compiled import
         try:
             self.loaded[name] = import_module(module_name, self.package)
         except ImportError as error:

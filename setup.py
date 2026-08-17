@@ -16,6 +16,11 @@ if os.path.exists(os.path.join(PUGIXML_SRC, "pugixml.cpp")):
         import pyarrow
         import numpy
 
+        # bake the built-against pyarrow into the wheel — triplets._abi raises
+        # a clear error when the runtime pyarrow is older (internal-ABI link)
+        with open(os.path.join("triplets", "_build_info.py"), "w") as build_info:
+            build_info.write(f'BUILD_PYARROW = "{pyarrow.__version__}"\n')
+
         pa_include = pyarrow.get_include()
         pa_lib_dirs = pyarrow.get_library_dirs()
         np_include = numpy.get_include()

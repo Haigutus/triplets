@@ -27,6 +27,8 @@ from .._registry import EngineRegistry
 logger = logging.getLogger(__name__)
 
 # Auto preference: first importable.
+from .._abi import check_pyarrow as _check_pyarrow
+
 _REGISTRY = EngineRegistry(
     "parser_cimxml", __package__,
     modules={
@@ -42,6 +44,7 @@ _REGISTRY = EngineRegistry(
     hints={"cython_pugixml_arrow": "Build with: pixi run build-cython-pugixml-arrow "
                                    "(or python setup_cython_parser.py build_ext --inplace)."},
     requires={"cython_pugixml_arrow": ("pyarrow",), "python_lxml_arrow": ("pyarrow",)},
+    guards={"cython_pugixml_arrow": _check_pyarrow},  # ABI check before the compiled import
 )
 
 # Engines whose load_rdf_to_dataframe returns Arrow RecordBatches

@@ -231,3 +231,25 @@ def test_cimxml_polars_input_parallel(svedala_pandas):
                                   engine="cython_pugixml", max_workers=2,
                                   export_type="xml_per_instance", export_to_memory=True)
     assert len(out) == svedala_pandas["INSTANCE_ID"].nunique()
+
+
+def test_split_instances_skips_phantom_dictionary_groups(tmp_path):
+    """A filtered arrow-parsed frame must not export empty phantom instances:
+    ArrowDtype dictionary groupby yields every dictionary value (observed=True
+    is Categorical-only), so _split_instances skips empty groups."""
+    xml = ('<?xml version="1.0"?>\n'
+           '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" '
+           'xmlns:cim="http://iec.ch/TC57/CIM100#">\n'
+           '  <cim:Breaker rdf:ID="_b1"><cim:IdentifiedObject.name>B</cim:IdentifiedObject.name></cim:Breaker>\n'
+           '</rdf:RDF>\n')
+    files = []
+    for name in ("one.xml", "two.xml"):
+        path = tmp_path / name
+        path.write_text(xml)
+        files.append(str(path))
+    data = pandas.read_RDF(files)
+    keep = str(data["INSTANCE_ID"].iloc[0])
+    filtered = data[data["INSTANCE_ID"] == keep]
+    assert str(filtered["INSTANCE_ID"].dtype).startswith("dictionary")   # the footgun dtype
+    frames = list(export._split_instances(filtered))
+    assert len(frames) == 1 and all(len(frame) for frame in frames)

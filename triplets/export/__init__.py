@@ -34,6 +34,7 @@ from .networkx_pandas import export_to_networkx as _export_to_networkx
 logger = logging.getLogger(__name__)
 
 
+from .._abi import check_pyarrow as _check_pyarrow
 from .._engine_detect import flavor as _flavor, to_arrow as _to_arrow, to_pandas as _to_pandas
 from .._registry import EngineRegistry
 
@@ -49,6 +50,7 @@ _CIMXML = EngineRegistry(
              "lxml": "python_lxml", "pandas": "python_lxml"},
     requires={"cython_pugixml": (".cimxml_cython_pugixml", "pyarrow")},
     hints={"cython_pugixml": "Build with: pixi run build-cython-pugixml-arrow."},
+    guards={"cython_pugixml": _check_pyarrow},   # ABI check before the compiled import
 )
 _NQUADS = EngineRegistry(
     "exporter_nquads", __package__,
@@ -167,10 +169,16 @@ def get_cimxml_engine(name="auto"):
 
 
 def _split_instances(data):
-    """Per-INSTANCE_ID frames in the input's own flavor (frame ops bind to input flavor)."""
+    """Per-INSTANCE_ID frames in the input's own flavor (frame ops bind to input flavor).
+
+    Empty groups are skipped: on ArrowDtype dictionary columns (the parser's
+    INSTANCE_ID default) groupby yields every dictionary value — including
+    values filtered out of the frame — and observed=True does not apply
+    (pandas Categorical only), so a filtered frame would otherwise export
+    phantom empty instances."""
     if _flavor(data) == "polars":
         return data.partition_by("INSTANCE_ID", maintain_order=True)
-    return (frame for _, frame in data.groupby("INSTANCE_ID", observed=True))
+    return (frame for _, frame in data.groupby("INSTANCE_ID", observed=True) if len(frame))
 
 
 class ExportType(StrEnum):

@@ -42,11 +42,11 @@ cim-diff = "triplets.cli.cim_diff:main"
 
 [project.optional-dependencies]
 arrow = [
-    "pyarrow>=14.0",
+    "pyarrow>=25.0.1,<26",   # floor = build pin below; bump both together (ABI)
 ]
 polars = [
     "polars>=1.0",
-    "pyarrow>=14.0",
+    "pyarrow>=25.0.1,<26",   # floor = build pin below; bump both together (ABI)
 ]
 excel = [
     "openpyxl>=3.1.5",
@@ -73,7 +73,7 @@ dev = [
     "pytest-xdist",
     "pytest-benchmark",
     "polars>=1.0",
-    "pyarrow>=14.0",
+    "pyarrow>=25.0.1,<26",   # floor = build pin below; bump both together (ABI)
     "networkx>=3.0",
     "openpyxl>=3.1.5",
     "rdflib>=7.6.0",
@@ -95,7 +95,7 @@ docs = [
 duckdb = [
     "duckdb>=1.5.3",
     # con.read_rdf streams through parse_batches, which requires an arrow parser engine
-    "pyarrow>=14.0",
+    "pyarrow>=25.0.1,<26",   # floor = build pin below; bump both together (ABI)
 ]
 
 [tool.pytest.ini_options]
@@ -129,7 +129,7 @@ requires = [
     "wheel",
     "versioneer",
     "Cython>=3.0; platform_system != 'Emscripten'",
-    "pyarrow>=14.0; platform_system != 'Emscripten'",
+    "pyarrow==25.0.1; platform_system != 'Emscripten'",  # exact build pin — the cython extensions link pyarrow's internal ABI; runtime extras floor must match
     "numpy; platform_system != 'Emscripten'",
 ]
 build-backend = "setuptools.build_meta"

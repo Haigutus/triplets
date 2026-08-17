@@ -112,3 +112,24 @@ def test_custom_registered_engine_is_available():
         assert registry.get("custom")[1] is sentinel
     finally:
         registry.loaded.pop("custom", None)
+
+
+def test_pyarrow_abi_guard(monkeypatch):
+    """Wheels bake the built-against pyarrow (_build_info); an older runtime
+    pyarrow raises a clear error instead of a binary crash. Source trees
+    (no _build_info) skip the check."""
+    import sys
+    import types
+
+    from triplets import _abi
+
+    _abi.check_pyarrow()                                  # source tree — no-op
+
+    fake = types.ModuleType("triplets._build_info")
+    fake.BUILD_PYARROW = "999.0.0"
+    monkeypatch.setitem(sys.modules, "triplets._build_info", fake)
+    with pytest.raises(ImportError, match="built against pyarrow 999.0.0"):
+        _abi.check_pyarrow()
+
+    fake.BUILD_PYARROW = "1.0.0"                          # runtime newer → fine
+    _abi.check_pyarrow()

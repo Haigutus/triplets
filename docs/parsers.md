@@ -142,6 +142,15 @@ data = triplets.parser.parse(path, return_type="polars")
 - `categorical_columns` (default `("INSTANCE_ID", "KEY")`) — columns to
   dictionary-encode (Arrow) / categorize (pandas) for memory savings; `None`
   disables.
+
+  **groupby footgun**: on an ArrowDtype dictionary column, pandas
+  `groupby("INSTANCE_ID")` yields a group for EVERY dictionary value — on a
+  *filtered* frame that includes empty phantom groups for the filtered-out
+  instances, and `observed=True` does not help (it only applies to pandas
+  Categorical, not ArrowDtype dictionary). If your pipeline iterates groups,
+  either skip empty ones (`if len(frame)`), cast first
+  (`df["INSTANCE_ID"].astype(str)`), or parse with
+  `categorical_columns=("KEY",)`. triplets' own exports skip empty groups.
 - `max_workers` (default `None`) — when set and more than one XML file is
   found, files are parsed concurrently on a `ThreadPoolExecutor`.
 

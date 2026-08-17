@@ -279,7 +279,8 @@ typed = data.sparql.query(
     PREFIXES + "SELECT ?l WHERE { ?s cim:Conductor.length ?l }",
     rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
 
-# scope restricts the queried graphs; all data stays loaded for reference resolution
+# scope filters to the named graphs (queried instances) — out-of-scope data
+# is not loaded; include dependency instances for cross-instance references
 one_instance = str(data["INSTANCE_ID"].astype(str).iloc[0])
 scoped = data.sparql.query(PREFIXES + "SELECT ?s WHERE { ?s rdf:type cim:ACLineSegment }", scope=[one_instance])
 

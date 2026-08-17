@@ -96,8 +96,10 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     rdf_map : dict or str, optional
         Export schema — xsd-typed literals in the data graph (optional).
     scope : iterable of INSTANCE_ID, optional
-        Validate only these instances' named graphs; all data stays loaded for
-        reference resolution. None = full union.
+        Validate only these instances' named graphs — data outside the scope
+        is not loaded, so references into unscoped instances count as absent.
+        Include dependency instances in the scope (or validate the full
+        union, scope=None) for cross-instance checks.
     engine : str, default "auto"
         "polars" (performance), "pandas" (debugging), "duckdb"
         (larger-than-memory) or "pyshacl" (reference). "auto" picks

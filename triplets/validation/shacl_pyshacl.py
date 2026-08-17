@@ -29,8 +29,10 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
     rdf_map : dict or str, optional
         Export schema — xsd-typed literals in the data graph (optional).
     scope : iterable of INSTANCE_ID, optional
-        Validate only these instances (named graphs); all data stays loaded for
-        reference resolution. None = full union (all profiles).
+        Validate only these instances' named graphs — data outside the scope
+        is not loaded, so references into unscoped instances count as absent.
+        Include dependency instances in the scope (or validate the full
+        union, scope=None) for cross-instance checks.
     inference, advanced, abort_on_first : passed to pyshacl.validate.
     **kwargs : other engines' options (components, max_workers, table_name) —
         accepted and ignored, per the shared engine contract.
