@@ -6,16 +6,28 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
+### Changed
+- **Schema validation runs per instance, per declared profile — profiles are
+  never merged**: `compile_schema(rdf_map)` compiles every profile contained
+  in the schema JSON separately (a `CompiledSchema` set, addressable by each
+  profile's declared identity: versionIRI / conformsTo URI / keyword /
+  section key); `validate_schema` resolves each INSTANCE_ID's declared
+  profiles from its header (`conformsTo`, `Model.profile`,
+  `Model.messageType`, `keyword`; legacy 2.4 URL fallback) and validates the
+  instance against each declared profile on its own. One instance may
+  declare several profiles — each runs separately. `profiles=` overrides
+  resolution (header-less/legacy data); unresolved instances are skipped and
+  reported in the coverage metadata. Violations carry a `PROFILE` column,
+  reports a `[rdfs_profile]` entry, SARIF titles read
+  `RDFS <profile> <Class> <attr> (N×)`.
 - **mRID cardinality is validated per schema again** (reverts part of
-  0.2.0rc4's #101 fix): the schemas are already profile-accurate —
-  CGMES 2.4 declares `IdentifiedObject.mRID` 0..1 (not serialized),
-  CGMES 3.0 and NCP declare 1..1 (the element is expected in the data) —
-  so the hardcoded exemption suppressed a legitimate check. #101's
-  re-declared-object findings are a scoping matter: validate the full
-  model-set union (the EQ element satisfies minOccurs for objects
-  re-declared in SSH/TP/SV); per-file validation legitimately reports
-  attributes described in another profile.
+  0.2.0rc4's #101 fix): the schemas are profile-accurate — CGMES 2.4
+  declares `IdentifiedObject.mRID` 0..1 (not serialized), CGMES 3.0 and NCP
+  1..1 (element expected) — and per-instance runs make it correct on model
+  sets: each instance's mRID is counted against its own profile's rule, so
+  no cross-profile duplication (the union-frame maxOccurs false-positive)
+  and no cross-profile satisfaction (#101's minOccurs false-positives were
+  per-file scoping, now the defined semantics).
 
 ## [0.2.0rc4] - 2026-08-17
 

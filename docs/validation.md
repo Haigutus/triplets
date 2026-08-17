@@ -297,33 +297,46 @@ needed, no rdflib on this path:
 ```python
 violations = triplets.validation.validate_schema(data, schemas.ENTSOE_CGMES_3_0_0_552_ED1)
 violations = data.shacl.validate_schema(rdf_map, engine="duckdb", closed=True)
-compiled = triplets.validation.compile_schema(rdf_map)   # reuse across validations
+violations = data.shacl.validate_schema(rdf_map, profiles=("EQ", "SSH"))  # explicit override
+compiled = triplets.validation.compile_schema(rdf_map)   # the whole profile set, cached
+compiled.get("http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0")  # lookup by profile URI
 ```
 
-`compile_schema(rdf_map, closed=False)` synthesizes the engine IR straight
-from the schema (cached by content): cardinality from the resolved
-`xsd:minOccours`/`xsd:maxOccours` fields, datatype lexical checks from
-`xsd:type`, enumeration membership from `values`, association targets from
-`range` expanded to concrete subclasses via the classes' `inheritance` lists
-(abstract ranges like `#EquipmentContainer` accept any concrete subclass;
-unexpandable ranges land in the coverage metadata). `closed=True` adds an
-unknown-property check per class (off by default — multi-profile data
-legitimately unions properties). A dangling association reference is silent
-(minOccurs catches absence), and the found target type lands in `[detail]`'s
-successor `TARGET` column as usual.
+**Semantics: per instance, per declared profile — profiles are never merged.**
+The schema JSON is a SET of profiles; `compile_schema` compiles every section
+separately into a `CompiledSchema` addressable by each profile's own declared
+identity (versionIRI / conformsTo URI / keyword / section key). Every
+INSTANCE_ID is validated on its own (the scope filter) against each profile
+its header declares — resolved from `conformsTo` (NC dcat headers),
+`Model.profile`/`Model.messageType` (CGMES), `keyword`, with the legacy 2.4
+profile-URL substring fallback. One instance may declare several profiles;
+each runs separately. This is why merging is wrong: every CGMES 3.0 profile
+serializes `IdentifiedObject.mRID` 1..1 — a union frame carries duplicate
+mRID rows per re-declared object (false maxOccurs), while SSH's own mRID
+requirement must be met by SSH's own rows, not EQ's.
 
-The same vectorized engines run the checks (polars lazy plans, duckdb SQL,
-pandas — plans cached per compiled schema); the pyshacl engine refuses
-schema-compiled IR (no SHACL graph exists). **Results do not masquerade as
-SHACL**: the constraint language is `"rdfs"` (`CompiledShapes.language`, in
-the run metadata), violation types are vocabulary-accurate —
-`xsd:minOccurs`, `xsd:maxOccurs`, `xsd:type`, `rdfs:range` (enum membership
-and association targets are both range checks), `schema:domainIncludes`
-(closed — an exclusive `rdfs:domain` exists only for owned properties; the
-APL convention attaches external properties via the non-exclusive
-`schema:domainIncludes`, and that is exactly what this check asserts) — and
-the message tags follow: `[rdfs_expected]`, `[rdfs_path]`, … with
-`sh:sourceConstraintComponent` pointing at the real RDFS/XSD IRIs.
+`profiles=` overrides resolution for header-less or legacy data (identifiers
+may be section keys, keywords or URIs; unknown ones raise). Instances that
+resolve to no profile are skipped and reported in the run-metadata coverage
+(`skipped_shapes`); the applied profiles land in `attrs["validation"]["profiles"]`,
+each violation carries a `PROFILE` column, reports carry `[rdfs_profile] EQ`
+entries, and SARIF alert titles read `RDFS <profile> <Class> <attr> (N×)`.
+
+Per profile the checks are: cardinality from the resolved `xsd:minOccours`/
+`xsd:maxOccours` (incl. mRID — the schemas are profile-accurate: CGMES 2.4
+declares it 0..1/not serialized, CGMES 3.0/NCP 1..1), datatype lexical checks
+from `xsd:type`, enumeration membership from `values`, association targets
+from `range` expanded to concrete subclasses via `inheritance` (the expansion
+index spans all sections — inheritance is model knowledge). A referenced
+object conforms when ANY of its types is in the range set; dangling
+references are silent (cross-instance references resolve outside the scope).
+`closed=True` adds an unknown-property check per class and profile
+(`schema:domainIncludes`). The same vectorized engines run everything (plans
+cached per compiled profile); the pyshacl engine refuses schema-compiled IR.
+**Results do not masquerade as SHACL**: constraint language `"rdfs"`,
+violation types `xsd:minOccurs`/`xsd:maxOccurs`/`xsd:type`/`rdfs:range`/
+`schema:domainIncludes` — real vocabulary IRIs in `sh:sourceConstraintComponent`,
+message tags `[rdfs_expected]`, `[rdfs_path]`, `[rdfs_profile]`, …
 
 ## Shared Loading (`_rdflib_loader.py`)
 

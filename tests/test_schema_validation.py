@@ -1,7 +1,10 @@
 """Schema-based validation (triplets.validation.compile_schema/validate_schema):
 cardinality, datatypes, enumerations and association ranges straight from the
 export schema, run by the same vectorized engines as SHACL — presented with
-vocabulary-accurate rdfs:/xsd: types, not fake SHACL."""
+vocabulary-accurate rdfs:/xsd:/schema: types, not fake SHACL.
+
+Semantics under test: validation runs per INSTANCE_ID, per profile the
+instance declares — profiles are never merged."""
 import pandas
 import pytest
 
@@ -18,12 +21,16 @@ def engine(request):
     return request.param
 
 
-SCHEMA = {"EQ": {
+EQ_SECTION = {
+    "ProfileMetadata": {"Type": "Description", "keyword": "EQ",
+                        "versionIRI": "http://example.org/CoreEquipment-EU/3.0",
+                        "conformsTo": "http://example.org/profile/EQ"},
     "Breaker": {"type": "Class", "description": "A breaker.",
                 "namespace": "http://iec.ch/TC57/CIM100#",
                 "inheritance": ["#Breaker", "#Switch", "#Equipment"],
-                "parameters": ["IdentifiedObject.name", "Switch.retained",
-                               "Equipment.EquipmentContainer", "Breaker.kind"]},
+                "parameters": ["IdentifiedObject.mRID", "IdentifiedObject.name",
+                               "Switch.retained", "Equipment.EquipmentContainer",
+                               "Breaker.kind"]},
     "VoltageLevel": {"type": "Class", "description": "A voltage level.",
                      "namespace": "http://iec.ch/TC57/CIM100#",
                      "inheritance": ["#VoltageLevel", "#EquipmentContainer"], "parameters": []},
@@ -32,6 +39,9 @@ SCHEMA = {"EQ": {
     "Substation": {"type": "Class", "description": "A substation.",
                    "namespace": "http://iec.ch/TC57/CIM100#",
                    "inheritance": ["#Substation"], "parameters": []},
+    "IdentifiedObject.mRID": {"type": "Attribute", "multiplicity": "1..1",
+                              "xsd:minOccours": "1", "xsd:maxOccours": "1",
+                              "xsd:type": "xsd:string", "description": "Master RID."},
     "IdentifiedObject.name": {"type": "Attribute", "multiplicity": "1..1",
                               "xsd:minOccours": "1", "xsd:maxOccours": "1",
                               "xsd:type": "xsd:string", "description": "The name."},
@@ -46,17 +56,46 @@ SCHEMA = {"EQ": {
                      "xsd:minOccours": "0", "xsd:maxOccours": "1", "range": "BreakerKind",
                      "values": ["BreakerKind.air", "BreakerKind.vacuum"],
                      "description": "Breaker kind."},
-}}
+}
+
+SSH_SECTION = {
+    "ProfileMetadata": {"Type": "Description", "keyword": "SSH",
+                        "versionIRI": "http://example.org/SteadyStateHypothesis-EU/3.0",
+                        "conformsTo": "http://example.org/profile/SSH"},
+    "Breaker": {"type": "Class", "description": "A breaker (SSH view).",
+                "namespace": "http://iec.ch/TC57/CIM100#",
+                "inheritance": ["#Breaker", "#Switch", "#Equipment"],
+                "parameters": ["IdentifiedObject.mRID", "Switch.open"]},
+    "IdentifiedObject.mRID": {"type": "Attribute", "multiplicity": "1..1",
+                              "xsd:minOccours": "1", "xsd:maxOccours": "1",
+                              "xsd:type": "xsd:string", "description": "Master RID."},
+    "Switch.open": {"type": "Attribute", "multiplicity": "1..1",
+                    "xsd:minOccours": "1", "xsd:maxOccours": "1",
+                    "xsd:type": "xsd:boolean", "description": "Open state."},
+}
+
+SCHEMA = {"EQ": EQ_SECTION, "SSH": SSH_SECTION}
+
+EQ_HEADER = [("h-eq", "Model.profile", "http://example.org/CoreEquipment-EU/3.0", "eq")]
+SSH_HEADER = [("h-ssh", "keyword", "SSH", "ssh")]
+CONTAINED = [("vl1", "Type", "VoltageLevel", "eq")]
+OK_PROPS = (("IdentifiedObject.mRID", "b"), ("IdentifiedObject.name", "B"),
+            ("Equipment.EquipmentContainer", "vl1"))
+
+
+def frame(rows):
+    return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
 
 def run(rows, engine, **kwargs):
-    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    return validate_schema(data, SCHEMA, engine=engine, **kwargs)
+    """Single header-less EQ-profile instance — the common per-check harness."""
+    kwargs.setdefault("profiles", ("EQ",))
+    return validate_schema(frame(rows), SCHEMA, engine=engine, **kwargs)
 
 
-def breaker(object_id, *properties):
-    return [(object_id, "Type", "Breaker", "eq")] + [(object_id, key, value, "eq")
-                                                     for key, value in properties]
+def breaker(object_id, *properties, instance="eq"):
+    return [(object_id, "Type", "Breaker", instance)] + [(object_id, key, value, instance)
+                                                         for key, value in properties]
 
 
 def violating(violations, violation_type):
@@ -64,12 +103,11 @@ def violating(violations, violation_type):
     return set(zip(rows["ID"], rows["VALUE"].where(rows["VALUE"].notna(), None)))
 
 
-CONTAINED = [("vl1", "Type", "VoltageLevel", "eq")]
-OK_PROPS = (("IdentifiedObject.name", "B"), ("Equipment.EquipmentContainer", "vl1"))
-
+# ── per-check semantics (single instance, explicit EQ profile) ───────────────
 
 def test_min_occurs(engine):
-    rows = breaker("b1", *OK_PROPS) + breaker("b2", ("Equipment.EquipmentContainer", "vl1")) + CONTAINED
+    rows = breaker("b1", *OK_PROPS) + breaker("b2", ("IdentifiedObject.mRID", "b2"),
+                                              ("Equipment.EquipmentContainer", "vl1")) + CONTAINED
     v = run(rows, engine)
     assert violating(v, "xsd:minOccurs") == {("b2", None)}      # name missing
 
@@ -82,7 +120,7 @@ def test_max_occurs(engine):
 
 def test_datatype_lexical_two_levels(engine):
     rows = (breaker("b1", *OK_PROPS, ("Switch.retained", "maybe"))     # invalid boolean
-            + breaker("b2", ("IdentifiedObject.name", "B2"),
+            + breaker("b2", ("IdentifiedObject.mRID", "b2"), ("IdentifiedObject.name", "B2"),
                       ("Equipment.EquipmentContainer", "vl1"),
                       ("Switch.retained", "1"))                        # valid, non-canonical
             + CONTAINED)
@@ -103,40 +141,176 @@ def test_enumeration_membership(engine):
 def test_association_range_abstract_expansion(engine):
     """The schema range #EquipmentContainer is abstract — Bay and VoltageLevel
     (its concrete subclasses via inheritance) pass, a Substation fails, and a
-    dangling reference stays silent (minOccurs catches absence)."""
-    rows = (breaker("b1", ("IdentifiedObject.name", "B1"),
+    dangling reference stays silent."""
+    rows = (breaker("b1", ("IdentifiedObject.mRID", "b1"), ("IdentifiedObject.name", "B1"),
                     ("Equipment.EquipmentContainer", "bay1"))
-            + breaker("b2", ("IdentifiedObject.name", "B2"),
+            + breaker("b2", ("IdentifiedObject.mRID", "b2"), ("IdentifiedObject.name", "B2"),
                       ("Equipment.EquipmentContainer", "sub1"))
-            + breaker("b3", ("IdentifiedObject.name", "B3"),
+            + breaker("b3", ("IdentifiedObject.mRID", "b3"), ("IdentifiedObject.name", "B3"),
                       ("Equipment.EquipmentContainer", "ghost"))
-            + [("bay1", "Type", "Bay", "eq"), ("sub1", "Type", "Substation", "eq")])
+            + [("bay1", "Type", "Bay", "eq"), ("sub1", "Type", "Substation", "eq"),
+               ("sub1", "IdentifiedObject.name", "Main Sub", "eq")])
     v = run(rows, engine)
     assert violating(v, "rdfs:range") == {("b2", "sub1")}     # VALUE = the reference itself
     assert v.loc[v["ID"] == "b2", "TARGET"].iloc[0] \
-        == "referenced object sub1 found — Substation"
+        == 'referenced object sub1 found — Substation "Main Sub"'
 
 
 def test_association_multi_typed_target_conforms(engine):
     """SSH/TP re-type EQ objects (issue #100): a target with several rdf:type
     values conforms when ANY of them is in the expanded range set."""
-    rows = (breaker("b1", ("IdentifiedObject.name", "B1"),
-                    ("Equipment.EquipmentContainer", "bay1"))
+    rows = (breaker("b1", *OK_PROPS[:2], ("Equipment.EquipmentContainer", "bay1"))
             + [("bay1", "Type", "Bay", "eq"),
-               ("bay1", "Type", "Equipment", "ssh")])    # extra generic type
+               ("bay1", "Type", "Equipment", "eq")])       # extra generic type
     v = run(rows, engine)
     assert violating(v, "rdfs:range") == set()
 
 
 def test_closed_flag_reports_unknown_property(engine):
     """schema:domainIncludes, not rdfs:domain — external properties attach to
-    classes non-exclusively (the APL rdfs:domain/domainIncludes convention),
-    so "not among this class's declared properties" is a domainIncludes claim."""
+    classes non-exclusively (the APL rdfs:domain/domainIncludes convention)."""
     rows = breaker("b1", *OK_PROPS, ("Breaker.madeUp", "x")) + CONTAINED
     assert violating(run(rows, engine), "schema:domainIncludes") == set()   # default: off
     v = run(rows, engine, closed=True)
-    flagged = v[v["VIOLATION_TYPE"] == "schema:domainIncludes"]
-    assert set(flagged["ID"]) == {"b1"}
+    assert set(v.loc[v["VIOLATION_TYPE"] == "schema:domainIncludes", "ID"]) == {"b1"}
+
+
+# ── per-(instance, profile) orchestration ─────────────────────────────────────
+
+def test_mrid_across_profiles_no_duplication(engine):
+    """The case that motivated per-instance semantics: EQ and SSH both
+    serialize mRID (1..1 each) — the union carries two mRID rows per object,
+    but each (instance, profile) run counts only its own instance's rows, so
+    no xsd:maxOccurs false-positive; and each profile's mRID requirement is
+    checked against ITS instance (the #101 case done right)."""
+    rows = (EQ_HEADER + SSH_HEADER + CONTAINED
+            + breaker("b1", *OK_PROPS, instance="eq")
+            + [("b1", "Type", "Breaker", "ssh"),
+               ("b1", "IdentifiedObject.mRID", "b1", "ssh"),
+               ("b1", "Switch.open", "true", "ssh")])
+    v = validate_schema(frame(rows), SCHEMA, engine=engine)
+    assert violating(v, "xsd:maxOccurs") == set()              # no cross-profile doubling
+
+    without_ssh_mrid = [row for row in rows
+                        if row[3] != "ssh" or row[1] != "IdentifiedObject.mRID"]
+    v = validate_schema(frame(without_ssh_mrid), SCHEMA, engine=engine)
+    missing = v[(v["VIOLATION_TYPE"] == "xsd:minOccurs") & (v["KEY"] == "IdentifiedObject.mRID")]
+    assert set(zip(missing["ID"], missing["PROFILE"])) == {("b1", "SSH")}   # SSH's own rule
+
+
+def test_resolution_by_header_fields(engine):
+    """conformsTo (NC-style), Model.profile→versionIRI (CGMES3-style) and
+    keyword all resolve through the schema's own declared identity."""
+    for header_key, value in (("conformsTo", "http://example.org/profile/EQ"),
+                              ("Model.profile", "http://example.org/CoreEquipment-EU/3.0"),
+                              ("keyword", "EQ")):
+        rows = [("h", header_key, value, "eq")] + breaker("b1") + CONTAINED
+        v = validate_schema(frame(rows), SCHEMA, engine=engine)
+        assert set(v["PROFILE"]) == {"EQ"}
+        assert ("b1", None) in violating(v, "xsd:minOccurs")   # mRID + name missing
+
+
+def test_resolution_legacy_url_fallback(engine):
+    rows = [("h", "Model.profile",
+             "http://entsoe.eu/CIM/EquipmentCore/3/1", "eq")] + breaker("b1") + CONTAINED
+    v = validate_schema(frame(rows), SCHEMA, engine=engine)
+    assert set(v["PROFILE"]) == {"EQ"}
+
+
+def test_instance_declaring_two_profiles_runs_both(engine):
+    """One instance file serializing several profiles: each declared profile
+    is validated separately against the same instance — never merged."""
+    rows = ([("h", "conformsTo", "http://example.org/profile/EQ", "one"),
+             ("h", "conformsTo", "http://example.org/profile/SSH", "one")]
+            + breaker("b1", *OK_PROPS, ("Switch.open", "true"), instance="one")
+            + [("vl1", "Type", "VoltageLevel", "one")])
+    v = validate_schema(frame(rows), SCHEMA, engine=engine)
+    assert len(v) == 0                                         # conforms to both
+
+    incomplete = [row for row in rows if row[1] != "Switch.open"]
+    v = validate_schema(frame(incomplete), SCHEMA, engine=engine)
+    assert set(zip(v["KEY"], v["PROFILE"])) == {("Switch.open", "SSH")}
+
+
+def test_unresolved_instance_skipped_with_coverage_note(engine):
+    rows = breaker("b1") + CONTAINED                           # no header at all
+    v = validate_schema(frame(rows), SCHEMA, engine=engine)
+    assert len(v) == 0
+    notes = v.attrs["validation"]["skipped_shapes"]
+    assert any("no schema profile matched" in note for note in notes)
+
+    forced = validate_schema(frame(rows), SCHEMA, engine=engine, profiles=("EQ",))
+    assert len(forced) > 0                                     # override validates it
+
+
+def test_explicit_profiles_accept_any_identifier():
+    rows = breaker("b1") + CONTAINED
+    by_uri = validate_schema(frame(rows), SCHEMA, profiles=("http://example.org/profile/EQ",))
+    by_key = validate_schema(frame(rows), SCHEMA, profiles=("EQ",))
+    assert set(by_uri["PROFILE"]) == set(by_key["PROFILE"]) == {"EQ"}
+    with pytest.raises(ValueError, match="unknown schema profile.*available"):
+        validate_schema(frame(rows), SCHEMA, profiles=("NOPE",))
+
+
+# ── compiled set, metadata, reports ──────────────────────────────────────────
+
+def test_compiled_set_lookup_and_cache():
+    compiled = compile_schema(SCHEMA)
+    assert sorted(compiled.profiles) == ["EQ", "SSH"]
+    assert compiled.get("EQ") is compiled.profiles["EQ"]
+    assert compiled.get("http://example.org/profile/SSH") is compiled.profiles["SSH"]
+    assert compiled.get("http://example.org/CoreEquipment-EU/3.0") is compiled.profiles["EQ"]
+    assert compiled.get("unknown") is None
+    assert compile_schema(SCHEMA) is compiled                  # cached by content
+    eq = compiled.profiles["EQ"]
+    assert eq.language == "rdfs" and eq.graph is None
+    assert eq.stats["node_shapes"] == 1                        # only Breaker carries constraints
+
+
+def test_run_metadata(engine):
+    rows = EQ_HEADER + breaker("b1", *OK_PROPS) + CONTAINED
+    v = validate_schema(frame(rows), SCHEMA, engine=engine)
+    meta = v.attrs["validation"]
+    assert meta["language"] == "rdfs"
+    assert meta["profiles"] == ["EQ"]
+    assert meta["references"] == ["rdf_map"]
+    assert meta["source_shapes"] == {}
+    assert meta["engine"] == engine
+
+
+def test_unexpandable_range_lands_in_coverage():
+    schema = {"EQ": {**EQ_SECTION,
+                     "Equipment.EquipmentContainer": {
+                         **EQ_SECTION["Equipment.EquipmentContainer"],
+                         "range": "http://iec.ch/TC57/61970-552/ModelDescription/1#Model"}}}
+    compiled = compile_schema(schema)
+    assert any("Model" in entry for entry in compiled.stats["skipped_shapes"])
+    assert any("Model" in entry for entry in compiled.profiles["EQ"].stats["skipped_shapes"])
+
+
+def test_reports_carry_rdfs_tags_and_profile(engine):
+    """Both formats present the rdfs family with the profile named in the
+    heading and in the error itself."""
+    import rdflib
+    from triplets.validation.sarif import build_sarif
+
+    rows = EQ_HEADER + breaker("b1", ("IdentifiedObject.mRID", "b1"),
+                               ("Equipment.EquipmentContainer", "vl1")) + CONTAINED
+    v = validate_schema(frame(rows), SCHEMA, engine=engine)
+    run_sarif = build_sarif(v)["runs"][0]
+    text = run_sarif["results"][0]["message"]["text"]
+    assert "[engine_message] " in text and "[rdfs_expected] " in text
+    assert "[rdfs_profile] EQ" in text and "[shacl" not in text
+    names = {rule["name"] for rule in run_sarif["tool"]["driver"]["rules"]}
+    assert "RDFS EQ Breaker IdentifiedObject.name (1×)" in names
+
+    graph = rdflib.Graph().parse(
+        data=v.shacl.to_shacl_report(export_to_memory=True).getvalue(), format="turtle")
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    messages = {str(m) for m in graph.objects(None, sh.resultMessage)}
+    assert "[rdfs_profile] EQ" in messages
+    components = {str(c) for c in graph.objects(None, sh.sourceConstraintComponent)}
+    assert "http://www.w3.org/2001/XMLSchema#minOccurs" in components
 
 
 def test_closed_type_roundtrips_through_report():
@@ -154,58 +328,6 @@ def test_closed_type_roundtrips_through_report():
     assert "schema:domainIncludes" in set(back["VIOLATION_TYPE"])
 
 
-def test_cross_profile_dedupe_first_wins():
-    two_profiles = {"EQ": SCHEMA["EQ"],
-                    "SSH": {"Breaker": SCHEMA["EQ"]["Breaker"],
-                            "IdentifiedObject.name": {**SCHEMA["EQ"]["IdentifiedObject.name"],
-                                                      "xsd:minOccours": "0"}}}
-    compiled = compile_schema(two_profiles)
-    name_rows = compiled.ir[(compiled.ir["path"] == "IdentifiedObject.name")
-                            & (compiled.ir["component"] == "sh:minCount")]
-    assert len(name_rows) == 1 and name_rows["params"].iloc[0] == 1    # EQ (first) wins
-
-
-def test_compiled_shape_and_metadata():
-    compiled = compile_schema(SCHEMA)
-    assert compiled.language == "rdfs" and compiled.graph is None
-    assert compiled.stats["node_shapes"] == 1          # only Breaker carries constraints
-    assert compiled.stats["skipped_shapes"] == []
-    assert compile_schema(SCHEMA) is compiled          # cached
-
-    v = run(breaker("b1", *OK_PROPS) + CONTAINED, "pandas")
-    meta = v.attrs["validation"]
-    assert meta["language"] == "rdfs"
-    assert meta["references"] == ["rdf_map"]
-    assert meta["source_shapes"] == {}                 # nothing to embed — no graph
-
-
-def test_unexpandable_range_lands_in_coverage():
-    schema = {"EQ": {**SCHEMA["EQ"],
-                     "Equipment.EquipmentContainer": {
-                         **SCHEMA["EQ"]["Equipment.EquipmentContainer"],
-                         "range": "http://iec.ch/TC57/61970-552/ModelDescription/1#Model"}}}
-    compiled = compile_schema(schema)
-    assert any("Model" in entry for entry in compiled.stats["skipped_shapes"])
-
-
-def test_reports_carry_rdfs_tags(engine):
-    """Both report formats present the rdfs language family — schema
-    validation does not masquerade as SHACL."""
-    import rdflib
-    from triplets.validation.sarif import build_sarif
-
-    v = run(breaker("b1", ("Equipment.EquipmentContainer", "vl1")) + CONTAINED, engine)
-    text = build_sarif(v)["runs"][0]["results"][0]["message"]["text"]
-    assert "[engine_message] " in text and "[rdfs_expected] " in text
-    assert "[rdfs_path] " in text and "[shacl" not in text
-
-    graph = rdflib.Graph().parse(
-        data=v.shacl.to_shacl_report(export_to_memory=True).getvalue(), format="turtle")
-    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
-    components = {str(c) for c in graph.objects(None, sh.sourceConstraintComponent)}
-    assert "http://www.w3.org/2001/XMLSchema#minOccurs" in components  # real XSD IRI
-
-
 def test_report_roundtrip_restores_rdfs_types():
     pytest.importorskip("rdflib")
     from triplets.validation.shacl_report import report_to_violations, violations_to_report_graph
@@ -215,25 +337,56 @@ def test_report_roundtrip_restores_rdfs_types():
     assert set(back["VIOLATION_TYPE"]) == set(v["VIOLATION_TYPE"])     # xsd:minOccurs survives
 
 
+def test_errors_are_self_contained(engine):
+    """A model validator must understand the fix from the error alone."""
+    from triplets.validation.sarif import build_sarif
+
+    rows = (breaker("b1", *OK_PROPS[:2],
+                    ("IdentifiedObject.name", "B1-dup"),
+                    ("Switch.retained", "maybe"),
+                    ("Equipment.EquipmentContainer", "sub1"))
+            + [("sub1", "Type", "Substation", "eq"),
+               ("sub1", "IdentifiedObject.name", "Main Sub", "eq")])
+    v = run(rows, engine)
+    targets = dict(zip(v["VIOLATION_TYPE"], v["TARGET"]))
+    assert targets["xsd:maxOccurs"] == "found 2 values: 'B', 'B1-dup'"
+    texts = [r["message"]["text"] for r in build_sarif(v, group=False)["runs"][0]["results"]]
+    assert any("[context_value] maybe" in text for text in texts)
+    assert any('referenced object sub1 found — Substation "Main Sub"' in text
+               for text in texts)
+
+
 def test_pyshacl_engine_refused():
     pytest.importorskip("pyshacl")
-    data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
     with pytest.raises(ValueError, match="pyshacl engine cannot run"):
-        validate_schema(data, SCHEMA, engine="pyshacl")
+        run(breaker("b1"), "pyshacl")
+
+
+def test_sarif_title_grouping_is_per_profile_property():
+    """Alert rules group per (profile, class, property) — a title never covers
+    another property's or profile's findings."""
+    from triplets.validation.sarif import build_sarif
+
+    rows = breaker("b1") + breaker("b2") + CONTAINED           # nameless, mRID-less
+    v = run(rows, "pandas", context=True)
+    rules = build_sarif(v)["runs"][0]["tool"]["driver"]["rules"]
+    names = {rule["name"] for rule in rules}
+    assert "RDFS EQ Breaker IdentifiedObject.name (2×)" in names
+    assert "RDFS EQ Breaker IdentifiedObject.mRID (2×)" in names
 
 
 def test_accessor():
-    data = pandas.DataFrame(breaker("b1") + CONTAINED,
-                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    v = data.shacl.validate_schema(SCHEMA)
-    assert violating(v, "xsd:minOccurs") == {("b1", None)}
+    data = frame(breaker("b1") + CONTAINED)
+    v = data.shacl.validate_schema(SCHEMA, profiles=("EQ",))
+    assert ("b1", None) in violating(v, "xsd:minOccurs")
 
 
 @pytest.mark.performance
 def test_real_schema_smoke():
-    """Svedala EQ against the real CGMES 3.0.0 schema — engines agree."""
-    from _parity import SVEDALA_DIR, SKIP_REASON
+    """Svedala EQ auto-resolves its profile from the header — engines agree."""
     from pathlib import Path
+
+    from _parity import SVEDALA_DIR, SKIP_REASON
     from triplets.export_schema import schemas
 
     eq = SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"
@@ -242,78 +395,9 @@ def test_real_schema_smoke():
     data = pandas.read_RDF([str(eq)])
     results = {}
     for engine in ENGINES:
-        pytest.importorskip(engine) if engine != "pandas" else None
+        if engine != "pandas":
+            pytest.importorskip(engine)
         v = validate_schema(data, schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine=engine)
+        assert set(v["PROFILE"]) <= {"EQ"} and v.attrs["validation"]["profiles"] == ["EQ"]
         results[engine] = set(zip(v["ID"], v["KEY"].astype(str), v["VIOLATION_TYPE"]))
     assert results["pandas"] == results["polars"] == results["duckdb"]
-
-
-def test_mrid_validated_per_schema(engine):
-    """mRID cardinality follows the schema, no special-casing: CGMES 3.0/NCP
-    declare it 1..1 (the element is expected), CGMES 2.4 declares 0..1 (not
-    serialized) — the schemas are profile-accurate, so no code exemption."""
-    def with_mrid(min_occurs):
-        schema = {"EQ": {**SCHEMA["EQ"]}}
-        schema["EQ"]["Breaker"] = {**SCHEMA["EQ"]["Breaker"],
-                                   "parameters": [*SCHEMA["EQ"]["Breaker"]["parameters"],
-                                                  "IdentifiedObject.mRID"]}
-        schema["EQ"]["IdentifiedObject.mRID"] = {
-            "type": "Attribute", "multiplicity": f"{min_occurs}..1",
-            "xsd:minOccours": str(min_occurs), "xsd:maxOccours": "1",
-            "xsd:type": "xsd:string", "description": "Master RID."}
-        return schema
-
-    data = pandas.DataFrame(breaker("b1", *OK_PROPS) + CONTAINED,
-                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    v = validate_schema(data, with_mrid(1), engine=engine)          # CGMES 3.0/NCP style
-    assert ("b1", None) in violating(v, "xsd:minOccurs")            # element IS required
-    v = validate_schema(data, with_mrid(0), engine=engine)          # CGMES 2.4 style
-    assert violating(v, "xsd:minOccurs") == set()
-
-
-def test_sarif_titles_follow_rdfs_format():
-    """Alert titles read "RDFS <Class> <attr> (N×)" — GitHub shows the rule
-    name as the alert title; without one it dumps the raw message text."""
-    from triplets.validation.sarif import build_sarif
-
-    rows = (breaker("b1") + breaker("b2") + CONTAINED)     # two nameless breakers
-    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    v = validate_schema(data, SCHEMA, context=True)        # even enriched: same title
-    rules = build_sarif(v)["runs"][0]["tool"]["driver"]["rules"]
-    names = {rule["name"] for rule in rules}
-    assert "RDFS Breaker IdentifiedObject.name (2×)" in names
-
-
-def test_errors_are_self_contained(engine):
-    """A model validator must understand the fix from the error alone: the
-    offending literal is in the text, duplicates are listed, and references
-    carry the target's id, type and name."""
-    import rdflib
-    from triplets.validation.sarif import build_sarif
-
-    rows = (breaker("b1",
-                    ("IdentifiedObject.name", "B1"), ("IdentifiedObject.name", "B1-dup"),
-                    ("Switch.retained", "maybe"),
-                    ("Equipment.EquipmentContainer", "sub1"))
-            + [("sub1", "Type", "Substation", "eq"),
-               ("sub1", "IdentifiedObject.name", "Main Sub", "eq")])
-    v = run(rows, engine)
-    targets = dict(zip(v["VIOLATION_TYPE"], v["TARGET"]))
-    assert targets["xsd:maxOccurs"] == "found 2 values: 'B1', 'B1-dup'"
-    assert targets["rdfs:range"] == 'referenced object sub1 found — Substation "Main Sub"'
-
-    texts = [r["message"]["text"] for r in build_sarif(v, group=False)["runs"][0]["results"]]
-    assert any("[context_value] maybe" in text for text in texts)          # the bad literal
-    assert any("found 2 values: 'B1', 'B1-dup'" in text for text in texts)
-    assert any('referenced object sub1 found — Substation "Main Sub"' in text
-               for text in texts)
-
-    grouped = build_sarif(v)["runs"][0]["results"]
-    examples = " ".join(r["message"]["text"] for r in grouped)
-    assert "= 'maybe'" in examples                        # object ↔ value pairing
-
-    graph = rdflib.Graph().parse(
-        data=v.shacl.to_shacl_report(export_to_memory=True).getvalue(), format="turtle")
-    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
-    messages = {str(m) for m in graph.objects(None, sh.resultMessage)}
-    assert "[context_value] maybe" in messages
