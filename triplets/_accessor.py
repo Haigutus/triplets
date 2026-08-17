@@ -186,6 +186,7 @@ _QUERY_NAMESPACES = {
     # enrich/locate/to_sarif/to_shacl_report take a *violations* frame (plain pandas) —
     # the namespace is registered on every DataFrame, so violations.shacl.to_sarif() works
     "shacl": ({"validate": validation.validate,
+               "validate_schema": validation.validate_schema,
                "enrich": validation.enrich,
                "locate": validation.locate_violations,
                "to_sarif": validation.export_to_sarif,

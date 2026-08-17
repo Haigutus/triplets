@@ -6,6 +6,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Schema-based validation** (`triplets.validation.validate_schema(data,
+  rdf_map)`, `compile_schema(rdf_map, closed=False)`,
+  `data.shacl.validate_schema(...)`): cardinality, datatype lexical checks,
+  enumeration membership and association ranges straight from the export
+  schema — the same vectorized engines (polars/pandas/duckdb, precompiled
+  plans) as SHACL, without rdflib. Results are presented in the schema's own
+  vocabulary, not fake SHACL: `xsd:minOccurs`/`xsd:maxOccurs`/`xsd:type`,
+  `rdfs:range` (enums + association targets, abstract ranges expanded to
+  concrete subclasses via inheritance), optional `schema:domainIncludes`
+  (closed=True — the APL rdfs:domain/domainIncludes convention: external
+  properties attach to classes non-exclusively);
+  message tags follow the constraint language (`[rdfs_expected]`, …).
+
 ### Fixed
 - **SARIF: every result gets a displayable location** (GitHub rejects
   location-less results): null-ID rows keep their stamped

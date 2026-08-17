@@ -42,6 +42,7 @@ class CompiledShapes:
     ir: pandas.DataFrame          # constraint table — what the vectorized engines consume
     hash: str                     # content hash of the shape sources (cache key)
     sources: tuple = ()           # shape file basenames (report metadata; () for a Graph)
+    language: str = "shacl"       # constraint language — "rdfs" for schema-compiled IR
     stats: dict = field(default_factory=dict)  # coverage facts (see _shape_stats)
     plans: dict = field(default_factory=dict)  # engine name → compiled artifact (lazy)
 

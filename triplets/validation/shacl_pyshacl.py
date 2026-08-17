@@ -48,6 +48,10 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
         load+clone: 40 s vs 33 s). Opt in when the store is already loaded
         for SPARQL anyway — then the load leg is free.
     """
+    if compiled.graph is None:
+        raise ValueError("schema-compiled (rdfs) shapes carry no SHACL graph — "
+                         "the pyshacl engine cannot run them; use polars/pandas/duckdb")
+
     from pyshacl import validate as pyshacl_validate
 
     data_graph = scoped_graph(load_dataset(data, rdf_map=rdf_map, store=store), scope)

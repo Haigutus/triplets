@@ -88,6 +88,7 @@ def build_sarif(violations, group=True, sources=None):
         if column not in frame.columns:
             frame[column] = pandas.NA
 
+    language = violations.attrs.get("validation", {}).get("language", "shacl")
     groups = [(key, rows.to_dict("records")) for key, rows
               in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False)]
 
@@ -99,9 +100,10 @@ def build_sarif(violations, group=True, sources=None):
         rule_index = len(rules)
         rules.append(rule)
         if group:
-            results.append(_grouped_result(rule["id"], rule_index, records))
+            results.append(_grouped_result(rule["id"], rule_index, records, language))
         else:
-            results.extend(_result(rule["id"], rule_index, record) for record in records)
+            results.extend(_result(rule["id"], rule_index, record, language)
+                           for record in records)
 
     import triplets
     meta = violations.attrs.get("validation", {})
@@ -175,7 +177,7 @@ def _rule(shape, constraint, records, seen_ids, occurrences=None):
     })
 
 
-def _grouped_result(rule_id, rule_index, records):
+def _grouped_result(rule_id, rule_index, records, language="shacl"):
     total = len(records)
     samples = _samples(records)
     head = ", ".join(filter(None, (_describe(record) for record in samples[:_SAMPLES])))
@@ -186,7 +188,8 @@ def _grouped_result(rule_id, rule_index, records):
     # the sh:ValidationReport's resultMessages. Shape-level notes (e.g.
     # triplets:invalidSparql, ID always null) are not about affected objects,
     # so they carry no [context_count]/[context_examples] blocks.
-    blocks = _message_blocks(records[0], targets=[r.get("TARGET") for r in samples])
+    blocks = _message_blocks(records[0], targets=[r.get("TARGET") for r in samples],
+                             language=language)
     if any(not pandas.isna(record["ID"]) for record in records):
         blocks.append(f"[context_count] {total} object(s) affected")
         if described:
@@ -216,13 +219,13 @@ def _grouped_result(rule_id, rule_index, records):
     })
 
 
-def _result(rule_id, rule_index, record):
+def _result(rule_id, rule_index, record, language="shacl"):
     location = _location(record)
     return _prune({
         "ruleId": rule_id,
         "ruleIndex": rule_index,
         "level": _LEVELS.get(_value(record["SEVERITY"]), "warning"),
-        "message": {"text": "\n".join(_message_blocks(record))},
+        "message": {"text": "\n".join(_message_blocks(record, language=language))},
         "locations": [location] if location else None,
         "properties": _prune({
             "id": _value(record["ID"]),
@@ -240,19 +243,19 @@ def _result(rule_id, rule_index, record):
     })
 
 
-def _message_blocks(record, targets=None):
+def _message_blocks(record, targets=None, language="shacl"):
     """The prefixed message lines a result carries: the constraint message
     verbatim ([shacl_message]/[engine_message] — exactly one of the two), the violated
     path ([shacl_path]), what the constraint requires ([shacl_expected]), the referenced
     object's state ([context_message] — per group: the distinct ones) and the schema
     definition ([schema_property]) when enriched — file position and snippet go to
     physicalLocation, shape description to the rule."""
-    blocks = [f"{message_prefix(record['VIOLATION_TYPE'], record.get('MESSAGE_SOURCE'))} "
+    blocks = [f"{message_prefix(record['VIOLATION_TYPE'], record.get('MESSAGE_SOURCE'), language)} "
               f"{_message(record)}"]
     if not pandas.isna(record["KEY"]):
-        blocks.append(f"[shacl_path] {record['KEY']}")
+        blocks.append(f"[{language}_path] {record['KEY']}")
     if not pandas.isna(record.get("EXPECTED")):
-        blocks.append(f"[shacl_expected] {record['EXPECTED']}")
+        blocks.append(f"[{language}_expected] {record['EXPECTED']}")
     targets = [record.get("TARGET")] if targets is None else targets
     targets = list(dict.fromkeys(t for t in targets if not pandas.isna(t)))
     if targets:
