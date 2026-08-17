@@ -22,6 +22,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   maps `IdentifiedObject.mRID` to the rdf:ID/about attribute (stated in the
   profile RDFS) — every parsed object carries it as the ID column.
   maxOccurs/datatype still apply to explicit elements.
+- **Errors are self-contained** — understandable and fixable from the report
+  alone: the offending value is in the message text (`[context_value]`; SARIF
+  grouped examples pair each object with its bad value), `sh:maxCount`
+  findings list the actual duplicate values, and reference findings name the
+  target's id, Type and IdentifiedObject.name (or that it does not exist).
+  Long grouped observation lines are capped at 3 distinct + count.
 - **SARIF alert titles are always human-readable**: rules without a shape
   `sh:name` get a synthesized title instead of GitHub dumping the raw
   message text — schema runs: `RDFS <Class> <attr> (N×)` (per-property rule

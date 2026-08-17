@@ -148,13 +148,14 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
 
 
 def _describe_associations(violations, data, compiled, table_name="triplets"):
-    """Association type-check findings get a TARGET entry stating what the
-    reference points at — the raw MESSAGE stays verbatim (exporters emit
-    TARGET as its own [target]-tagged message).
+    """Findings get a TARGET entry stating what was actually found in the
+    data — the raw MESSAGE stays verbatim (exporters emit TARGET as its own
+    [context_message] entry), so the error is self-contained:
 
-    ``sh:class`` rows carry the referenced id in VALUE — TARGET names the
-    target's actual Type, or the fact that no such object exists in the
-    data. valueType rows (``via_type`` paths) carry the found type in VALUE.
+    - reference checks (``sh:class``/``triplets:range``, VALUE = the ref):
+      the target's id, Type and name — or the fact that it does not exist;
+    - valueType rows (``via_type``): the found type (the id is not carried);
+    - ``sh:maxCount``: the actual duplicate values.
     One shared pass over the violations frame; no per-engine code.
     """
     violations["TARGET"] = pandas.Series(None, index=violations.index, dtype=object)
@@ -168,15 +169,74 @@ def _describe_associations(violations, data, compiled, table_name="triplets"):
     via = described & keys.isin(via_rules)
     of_class = (described & ~via
                 & violations["VIOLATION_TYPE"].isin(("sh:class", "triplets:range")))
+    over_count = violations["VIOLATION_TYPE"].eq("sh:maxCount") & violations["KEY"].notna()
     if via.any():
         violations.loc[via, "TARGET"] = ("association target found, of type "
                                          + violations.loc[via, "VALUE"].astype(str))
     if of_class.any():
-        found = violations.loc[of_class, "VALUE"].astype(str).map(_type_map(data, table_name))
+        types, names = _type_map(data, table_name), _name_map(data, table_name)
+
+        def describe_reference(ref):
+            found = types.get(ref)
+            if found is None:
+                return f"referenced object {ref} not found in the data"
+            name = names.get(ref)
+            return f'referenced object {ref} found — {found}' + (f' "{name}"' if name else "")
+
         violations.loc[of_class, "TARGET"] = (
-            "referenced object found, of type " + found).where(
-            found.notna(), "referenced object not found in the data")
+            violations.loc[of_class, "VALUE"].astype(str).map(describe_reference))
+    if over_count.any():
+        violations.loc[over_count, "TARGET"] = _found_values(
+            violations.loc[over_count, ["ID", "KEY"]], data, table_name)
     return violations
+
+
+def _name_map(data, table_name="triplets"):
+    """{ID: IdentifiedObject.name} from the data (any input flavor)."""
+    kind = flavor(data)
+    if kind == "duckdb":
+        return dict(data.execute(
+            f"SELECT ID, VALUE FROM {table_name} "
+            f"WHERE KEY = 'IdentifiedObject.name'").fetchall())
+    if kind == "pyarrow":
+        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+        kind = "pandas"
+    if kind == "polars":
+        rows = data.filter(data["KEY"] == "IdentifiedObject.name")
+        return dict(zip(rows["ID"].to_list(), rows["VALUE"].to_list()))
+    rows = data.loc[data["KEY"] == "IdentifiedObject.name"]
+    return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
+
+
+def _found_values(pairs, data, table_name="triplets", cap=5):
+    """Per violated (ID, KEY): "found N values: 'a', 'b', …" — the validator
+    sees WHICH duplicates to remove without opening the instance data."""
+    kind = flavor(data)
+    keys = list(pairs["KEY"].astype(str).unique())
+    if kind == "duckdb":
+        placeholders = ", ".join("?" for _ in keys)
+        rows = pandas.DataFrame(data.execute(
+            f"SELECT ID, KEY, VALUE FROM {table_name} WHERE KEY IN ({placeholders})",
+            keys).fetchall(), columns=["ID", "KEY", "VALUE"])
+    else:
+        if kind == "pyarrow":
+            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+            kind = "pandas"
+        if kind == "polars":
+            rows = data.filter(data["KEY"].is_in(keys)).to_pandas()
+        else:
+            rows = data.loc[data["KEY"].isin(keys)]
+    rows = rows.astype({"ID": str, "KEY": str})
+
+    def describe(values):
+        quoted = [f"'{value}'" for value in values[:cap]]
+        more = f", … ({len(values)} total)" if len(values) > cap else ""
+        return f"found {len(values)} values: {', '.join(quoted)}{more}"
+
+    grouped = (rows.groupby(["ID", "KEY"], observed=True)["VALUE"]
+               .apply(lambda values: describe(list(values))))
+    return pandas.Series(list(zip(pairs["ID"].astype(str), pairs["KEY"].astype(str))),
+                         index=pairs.index).map(grouped)
 
 
 # what a violated constraint requires, worded from its IR parameter — the

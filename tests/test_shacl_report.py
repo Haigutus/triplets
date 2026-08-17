@@ -134,6 +134,7 @@ def test_multi_messages_from_context_and_location_columns():
     graph = violations_to_report_graph(enriched)
     assert {str(message) for message in graph.objects(None, sh.resultMessage)} == {
         "[shacl_message] too long",
+        "[context_value] 100",
         "[shacl_description] Line length plausibility.",
         "[schema_property] Total length of the line. [0..1]",
         "[context_location] grid.xml line 5",

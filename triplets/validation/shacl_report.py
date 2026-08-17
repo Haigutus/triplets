@@ -261,6 +261,8 @@ def _messages(row, language="shacl"):
     if cell("MESSAGE") is not None:
         messages.append(f"{message_prefix(row.VIOLATION_TYPE, cell('MESSAGE_SOURCE'), language)} "
                         f"{row.MESSAGE}")
+    if cell("VALUE") is not None:
+        messages.append(f"[context_value] {row.VALUE}")
     if cell("EXPECTED") is not None:
         messages.append(f"[{language}_expected] {row.EXPECTED}")
     if cell("TARGET") is not None:

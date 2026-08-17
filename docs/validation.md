@@ -244,7 +244,8 @@ text has one author.
 | `[shacl_message]` | the shape's own `sh:message`, verbatim |
 | `[engine_message]` | engine-worded constraint text (default messages, `triplets:*` tool findings) |
 | `[shacl_expected]` | what the constraint requires, worded from the IR parameter (`one of: Bay, VoltageLevel`) — the `EXPECTED` column, stamped by `validate()`, no extra input needed |
-| `[context_message]` | the referenced object's state (its actual Type / dangling) — the `TARGET` column |
+| `[context_value]` | the offending value itself (the bad literal, or the reference) — self-contained errors, no need to open the instance data |
+| `[context_message]` | what was actually found — reference targets (id, Type, name / dangling), duplicate values on maxCount — the `TARGET` column |
 | `[context_object]` | the validated object (`Breaker BRK-1` — context.enrich) |
 | `[shacl_description]` | the shape's `sh:description` (context.enrich) |
 | `[schema_property]` | the rdf_map property (attribute/association) definition + multiplicity (context.enrich with `rdf_map=`) |
