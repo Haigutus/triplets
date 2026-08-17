@@ -16,11 +16,17 @@ logger = logging.getLogger(__name__)
 # embedded ProfileMetadata (keyword / versionIRI / conformsTo) instead.
 PROFILE_URL_MAP = {
     "EquipmentCore": "EQ",
+    "EquipmentOperation": "EQ",
+    "EquipmentShortCircuit": "EQ",
     "SteadyState": "SSH",
     "StateVariables": "SV",
     "Topology/": "TP",
     "EquipmentBoundary": "EQBD",
     "TopologyBoundary": "TPBD",
+    "DiagramLayout": "DL",
+    "Dynamics": "DY",
+    "GeographicalLocation": "GL",
+    "Fault": "FH",
 }
 
 # Namespace for internal/undefined structures when export_undefined=True
@@ -41,9 +47,11 @@ def _profile_identity_index(rdf_map):
     Sections identify themselves via their key ("EQ") and the ProfileMetadata
     entry: keyword ("EQ"), versionIRI (the profile URI, matches old-header
     Model.profile), conformsTo. The schema defines what to match — no
-    hardcoded knowledge per CGMES generation.
+    hardcoded knowledge per CGMES generation. An identifier several sections
+    share (e.g. the IEC document URN every CGMES 3.0 section carries as
+    conformsTo) identifies none of them and is dropped from the index.
     """
-    index = {}
+    index, ambiguous = {}, set()
     for section_name, section in rdf_map.items():
         if not isinstance(section, dict):
             continue
@@ -52,7 +60,10 @@ def _profile_identity_index(rdf_map):
                        metadata.get("versionIRI"), metadata.get("conformsTo")]
         for identifier in identifiers:
             if isinstance(identifier, str) and identifier:
-                index.setdefault(identifier, section_name)
+                if index.setdefault(identifier, section_name) != section_name:
+                    ambiguous.add(identifier)
+    for identifier in ambiguous:
+        del index[identifier]
     return index
 
 

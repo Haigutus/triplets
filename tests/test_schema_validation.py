@@ -375,6 +375,74 @@ def test_sarif_title_grouping_is_per_profile_property():
     assert "RDFS EQ Breaker IdentifiedObject.mRID (2×)" in names
 
 
+# ── review regressions ───────────────────────────────────────────────────────
+
+def test_context_enrichment_columns_survive(engine):
+    """context=True enrichment must survive the per-(instance, profile) concat."""
+    from triplets.validation import ENRICHMENT_COLUMNS
+
+    rows = breaker("b1", ("IdentifiedObject.mRID", "b1"),
+                   ("Equipment.EquipmentContainer", "vl1")) + CONTAINED
+    v = run(rows, engine, context=True)
+    assert set(ENRICHMENT_COLUMNS) <= set(v.columns)
+    assert len(v) and (v["OBJECT_TYPE"] == "Breaker").all()
+
+
+def test_duckdb_connection_with_configured_table():
+    """Instance discovery and the describe helpers resolve the connection's
+    configured table/schema like the duckdb engine — not a hardcoded name."""
+    duckdb = pytest.importorskip("duckdb")
+
+    rows = EQ_HEADER + breaker("b1") + CONTAINED               # mRID + name missing
+    con = duckdb.connect(table="grid", schema="cim")
+    con.execute("CREATE SCHEMA cim")
+    con.register("_src", frame(rows))
+    con.execute("CREATE TABLE cim.grid AS SELECT * FROM _src")
+    v = validate_schema(con, SCHEMA, engine="duckdb")
+    assert set(v["PROFILE"]) == {"EQ"}
+    assert ("b1", None) in violating(v, "xsd:minOccurs")
+
+
+def test_shared_conforms_to_identifies_no_profile():
+    """An identifier several sections share (the IEC document-URN pattern in
+    the shipped schemas) identifies none of them — it must never match the
+    wrong profile."""
+    shared = {
+        "EQ": {**EQ_SECTION, "ProfileMetadata": {
+            **EQ_SECTION["ProfileMetadata"], "conformsTo": "urn:iso:std:iec:61970-501"}},
+        "SSH": {**SSH_SECTION, "ProfileMetadata": {
+            **SSH_SECTION["ProfileMetadata"], "conformsTo": "urn:iso:std:iec:61970-501"}},
+    }
+    from triplets.export.cimxml_utils import _profile_identity_index
+    assert "urn:iso:std:iec:61970-501" not in _profile_identity_index(shared)
+
+    rows = [("h", "conformsTo", "urn:iso:std:iec:61970-501", "eq")] + breaker("b1") + CONTAINED
+    v = validate_schema(frame(rows), shared)
+    assert len(v) == 0
+    assert any("no schema profile matched" in note
+               for note in v.attrs["validation"]["skipped_shapes"])
+
+
+def test_legacy_url_fallback_eq_operation_short_circuit():
+    """A 2.4 EQ file may declare only the Operation/ShortCircuit profile URLs."""
+    rows = ([("h", "Model.profile", "http://entsoe.eu/CIM/EquipmentOperation/3/1", "eq"),
+             ("h", "Model.profile", "http://entsoe.eu/CIM/EquipmentShortCircuit/3/1", "eq")]
+            + breaker("b1") + CONTAINED)
+    v = validate_schema(frame(rows), SCHEMA)
+    assert set(v["PROFILE"]) == {"EQ"}
+
+
+def test_legacy_url_map_covers_all_24_sections():
+    import json
+    from triplets.export.cimxml_utils import PROFILE_URL_MAP
+    from triplets.export_schema import schemas
+
+    with open(schemas.ENTSOE_CGMES_2_4_15_552_ED2) as file:
+        sections = {name for name, entry in json.load(file).items()
+                    if isinstance(entry, dict)}
+    assert sections <= set(PROFILE_URL_MAP.values())
+
+
 def test_accessor():
     data = frame(breaker("b1") + CONTAINED)
     v = data.shacl.validate_schema(SCHEMA, profiles=("EQ",))
