@@ -323,14 +323,142 @@ def _type_map(data, table_name="triplets"):
     return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
 
 
-def validate_schema(data, rdf_map, engine="auto", closed=False, **kwargs):
-    """Validate triplet data directly against the export schema — cardinality
-    (xsd:minOccurs/maxOccurs), datatypes (xsd:type), enumeration membership
-    and association ranges (rdfs:range), optionally unknown properties
-    (rdfs:domain, closed=True). Same vectorized engines, reports and metadata
-    as SHACL validation; no rdflib needed."""
-    return validate(data, compile_schema(rdf_map, closed=closed), rdf_map=rdf_map,
-                    engine=engine, **kwargs)
+_HEADER_KEYS = ("Model.messageType", "keyword", "Model.profile", "conformsTo")
+
+
+def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, **kwargs):
+    """Validate triplet data against the export schema — per instance, per
+    declared profile; profiles are never merged.
+
+    Every INSTANCE_ID is validated separately (the scope filter), against
+    each profile its own header declares: the header's profile-identity
+    fields (``conformsTo``, ``Model.profile``, ``keyword``,
+    ``Model.messageType``) are matched against the schema profiles' declared
+    identity (versionIRI / conformsTo / keyword / section key; legacy 2.4
+    profile URLs by substring). One instance may declare several profiles —
+    each runs on its own, so per-profile constraints (e.g. mRID 1..1 in
+    every CGMES 3.0 profile) are checked against that instance's rows alone.
+
+    profiles : sequence of profile identifiers, optional
+        Explicit override applied to EVERY instance (section key, keyword or
+        profile URI) — for header-less or legacy data. Unknown identifiers
+        raise ValueError. Default None = resolve from each instance's header;
+        instances resolving to nothing are skipped and reported in the run
+        metadata coverage (``skipped_shapes``).
+    """
+    import triplets
+
+    started = datetime.now(timezone.utc)
+    compiled_set = compile_schema(rdf_map, closed=closed)
+    table_name = kwargs.get("table_name", "triplets")
+
+    chosen = None
+    if profiles is not None:
+        chosen = []
+        for identifier in profiles:
+            section = compiled_set.section(identifier)
+            if section is None:
+                raise ValueError(f"unknown schema profile {identifier!r}; available: "
+                                 f"{', '.join(sorted(compiled_set.profiles))}")
+            if section not in chosen:
+                chosen.append(section)
+
+    unresolved, runs = [], []
+    for instance, hints in _instance_hints(data, table_name).items():
+        sections = chosen if chosen is not None else _match_profiles(hints, compiled_set)
+        if not sections:
+            unresolved.append(f"instance {instance}: no schema profile matched "
+                              f"(hints: {hints[:4]})")
+            continue
+        runs.extend((instance, section) for section in sections)
+
+    frames = []
+    for instance, section in runs:
+        sub = validate(data, compiled_set.profiles[section], rdf_map=rdf_map,
+                       engine=engine, scope=[instance], **kwargs)
+        sub["PROFILE"] = section
+        frames.append(sub)
+
+    columns = VIOLATION_COLUMNS + ["TARGET", "EXPECTED", "MESSAGE_SOURCE", "PROFILE"]
+    violations = (pandas.concat(frames, ignore_index=True)[columns] if frames
+                  else pandas.DataFrame(columns=columns))
+
+    used = sorted({section for _, section in runs})
+    engine_name = get_engine(engine)[0]
+    skipped = sorted(
+        {f"{section}: {entry}" for section in used
+         for entry in compiled_set.profiles[section].stats["skipped_shapes"]}
+        | set(unresolved))
+    skipped_components = sorted({
+        component for section in used for component in
+        compiled_set.profiles[section].plans.get(engine_name, ((), (), ()))[2]})
+    finished = datetime.now(timezone.utc)
+    violations.attrs["validation"] = {
+        "started_at": _iso(started),
+        "generated_at": _iso(finished),
+        "duration_seconds": round((finished - started).total_seconds(), 3),
+        "engine": engine_name,
+        "creator": f"triplets {triplets.__version__}",
+        "source": _source_labels(data, table_name=table_name),
+        "references": list(compiled_set.sources),
+        "language": "rdfs",
+        "profiles": used,
+        "node_shapes": sum(compiled_set.profiles[s].stats["node_shapes"] for s in used),
+        "constraints": sum(compiled_set.profiles[s].stats["constraints"] for s in used),
+        "skipped_shapes": skipped,
+        "skipped_components": skipped_components,
+        "source_shapes": {},
+    }
+    return violations
+
+
+def _match_profiles(hints, compiled_set):
+    """Sections a header's hints resolve to, in hint-priority order — exact
+    identity first, the legacy 2.4 profile-URL substrings as fallback."""
+    sections = []
+    for hint in hints:
+        section = compiled_set.section(hint)
+        if section and section not in sections:
+            sections.append(section)
+    if not sections:
+        from ..export.cimxml_utils import PROFILE_URL_MAP
+        for hint in hints:
+            for url_part, section in PROFILE_URL_MAP.items():
+                if url_part in hint and section in compiled_set.profiles \
+                        and section not in sections:
+                    sections.append(section)
+    return sections
+
+
+def _instance_hints(data, table_name="triplets"):
+    """{INSTANCE_ID: [header profile hints, priority-ordered]} — every
+    instance appears, hint-less ones with an empty list (any input flavor)."""
+    kind = flavor(data)
+    if kind == "duckdb":
+        placeholders = ", ".join("?" for _ in _HEADER_KEYS)
+        header = pandas.DataFrame(data.execute(
+            f"SELECT INSTANCE_ID, KEY, VALUE FROM {table_name} WHERE KEY IN ({placeholders})",
+            list(_HEADER_KEYS)).fetchall(), columns=["INSTANCE_ID", "KEY", "VALUE"])
+        instances = [row[0] for row in data.execute(
+            f"SELECT DISTINCT INSTANCE_ID FROM {table_name}").fetchall()]
+    else:
+        if kind == "pyarrow":
+            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+            kind = "pandas"
+        if kind == "polars":
+            header = data.filter(data["KEY"].is_in(list(_HEADER_KEYS))).to_pandas()
+            instances = data["INSTANCE_ID"].unique().to_list()
+        else:
+            header = data.loc[data["KEY"].isin(_HEADER_KEYS)]
+            instances = data["INSTANCE_ID"].unique().tolist()
+
+    hints = {str(instance): [] for instance in instances}
+    priority = {key: rank for rank, key in enumerate(_HEADER_KEYS)}
+    header = header.sort_values("KEY", key=lambda keys: keys.map(priority), kind="stable")
+    for instance, value in zip(header["INSTANCE_ID"].astype(str), header["VALUE"]):
+        if value is not None and not pandas.isna(value):
+            hints[instance].append(str(value))
+    return hints
 
 
 def _report_metadata(violations, data, compiled, engine_name, started, table_name="triplets"):

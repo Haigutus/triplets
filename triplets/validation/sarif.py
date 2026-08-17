@@ -154,12 +154,15 @@ def _fallback_name(shape, first, language):
     SHACL shapes: "<attr> <violation type>"."""
     key = _value(first["KEY"])
     if language != "shacl":
+        profile = _value(first.get("PROFILE"))
         cls = None if pandas.isna(shape) else _local(str(shape))
-        if cls and key and cls.endswith(f".{key}"):     # per-property shape id: Class.<key>
+        if cls and profile and cls.startswith(f"{profile}:"):   # shape id: <profile>:Class.<key>
+            cls = cls[len(profile) + 1:]
+        if cls and key and cls.endswith(f".{key}"):             # per-property shape id
             cls = cls[: -len(key) - 1]
         label = (key if key and cls and key.startswith(f"{cls}.")
                  else " ".join(filter(None, (cls, key))))
-        return f"{language.upper()} {label}".strip()
+        return " ".join(filter(None, (language.upper(), profile, label)))
     return " ".join(filter(None, (key, _value(first["VIOLATION_TYPE"])))) or None
 
 
@@ -222,6 +225,7 @@ def _grouped_result(rule_id, rule_index, records, language="shacl"):
         "locations": locations or None,
         "properties": _prune({
             "count": total,
+            "profile": _value(records[0].get("PROFILE")),
             "key": _value(records[0]["KEY"]),
             "sampleIDs": [record["ID"] for record in samples if not pandas.isna(record["ID"])] or None,
             "sampleValues": sorted({str(record["VALUE"]) for record in samples
@@ -245,6 +249,7 @@ def _result(rule_id, rule_index, record, language="shacl"):
         "locations": [location] if location else None,
         "properties": _prune({
             "id": _value(record["ID"]),
+            "profile": _value(record.get("PROFILE")),
             "key": _value(record["KEY"]),
             "value": _value(record["VALUE"]),
             "violationType": _value(record["VIOLATION_TYPE"]),
@@ -268,6 +273,8 @@ def _message_blocks(record, targets=None, language="shacl", value=False):
     physicalLocation, shape description to the rule."""
     blocks = [f"{message_prefix(record['VIOLATION_TYPE'], record.get('MESSAGE_SOURCE'), language)} "
               f"{_message(record)}"]
+    if not pandas.isna(record.get("PROFILE")):
+        blocks.append(f"[{language}_profile] {record['PROFILE']}")
     if not pandas.isna(record["KEY"]):
         blocks.append(f"[{language}_path] {record['KEY']}")
     if value and not pandas.isna(record["VALUE"]):       # grouped: values ride the examples
