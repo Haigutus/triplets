@@ -6,6 +6,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0rc4] - 2026-08-17
+
+Validation correctness (issues #99-#101) and self-contained errors:
+every finding is fixable from the report alone.
+
 ### Fixed
 - **Identical shape re-declarations behave like one shape** (#99): the
   ENTSO-E Simple files re-declare shared property-shape URIs per profile
@@ -424,6 +429,7 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   modules. Several `tools` and `cgmes_tools` functions were renamed; the old names keep
   working with a warning. All of these will be removed in 0.2.
 
+[0.2.0rc4]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc4
 [0.2.0rc3]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc3
 [0.2.0rc2]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc2
 [0.2.0rc1]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc1
