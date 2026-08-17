@@ -6,6 +6,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Identical shape re-declarations behave like one shape** (#99): the
+  ENTSO-E Simple files re-declare shared property-shape URIs per profile
+  file — the duplicated IR rules double-counted in the polars batch path
+  (`sh:maxCount` false positives on merged shape sets). The IR is deduped at
+  compile.
+- **`validate_schema` range checks accept multi-typed targets** (#100): a
+  referenced object conforms when ANY of its rdf:type values is in the
+  expanded range set (RDF types are cumulative — SSH/TP re-type EQ objects).
+  New vectorized `triplets:range` component in all three engines; dangling
+  references stay silent (cross-profile sets); `sh:value` is now the
+  reference itself, the found type stays in `TARGET`/`[context_message]`.
+- **`validate_schema` skips the mRID minOccurs check** (#101): IEC 61970-552
+  maps `IdentifiedObject.mRID` to the rdf:ID/about attribute (stated in the
+  profile RDFS) — every parsed object carries it as the ID column.
+  maxOccurs/datatype still apply to explicit elements.
+- **SARIF alert titles are always human-readable**: rules without a shape
+  `sh:name` get a synthesized title instead of GitHub dumping the raw
+  message text — schema runs: `RDFS <Class> <attr> (N×)` (per-property rule
+  granularity); unnamed SHACL shapes: `<attr> <violation type> (N×)`.
+
 ## [0.2.0rc3] - 2026-08-17
 
 Field-feedback round (relicapgrid PROF validation) plus schema-based

@@ -170,6 +170,18 @@ def _class(rule, table, context):
                  rows, rows_params, f"PV NOT IN ({_class_sql(table)})", [rule.params])
 
 
+def _schema_range(rule, table, context):
+    """triplets:range — ANY of the target's types in the allowed set conforms
+    (issue #100); targets without a Type row are silent."""
+    rows, rows_params = _rows_sql(rule, table)
+    placeholders = ", ".join("?" for _ in rule.params)
+    condition = (f"EXISTS (SELECT 1 FROM {table} x WHERE x.ID = PV AND x.KEY = 'Type') "
+                 f"AND PV NOT IN (SELECT ID FROM {table} x "
+                 f"WHERE x.KEY = 'Type' AND x.VALUE IN ({placeholders}))")
+    return _wrap(rule, f"reference target is not one of {rule.params}",
+                 rows, rows_params, condition, list(rule.params))
+
+
 def _node_kind(rule, table, context):
     if rule.params not in ("IRI", "Literal"):
         logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)", rule.params, rule.shape_id)
@@ -255,6 +267,7 @@ SQL_BUILDERS = {
     "sh:in": _in,
     "sh:hasValue": _has_value,
     "sh:class": _class,
+    "triplets:range": _schema_range,
     "sh:nodeKind": _node_kind,
     "sh:equals": _equals,
     "sh:disjoint": _disjoint,

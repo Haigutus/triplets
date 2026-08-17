@@ -331,6 +331,19 @@ def _class(context, rule):
                   f"referenced object is not of class {rule.params}")
 
 
+def _schema_range(context, rule):
+    """triplets:range — the referenced object conforms when ANY of its types
+    is in the allowed set (RDF types are cumulative, issue #100); references
+    whose target has no Type row are silent (cross-profile datasets)."""
+    rows = context.path_rows(rule)
+    typed = context.key_rows("Type")["ID"].astype(str).unique()
+    allowed = pandas.Index([]).append([pandas.Index(context.class_ids(cls))
+                                       for cls in rule.params])
+    bad = rows["PATH_VALUE"].isin(typed) & ~rows["PATH_VALUE"].isin(allowed)
+    return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
+                  f"reference target is not one of {rule.params}")
+
+
 def _node_kind(context, rule):
     """sh:nodeKind — triplets store term kinds nowhere, so kind is decided like the
     N-Quads exporter decides it: by the schema when rdf_map names the path (a
@@ -623,6 +636,7 @@ CONSTRAINT_VALIDATORS = {
     "sh:in": _in,
     "sh:hasValue": _has_value,
     "sh:class": _class,
+    "triplets:range": _schema_range,
     "sh:nodeKind": _node_kind,
     "sh:equals": _equals,
     "sh:disjoint": _disjoint,

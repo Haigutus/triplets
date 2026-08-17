@@ -112,9 +112,20 @@ def test_association_range_abstract_expansion(engine):
                       ("Equipment.EquipmentContainer", "ghost"))
             + [("bay1", "Type", "Bay", "eq"), ("sub1", "Type", "Substation", "eq")])
     v = run(rows, engine)
-    assert violating(v, "rdfs:range") == {("b2", "Substation")}
+    assert violating(v, "rdfs:range") == {("b2", "sub1")}     # VALUE = the reference itself
     assert v.loc[v["ID"] == "b2", "TARGET"].iloc[0] \
-        == "association target found, of type Substation"
+        == "referenced object found, of type Substation"
+
+
+def test_association_multi_typed_target_conforms(engine):
+    """SSH/TP re-type EQ objects (issue #100): a target with several rdf:type
+    values conforms when ANY of them is in the expanded range set."""
+    rows = (breaker("b1", ("IdentifiedObject.name", "B1"),
+                    ("Equipment.EquipmentContainer", "bay1"))
+            + [("bay1", "Type", "Bay", "eq"),
+               ("bay1", "Type", "Equipment", "ssh")])    # extra generic type
+    v = run(rows, engine)
+    assert violating(v, "rdfs:range") == set()
 
 
 def test_closed_flag_reports_unknown_property(engine):
@@ -235,3 +246,40 @@ def test_real_schema_smoke():
         v = validate_schema(data, schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine=engine)
         results[engine] = set(zip(v["ID"], v["KEY"].astype(str), v["VIOLATION_TYPE"]))
     assert results["pandas"] == results["polars"] == results["duckdb"]
+
+
+def test_mrid_min_occurs_satisfied_by_rdf_id(engine):
+    """IEC 61970-552: mRID maps to the rdf:ID/about attribute — every parsed
+    object carries it as the ID column, so no minOccurs check (issue #101);
+    an explicit duplicate element still trips maxOccurs."""
+    schema = {"EQ": {**SCHEMA["EQ"]}}
+    schema["EQ"]["Breaker"] = {**SCHEMA["EQ"]["Breaker"],
+                               "parameters": [*SCHEMA["EQ"]["Breaker"]["parameters"],
+                                              "IdentifiedObject.mRID"]}
+    schema["EQ"]["IdentifiedObject.mRID"] = {
+        "type": "Attribute", "multiplicity": "1..1", "xsd:minOccours": "1",
+        "xsd:maxOccours": "1", "xsd:type": "xsd:string", "description": "Master RID."}
+    data = pandas.DataFrame(breaker("b1", *OK_PROPS) + CONTAINED,
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    v = validate_schema(data, schema, engine=engine)
+    assert violating(v, "xsd:minOccurs") == set()          # no mRID element needed
+
+    doubled = pandas.DataFrame(
+        breaker("b1", *OK_PROPS, ("IdentifiedObject.mRID", "x"),
+                ("IdentifiedObject.mRID", "y")) + CONTAINED,
+        columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    v = validate_schema(doubled, schema, engine=engine)
+    assert ("b1", None) in violating(v, "xsd:maxOccurs")   # maxOccurs still applies
+
+
+def test_sarif_titles_follow_rdfs_format():
+    """Alert titles read "RDFS <Class> <attr> (N×)" — GitHub shows the rule
+    name as the alert title; without one it dumps the raw message text."""
+    from triplets.validation.sarif import build_sarif
+
+    rows = (breaker("b1") + breaker("b2") + CONTAINED)     # two nameless breakers
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    v = validate_schema(data, SCHEMA, context=True)        # even enriched: same title
+    rules = build_sarif(v)["runs"][0]["tool"]["driver"]["rules"]
+    names = {rule["name"] for rule in rules}
+    assert "RDFS Breaker IdentifiedObject.name (2×)" in names

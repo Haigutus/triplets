@@ -216,6 +216,18 @@ def _class(context, rule):
     return _emit(plan, rule, f"referenced object is not of class {rule.params}")
 
 
+def _schema_range(context, rule):
+    """triplets:range — ANY of the target's types in the allowed set conforms
+    (issue #100); targets without a Type row are silent."""
+    allowed = polars.concat([polars.Series(context.class_ids(cls)) for cls in rule.params],
+                            rechunk=True).implode()
+    typed = context.membership.select(polars.col("ID")).unique().collect()["ID"].implode()
+    plan = (context.path_rows(rule)
+            .filter(polars.col("PATH_VALUE").is_in(typed)
+                    & ~polars.col("PATH_VALUE").is_in(allowed)))
+    return _emit(plan, rule, f"reference target is not one of {rule.params}")
+
+
 def _node_kind(context, rule):
     if rule.params not in ("IRI", "Literal"):
         logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)", rule.params, rule.shape_id)
@@ -302,6 +314,7 @@ PLAN_BUILDERS = {
     "sh:in": _in,
     "sh:hasValue": _has_value,
     "sh:class": _class,
+    "triplets:range": _schema_range,
     "sh:nodeKind": _node_kind,
     "sh:equals": _equals,
     "sh:disjoint": _disjoint,
