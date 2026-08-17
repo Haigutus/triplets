@@ -182,7 +182,9 @@ def test_component_registries_agree():
     known = set(shacl_ir.KNOWN_COMPONENTS)
     assert set(shacl_pandas.CONSTRAINT_VALIDATORS) == known
     assert shacl_ir.FALLBACK_COMPONENTS <= known
-    assert set(shacl_report._COMPONENT_MAP.values()) == known
+    # pyshacl's report vocabulary covers the SHACL components; triplets:range
+    # is schema-validation-only (never emitted by pyshacl)
+    assert set(shacl_report._COMPONENT_MAP.values()) == known - {"triplets:range"}
 
     if importlib.util.find_spec("polars"):
         from triplets.validation import shacl_polars

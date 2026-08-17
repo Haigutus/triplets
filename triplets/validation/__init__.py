@@ -166,7 +166,8 @@ def _describe_associations(violations, data, compiled, table_name="triplets"):
                          index=violations.index)
     described = violations["VALUE"].notna()
     via = described & keys.isin(via_rules)
-    of_class = described & ~via & violations["VIOLATION_TYPE"].eq("sh:class")
+    of_class = (described & ~via
+                & violations["VIOLATION_TYPE"].isin(("sh:class", "triplets:range")))
     if via.any():
         violations.loc[via, "TARGET"] = ("association target found, of type "
                                          + violations.loc[via, "VALUE"].astype(str))
@@ -195,6 +196,7 @@ _EXPECTED = {
     "sh:nodeKind": "an {} value".format,
     "sh:hasValue": "value {}".format,
     "sh:in": lambda params: "one of: " + ", ".join(map(str, params)),
+    "triplets:range": lambda params: "a reference to one of: " + ", ".join(map(str, params)),
     "sh:equals": "equal to {}".format,
     "sh:disjoint": "different from {}".format,
     "sh:lessThan": "less than {}".format,

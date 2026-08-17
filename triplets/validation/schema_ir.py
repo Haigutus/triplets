@@ -38,10 +38,16 @@ logger = logging.getLogger(__name__)
 
 _PROPERTY_TYPES = ("Attribute", "Association", "Enumeration")
 
+# IEC 61970-552 CIMXML maps IdentifiedObject.mRID to the rdf:ID/rdf:about
+# attribute (stated in the profile RDFS) — triplets frames always carry it as
+# the ID column, so a minOccurs check would false-fire on every object that
+# skips the redundant element (issue #101). maxOccurs/datatype still apply.
+_IDENTITY_KEYS = {"IdentifiedObject.mRID"}
+
 # engine dispatch key → presented violation type (vocabulary-accurate)
 PRESENTED = {"sh:minCount": "xsd:minOccurs", "sh:maxCount": "xsd:maxOccurs",
              "sh:datatype": "xsd:type", "sh:in": "rdfs:range",
-             "sh:closed": "schema:domainIncludes"}
+             "triplets:range": "rdfs:range", "sh:closed": "schema:domainIncludes"}
 
 
 def compile_schema(rdf_map, closed=False) -> CompiledShapes:
@@ -109,7 +115,9 @@ def _schema_rows(schema, closed):
         meta = {"shape_id": f"urn:triplets:schema#{name}", "target_class": name,
                 "target_kind": "class", "path": None, "inverse": False, "via_type": False,
                 "component": None, "params": None, "severity": "Violation", "message": None,
-                "name": f"{name} (schema)", "description": record["description"]}
+                # no name: the SARIF title synthesizes "RDFS <Class> <attr>" —
+                # more informative than any static per-class label
+                "name": None, "description": record["description"]}
         for prop, entry in record["properties"].items():
             rows.extend(_property_rows(meta, prop, entry, concrete, skipped))
         if closed:
@@ -119,11 +127,14 @@ def _schema_rows(schema, closed):
 
 
 def _property_rows(meta, prop, entry, concrete, skipped):
-    """One property entry → cardinality + value-space IR rows."""
-    meta = {**meta, "path": prop}
+    """One property entry → cardinality + value-space IR rows.
+
+    Per-property shape_id (like SHACL property shapes): rules and alert
+    titles group per (class, property), not per class."""
+    meta = {**meta, "path": prop, "shape_id": f"{meta['shape_id']}.{prop}"}
     rows = []
     low, high = entry.get("xsd:minOccours", ""), entry.get("xsd:maxOccours", "")
-    if low.isdigit() and int(low) > 0:
+    if low.isdigit() and int(low) > 0 and prop not in _IDENTITY_KEYS:
         rows.append({**meta, "component": "sh:minCount", "params": int(low)})
     if high.isdigit():
         rows.append({**meta, "component": "sh:maxCount", "params": int(high)})
@@ -136,9 +147,10 @@ def _property_rows(meta, prop, entry, concrete, skipped):
     elif kind == "Association":
         targets = concrete.get(_local(entry.get("range", "")), ())
         if targets:
-            # the referenced object's Type must be a concrete subclass of the
-            # range — the via_type path; dangling references yield no value node
-            rows.append({**meta, "via_type": True, "component": "sh:in",
+            # ANY of the referenced object's types in the expanded range set
+            # conforms (RDF types are cumulative — SSH/TP re-type EQ objects,
+            # issue #100); dangling references are silent (cross-profile sets)
+            rows.append({**meta, "component": "triplets:range",
                          "params": sorted(targets)})
         else:
             skipped.append(f"{meta['target_class']}.{prop}: association range "

@@ -133,6 +133,17 @@ def test_unenriched_frame_and_null_id():
     assert result["message"]["text"].startswith("[engine_message] oxigraph rejected")
 
 
+def test_rule_title_fallback_for_unnamed_shapes():
+    """Unnamed SHACL shapes get "<attr> <violation type>" as the alert title
+    instead of GitHub dumping the raw message text."""
+    violations = pandas.DataFrame(
+        [["id1", "EnergyConsumer.q", "1", "triplets:lexicalForm", "narrower form",
+          "Warning", "n0f320cdb3"]],
+        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
+    rule = build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"][0]
+    assert rule["name"] == "EnergyConsumer.q triplets:lexicalForm (1×)"
+
+
 def test_message_fallback_generated():
     violations = pandas.DataFrame(
         [["id1", "Conductor.length", "-4", "sh:minInclusive", None, "Violation", None]],

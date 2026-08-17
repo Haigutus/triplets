@@ -96,7 +96,7 @@ def build_sarif(violations, group=True, sources=None):
     seen_ids = {}
     for (shape, constraint), records in groups:
         rule = _rule(shape, constraint, records, seen_ids,
-                     occurrences=len(records) if group else None)
+                     occurrences=len(records) if group else None, language=language)
         rule_index = len(rules)
         rules.append(rule)
         if group:
@@ -147,12 +147,28 @@ def build_sarif(violations, group=True, sources=None):
     }
 
 
+def _fallback_name(shape, first, language):
+    """Alert title when the shape carries no sh:name — GitHub otherwise shows
+    the raw multi-line message text as the title. Schema runs:
+    "RDFS <Class> <attr>" (the class is the shape's local name); unnamed
+    SHACL shapes: "<attr> <violation type>"."""
+    key = _value(first["KEY"])
+    if language != "shacl":
+        cls = None if pandas.isna(shape) else _local(str(shape))
+        if cls and key and cls.endswith(f".{key}"):     # per-property shape id: Class.<key>
+            cls = cls[: -len(key) - 1]
+        label = (key if key and cls and key.startswith(f"{cls}.")
+                 else " ".join(filter(None, (cls, key))))
+        return f"{language.upper()} {label}".strip()
+    return " ".join(filter(None, (key, _value(first["VIOLATION_TYPE"])))) or None
+
+
 def _samples(records):
     """The instances a grouped result reports: all, or first 3 + last 3."""
     return records if len(records) <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
 
 
-def _rule(shape, constraint, records, seen_ids, occurrences=None):
+def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shacl"):
     identifier = f"{_local(str(shape))}/{constraint}" if not pandas.isna(shape) else str(constraint)
     if identifier in seen_ids:                       # distinct shapes, same local name
         seen_ids[identifier] += 1
@@ -163,7 +179,7 @@ def _rule(shape, constraint, records, seen_ids, occurrences=None):
     first = records[0]
     # grouped runs put the occurrence count in the rule title — what GitHub
     # shows as the alert name (the ruleId stays stable, so alerts still match)
-    name = _value(first["SHAPE_NAME"])
+    name = _value(first["SHAPE_NAME"]) or _fallback_name(shape, first, language)
     if name and occurrences:
         name = f"{name} ({occurrences}×)"
     return _prune({

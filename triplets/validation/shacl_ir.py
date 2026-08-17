@@ -231,6 +231,11 @@ def parse_ir(graph) -> pandas.DataFrame:
             ", ".join(f"sh:{_local(term)} (x{count})" for term, count in invisible.items()))
 
     ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
+    # identical re-declarations behave like ONE shape (issue #99): the ENTSO-E
+    # Simple files re-declare shared property-shape URIs per profile file —
+    # duplicated rules double-counted in the polars batch path
+    signature = ir.assign(params=ir["params"].astype(str))
+    ir = ir.loc[~signature.duplicated()].reset_index(drop=True)
     # DataFrame construction turns None into NaN — which is TRUTHY, so the
     # engines' `rule.message or default` would emit NaN instead of the default
     # (object dtype: the str dtype would coerce the None straight back to NaN)
@@ -467,6 +472,9 @@ KNOWN_COMPONENTS = {
     "sh:minLength", "sh:maxLength", "sh:nodeKind", "sh:hasValue", "sh:in",
     "sh:equals", "sh:disjoint", "sh:lessThan", "sh:lessThanOrEquals", "sh:node",
     "sh:closed", "sh:sparql", "sh:or", "sh:and", "sh:not",
+    "triplets:range",   # schema validation: reference target's ANY type in the
+                        # allowed set (RDF types are cumulative — issue #100);
+                        # dangling references are silent (cross-profile sets)
 }
 
 
