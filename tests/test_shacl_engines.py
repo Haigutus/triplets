@@ -140,8 +140,8 @@ def test_class_target_names_referenced_type(engine):
             + [("sub1", "Type", "Substation", "eq")])
     v = run(rows, SHAPE.format(body="sh:path cim:Equipment.EquipmentContainer ; sh:class cim:VoltageLevel"), engine)
     targets = dict(zip(v["ID"], v["TARGET"]))
-    assert targets["b1"] == "referenced object found, of type Substation"
-    assert targets["b2"] == "referenced object not found in the data"
+    assert targets["b1"] == "referenced object sub1 found — Substation"
+    assert targets["b2"] == "referenced object ghost not found in the data"
     assert " — " not in v["MESSAGE"].iloc[0]              # raw text untouched
     assert set(v["EXPECTED"]) == {"a reference to a VoltageLevel"}
 

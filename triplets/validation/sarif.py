@@ -241,7 +241,7 @@ def _result(rule_id, rule_index, record, language="shacl"):
         "ruleId": rule_id,
         "ruleIndex": rule_index,
         "level": _LEVELS.get(_value(record["SEVERITY"]), "warning"),
-        "message": {"text": "\n".join(_message_blocks(record, language=language))},
+        "message": {"text": "\n".join(_message_blocks(record, language=language, value=True))},
         "locations": [location] if location else None,
         "properties": _prune({
             "id": _value(record["ID"]),
@@ -259,7 +259,7 @@ def _result(rule_id, rule_index, record, language="shacl"):
     })
 
 
-def _message_blocks(record, targets=None, language="shacl"):
+def _message_blocks(record, targets=None, language="shacl", value=False):
     """The prefixed message lines a result carries: the constraint message
     verbatim ([shacl_message]/[engine_message] — exactly one of the two), the violated
     path ([shacl_path]), what the constraint requires ([shacl_expected]), the referenced
@@ -270,10 +270,14 @@ def _message_blocks(record, targets=None, language="shacl"):
               f"{_message(record)}"]
     if not pandas.isna(record["KEY"]):
         blocks.append(f"[{language}_path] {record['KEY']}")
+    if value and not pandas.isna(record["VALUE"]):       # grouped: values ride the examples
+        blocks.append(f"[context_value] {record['VALUE']}")
     if not pandas.isna(record.get("EXPECTED")):
         blocks.append(f"[{language}_expected] {record['EXPECTED']}")
     targets = [record.get("TARGET")] if targets is None else targets
     targets = list(dict.fromkeys(t for t in targets if not pandas.isna(t)))
+    if len(targets) > 3:                                 # grouped: keep the line readable
+        targets = targets[:3] + [f"… ({len(targets)} distinct)"]
     if targets:
         blocks.append(f"[context_message] {'; '.join(targets)}")
     if not pandas.isna(record["SCHEMA_DESCRIPTION"]):
@@ -297,7 +301,8 @@ def _message(record):
 
 
 def _describe(record):
-    """Human-readable instance sample: 'Type ID (name)'."""
+    """One grouped-example entry: object identity plus the offending value —
+    the validator sees WHICH object carries WHICH bad value."""
     if pandas.isna(record["ID"]):
         return None
     parts = []
@@ -306,6 +311,8 @@ def _describe(record):
     parts.append(str(record["ID"]))
     if not pandas.isna(record["OBJECT_NAME"]):
         parts.append(f"({record['OBJECT_NAME']})")
+    if not pandas.isna(record["VALUE"]):
+        parts.append(f"= '{record['VALUE']}'")
     return " ".join(parts)
 
 

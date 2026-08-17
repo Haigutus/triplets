@@ -114,7 +114,7 @@ def test_association_range_abstract_expansion(engine):
     v = run(rows, engine)
     assert violating(v, "rdfs:range") == {("b2", "sub1")}     # VALUE = the reference itself
     assert v.loc[v["ID"] == "b2", "TARGET"].iloc[0] \
-        == "referenced object found, of type Substation"
+        == "referenced object sub1 found — Substation"
 
 
 def test_association_multi_typed_target_conforms(engine):
@@ -283,3 +283,38 @@ def test_sarif_titles_follow_rdfs_format():
     rules = build_sarif(v)["runs"][0]["tool"]["driver"]["rules"]
     names = {rule["name"] for rule in rules}
     assert "RDFS Breaker IdentifiedObject.name (2×)" in names
+
+
+def test_errors_are_self_contained(engine):
+    """A model validator must understand the fix from the error alone: the
+    offending literal is in the text, duplicates are listed, and references
+    carry the target's id, type and name."""
+    import rdflib
+    from triplets.validation.sarif import build_sarif
+
+    rows = (breaker("b1",
+                    ("IdentifiedObject.name", "B1"), ("IdentifiedObject.name", "B1-dup"),
+                    ("Switch.retained", "maybe"),
+                    ("Equipment.EquipmentContainer", "sub1"))
+            + [("sub1", "Type", "Substation", "eq"),
+               ("sub1", "IdentifiedObject.name", "Main Sub", "eq")])
+    v = run(rows, engine)
+    targets = dict(zip(v["VIOLATION_TYPE"], v["TARGET"]))
+    assert targets["xsd:maxOccurs"] == "found 2 values: 'B1', 'B1-dup'"
+    assert targets["rdfs:range"] == 'referenced object sub1 found — Substation "Main Sub"'
+
+    texts = [r["message"]["text"] for r in build_sarif(v, group=False)["runs"][0]["results"]]
+    assert any("[context_value] maybe" in text for text in texts)          # the bad literal
+    assert any("found 2 values: 'B1', 'B1-dup'" in text for text in texts)
+    assert any('referenced object sub1 found — Substation "Main Sub"' in text
+               for text in texts)
+
+    grouped = build_sarif(v)["runs"][0]["results"]
+    examples = " ".join(r["message"]["text"] for r in grouped)
+    assert "= 'maybe'" in examples                        # object ↔ value pairing
+
+    graph = rdflib.Graph().parse(
+        data=v.shacl.to_shacl_report(export_to_memory=True).getvalue(), format="turtle")
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    messages = {str(m) for m in graph.objects(None, sh.resultMessage)}
+    assert "[context_value] maybe" in messages
