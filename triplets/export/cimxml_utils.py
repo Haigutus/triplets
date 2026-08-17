@@ -26,7 +26,7 @@ PROFILE_URL_MAP = {
     "DiagramLayout": "DL",
     "Dynamics": "DY",
     "GeographicalLocation": "GL",
-    "Fault": "FH",
+    "FileHeader": "FH",
 }
 
 # Namespace for internal/undefined structures when export_undefined=True
