@@ -6,6 +6,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0rc5] - 2026-08-17
+
+Schema-validation semantics: per instance, per declared profile —
+profiles are never merged; mRID validated per each profile's own rule.
+
 ### Changed
 - **Schema validation runs per instance, per declared profile — profiles are
   never merged**: `compile_schema(rdf_map)` compiles every profile contained
@@ -452,6 +457,7 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   modules. Several `tools` and `cgmes_tools` functions were renamed; the old names keep
   working with a warning. All of these will be removed in 0.2.
 
+[0.2.0rc5]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc5
 [0.2.0rc4]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc4
 [0.2.0rc3]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc3
 [0.2.0rc2]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc2
