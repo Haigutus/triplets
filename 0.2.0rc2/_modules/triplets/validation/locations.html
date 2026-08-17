@@ -285,18 +285,18 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.validation.locations</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Exact source locations for violations — one grep-style pass over the CIM/XML.</span>
+<span></span><span class="sd">"""Exact source locations for violations — one grep-style pass over the CIM/XML.</span>
 
 <span class="sd">RDF objects carry no text coordinates through the triplets frame, so locations</span>
 <span class="sd">are recovered from the original files at *export* time: each source file is</span>
 <span class="sd">read once and every ``rdf:ID`` / ``rdf:about`` definition is indexed with its</span>
 <span class="sd">line number — one sequential pass per file, cost independent of how many IDs</span>
-<span class="sd">are wanted. For each violation, the violated property&#39;s own position is then</span>
-<span class="sd">searched inside that object&#39;s text window, so the annotation lands on the</span>
+<span class="sd">are wanted. For each violation, the violated property's own position is then</span>
+<span class="sd">searched inside that object's text window, so the annotation lands on the</span>
 <span class="sd">offending property element, not just the object.</span>
 
 <span class="sd">``locate_violations`` is the public pass: it stamps ``LOCATION_COLUMNS``</span>
-<span class="sd">(SOURCE_URI, SOURCE_LINE, SOURCE_SNIPPET — the located line&#39;s text) onto a</span>
+<span class="sd">(SOURCE_URI, SOURCE_LINE, SOURCE_SNIPPET — the located line's text) onto a</span>
 <span class="sd">violations frame — both the SARIF and the sh:ValidationReport exports call</span>
 <span class="sd">it when given ``sources=``, and it is exposed as</span>
 <span class="sd">``violations.shacl.locate(sources=...)``.</span>
@@ -311,23 +311,23 @@
 <span class="sd">and broke SARIF viewers, for no extra information. Line-only is also what</span>
 <span class="sd">keeps the pass extensible beyond XML: IDs and KEYs appear as literal</span>
 <span class="sd">substrings in every serialization (N-Quads, Turtle, JSON-LD).</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
-<span class="n">LOCATION_COLUMNS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;SOURCE_URI&quot;</span><span class="p">,</span> <span class="s2">&quot;SOURCE_LINE&quot;</span><span class="p">,</span> <span class="s2">&quot;SOURCE_SNIPPET&quot;</span><span class="p">]</span>
+<span class="n">LOCATION_COLUMNS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"SOURCE_URI"</span><span class="p">,</span> <span class="s2">"SOURCE_LINE"</span><span class="p">,</span> <span class="s2">"SOURCE_SNIPPET"</span><span class="p">]</span>
 
-<span class="c1"># an object definition: &lt;cim:Breaker rdf:ID=&quot;_uuid&quot;&gt; / rdf:about=&quot;#_uuid&quot; /</span>
-<span class="c1"># rdf:about=&quot;urn:uuid:uuid&quot; — group(1) is the bare ID, triplets conventions</span>
-<span class="n">_DEFINITION</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">rb</span><span class="s1">&#39;rdf:(?:ID|about)=&quot;(?:urn:uuid:)?[#_]*([^&quot;]+)&quot;&#39;</span><span class="p">)</span>
+<span class="c1"># an object definition: &lt;cim:Breaker rdf:ID="_uuid"&gt; / rdf:about="#_uuid" /</span>
+<span class="c1"># rdf:about="urn:uuid:uuid" — group(1) is the bare ID, triplets conventions</span>
+<span class="n">_DEFINITION</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">rb</span><span class="s1">'rdf:(?:ID|about)="(?:urn:uuid:)?[#_]*([^"]+)"'</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="locate">
 <a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.locations.locate">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">locate</span><span class="p">(</span><span class="n">wanted</span><span class="p">,</span> <span class="n">sources</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Find the wanted objects in the source XML.</span>
+<span class="w">    </span><span class="sd">"""Find the wanted objects in the source XML.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -339,10 +339,10 @@
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
-<span class="sd">    dict {ID: {&quot;uri&quot;: str, &quot;startLine&quot;: int, &quot;snippet&quot;: str,</span>
-<span class="sd">               &quot;keyLines&quot;: {KEY: (line, snippet)}}}</span>
+<span class="sd">    dict {ID: {"uri": str, "startLine": int, "snippet": str,</span>
+<span class="sd">               "keyLines": {KEY: (line, snippet)}}}</span>
 <span class="sd">        IDs not present in the sources are absent from the result.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">..parser.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_all_xml</span>
 
     <span class="n">remaining</span> <span class="o">=</span> <span class="p">{</span><span class="nb">str</span><span class="p">(</span><span class="n">object_id</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">():</span> <span class="n">object_id</span> <span class="k">for</span> <span class="n">object_id</span> <span class="ow">in</span> <span class="n">wanted</span><span class="p">}</span>
@@ -354,18 +354,18 @@
         <span class="n">matches</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">_DEFINITION</span><span class="o">.</span><span class="n">finditer</span><span class="p">(</span><span class="n">text</span><span class="p">))</span>
         <span class="n">line</span><span class="p">,</span> <span class="n">previous</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span>
         <span class="k">for</span> <span class="n">position</span><span class="p">,</span> <span class="n">match</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">matches</span><span class="p">):</span>
-            <span class="n">line</span> <span class="o">+=</span> <span class="n">text</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">previous</span><span class="p">,</span> <span class="n">match</span><span class="o">.</span><span class="n">start</span><span class="p">())</span>
+            <span class="n">line</span> <span class="o">+=</span> <span class="n">text</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="sa">b</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="n">previous</span><span class="p">,</span> <span class="n">match</span><span class="o">.</span><span class="n">start</span><span class="p">())</span>
             <span class="n">previous</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
             <span class="n">object_id</span> <span class="o">=</span> <span class="n">remaining</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">object_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">continue</span>
             <span class="n">window_end</span> <span class="o">=</span> <span class="n">matches</span><span class="p">[</span><span class="n">position</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">start</span><span class="p">()</span> <span class="k">if</span> <span class="n">position</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">matches</span><span class="p">)</span> <span class="k">else</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
             <span class="n">located</span><span class="p">[</span><span class="n">object_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-                <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;startLine&quot;</span><span class="p">:</span> <span class="n">line</span><span class="p">,</span> <span class="s2">&quot;snippet&quot;</span><span class="p">:</span> <span class="n">_line_text</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">match</span><span class="o">.</span><span class="n">start</span><span class="p">()),</span>
-                <span class="s2">&quot;keyLines&quot;</span><span class="p">:</span> <span class="n">_key_lines</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">match</span><span class="o">.</span><span class="n">start</span><span class="p">(),</span> <span class="n">window_end</span><span class="p">,</span> <span class="n">line</span><span class="p">,</span> <span class="n">wanted</span><span class="p">[</span><span class="n">object_id</span><span class="p">]),</span>
+                <span class="s2">"uri"</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">"startLine"</span><span class="p">:</span> <span class="n">line</span><span class="p">,</span> <span class="s2">"snippet"</span><span class="p">:</span> <span class="n">_line_text</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">match</span><span class="o">.</span><span class="n">start</span><span class="p">()),</span>
+                <span class="s2">"keyLines"</span><span class="p">:</span> <span class="n">_key_lines</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">match</span><span class="o">.</span><span class="n">start</span><span class="p">(),</span> <span class="n">window_end</span><span class="p">,</span> <span class="n">line</span><span class="p">,</span> <span class="n">wanted</span><span class="p">[</span><span class="n">object_id</span><span class="p">]),</span>
             <span class="p">}</span>
     <span class="k">if</span> <span class="n">remaining</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%d</span><span class="s2"> violating object(s) not found in the sources&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">remaining</span><span class="p">))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"</span><span class="si">%d</span><span class="s2"> violating object(s) not found in the sources"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">remaining</span><span class="p">))</span>
     <span class="k">return</span> <span class="n">located</span></div>
 
 
@@ -373,16 +373,16 @@
 <div class="viewcode-block" id="locate_violations">
 <a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.locations.locate_violations">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">locate_violations</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">sources</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Stamp LOCATION_COLUMNS onto a violations frame — one locate() pass.</span>
+<span class="w">    </span><span class="sd">"""Stamp LOCATION_COLUMNS onto a violations frame — one locate() pass.</span>
 
-<span class="sd">    Per row (ID, KEY): the violated property element&#39;s own position when it</span>
-<span class="sd">    was found inside the object&#39;s text window, else the object definition&#39;s;</span>
+<span class="sd">    Per row (ID, KEY): the violated property element's own position when it</span>
+<span class="sd">    was found inside the object's text window, else the object definition's;</span>
 <span class="sd">    rows whose object is not in the sources get nulls.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
 
     <span class="n">wanted</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="k">for</span> <span class="n">object_id</span><span class="p">,</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">violations</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">],</span> <span class="n">violations</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]):</span>
+    <span class="k">for</span> <span class="n">object_id</span><span class="p">,</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">violations</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">],</span> <span class="n">violations</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">object_id</span><span class="p">):</span>
             <span class="n">wanted</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">object_id</span><span class="p">),</span> <span class="nb">set</span><span class="p">())</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="kc">None</span> <span class="k">if</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">key</span><span class="p">))</span>
     <span class="n">located</span> <span class="o">=</span> <span class="n">locate</span><span class="p">(</span><span class="n">wanted</span><span class="p">,</span> <span class="n">sources</span><span class="p">)</span>
@@ -392,11 +392,11 @@
         <span class="k">if</span> <span class="n">entry</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
         <span class="n">key</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-        <span class="n">line</span><span class="p">,</span> <span class="n">snippet</span> <span class="o">=</span> <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;keyLines&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">(</span><span class="n">entry</span><span class="p">[</span><span class="s2">&quot;startLine&quot;</span><span class="p">],</span> <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;snippet&quot;</span><span class="p">]))</span>
-        <span class="k">return</span> <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">],</span> <span class="n">line</span><span class="p">,</span> <span class="n">snippet</span>
+        <span class="n">line</span><span class="p">,</span> <span class="n">snippet</span> <span class="o">=</span> <span class="n">entry</span><span class="p">[</span><span class="s2">"keyLines"</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">(</span><span class="n">entry</span><span class="p">[</span><span class="s2">"startLine"</span><span class="p">],</span> <span class="n">entry</span><span class="p">[</span><span class="s2">"snippet"</span><span class="p">]))</span>
+        <span class="k">return</span> <span class="n">entry</span><span class="p">[</span><span class="s2">"uri"</span><span class="p">],</span> <span class="n">line</span><span class="p">,</span> <span class="n">snippet</span>
 
     <span class="n">frame</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-    <span class="n">positions</span> <span class="o">=</span> <span class="p">[</span><span class="n">position</span><span class="p">(</span><span class="n">object_id</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span> <span class="k">for</span> <span class="n">object_id</span><span class="p">,</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">],</span> <span class="n">frame</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">])]</span>
+    <span class="n">positions</span> <span class="o">=</span> <span class="p">[</span><span class="n">position</span><span class="p">(</span><span class="n">object_id</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span> <span class="k">for</span> <span class="n">object_id</span><span class="p">,</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">],</span> <span class="n">frame</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">])]</span>
     <span class="k">if</span> <span class="n">positions</span><span class="p">:</span>
         <span class="n">stamped</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">LOCATION_COLUMNS</span><span class="p">,</span>
                                    <span class="n">index</span><span class="o">=</span><span class="n">frame</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">object</span><span class="p">)</span>
@@ -408,33 +408,33 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_key_lines</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">definition_start</span><span class="p">,</span> <span class="n">window_end</span><span class="p">,</span> <span class="n">definition_line</span><span class="p">,</span> <span class="n">keys</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;(line, snippet) of each violated property element inside the object&#39;s window.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""(line, snippet) of each violated property element inside the object's window."""</span>
     <span class="n">lines</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">key</span> <span class="ow">or</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;Type&quot;</span><span class="p">:</span>         <span class="c1"># the type is the definition element itself</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">key</span> <span class="ow">or</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">"Type"</span><span class="p">:</span>         <span class="c1"># the type is the definition element itself</span>
             <span class="k">continue</span>
-        <span class="n">pattern</span> <span class="o">=</span> <span class="sa">rb</span><span class="s2">&quot;&lt;[\w.-]+:&quot;</span> <span class="o">+</span> <span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span> <span class="o">+</span> <span class="sa">rb</span><span class="s2">&quot;[\s&gt;/]&quot;</span>
+        <span class="n">pattern</span> <span class="o">=</span> <span class="sa">rb</span><span class="s2">"&lt;[\w.-]+:"</span> <span class="o">+</span> <span class="n">re</span><span class="o">.</span><span class="n">escape</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span> <span class="o">+</span> <span class="sa">rb</span><span class="s2">"[\s&gt;/]"</span>
         <span class="n">match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">text</span><span class="p">[</span><span class="n">definition_start</span><span class="p">:</span><span class="n">window_end</span><span class="p">])</span>
         <span class="k">if</span> <span class="n">match</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">start</span> <span class="o">=</span> <span class="n">definition_start</span> <span class="o">+</span> <span class="n">match</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-            <span class="n">lines</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">definition_line</span> <span class="o">+</span> <span class="n">text</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">definition_start</span><span class="p">,</span> <span class="n">start</span><span class="p">),</span>
+            <span class="n">lines</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">definition_line</span> <span class="o">+</span> <span class="n">text</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="sa">b</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="n">definition_start</span><span class="p">,</span> <span class="n">start</span><span class="p">),</span>
                           <span class="n">_line_text</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">start</span><span class="p">))</span>
     <span class="k">return</span> <span class="n">lines</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_line_text</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">position</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The stripped text of *position*&#39;s line — the debugging snippet.&quot;&quot;&quot;</span>
-    <span class="n">line_start</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">rfind</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">position</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
-    <span class="n">line_end</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">position</span><span class="p">)</span>
+<span class="w">    </span><span class="sd">"""The stripped text of *position*'s line — the debugging snippet."""</span>
+    <span class="n">line_start</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">rfind</span><span class="p">(</span><span class="sa">b</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">position</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">line_end</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="sa">b</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="n">position</span><span class="p">)</span>
     <span class="n">line_end</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">)</span> <span class="k">if</span> <span class="n">line_end</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span> <span class="k">else</span> <span class="n">line_end</span>
-    <span class="k">return</span> <span class="n">text</span><span class="p">[</span><span class="n">line_start</span><span class="p">:</span><span class="n">line_end</span><span class="p">]</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span> <span class="s2">&quot;replace&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">text</span><span class="p">[</span><span class="n">line_start</span><span class="p">:</span><span class="n">line_end</span><span class="p">]</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="s2">"replace"</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_read</span><span class="p">(</span><span class="n">source</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;(uri, bytes) for a path or a file-like (zip members from find_all_xml).&quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="s2">&quot;read&quot;</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;memory&gt;&quot;</span><span class="p">)),</span> <span class="n">source</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""(uri, bytes) for a path or a file-like (zip members from find_all_xml)."""</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="s2">"read"</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="s2">"name"</span><span class="p">,</span> <span class="s2">"&lt;memory&gt;"</span><span class="p">)),</span> <span class="n">source</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="s2">"rb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">source</span><span class="p">),</span> <span class="n">file</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
 </pre></div>
         </article>

@@ -285,7 +285,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.cli.cim_spreadsheet</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span></span><span class="sd">"""</span>
 <span class="sd">CIM Spreadsheet Converter CLI Tool</span>
 <span class="sd">===================================</span>
 
@@ -334,10 +334,10 @@
 <span class="sd">    from triplets.tools.cim_spreadsheet_cli import cim_to_spreadsheet, spreadsheet_to_cim</span>
 
 <span class="sd">    # Convert CIM to Excel</span>
-<span class="sd">    cim_to_spreadsheet(&#39;model.xml&#39;, &#39;output.xlsx&#39;)</span>
+<span class="sd">    cim_to_spreadsheet('model.xml', 'output.xlsx')</span>
 
 <span class="sd">    # Convert Excel to CIM</span>
-<span class="sd">    spreadsheet_to_cim(&#39;data.xlsx&#39;, &#39;cim_output/&#39;)</span>
+<span class="sd">    spreadsheet_to_cim('data.xlsx', 'cim_output/')</span>
 
 <span class="sd">Examples</span>
 <span class="sd">--------</span>
@@ -391,7 +391,7 @@
 <span class="sd">--------</span>
 <span class="sd">cim-diff : Tool for comparing CIM XML files</span>
 <span class="sd">triplets.rdf_parser : Core module for RDF/CIM data manipulation</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
@@ -408,7 +408,7 @@
 <div class="viewcode-block" id="cim_to_spreadsheet">
 <a class="viewcode-back" href="../../../triplets.cli.html#triplets.cli.cim_spreadsheet.cim_to_spreadsheet">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">cim_to_spreadsheet</span><span class="p">(</span><span class="n">cim_path</span><span class="p">,</span> <span class="n">output_path</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">zip_output</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Convert CIM XML to spreadsheet format (Excel or CSV).</span>
 
 <span class="sd">    Handles all orchestration including file I/O, format detection, zipping,</span>
@@ -420,9 +420,9 @@
 <span class="sd">        Path to input CIM XML file or ZIP containing XML files</span>
 <span class="sd">    output_path : str</span>
 <span class="sd">        Path to output file (for Excel/zipped CSV) or directory (for CSV)</span>
-<span class="sd">    format : {&#39;excel&#39;, &#39;csv&#39;}, optional</span>
+<span class="sd">    format : {'excel', 'csv'}, optional</span>
 <span class="sd">        Output format. If None, auto-detected from output_path extension.</span>
-<span class="sd">        Defaults to &#39;excel&#39; if ambiguous.</span>
+<span class="sd">        Defaults to 'excel' if ambiguous.</span>
 <span class="sd">    zip_output : bool, optional</span>
 <span class="sd">        Whether to ZIP the output. If None, defaults to True for CSV format,</span>
 <span class="sd">        False for Excel format.</span>
@@ -437,50 +437,50 @@
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; cim_to_spreadsheet(&#39;model.xml&#39;, &#39;output.xlsx&#39;)</span>
-<span class="sd">    &gt;&gt;&gt; cim_to_spreadsheet(&#39;model.zip&#39;, &#39;output.zip&#39;, format=&#39;csv&#39;)</span>
-<span class="sd">    &gt;&gt;&gt; cim_to_spreadsheet(&#39;model.xml&#39;, &#39;output.xlsx&#39;, multivalue=True)</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    &gt;&gt;&gt; cim_to_spreadsheet('model.xml', 'output.xlsx')</span>
+<span class="sd">    &gt;&gt;&gt; cim_to_spreadsheet('model.zip', 'output.zip', format='csv')</span>
+<span class="sd">    &gt;&gt;&gt; cim_to_spreadsheet('model.xml', 'output.xlsx', multivalue=True)</span>
+<span class="sd">    """</span>
 
     <span class="c1"># Format detection</span>
     <span class="k">if</span> <span class="nb">format</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">output_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">&quot;.xlsx&quot;</span><span class="p">,</span> <span class="s2">&quot;.xls&quot;</span><span class="p">)):</span>
-            <span class="nb">format</span> <span class="o">=</span> <span class="s2">&quot;excel&quot;</span>
-        <span class="k">elif</span> <span class="n">output_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">&quot;.csv&quot;</span><span class="p">,</span> <span class="s2">&quot;.zip&quot;</span><span class="p">))</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">output_path</span><span class="p">):</span>
-            <span class="nb">format</span> <span class="o">=</span> <span class="s2">&quot;csv&quot;</span>
+        <span class="k">if</span> <span class="n">output_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">".xlsx"</span><span class="p">,</span> <span class="s2">".xls"</span><span class="p">)):</span>
+            <span class="nb">format</span> <span class="o">=</span> <span class="s2">"excel"</span>
+        <span class="k">elif</span> <span class="n">output_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">".csv"</span><span class="p">,</span> <span class="s2">".zip"</span><span class="p">))</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">output_path</span><span class="p">):</span>
+            <span class="nb">format</span> <span class="o">=</span> <span class="s2">"csv"</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="nb">format</span> <span class="o">=</span> <span class="s2">&quot;excel&quot;</span>
+            <span class="nb">format</span> <span class="o">=</span> <span class="s2">"excel"</span>
 
     <span class="c1"># Default zip behavior</span>
     <span class="k">if</span> <span class="n">zip_output</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">zip_output</span> <span class="o">=</span> <span class="p">(</span><span class="nb">format</span> <span class="o">==</span> <span class="s2">&quot;csv&quot;</span><span class="p">)</span>
+        <span class="n">zip_output</span> <span class="o">=</span> <span class="p">(</span><span class="nb">format</span> <span class="o">==</span> <span class="s2">"csv"</span><span class="p">)</span>
 
     <span class="n">data</span> <span class="o">=</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">load_all_to_dataframe</span><span class="p">(</span><span class="n">cim_path</span><span class="p">)</span>
 
-    <span class="n">base_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">output_path</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;.zip&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;.xlsx&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;.csv&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+    <span class="n">base_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">output_path</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'.zip'</span><span class="p">,</span> <span class="s1">''</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'.xlsx'</span><span class="p">,</span> <span class="s1">''</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'.csv'</span><span class="p">,</span> <span class="s1">''</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">base_name</span><span class="p">:</span>
-        <span class="n">base_name</span> <span class="o">=</span> <span class="s1">&#39;export&#39;</span>
+        <span class="n">base_name</span> <span class="o">=</span> <span class="s1">'export'</span>
 
-    <span class="k">if</span> <span class="nb">format</span> <span class="o">==</span> <span class="s2">&quot;excel&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">format</span> <span class="o">==</span> <span class="s2">"excel"</span><span class="p">:</span>
         <span class="n">excel_file</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_excel</span><span class="p">(</span>
             <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">,</span>
             <span class="n">single_file</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-            <span class="n">filename</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_name</span><span class="si">}</span><span class="s2">.xlsx&quot;</span><span class="p">,</span>
+            <span class="n">filename</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">base_name</span><span class="si">}</span><span class="s2">.xlsx"</span><span class="p">,</span>
             <span class="n">apply_formatting</span><span class="o">=</span><span class="kc">True</span>
         <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">zip_output</span><span class="p">:</span>
             <span class="c1"># Zip the Excel file</span>
-            <span class="n">zip_path</span> <span class="o">=</span> <span class="n">output_path</span> <span class="k">if</span> <span class="n">output_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.zip&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="n">output_path</span> <span class="o">+</span> <span class="s1">&#39;.zip&#39;</span>
-            <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">zip_path</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZIP_DEFLATED</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
+            <span class="n">zip_path</span> <span class="o">=</span> <span class="n">output_path</span> <span class="k">if</span> <span class="n">output_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">'.zip'</span><span class="p">)</span> <span class="k">else</span> <span class="n">output_path</span> <span class="o">+</span> <span class="s1">'.zip'</span>
+            <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">zip_path</span><span class="p">,</span> <span class="s1">'w'</span><span class="p">,</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZIP_DEFLATED</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
                 <span class="n">zf</span><span class="o">.</span><span class="n">writestr</span><span class="p">(</span><span class="n">excel_file</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">excel_file</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="c1"># Write directly to file</span>
-            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="s1">'wb'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
                 <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">excel_file</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
 
-    <span class="k">elif</span> <span class="nb">format</span> <span class="o">==</span> <span class="s2">&quot;csv&quot;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="nb">format</span> <span class="o">==</span> <span class="s2">"csv"</span><span class="p">:</span>
         <span class="n">csv_files</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_csv</span><span class="p">(</span>
             <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">,</span>
@@ -490,8 +490,8 @@
 
         <span class="k">if</span> <span class="n">zip_output</span><span class="p">:</span>
             <span class="c1"># Zip all CSV files</span>
-            <span class="n">zip_path</span> <span class="o">=</span> <span class="n">output_path</span> <span class="k">if</span> <span class="n">output_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.zip&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="n">output_path</span> <span class="o">+</span> <span class="s1">&#39;.zip&#39;</span>
-            <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">zip_path</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZIP_DEFLATED</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
+            <span class="n">zip_path</span> <span class="o">=</span> <span class="n">output_path</span> <span class="k">if</span> <span class="n">output_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">'.zip'</span><span class="p">)</span> <span class="k">else</span> <span class="n">output_path</span> <span class="o">+</span> <span class="s1">'.zip'</span>
+            <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">zip_path</span><span class="p">,</span> <span class="s1">'w'</span><span class="p">,</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZIP_DEFLATED</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">csv_file</span> <span class="ow">in</span> <span class="n">csv_files</span><span class="p">:</span>
                     <span class="n">zf</span><span class="o">.</span><span class="n">writestr</span><span class="p">(</span><span class="n">csv_file</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">csv_file</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
         <span class="k">else</span><span class="p">:</span>
@@ -499,7 +499,7 @@
             <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">csv_file</span> <span class="ow">in</span> <span class="n">csv_files</span><span class="p">:</span>
                 <span class="n">csv_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="n">csv_file</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">csv_path</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">csv_path</span><span class="p">,</span> <span class="s1">'wb'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
                     <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">csv_file</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span></div>
 
 
@@ -509,7 +509,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">spreadsheet_to_cim</span><span class="p">(</span><span class="n">input_path</span><span class="p">,</span> <span class="n">output_path</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                        <span class="n">export_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">zip_output</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                        <span class="n">sheets</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Convert spreadsheet format (Excel or CSV) to CIM XML.</span>
 
 <span class="sd">    Handles all orchestration including file I/O, format detection, unzipping,</span>
@@ -522,14 +522,14 @@
 <span class="sd">        Path to input Excel file, CSV directory, or ZIP archive</span>
 <span class="sd">    output_path : str</span>
 <span class="sd">        Path to output directory where CIM XML files will be written</span>
-<span class="sd">    format : {&#39;excel&#39;, &#39;csv&#39;}, optional</span>
+<span class="sd">    format : {'excel', 'csv'}, optional</span>
 <span class="sd">        Input format. If None, auto-detected from input_path extension.</span>
-<span class="sd">        Defaults to &#39;excel&#39; if ambiguous.</span>
+<span class="sd">        Defaults to 'excel' if ambiguous.</span>
 <span class="sd">    rdf_map : str, optional</span>
 <span class="sd">        Path to RDF map JSON file for custom mappings during export</span>
-<span class="sd">    export_type : {&#39;xml_per_instance&#39;, &#39;xml_per_instance_zip_per_all&#39;, &#39;xml_per_instance_zip_per_xml&#39;}, optional</span>
+<span class="sd">    export_type : {'xml_per_instance', 'xml_per_instance_zip_per_all', 'xml_per_instance_zip_per_xml'}, optional</span>
 <span class="sd">        How to package the CIM XML output. If None, defaults to</span>
-<span class="sd">        &#39;xml_per_instance_zip_per_all&#39; if zip_output=True, else &#39;xml_per_instance&#39;</span>
+<span class="sd">        'xml_per_instance_zip_per_all' if zip_output=True, else 'xml_per_instance'</span>
 <span class="sd">    multivalue : bool, default True</span>
 <span class="sd">        If True, unpack list values into separate triplets during conversion.</span>
 <span class="sd">        Use False to keep list values as-is in single triplets.</span>
@@ -561,38 +561,38 @@
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; spreadsheet_to_cim(&#39;data.xlsx&#39;, &#39;output/&#39;)</span>
-<span class="sd">    &gt;&gt;&gt; spreadsheet_to_cim(&#39;data.zip&#39;, &#39;output/&#39;, sheets=[&#39;ACLineSegment&#39;, &#39;Substation&#39;])</span>
-<span class="sd">    &gt;&gt;&gt; spreadsheet_to_cim(&#39;data.xlsx&#39;, &#39;output/&#39;, triplets_sheet=&#39;RawData&#39;)</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    &gt;&gt;&gt; spreadsheet_to_cim('data.xlsx', 'output/')</span>
+<span class="sd">    &gt;&gt;&gt; spreadsheet_to_cim('data.zip', 'output/', sheets=['ACLineSegment', 'Substation'])</span>
+<span class="sd">    &gt;&gt;&gt; spreadsheet_to_cim('data.xlsx', 'output/', triplets_sheet='RawData')</span>
+<span class="sd">    """</span>
 
     <span class="c1"># Format detection</span>
     <span class="k">if</span> <span class="nb">format</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">input_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">&quot;.xlsx&quot;</span><span class="p">,</span> <span class="s2">&quot;.xls&quot;</span><span class="p">)):</span>
-            <span class="nb">format</span> <span class="o">=</span> <span class="s2">&quot;excel&quot;</span>
-        <span class="k">elif</span> <span class="n">input_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">&quot;.csv&quot;</span><span class="p">,</span> <span class="s2">&quot;.zip&quot;</span><span class="p">))</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">input_path</span><span class="p">):</span>
-            <span class="nb">format</span> <span class="o">=</span> <span class="s2">&quot;csv&quot;</span>
+        <span class="k">if</span> <span class="n">input_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">".xlsx"</span><span class="p">,</span> <span class="s2">".xls"</span><span class="p">)):</span>
+            <span class="nb">format</span> <span class="o">=</span> <span class="s2">"excel"</span>
+        <span class="k">elif</span> <span class="n">input_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s2">".csv"</span><span class="p">,</span> <span class="s2">".zip"</span><span class="p">))</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">input_path</span><span class="p">):</span>
+            <span class="nb">format</span> <span class="o">=</span> <span class="s2">"csv"</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="nb">format</span> <span class="o">=</span> <span class="s2">&quot;excel&quot;</span>
+            <span class="nb">format</span> <span class="o">=</span> <span class="s2">"excel"</span>
 
     <span class="n">tableviews</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="n">raw_triplets</span> <span class="o">=</span> <span class="p">[]</span>
 
-    <span class="k">if</span> <span class="nb">format</span> <span class="o">==</span> <span class="s2">&quot;excel&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">format</span> <span class="o">==</span> <span class="s2">"excel"</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="c1"># Check if it&#39;s a zipped Excel file (not just an xlsx which is also a zip)</span>
-            <span class="k">if</span> <span class="n">input_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.zip&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">is_zipfile</span><span class="p">(</span><span class="n">input_path</span><span class="p">):</span>
+            <span class="c1"># Check if it's a zipped Excel file (not just an xlsx which is also a zip)</span>
+            <span class="k">if</span> <span class="n">input_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">'.zip'</span><span class="p">)</span> <span class="ow">and</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">is_zipfile</span><span class="p">(</span><span class="n">input_path</span><span class="p">):</span>
                 <span class="c1"># Read from ZIP in memory</span>
-                <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">input_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
+                <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">input_path</span><span class="p">,</span> <span class="s1">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
                     <span class="c1"># Find the Excel file</span>
                     <span class="n">excel_filename</span> <span class="o">=</span> <span class="kc">None</span>
                     <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">zf</span><span class="o">.</span><span class="n">namelist</span><span class="p">():</span>
-                        <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">&#39;.xlsx&#39;</span><span class="p">,</span> <span class="s1">&#39;.xls&#39;</span><span class="p">)):</span>
+                        <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">'.xlsx'</span><span class="p">,</span> <span class="s1">'.xls'</span><span class="p">)):</span>
                             <span class="n">excel_filename</span> <span class="o">=</span> <span class="n">filename</span>
                             <span class="k">break</span>
 
                     <span class="k">if</span> <span class="ow">not</span> <span class="n">excel_filename</span><span class="p">:</span>
-                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;No Excel file found in ZIP archive&quot;</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"No Excel file found in ZIP archive"</span><span class="p">)</span>
 
                     <span class="c1"># Read Excel file to BytesIO</span>
                     <span class="n">excel_bytes</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">(</span><span class="n">zf</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">excel_filename</span><span class="p">))</span>
@@ -606,30 +606,30 @@
                 <span class="n">_read_excel_sheets</span><span class="p">(</span><span class="n">excel_obj</span><span class="p">,</span> <span class="n">tableviews</span><span class="p">,</span> <span class="n">raw_triplets</span><span class="p">,</span> <span class="n">sheets</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span>
-                <span class="s2">&quot;openpyxl is required for Excel import. &quot;</span>
-                <span class="s2">&quot;Install it with: pip install openpyxl&quot;</span>
+                <span class="s2">"openpyxl is required for Excel import. "</span>
+                <span class="s2">"Install it with: pip install openpyxl"</span>
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
 
-    <span class="k">elif</span> <span class="nb">format</span> <span class="o">==</span> <span class="s2">&quot;csv&quot;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="nb">format</span> <span class="o">==</span> <span class="s2">"csv"</span><span class="p">:</span>
         <span class="n">csv_dataframes</span> <span class="o">=</span> <span class="p">{}</span>
 
         <span class="k">if</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">is_zipfile</span><span class="p">(</span><span class="n">input_path</span><span class="p">):</span>
             <span class="c1"># Read from ZIP</span>
-            <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">input_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">input_path</span><span class="p">,</span> <span class="s1">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">zf</span><span class="o">.</span><span class="n">namelist</span><span class="p">():</span>
-                    <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.csv&#39;</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">'.csv'</span><span class="p">):</span>
                         <span class="n">sheet_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">filename</span><span class="p">)[:</span><span class="o">-</span><span class="mi">4</span><span class="p">]</span>
-                        <span class="n">csv_content</span> <span class="o">=</span> <span class="n">zf</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span>
+                        <span class="n">csv_content</span> <span class="o">=</span> <span class="n">zf</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">'utf-8'</span><span class="p">)</span>
                         <span class="n">csv_dataframes</span><span class="p">[</span><span class="n">sheet_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">StringIO</span><span class="p">(</span><span class="n">csv_content</span><span class="p">),</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">input_path</span><span class="p">):</span>
             <span class="c1"># Read from directory</span>
             <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">input_path</span><span class="p">):</span>
-                <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.csv&#39;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">'.csv'</span><span class="p">):</span>
                     <span class="n">sheet_name</span> <span class="o">=</span> <span class="n">filename</span><span class="p">[:</span><span class="o">-</span><span class="mi">4</span><span class="p">]</span>
                     <span class="n">csv_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">input_path</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
                     <span class="n">csv_dataframes</span><span class="p">[</span><span class="n">sheet_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">csv_path</span><span class="p">,</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CSV format requires a directory or ZIP file, got: </span><span class="si">{</span><span class="n">input_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CSV format requires a directory or ZIP file, got: </span><span class="si">{</span><span class="n">input_path</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">triplets_sheet</span> <span class="ow">and</span> <span class="n">triplets_sheet</span> <span class="ow">in</span> <span class="n">csv_dataframes</span><span class="p">:</span>
             <span class="n">triplet_df</span> <span class="o">=</span> <span class="n">csv_dataframes</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">triplets_sheet</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
@@ -640,7 +640,7 @@
             <span class="n">csv_dataframes</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">csv_dataframes</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">sheets</span><span class="p">}</span>
             <span class="k">for</span> <span class="n">sheet_name</span> <span class="ow">in</span> <span class="n">sheets</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">sheet_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">csv_dataframes</span><span class="p">:</span>
-                    <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CSV &#39;</span><span class="si">{</span><span class="n">sheet_name</span><span class="si">}</span><span class="s2">&#39; not found, skipping&quot;</span><span class="p">)</span>
+                    <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CSV '</span><span class="si">{</span><span class="n">sheet_name</span><span class="si">}</span><span class="s2">' not found, skipping"</span><span class="p">)</span>
 
         <span class="n">tableviews</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">csv_dataframes</span><span class="p">)</span>
 
@@ -650,21 +650,21 @@
         <span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">data</span><span class="p">]</span> <span class="o">+</span> <span class="n">raw_triplets</span><span class="p">,</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">triplets._version</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_versions</span>
-    <span class="n">version</span> <span class="o">=</span> <span class="n">get_versions</span><span class="p">()[</span><span class="s1">&#39;version&#39;</span><span class="p">]</span>
-    <span class="n">tool_version</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;triplets-</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">version</span> <span class="o">=</span> <span class="n">get_versions</span><span class="p">()[</span><span class="s1">'version'</span><span class="p">]</span>
+    <span class="n">tool_version</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"triplets-</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">"</span>
     <span class="c1"># Old header (md:FullModel) uses Model.applicationSoftware</span>
-    <span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key</span><span class="p">(</span><span class="s2">&quot;Model.applicationSoftware&quot;</span><span class="p">,</span> <span class="n">tool_version</span><span class="p">)</span>
+    <span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key</span><span class="p">(</span><span class="s2">"Model.applicationSoftware"</span><span class="p">,</span> <span class="n">tool_version</span><span class="p">)</span>
     <span class="c1"># New header (dcat:Dataset) uses applicationSoftware (eumd namespace)</span>
-    <span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key</span><span class="p">(</span><span class="s2">&quot;applicationSoftware&quot;</span><span class="p">,</span> <span class="n">tool_version</span><span class="p">)</span>
+    <span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key</span><span class="p">(</span><span class="s2">"applicationSoftware"</span><span class="p">,</span> <span class="n">tool_version</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="s2">&quot;INSTANCE_ID&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">columns</span> <span class="ow">or</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
-        <span class="n">data</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid4</span><span class="p">())</span>
+    <span class="k">if</span> <span class="s2">"INSTANCE_ID"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">columns</span> <span class="ow">or</span> <span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
+        <span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid4</span><span class="p">())</span>
 
     <span class="k">if</span> <span class="n">zip_output</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">zip_output</span> <span class="o">=</span> <span class="kc">True</span>
 
     <span class="k">if</span> <span class="n">export_type</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">export_type</span> <span class="o">=</span> <span class="s2">&quot;xml_per_instance_zip_per_all&quot;</span> <span class="k">if</span> <span class="n">zip_output</span> <span class="k">else</span> <span class="s2">&quot;xml_per_instance&quot;</span>
+        <span class="n">export_type</span> <span class="o">=</span> <span class="s2">"xml_per_instance_zip_per_all"</span> <span class="k">if</span> <span class="n">zip_output</span> <span class="k">else</span> <span class="s2">"xml_per_instance"</span>
 
     <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
@@ -681,16 +681,16 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_extract_raw_triplets</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">source_name</span><span class="p">,</span> <span class="n">raw_triplets</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate and extract raw triplets from a DataFrame, appending to raw_triplets list.&quot;&quot;&quot;</span>
-    <span class="n">required</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">"""Validate and extract raw triplets from a DataFrame, appending to raw_triplets list."""</span>
+    <span class="n">required</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]</span>
     <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">col</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">required</span><span class="p">):</span>
         <span class="n">raw_triplets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">required</span><span class="p">])</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Triplets source &#39;</span><span class="si">{</span><span class="n">source_name</span><span class="si">}</span><span class="s2">&#39; missing required columns (ID, KEY, VALUE), skipping&quot;</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Triplets source '</span><span class="si">{</span><span class="n">source_name</span><span class="si">}</span><span class="s2">' missing required columns (ID, KEY, VALUE), skipping"</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_read_excel_sheets</span><span class="p">(</span><span class="n">excel_obj</span><span class="p">,</span> <span class="n">tableviews</span><span class="p">,</span> <span class="n">raw_triplets</span><span class="p">,</span> <span class="n">sheets</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Read Excel sheets into tableviews dictionary and raw triplets list.</span>
 
 <span class="sd">    Internal helper function that populates tableviews and raw_triplets</span>
@@ -717,7 +717,7 @@
 <span class="sd">    --------</span>
 <span class="sd">    - Logs warning if specified sheet not found in Excel file</span>
 <span class="sd">    - Logs warning if triplets sheet missing required columns (ID, KEY, VALUE)</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="c1"># Determine which sheets to read</span>
     <span class="k">if</span> <span class="n">sheets</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -729,7 +729,7 @@
     <span class="n">valid_sheets</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">sheets_to_read</span> <span class="k">if</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">excel_obj</span><span class="o">.</span><span class="n">sheet_names</span><span class="p">]</span>
     <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">sheets_to_read</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">s</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">excel_obj</span><span class="o">.</span><span class="n">sheet_names</span><span class="p">:</span>
-            <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sheet &#39;</span><span class="si">{</span><span class="n">s</span><span class="si">}</span><span class="s2">&#39; not found in Excel file, skipping&quot;</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Sheet '</span><span class="si">{</span><span class="n">s</span><span class="si">}</span><span class="s2">' not found in Excel file, skipping"</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">valid_sheets</span><span class="p">:</span>
         <span class="n">tableviews</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">pandas</span><span class="o">.</span><span class="n">read_excel</span><span class="p">(</span><span class="n">excel_obj</span><span class="p">,</span> <span class="n">sheet_name</span><span class="o">=</span><span class="n">valid_sheets</span><span class="p">,</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
@@ -742,7 +742,7 @@
 <div class="viewcode-block" id="detect_conversion_direction">
 <a class="viewcode-back" href="../../../triplets.cli.html#triplets.cli.cim_spreadsheet.detect_conversion_direction">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">detect_conversion_direction</span><span class="p">(</span><span class="n">input_path</span><span class="p">,</span> <span class="n">output_path</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Auto-detect conversion direction from file extensions.</span>
 
 <span class="sd">    Examines input and output file paths to determine whether the conversion</span>
@@ -758,7 +758,7 @@
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    str</span>
-<span class="sd">        Either &#39;to-spreadsheet&#39; or &#39;to-cim&#39;</span>
+<span class="sd">        Either 'to-spreadsheet' or 'to-cim'</span>
 
 <span class="sd">    Raises</span>
 <span class="sd">    ------</span>
@@ -769,49 +769,49 @@
 <span class="sd">    -----</span>
 <span class="sd">    Detection logic:</span>
 
-<span class="sd">    - If input is .xml/.rdf (or ZIP containing such files), direction is &#39;to-spreadsheet&#39;</span>
-<span class="sd">    - If input is .xlsx/.xls/.csv (or directory with CSVs), direction is &#39;to-cim&#39;</span>
+<span class="sd">    - If input is .xml/.rdf (or ZIP containing such files), direction is 'to-spreadsheet'</span>
+<span class="sd">    - If input is .xlsx/.xls/.csv (or directory with CSVs), direction is 'to-cim'</span>
 <span class="sd">    - If ambiguous from input, checks output path for spreadsheet extensions or</span>
 <span class="sd">      directory-like patterns</span>
 <span class="sd">    - Raises ValueError if direction cannot be determined</span>
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; detect_conversion_direction(&#39;model.xml&#39;, &#39;output.xlsx&#39;)</span>
-<span class="sd">    &#39;to-spreadsheet&#39;</span>
-<span class="sd">    &gt;&gt;&gt; detect_conversion_direction(&#39;data.xlsx&#39;, &#39;output/&#39;)</span>
-<span class="sd">    &#39;to-cim&#39;</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    &gt;&gt;&gt; detect_conversion_direction('model.xml', 'output.xlsx')</span>
+<span class="sd">    'to-spreadsheet'</span>
+<span class="sd">    &gt;&gt;&gt; detect_conversion_direction('data.xlsx', 'output/')</span>
+<span class="sd">    'to-cim'</span>
+<span class="sd">    """</span>
 
     <span class="c1"># Check if input is CIM XML</span>
-    <span class="n">input_is_cim</span> <span class="o">=</span> <span class="n">input_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">&#39;.xml&#39;</span><span class="p">,</span> <span class="s1">&#39;.rdf&#39;</span><span class="p">))</span>
+    <span class="n">input_is_cim</span> <span class="o">=</span> <span class="n">input_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">'.xml'</span><span class="p">,</span> <span class="s1">'.rdf'</span><span class="p">))</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">input_is_cim</span> <span class="ow">and</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">is_zipfile</span><span class="p">(</span><span class="n">input_path</span><span class="p">):</span>
-        <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">input_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
-            <span class="n">input_is_cim</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">&#39;.xml&#39;</span><span class="p">,</span> <span class="s1">&#39;.rdf&#39;</span><span class="p">))</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">zf</span><span class="o">.</span><span class="n">namelist</span><span class="p">())</span>
+        <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">input_path</span><span class="p">,</span> <span class="s1">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
+            <span class="n">input_is_cim</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">'.xml'</span><span class="p">,</span> <span class="s1">'.rdf'</span><span class="p">))</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">zf</span><span class="o">.</span><span class="n">namelist</span><span class="p">())</span>
 
     <span class="c1"># Check if input is spreadsheet</span>
-    <span class="n">input_is_spreadsheet</span> <span class="o">=</span> <span class="n">input_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">&#39;.xlsx&#39;</span><span class="p">,</span> <span class="s1">&#39;.xls&#39;</span><span class="p">,</span> <span class="s1">&#39;.csv&#39;</span><span class="p">))</span> <span class="ow">or</span> <span class="p">(</span>
-        <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">input_path</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.csv&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">input_path</span><span class="p">))</span>
+    <span class="n">input_is_spreadsheet</span> <span class="o">=</span> <span class="n">input_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">'.xlsx'</span><span class="p">,</span> <span class="s1">'.xls'</span><span class="p">,</span> <span class="s1">'.csv'</span><span class="p">))</span> <span class="ow">or</span> <span class="p">(</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">input_path</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">'.csv'</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">input_path</span><span class="p">))</span>
     <span class="p">)</span>
 
     <span class="c1"># Determine direction</span>
     <span class="k">if</span> <span class="n">input_is_cim</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">input_is_spreadsheet</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s1">&#39;to-spreadsheet&#39;</span>
+        <span class="k">return</span> <span class="s1">'to-spreadsheet'</span>
     <span class="k">elif</span> <span class="n">input_is_spreadsheet</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">input_is_cim</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s1">&#39;to-cim&#39;</span>
+        <span class="k">return</span> <span class="s1">'to-cim'</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="c1"># Ambiguous, check output</span>
-        <span class="n">output_is_spreadsheet</span> <span class="o">=</span> <span class="n">output_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">&#39;.xlsx&#39;</span><span class="p">,</span> <span class="s1">&#39;.xls&#39;</span><span class="p">,</span> <span class="s1">&#39;.csv&#39;</span><span class="p">))</span>
-        <span class="n">output_is_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">output_path</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">&#39;/&#39;</span> <span class="ow">in</span> <span class="n">output_path</span> <span class="ow">or</span> <span class="s1">&#39;</span><span class="se">\\</span><span class="s1">&#39;</span> <span class="ow">in</span> <span class="n">output_path</span>
+        <span class="n">output_is_spreadsheet</span> <span class="o">=</span> <span class="n">output_path</span><span class="o">.</span><span class="n">endswith</span><span class="p">((</span><span class="s1">'.xlsx'</span><span class="p">,</span> <span class="s1">'.xls'</span><span class="p">,</span> <span class="s1">'.csv'</span><span class="p">))</span>
+        <span class="n">output_is_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">output_path</span><span class="p">)</span> <span class="ow">or</span> <span class="s1">'/'</span> <span class="ow">in</span> <span class="n">output_path</span> <span class="ow">or</span> <span class="s1">'</span><span class="se">\\</span><span class="s1">'</span> <span class="ow">in</span> <span class="n">output_path</span>
 
         <span class="k">if</span> <span class="n">output_is_spreadsheet</span><span class="p">:</span>
-            <span class="k">return</span> <span class="s1">&#39;to-spreadsheet&#39;</span>
+            <span class="k">return</span> <span class="s1">'to-spreadsheet'</span>
         <span class="k">elif</span> <span class="n">output_is_dir</span><span class="p">:</span>
-            <span class="k">return</span> <span class="s1">&#39;to-cim&#39;</span>
+            <span class="k">return</span> <span class="s1">'to-cim'</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="s2">&quot;Cannot auto-detect conversion direction. &quot;</span>
-                <span class="s2">&quot;Please specify --direction (to-spreadsheet or to-cim)&quot;</span>
+                <span class="s2">"Cannot auto-detect conversion direction. "</span>
+                <span class="s2">"Please specify --direction (to-spreadsheet or to-cim)"</span>
             <span class="p">)</span></div>
 
 
@@ -819,7 +819,7 @@
 <div class="viewcode-block" id="main">
 <a class="viewcode-back" href="../../../triplets.cli.html#triplets.cli.cim_spreadsheet.main">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    CLI entry point for cim-spreadsheet tool.</span>
 
 <span class="sd">    Parses command-line arguments and executes the appropriate conversion</span>
@@ -859,28 +859,28 @@
 <span class="sd">    cim_to_spreadsheet : Function for CIM to spreadsheet conversion</span>
 <span class="sd">    spreadsheet_to_cim : Function for spreadsheet to CIM conversion</span>
 <span class="sd">    detect_conversion_direction : Auto-detection logic</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span>
-        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Convert between CIM XML and Spreadsheet (Excel/CSV) formats. &quot;</span>
-                    <span class="s2">&quot;Conversion direction is auto-detected from file extensions.&quot;</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Convert between CIM XML and Spreadsheet (Excel/CSV) formats. "</span>
+                    <span class="s2">"Conversion direction is auto-detected from file extensions."</span>
     <span class="p">)</span>
 
     <span class="c1"># Common arguments</span>
-    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--input&quot;</span><span class="p">,</span> <span class="s2">&quot;-i&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Input file or directory&quot;</span><span class="p">)</span>
-    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--output&quot;</span><span class="p">,</span> <span class="s2">&quot;-o&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Output file or directory&quot;</span><span class="p">)</span>
-    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--direction&quot;</span><span class="p">,</span> <span class="s2">&quot;-d&quot;</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;to-spreadsheet&quot;</span><span class="p">,</span> <span class="s2">&quot;to-cim&quot;</span><span class="p">],</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Conversion direction (auto-detected if not specified)&quot;</span><span class="p">)</span>
-    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--format&quot;</span><span class="p">,</span> <span class="s2">&quot;-f&quot;</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;excel&quot;</span><span class="p">,</span> <span class="s2">&quot;csv&quot;</span><span class="p">],</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Spreadsheet format (auto-detected if not specified)&quot;</span><span class="p">)</span>
-    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--no-multivalue&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_false&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s2">&quot;multivalue&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Disable multivalue mode (keep duplicate (ID, KEY) pairs as separate rows/triplets instead of aggregating into lists)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--input"</span><span class="p">,</span> <span class="s2">"-i"</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Input file or directory"</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--output"</span><span class="p">,</span> <span class="s2">"-o"</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Output file or directory"</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--direction"</span><span class="p">,</span> <span class="s2">"-d"</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">"to-spreadsheet"</span><span class="p">,</span> <span class="s2">"to-cim"</span><span class="p">],</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Conversion direction (auto-detected if not specified)"</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--format"</span><span class="p">,</span> <span class="s2">"-f"</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">"excel"</span><span class="p">,</span> <span class="s2">"csv"</span><span class="p">],</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Spreadsheet format (auto-detected if not specified)"</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--no-multivalue"</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">"store_false"</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s2">"multivalue"</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Disable multivalue mode (keep duplicate (ID, KEY) pairs as separate rows/triplets instead of aggregating into lists)"</span><span class="p">)</span>
     <span class="n">parser</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--zip&quot;</span><span class="p">,</span> <span class="s2">&quot;-z&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s2">&quot;zip_output&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Zip output&quot;</span><span class="p">)</span>
-    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--no-zip&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_false&quot;</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s2">&quot;zip_output&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Do not zip output&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--zip"</span><span class="p">,</span> <span class="s2">"-z"</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">"store_true"</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s2">"zip_output"</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Zip output"</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--no-zip"</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">"store_false"</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s2">"zip_output"</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Do not zip output"</span><span class="p">)</span>
     <span class="n">parser</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">zip_output</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 
     <span class="c1"># Spreadsheet to CIM specific arguments</span>
-    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--rdf-map&quot;</span><span class="p">,</span> <span class="s2">&quot;-r&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Path to RDF map JSON (for to-cim conversion)&quot;</span><span class="p">)</span>
-    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--export-type&quot;</span><span class="p">,</span> <span class="s2">&quot;-e&quot;</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;xml_per_instance&quot;</span><span class="p">,</span> <span class="s2">&quot;xml_per_instance_zip_per_all&quot;</span><span class="p">,</span> <span class="s2">&quot;xml_per_instance_zip_per_xml&quot;</span><span class="p">],</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;How to package CIM XML export (for to-cim conversion)&quot;</span><span class="p">)</span>
-    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--sheets&quot;</span><span class="p">,</span> <span class="s2">&quot;-s&quot;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s1">&#39;+&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Specific sheet/file names to convert (Excel sheet names or CSV base filenames)&quot;</span><span class="p">)</span>
-    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--triplets-sheet&quot;</span><span class="p">,</span> <span class="s2">&quot;-t&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Sheet/file name containing raw triplets (ID, KEY, VALUE) to include (Excel sheet name or CSV base filename)&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--rdf-map"</span><span class="p">,</span> <span class="s2">"-r"</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Path to RDF map JSON (for to-cim conversion)"</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--export-type"</span><span class="p">,</span> <span class="s2">"-e"</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">"xml_per_instance"</span><span class="p">,</span> <span class="s2">"xml_per_instance_zip_per_all"</span><span class="p">,</span> <span class="s2">"xml_per_instance_zip_per_xml"</span><span class="p">],</span> <span class="n">help</span><span class="o">=</span><span class="s2">"How to package CIM XML export (for to-cim conversion)"</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--sheets"</span><span class="p">,</span> <span class="s2">"-s"</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s1">'+'</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Specific sheet/file names to convert (Excel sheet names or CSV base filenames)"</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--triplets-sheet"</span><span class="p">,</span> <span class="s2">"-t"</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Sheet/file name containing raw triplets (ID, KEY, VALUE) to include (Excel sheet name or CSV base filename)"</span><span class="p">)</span>
 
     <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
 
@@ -891,13 +891,13 @@
     <span class="k">if</span> <span class="n">direction</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">direction</span> <span class="o">=</span> <span class="n">detect_conversion_direction</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
-            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Auto-detected conversion direction: </span><span class="si">{</span><span class="n">direction</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Auto-detected conversion direction: </span><span class="si">{</span><span class="n">direction</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
             <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 
     <span class="k">try</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">direction</span> <span class="o">==</span> <span class="s2">&quot;to-spreadsheet&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">direction</span> <span class="o">==</span> <span class="s2">"to-spreadsheet"</span><span class="p">:</span>
             <span class="n">cim_to_spreadsheet</span><span class="p">(</span>
                 <span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="p">,</span>
                 <span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">,</span>
@@ -905,9 +905,9 @@
                 <span class="n">zip_output</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">zip_output</span><span class="p">,</span>
                 <span class="n">multivalue</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">multivalue</span>
             <span class="p">)</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Converted </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Converted </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
-        <span class="k">elif</span> <span class="n">direction</span> <span class="o">==</span> <span class="s2">&quot;to-cim&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">direction</span> <span class="o">==</span> <span class="s2">"to-cim"</span><span class="p">:</span>
             <span class="n">spreadsheet_to_cim</span><span class="p">(</span>
                 <span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="p">,</span>
                 <span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">,</span>
@@ -919,15 +919,15 @@
                 <span class="n">sheets</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">sheets</span><span class="p">,</span>
                 <span class="n">triplets_sheet</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">triplets_sheet</span>
             <span class="p">)</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Converted </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Converted </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="n">logging</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error during conversion&quot;</span><span class="p">)</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">"Error during conversion"</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
         <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span></div>
 
 
-<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"__main__"</span><span class="p">:</span>
     <span class="n">main</span><span class="p">()</span>
 </pre></div>
         </article>

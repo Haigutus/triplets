@@ -285,10 +285,10 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.export.csv_polars</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;CSV export using polars native write_csv.</span>
+<span></span><span class="sd">"""CSV export using polars native write_csv.</span>
 
 <span class="sd">Exports triplet data to CSV files, one per type. Uses polars for fast I/O.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
@@ -302,7 +302,7 @@
 <div class="viewcode-block" id="export_to_csv">
 <a class="viewcode-back" href="../../../triplets.export.html#triplets.export.csv_polars.export_to_csv">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">export_to_csv</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">single_file</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">base_filename</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Export triplet data to CSV files using polars.</span>
+<span class="w">    </span><span class="sd">"""Export triplet data to CSV files using polars.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -317,8 +317,8 @@
 <span class="sd">    single_file : bool, default False</span>
 <span class="sd">        If True, export all data using a single base filename.</span>
 <span class="sd">    base_filename : str, optional</span>
-<span class="sd">        Base filename when single_file=True. If None, uses &#39;export&#39;.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">        Base filename when single_file=True. If None, uses 'export'.</span>
+<span class="sd">    """</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">triplets.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">polars_engine</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_tableviews</span><span class="p">(</span><span class="n">df</span><span class="p">):</span>
@@ -332,25 +332,25 @@
 
     <span class="k">if</span> <span class="n">single_file</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">base_filename</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">base_filename</span> <span class="o">=</span> <span class="s2">&quot;export&quot;</span>
+            <span class="n">base_filename</span> <span class="o">=</span> <span class="s2">"export"</span>
         <span class="n">tableviews</span> <span class="o">=</span> <span class="n">_tableviews</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
         <span class="n">exported_files</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">class_type</span><span class="p">,</span> <span class="n">class_data</span> <span class="ow">in</span> <span class="n">tableviews</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="n">file_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_filename</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">class_type</span><span class="si">}</span><span class="s2">.csv&quot;</span>
+            <span class="n">file_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">base_filename</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">class_type</span><span class="si">}</span><span class="s2">.csv"</span>
             <span class="n">output</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">()</span>
             <span class="n">output</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">file_name</span>
             <span class="n">class_data</span><span class="o">.</span><span class="n">write_csv</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
             <span class="n">output</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
             <span class="n">exported_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">labels</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;label&quot;</span><span class="p">)</span>
+        <span class="n">labels</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"KEY"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"label"</span><span class="p">)</span>
         <span class="n">exported_files</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">labels</span><span class="o">.</span><span class="n">iter_rows</span><span class="p">(</span><span class="n">named</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-            <span class="n">instance_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">])</span>
+            <span class="n">instance_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">"INSTANCE_ID"</span><span class="p">)</span> <span class="o">==</span> <span class="n">row</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">])</span>
             <span class="n">tableviews</span> <span class="o">=</span> <span class="n">_tableviews</span><span class="p">(</span><span class="n">instance_data</span><span class="p">)</span>
-            <span class="n">base_name</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">base_name</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"."</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
             <span class="k">for</span> <span class="n">class_type</span><span class="p">,</span> <span class="n">class_data</span> <span class="ow">in</span> <span class="n">tableviews</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-                <span class="n">file_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base_name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">class_type</span><span class="si">}</span><span class="s2">.csv&quot;</span>
+                <span class="n">file_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">base_name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">class_type</span><span class="si">}</span><span class="s2">.csv"</span>
                 <span class="n">output</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">()</span>
                 <span class="n">output</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">file_name</span>
                 <span class="n">class_data</span><span class="o">.</span><span class="n">write_csv</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
@@ -365,11 +365,11 @@
         <span class="n">exported_file_names</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">file_object</span> <span class="ow">in</span> <span class="n">exported_files</span><span class="p">:</span>
             <span class="n">export_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">file_object</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">export_path</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">export_path</span><span class="p">,</span> <span class="s2">"wb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
                 <span class="n">file_object</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
                 <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">file_object</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
             <span class="n">exported_file_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">file_object</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Saved </span><span class="si">{</span><span class="n">export_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Saved </span><span class="si">{</span><span class="n">export_path</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">exported_file_names</span></div>
 
 </pre></div>

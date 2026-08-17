@@ -285,22 +285,22 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.sparql.sparql_rdflib</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;SPARQL reference engine — rdflib&#39;s built-in SPARQL 1.1.</span>
+<span></span><span class="sd">"""SPARQL reference engine — rdflib's built-in SPARQL 1.1.</span>
 
 <span class="sd">Correctness-first reference; the data is loaded into an in-memory rdflib</span>
 <span class="sd">Dataset via the N-Quads export — cached in-process by content key (see</span>
 <span class="sd">_rdflib_loader), so the export/parse runs only on a cache miss, same logic</span>
-<span class="sd">as the qlever engine&#39;s index cache. Scope is applied after loading (named</span>
+<span class="sd">as the qlever engine's index cache. Scope is applied after loading (named</span>
 <span class="sd">graphs), so one cached dataset serves all scopes.</span>
 
 <span class="sd">Results follow the shared engine contract — all SELECT values are lexical</span>
-<span class="sd">strings (triplets are all-string; consumers cast), decoded through rdflib&#39;s</span>
+<span class="sd">strings (triplets are all-string; consumers cast), decoded through rdflib's</span>
 <span class="sd">SPARQL-CSV result serializer (measured ~1.5x faster than iterating the</span>
-<span class="sd">result&#39;s term objects, and the same decode the oxigraph engine uses).</span>
+<span class="sd">result's term objects, and the same decode the oxigraph engine uses).</span>
 <span class="sd">rdf_map still matters: typed literals in the loaded graph drive</span>
 <span class="sd">comparisons/ORDER BY *inside* the query — only the returned representation</span>
 <span class="sd">is string.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">io</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 
@@ -312,53 +312,53 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._rdflib_loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataset</span><span class="p">,</span> <span class="n">scoped_graph</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">..export.nquads_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">CIM_NS</span><span class="p">,</span> <span class="n">RDF_TYPE</span>
 
-<span class="k">if</span> <span class="n">find_spec</span><span class="p">(</span><span class="s2">&quot;rdflib&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># registry contract: an unavailable engine fails at import</span>
-    <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">&quot;rdflib is not installed&quot;</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">find_spec</span><span class="p">(</span><span class="s2">"rdflib"</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># registry contract: an unavailable engine fails at import</span>
+    <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">"rdflib is not installed"</span><span class="p">)</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
-<span class="n">_UUID_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;urn:uuid:&quot;</span>
+<span class="n">_UUID_PREFIX</span> <span class="o">=</span> <span class="s2">"urn:uuid:"</span>
 
 
 <div class="viewcode-block" id="query">
 <a class="viewcode-back" href="../../../triplets.sparql.html#triplets.sparql.sparql_rdflib.query">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Execute query_string over data; shape the result by query type.&quot;&quot;&quot;</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Execute query_string over data; shape the result by query type."""</span>
     <span class="n">dataset</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="n">data_unchanged</span><span class="p">)</span>
     <span class="n">graph</span> <span class="o">=</span> <span class="n">scoped_graph</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span>
     <span class="n">result</span> <span class="o">=</span> <span class="n">graph</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">query_string</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
-        <span class="n">return_type</span> <span class="o">=</span> <span class="s2">&quot;polars&quot;</span> <span class="k">if</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span> <span class="k">else</span> <span class="s2">&quot;pandas&quot;</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
+        <span class="n">return_type</span> <span class="o">=</span> <span class="s2">"polars"</span> <span class="k">if</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"polars"</span> <span class="k">else</span> <span class="s2">"pandas"</span>
 
-    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;ASK&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"ASK"</span><span class="p">:</span>
         <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">askAnswer</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;CONSTRUCT&quot;</span><span class="p">,</span> <span class="s2">&quot;DESCRIBE&quot;</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"CONSTRUCT"</span><span class="p">,</span> <span class="s2">"DESCRIBE"</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">to_return_type</span><span class="p">(</span><span class="n">_graph_to_triplets</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">graph</span><span class="p">),</span> <span class="n">return_type</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">to_return_type</span><span class="p">(</span><span class="n">_select_to_dataframe</span><span class="p">(</span><span class="n">result</span><span class="p">),</span> <span class="n">return_type</span><span class="p">)</span></div>
 
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_select_to_dataframe</span><span class="p">(</span><span class="n">result</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;SELECT result → DataFrame (columns = projected vars, lexical strings).</span>
+<span class="w">    </span><span class="sd">"""SELECT result → DataFrame (columns = projected vars, lexical strings).</span>
 
 <span class="sd">    The SPARQL-CSV serializer streams lexical forms (IRIs bare, literals</span>
 <span class="sd">    unquoted; unbound → empty field → null) — the shared all-strings</span>
-<span class="sd">    convention, same decode as the oxigraph engine.&quot;&quot;&quot;</span>
-    <span class="n">payload</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="s2">&quot;csv&quot;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="n">payload</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">keep_default_na</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">na_values</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;&quot;</span><span class="p">])</span>
+<span class="sd">    convention, same decode as the oxigraph engine."""</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="s2">"csv"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="n">payload</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">keep_default_na</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">na_values</span><span class="o">=</span><span class="p">[</span><span class="s2">""</span><span class="p">])</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_graph_to_triplets</span><span class="p">(</span><span class="n">graph</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;CONSTRUCT/DESCRIBE result graph → triplet DataFrame (ID/KEY/VALUE).</span>
+<span class="w">    </span><span class="sd">"""CONSTRUCT/DESCRIBE result graph → triplet DataFrame (ID/KEY/VALUE).</span>
 
 <span class="sd">    Inverse of the N-Quads export conventions: strips urn:uuid: from subjects,</span>
-<span class="sd">    CIM namespace from predicates, maps rdf:type → &#39;Type&#39;. INSTANCE_ID is empty</span>
+<span class="sd">    CIM namespace from predicates, maps rdf:type → 'Type'. INSTANCE_ID is empty</span>
 <span class="sd">    (a constructed graph has no source instance).</span>
 
-<span class="sd">    Measured: serialize(format=&quot;nt&quot;) + read_nquads loses to this loop (~9%</span>
-<span class="sd">    slower per 84k triples — rdflib&#39;s NT serializer overhead exceeds the</span>
+<span class="sd">    Measured: serialize(format="nt") + read_nquads loses to this loop (~9%</span>
+<span class="sd">    slower per 84k triples — rdflib's NT serializer overhead exceeds the</span>
 <span class="sd">    vectorized decode gain), so the direct iteration stays.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">subject</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">obj</span> <span class="ow">in</span> <span class="n">graph</span><span class="p">:</span>
 
@@ -373,7 +373,7 @@
         <span class="p">)</span>
 
     <span class="c1"># return_type conversion happens in _finalize</span>
-    <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"INSTANCE_ID"</span><span class="p">])</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_strip_uuid</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
@@ -382,14 +382,14 @@
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_shorten_predicate</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
     <span class="k">if</span> <span class="n">predicate</span> <span class="o">==</span> <span class="n">RDF_TYPE</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s2">&quot;Type&quot;</span>
+        <span class="k">return</span> <span class="s2">"Type"</span>
     <span class="k">if</span> <span class="n">predicate</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">CIM_NS</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">predicate</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">CIM_NS</span><span class="p">):]</span>
     <span class="k">return</span> <span class="n">predicate</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_shorten_object</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
-    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;Literal&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"Literal"</span><span class="p">:</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
     <span class="n">value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">_UUID_PREFIX</span><span class="p">):</span>

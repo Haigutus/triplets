@@ -326,9 +326,9 @@
 <h2>Call Sequence<a class="headerlink" href="#call-sequence" title="Link to this heading">¶</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pd</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="n">paths</span><span class="p">])</span>
 <span class="o">|</span>
-<span class="s1">&#39;-&gt; parser.parse(paths, engine=&quot;auto&quot;)</span>
+<span class="s1">'-&gt; parser.parse(paths, engine="auto")</span>
     <span class="o">|</span>
-    <span class="o">|-&gt;</span> <span class="n">get_engine</span><span class="p">(</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
+    <span class="o">|-&gt;</span> <span class="n">get_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)</span>
     <span class="o">|</span>   <span class="k">try</span> <span class="n">cython_pugixml_arrow</span>    <span class="o">-&gt;</span> <span class="ne">ImportError</span> <span class="p">(</span><span class="ow">not</span> <span class="n">compiled</span><span class="p">)</span>
     <span class="o">|</span>   <span class="k">try</span> <span class="n">python_lxml_arrow</span>       <span class="o">-&gt;</span> <span class="ne">ImportError</span> <span class="p">(</span><span class="n">no</span> <span class="n">pyarrow</span><span class="p">)</span>
     <span class="o">|</span>   <span class="n">fall</span> <span class="n">back</span> <span class="n">python_lxml_pandas</span> <span class="o">-&gt;</span> <span class="n">always</span> <span class="n">works</span>
@@ -336,10 +336,10 @@
     <span class="o">|-&gt;</span> <span class="n">find_all_xml</span><span class="p">(</span><span class="n">paths</span><span class="p">)</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="nb">open</span> <span class="o">.</span><span class="n">xml</span><span class="o">/.</span><span class="n">rdf</span> <span class="n">files</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">extract</span> <span class="kn">from</span><span class="w"> </span><span class="nn">.zip</span> <span class="p">(</span><span class="n">nested</span> <span class="n">zips</span> <span class="n">supported</span><span class="p">)</span>
-    <span class="o">|</span>   <span class="s1">&#39;-&gt; returns [file_obj, file_obj, ...]</span>
+    <span class="o">|</span>   <span class="s1">'-&gt; returns [file_obj, file_obj, ...]</span>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="k">for</span> <span class="n">each</span> <span class="n">xml</span><span class="p">:</span>
-    <span class="o">|</span>   <span class="s1">&#39;-&gt; engine.load_rdf_to_dataframe(xml)</span>
+    <span class="o">|</span>   <span class="s1">'-&gt; engine.load_rdf_to_dataframe(xml)</span>
     <span class="o">|</span>       <span class="o">|</span>
     <span class="o">|</span>       <span class="o">|</span>  <span class="n">python_lxml_pandas</span>          <span class="n">python_lxml_arrow</span>          <span class="n">cython_pugixml_arrow</span>
     <span class="o">|</span>       <span class="o">|</span>  <span class="o">-----------------</span>           <span class="o">-----------------</span>          <span class="o">--------------------</span>
@@ -351,20 +351,20 @@
     <span class="o">|</span>       <span class="o">|</span>        <span class="n">v</span>                           <span class="n">v</span>                          <span class="n">v</span>
     <span class="o">|</span>       <span class="o">|</span>   <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span>              <span class="n">pa</span><span class="o">.</span><span class="n">RecordBatch</span>              <span class="n">pa</span><span class="o">.</span><span class="n">RecordBatch</span>
     <span class="o">|</span>       <span class="o">|</span>
-    <span class="o">|</span>       <span class="s1">&#39;-&gt; returns result</span>
+    <span class="o">|</span>       <span class="s1">'-&gt; returns result</span>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="n">combine</span><span class="p">:</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">pandas</span> <span class="n">engine</span><span class="p">:</span>  <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">dataframes</span><span class="p">)</span>
-    <span class="o">|</span>   <span class="s1">&#39;-&gt; arrow engines:  pa.Table.from_batches(batches)</span>
+    <span class="o">|</span>   <span class="s1">'-&gt; arrow engines:  pa.Table.from_batches(batches)</span>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="n">categorical</span> <span class="n">encoding</span><span class="p">:</span>
-    <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">pandas</span> <span class="n">engine</span><span class="p">:</span>  <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;category&quot;</span><span class="p">)</span>
-    <span class="o">|</span>   <span class="s1">&#39;-&gt; arrow engines:  pa.compute.dictionary_encode(col)</span>
+    <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">pandas</span> <span class="n">engine</span><span class="p">:</span>  <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"category"</span><span class="p">)</span>
+    <span class="o">|</span>   <span class="s1">'-&gt; arrow engines:  pa.compute.dictionary_encode(col)</span>
     <span class="o">|</span>
-    <span class="s1">&#39;-&gt; convert to return_type:</span>
-        <span class="o">|-&gt;</span> <span class="s2">&quot;pandas&quot;</span>  <span class="o">-&gt;</span> <span class="n">df</span> <span class="ow">or</span> <span class="n">table</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
-        <span class="o">|-&gt;</span> <span class="s2">&quot;arrow&quot;</span>   <span class="o">-&gt;</span> <span class="n">pa</span><span class="o">.</span><span class="n">Table</span>
-        <span class="s1">&#39;-&gt; &quot;polars&quot;  -&gt; pl.from_arrow(table)</span>
+    <span class="s1">'-&gt; convert to return_type:</span>
+        <span class="o">|-&gt;</span> <span class="s2">"pandas"</span>  <span class="o">-&gt;</span> <span class="n">df</span> <span class="ow">or</span> <span class="n">table</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
+        <span class="o">|-&gt;</span> <span class="s2">"arrow"</span>   <span class="o">-&gt;</span> <span class="n">pa</span><span class="o">.</span><span class="n">Table</span>
+        <span class="s1">'-&gt; "polars"  -&gt; pl.from_arrow(table)</span>
 </pre></div>
 </div>
 </section>
@@ -375,7 +375,7 @@
 <span class="o">|--</span> <span class="n">utils</span><span class="o">.</span><span class="n">py</span>                 <span class="c1"># find_all_xml, clean_ID, _split_prefixed_name, RDF constants</span>
 <span class="o">|--</span> <span class="n">python_lxml_pandas</span><span class="o">.</span><span class="n">py</span>    <span class="c1"># lxml -&gt; list of tuples -&gt; pd.DataFrame (default)</span>
 <span class="o">|--</span> <span class="n">python_lxml_arrow</span><span class="o">.</span><span class="n">py</span>     <span class="c1"># lxml -&gt; Arrow StringBuilders -&gt; pa.RecordBatch</span>
-<span class="s1">&#39;-- cython_pugixml_arrow.pyx # pugixml C++ -&gt; Arrow C++ builders -&gt; pa.RecordBatch</span>
+<span class="s1">'-- cython_pugixml_arrow.pyx # pugixml C++ -&gt; Arrow C++ builders -&gt; pa.RecordBatch</span>
 </pre></div>
 </div>
 </section>
@@ -386,19 +386,19 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
 
 <span class="c1"># auto (best available engine)</span>
-<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="s2">&quot;grid_EQ.xml&quot;</span><span class="p">,</span> <span class="s2">&quot;data.zip&quot;</span><span class="p">])</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="s2">"grid_EQ.xml"</span><span class="p">,</span> <span class="s2">"data.zip"</span><span class="p">])</span>
 
 <span class="c1"># explicit engine selection</span>
-<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;python_lxml_pandas&quot;</span><span class="p">)</span>
-<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;python_lxml_arrow&quot;</span><span class="p">)</span>
-<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;cython_pugixml_arrow&quot;</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"python_lxml_pandas"</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"python_lxml_arrow"</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"cython_pugixml_arrow"</span><span class="p">)</span>
 
 <span class="c1"># polars</span>
-<span class="n">data</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">read_rdf</span><span class="p">([</span><span class="s2">&quot;grid_EQ.xml&quot;</span><span class="p">],</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">&quot;polars&quot;</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">read_rdf</span><span class="p">([</span><span class="s2">"grid_EQ.xml"</span><span class="p">],</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"polars"</span><span class="p">)</span>
 
 <span class="c1"># return Arrow or Polars directly</span>
-<span class="n">table</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">&quot;arrow&quot;</span><span class="p">)</span>
-<span class="n">data</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">&quot;polars&quot;</span><span class="p">)</span>
+<span class="n">table</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"arrow"</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"polars"</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>

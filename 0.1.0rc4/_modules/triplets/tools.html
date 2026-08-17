@@ -278,7 +278,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.tools</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Triplet data manipulation tools with pandas/polars engine support.</span>
+<span></span><span class="sd">"""Triplet data manipulation tools with pandas/polars engine support.</span>
 
 <span class="sd">Provides query, filter, diff, transform, and mutate operations on triplet</span>
 <span class="sd">DataFrames ([ID, KEY, VALUE, INSTANCE_ID]).</span>
@@ -288,8 +288,8 @@
 <span class="sd">- polars_engine (optional, uses polars-native operations for speed)</span>
 
 <span class="sd">The engine is auto-detected from the input DataFrame type, or can be</span>
-<span class="sd">specified explicitly with engine=&quot;pandas&quot; or engine=&quot;polars&quot;.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">specified explicitly with engine="pandas" or engine="polars".</span>
+<span class="sd">"""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">functools</span>
@@ -299,25 +299,25 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_auto_engine</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Pick engine based on DataFrame type.&quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;__module__&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="s1">&#39;polars&#39;</span> <span class="ow">in</span> <span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="vm">__module__</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Pick engine based on DataFrame type."""</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'__module__'</span><span class="p">)</span> <span class="ow">and</span> <span class="s1">'polars'</span> <span class="ow">in</span> <span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="vm">__module__</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">polars_engine</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;engine auto-selected: polars (input is polars DataFrame)&quot;</span><span class="p">)</span>
-            <span class="k">return</span> <span class="s2">&quot;polars&quot;</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">"engine auto-selected: polars (input is polars DataFrame)"</span><span class="p">)</span>
+            <span class="k">return</span> <span class="s2">"polars"</span>
         <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
             <span class="k">pass</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;engine auto-selected: pandas&quot;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="s2">&quot;pandas&quot;</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">"engine auto-selected: pandas"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="s2">"pandas"</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve engine name and return the module.&quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
-        <span class="n">engine</span> <span class="o">=</span> <span class="n">_auto_engine</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;pandas&quot;</span>
+<span class="w">    </span><span class="sd">"""Resolve engine name and return the module."""</span>
+    <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
+        <span class="n">engine</span> <span class="o">=</span> <span class="n">_auto_engine</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">"pandas"</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;engine set: </span><span class="si">{</span><span class="n">engine</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">"engine set: </span><span class="si">{</span><span class="n">engine</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">polars_engine</span>
         <span class="k">return</span> <span class="n">polars_engine</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">pandas_engine</span>
@@ -329,118 +329,118 @@
 
 <div class="viewcode-block" id="type_tableview">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.type_tableview">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">type_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">type_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="s2">"Type"</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="n">string_to_number</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="n">type_key</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="key_tableview">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.key_tableview">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">key_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">key_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">key_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="n">string_to_number</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="id_tableview">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.id_tableview">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">id</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">id</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">id</span><span class="p">,</span> <span class="n">string_to_number</span><span class="o">=</span><span class="n">string_to_number</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="types_dict">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.types_dict">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">types_dict</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">types_dict</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">types_dict</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">get_object_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">object_UUID</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_object_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">object_UUID</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">get_object_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">object_UUID</span><span class="p">)</span>
 
 <div class="viewcode-block" id="get_namespace_map">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.get_namespace_map">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_namespace_map</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_namespace_map</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">get_namespace_map</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="references_to_simple">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.references_to_simple">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">references_to_simple</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">],</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">references_to_simple</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"Type"</span><span class="p">],</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">references_to_simple</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">columns</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="references_to">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.references_to">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">references_to</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">references_to</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">references_to</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="references_from_simple">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.references_from_simple">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">references_from_simple</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">],</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">references_from_simple</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"Type"</span><span class="p">],</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">references_from_simple</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">columns</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="references_from">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.references_from">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">references_from</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">references_from</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">references_from</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="references_all">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.references_all">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">references_all</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">references_all</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">references_all</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="references_simple">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.references_simple">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">references_simple</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">references_simple</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">references_simple</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">columns</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="references">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.references">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">references</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">ID</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">references</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">ID</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">references</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">ID</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="filter_triplets_by_type">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.filter_triplets_by_type">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="s2">"Type"</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="n">type_key</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="filter_triplets_by_triplets">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.filter_triplets_by_triplets">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets_by_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">filter_triplet</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets_by_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">filter_triplet</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">filter_triplets_by_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">filter_triplet</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="filter_triplets">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.filter_triplets">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">ID</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">INSTANCE_ID</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">ID</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">INSTANCE_ID</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">ID</span><span class="o">=</span><span class="n">ID</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="n">KEY</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="n">VALUE</span><span class="p">,</span> <span class="n">INSTANCE_ID</span><span class="o">=</span><span class="n">INSTANCE_ID</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="n">regex</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="set_triplets_value_by_key">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.set_triplets_value_by_key">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">set_triplets_value_by_key</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">set_triplets_value_by_key</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">set_triplets_value_by_key</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="set_triplets_value_by_key_and_id">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.set_triplets_value_by_key_and_id">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">set_triplets_value_by_key_and_id</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="nb">id</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">set_triplets_value_by_key_and_id</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="nb">id</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">set_triplets_value_by_key_and_id</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="nb">id</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="triplets_to_tableviews">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.triplets_to_tableviews">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">triplets_to_tableviews</span><span class="p">(</span><span class="n">triplet_df</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">triplets_to_tableviews</span><span class="p">(</span><span class="n">triplet_df</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">triplet_df</span><span class="p">)</span><span class="o">.</span><span class="n">triplets_to_tableviews</span><span class="p">(</span><span class="n">triplet_df</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="tableviews_to_triplets">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.tableviews_to_triplets">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tableviews_to_triplets</span><span class="p">(</span><span class="n">tableviews</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tableviews_to_triplets</span><span class="p">(</span><span class="n">tableviews</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="c1"># tableviews is a dict — detect engine from first value if available</span>
     <span class="n">data</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="n">tableviews</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span> <span class="kc">None</span><span class="p">)</span> <span class="k">if</span> <span class="n">tableviews</span> <span class="k">else</span> <span class="kc">None</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">tableviews_to_triplets</span><span class="p">(</span><span class="n">tableviews</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span></div>
@@ -448,61 +448,61 @@
 
 <div class="viewcode-block" id="tableview_to_triplets">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.tableview_to_triplets">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">tableview_to_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tableview_to_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">tableview_to_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="get_object_data">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.get_object_data">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_object_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">object_UUID</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_object_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">object_UUID</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">get_object_data</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">object_UUID</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="update_triplets_from_triplets">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.update_triplets_from_triplets">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">update_triplets_from_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">update_data</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">update_triplets_from_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">update_data</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">update_triplets_from_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">update_data</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="n">update</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="n">add</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="update_triplets_from_tableview">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.update_triplets_from_tableview">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">update_triplets_from_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">tableview</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">instance_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">update_triplets_from_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">tableview</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">instance_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">update_triplets_from_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">tableview</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="n">update</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="n">add</span><span class="p">,</span> <span class="n">instance_id</span><span class="o">=</span><span class="n">instance_id</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="remove_triplets_from_triplets">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.remove_triplets_from_triplets">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">remove_triplets_from_triplets</span><span class="p">(</span><span class="n">from_triplet</span><span class="p">,</span> <span class="n">what_triplet</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">],</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">remove_triplets_from_triplets</span><span class="p">(</span><span class="n">from_triplet</span><span class="p">,</span> <span class="n">what_triplet</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">],</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">from_triplet</span><span class="p">)</span><span class="o">.</span><span class="n">remove_triplets_from_triplets</span><span class="p">(</span><span class="n">from_triplet</span><span class="p">,</span> <span class="n">what_triplet</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">columns</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="diff_triplets">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.diff_triplets">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">diff_triplets</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">diff_triplets</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">old_data</span><span class="p">)</span><span class="o">.</span><span class="n">diff_triplets</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="diff_triplets_by_instance">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.diff_triplets_by_instance">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">diff_triplets_by_instance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">INSTANCE_ID_1</span><span class="p">,</span> <span class="n">INSTANCE_ID_2</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">diff_triplets_by_instance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">INSTANCE_ID_1</span><span class="p">,</span> <span class="n">INSTANCE_ID_2</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">diff_triplets_by_instance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">INSTANCE_ID_1</span><span class="p">,</span> <span class="n">INSTANCE_ID_2</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="print_triplets_diff">
 <a class="viewcode-back" href="../../triplets.tools.html#triplets.tools.print_triplets_diff">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">file_id_object</span><span class="o">=</span><span class="s2">&quot;Distribution&quot;</span><span class="p">,</span> <span class="n">file_id_key</span><span class="o">=</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">file_id_object</span><span class="o">=</span><span class="s2">"Distribution"</span><span class="p">,</span> <span class="n">file_id_key</span><span class="o">=</span><span class="s2">"label"</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
     <span class="k">return</span> <span class="n">_get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span> <span class="n">old_data</span><span class="p">)</span><span class="o">.</span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">file_id_object</span><span class="o">=</span><span class="n">file_id_object</span><span class="p">,</span> <span class="n">file_id_key</span><span class="o">=</span><span class="n">file_id_key</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="n">exclude_objects</span><span class="p">)</span></div>
 
 
 
 <span class="c1"># ── Convenience aliases (not deprecated — both names are first-class) ───────</span>
 <span class="c1"># Alias → target. The aliases group functions by prefix for IDE autocomplete:</span>
-<span class="c1"># typing &quot;get&quot;, &quot;tableview&quot; or &quot;references&quot; surfaces the whole family.</span>
+<span class="c1"># typing "get", "tableview" or "references" surfaces the whole family.</span>
 <span class="n">ALIASES</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;get_types_count&quot;</span><span class="p">:</span> <span class="s2">&quot;types_dict&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;tableview_by_type&quot;</span><span class="p">:</span> <span class="s2">&quot;type_tableview&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;tableview_by_key&quot;</span><span class="p">:</span> <span class="s2">&quot;key_tableview&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;tableview_by_id&quot;</span><span class="p">:</span> <span class="s2">&quot;id_tableview&quot;</span><span class="p">,</span>
+    <span class="s2">"get_types_count"</span><span class="p">:</span> <span class="s2">"types_dict"</span><span class="p">,</span>
+    <span class="s2">"tableview_by_type"</span><span class="p">:</span> <span class="s2">"type_tableview"</span><span class="p">,</span>
+    <span class="s2">"tableview_by_key"</span><span class="p">:</span> <span class="s2">"key_tableview"</span><span class="p">,</span>
+    <span class="s2">"tableview_by_id"</span><span class="p">:</span> <span class="s2">"id_tableview"</span><span class="p">,</span>
 <span class="p">}</span>
 
 <span class="k">for</span> <span class="n">_alias</span><span class="p">,</span> <span class="n">_target</span> <span class="ow">in</span> <span class="n">ALIASES</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -512,19 +512,19 @@
 <span class="c1"># ── Deprecated names (renamed in 0.1; removal in 0.2) ───────────────────────</span>
 <span class="c1"># Old name → new name; old names keep working but emit DeprecationWarning.</span>
 <span class="n">DEPRECATED_ALIASES</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;filter_by_type&quot;</span><span class="p">:</span> <span class="s2">&quot;filter_triplets_by_type&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;filter_by_triplet&quot;</span><span class="p">:</span> <span class="s2">&quot;filter_triplets_by_triplets&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;set_VALUE_at_KEY&quot;</span><span class="p">:</span> <span class="s2">&quot;set_triplets_value_by_key&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;set_VALUE_at_KEY_and_ID&quot;</span><span class="p">:</span> <span class="s2">&quot;set_triplets_value_by_key_and_id&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;update_triplet_from_triplet&quot;</span><span class="p">:</span> <span class="s2">&quot;update_triplets_from_triplets&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;update_triplet_from_tableview&quot;</span><span class="p">:</span> <span class="s2">&quot;update_triplets_from_tableview&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;remove_triplet_from_triplet&quot;</span><span class="p">:</span> <span class="s2">&quot;remove_triplets_from_triplets&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;triplet_to_tableviews&quot;</span><span class="p">:</span> <span class="s2">&quot;triplets_to_tableviews&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;tableview_to_triplet&quot;</span><span class="p">:</span> <span class="s2">&quot;tableview_to_triplets&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;tableviews_to_triplet&quot;</span><span class="p">:</span> <span class="s2">&quot;tableviews_to_triplets&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;diff_between_triplet&quot;</span><span class="p">:</span> <span class="s2">&quot;diff_triplets&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;diff_between_INSTANCE&quot;</span><span class="p">:</span> <span class="s2">&quot;diff_triplets_by_instance&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;print_triplet_diff&quot;</span><span class="p">:</span> <span class="s2">&quot;print_triplets_diff&quot;</span><span class="p">,</span>
+    <span class="s2">"filter_by_type"</span><span class="p">:</span> <span class="s2">"filter_triplets_by_type"</span><span class="p">,</span>
+    <span class="s2">"filter_by_triplet"</span><span class="p">:</span> <span class="s2">"filter_triplets_by_triplets"</span><span class="p">,</span>
+    <span class="s2">"set_VALUE_at_KEY"</span><span class="p">:</span> <span class="s2">"set_triplets_value_by_key"</span><span class="p">,</span>
+    <span class="s2">"set_VALUE_at_KEY_and_ID"</span><span class="p">:</span> <span class="s2">"set_triplets_value_by_key_and_id"</span><span class="p">,</span>
+    <span class="s2">"update_triplet_from_triplet"</span><span class="p">:</span> <span class="s2">"update_triplets_from_triplets"</span><span class="p">,</span>
+    <span class="s2">"update_triplet_from_tableview"</span><span class="p">:</span> <span class="s2">"update_triplets_from_tableview"</span><span class="p">,</span>
+    <span class="s2">"remove_triplet_from_triplet"</span><span class="p">:</span> <span class="s2">"remove_triplets_from_triplets"</span><span class="p">,</span>
+    <span class="s2">"triplet_to_tableviews"</span><span class="p">:</span> <span class="s2">"triplets_to_tableviews"</span><span class="p">,</span>
+    <span class="s2">"tableview_to_triplet"</span><span class="p">:</span> <span class="s2">"tableview_to_triplets"</span><span class="p">,</span>
+    <span class="s2">"tableviews_to_triplet"</span><span class="p">:</span> <span class="s2">"tableviews_to_triplets"</span><span class="p">,</span>
+    <span class="s2">"diff_between_triplet"</span><span class="p">:</span> <span class="s2">"diff_triplets"</span><span class="p">,</span>
+    <span class="s2">"diff_between_INSTANCE"</span><span class="p">:</span> <span class="s2">"diff_triplets_by_instance"</span><span class="p">,</span>
+    <span class="s2">"print_triplet_diff"</span><span class="p">:</span> <span class="s2">"print_triplets_diff"</span><span class="p">,</span>
 <span class="p">}</span>
 
 
@@ -533,7 +533,7 @@
 
     <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">new_function</span><span class="p">)</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">wrapper</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tools.</span><span class="si">{</span><span class="n">old_name</span><span class="si">}</span><span class="s2"> is deprecated, use tools.</span><span class="si">{</span><span class="n">new_name</span><span class="si">}</span><span class="s2">()&quot;</span><span class="p">,</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">"tools.</span><span class="si">{</span><span class="n">old_name</span><span class="si">}</span><span class="s2"> is deprecated, use tools.</span><span class="si">{</span><span class="n">new_name</span><span class="si">}</span><span class="s2">()"</span><span class="p">,</span>
                       <span class="ne">DeprecationWarning</span><span class="p">,</span> <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">new_function</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
@@ -547,14 +547,14 @@
 <span class="c1"># ── Register on pandas DataFrames (backwards compat) ────────────────────────</span>
 <span class="c1"># New names delegate directly; deprecated old names go through the warning alias.</span>
 <span class="n">DATAFRAME_METHODS</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="s2">&quot;type_tableview&quot;</span><span class="p">,</span> <span class="s2">&quot;key_tableview&quot;</span><span class="p">,</span> <span class="s2">&quot;id_tableview&quot;</span><span class="p">,</span> <span class="s2">&quot;types_dict&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;get_object_data&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;references_to_simple&quot;</span><span class="p">,</span> <span class="s2">&quot;references_to&quot;</span><span class="p">,</span> <span class="s2">&quot;references_from_simple&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;references_from&quot;</span><span class="p">,</span> <span class="s2">&quot;references_all&quot;</span><span class="p">,</span> <span class="s2">&quot;references_simple&quot;</span><span class="p">,</span> <span class="s2">&quot;references&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;filter_triplets_by_type&quot;</span><span class="p">,</span> <span class="s2">&quot;filter_triplets_by_triplets&quot;</span><span class="p">,</span> <span class="s2">&quot;filter_triplets&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;set_triplets_value_by_key&quot;</span><span class="p">,</span> <span class="s2">&quot;set_triplets_value_by_key_and_id&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;tableview_to_triplets&quot;</span><span class="p">,</span> <span class="s2">&quot;update_triplets_from_triplets&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;update_triplets_from_tableview&quot;</span><span class="p">,</span> <span class="s2">&quot;diff_triplets_by_instance&quot;</span><span class="p">,</span>
+    <span class="s2">"type_tableview"</span><span class="p">,</span> <span class="s2">"key_tableview"</span><span class="p">,</span> <span class="s2">"id_tableview"</span><span class="p">,</span> <span class="s2">"types_dict"</span><span class="p">,</span>
+    <span class="s2">"get_object_data"</span><span class="p">,</span>
+    <span class="s2">"references_to_simple"</span><span class="p">,</span> <span class="s2">"references_to"</span><span class="p">,</span> <span class="s2">"references_from_simple"</span><span class="p">,</span>
+    <span class="s2">"references_from"</span><span class="p">,</span> <span class="s2">"references_all"</span><span class="p">,</span> <span class="s2">"references_simple"</span><span class="p">,</span> <span class="s2">"references"</span><span class="p">,</span>
+    <span class="s2">"filter_triplets_by_type"</span><span class="p">,</span> <span class="s2">"filter_triplets_by_triplets"</span><span class="p">,</span> <span class="s2">"filter_triplets"</span><span class="p">,</span>
+    <span class="s2">"set_triplets_value_by_key"</span><span class="p">,</span> <span class="s2">"set_triplets_value_by_key_and_id"</span><span class="p">,</span>
+    <span class="s2">"tableview_to_triplets"</span><span class="p">,</span> <span class="s2">"update_triplets_from_triplets"</span><span class="p">,</span>
+    <span class="s2">"update_triplets_from_tableview"</span><span class="p">,</span> <span class="s2">"diff_triplets_by_instance"</span><span class="p">,</span>
 <span class="p">]</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>

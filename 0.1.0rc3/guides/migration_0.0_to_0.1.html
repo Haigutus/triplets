@@ -316,11 +316,11 @@ plain <code class="docutils literal notranslate"><span class="pre">object</span>
 <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="o">.</span><span class="n">KEY</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="n">pattern</span><span class="p">)]</span>
 
 <span class="c1"># After (works with any dtype)</span>
-<span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="n">pattern</span><span class="p">)]</span>
+<span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="n">pattern</span><span class="p">)]</span>
 </pre></div>
 </div>
 <p>To avoid arrow dtypes entirely, use the pandas-only engine:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">(</span><span class="n">files</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;python_lxml_pandas&quot;</span><span class="p">)</span>  <span class="c1"># always returns plain str dtypes</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">(</span><span class="n">files</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"python_lxml_pandas"</span><span class="p">)</span>  <span class="c1"># always returns plain str dtypes</span>
 </pre></div>
 </div>
 </section>
@@ -329,10 +329,10 @@ plain <code class="docutils literal notranslate"><span class="pre">object</span>
 <p>With arrow engines, <code class="docutils literal notranslate"><span class="pre">KEY</span></code> and <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code> columns are dictionary-encoded (categorical) by default.
 This saves ~60% memory but may affect code that expects plain string columns:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check if a column is categorical</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>  <span class="c1"># dictionary&lt;values=string, indices=int32, ordered=0&gt;[pyarrow]</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>  <span class="c1"># dictionary&lt;values=string, indices=int32, ordered=0&gt;[pyarrow]</span>
 
 <span class="c1"># Convert to plain strings if needed</span>
-<span class="n">data</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+<span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
@@ -390,10 +390,10 @@ They will be removed in 0.2.</p>
 <p>The old monkey-patched methods (<code class="docutils literal notranslate"><span class="pre">data.type_tableview(...)</span></code>) still work but the recommended
 approach is the accessor namespace:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Old (monkey-patch, still works)</span>
-<span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">"ACLineSegment"</span><span class="p">)</span>
 
 <span class="c1"># New (accessor namespace)</span>
-<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">"ACLineSegment"</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Both call the same underlying function. The accessor namespace works for both pandas and polars.</p>

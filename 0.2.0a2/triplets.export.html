@@ -384,13 +384,13 @@ xsd:string stays plain). Currently python_lxml only — “auto” picks it.</p>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">files</span> <span class="o">=</span> <span class="n">export_to_cimxml</span><span class="p">(</span>
 <span class="gp">... </span>    <span class="n">data</span><span class="p">,</span>
-<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">&quot;config/cim_map.json&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">"config/cim_map.json"</span><span class="p">,</span>
 <span class="gp">... </span>    <span class="n">export_type</span><span class="o">=</span><span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span><span class="p">,</span>
 <span class="gp">... </span>    <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="gp">... </span>    <span class="n">max_workers</span><span class="o">=</span><span class="mi">4</span>
 <span class="gp">... </span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
-<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;name:&quot;</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"name:"</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
 </pre></div>
 </div>
 <p class="rubric">Notes</p>
@@ -491,15 +491,15 @@ xsd:type (like the N-Quads export); xsd:string stays unannotated.</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">instance</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">instance</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">generate_xml</span><span class="p">(</span>
 <span class="gp">... </span>    <span class="n">instance</span><span class="p">,</span>
-<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">&quot;config/eq_profile.json&quot;</span><span class="p">,</span>
-<span class="gp">... </span>    <span class="n">comment</span><span class="o">=</span><span class="s2">&quot;Exported on 2025-11-11&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">"config/eq_profile.json"</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">comment</span><span class="o">=</span><span class="s2">"Exported on 2025-11-11"</span><span class="p">,</span>
 <span class="gp">... </span>    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span>
 <span class="gp">... </span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;filename&quot;</span><span class="p">],</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-<span class="gp">... </span>    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;file&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"filename"</span><span class="p">],</span> <span class="s2">"wb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"file"</span><span class="p">])</span>
 </pre></div>
 </div>
 <p class="rubric">Notes</p>
@@ -582,15 +582,15 @@ xsd:type (like the N-Quads export); xsd:string stays unannotated.</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">instance</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">instance</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">generate_xml</span><span class="p">(</span>
 <span class="gp">... </span>    <span class="n">instance</span><span class="p">,</span>
-<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">&quot;config/eq_profile.json&quot;</span><span class="p">,</span>
-<span class="gp">... </span>    <span class="n">comment</span><span class="o">=</span><span class="s2">&quot;Exported on 2025-11-11&quot;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">rdf_map</span><span class="o">=</span><span class="s2">"config/eq_profile.json"</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">comment</span><span class="o">=</span><span class="s2">"Exported on 2025-11-11"</span><span class="p">,</span>
 <span class="gp">... </span>    <span class="n">debug</span><span class="o">=</span><span class="kc">True</span>
 <span class="gp">... </span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;filename&quot;</span><span class="p">],</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-<span class="gp">... </span>    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;file&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"filename"</span><span class="p">],</span> <span class="s2">"wb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"file"</span><span class="p">])</span>
 </pre></div>
 </div>
 <p class="rubric">Notes</p>

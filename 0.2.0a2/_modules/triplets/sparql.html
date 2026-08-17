@@ -284,7 +284,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.sparql</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;SPARQL querying over triplet data.</span>
+<span></span><span class="sd">"""SPARQL querying over triplet data.</span>
 
 <span class="sd">Engines (registry dispatch, mirroring triplets.parser):</span>
 <span class="sd">- qlever   — performance (embedded C++ via the official libqlever facade; needs</span>
@@ -296,7 +296,7 @@
 <span class="sd">Data reaches every engine through the N-Quads export conventions</span>
 <span class="sd">(INSTANCE_ID as named graph): rdflib and oxigraph load the export directly,</span>
 <span class="sd">qlever ingests the same term mapping as Arrow batches.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
@@ -311,42 +311,42 @@
 <span class="c1"># pyoxigraph wheel), which wins over rdflib (reference, always available with</span>
 <span class="c1"># the sparql extra).</span>
 <span class="n">_REGISTRY</span> <span class="o">=</span> <span class="n">EngineRegistry</span><span class="p">(</span>
-    <span class="s2">&quot;sparql&quot;</span><span class="p">,</span> <span class="n">__package__</span><span class="p">,</span>
+    <span class="s2">"sparql"</span><span class="p">,</span> <span class="n">__package__</span><span class="p">,</span>
     <span class="n">modules</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;qlever&quot;</span><span class="p">:</span> <span class="s2">&quot;.sparql_qlever&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;oxigraph&quot;</span><span class="p">:</span> <span class="s2">&quot;.sparql_oxigraph&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;rdflib&quot;</span><span class="p">:</span> <span class="s2">&quot;.sparql_rdflib&quot;</span><span class="p">,</span>
+        <span class="s2">"qlever"</span><span class="p">:</span> <span class="s2">".sparql_qlever"</span><span class="p">,</span>
+        <span class="s2">"oxigraph"</span><span class="p">:</span> <span class="s2">".sparql_oxigraph"</span><span class="p">,</span>
+        <span class="s2">"rdflib"</span><span class="p">:</span> <span class="s2">".sparql_rdflib"</span><span class="p">,</span>
     <span class="p">},</span>
     <span class="n">aliases</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;reference&quot;</span><span class="p">:</span> <span class="s2">&quot;rdflib&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;performance&quot;</span><span class="p">:</span> <span class="s2">&quot;qlever&quot;</span><span class="p">,</span>
+        <span class="s2">"reference"</span><span class="p">:</span> <span class="s2">"rdflib"</span><span class="p">,</span>
+        <span class="s2">"performance"</span><span class="p">:</span> <span class="s2">"qlever"</span><span class="p">,</span>
     <span class="p">},</span>
-    <span class="n">hints</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;oxigraph&quot;</span><span class="p">:</span> <span class="s2">&quot;Install with: pip install triplets[oxigraph].&quot;</span><span class="p">},</span>
-    <span class="n">default_hint</span><span class="o">=</span><span class="s2">&quot;Install with: pip install triplets[sparql].&quot;</span><span class="p">,</span>
+    <span class="n">hints</span><span class="o">=</span><span class="p">{</span><span class="s2">"oxigraph"</span><span class="p">:</span> <span class="s2">"Install with: pip install triplets[oxigraph]."</span><span class="p">},</span>
+    <span class="n">default_hint</span><span class="o">=</span><span class="s2">"Install with: pip install triplets[sparql]."</span><span class="p">,</span>
 <span class="p">)</span>
 
 
 <div class="viewcode-block" id="register_engine">
 <a class="viewcode-back" href="../../triplets.sparql.html#triplets.sparql.register_engine">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">register_engine</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">module</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a custom SPARQL engine for future extensibility.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Register a custom SPARQL engine for future extensibility."""</span>
     <span class="n">_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">module</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="get_engine">
 <a class="viewcode-back" href="../../triplets.sparql.html#triplets.sparql.get_engine">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_engine</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve SPARQL engine name (with aliases) and return (name, module).&quot;&quot;&quot;</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_engine</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Resolve SPARQL engine name (with aliases) and return (name, module)."""</span>
     <span class="k">return</span> <span class="n">_REGISTRY</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="query">
 <a class="viewcode-back" href="../../triplets.sparql.html#triplets.sparql.query">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span>
           <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run a SPARQL query over triplet data.</span>
+<span class="w">    </span><span class="sd">"""Run a SPARQL query over triplet data.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -357,16 +357,16 @@
 <span class="sd">    rdf_map : dict or str, optional</span>
 <span class="sd">        Export schema — enables xsd-typed literals in the queried graph (optional).</span>
 <span class="sd">    scope : iterable of INSTANCE_ID, optional</span>
-<span class="sd">        Restrict the queried data to these instances&#39; named graphs; all data</span>
+<span class="sd">        Restrict the queried data to these instances' named graphs; all data</span>
 <span class="sd">        stays loaded for reference resolution. None = full union.</span>
-<span class="sd">    engine : str, default &quot;auto&quot;</span>
-<span class="sd">        &quot;qlever&quot; (performance, embedded C++), &quot;oxigraph&quot; (portable</span>
-<span class="sd">        performance, embedded Rust) or &quot;rdflib&quot; (reference). &quot;auto&quot; picks</span>
+<span class="sd">    engine : str, default "auto"</span>
+<span class="sd">        "qlever" (performance, embedded C++), "oxigraph" (portable</span>
+<span class="sd">        performance, embedded Rust) or "rdflib" (reference). "auto" picks</span>
 <span class="sd">        the first available in that order.</span>
-<span class="sd">    return_type : str, default &quot;auto&quot;</span>
-<span class="sd">        Output flavor for data results: &quot;auto&quot; matches the input (polars in →</span>
-<span class="sd">        polars out; pandas/duckdb → pandas), or explicit &quot;pandas&quot; / &quot;polars&quot; /</span>
-<span class="sd">        &quot;arrow&quot;. All SELECT values are lexical strings in every engine</span>
+<span class="sd">    return_type : str, default "auto"</span>
+<span class="sd">        Output flavor for data results: "auto" matches the input (polars in →</span>
+<span class="sd">        polars out; pandas/duckdb → pandas), or explicit "pandas" / "polars" /</span>
+<span class="sd">        "arrow". All SELECT values are lexical strings in every engine</span>
 <span class="sd">        (triplets are all-string; consumers cast).</span>
 <span class="sd">    data_unchanged : bool, default False</span>
 <span class="sd">        Assert that `data` has not been mutated since it was last hashed:</span>
@@ -374,7 +374,7 @@
 <span class="sd">        and skips the content_hash (the dominant cost of small warm</span>
 <span class="sd">        queries). Only skips work when this object was hashed before;</span>
 <span class="sd">        otherwise the hash runs and is remembered.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span> <span class="o">=</span> <span class="n">get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">engine_mod</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="n">scope</span><span class="p">,</span>
                             <span class="n">return_type</span><span class="o">=</span><span class="n">return_type</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="n">data_unchanged</span><span class="p">)</span></div>

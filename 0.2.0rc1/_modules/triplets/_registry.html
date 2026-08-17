@@ -285,38 +285,38 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets._registry</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Shared engine registry — one dispatch pattern for every subsystem.</span>
+<span></span><span class="sd">"""Shared engine registry — one dispatch pattern for every subsystem.</span>
 
 <span class="sd">One pattern in one place: engine name → module imported on first use, alias</span>
-<span class="sd">resolution, &quot;auto&quot; preference order, availability probing, and an actionable</span>
+<span class="sd">resolution, "auto" preference order, availability probing, and an actionable</span>
 <span class="sd">error when an engine (or every auto candidate) is unavailable. Each package</span>
 <span class="sd">instantiates EngineRegistry with its engines and keeps thin public</span>
 <span class="sd">register_engine / get_engine wrappers, so the per-package API is unchanged.</span>
 
 <span class="sd">Selection is eager, loading is lazy: registries are constructed at import</span>
 <span class="sd">time and probe availability with importlib.util.find_spec (microseconds,</span>
-<span class="sd">imports nothing), so what &quot;auto&quot; resolves to is fixed and inspectable from</span>
+<span class="sd">imports nothing), so what "auto" resolves to is fixed and inspectable from</span>
 <span class="sd">the moment ``import triplets`` returns — see :func:`engines`. The chosen</span>
 <span class="sd">module is only actually imported on first use.</span>
 
 <span class="sd">The registry contract for engine modules: importing the module must fail with</span>
-<span class="sd">ImportError when the engine&#39;s backend is unavailable (compiled extension,</span>
-<span class="sd">optional dependency) — that is what makes &quot;auto&quot; fall through and what turns</span>
+<span class="sd">ImportError when the engine's backend is unavailable (compiled extension,</span>
+<span class="sd">optional dependency) — that is what makes "auto" fall through and what turns</span>
 <span class="sd">into the install/build hint. ``requires`` lists find_spec probe targets beyond</span>
 <span class="sd">the module itself (optional dependencies the module imports at its top).</span>
 
-<span class="sd">``policy`` separates the two kinds of subsystems: ``&quot;auto&quot;`` registries pick</span>
+<span class="sd">``policy`` separates the two kinds of subsystems: ``"auto"`` registries pick</span>
 <span class="sd">the fastest available engine because their results are flavor-independent</span>
-<span class="sd">(parsed files, exported bytes, query results, violation reports); ``&quot;input&quot;``</span>
-<span class="sd">registries hold engines that are each bound to their input&#39;s flavor (tools,</span>
+<span class="sd">(parsed files, exported bytes, query results, violation reports); ``"input"``</span>
+<span class="sd">registries hold engines that are each bound to their input's flavor (tools,</span>
 <span class="sd">csv) — those cannot be overridden globally, only chosen per call or by</span>
 <span class="sd">passing input in the desired flavor.</span>
 
-<span class="sd">Precedence for &quot;auto&quot; resolution: per-call ``engine=`` (any explicit name</span>
+<span class="sd">Precedence for "auto" resolution: per-call ``engine=`` (any explicit name</span>
 <span class="sd">bypasses everything) &gt; :func:`set_engine` override &gt; probe order. ``set_engine``</span>
 <span class="sd">is a process-global startup-time control, not a per-thread one; concurrent</span>
 <span class="sd">code that needs a specific engine should pass ``engine=`` per call.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
@@ -331,12 +331,12 @@
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">EngineRegistry</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;name → lazily imported engine module, with aliases and an auto order.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""name → lazily imported engine module, with aliases and an auto order."""</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">package</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">modules</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">aliases</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-                 <span class="n">hints</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">default_hint</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">auto</span><span class="p">:</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-                 <span class="n">requires</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">kind</span>              <span class="c1"># &quot;parser_cimxml&quot; / &quot;sparql&quot; / … — for messages and engines();</span>
+                 <span class="n">hints</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">default_hint</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span> <span class="n">auto</span><span class="p">:</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                 <span class="n">requires</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kind</span> <span class="o">=</span> <span class="n">kind</span>              <span class="c1"># "parser_cimxml" / "sparql" / … — for messages and engines();</span>
                                       <span class="c1"># format-specific kinds carry a role prefix (parser_/exporter_)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">package</span> <span class="o">=</span> <span class="n">package</span>        <span class="c1"># anchor for the relative module imports</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">modules</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">modules</span><span class="p">)</span>  <span class="c1"># engine name → relative module name</span>
@@ -345,7 +345,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">default_hint</span> <span class="o">=</span> <span class="n">default_hint</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">auto</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">auto</span> <span class="k">if</span> <span class="n">auto</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">modules</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">requires</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">requires</span> <span class="ow">or</span> <span class="p">{})</span>  <span class="c1"># engine name → extra find_spec targets</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>                  <span class="c1"># &quot;auto&quot; (fastest wins) | &quot;input&quot; (bound to input flavor)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span>                  <span class="c1"># "auto" (fastest wins) | "input" (bound to input flavor)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">override</span> <span class="o">=</span> <span class="kc">None</span>                  <span class="c1"># set_engine() target (resolved name)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">loaded</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>      <span class="c1"># engine name → module (incl. custom engines)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_probed</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>    <span class="c1"># find_spec target → exists (memo)</span>
@@ -363,7 +363,7 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_probed</span><span class="p">[</span><span class="n">target</span><span class="p">]</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;find_spec probe — never imports. True for custom-registered engines.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""find_spec probe — never imports. True for custom-registered engines."""</span>
         <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">loaded</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">True</span>
@@ -377,7 +377,7 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">selected</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;What &quot;auto&quot; resolves to right now (override, else first available auto candidate).&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""What "auto" resolves to right now (override, else first available auto candidate)."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">override</span> <span class="ow">or</span> <span class="nb">next</span><span class="p">((</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">auto</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">available</span><span class="p">(</span><span class="n">c</span><span class="p">)),</span> <span class="kc">None</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
@@ -385,19 +385,19 @@
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">loaded</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
         <span class="n">module_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">modules</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">module_name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2"> engine: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">. Known: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">modules</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2"> engine: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">. Known: </span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">modules</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">loaded</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">import_module</span><span class="p">(</span><span class="n">module_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">package</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
             <span class="n">hint</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hints</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_hint</span><span class="p">)</span>
-            <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2"> engine not available.&quot;</span><span class="p">,</span> <span class="n">hint</span><span class="p">,</span>
-                <span class="sa">f</span><span class="s2">&quot;Original error: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">))))</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
+            <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2"> engine not available."</span><span class="p">,</span> <span class="n">hint</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">"Original error: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="s2">"</span><span class="p">))))</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">loaded</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve *name* (aliases; &quot;auto&quot; = selected engine) → (name, module).&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Resolve *name* (aliases; "auto" = selected engine) → (name, module)."""</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">override</span><span class="p">:</span>
                 <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">override</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">override</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">auto</span><span class="p">:</span>
@@ -406,22 +406,22 @@
                 <span class="k">try</span><span class="p">:</span>
                     <span class="k">return</span> <span class="n">candidate</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">candidate</span><span class="p">)</span>
                 <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>                  <span class="c1"># probed available but broken build</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> engine </span><span class="si">%s</span><span class="s2"> found but failed to import; trying next&quot;</span><span class="p">,</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> engine </span><span class="si">%s</span><span class="s2"> found but failed to import; trying next"</span><span class="p">,</span>
                                    <span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span> <span class="n">candidate</span><span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">_probed</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="n">candidate</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">False</span>
-            <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;no </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2"> engine available (tried: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">auto</span><span class="p">)</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">,</span>
+            <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"no </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2"> engine available (tried: </span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">auto</span><span class="p">)</span><span class="si">}</span><span class="s2">)."</span><span class="p">,</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">default_hint</span><span class="p">))))</span>
         <span class="n">resolved</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> engine: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span> <span class="n">resolved</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> engine: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span> <span class="n">resolved</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">resolved</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">resolved</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Set (or clear, with None/&quot;auto&quot;) the engine &quot;auto&quot; resolves to.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">!=</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;the </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2"> engine follows the input flavor and cannot be &quot;</span>
-                             <span class="sa">f</span><span class="s2">&quot;overridden; pass input in the desired engine&#39;s native flavor instead&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;auto&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Set (or clear, with None/"auto") the engine "auto" resolves to."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">!=</span> <span class="s2">"auto"</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"the </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="si">}</span><span class="s2"> engine follows the input flavor and cannot be "</span>
+                             <span class="sa">f</span><span class="s2">"overridden; pass input in the desired engine's native flavor instead"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">override</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">return</span>
         <span class="n">resolved</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
@@ -429,36 +429,36 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">override</span> <span class="o">=</span> <span class="n">resolved</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">info</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;One engines() row.</span>
+<span class="w">        </span><span class="sd">"""One engines() row.</span>
 
-<span class="sd">        ``policy=&quot;input&quot;`` kinds have no global engine — the input object&#39;s</span>
+<span class="sd">        ``policy="input"`` kinds have no global engine — the input object's</span>
 <span class="sd">        flavor decides per call — so ``engine`` is None and ``source`` is</span>
-<span class="sd">        ``&quot;input&quot;`` instead of pretending an auto pick exists.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">==</span> <span class="s2">&quot;input&quot;</span><span class="p">:</span>
-            <span class="n">engine</span><span class="p">,</span> <span class="n">source</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;input&quot;</span>
+<span class="sd">        ``"input"`` instead of pretending an auto pick exists.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span> <span class="o">==</span> <span class="s2">"input"</span><span class="p">:</span>
+            <span class="n">engine</span><span class="p">,</span> <span class="n">source</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">"input"</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">engine</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected</span>
-            <span class="n">source</span> <span class="o">=</span> <span class="s2">&quot;set_engine&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">override</span> <span class="k">else</span> <span class="s2">&quot;auto&quot;</span>
-        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;engine&quot;</span><span class="p">:</span> <span class="n">engine</span><span class="p">,</span>
-                <span class="s2">&quot;source&quot;</span><span class="p">:</span> <span class="n">source</span><span class="p">,</span>
-                <span class="s2">&quot;policy&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">,</span>
-                <span class="s2">&quot;auto_order&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">auto</span><span class="p">),</span>
-                <span class="s2">&quot;available&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">available_engines</span><span class="p">(),</span>
-                <span class="s2">&quot;unavailable&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">modules</span> <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">available</span><span class="p">(</span><span class="n">n</span><span class="p">)],</span>
-                <span class="s2">&quot;aliases&quot;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="p">)}</span>
+            <span class="n">source</span> <span class="o">=</span> <span class="s2">"set_engine"</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">override</span> <span class="k">else</span> <span class="s2">"auto"</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">"engine"</span><span class="p">:</span> <span class="n">engine</span><span class="p">,</span>
+                <span class="s2">"source"</span><span class="p">:</span> <span class="n">source</span><span class="p">,</span>
+                <span class="s2">"policy"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy</span><span class="p">,</span>
+                <span class="s2">"auto_order"</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">auto</span><span class="p">),</span>
+                <span class="s2">"available"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">available_engines</span><span class="p">(),</span>
+                <span class="s2">"unavailable"</span><span class="p">:</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">modules</span> <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">available</span><span class="p">(</span><span class="n">n</span><span class="p">)],</span>
+                <span class="s2">"aliases"</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aliases</span><span class="p">)}</span>
 
 
 <div class="viewcode-block" id="engines">
 <a class="viewcode-back" href="../../triplets.html#triplets.engines">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">engines</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;What each subsystem&#39;s &quot;auto&quot; resolves to, plus the available alternatives.</span>
+<span class="w">    </span><span class="sd">"""What each subsystem's "auto" resolves to, plus the available alternatives.</span>
 
 <span class="sd">    Returns {kind: {engine, source, policy, auto_order, available, unavailable,</span>
-<span class="sd">    aliases}}. ``policy=&quot;input&quot;`` subsystems (tools, exporter_csv) follow the</span>
-<span class="sd">    input object&#39;s flavor per call, so they report ``engine: None`` and</span>
-<span class="sd">    ``source: &quot;input&quot;`` — there is no global pick to show.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    aliases}}. ``policy="input"`` subsystems (tools, exporter_csv) follow the</span>
+<span class="sd">    input object's flavor per call, so they report ``engine: None`` and</span>
+<span class="sd">    ``source: "input"`` — there is no global pick to show.</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="p">{</span><span class="n">kind</span><span class="p">:</span> <span class="n">registry</span><span class="o">.</span><span class="n">info</span><span class="p">()</span> <span class="k">for</span> <span class="n">kind</span><span class="p">,</span> <span class="n">registry</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">REGISTRIES</span><span class="o">.</span><span class="n">items</span><span class="p">())}</span></div>
 
 
@@ -466,18 +466,18 @@
 <div class="viewcode-block" id="set_engine">
 <a class="viewcode-back" href="../../triplets.html#triplets.set_engine">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">set_engine</span><span class="p">(</span><span class="o">**</span><span class="n">engines_by_kind</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Global engine override per subsystem, e.g. ``set_engine(parser_cimxml=&quot;python_lxml_arrow&quot;,</span>
-<span class="sd">    sparql=&quot;rdflib&quot;)``. ``None`` or ``&quot;auto&quot;`` restores auto-selection.</span>
+<span class="w">    </span><span class="sd">"""Global engine override per subsystem, e.g. ``set_engine(parser_cimxml="python_lxml_arrow",</span>
+<span class="sd">    sparql="rdflib")``. ``None`` or ``"auto"`` restores auto-selection.</span>
 
 <span class="sd">    Per-call ``engine=`` still wins over this. Process-global and intended for</span>
 <span class="sd">    startup configuration; loads the engine eagerly so a bad name or missing</span>
 <span class="sd">    dependency fails here, not at first use. Note per-call capability</span>
 <span class="sd">    constraints still apply (e.g. cimxml ``datatypes=True`` requires the</span>
 <span class="sd">    python_lxml engine regardless of the override).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">unknown</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">engines_by_kind</span><span class="p">)</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">REGISTRIES</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">unknown</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;unknown subsystem(s) </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">unknown</span><span class="p">)</span><span class="si">}</span><span class="s2">; known: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">REGISTRIES</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"unknown subsystem(s) </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">unknown</span><span class="p">)</span><span class="si">}</span><span class="s2">; known: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">REGISTRIES</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">kind</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">engines_by_kind</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
         <span class="n">REGISTRIES</span><span class="p">[</span><span class="n">kind</span><span class="p">]</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
 

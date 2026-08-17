@@ -284,7 +284,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.parser</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;CIM/RDF XML parser package.</span>
+<span></span><span class="sd">"""CIM/RDF XML parser package.</span>
 
 <span class="sd">Provides pluggable engines for parsing CIM RDF/XML to DataFrames or Arrow tables:</span>
 <span class="sd">- python_lxml_pandas  (pure Python + lxml → pd.DataFrame, always available, default)</span>
@@ -295,10 +295,10 @@
 
 <span class="sd">Usage:</span>
 <span class="sd">    from triplets.parser import parse, read_rdf</span>
-<span class="sd">    df = parse([&quot;file.xml&quot;, &quot;data.zip&quot;], engine=&quot;python_lxml_pandas&quot;)</span>
-<span class="sd">    df = parse(path, engine=&quot;auto&quot;)  # best available</span>
-<span class="sd">    table = parse(path, return_type=&quot;arrow&quot;)</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    df = parse(["file.xml", "data.zip"], engine="python_lxml_pandas")</span>
+<span class="sd">    df = parse(path, engine="auto")  # best available</span>
+<span class="sd">    table = parse(path, return_type="arrow")</span>
+<span class="sd">"""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -313,37 +313,37 @@
 
 <span class="c1"># Auto preference: first importable.</span>
 <span class="n">_REGISTRY</span> <span class="o">=</span> <span class="n">EngineRegistry</span><span class="p">(</span>
-    <span class="s2">&quot;parser&quot;</span><span class="p">,</span> <span class="n">__package__</span><span class="p">,</span>
+    <span class="s2">"parser"</span><span class="p">,</span> <span class="n">__package__</span><span class="p">,</span>
     <span class="n">modules</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;cython_pugixml_arrow&quot;</span><span class="p">:</span> <span class="s2">&quot;.cython_pugixml_arrow&quot;</span><span class="p">,</span>  <span class="c1"># compiled extension, fastest</span>
-        <span class="s2">&quot;python_lxml_arrow&quot;</span><span class="p">:</span> <span class="s2">&quot;.python_lxml_arrow&quot;</span><span class="p">,</span>        <span class="c1"># needs pyarrow</span>
-        <span class="s2">&quot;python_lxml_pandas&quot;</span><span class="p">:</span> <span class="s2">&quot;.python_lxml_pandas&quot;</span><span class="p">,</span>      <span class="c1"># pure python, always available</span>
+        <span class="s2">"cython_pugixml_arrow"</span><span class="p">:</span> <span class="s2">".cython_pugixml_arrow"</span><span class="p">,</span>  <span class="c1"># compiled extension, fastest</span>
+        <span class="s2">"python_lxml_arrow"</span><span class="p">:</span> <span class="s2">".python_lxml_arrow"</span><span class="p">,</span>        <span class="c1"># needs pyarrow</span>
+        <span class="s2">"python_lxml_pandas"</span><span class="p">:</span> <span class="s2">".python_lxml_pandas"</span><span class="p">,</span>      <span class="c1"># pure python, always available</span>
     <span class="p">},</span>
     <span class="n">aliases</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;native&quot;</span><span class="p">:</span> <span class="s2">&quot;python_lxml_pandas&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;pugixml&quot;</span><span class="p">:</span> <span class="s2">&quot;cython_pugixml_arrow&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;performance&quot;</span><span class="p">:</span> <span class="s2">&quot;cython_pugixml_arrow&quot;</span><span class="p">,</span>
+        <span class="s2">"native"</span><span class="p">:</span> <span class="s2">"python_lxml_pandas"</span><span class="p">,</span>
+        <span class="s2">"pugixml"</span><span class="p">:</span> <span class="s2">"cython_pugixml_arrow"</span><span class="p">,</span>
+        <span class="s2">"performance"</span><span class="p">:</span> <span class="s2">"cython_pugixml_arrow"</span><span class="p">,</span>
     <span class="p">},</span>
-    <span class="n">hints</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;cython_pugixml_arrow&quot;</span><span class="p">:</span> <span class="s2">&quot;Build with: pixi run build-cython-pugixml-arrow &quot;</span>
-                                   <span class="s2">&quot;(or python setup_cython_parser.py build_ext --inplace).&quot;</span><span class="p">},</span>
+    <span class="n">hints</span><span class="o">=</span><span class="p">{</span><span class="s2">"cython_pugixml_arrow"</span><span class="p">:</span> <span class="s2">"Build with: pixi run build-cython-pugixml-arrow "</span>
+                                   <span class="s2">"(or python setup_cython_parser.py build_ext --inplace)."</span><span class="p">},</span>
 <span class="p">)</span>
 
 <span class="c1"># Engines whose load_rdf_to_dataframe returns Arrow RecordBatches</span>
-<span class="n">_ARROW_ENGINES</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;python_lxml_arrow&quot;</span><span class="p">,</span> <span class="s2">&quot;cython_pugixml_arrow&quot;</span><span class="p">}</span>
+<span class="n">_ARROW_ENGINES</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"python_lxml_arrow"</span><span class="p">,</span> <span class="s2">"cython_pugixml_arrow"</span><span class="p">}</span>
 
 
 <div class="viewcode-block" id="register_engine">
 <a class="viewcode-back" href="../../triplets.parser.html#triplets.parser.register_engine">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">register_engine</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">module_or_factory</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a custom engine for future extensibility.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Register a custom engine for future extensibility."""</span>
     <span class="n">_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">module_or_factory</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="get_engine">
 <a class="viewcode-back" href="../../triplets.parser.html#triplets.parser.get_engine">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_engine</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve parser engine name (with aliases) and return (name, module).&quot;&quot;&quot;</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_engine</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Resolve parser engine name (with aliases) and return (name, module)."""</span>
     <span class="k">return</span> <span class="n">_REGISTRY</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
 
 
@@ -360,47 +360,47 @@
     <span class="n">list_of_paths_to_zip_globalzip_xml</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
     <span class="n">debug</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">max_workers</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">engine</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-    <span class="n">return_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;pandas&quot;</span><span class="p">,</span>
-    <span class="n">categorical_columns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">),</span>
+    <span class="n">engine</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
+    <span class="n">return_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"pandas"</span><span class="p">,</span>
+    <span class="n">categorical_columns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"INSTANCE_ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">),</span>
     <span class="n">shorten_resources</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Main entry: parse CIM RDF/XML (or zips) using chosen engine.</span>
+<span class="w">    </span><span class="sd">"""Main entry: parse CIM RDF/XML (or zips) using chosen engine.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    debug : bool, default False</span>
 <span class="sd">        Enable verbose debug output (file discovery, row counts, timing in some engines, etc.).</span>
 <span class="sd">        When False but the logger is at DEBUG level (logging.basicConfig(level=logging.DEBUG) or</span>
-<span class="sd">        getLogger(&quot;triplets.parser&quot;).setLevel(logging.DEBUG)), debug output is auto-enabled.</span>
-<span class="sd">    engine : str, default &quot;auto&quot;</span>
-<span class="sd">        Parser engine. &quot;auto&quot; picks best available.</span>
-<span class="sd">        Options: &quot;python_lxml_pandas&quot;, &quot;python_lxml_arrow&quot;, &quot;cython_pugixml_arrow&quot;.</span>
-<span class="sd">    return_type : str, default &quot;pandas&quot;</span>
-<span class="sd">        Output format: &quot;pandas&quot;, &quot;arrow&quot;, or &quot;polars&quot;.</span>
-<span class="sd">    categorical_columns : tuple or None, default (&quot;INSTANCE_ID&quot;, &quot;KEY&quot;)</span>
+<span class="sd">        getLogger("triplets.parser").setLevel(logging.DEBUG)), debug output is auto-enabled.</span>
+<span class="sd">    engine : str, default "auto"</span>
+<span class="sd">        Parser engine. "auto" picks best available.</span>
+<span class="sd">        Options: "python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow".</span>
+<span class="sd">    return_type : str, default "pandas"</span>
+<span class="sd">        Output format: "pandas", "arrow", or "polars".</span>
+<span class="sd">    categorical_columns : tuple or None, default ("INSTANCE_ID", "KEY")</span>
 <span class="sd">        Columns to dictionary-encode for memory savings. Pass None to disable.</span>
 <span class="sd">    shorten_resources : bool, default True</span>
 <span class="sd">        Shorten http(s) resource values to their #fragment (CIM instance data convention).</span>
 <span class="sd">        Pass False for lossless URIs (e.g. RDFS schema parsing); only the python engines</span>
 <span class="sd">        support this.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">debug</span> <span class="o">=</span> <span class="n">debug</span> <span class="ow">or</span> <span class="n">logger</span><span class="o">.</span><span class="n">isEnabledFor</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
     <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span> <span class="o">=</span> <span class="n">get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
     <span class="n">is_arrow_engine</span> <span class="o">=</span> <span class="n">engine_name</span> <span class="ow">in</span> <span class="n">_ARROW_ENGINES</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">shorten_resources</span> <span class="ow">and</span> <span class="n">engine_name</span> <span class="o">==</span> <span class="s2">&quot;cython_pugixml_arrow&quot;</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;shorten_resources=False is not supported by the cython_pugixml_arrow engine, &quot;</span>
-                         <span class="s2">&quot;use engine=&#39;python_lxml_pandas&#39; or &#39;python_lxml_arrow&#39;&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">shorten_resources</span> <span class="ow">and</span> <span class="n">engine_name</span> <span class="o">==</span> <span class="s2">"cython_pugixml_arrow"</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"shorten_resources=False is not supported by the cython_pugixml_arrow engine, "</span>
+                         <span class="s2">"use engine='python_lxml_pandas' or 'python_lxml_arrow'"</span><span class="p">)</span>
 
-    <span class="n">parse_one</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">engine_mod</span><span class="p">,</span> <span class="s2">&quot;load_rdf_to_dataframe&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">parse_one</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">engine_mod</span><span class="p">,</span> <span class="s2">"load_rdf_to_dataframe"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">parse_one</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Engine </span><span class="si">{</span><span class="n">engine_name</span><span class="si">}</span><span class="s2"> missing load_rdf_to_dataframe entrypoint&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Engine </span><span class="si">{</span><span class="n">engine_name</span><span class="si">}</span><span class="s2"> missing load_rdf_to_dataframe entrypoint"</span><span class="p">)</span>
 
     <span class="c1"># Normalize input to list for find_all_xml</span>
     <span class="k">if</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">list_of_paths_to_zip_globalzip_xml</span><span class="p">,</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">))</span>
-            <span class="ow">or</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">list_of_paths_to_zip_globalzip_xml</span><span class="p">,</span> <span class="s2">&quot;read&quot;</span><span class="p">)):</span>
+            <span class="ow">or</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">list_of_paths_to_zip_globalzip_xml</span><span class="p">,</span> <span class="s2">"read"</span><span class="p">)):</span>
         <span class="n">items</span> <span class="o">=</span> <span class="p">[</span><span class="n">list_of_paths_to_zip_globalzip_xml</span><span class="p">]</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">items</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">list_of_paths_to_zip_globalzip_xml</span><span class="p">)</span> <span class="k">if</span> <span class="n">list_of_paths_to_zip_globalzip_xml</span> <span class="k">else</span> <span class="p">[]</span>
@@ -433,20 +433,20 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_empty</span><span class="p">(</span><span class="n">return_type</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Empty result with the standard triplet columns in the requested return_type.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Empty result with the standard triplet columns in the requested return_type."""</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
-    <span class="n">empty</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">])</span>
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;arrow&quot;</span><span class="p">:</span>
+    <span class="n">empty</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"INSTANCE_ID"</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"arrow"</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pa</span>
         <span class="k">return</span> <span class="n">pa</span><span class="o">.</span><span class="n">Table</span><span class="o">.</span><span class="n">from_pandas</span><span class="p">(</span><span class="n">empty</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
         <span class="k">return</span> <span class="n">pl</span><span class="o">.</span><span class="n">from_pandas</span><span class="p">(</span><span class="n">empty</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">empty</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_finalize_arrow</span><span class="p">(</span><span class="n">batches</span><span class="p">,</span> <span class="n">return_type</span><span class="p">,</span> <span class="n">categorical_columns</span><span class="p">,</span> <span class="n">debug</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Combine Arrow RecordBatches, dictionary-encode, and convert to return_type.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Combine Arrow RecordBatches, dictionary-encode, and convert to return_type."""</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pa</span>
 
     <span class="n">table</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">Table</span><span class="o">.</span><span class="n">from_batches</span><span class="p">(</span><span class="n">batches</span><span class="p">)</span>
@@ -460,24 +460,24 @@
                     <span class="n">table</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">set_column</span><span class="p">(</span><span class="n">table</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">get_field_index</span><span class="p">(</span><span class="n">col_name</span><span class="p">),</span> <span class="n">col_name</span><span class="p">,</span> <span class="n">dict_arr</span><span class="p">)</span>
                 <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-                        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not dictionary-encode </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">col_name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Could not dictionary-encode </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">col_name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;pandas&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"pandas"</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">table</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">(</span><span class="n">types_mapper</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">ArrowDtype</span><span class="p">)</span>  <span class="c1"># zero-copy, Arrow-backed dtypes</span>
         <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">table</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;arrow&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"arrow"</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">table</span>
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
         <span class="k">return</span> <span class="n">pl</span><span class="o">.</span><span class="n">from_arrow</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown return_type: </span><span class="si">{</span><span class="n">return_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown return_type: </span><span class="si">{</span><span class="n">return_type</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_finalize_pandas</span><span class="p">(</span><span class="n">dataframes</span><span class="p">,</span> <span class="n">return_type</span><span class="p">,</span> <span class="n">categorical_columns</span><span class="p">,</span> <span class="n">debug</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Combine pandas DataFrames, optionally apply Categorical, and convert to return_type.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Combine pandas DataFrames, optionally apply Categorical, and convert to return_type."""</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dataframes</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
@@ -490,26 +490,26 @@
         <span class="k">for</span> <span class="n">col_name</span> <span class="ow">in</span> <span class="n">categorical_columns</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">col_name</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
                 <span class="k">try</span><span class="p">:</span>
-                    <span class="n">df</span><span class="p">[</span><span class="n">col_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">col_name</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;category&quot;</span><span class="p">)</span>
+                    <span class="n">df</span><span class="p">[</span><span class="n">col_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">col_name</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"category"</span><span class="p">)</span>
                 <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-                        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not categorize </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">col_name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Could not categorize </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">col_name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;pandas&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"pandas"</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">df</span>
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;arrow&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"arrow"</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pa</span>
         <span class="k">return</span> <span class="n">pa</span><span class="o">.</span><span class="n">Table</span><span class="o">.</span><span class="n">from_pandas</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">preserve_index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
         <span class="k">return</span> <span class="n">pl</span><span class="o">.</span><span class="n">from_pandas</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown return_type: </span><span class="si">{</span><span class="n">return_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown return_type: </span><span class="si">{</span><span class="n">return_type</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="read_rdf">
 <a class="viewcode-back" href="../../triplets.parser.html#triplets.parser.read_rdf">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">read_rdf</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Alias for parse (for pandas.read_rdf registration).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Alias for parse (for pandas.read_rdf registration)."""</span>
     <span class="k">return</span> <span class="n">parse</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
 </pre></div>

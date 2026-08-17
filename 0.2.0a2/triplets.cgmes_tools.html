@@ -322,7 +322,7 @@ Defaults to a predefined CGMES profile dependencies dictionary.</p>
 </dl>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">generate_instance_ids</span><span class="p">()</span>
-<span class="go">{&#39;EQ&#39;: &#39;123e4567-e89b-12d3-a456-426614174000&#39;, ...}</span>
+<span class="go">{'EQ': '123e4567-e89b-12d3-a456-426614174000', ...}</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -352,8 +352,8 @@ for older formats (pre-QoDC 2.1).</p></li>
 ‘Model.forEntity’ if applicable.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">get_metadata_from_filename</span><span class="p">(</span><span class="s1">&#39;20230101T0000Z_A01_ENTITY_EQ_001.xml&#39;</span><span class="p">)</span>
-<span class="go">{&#39;Model.scenarioTime&#39;: &#39;20230101T0000Z&#39;, &#39;Model.processType&#39;: &#39;A01&#39;, ...}</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">get_metadata_from_filename</span><span class="p">(</span><span class="s1">'20230101T0000Z_A01_ENTITY_EQ_001.xml'</span><span class="p">)</span>
+<span class="go">{'Model.scenarioTime': '20230101T0000Z', 'Model.processType': 'A01', ...}</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -384,9 +384,9 @@ for older formats (pre-QoDC 2.1).</p></li>
 <li><p>Uses the provided filename_mask to construct the filename.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">meta</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Model.scenarioTime&#39;</span><span class="p">:</span> <span class="s1">&#39;20230101T0000Z&#39;</span><span class="p">,</span> <span class="s1">&#39;Model.processType&#39;</span><span class="p">:</span> <span class="s1">&#39;A01&#39;</span><span class="p">,</span> <span class="o">...</span><span class="p">}</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">meta</span> <span class="o">=</span> <span class="p">{</span><span class="s1">'Model.scenarioTime'</span><span class="p">:</span> <span class="s1">'20230101T0000Z'</span><span class="p">,</span> <span class="s1">'Model.processType'</span><span class="p">:</span> <span class="s1">'A01'</span><span class="p">,</span> <span class="o">...</span><span class="p">}</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">get_filename_from_metadata</span><span class="p">(</span><span class="n">meta</span><span class="p">)</span>
-<span class="go">&#39;20230101T0000Z_A01_ENTITY_EQ_001.xml&#39;</span>
+<span class="go">'20230101T0000Z_A01_ENTITY_EQ_001.xml'</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -408,7 +408,7 @@ FullModel element.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span> <span class="o">=</span> <span class="n">get_metadata_from_xml</span><span class="p">(</span><span class="s1">&#39;path/to/file.xml&#39;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span> <span class="o">=</span> <span class="n">get_metadata_from_xml</span><span class="p">(</span><span class="s1">'path/to/file.xml'</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
 <span class="go">   tag                text  attrib</span>
 <span class="go">0  Model.scenarioTime  20230101T0000Z  {}</span>
@@ -464,7 +464,7 @@ HTML (if notebook=True).</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;uuid1&#39;</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'uuid1'</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -490,7 +490,7 @@ HTML (if notebook=True).</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references_from</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;uuid1&#39;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references_from</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'uuid1'</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -516,7 +516,7 @@ HTML (if notebook=True).</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references_to</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;uuid1&#39;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references_to</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'uuid1'</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -545,7 +545,7 @@ HTML (if notebook=True).</p>
 <li><p>TODO: Add support for type=None to return all types and include type in result.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">eic_map</span> <span class="o">=</span> <span class="n">get_EIC_to_mRID_map</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;PowerTransformer&#39;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">eic_map</span> <span class="o">=</span> <span class="n">get_EIC_to_mRID_map</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'PowerTransformer'</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">eic_map</span><span class="p">)</span>
 <span class="go">   mRID                                  EIC</span>
 <span class="go">0  uuid1  10X1001A1001A021</span>
@@ -677,7 +677,7 @@ containing model parts (ID, PROFILE, INSTANCE_ID) and their dependencies.</p>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">models</span> <span class="o">=</span> <span class="n">get_loaded_models</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">models</span><span class="p">)</span>
-<span class="go">{&#39;SV_UUID&#39;: DataFrame(...), ...}</span>
+<span class="go">{'SV_UUID': DataFrame(...), ...}</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -705,7 +705,7 @@ containing model parts (ID, PROFILE, INSTANCE_ID) and their dependencies.</p>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">meta</span> <span class="o">=</span> <span class="n">get_metadata_from_FullModel</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">meta</span><span class="p">)</span>
-<span class="go">{&#39;Model.scenarioTime&#39;: &#39;20230101T0000Z&#39;, &#39;Model.processType&#39;: &#39;A01&#39;, ...}</span>
+<span class="go">{'Model.scenarioTime': '20230101T0000Z', 'Model.processType': 'A01', ...}</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -729,7 +729,7 @@ containing model parts (ID, PROFILE, INSTANCE_ID) and their dependencies.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model_data</span> <span class="o">=</span> <span class="n">get_model_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">models</span><span class="p">[</span><span class="s1">&#39;SV_UUID&#39;</span><span class="p">])</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model_data</span> <span class="o">=</span> <span class="n">get_model_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">models</span><span class="p">[</span><span class="s1">'SV_UUID'</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -788,7 +788,7 @@ ratio of total Q to P.</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">updated_data</span> <span class="o">=</span> <span class="n">switch_equipment_terminals</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;uuid1&#39;</span><span class="p">,</span> <span class="s1">&#39;uuid2&#39;</span><span class="p">],</span> <span class="n">connected</span><span class="o">=</span><span class="s1">&#39;true&#39;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">updated_data</span> <span class="o">=</span> <span class="n">switch_equipment_terminals</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s1">'uuid1'</span><span class="p">,</span> <span class="s1">'uuid2'</span><span class="p">],</span> <span class="n">connected</span><span class="o">=</span><span class="s1">'true'</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -814,7 +814,7 @@ ratio of total Q to P.</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">meta</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Model.scenarioTime&#39;</span><span class="p">:</span> <span class="s1">&#39;20230102T0000Z&#39;</span><span class="p">}</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">meta</span> <span class="o">=</span> <span class="p">{</span><span class="s1">'Model.scenarioTime'</span><span class="p">:</span> <span class="s1">'20230102T0000Z'</span><span class="p">}</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">updated_data</span> <span class="o">=</span> <span class="n">update_FullModel_from_dict</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">meta</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -915,7 +915,7 @@ Defaults to a predefined CGMES profile dependencies dictionary.</p>
 </dl>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">generate_instance_ids</span><span class="p">()</span>
-<span class="go">{&#39;EQ&#39;: &#39;123e4567-e89b-12d3-a456-426614174000&#39;, ...}</span>
+<span class="go">{'EQ': '123e4567-e89b-12d3-a456-426614174000', ...}</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -939,7 +939,7 @@ Defaults to a predefined CGMES profile dependencies dictionary.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model_data</span> <span class="o">=</span> <span class="n">get_model_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">models</span><span class="p">[</span><span class="s1">&#39;SV_UUID&#39;</span><span class="p">])</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">model_data</span> <span class="o">=</span> <span class="n">get_model_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">models</span><span class="p">[</span><span class="s1">'SV_UUID'</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -965,7 +965,7 @@ HTML (if notebook=True).</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references_to</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;uuid1&#39;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references_to</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'uuid1'</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -991,7 +991,7 @@ HTML (if notebook=True).</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references_from</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;uuid1&#39;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references_from</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'uuid1'</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1018,7 +1018,7 @@ HTML (if notebook=True).</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;uuid1&#39;</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">file_path</span> <span class="o">=</span> <span class="n">draw_references</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'uuid1'</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>

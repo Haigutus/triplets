@@ -285,7 +285,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets._caches</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;In-process engine-state caches — explicit lifecycle.</span>
+<span></span><span class="sd">"""In-process engine-state caches — explicit lifecycle.</span>
 
 <span class="sd">Engine state (loaded rdflib datasets, oxigraph stores, qlever index handles,</span>
 <span class="sd">compiled SHACL shapes) is cached for the process lifetime, keyed by content.</span>
@@ -297,17 +297,17 @@
 <span class="sd">    with triplets.cache_scope():  # entries created inside are dropped on exit</span>
 <span class="sd">        ...</span>
 
-<span class="sd">Only in-memory state is dropped: qlever&#39;s on-disk indexes stay (reloading one</span>
+<span class="sd">Only in-memory state is dropped: qlever's on-disk indexes stay (reloading one</span>
 <span class="sd">is ~4 ms; delete $TRIPLETS_QLEVER_DIR to reclaim disk). Each cache dict</span>
 <span class="sd">registers itself at module import via register_cache.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">contextmanager</span>
 
 <span class="n">_CACHES</span> <span class="o">=</span> <span class="p">[]</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">register_cache</span><span class="p">(</span><span class="n">cache</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a module-level cache dict with clear_caches/cache_scope.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Register a module-level cache dict with clear_caches/cache_scope."""</span>
     <span class="n">_CACHES</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cache</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">cache</span>
 
@@ -315,7 +315,7 @@
 <div class="viewcode-block" id="clear_caches">
 <a class="viewcode-back" href="../../triplets.html#triplets.clear_caches">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">clear_caches</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Drop all in-memory engine state (see module docstring).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Drop all in-memory engine state (see module docstring)."""</span>
     <span class="k">for</span> <span class="n">cache</span> <span class="ow">in</span> <span class="n">_CACHES</span><span class="p">:</span>
         <span class="n">cache</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
 
@@ -325,8 +325,8 @@
 <a class="viewcode-back" href="../../triplets.html#triplets.cache_scope">[docs]</a>
 <span class="nd">@contextmanager</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">cache_scope</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bound engine-state lifetime to a block: entries created inside are</span>
-<span class="sd">    dropped on exit; entries that existed before the block are kept.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Bound engine-state lifetime to a block: entries created inside are</span>
+<span class="sd">    dropped on exit; entries that existed before the block are kept."""</span>
     <span class="n">snapshots</span> <span class="o">=</span> <span class="p">[</span><span class="nb">dict</span><span class="p">(</span><span class="n">cache</span><span class="p">)</span> <span class="k">for</span> <span class="n">cache</span> <span class="ow">in</span> <span class="n">_CACHES</span><span class="p">]</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="k">yield</span>

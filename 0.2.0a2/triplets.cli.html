@@ -339,10 +339,10 @@ making it simple to use without explicit direction specification.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">triplets.tools.cim_spreadsheet_cli</span><span class="w"> </span><span class="kn">import</span> <span class="n">cim_to_spreadsheet</span><span class="p">,</span> <span class="n">spreadsheet_to_cim</span>
 
 <span class="c1"># Convert CIM to Excel</span>
-<span class="n">cim_to_spreadsheet</span><span class="p">(</span><span class="s1">&#39;model.xml&#39;</span><span class="p">,</span> <span class="s1">&#39;output.xlsx&#39;</span><span class="p">)</span>
+<span class="n">cim_to_spreadsheet</span><span class="p">(</span><span class="s1">'model.xml'</span><span class="p">,</span> <span class="s1">'output.xlsx'</span><span class="p">)</span>
 
 <span class="c1"># Convert Excel to CIM</span>
-<span class="n">spreadsheet_to_cim</span><span class="p">(</span><span class="s1">&#39;data.xlsx&#39;</span><span class="p">,</span> <span class="s1">&#39;cim_output/&#39;</span><span class="p">)</span>
+<span class="n">spreadsheet_to_cim</span><span class="p">(</span><span class="s1">'data.xlsx'</span><span class="p">,</span> <span class="s1">'cim_output/'</span><span class="p">)</span>
 </pre></div>
 </div>
 </li>
@@ -431,9 +431,9 @@ Use False to keep duplicate pairs as separate rows.</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">cim_to_spreadsheet</span><span class="p">(</span><span class="s1">&#39;model.xml&#39;</span><span class="p">,</span> <span class="s1">&#39;output.xlsx&#39;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">cim_to_spreadsheet</span><span class="p">(</span><span class="s1">&#39;model.zip&#39;</span><span class="p">,</span> <span class="s1">&#39;output.zip&#39;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;csv&#39;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">cim_to_spreadsheet</span><span class="p">(</span><span class="s1">&#39;model.xml&#39;</span><span class="p">,</span> <span class="s1">&#39;output.xlsx&#39;</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">cim_to_spreadsheet</span><span class="p">(</span><span class="s1">'model.xml'</span><span class="p">,</span> <span class="s1">'output.xlsx'</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cim_to_spreadsheet</span><span class="p">(</span><span class="s1">'model.zip'</span><span class="p">,</span> <span class="s1">'output.zip'</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">'csv'</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cim_to_spreadsheet</span><span class="p">(</span><span class="s1">'model.xml'</span><span class="p">,</span> <span class="s1">'output.xlsx'</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -483,9 +483,9 @@ This sheet is not processed as tableview data.</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">spreadsheet_to_cim</span><span class="p">(</span><span class="s1">&#39;data.xlsx&#39;</span><span class="p">,</span> <span class="s1">&#39;output/&#39;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">spreadsheet_to_cim</span><span class="p">(</span><span class="s1">&#39;data.zip&#39;</span><span class="p">,</span> <span class="s1">&#39;output/&#39;</span><span class="p">,</span> <span class="n">sheets</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;ACLineSegment&#39;</span><span class="p">,</span> <span class="s1">&#39;Substation&#39;</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">spreadsheet_to_cim</span><span class="p">(</span><span class="s1">&#39;data.xlsx&#39;</span><span class="p">,</span> <span class="s1">&#39;output/&#39;</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="o">=</span><span class="s1">&#39;RawData&#39;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">spreadsheet_to_cim</span><span class="p">(</span><span class="s1">'data.xlsx'</span><span class="p">,</span> <span class="s1">'output/'</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">spreadsheet_to_cim</span><span class="p">(</span><span class="s1">'data.zip'</span><span class="p">,</span> <span class="s1">'output/'</span><span class="p">,</span> <span class="n">sheets</span><span class="o">=</span><span class="p">[</span><span class="s1">'ACLineSegment'</span><span class="p">,</span> <span class="s1">'Substation'</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">spreadsheet_to_cim</span><span class="p">(</span><span class="s1">'data.xlsx'</span><span class="p">,</span> <span class="s1">'output/'</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="o">=</span><span class="s1">'RawData'</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -523,10 +523,10 @@ directory-like patterns</p></li>
 <li><p>Raises ValueError if direction cannot be determined</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">detect_conversion_direction</span><span class="p">(</span><span class="s1">&#39;model.xml&#39;</span><span class="p">,</span> <span class="s1">&#39;output.xlsx&#39;</span><span class="p">)</span>
-<span class="go">&#39;to-spreadsheet&#39;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">detect_conversion_direction</span><span class="p">(</span><span class="s1">&#39;data.xlsx&#39;</span><span class="p">,</span> <span class="s1">&#39;output/&#39;</span><span class="p">)</span>
-<span class="go">&#39;to-cim&#39;</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">detect_conversion_direction</span><span class="p">(</span><span class="s1">'model.xml'</span><span class="p">,</span> <span class="s1">'output.xlsx'</span><span class="p">)</span>
+<span class="go">'to-spreadsheet'</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">detect_conversion_direction</span><span class="p">(</span><span class="s1">'data.xlsx'</span><span class="p">,</span> <span class="s1">'output/'</span><span class="p">)</span>
+<span class="go">'to-cim'</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -626,11 +626,11 @@ or ordering differences.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">triplets</span><span class="w"> </span><span class="kn">import</span> <span class="n">rdf_parser</span>
 
 <span class="c1"># Load both files</span>
-<span class="n">original</span> <span class="o">=</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">load_all_to_dataframe</span><span class="p">([</span><span class="s1">&#39;original.xml&#39;</span><span class="p">])</span>
-<span class="n">modified</span> <span class="o">=</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">load_all_to_dataframe</span><span class="p">([</span><span class="s1">&#39;modified.xml&#39;</span><span class="p">])</span>
+<span class="n">original</span> <span class="o">=</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">load_all_to_dataframe</span><span class="p">([</span><span class="s1">'original.xml'</span><span class="p">])</span>
+<span class="n">modified</span> <span class="o">=</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">load_all_to_dataframe</span><span class="p">([</span><span class="s1">'modified.xml'</span><span class="p">])</span>
 
 <span class="c1"># Print diff</span>
-<span class="n">rdf_parser</span><span class="o">.</span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">original</span><span class="p">,</span> <span class="n">modified</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;NamespaceMap&#39;</span><span class="p">,</span> <span class="s1">&#39;Distribution&#39;</span><span class="p">])</span>
+<span class="n">rdf_parser</span><span class="o">.</span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">original</span><span class="p">,</span> <span class="n">modified</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s1">'NamespaceMap'</span><span class="p">,</span> <span class="s1">'Distribution'</span><span class="p">])</span>
 </pre></div>
 </div>
 </li>

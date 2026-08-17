@@ -290,7 +290,7 @@
 <div class="viewcode-block" id="export_to_networkx">
 <a class="viewcode-back" href="../../../triplets.export.html#triplets.export.networkx_pandas.export_to_networkx">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">export_to_networkx</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a triplet dataset to a NetworkX graph.</span>
+<span class="w">    </span><span class="sd">"""Convert a triplet dataset to a NetworkX graph.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -309,19 +309,19 @@
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
 <span class="sd">    &gt;&gt;&gt; graph = data.to_networkx()</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">networkx</span>
 
     <span class="c1">#  TODO - Add all node data</span>
     <span class="c1">#  TODO - Add all supported graph export formats</span>
 
     <span class="n">edges</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_all</span><span class="p">()</span>
-    <span class="n">nodes</span> <span class="o">=</span> <span class="n">data</span><span class="p">[[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;Type&#39;&quot;</span><span class="p">)[[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">]]</span>
+    <span class="n">nodes</span> <span class="o">=</span> <span class="n">data</span><span class="p">[[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"KEY == 'Type'"</span><span class="p">)[[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span>
 
     <span class="n">graph</span> <span class="o">=</span> <span class="n">networkx</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
 
-    <span class="n">graph</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">([(</span><span class="n">ID</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="n">VALUE</span><span class="p">})</span> <span class="k">for</span> <span class="n">ID</span><span class="p">,</span> <span class="n">VALUE</span> <span class="ow">in</span> <span class="n">nodes</span><span class="o">.</span><span class="n">values</span><span class="p">])</span>
-    <span class="n">graph</span><span class="o">.</span><span class="n">add_edges_from</span><span class="p">([(</span><span class="n">FROM</span><span class="p">,</span> <span class="n">TO</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="n">KEY</span><span class="p">})</span> <span class="k">for</span> <span class="n">FROM</span><span class="p">,</span> <span class="n">KEY</span><span class="p">,</span> <span class="n">TO</span> <span class="ow">in</span> <span class="n">edges</span><span class="o">.</span><span class="n">values</span><span class="p">])</span>
+    <span class="n">graph</span><span class="o">.</span><span class="n">add_nodes_from</span><span class="p">([(</span><span class="n">ID</span><span class="p">,</span> <span class="p">{</span><span class="s2">"Type"</span><span class="p">:</span> <span class="n">VALUE</span><span class="p">})</span> <span class="k">for</span> <span class="n">ID</span><span class="p">,</span> <span class="n">VALUE</span> <span class="ow">in</span> <span class="n">nodes</span><span class="o">.</span><span class="n">values</span><span class="p">])</span>
+    <span class="n">graph</span><span class="o">.</span><span class="n">add_edges_from</span><span class="p">([(</span><span class="n">FROM</span><span class="p">,</span> <span class="n">TO</span><span class="p">,</span> <span class="p">{</span><span class="s2">"Type"</span><span class="p">:</span> <span class="n">KEY</span><span class="p">})</span> <span class="k">for</span> <span class="n">FROM</span><span class="p">,</span> <span class="n">KEY</span><span class="p">,</span> <span class="n">TO</span> <span class="ow">in</span> <span class="n">edges</span><span class="o">.</span><span class="n">values</span><span class="p">])</span>
 
     <span class="k">return</span> <span class="n">graph</span></div>
 

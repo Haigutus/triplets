@@ -285,7 +285,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.tools.duckdb_engine</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;DuckDB SQL-based implementation of triplet tools.</span>
+<span></span><span class="sd">"""DuckDB SQL-based implementation of triplet tools.</span>
 
 <span class="sd">Functions are monkey-patched onto duckdb.DuckDBPyConnection.</span>
 <span class="sd">The *_tableview helpers create a named SQL view and return a relation over it</span>
@@ -299,7 +299,7 @@
 <span class="sd">rewrites, extra user columns survive) and return the connection for chaining.</span>
 
 <span class="sd">Per-connection defaults live in a WeakKeyDictionary (DuckDBPyConnection has no</span>
-<span class="sd">``__dict__``) and, once explicitly configured, in a tiny ``main.&quot;_triplets_config&quot;``</span>
+<span class="sd">``__dict__``) and, once explicitly configured, in a tiny ``main."_triplets_config"``</span>
 <span class="sd">key/value table inside the database itself — so a persisted file remembers its</span>
 <span class="sd">table/schema across reopen, and cursors/duplicates resolve the same config.</span>
 <span class="sd">A bare ``duckdb.connect()`` never writes anything (keeps :memory: clean);</span>
@@ -307,59 +307,59 @@
 <span class="sd">call kwargs → in-process config → DB-stored config → package defaults; SQL</span>
 <span class="sd">always uses double-quoted identifiers. ATTACHed extra catalogs are out of</span>
 <span class="sd">scope — the config lives in the default catalog.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">weakref</span><span class="w"> </span><span class="kn">import</span> <span class="n">WeakKeyDictionary</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
-<span class="n">_DEFAULT_TABLE</span> <span class="o">=</span> <span class="s2">&quot;triplets&quot;</span>
+<span class="n">_DEFAULT_TABLE</span> <span class="o">=</span> <span class="s2">"triplets"</span>
 <span class="n">_DEFAULT_SCHEMA</span> <span class="o">=</span> <span class="kc">None</span>
-<span class="n">_UNSET</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>              <span class="c1"># &quot;caller passed nothing&quot; (None is a real schema value)</span>
+<span class="n">_UNSET</span> <span class="o">=</span> <span class="nb">object</span><span class="p">()</span>              <span class="c1"># "caller passed nothing" (None is a real schema value)</span>
 <span class="n">_config</span> <span class="o">=</span> <span class="n">WeakKeyDictionary</span><span class="p">()</span>  <span class="c1"># connection → (schema, table)</span>
 
-<span class="n">_CONFIG_TABLE</span> <span class="o">=</span> <span class="s1">&#39;main.&quot;_triplets_config&quot;&#39;</span>
+<span class="n">_CONFIG_TABLE</span> <span class="o">=</span> <span class="s1">'main."_triplets_config"'</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_quote</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Quote a DuckDB identifier (double quotes; escape by doubling).&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="s1">&#39;&quot;&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">,</span> <span class="s1">&#39;&quot;&quot;&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;&quot;&#39;</span>
+<span class="w">    </span><span class="sd">"""Quote a DuckDB identifier (double quotes; escape by doubling)."""</span>
+    <span class="k">return</span> <span class="s1">'"'</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'"'</span><span class="p">,</span> <span class="s1">'""'</span><span class="p">)</span> <span class="o">+</span> <span class="s1">'"'</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_sql_name</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">table</span><span class="p">):</span>
     <span class="k">if</span> <span class="n">schema</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">_quote</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
-    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_quote</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">_quote</span><span class="p">(</span><span class="n">table</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_quote</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">_quote</span><span class="p">(</span><span class="n">table</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_is_read_only</span><span class="p">(</span><span class="n">connection</span><span class="p">):</span>
     <span class="n">row</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-        <span class="s2">&quot;SELECT value FROM duckdb_settings() WHERE name = &#39;access_mode&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">row</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;read_only&quot;</span>
+        <span class="s2">"SELECT value FROM duckdb_settings() WHERE name = 'access_mode'"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">row</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"read_only"</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_load_config</span><span class="p">(</span><span class="n">connection</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;(schema, table) stored in the database, or None when never configured.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""(schema, table) stored in the database, or None when never configured."""</span>
     <span class="n">exists</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-        <span class="s2">&quot;SELECT 1 FROM duckdb_tables() &quot;</span>
-        <span class="s2">&quot;WHERE schema_name = &#39;main&#39; AND table_name = &#39;_triplets_config&#39;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+        <span class="s2">"SELECT 1 FROM duckdb_tables() "</span>
+        <span class="s2">"WHERE schema_name = 'main' AND table_name = '_triplets_config'"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">exists</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span>
-    <span class="n">stored</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT key, value FROM </span><span class="si">{</span><span class="n">_CONFIG_TABLE</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
-    <span class="k">return</span> <span class="n">stored</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;schema&quot;</span><span class="p">),</span> <span class="n">stored</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;table&quot;</span><span class="p">,</span> <span class="n">_DEFAULT_TABLE</span><span class="p">)</span>
+    <span class="n">stored</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT key, value FROM </span><span class="si">{</span><span class="n">_CONFIG_TABLE</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">stored</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"schema"</span><span class="p">),</span> <span class="n">stored</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"table"</span><span class="p">,</span> <span class="n">_DEFAULT_TABLE</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_store_config</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">table</span><span class="p">):</span>
-    <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;CREATE TABLE IF NOT EXISTS </span><span class="si">{</span><span class="n">_CONFIG_TABLE</span><span class="si">}</span><span class="s1"> &#39;</span>
-                       <span class="sa">f</span><span class="s1">&#39;(&quot;key&quot; VARCHAR PRIMARY KEY, &quot;value&quot; VARCHAR)&#39;</span><span class="p">)</span>
-    <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;INSERT OR REPLACE INTO </span><span class="si">{</span><span class="n">_CONFIG_TABLE</span><span class="si">}</span><span class="s2"> &quot;</span>
-                       <span class="sa">f</span><span class="s2">&quot;VALUES (&#39;table&#39;, ?), (&#39;schema&#39;, ?)&quot;</span><span class="p">,</span> <span class="p">[</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="p">])</span>
+    <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s1">'CREATE TABLE IF NOT EXISTS </span><span class="si">{</span><span class="n">_CONFIG_TABLE</span><span class="si">}</span><span class="s1"> '</span>
+                       <span class="sa">f</span><span class="s1">'("key" VARCHAR PRIMARY KEY, "value" VARCHAR)'</span><span class="p">)</span>
+    <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"INSERT OR REPLACE INTO </span><span class="si">{</span><span class="n">_CONFIG_TABLE</span><span class="si">}</span><span class="s2"> "</span>
+                       <span class="sa">f</span><span class="s2">"VALUES ('table', ?), ('schema', ?)"</span><span class="p">,</span> <span class="p">[</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="p">])</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_table</span><span class="p">(</span><span class="n">connection</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``(schema, table)`` for *connection*: in-process config → DB-stored →</span>
-<span class="sd">    package defaults. The DB probe runs once per connection (cached).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""``(schema, table)`` for *connection*: in-process config → DB-stored →</span>
+<span class="sd">    package defaults. The DB probe runs once per connection (cached)."""</span>
     <span class="k">if</span> <span class="n">connection</span> <span class="ow">in</span> <span class="n">_config</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">_config</span><span class="p">[</span><span class="n">connection</span><span class="p">]</span>
     <span class="n">resolved</span> <span class="o">=</span> <span class="n">_load_config</span><span class="p">(</span><span class="n">connection</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">_DEFAULT_SCHEMA</span><span class="p">,</span> <span class="n">_DEFAULT_TABLE</span><span class="p">)</span>
@@ -374,8 +374,8 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_table_parts</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;``(schema, table)`` for one call: call kwargs → connection → package</span>
-<span class="sd">    defaults. ``table_name`` is a legacy alias for a bare table name (no schema).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""``(schema, table)`` for one call: call kwargs → connection → package</span>
+<span class="sd">    defaults. ``table_name`` is a legacy alias for a bare table name (no schema)."""</span>
     <span class="n">cfg_schema</span><span class="p">,</span> <span class="n">cfg_table</span> <span class="o">=</span> <span class="n">_get_table</span><span class="p">(</span><span class="n">connection</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">table</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">table</span> <span class="o">=</span> <span class="n">table_name</span> <span class="k">if</span> <span class="n">table_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">cfg_table</span>
@@ -385,34 +385,34 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_table</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Quoted SQL table ref: call kwargs → connection → package defaults.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Quoted SQL table ref: call kwargs → connection → package defaults."""</span>
     <span class="k">return</span> <span class="n">_sql_name</span><span class="p">(</span><span class="o">*</span><span class="n">_table_parts</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">))</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_ord_expr</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">table</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Load-order expression for first-value picks: ``rowid`` on base tables,</span>
+<span class="w">    </span><span class="sd">"""Load-order expression for first-value picks: ``rowid`` on base tables,</span>
 <span class="sd">    ``row_number() OVER ()`` when the target has none (a VIEW or a registered</span>
 <span class="sd">    frame) — order then follows scan order, so only tie-breaks among duplicate</span>
-<span class="sd">    (ID, KEY) rows are affected.&quot;&quot;&quot;</span>
+<span class="sd">    (ID, KEY) rows are affected."""</span>
     <span class="n">row</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-        <span class="s2">&quot;SELECT 1 FROM duckdb_tables() &quot;</span>
-        <span class="s2">&quot;WHERE table_name = ? AND schema_name = COALESCE(?, current_schema())&quot;</span><span class="p">,</span>
+        <span class="s2">"SELECT 1 FROM duckdb_tables() "</span>
+        <span class="s2">"WHERE table_name = ? AND schema_name = COALESCE(?, current_schema())"</span><span class="p">,</span>
         <span class="p">[</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="p">])</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">row</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s2">&quot;rowid&quot;</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> has no rowid (view/registered frame) — using row_number()&quot;</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
-    <span class="k">return</span> <span class="s2">&quot;row_number() OVER ()&quot;</span>
+        <span class="k">return</span> <span class="s2">"rowid"</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> has no rowid (view/registered frame) — using row_number()"</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
+    <span class="k">return</span> <span class="s2">"row_number() OVER ()"</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_set_triplets_table</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">_DEFAULT_TABLE</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">_DEFAULT_SCHEMA</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Set this connection&#39;s default triplets table/schema (persisted in the</span>
-<span class="sd">    database for file-backed connections). Returns the connection.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Set this connection's default triplets table/schema (persisted in the</span>
+<span class="sd">    database for file-backed connections). Returns the connection."""</span>
     <span class="n">_set_table</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">connection</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_install_connect</span><span class="p">(</span><span class="n">duckdb_module</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wrap ``duckdb.connect`` so it accepts ``table=`` / ``schema=``.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Wrap ``duckdb.connect`` so it accepts ``table=`` / ``schema=``."""</span>
     <span class="n">original</span> <span class="o">=</span> <span class="n">duckdb_module</span><span class="o">.</span><span class="n">connect</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">connect</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">_UNSET</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">_UNSET</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
@@ -429,96 +429,96 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_lit</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;SQL literal: NULL for None, single-quoted with quotes escaped otherwise.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""SQL literal: NULL for None, single-quoted with quotes escaped otherwise."""</span>
     <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s2">&quot;NULL&quot;</span>
-    <span class="k">return</span> <span class="s2">&quot;&#39;&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;&#39;&#39;&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;&#39;&quot;</span>
+        <span class="k">return</span> <span class="s2">"NULL"</span>
+    <span class="k">return</span> <span class="s2">"'"</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s2">"''"</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"'"</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_in_list</span><span class="p">(</span><span class="n">values</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Comma-separated SQL literal list from an iterable of values.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_lit</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">)</span>
+<span class="w">    </span><span class="sd">"""Comma-separated SQL literal list from an iterable of values."""</span>
+    <span class="k">return</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_lit</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Copy an external triplet dataset (pandas DataFrame / relation) into a temp</span>
-<span class="sd">    table so later SQL is independent of the python object&#39;s lifetime.&quot;&quot;&quot;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;_reg_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CREATE OR REPLACE TEMP TABLE </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> AS SELECT * FROM _reg_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;_reg_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="sd">"""Copy an external triplet dataset (pandas DataFrame / relation) into a temp</span>
+<span class="sd">    table so later SQL is independent of the python object's lifetime."""</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="sa">f</span><span class="s2">"_reg_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CREATE OR REPLACE TEMP TABLE </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> AS SELECT * FROM _reg_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span><span class="sa">f</span><span class="s2">"_reg_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_create_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view_name</span><span class="p">,</span> <span class="n">query</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create (or replace) a named SQL view and return a relation over it.</span>
+<span class="w">    </span><span class="sd">"""Create (or replace) a named SQL view and return a relation over it.</span>
 
-<span class="sd">    The view is named and re-queryable (SELECT * FROM &quot;&lt;view_name&gt;&quot;) and stays</span>
+<span class="sd">    The view is named and re-queryable (SELECT * FROM "&lt;view_name&gt;") and stays</span>
 <span class="sd">    lazy — it reflects later changes to the underlying triplets table. It is</span>
 <span class="sd">    created next to the data: in *schema* when given, else the default schema.</span>
 <span class="sd">    Default view names come from the data (type/key names), so they can collide</span>
 <span class="sd">    with user objects — pass ``view_name=`` to control the name.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">ref</span> <span class="o">=</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">view_name</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CREATE OR REPLACE VIEW </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2"> AS </span><span class="si">{</span><span class="n">query</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT * FROM </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CREATE OR REPLACE VIEW </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2"> AS </span><span class="si">{</span><span class="n">query</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT * FROM </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_check_string_to_number</span><span class="p">(</span><span class="n">string_to_number</span><span class="p">):</span>
     <span class="k">if</span> <span class="n">string_to_number</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;string_to_number=True is not implemented for the duckdb engine &quot;</span>
-                         <span class="s2">&quot;(tableview columns are VARCHAR); pass string_to_number=False&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"string_to_number=True is not implemented for the duckdb engine "</span>
+                         <span class="s2">"(tableview columns are VARCHAR); pass string_to_number=False"</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_pivot_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view_name</span><span class="p">,</span> <span class="n">id_predicate</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">ord_expr</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a named view pivoting the triplets of the IDs selected by</span>
+<span class="w">    </span><span class="sd">"""Create a named view pivoting the triplets of the IDs selected by</span>
 <span class="sd">    id_predicate (a subquery or literal list usable inside ``ID IN (...)``).</span>
 
 <span class="sd">    PIVOT inside a view needs explicit columns, so the distinct KEYs are resolved</span>
 <span class="sd">    up front: the column set is fixed at creation time, while the values stay lazy.</span>
 <span class="sd">    With ``multivalue=True`` a key holding several values renders the literal</span>
-<span class="sd">    ``[&#39;a&#39;, &#39;b&#39;]`` text (single values stay bare) — the same string encoding the</span>
+<span class="sd">    ``['a', 'b']`` text (single values stay bare) — the same string encoding the</span>
 <span class="sd">    pandas/polars engines produce.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">keys</span> <span class="o">=</span> <span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-        <span class="sa">f</span><span class="s2">&quot;SELECT DISTINCT KEY FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE ID IN (</span><span class="si">{</span><span class="n">id_predicate</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()]</span>
+        <span class="sa">f</span><span class="s2">"SELECT DISTINCT KEY FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE ID IN (</span><span class="si">{</span><span class="n">id_predicate</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()]</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">keys</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">_create_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view_name</span><span class="p">,</span>
-                            <span class="sa">f</span><span class="s2">&quot;SELECT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE ID IN (</span><span class="si">{</span><span class="n">id_predicate</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
-    <span class="n">in_list</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_lit</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">)</span>
+                            <span class="sa">f</span><span class="s2">"SELECT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE ID IN (</span><span class="si">{</span><span class="n">id_predicate</span><span class="si">}</span><span class="s2">)"</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
+    <span class="n">in_list</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_lit</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">multivalue</span><span class="p">:</span>
         <span class="c1"># element order = load order (matches pandas/polars maintain_order)</span>
-        <span class="n">value</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;CASE WHEN count(*) = 1 THEN any_value(VALUE) &quot;</span>
-                 <span class="s2">&quot;ELSE &#39;[&#39;&#39;&#39; || string_agg(VALUE, &#39;&#39;&#39;, &#39;&#39;&#39; ORDER BY _view_ord) || &#39;&#39;&#39;]&#39; END&quot;</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"CASE WHEN count(*) = 1 THEN any_value(VALUE) "</span>
+                 <span class="s2">"ELSE '[''' || string_agg(VALUE, ''', ''' ORDER BY _view_ord) || ''']' END"</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="c1"># Multi-valued keys take the load-order-first value so the single-value</span>
         <span class="c1"># pick matches pandas/polars and the view is deterministic.</span>
-        <span class="n">value</span> <span class="o">=</span> <span class="s2">&quot;arg_min(VALUE, _view_ord)&quot;</span>
-    <span class="c1"># ord_expr is computed in a subquery: a window (row_number fallback) can&#39;t</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="s2">"arg_min(VALUE, _view_ord)"</span>
+    <span class="c1"># ord_expr is computed in a subquery: a window (row_number fallback) can't</span>
     <span class="c1"># sit inside the aggregate directly.</span>
-    <span class="k">return</span> <span class="n">_create_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view_name</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_create_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view_name</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        WITH s AS (SELECT ID, KEY, VALUE, </span><span class="si">{</span><span class="n">ord_expr</span><span class="si">}</span><span class="s2"> AS _view_ord FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">),</span>
 <span class="s2">             d AS (SELECT ID, KEY, </span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2"> AS VALUE FROM s</span>
 <span class="s2">                   WHERE ID IN (</span><span class="si">{</span><span class="n">id_predicate</span><span class="si">}</span><span class="s2">) GROUP BY ID, KEY)</span>
 <span class="s2">        PIVOT d ON KEY IN (</span><span class="si">{</span><span class="n">in_list</span><span class="si">}</span><span class="s2">) USING FIRST(VALUE) GROUP BY ID</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
+<span class="s2">    """</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="types_dict">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.types_dict">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">types_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">contains</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">case_insensitive</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return dict of {type_name: count}.</span>
+<span class="w">    </span><span class="sd">"""Return dict of {type_name: count}.</span>
 
 <span class="sd">    With ``contains``, keep only types whose name contains that substring</span>
 <span class="sd">    (case-insensitive unless ``case_insensitive=False``).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT VALUE, COUNT(DISTINCT ID) as count</span>
 <span class="s2">        FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span>
-<span class="s2">        WHERE KEY = &#39;Type&#39;</span>
+<span class="s2">        WHERE KEY = 'Type'</span>
 <span class="s2">        GROUP BY VALUE</span>
 <span class="s2">        ORDER BY count DESC</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+<span class="s2">    """</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
     <span class="n">types_dictionary</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">contains</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -533,15 +533,15 @@
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.type_tableview">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">type_tableview</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">view_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                    <span class="n">string_to_number</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a named SQL view pivoting all objects of a type; return a relation</span>
+<span class="w">    </span><span class="sd">"""Create a named SQL view pivoting all objects of a type; return a relation</span>
 <span class="sd">    over it. The view defaults to the type name (override with view_name) and is</span>
 <span class="sd">    created in the resolved schema, next to the data. multivalue=True renders</span>
-<span class="sd">    multi-valued keys as the literal [&#39;a&#39;, &#39;b&#39;] text (pandas/polars encoding);</span>
-<span class="sd">    string_to_number is accepted for signature parity but not implemented.&quot;&quot;&quot;</span>
+<span class="sd">    multi-valued keys as the literal ['a', 'b'] text (pandas/polars encoding);</span>
+<span class="sd">    string_to_number is accepted for signature parity but not implemented."""</span>
     <span class="n">_check_string_to_number</span><span class="p">(</span><span class="n">string_to_number</span><span class="p">)</span>
     <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="n">_table_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">ref</span> <span class="o">=</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">)</span>
-    <span class="n">ids</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SELECT DISTINCT ID FROM </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2"> WHERE KEY = &#39;Type&#39; AND VALUE = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">type_name</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">ids</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"SELECT DISTINCT ID FROM </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2"> WHERE KEY = 'Type' AND VALUE = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">type_name</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
     <span class="k">return</span> <span class="n">_pivot_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view_name</span> <span class="ow">or</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">ids</span><span class="p">,</span> <span class="n">ref</span><span class="p">,</span> <span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span> <span class="n">sch</span><span class="p">,</span>
                        <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span></div>
 
@@ -551,81 +551,81 @@
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.filter_triplets">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ID</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">INSTANCE_ID</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                     <span class="n">regex</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Filter triplets by any combination of columns. Returns DuckDBPyRelation (lazy).</span>
+<span class="w">    </span><span class="sd">"""Filter triplets by any combination of columns. Returns DuckDBPyRelation (lazy).</span>
 
 <span class="sd">    A list value keeps rows matching any of its values; with regex=True the</span>
 <span class="sd">    value(s) are regex patterns matched anywhere in the value, like pandas</span>
 <span class="sd">    str.contains.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">conditions</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">col</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="p">[(</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="n">ID</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="n">KEY</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="n">VALUE</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">,</span> <span class="n">INSTANCE_ID</span><span class="p">)]:</span>
+    <span class="k">for</span> <span class="n">col</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="p">[(</span><span class="s2">"ID"</span><span class="p">,</span> <span class="n">ID</span><span class="p">),</span> <span class="p">(</span><span class="s2">"KEY"</span><span class="p">,</span> <span class="n">KEY</span><span class="p">),</span> <span class="p">(</span><span class="s2">"VALUE"</span><span class="p">,</span> <span class="n">VALUE</span><span class="p">),</span> <span class="p">(</span><span class="s2">"INSTANCE_ID"</span><span class="p">,</span> <span class="n">INSTANCE_ID</span><span class="p">)]:</span>
         <span class="k">if</span> <span class="n">val</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">continue</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="nb">set</span><span class="p">)):</span>
             <span class="n">values</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">values</span><span class="p">:</span>
-                <span class="n">conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;FALSE&quot;</span><span class="p">)</span>
+                <span class="n">conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"FALSE"</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">regex</span><span class="p">:</span>
-                <span class="n">conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;(&quot;</span> <span class="o">+</span> <span class="s2">&quot; OR &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;regexp_matches(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;)&quot;</span><span class="p">)</span>
+                <span class="n">conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"("</span> <span class="o">+</span> <span class="s2">" OR "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"regexp_matches(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">v</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">)</span> <span class="o">+</span> <span class="s2">")"</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2"> IN (</span><span class="si">{</span><span class="n">_in_list</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+                <span class="n">conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2"> IN (</span><span class="si">{</span><span class="n">_in_list</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">regex</span><span class="p">:</span>
-            <span class="n">conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;regexp_matches(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+            <span class="n">conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"regexp_matches(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot; AND &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">conditions</span><span class="p">)</span> <span class="k">if</span> <span class="n">conditions</span> <span class="k">else</span> <span class="s2">&quot;TRUE&quot;</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT * FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="n">where</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+            <span class="n">conditions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">where</span> <span class="o">=</span> <span class="s2">" AND "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">conditions</span><span class="p">)</span> <span class="k">if</span> <span class="n">conditions</span> <span class="k">else</span> <span class="s2">"TRUE"</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT * FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="n">where</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="filter_triplets_by_type">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.filter_triplets_by_type">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets_by_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Filter to only objects of a specific type. Returns DuckDBPyRelation (lazy).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Filter to only objects of a specific type. Returns DuckDBPyRelation (lazy)."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT d.* FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> d</span>
 <span class="s2">        WHERE d.ID IN (</span>
 <span class="s2">            SELECT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span>
-<span class="s2">            WHERE KEY = &#39;Type&#39; AND VALUE = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">type_name</span><span class="p">)</span><span class="si">}</span>
+<span class="s2">            WHERE KEY = 'Type' AND VALUE = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">type_name</span><span class="p">)</span><span class="si">}</span>
 <span class="s2">        )</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span></div>
+<span class="s2">    """</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="filter_triplets_by_value">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.filter_triplets_by_value">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets_by_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">VALUE</span><span class="p">,</span> <span class="n">detailed</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets_by_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">VALUE</span><span class="p">,</span> <span class="n">detailed</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="s2">"Type"</span><span class="p">,</span>
                              <span class="n">regex</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Filter to objects that have any triplet matching VALUE. Returns DuckDBPyRelation.</span>
+<span class="w">    </span><span class="sd">"""Filter to objects that have any triplet matching VALUE. Returns DuckDBPyRelation.</span>
 
 <span class="sd">    Selects every object (ID) with at least one triplet whose VALUE matches</span>
 <span class="sd">    `VALUE` (with regex=True, a regex pattern matched anywhere in the value,</span>
 <span class="sd">    like pandas str.contains). With detailed=True, returns all their triplets;</span>
-<span class="sd">    otherwise the matching rows plus each matched object&#39;s `type_key` row, type</span>
+<span class="sd">    otherwise the matching rows plus each matched object's `type_key` row, type</span>
 <span class="sd">    row first within each ID.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="n">match</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;regexp_matches(VALUE, </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">VALUE</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span> <span class="k">if</span> <span class="n">regex</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;VALUE = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">VALUE</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
-    <span class="n">probe_ids</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SELECT DISTINCT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="n">match</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">match</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"regexp_matches(VALUE, </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">VALUE</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span> <span class="k">if</span> <span class="n">regex</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">"VALUE = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">VALUE</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+    <span class="n">probe_ids</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"SELECT DISTINCT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="n">match</span><span class="si">}</span><span class="s2">"</span>
     <span class="k">if</span> <span class="n">detailed</span><span class="p">:</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT * FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE ID IN (</span><span class="si">{</span><span class="n">probe_ids</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT * FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE ID IN (</span><span class="si">{</span><span class="n">probe_ids</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT * FROM (</span>
 <span class="s2">            SELECT * FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="n">match</span><span class="si">}</span>
 <span class="s2">            UNION</span>
 <span class="s2">            SELECT * FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE ID IN (</span><span class="si">{</span><span class="n">probe_ids</span><span class="si">}</span><span class="s2">) AND KEY = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">type_key</span><span class="p">)</span><span class="si">}</span>
 <span class="s2">        )</span>
 <span class="s2">        ORDER BY ID, (KEY = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">type_key</span><span class="p">)</span><span class="si">}</span><span class="s2">) DESC</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span></div>
+<span class="s2">    """</span><span class="p">)</span></div>
 
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_refs_to_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">ord_expr</span><span class="o">=</span><span class="s2">&quot;rowid&quot;</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;SQL for references_to: object (level 0) + multi-level referrers, with</span>
-<span class="sd">    level/ID_TO/ID_FROM — matches the pandas engine.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_refs_to_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">ord_expr</span><span class="o">=</span><span class="s2">"rowid"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""SQL for references_to: object (level 0) + multi-level referrers, with</span>
+<span class="sd">    level/ID_TO/ID_FROM — matches the pandas engine."""</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        WITH RECURSIVE nodes(node, lvl, id_to, id_from) AS (</span>
 <span class="s2">            SELECT </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">reference</span><span class="p">)</span><span class="si">}</span><span class="s2">, 0, CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)</span>
 <span class="s2">            UNION</span>
@@ -638,12 +638,12 @@
 <span class="s2">        FROM nodes n</span>
 <span class="s2">        JOIN (SELECT ID, KEY, VALUE, INSTANCE_ID, </span><span class="si">{</span><span class="n">ord_expr</span><span class="si">}</span><span class="s2"> AS _ord FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">) t</span>
 <span class="s2">        ON t.ID = n.node</span>
-<span class="s2">    &quot;&quot;&quot;</span>
+<span class="s2">    """</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_refs_from_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">ord_expr</span><span class="o">=</span><span class="s2">&quot;rowid&quot;</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;SQL for references_from: object (level 0) + multi-level referenced objects.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_refs_from_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">ord_expr</span><span class="o">=</span><span class="s2">"rowid"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""SQL for references_from: object (level 0) + multi-level referenced objects."""</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        WITH RECURSIVE nodes(node, lvl, id_to, id_from) AS (</span>
 <span class="s2">            SELECT </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">reference</span><span class="p">)</span><span class="si">}</span><span class="s2">, 0, CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)</span>
 <span class="s2">            UNION</span>
@@ -656,15 +656,15 @@
 <span class="s2">        FROM nodes n</span>
 <span class="s2">        JOIN (SELECT ID, KEY, VALUE, INSTANCE_ID, </span><span class="si">{</span><span class="n">ord_expr</span><span class="si">}</span><span class="s2"> AS _ord FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">) t</span>
 <span class="s2">        ON t.ID = n.node</span>
-<span class="s2">    &quot;&quot;&quot;</span>
+<span class="s2">    """</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_references_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">keep_ord</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ord_expr</span><span class="o">=</span><span class="s2">&quot;rowid&quot;</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;references_from + references_to, deduped on (ID,KEY,VALUE,INSTANCE_ID)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_references_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">keep_ord</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ord_expr</span><span class="o">=</span><span class="s2">"rowid"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""references_from + references_to, deduped on (ID,KEY,VALUE,INSTANCE_ID)</span>
 <span class="sd">    keeping the FROM side first — matches pandas concat+drop_duplicates. _ord is</span>
-<span class="sd">    the base-table load order (kept only when a downstream pivot needs it).&quot;&quot;&quot;</span>
-    <span class="n">drop</span> <span class="o">=</span> <span class="s2">&quot;_src, _rn&quot;</span> <span class="k">if</span> <span class="n">keep_ord</span> <span class="k">else</span> <span class="s2">&quot;_src, _rn, _ord&quot;</span>
-    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="sd">    the base-table load order (kept only when a downstream pivot needs it)."""</span>
+    <span class="n">drop</span> <span class="o">=</span> <span class="s2">"_src, _rn"</span> <span class="k">if</span> <span class="n">keep_ord</span> <span class="k">else</span> <span class="s2">"_src, _rn, _ord"</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT * EXCLUDE (</span><span class="si">{</span><span class="n">drop</span><span class="si">}</span><span class="s2">) FROM (</span>
 <span class="s2">            SELECT *, row_number() OVER (PARTITION BY ID, KEY, VALUE, INSTANCE_ID ORDER BY _src, _ord) AS _rn</span>
 <span class="s2">            FROM (</span>
@@ -673,26 +673,26 @@
 <span class="s2">                SELECT *, 1 AS _src FROM (</span><span class="si">{</span><span class="n">_refs_to_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span><span class="w"> </span><span class="n">levels</span><span class="p">,</span><span class="w"> </span><span class="n">table_name</span><span class="p">,</span><span class="w"> </span><span class="n">ord_expr</span><span class="p">)</span><span class="si">}</span><span class="s2">)</span>
 <span class="s2">            )</span>
 <span class="s2">        ) WHERE _rn = 1</span>
-<span class="s2">    &quot;&quot;&quot;</span>
+<span class="s2">    """</span>
 
 
 <div class="viewcode-block" id="references_to">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.references_to">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">references_to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Objects that reference the given ID, multi-level. Returns DuckDBPyRelation.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Objects that reference the given ID, multi-level. Returns DuckDBPyRelation."""</span>
     <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="n">_table_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">refs</span> <span class="o">=</span> <span class="n">_refs_to_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span> <span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">))</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT * EXCLUDE (_ord) FROM (</span><span class="si">{</span><span class="n">refs</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT * EXCLUDE (_ord) FROM (</span><span class="si">{</span><span class="n">refs</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="references_from">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.references_from">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">references_from</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Objects referenced BY the given ID, multi-level. Returns DuckDBPyRelation.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Objects referenced BY the given ID, multi-level. Returns DuckDBPyRelation."""</span>
     <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="n">_table_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">refs</span> <span class="o">=</span> <span class="n">_refs_from_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span> <span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">))</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT * EXCLUDE (_ord) FROM (</span><span class="si">{</span><span class="n">refs</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT * EXCLUDE (_ord) FROM (</span><span class="si">{</span><span class="n">refs</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span></div>
 
 
 
@@ -702,12 +702,12 @@
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.key_tableview">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">key_tableview</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">view_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                   <span class="n">string_to_number</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a named SQL view pivoting objects carrying a given KEY; return a</span>
-<span class="sd">    relation over it. The view defaults to the key name (override with view_name).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Create a named SQL view pivoting objects carrying a given KEY; return a</span>
+<span class="sd">    relation over it. The view defaults to the key name (override with view_name)."""</span>
     <span class="n">_check_string_to_number</span><span class="p">(</span><span class="n">string_to_number</span><span class="p">)</span>
     <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="n">_table_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">ref</span> <span class="o">=</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">)</span>
-    <span class="n">ids</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SELECT DISTINCT ID FROM </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2"> WHERE KEY = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">ids</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"SELECT DISTINCT ID FROM </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2"> WHERE KEY = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
     <span class="k">return</span> <span class="n">_pivot_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view_name</span> <span class="ow">or</span> <span class="n">key</span><span class="p">,</span> <span class="n">ids</span><span class="p">,</span> <span class="n">ref</span><span class="p">,</span> <span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span> <span class="n">sch</span><span class="p">,</span>
                        <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span></div>
 
@@ -717,14 +717,14 @@
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.id_tableview">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">id_tableview</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">id</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">view_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                  <span class="n">string_to_number</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a named SQL view pivoting the given ID(s) — a single id or an</span>
+<span class="w">    </span><span class="sd">"""Create a named SQL view pivoting the given ID(s) — a single id or an</span>
 <span class="sd">    iterable — and return a relation over it. The view defaults to the id when a</span>
-<span class="sd">    single one is given, else &#39;id_tableview&#39; (override with view_name).&quot;&quot;&quot;</span>
+<span class="sd">    single one is given, else 'id_tableview' (override with view_name)."""</span>
     <span class="n">_check_string_to_number</span><span class="p">(</span><span class="n">string_to_number</span><span class="p">)</span>
     <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="n">_table_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">ids</span> <span class="o">=</span> <span class="p">[</span><span class="nb">id</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="nb">id</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">view_name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">view_name</span> <span class="o">=</span> <span class="n">ids</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="s2">&quot;id_tableview&quot;</span>
+        <span class="n">view_name</span> <span class="o">=</span> <span class="n">ids</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="s2">"id_tableview"</span>
     <span class="k">return</span> <span class="n">_pivot_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view_name</span><span class="p">,</span> <span class="n">_in_list</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span>
                        <span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span> <span class="n">sch</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span></div>
 
@@ -733,25 +733,25 @@
 <div class="viewcode-block" id="get_object_data">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.get_object_data">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_object_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">object_UUID</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;All (KEY, VALUE) rows for one object. Returns DuckDBPyRelation (lazy).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""All (KEY, VALUE) rows for one object. Returns DuckDBPyRelation (lazy)."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT KEY, VALUE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE ID = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">object_UUID</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT KEY, VALUE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE ID = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">object_UUID</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="get_namespace_map">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.get_namespace_map">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_namespace_map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return (namespace_map dict, xml_base) from the NamespaceMap object.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Return (namespace_map dict, xml_base) from the NamespaceMap object."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT KEY, VALUE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span>
-<span class="s2">        WHERE KEY != &#39;Type&#39; AND ID IN (</span>
-<span class="s2">            SELECT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE KEY = &#39;Type&#39; AND VALUE = &#39;NamespaceMap&#39;</span>
+<span class="s2">        WHERE KEY != 'Type' AND ID IN (</span>
+<span class="s2">            SELECT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE KEY = 'Type' AND VALUE = 'NamespaceMap'</span>
 <span class="s2">        )</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+<span class="s2">    """</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
     <span class="n">namespace_map</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span>
-    <span class="n">xml_base</span> <span class="o">=</span> <span class="n">namespace_map</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;xml_base&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">xml_base</span> <span class="o">=</span> <span class="n">namespace_map</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"xml_base"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">namespace_map</span><span class="p">,</span> <span class="n">xml_base</span></div>
 
 
@@ -760,7 +760,7 @@
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.triplets_to_tableviews">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">triplets_to_tableviews</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                            <span class="n">string_to_number</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return {type_name: tableview relation} for every type in the dataset.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Return {type_name: tableview relation} for every type in the dataset."""</span>
     <span class="k">return</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">type_tableview</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">,</span>
                                  <span class="n">string_to_number</span><span class="o">=</span><span class="n">string_to_number</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">types_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)}</span></div>
@@ -772,7 +772,7 @@
 <div class="viewcode-block" id="references">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.references">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">references</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ID</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;All references to and from an object (both directions). Returns DuckDBPyRelation.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""All references to and from an object (both directions). Returns DuckDBPyRelation."""</span>
     <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="n">_table_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">_references_sql</span><span class="p">(</span><span class="n">ID</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span>
                                     <span class="n">ord_expr</span><span class="o">=</span><span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">)))</span></div>
@@ -780,54 +780,54 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_pivot_refs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">refs_sql</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">columns</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Pivot a references query (carrying _ord) on KEY, indexed by `index`</span>
+<span class="w">    </span><span class="sd">"""Pivot a references query (carrying _ord) on KEY, indexed by `index`</span>
 <span class="sd">    (ID_FROM/ID_TO/ID). Multi-valued keys take the load-order-first value</span>
-<span class="sd">    (arg_min by _ord) so the pick matches pandas/polars; keep only `columns`.&quot;&quot;&quot;</span>
-    <span class="n">pivoted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="sd">    (arg_min by _ord) so the pick matches pandas/polars; keep only `columns`."""</span>
+    <span class="n">pivoted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        PIVOT (SELECT </span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">, KEY, arg_min(VALUE, _ord) AS VALUE</span>
 <span class="s2">               FROM (</span><span class="si">{</span><span class="n">refs_sql</span><span class="si">}</span><span class="s2">) GROUP BY </span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">, KEY)</span>
 <span class="s2">        ON KEY USING FIRST(VALUE) GROUP BY </span><span class="si">{</span><span class="n">index</span><span class="si">}</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span>
+<span class="s2">    """</span><span class="p">)</span>
     <span class="n">keep</span> <span class="o">=</span> <span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="p">(</span><span class="n">columns</span> <span class="ow">or</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">pivoted</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
-    <span class="k">return</span> <span class="n">pivoted</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;&quot;</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s1">&quot;&#39;</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">keep</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">pivoted</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s1">'"</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s1">"'</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">keep</span><span class="p">))</span>
 
 
 <div class="viewcode-block" id="references_to_simple">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.references_to_simple">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">references_to_simple</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">],</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Pivot of objects referencing `reference` (index ID_FROM), limited to `columns`.&quot;&quot;&quot;</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">references_to_simple</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"Type"</span><span class="p">],</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Pivot of objects referencing `reference` (index ID_FROM), limited to `columns`."""</span>
     <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="n">_table_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">refs</span> <span class="o">=</span> <span class="n">_refs_to_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span> <span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">_pivot_refs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">refs</span><span class="p">,</span> <span class="s2">&quot;ID_FROM&quot;</span><span class="p">,</span> <span class="n">columns</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_pivot_refs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">refs</span><span class="p">,</span> <span class="s2">"ID_FROM"</span><span class="p">,</span> <span class="n">columns</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="references_from_simple">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.references_from_simple">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">references_from_simple</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">],</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Pivot of objects referenced BY `reference` (index ID_TO), limited to `columns`.&quot;&quot;&quot;</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">references_from_simple</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"Type"</span><span class="p">],</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Pivot of objects referenced BY `reference` (index ID_TO), limited to `columns`."""</span>
     <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="n">_table_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">refs</span> <span class="o">=</span> <span class="n">_refs_from_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span> <span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">_pivot_refs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">refs</span><span class="p">,</span> <span class="s2">&quot;ID_TO&quot;</span><span class="p">,</span> <span class="n">columns</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">_pivot_refs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">refs</span><span class="p">,</span> <span class="s2">"ID_TO"</span><span class="p">,</span> <span class="n">columns</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="references_simple">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.references_simple">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">references_simple</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reference</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Pivot of the object and everything linked to/from it (index ID), with the</span>
-<span class="sd">    level/ID_FROM/ID_TO metadata merged back, matching pandas.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Pivot of the object and everything linked to/from it (index ID), with the</span>
+<span class="sd">    level/ID_FROM/ID_TO metadata merged back, matching pandas."""</span>
     <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="n">_table_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">refs_sql</span> <span class="o">=</span> <span class="n">_references_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span> <span class="n">keep_ord</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
                                <span class="n">ord_expr</span><span class="o">=</span><span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">))</span>
-    <span class="n">pivoted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE</span>
+    <span class="n">pivoted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE</span>
 <span class="s2">                                  FROM (</span><span class="si">{</span><span class="n">refs_sql</span><span class="si">}</span><span class="s2">) GROUP BY ID, KEY)</span>
-<span class="s2">                           ON KEY USING FIRST(VALUE) GROUP BY ID&quot;&quot;&quot;</span><span class="p">)</span>
+<span class="s2">                           ON KEY USING FIRST(VALUE) GROUP BY ID"""</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">columns</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="s2">&quot;IdentifiedObject.name&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">pivoted</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+        <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"Type"</span><span class="p">,</span> <span class="s2">"IdentifiedObject.name"</span><span class="p">)</span> <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">pivoted</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
     <span class="n">keep</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">columns</span> <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">pivoted</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
-    <span class="n">sel</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;, p.&quot;</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s1">&quot;&#39;</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">keep</span><span class="p">)</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="n">sel</span> <span class="o">=</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s1">', p."</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s1">"'</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">keep</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        WITH refs AS (</span><span class="si">{</span><span class="n">refs_sql</span><span class="si">}</span><span class="s2">),</span>
 <span class="s2">        p AS (PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE FROM refs GROUP BY ID, KEY)</span>
 <span class="s2">              ON KEY USING FIRST(VALUE) GROUP BY ID),</span>
@@ -836,20 +836,20 @@
 <span class="s2">        SELECT p.ID</span><span class="si">{</span><span class="n">sel</span><span class="si">}</span><span class="s2">, m.level, m.ID_FROM, m.ID_TO</span>
 <span class="s2">        FROM p LEFT JOIN m ON p.ID = m.ID</span>
 <span class="s2">        ORDER BY m.level</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span></div>
+<span class="s2">    """</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="references_all">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.references_all">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">references_all</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;All reference links as (ID_FROM, KEY, ID_TO). Returns DuckDBPyRelation.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""All reference links as (ID_FROM, KEY, ID_TO). Returns DuckDBPyRelation."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT DISTINCT a.ID AS ID_FROM, a.KEY, a.VALUE AS ID_TO</span>
 <span class="s2">        FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> a</span>
 <span class="s2">        JOIN (SELECT DISTINCT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">) b ON a.VALUE = b.ID</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span></div>
+<span class="s2">    """</span><span class="p">)</span></div>
 
 
 
@@ -858,13 +858,13 @@
 <div class="viewcode-block" id="filter_triplets_by_triplets">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.filter_triplets_by_triplets">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets_by_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filter_triplet</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Keep triplets whose ID appears in `filter_triplet`. Returns DuckDBPyRelation.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Keep triplets whose ID appears in `filter_triplet`. Returns DuckDBPyRelation."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="n">_materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filter_triplet</span><span class="p">,</span> <span class="s2">&quot;_filter_triplet&quot;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="n">_materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filter_triplet</span><span class="p">,</span> <span class="s2">"_filter_triplet"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT * FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span>
 <span class="s2">        WHERE ID IN (SELECT DISTINCT ID FROM _filter_triplet)</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span></div>
+<span class="s2">    """</span><span class="p">)</span></div>
 
 
 
@@ -876,9 +876,9 @@
 <div class="viewcode-block" id="set_value_at_key">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.set_value_at_key">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">set_value_at_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Set VALUE for every row with the given KEY. Mutates the table; returns self.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Set VALUE for every row with the given KEY. Mutates the table; returns self."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;UPDATE </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> SET VALUE = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2"> WHERE KEY = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"UPDATE </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> SET VALUE = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2"> WHERE KEY = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">return</span> <span class="bp">self</span></div>
 
 
@@ -886,46 +886,46 @@
 <div class="viewcode-block" id="set_value_at_key_and_id">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.set_value_at_key_and_id">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">set_value_at_key_and_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="nb">id</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Set VALUE for the row with the given KEY and ID. Mutates the table; returns self.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Set VALUE for the row with the given KEY and ID. Mutates the table; returns self."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;UPDATE </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> SET VALUE = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
-                 <span class="sa">f</span><span class="s2">&quot;WHERE KEY = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2"> AND ID = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"UPDATE </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> SET VALUE = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2"> "</span>
+                 <span class="sa">f</span><span class="s2">"WHERE KEY = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2"> AND ID = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="nb">id</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">return</span> <span class="bp">self</span></div>
 
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_apply_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">has_instance</span><span class="p">,</span> <span class="n">update</span><span class="p">,</span> <span class="n">add</span><span class="p">,</span> <span class="n">table_name</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Merge the normalized TEMP TABLE _update_data (ID, KEY, VALUE, INSTANCE_ID)</span>
+<span class="w">    </span><span class="sd">"""Merge the normalized TEMP TABLE _update_data (ID, KEY, VALUE, INSTANCE_ID)</span>
 <span class="sd">    into table_name. Merge keys are ID+KEY, plus INSTANCE_ID when has_instance.</span>
 
 <span class="sd">    Like pandas, update overwrites only VALUE on matched rows (preserving their</span>
 <span class="sd">    original INSTANCE_ID); add appends rows with no existing match. UPDATE runs</span>
 <span class="sd">    before INSERT so updated rows are never re-inserted.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">on</span> <span class="o">=</span> <span class="s2">&quot;u.ID = t.ID AND u.KEY = t.KEY&quot;</span> <span class="o">+</span> <span class="p">(</span><span class="s2">&quot; AND u.INSTANCE_ID = t.INSTANCE_ID&quot;</span> <span class="k">if</span> <span class="n">has_instance</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+<span class="sd">    """</span>
+    <span class="n">on</span> <span class="o">=</span> <span class="s2">"u.ID = t.ID AND u.KEY = t.KEY"</span> <span class="o">+</span> <span class="p">(</span><span class="s2">" AND u.INSTANCE_ID = t.INSTANCE_ID"</span> <span class="k">if</span> <span class="n">has_instance</span> <span class="k">else</span> <span class="s2">""</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">update</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;UPDATE </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> t SET VALUE = u.VALUE FROM _update_data u WHERE </span><span class="si">{</span><span class="n">on</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"UPDATE </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> t SET VALUE = u.VALUE FROM _update_data u WHERE </span><span class="si">{</span><span class="n">on</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">add</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;INSERT INTO </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> BY NAME &quot;</span>
-                     <span class="sa">f</span><span class="s2">&quot;SELECT u.ID, u.KEY, u.VALUE, u.INSTANCE_ID FROM _update_data u &quot;</span>
-                     <span class="sa">f</span><span class="s2">&quot;WHERE NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> t WHERE </span><span class="si">{</span><span class="n">on</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"INSERT INTO </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> BY NAME "</span>
+                     <span class="sa">f</span><span class="s2">"SELECT u.ID, u.KEY, u.VALUE, u.INSTANCE_ID FROM _update_data u "</span>
+                     <span class="sa">f</span><span class="s2">"WHERE NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> t WHERE </span><span class="si">{</span><span class="n">on</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
     <span class="k">return</span> <span class="bp">self</span>
 
 
 <div class="viewcode-block" id="update_triplets_from_triplets">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.update_triplets_from_triplets">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">update_triplets_from_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">update_data</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Update existing and/or add new rows from another triplet dataset. Merges on</span>
-<span class="sd">    ID+KEY (plus INSTANCE_ID when update_data has it). Mutates the table; returns self.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Update existing and/or add new rows from another triplet dataset. Merges on</span>
+<span class="sd">    ID+KEY (plus INSTANCE_ID when update_data has it). Mutates the table; returns self."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">&quot;_reg_update&quot;</span><span class="p">,</span> <span class="n">update_data</span><span class="p">)</span>
-    <span class="n">has_instance</span> <span class="o">=</span> <span class="s2">&quot;INSTANCE_ID&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s2">&quot;SELECT * FROM _reg_update&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">columns</span>
-    <span class="n">instance_expr</span> <span class="o">=</span> <span class="s2">&quot;INSTANCE_ID&quot;</span> <span class="k">if</span> <span class="n">has_instance</span> <span class="k">else</span> <span class="s2">&quot;NULL&quot;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">"_reg_update"</span><span class="p">,</span> <span class="n">update_data</span><span class="p">)</span>
+    <span class="n">has_instance</span> <span class="o">=</span> <span class="s2">"INSTANCE_ID"</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s2">"SELECT * FROM _reg_update"</span><span class="p">)</span><span class="o">.</span><span class="n">columns</span>
+    <span class="n">instance_expr</span> <span class="o">=</span> <span class="s2">"INSTANCE_ID"</span> <span class="k">if</span> <span class="n">has_instance</span> <span class="k">else</span> <span class="s2">"NULL"</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        CREATE OR REPLACE TEMP TABLE _update_data AS</span>
 <span class="s2">        SELECT ID, KEY, VALUE, </span><span class="si">{</span><span class="n">instance_expr</span><span class="si">}</span><span class="s2"> AS INSTANCE_ID FROM _reg_update</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span><span class="s2">&quot;_reg_update&quot;</span><span class="p">)</span>
+<span class="s2">    """</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span><span class="s2">"_reg_update"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_apply_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">has_instance</span><span class="p">,</span> <span class="n">update</span><span class="p">,</span> <span class="n">add</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span></div>
 
 
@@ -934,33 +934,33 @@
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.update_triplets_from_tableview">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">update_triplets_from_tableview</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tableview</span><span class="p">,</span> <span class="n">update</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">add</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">instance_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                                    <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Unpivot a tableview to triplets, then update/add them. When instance_id is</span>
-<span class="sd">    None the merge is on ID+KEY only (mirrors the pandas engine). Mutates; returns self.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Unpivot a tableview to triplets, then update/add them. When instance_id is</span>
+<span class="sd">    None the merge is on ID+KEY only (mirrors the pandas engine). Mutates; returns self."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">&quot;_reg_tv&quot;</span><span class="p">,</span> <span class="n">tableview</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">"_reg_tv"</span><span class="p">,</span> <span class="n">tableview</span><span class="p">)</span>
     <span class="n">has_instance</span> <span class="o">=</span> <span class="n">instance_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-    <span class="n">instance_expr</span> <span class="o">=</span> <span class="n">_lit</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span> <span class="k">if</span> <span class="n">has_instance</span> <span class="k">else</span> <span class="s2">&quot;NULL&quot;</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="n">instance_expr</span> <span class="o">=</span> <span class="n">_lit</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span> <span class="k">if</span> <span class="n">has_instance</span> <span class="k">else</span> <span class="s2">"NULL"</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        CREATE OR REPLACE TEMP TABLE _update_data AS</span>
 <span class="s2">        SELECT ID, KEY, VALUE, </span><span class="si">{</span><span class="n">instance_expr</span><span class="si">}</span><span class="s2"> AS INSTANCE_ID</span>
 <span class="s2">        FROM (UNPIVOT _reg_tv ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE)</span>
 <span class="s2">        WHERE VALUE IS NOT NULL</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span><span class="s2">&quot;_reg_tv&quot;</span><span class="p">)</span>
+<span class="s2">    """</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span><span class="s2">"_reg_tv"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_apply_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">has_instance</span><span class="p">,</span> <span class="n">update</span><span class="p">,</span> <span class="n">add</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="remove_triplets_from_triplets">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.remove_triplets_from_triplets">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">remove_triplets_from_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">what_triplet</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">],</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">remove_triplets_from_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">what_triplet</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">],</span>
                                   <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove rows matching `what_triplet` on `columns`. Mutates the table; returns self.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Remove rows matching `what_triplet` on `columns`. Mutates the table; returns self."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="n">_materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">what_triplet</span><span class="p">,</span> <span class="s2">&quot;_what_triplet&quot;</span><span class="p">)</span>
-    <span class="n">on</span> <span class="o">=</span> <span class="s2">&quot; AND &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;t.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2"> = w.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DELETE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> t &quot;</span>
-                 <span class="sa">f</span><span class="s2">&quot;WHERE EXISTS (SELECT 1 FROM _what_triplet w WHERE </span><span class="si">{</span><span class="n">on</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+    <span class="n">_materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">what_triplet</span><span class="p">,</span> <span class="s2">"_what_triplet"</span><span class="p">)</span>
+    <span class="n">on</span> <span class="o">=</span> <span class="s2">" AND "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"t.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2"> = w.</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"DELETE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> t "</span>
+                 <span class="sa">f</span><span class="s2">"WHERE EXISTS (SELECT 1 FROM _what_triplet w WHERE </span><span class="si">{</span><span class="n">on</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
     <span class="k">return</span> <span class="bp">self</span></div>
 
 
@@ -970,53 +970,53 @@
 <div class="viewcode-block" id="diff_triplets">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.diff_triplets">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">diff_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Rows unique to the table (left_only) or to new_data (right_only), with a</span>
-<span class="sd">    _merge column. Returns DuckDBPyRelation.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Rows unique to the table (left_only) or to new_data (right_only), with a</span>
+<span class="sd">    _merge column. Returns DuckDBPyRelation."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="n">_materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="s2">&quot;_new_data&quot;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="n">_materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="s2">"_new_data"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT ID, KEY, VALUE, INSTANCE_ID AS INSTANCE_ID_OLD, NULL AS INSTANCE_ID_NEW,</span>
-<span class="s2">               &#39;left_only&#39; AS _merge</span>
+<span class="s2">               'left_only' AS _merge</span>
 <span class="s2">        FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span>
 <span class="s2">        WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _new_data)</span>
 <span class="s2">        UNION ALL BY NAME</span>
 <span class="s2">        SELECT ID, KEY, VALUE, NULL AS INSTANCE_ID_OLD, INSTANCE_ID AS INSTANCE_ID_NEW,</span>
-<span class="s2">               &#39;right_only&#39; AS _merge</span>
+<span class="s2">               'right_only' AS _merge</span>
 <span class="s2">        FROM _new_data</span>
 <span class="s2">        WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">)</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span></div>
+<span class="s2">    """</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="diff_triplets_by_instance">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.diff_triplets_by_instance">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">diff_triplets_by_instance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">INSTANCE_ID_1</span><span class="p">,</span> <span class="n">INSTANCE_ID_2</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Triplets that differ between two instances in the table. Returns DuckDBPyRelation.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Triplets that differ between two instances in the table. Returns DuckDBPyRelation."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="n">scope</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;INSTANCE_ID IN (</span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">INSTANCE_ID_1</span><span class="p">)</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">INSTANCE_ID_2</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="n">scope</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"INSTANCE_ID IN (</span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">INSTANCE_ID_1</span><span class="p">)</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">INSTANCE_ID_2</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT * FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span>
 <span class="s2">        WHERE </span><span class="si">{</span><span class="n">scope</span><span class="si">}</span><span class="s2"> AND (ID, KEY, VALUE) IN (</span>
 <span class="s2">            SELECT ID, KEY, VALUE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span>
 <span class="s2">            WHERE </span><span class="si">{</span><span class="n">scope</span><span class="si">}</span><span class="s2"> GROUP BY ID, KEY, VALUE HAVING COUNT(*) = 1</span>
 <span class="s2">        )</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span></div>
+<span class="s2">    """</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="print_triplets_diff">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.print_triplets_diff">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">print_triplets_diff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">file_id_object</span><span class="o">=</span><span class="s2">&quot;Distribution&quot;</span><span class="p">,</span> <span class="n">file_id_key</span><span class="o">=</span><span class="s2">&quot;label&quot;</span><span class="p">,</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">print_triplets_diff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">file_id_object</span><span class="o">=</span><span class="s2">"Distribution"</span><span class="p">,</span> <span class="n">file_id_key</span><span class="o">=</span><span class="s2">"label"</span><span class="p">,</span>
                         <span class="n">exclude_objects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Print a simple removed/added diff of the table against new_data.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Print a simple removed/added diff of the table against new_data."""</span>
     <span class="n">diff</span> <span class="o">=</span> <span class="n">diff_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>
-    <span class="n">removed</span> <span class="o">=</span> <span class="n">diff</span><span class="p">[</span><span class="n">diff</span><span class="p">[</span><span class="s2">&quot;_merge&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;left_only&quot;</span><span class="p">]</span>
-    <span class="n">added</span> <span class="o">=</span> <span class="n">diff</span><span class="p">[</span><span class="n">diff</span><span class="p">[</span><span class="s2">&quot;_merge&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;right_only&quot;</span><span class="p">]</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;--- removed (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">removed</span><span class="p">)</span><span class="si">}</span><span class="s2"> triplets) / +++ added (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">added</span><span class="p">)</span><span class="si">}</span><span class="s2"> triplets) ---&quot;</span><span class="p">)</span>
+    <span class="n">removed</span> <span class="o">=</span> <span class="n">diff</span><span class="p">[</span><span class="n">diff</span><span class="p">[</span><span class="s2">"_merge"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"left_only"</span><span class="p">]</span>
+    <span class="n">added</span> <span class="o">=</span> <span class="n">diff</span><span class="p">[</span><span class="n">diff</span><span class="p">[</span><span class="s2">"_merge"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"right_only"</span><span class="p">]</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"--- removed (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">removed</span><span class="p">)</span><span class="si">}</span><span class="s2"> triplets) / +++ added (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">added</span><span class="p">)</span><span class="si">}</span><span class="s2"> triplets) ---"</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">removed</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;- </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;ID&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;KEY&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;VALUE&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"- </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'ID'</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'KEY'</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'VALUE'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">added</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;+ </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;ID&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;KEY&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;VALUE&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"+ </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'ID'</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'KEY'</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'VALUE'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
 
 
 
@@ -1025,67 +1025,67 @@
 <div class="viewcode-block" id="tableview_to_triplets">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.tableview_to_triplets">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">tableview_to_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">instance_id</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Unpivot a *wide tableview* table back to triplets (ID, KEY, VALUE).</span>
+<span class="w">    </span><span class="sd">"""Unpivot a *wide tableview* table back to triplets (ID, KEY, VALUE).</span>
 
 <span class="sd">    Point ``table_name`` at a tableview table (the default ``triplets`` table is</span>
 <span class="sd">    already long-form). Empty cells (NULL VALUE) are dropped — not real triplets.</span>
 <span class="sd">    Pass ``instance_id`` to stamp an ``INSTANCE_ID`` column, the same way</span>
 <span class="sd">    ``update_triplets_from_tableview`` does. Returns DuckDBPyRelation.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="n">instance_col</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;, </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span><span class="si">}</span><span class="s2"> AS INSTANCE_ID&quot;</span> <span class="k">if</span> <span class="n">instance_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">instance_col</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">", </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span><span class="si">}</span><span class="s2"> AS INSTANCE_ID"</span> <span class="k">if</span> <span class="n">instance_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">""</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">multivalue</span><span class="p">:</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">            SELECT ID, KEY, VALUE</span><span class="si">{</span><span class="n">instance_col</span><span class="si">}</span><span class="s2"> FROM (</span>
 <span class="s2">                UNPIVOT </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE</span>
 <span class="s2">            ) WHERE VALUE IS NOT NULL</span>
-<span class="s2">        &quot;&quot;&quot;</span><span class="p">)</span>
-    <span class="c1"># decode the pandas/polars list encoding: &quot;[&#39;a&#39;, &#39;b&#39;]&quot; cells explode into one</span>
+<span class="s2">        """</span><span class="p">)</span>
+    <span class="c1"># decode the pandas/polars list encoding: "['a', 'b']" cells explode into one</span>
     <span class="c1"># triplet per element (strip whitespace + quotes per element); bare cells pass</span>
     <span class="c1"># through. Same embedded-comma/quote limitation as the polars decoder.</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT ID, KEY, unnest(vals) AS VALUE</span><span class="si">{</span><span class="n">instance_col</span><span class="si">}</span><span class="s2"> FROM (</span>
 <span class="s2">            SELECT ID, KEY,</span>
-<span class="s2">                   CASE WHEN trim(VALUE) LIKE &#39;[%&#39; AND trim(VALUE) LIKE &#39;%]&#39;</span>
-<span class="s2">                        THEN list_transform(string_split(trim(trim(VALUE), &#39; []&#39;), &#39;,&#39;),</span>
-<span class="s2">                                            x -&gt; trim(x, &#39; &#39;&#39;&quot;&#39;))</span>
+<span class="s2">                   CASE WHEN trim(VALUE) LIKE '[%' AND trim(VALUE) LIKE '%]'</span>
+<span class="s2">                        THEN list_transform(string_split(trim(trim(VALUE), ' []'), ','),</span>
+<span class="s2">                                            x -&gt; trim(x, ' ''"'))</span>
 <span class="s2">                        ELSE [VALUE] END AS vals</span>
 <span class="s2">            FROM (UNPIVOT </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE)</span>
 <span class="s2">            WHERE VALUE IS NOT NULL)</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span></div>
+<span class="s2">    """</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="content_hash">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.content_hash">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">content_hash</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ignore_types</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;Distribution&quot;</span><span class="p">,</span> <span class="s2">&quot;NamespaceMap&quot;</span><span class="p">,</span> <span class="s2">&quot;FullModel&quot;</span><span class="p">),</span>
-                 <span class="n">columns</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">),</span> <span class="n">order_sensitive</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">content_hash</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ignore_types</span><span class="o">=</span><span class="p">(</span><span class="s2">"Distribution"</span><span class="p">,</span> <span class="s2">"NamespaceMap"</span><span class="p">,</span> <span class="s2">"FullModel"</span><span class="p">),</span>
+                 <span class="n">columns</span><span class="o">=</span><span class="p">(</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">),</span> <span class="n">order_sensitive</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                  <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Deterministic identity hash of the triplet content (blake2b hex) —</span>
+<span class="w">    </span><span class="sd">"""Deterministic identity hash of the triplet content (blake2b hex) —</span>
 <span class="sd">    row-order-invariant by default via in-database hash() combined with</span>
 <span class="sd">    streaming count/sum/xor aggregates (no sort, no materialization — works</span>
-<span class="sd">    larger-than-memory). With ``order_sensitive=True`` each row&#39;s position</span>
+<span class="sd">    larger-than-memory). With ``order_sensitive=True`` each row's position</span>
 <span class="sd">    (insertion order via rowid) is mixed into its hash, so the same rows</span>
 <span class="sd">    inserted in a different order produce a different digest. Engine-specific:</span>
-<span class="sd">    not comparable across engines (see pandas_engine).&quot;&quot;&quot;</span>
+<span class="sd">    not comparable across engines (see pandas_engine)."""</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
 
     <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="n">_table_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">)</span>
-    <span class="c1"># no coalesce: hash() distinguishes NULL from &#39;&#39; natively — coalescing</span>
-    <span class="c1"># to &#39;&#39; would collide a missing VALUE with an empty one</span>
-    <span class="n">hashed</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CAST(</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2"> AS VARCHAR)&quot;</span> <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">)</span>
+    <span class="c1"># no coalesce: hash() distinguishes NULL from '' natively — coalescing</span>
+    <span class="c1"># to '' would collide a missing VALUE with an empty one</span>
+    <span class="n">hashed</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CAST(</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2"> AS VARCHAR)"</span> <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">order_sensitive</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">)</span> <span class="o">!=</span> <span class="s2">&quot;rowid&quot;</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;order_sensitive content_hash requires a base table (rowid); &quot;</span>
-                             <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> is a view or registered frame with no stable row order&quot;</span><span class="p">)</span>
-        <span class="n">hashed</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;row_number() OVER (ORDER BY rowid), </span><span class="si">{</span><span class="n">hashed</span><span class="si">}</span><span class="s2">&quot;</span>
-    <span class="n">source</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SELECT hash(</span><span class="si">{</span><span class="n">hashed</span><span class="si">}</span><span class="s2">) AS h FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">)</span> <span class="o">!=</span> <span class="s2">"rowid"</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"order_sensitive content_hash requires a base table (rowid); "</span>
+                             <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> is a view or registered frame with no stable row order"</span><span class="p">)</span>
+        <span class="n">hashed</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"row_number() OVER (ORDER BY rowid), </span><span class="si">{</span><span class="n">hashed</span><span class="si">}</span><span class="s2">"</span>
+    <span class="n">source</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"SELECT hash(</span><span class="si">{</span><span class="n">hashed</span><span class="si">}</span><span class="s2">) AS h FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">"</span>
     <span class="k">if</span> <span class="n">ignore_types</span><span class="p">:</span>
-        <span class="n">source</span> <span class="o">+=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot; WHERE ID NOT IN (SELECT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">&quot;</span>
-                   <span class="sa">f</span><span class="s2">&quot; WHERE KEY = &#39;Type&#39; AND VALUE IN (</span><span class="si">{</span><span class="n">_in_list</span><span class="p">(</span><span class="n">ignore_types</span><span class="p">)</span><span class="si">}</span><span class="s2">))&quot;</span><span class="p">)</span>
-    <span class="n">row</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT count(*), sum(h)::VARCHAR, bit_xor(h)::VARCHAR&quot;</span>
-                       <span class="sa">f</span><span class="s2">&quot; FROM (</span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+        <span class="n">source</span> <span class="o">+=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">" WHERE ID NOT IN (SELECT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">"</span>
+                   <span class="sa">f</span><span class="s2">" WHERE KEY = 'Type' AND VALUE IN (</span><span class="si">{</span><span class="n">_in_list</span><span class="p">(</span><span class="n">ignore_types</span><span class="p">)</span><span class="si">}</span><span class="s2">))"</span><span class="p">)</span>
+    <span class="n">row</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT count(*), sum(h)::VARCHAR, bit_xor(h)::VARCHAR"</span>
+                       <span class="sa">f</span><span class="s2">" FROM (</span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">blake2b</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">row</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span> <span class="n">digest_size</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span></div>
 
 </pre></div>

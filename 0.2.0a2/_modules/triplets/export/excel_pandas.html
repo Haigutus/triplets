@@ -303,7 +303,7 @@
 <div class="viewcode-block" id="export_to_excel">
 <a class="viewcode-back" href="../../../triplets.export.html#triplets.export.excel_pandas.export_to_excel">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">export_to_excel</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">single_file</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">apply_formatting</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Export triplet data to Excel file(s), with each type on a separate sheet.</span>
+<span class="w">    </span><span class="sd">"""Export triplet data to Excel file(s), with each type on a separate sheet.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -318,7 +318,7 @@
 <span class="sd">    single_file : bool, default False</span>
 <span class="sd">        If True, export all data to a single file instead of one file per INSTANCE_ID.</span>
 <span class="sd">    filename : str, optional</span>
-<span class="sd">        Filename to use when single_file=True. If None, uses &#39;export.xlsx&#39;.</span>
+<span class="sd">        Filename to use when single_file=True. If None, uses 'export.xlsx'.</span>
 <span class="sd">    apply_formatting : bool, default True</span>
 <span class="sd">        If True, apply column width and freeze panes formatting.</span>
 
@@ -326,16 +326,16 @@
 <span class="sd">    -------</span>
 <span class="sd">    BytesIO, str, or list</span>
 <span class="sd">        Depends on single_file and export_to_memory flags.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">single_file</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">filename</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">filename</span> <span class="o">=</span> <span class="s1">&#39;export.xlsx&#39;</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="s1">'export.xlsx'</span>
 
         <span class="n">tableviews</span> <span class="o">=</span> <span class="n">triplets_to_tableviews</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span>
         <span class="n">output</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">()</span>
         <span class="n">output</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">filename</span>
 
-        <span class="k">with</span> <span class="n">pandas</span><span class="o">.</span><span class="n">ExcelWriter</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s1">&#39;openpyxl&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">writer</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">pandas</span><span class="o">.</span><span class="n">ExcelWriter</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s1">'openpyxl'</span><span class="p">)</span> <span class="k">as</span> <span class="n">writer</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">class_type</span><span class="p">,</span> <span class="n">class_data</span> <span class="ow">in</span> <span class="n">tableviews</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                 <span class="n">class_data</span><span class="o">.</span><span class="n">to_excel</span><span class="p">(</span><span class="n">writer</span><span class="p">,</span> <span class="n">sheet_name</span><span class="o">=</span><span class="n">class_type</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">apply_formatting</span><span class="p">:</span>
@@ -343,7 +343,7 @@
                     <span class="n">sheet</span> <span class="o">=</span> <span class="n">writer</span><span class="o">.</span><span class="n">sheets</span><span class="p">[</span><span class="n">class_type</span><span class="p">]</span>
                     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">class_data</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="p">):</span>
                         <span class="n">sheet</span><span class="o">.</span><span class="n">column_dimensions</span><span class="p">[</span><span class="n">get_column_letter</span><span class="p">(</span><span class="n">i</span><span class="p">)]</span><span class="o">.</span><span class="n">width</span> <span class="o">=</span> <span class="mi">38</span>
-                    <span class="n">sheet</span><span class="o">.</span><span class="n">freeze_panes</span> <span class="o">=</span> <span class="s1">&#39;B2&#39;</span>
+                    <span class="n">sheet</span><span class="o">.</span><span class="n">freeze_panes</span> <span class="o">=</span> <span class="s1">'B2'</span>
 
         <span class="n">output</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 
@@ -351,26 +351,26 @@
             <span class="k">return</span> <span class="n">output</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">()</span> <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">os</span><span class="o">.</span><span class="n">fspath</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.xlsx&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">path</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">'.xlsx'</span><span class="p">):</span>
                 <span class="n">export_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">export_path</span> <span class="o">=</span> <span class="n">path</span>
-            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">export_path</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">export_path</span><span class="p">,</span> <span class="s1">'wb'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
                 <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Saved </span><span class="si">{</span><span class="n">export_path</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Saved </span><span class="si">{</span><span class="n">export_path</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">filename</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">labels</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">&quot;KEY == &#39;label&#39;&quot;</span><span class="p">)</span>
+        <span class="n">labels</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"KEY == 'label'"</span><span class="p">)</span>
         <span class="n">exported_files</span> <span class="o">=</span> <span class="p">[]</span>
 
         <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">labels</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
             <span class="n">instance_data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="o">.</span><span class="n">INSTANCE_ID</span> <span class="o">==</span> <span class="n">label</span><span class="o">.</span><span class="n">INSTANCE_ID</span><span class="p">]</span>
             <span class="n">tableviews</span> <span class="o">=</span> <span class="n">triplets_to_tableviews</span><span class="p">(</span><span class="n">instance_data</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span>
-            <span class="n">file_name</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">{}</span><span class="s1">.xlsx&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">label</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">file_name</span> <span class="o">=</span> <span class="s1">'</span><span class="si">{}</span><span class="s1">.xlsx'</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">label</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"."</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
             <span class="n">output</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">()</span>
             <span class="n">output</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">file_name</span>
 
-            <span class="k">with</span> <span class="n">pandas</span><span class="o">.</span><span class="n">ExcelWriter</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s1">&#39;openpyxl&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">writer</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">pandas</span><span class="o">.</span><span class="n">ExcelWriter</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s1">'openpyxl'</span><span class="p">)</span> <span class="k">as</span> <span class="n">writer</span><span class="p">:</span>
                 <span class="k">for</span> <span class="n">class_type</span><span class="p">,</span> <span class="n">class_data</span> <span class="ow">in</span> <span class="n">tableviews</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                     <span class="n">class_data</span><span class="o">.</span><span class="n">to_excel</span><span class="p">(</span><span class="n">writer</span><span class="p">,</span> <span class="n">sheet_name</span><span class="o">=</span><span class="n">class_type</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">apply_formatting</span><span class="p">:</span>
@@ -378,7 +378,7 @@
                         <span class="n">sheet</span> <span class="o">=</span> <span class="n">writer</span><span class="o">.</span><span class="n">sheets</span><span class="p">[</span><span class="n">class_type</span><span class="p">]</span>
                         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">class_data</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="p">):</span>
                             <span class="n">sheet</span><span class="o">.</span><span class="n">column_dimensions</span><span class="p">[</span><span class="n">get_column_letter</span><span class="p">(</span><span class="n">i</span><span class="p">)]</span><span class="o">.</span><span class="n">width</span> <span class="o">=</span> <span class="mi">38</span>
-                        <span class="n">sheet</span><span class="o">.</span><span class="n">freeze_panes</span> <span class="o">=</span> <span class="s1">&#39;B2&#39;</span>
+                        <span class="n">sheet</span><span class="o">.</span><span class="n">freeze_panes</span> <span class="o">=</span> <span class="s1">'B2'</span>
 
             <span class="n">output</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
             <span class="n">exported_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
@@ -390,11 +390,11 @@
             <span class="n">exported_file_names</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">for</span> <span class="n">file_object</span> <span class="ow">in</span> <span class="n">exported_files</span><span class="p">:</span>
                 <span class="n">export_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">file_object</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">export_path</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">export_path</span><span class="p">,</span> <span class="s1">'wb'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
                     <span class="n">file_object</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
                     <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">file_object</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
                 <span class="n">exported_file_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">file_object</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Saved </span><span class="si">{</span><span class="n">export_path</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Saved </span><span class="si">{</span><span class="n">export_path</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">exported_file_names</span></div>
 
 </pre></div>

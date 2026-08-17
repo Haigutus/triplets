@@ -284,13 +284,13 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.validation.shacl_report</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Map a pyshacl/SHACL ValidationReport graph to the canonical violations DataFrame,</span>
+<span></span><span class="sd">"""Map a pyshacl/SHACL ValidationReport graph to the canonical violations DataFrame,</span>
 <span class="sd">and the inverse: export a violations DataFrame as a standard sh:ValidationReport.</span>
 
 <span class="sd">Canonical violations schema (identical across all current and future SHACL</span>
 <span class="sd">engines, so the later vectorized engines can produce it natively):</span>
 <span class="sd">    [ID, KEY, VALUE, VIOLATION_TYPE, MESSAGE, SEVERITY, SOURCE_SHAPE]</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">io</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
@@ -301,41 +301,41 @@
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
-<span class="n">VIOLATION_COLUMNS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="s2">&quot;VIOLATION_TYPE&quot;</span><span class="p">,</span> <span class="s2">&quot;MESSAGE&quot;</span><span class="p">,</span> <span class="s2">&quot;SEVERITY&quot;</span><span class="p">,</span> <span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">]</span>
+<span class="n">VIOLATION_COLUMNS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"VIOLATION_TYPE"</span><span class="p">,</span> <span class="s2">"MESSAGE"</span><span class="p">,</span> <span class="s2">"SEVERITY"</span><span class="p">,</span> <span class="s2">"SOURCE_SHAPE"</span><span class="p">]</span>
 
-<span class="n">_UUID_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;urn:uuid:&quot;</span>
-<span class="n">_SH</span> <span class="o">=</span> <span class="s2">&quot;http://www.w3.org/ns/shacl#&quot;</span>
+<span class="n">_UUID_PREFIX</span> <span class="o">=</span> <span class="s2">"urn:uuid:"</span>
+<span class="n">_SH</span> <span class="o">=</span> <span class="s2">"http://www.w3.org/ns/shacl#"</span>
 
 <span class="c1"># sh:sourceConstraintComponent URI suffix → short violation type</span>
 <span class="n">_COMPONENT_MAP</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;MinCountConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;MaxCountConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:maxCount&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;DatatypeConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:datatype&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;MinLengthConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:minLength&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;MaxLengthConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:maxLength&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;PatternConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:pattern&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;MinInclusiveConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:minInclusive&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;MaxInclusiveConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:maxInclusive&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;ClassConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:class&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;NodeConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:node&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;NodeKindConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:nodeKind&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;InConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:in&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;HasValueConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:hasValue&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;EqualsConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:equals&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;DisjointConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:disjoint&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;LessThanConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:lessThan&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;ClosedConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:closed&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;OrConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:or&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;AndConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:and&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;NotConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:not&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;SPARQLConstraintComponent&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:sparql&quot;</span><span class="p">,</span>
+    <span class="s2">"MinCountConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:minCount"</span><span class="p">,</span>
+    <span class="s2">"MaxCountConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:maxCount"</span><span class="p">,</span>
+    <span class="s2">"DatatypeConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:datatype"</span><span class="p">,</span>
+    <span class="s2">"MinLengthConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:minLength"</span><span class="p">,</span>
+    <span class="s2">"MaxLengthConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:maxLength"</span><span class="p">,</span>
+    <span class="s2">"PatternConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:pattern"</span><span class="p">,</span>
+    <span class="s2">"MinInclusiveConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:minInclusive"</span><span class="p">,</span>
+    <span class="s2">"MaxInclusiveConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:maxInclusive"</span><span class="p">,</span>
+    <span class="s2">"ClassConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:class"</span><span class="p">,</span>
+    <span class="s2">"NodeConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:node"</span><span class="p">,</span>
+    <span class="s2">"NodeKindConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:nodeKind"</span><span class="p">,</span>
+    <span class="s2">"InConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:in"</span><span class="p">,</span>
+    <span class="s2">"HasValueConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:hasValue"</span><span class="p">,</span>
+    <span class="s2">"EqualsConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:equals"</span><span class="p">,</span>
+    <span class="s2">"DisjointConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:disjoint"</span><span class="p">,</span>
+    <span class="s2">"LessThanConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:lessThan"</span><span class="p">,</span>
+    <span class="s2">"ClosedConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:closed"</span><span class="p">,</span>
+    <span class="s2">"OrConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:or"</span><span class="p">,</span>
+    <span class="s2">"AndConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:and"</span><span class="p">,</span>
+    <span class="s2">"NotConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:not"</span><span class="p">,</span>
+    <span class="s2">"SPARQLConstraintComponent"</span><span class="p">:</span> <span class="s2">"sh:sparql"</span><span class="p">,</span>
 <span class="p">}</span>
 
 
 <div class="viewcode-block" id="report_to_violations">
 <a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_report.report_to_violations">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">report_to_violations</span><span class="p">(</span><span class="n">report_graph</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;ValidationReport rdflib graph → violations DataFrame (single columnar pass).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""ValidationReport rdflib graph → violations DataFrame (single columnar pass)."""</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">rdflib</span>
 
     <span class="n">sh</span> <span class="o">=</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">Namespace</span><span class="p">(</span><span class="n">_SH</span><span class="p">)</span>
@@ -350,13 +350,13 @@
         <span class="n">shape</span> <span class="o">=</span> <span class="n">report_graph</span><span class="o">.</span><span class="n">value</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">sourceShape</span><span class="p">)</span>
         <span class="n">message</span> <span class="o">=</span> <span class="n">report_graph</span><span class="o">.</span><span class="n">value</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">resultMessage</span><span class="p">)</span>
 
-        <span class="n">columns</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_strip_uuid</span><span class="p">(</span><span class="n">report_graph</span><span class="o">.</span><span class="n">value</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">focusNode</span><span class="p">)))</span>
-        <span class="n">columns</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_shorten</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
-        <span class="n">columns</span><span class="p">[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_term_value</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
-        <span class="n">columns</span><span class="p">[</span><span class="s2">&quot;VIOLATION_TYPE&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_component</span><span class="p">(</span><span class="n">component</span><span class="p">))</span>
-        <span class="n">columns</span><span class="p">[</span><span class="s2">&quot;MESSAGE&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="p">)</span> <span class="k">if</span> <span class="n">message</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="n">columns</span><span class="p">[</span><span class="s2">&quot;SEVERITY&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_local_name</span><span class="p">(</span><span class="n">severity</span><span class="p">)</span> <span class="k">if</span> <span class="n">severity</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;Violation&quot;</span><span class="p">)</span>
-        <span class="n">columns</span><span class="p">[</span><span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">columns</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_strip_uuid</span><span class="p">(</span><span class="n">report_graph</span><span class="o">.</span><span class="n">value</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">focusNode</span><span class="p">)))</span>
+        <span class="n">columns</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_shorten</span><span class="p">(</span><span class="n">path</span><span class="p">))</span>
+        <span class="n">columns</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_term_value</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+        <span class="n">columns</span><span class="p">[</span><span class="s2">"VIOLATION_TYPE"</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_component</span><span class="p">(</span><span class="n">component</span><span class="p">))</span>
+        <span class="n">columns</span><span class="p">[</span><span class="s2">"MESSAGE"</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">message</span><span class="p">)</span> <span class="k">if</span> <span class="n">message</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">columns</span><span class="p">[</span><span class="s2">"SEVERITY"</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_local_name</span><span class="p">(</span><span class="n">severity</span><span class="p">)</span> <span class="k">if</span> <span class="n">severity</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">"Violation"</span><span class="p">)</span>
+        <span class="n">columns</span><span class="p">[</span><span class="s2">"SOURCE_SHAPE"</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">VIOLATION_COLUMNS</span><span class="p">)</span></div>
 
@@ -370,12 +370,12 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_shorten</span><span class="p">(</span><span class="n">term</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Predicate/path IRI → short KEY (CIM local name, rdf:type → &#39;Type&#39;).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Predicate/path IRI → short KEY (CIM local name, rdf:type → 'Type')."""</span>
     <span class="k">if</span> <span class="n">term</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span>
     <span class="n">value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">term</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">value</span> <span class="o">==</span> <span class="n">RDF_TYPE</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s2">&quot;Type&quot;</span>
+        <span class="k">return</span> <span class="s2">"Type"</span>
     <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">CIM_NS</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">value</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">CIM_NS</span><span class="p">):]</span>
     <span class="k">return</span> <span class="n">value</span>
@@ -384,35 +384,35 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_term_value</span><span class="p">(</span><span class="n">term</span><span class="p">):</span>
     <span class="k">if</span> <span class="n">term</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span>
-    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">term</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;Literal&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">term</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"Literal"</span><span class="p">:</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">term</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_strip_uuid</span><span class="p">(</span><span class="n">term</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_component</span><span class="p">(</span><span class="n">term</span><span class="p">):</span>
     <span class="k">if</span> <span class="n">term</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s2">&quot;sh:unknown&quot;</span>
+        <span class="k">return</span> <span class="s2">"sh:unknown"</span>
     <span class="n">value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">term</span><span class="p">)</span>
-    <span class="n">suffix</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">suffix</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"#"</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
     <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">_TRIPLETS_NS</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;triplets:</span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">&quot;</span>
-    <span class="k">return</span> <span class="n">_COMPONENT_MAP</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">suffix</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;sh:</span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"triplets:</span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">"</span>
+    <span class="k">return</span> <span class="n">_COMPONENT_MAP</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">suffix</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"sh:</span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_local_name</span><span class="p">(</span><span class="n">term</span><span class="p">):</span>
-    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">term</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">term</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"#"</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
 
 
 <span class="c1"># short violation type → sh:sourceConstraintComponent URI (inverse of _COMPONENT_MAP)</span>
-<span class="n">_COMPONENT_URI</span> <span class="o">=</span> <span class="p">{</span><span class="n">short</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_SH</span><span class="si">}{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">suffix</span><span class="p">,</span> <span class="n">short</span> <span class="ow">in</span> <span class="n">_COMPONENT_MAP</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+<span class="n">_COMPONENT_URI</span> <span class="o">=</span> <span class="p">{</span><span class="n">short</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_SH</span><span class="si">}{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">suffix</span><span class="p">,</span> <span class="n">short</span> <span class="ow">in</span> <span class="n">_COMPONENT_MAP</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
 
-<span class="n">_TRIPLETS_NS</span> <span class="o">=</span> <span class="s2">&quot;http://triplets#&quot;</span>
+<span class="n">_TRIPLETS_NS</span> <span class="o">=</span> <span class="s2">"http://triplets#"</span>
 
 
 <div class="viewcode-block" id="violations_to_report_graph">
 <a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_report.violations_to_report_graph">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">violations_to_report_graph</span><span class="p">(</span><span class="n">violations</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Violations DataFrame → sh:ValidationReport rdflib graph (inverse of</span>
+<span class="w">    </span><span class="sd">"""Violations DataFrame → sh:ValidationReport rdflib graph (inverse of</span>
 <span class="sd">    report_to_violations; KEYs expand to the CIM namespace unless already URIs).</span>
 
 <span class="sd">    A result carries several plain-text ``sh:resultMessage``s when the frame</span>
@@ -420,12 +420,12 @@
 <span class="sd">    schema descriptions (context.enrich) and the source position</span>
 <span class="sd">    (locations.locate_violations) — SHACL has no location vocabulary, so a</span>
 <span class="sd">    message is the interoperable carrier.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">rdflib</span>
 
     <span class="n">sh</span> <span class="o">=</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">Namespace</span><span class="p">(</span><span class="n">_SH</span><span class="p">)</span>
     <span class="n">graph</span> <span class="o">=</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
-    <span class="n">graph</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="s2">&quot;sh&quot;</span><span class="p">,</span> <span class="n">sh</span><span class="p">)</span>
+    <span class="n">graph</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="s2">"sh"</span><span class="p">,</span> <span class="n">sh</span><span class="p">)</span>
 
     <span class="n">report</span> <span class="o">=</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">BNode</span><span class="p">()</span>
     <span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">report</span><span class="p">,</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">ValidationReport</span><span class="p">))</span>
@@ -435,9 +435,9 @@
         <span class="n">result</span> <span class="o">=</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">BNode</span><span class="p">()</span>
         <span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">report</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">result</span><span class="p">,</span> <span class="n">result</span><span class="p">))</span>
         <span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">result</span><span class="p">,</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">ValidationResult</span><span class="p">))</span>
-        <span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">result</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">resultSeverity</span><span class="p">,</span> <span class="n">sh</span><span class="p">[</span><span class="n">row</span><span class="o">.</span><span class="n">SEVERITY</span> <span class="k">if</span> <span class="n">pandas</span><span class="o">.</span><span class="n">notna</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">SEVERITY</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;Violation&quot;</span><span class="p">]))</span>
+        <span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">result</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">resultSeverity</span><span class="p">,</span> <span class="n">sh</span><span class="p">[</span><span class="n">row</span><span class="o">.</span><span class="n">SEVERITY</span> <span class="k">if</span> <span class="n">pandas</span><span class="o">.</span><span class="n">notna</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">SEVERITY</span><span class="p">)</span> <span class="k">else</span> <span class="s2">"Violation"</span><span class="p">]))</span>
         <span class="k">if</span> <span class="n">pandas</span><span class="o">.</span><span class="n">notna</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">ID</span><span class="p">):</span>
-            <span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">result</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">focusNode</span><span class="p">,</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">URIRef</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_UUID_PREFIX</span><span class="si">}{</span><span class="n">row</span><span class="o">.</span><span class="n">ID</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)))</span>
+            <span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">result</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">focusNode</span><span class="p">,</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">URIRef</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_UUID_PREFIX</span><span class="si">}{</span><span class="n">row</span><span class="o">.</span><span class="n">ID</span><span class="si">}</span><span class="s2">"</span><span class="p">)))</span>
         <span class="k">if</span> <span class="n">pandas</span><span class="o">.</span><span class="n">notna</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">KEY</span><span class="p">):</span>
             <span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">result</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">resultPath</span><span class="p">,</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">URIRef</span><span class="p">(</span><span class="n">_expand</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">KEY</span><span class="p">))))</span>
         <span class="k">if</span> <span class="n">pandas</span><span class="o">.</span><span class="n">notna</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">VALUE</span><span class="p">):</span>
@@ -449,81 +449,81 @@
         <span class="k">if</span> <span class="n">pandas</span><span class="o">.</span><span class="n">notna</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">SOURCE_SHAPE</span><span class="p">):</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">SOURCE_SHAPE</span><span class="p">)</span>   <span class="c1"># anonymous property shapes stay blank nodes</span>
             <span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">result</span><span class="p">,</span> <span class="n">sh</span><span class="o">.</span><span class="n">sourceShape</span><span class="p">,</span>
-                       <span class="n">rdflib</span><span class="o">.</span><span class="n">URIRef</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="k">if</span> <span class="s2">&quot;://&quot;</span> <span class="ow">in</span> <span class="n">shape</span> <span class="ow">or</span> <span class="n">shape</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;urn:&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">BNode</span><span class="p">(</span><span class="n">shape</span><span class="p">)))</span>
+                       <span class="n">rdflib</span><span class="o">.</span><span class="n">URIRef</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="k">if</span> <span class="s2">"://"</span> <span class="ow">in</span> <span class="n">shape</span> <span class="ow">or</span> <span class="n">shape</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"urn:"</span><span class="p">)</span> <span class="k">else</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">BNode</span><span class="p">(</span><span class="n">shape</span><span class="p">)))</span>
 
     <span class="k">return</span> <span class="n">graph</span></div>
 
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_messages</span><span class="p">(</span><span class="n">row</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The result&#39;s message set — engine message + optional context/location.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""The result's message set — engine message + optional context/location."""</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">cell</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
         <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">else</span> <span class="n">value</span>
 
     <span class="n">messages</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">&quot;MESSAGE&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">"MESSAGE"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">MESSAGE</span><span class="p">))</span>
-    <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">&quot;SHAPE_DESCRIPTION&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Description: </span><span class="si">{</span><span class="n">row</span><span class="o">.</span><span class="n">SHAPE_DESCRIPTION</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">&quot;SCHEMA_DESCRIPTION&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">multiplicity</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot; [</span><span class="si">{</span><span class="n">row</span><span class="o">.</span><span class="n">SCHEMA_MULTIPLICITY</span><span class="si">}</span><span class="s2">]&quot;</span> <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">&quot;SCHEMA_MULTIPLICITY&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
-        <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Schema: </span><span class="si">{</span><span class="n">row</span><span class="o">.</span><span class="n">SCHEMA_DESCRIPTION</span><span class="si">}{</span><span class="n">multiplicity</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">&quot;SOURCE_URI&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">column</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot; column </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">SOURCE_COLUMN</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">&quot;SOURCE_COLUMN&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
-        <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Source: </span><span class="si">{</span><span class="n">row</span><span class="o">.</span><span class="n">SOURCE_URI</span><span class="si">}</span><span class="s2"> line </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">SOURCE_LINE</span><span class="p">)</span><span class="si">}{</span><span class="n">column</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">"SHAPE_DESCRIPTION"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Description: </span><span class="si">{</span><span class="n">row</span><span class="o">.</span><span class="n">SHAPE_DESCRIPTION</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">"SCHEMA_DESCRIPTION"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">multiplicity</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">" [</span><span class="si">{</span><span class="n">row</span><span class="o">.</span><span class="n">SCHEMA_MULTIPLICITY</span><span class="si">}</span><span class="s2">]"</span> <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">"SCHEMA_MULTIPLICITY"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">""</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Schema: </span><span class="si">{</span><span class="n">row</span><span class="o">.</span><span class="n">SCHEMA_DESCRIPTION</span><span class="si">}{</span><span class="n">multiplicity</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">"SOURCE_URI"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">column</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">" column </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">SOURCE_COLUMN</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span> <span class="k">if</span> <span class="n">cell</span><span class="p">(</span><span class="s2">"SOURCE_COLUMN"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">""</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Source: </span><span class="si">{</span><span class="n">row</span><span class="o">.</span><span class="n">SOURCE_URI</span><span class="si">}</span><span class="s2"> line </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">SOURCE_LINE</span><span class="p">)</span><span class="si">}{</span><span class="n">column</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">messages</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_expand</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Short KEY / violation type / shape name → URI (inverse of _shorten/_component).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Short KEY / violation type / shape name → URI (inverse of _shorten/_component)."""</span>
     <span class="n">value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">value</span> <span class="o">==</span> <span class="s2">&quot;Type&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">value</span> <span class="o">==</span> <span class="s2">"Type"</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">RDF_TYPE</span>
-    <span class="k">if</span> <span class="s2">&quot;://&quot;</span> <span class="ow">in</span> <span class="n">value</span> <span class="ow">or</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;urn:&quot;</span><span class="p">):</span>
+    <span class="k">if</span> <span class="s2">"://"</span> <span class="ow">in</span> <span class="n">value</span> <span class="ow">or</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"urn:"</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">value</span>
     <span class="k">if</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">_COMPONENT_URI</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">_COMPONENT_URI</span><span class="p">[</span><span class="n">value</span><span class="p">]</span>
-    <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;sh:&quot;</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_SH</span><span class="si">}{</span><span class="n">value</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span><span class="si">}</span><span class="s2">&quot;</span>
-    <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;triplets:&quot;</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_TRIPLETS_NS</span><span class="si">}{</span><span class="n">value</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="s1">&#39;triplets:&#39;</span><span class="p">):]</span><span class="si">}</span><span class="s2">&quot;</span>
-    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">CIM_NS</span><span class="si">}{</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"sh:"</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_SH</span><span class="si">}{</span><span class="n">value</span><span class="p">[</span><span class="mi">3</span><span class="p">:]</span><span class="si">}</span><span class="s2">"</span>
+    <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"triplets:"</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_TRIPLETS_NS</span><span class="si">}{</span><span class="n">value</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="s1">'triplets:'</span><span class="p">):]</span><span class="si">}</span><span class="s2">"</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">CIM_NS</span><span class="si">}{</span><span class="n">value</span><span class="si">}</span><span class="s2">"</span>
 
 
 <div class="viewcode-block" id="export_to_shacl_report">
 <a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_report.export_to_shacl_report">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">export_to_shacl_report</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">sources</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Violations frame → standard sh:ValidationReport, serialized as turtle.</span>
+<span class="w">    </span><span class="sd">"""Violations frame → standard sh:ValidationReport, serialized as turtle.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    violations : DataFrame in VIOLATION_COLUMNS (any engine&#39;s output).</span>
+<span class="sd">    violations : DataFrame in VIOLATION_COLUMNS (any engine's output).</span>
 <span class="sd">        Enrichment/location columns, when present, become additional</span>
 <span class="sd">        ``sh:resultMessage``s (Description/Schema/Source).</span>
 <span class="sd">    sources : optional</span>
 <span class="sd">        The original CIM/XML files — runs the locate_violations pass so each</span>
-<span class="sd">        result carries a &quot;Source: file line N column M&quot; message (a frame</span>
+<span class="sd">        result carries a "Source: file line N column M" message (a frame</span>
 <span class="sd">        already carrying LOCATION_COLUMNS is used as-is).</span>
 <span class="sd">    path : str or Path, optional</span>
-<span class="sd">        Output file (default &quot;report.ttl&quot;). Ignored with export_to_memory.</span>
+<span class="sd">        Output file (default "report.ttl"). Ignored with export_to_memory.</span>
 <span class="sd">    export_to_memory : bool, default False</span>
 <span class="sd">        Return a BytesIO (with .name) instead of writing to disk.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">sources</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.locations</span><span class="w"> </span><span class="kn">import</span> <span class="n">LOCATION_COLUMNS</span><span class="p">,</span> <span class="n">locate_violations</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">set</span><span class="p">(</span><span class="n">LOCATION_COLUMNS</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="nb">set</span><span class="p">(</span><span class="n">violations</span><span class="o">.</span><span class="n">columns</span><span class="p">):</span>
             <span class="n">violations</span> <span class="o">=</span> <span class="n">locate_violations</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">sources</span><span class="p">)</span>
-    <span class="n">payload</span> <span class="o">=</span> <span class="n">violations_to_report_graph</span><span class="p">(</span><span class="n">violations</span><span class="p">)</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="s2">&quot;turtle&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">violations_to_report_graph</span><span class="p">(</span><span class="n">violations</span><span class="p">)</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="s2">"turtle"</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">export_to_memory</span><span class="p">:</span>
         <span class="n">buffer</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
-        <span class="n">buffer</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;report.ttl&quot;</span>
+        <span class="n">buffer</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s2">"report.ttl"</span>
         <span class="k">return</span> <span class="n">buffer</span>
 
-    <span class="n">path</span> <span class="o">=</span> <span class="s2">&quot;report.ttl&quot;</span> <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">os</span><span class="o">.</span><span class="n">fspath</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="s2">"report.ttl"</span> <span class="k">if</span> <span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">os</span><span class="o">.</span><span class="n">fspath</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">"wb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
         <span class="n">file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Saved </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Saved </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">path</span></div>
 
 </pre></div>

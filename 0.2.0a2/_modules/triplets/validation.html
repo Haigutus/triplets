@@ -284,7 +284,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.validation</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;SHACL validation over triplet data.</span>
+<span></span><span class="sd">"""SHACL validation over triplet data.</span>
 
 <span class="sd">Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):</span>
 <span class="sd">- pyshacl — reference, spec-complete, rdflib-based; always available with the</span>
@@ -297,7 +297,7 @@
 <span class="sd">  the value nodes; sh:nodeKind is decided by the rdf_map schema)</span>
 <span class="sd">- duckdb — compiled-IR executor for larger-than-memory data (one SQL query</span>
 <span class="sd">  per constraint against the triplets table, streams/spills via DuckDB;</span>
-<span class="sd">  explicit engine=&quot;duckdb&quot;, not in auto — polars owns the in-memory fast path)</span>
+<span class="sd">  explicit engine="duckdb", not in auto — polars owns the in-memory fast path)</span>
 
 <span class="sd">Compile once: ``compile(shapes)`` parses the shapes with rdflib exactly once</span>
 <span class="sd">into ``CompiledShapes`` (shapes graph + flat constraint table, cached by</span>
@@ -312,8 +312,8 @@
 
 <span class="sd">One deliberate deviation from pyshacl: the datatype check inspects the raw</span>
 <span class="sd">lexical form of VALUE (see shacl_pandas) — with ``lexical=True`` (default)</span>
-<span class="sd">those findings are appended to any engine&#39;s report.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">those findings are appended to any engine's report.</span>
+<span class="sd">"""</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
@@ -334,47 +334,47 @@
 <span class="c1"># semantics, eager) → pyshacl (spec reference). duckdb is deliberately NOT in</span>
 <span class="c1"># auto: it is the explicit choice for larger-than-memory data (polars owns the</span>
 <span class="c1"># in-memory fast path). The vectorized engines share the IR and the deliberate</span>
-<span class="c1"># deviations (lexical datatype, schema-driven nodeKind); engine=&quot;reference&quot;</span>
+<span class="c1"># deviations (lexical datatype, schema-driven nodeKind); engine="reference"</span>
 <span class="c1"># always gives the pure pyshacl view.</span>
 <span class="n">_REGISTRY</span> <span class="o">=</span> <span class="n">EngineRegistry</span><span class="p">(</span>
-    <span class="s2">&quot;validation&quot;</span><span class="p">,</span> <span class="n">__package__</span><span class="p">,</span>
+    <span class="s2">"validation"</span><span class="p">,</span> <span class="n">__package__</span><span class="p">,</span>
     <span class="n">modules</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;polars&quot;</span><span class="p">:</span> <span class="s2">&quot;.shacl_polars&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;pandas&quot;</span><span class="p">:</span> <span class="s2">&quot;.shacl_pandas&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;duckdb&quot;</span><span class="p">:</span> <span class="s2">&quot;.shacl_duckdb&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;pyshacl&quot;</span><span class="p">:</span> <span class="s2">&quot;.shacl_pyshacl&quot;</span><span class="p">,</span>
+        <span class="s2">"polars"</span><span class="p">:</span> <span class="s2">".shacl_polars"</span><span class="p">,</span>
+        <span class="s2">"pandas"</span><span class="p">:</span> <span class="s2">".shacl_pandas"</span><span class="p">,</span>
+        <span class="s2">"duckdb"</span><span class="p">:</span> <span class="s2">".shacl_duckdb"</span><span class="p">,</span>
+        <span class="s2">"pyshacl"</span><span class="p">:</span> <span class="s2">".shacl_pyshacl"</span><span class="p">,</span>
     <span class="p">},</span>
     <span class="n">aliases</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;reference&quot;</span><span class="p">:</span> <span class="s2">&quot;pyshacl&quot;</span><span class="p">,</span>
+        <span class="s2">"reference"</span><span class="p">:</span> <span class="s2">"pyshacl"</span><span class="p">,</span>
     <span class="p">},</span>
-    <span class="n">default_hint</span><span class="o">=</span><span class="s2">&quot;Install with: pip install triplets[validation].&quot;</span><span class="p">,</span>
-    <span class="n">auto</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;polars&quot;</span><span class="p">,</span> <span class="s2">&quot;pandas&quot;</span><span class="p">,</span> <span class="s2">&quot;pyshacl&quot;</span><span class="p">],</span>
+    <span class="n">default_hint</span><span class="o">=</span><span class="s2">"Install with: pip install triplets[validation]."</span><span class="p">,</span>
+    <span class="n">auto</span><span class="o">=</span><span class="p">[</span><span class="s2">"polars"</span><span class="p">,</span> <span class="s2">"pandas"</span><span class="p">,</span> <span class="s2">"pyshacl"</span><span class="p">],</span>
 <span class="p">)</span>
 <span class="c1"># engines whose datatype check already emits the lexical findings itself</span>
-<span class="n">_LEXICAL_BUILTIN</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;polars&quot;</span><span class="p">,</span> <span class="s2">&quot;pandas&quot;</span><span class="p">,</span> <span class="s2">&quot;duckdb&quot;</span><span class="p">}</span>
+<span class="n">_LEXICAL_BUILTIN</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"polars"</span><span class="p">,</span> <span class="s2">"pandas"</span><span class="p">,</span> <span class="s2">"duckdb"</span><span class="p">}</span>
 
 
 <div class="viewcode-block" id="register_engine">
 <a class="viewcode-back" href="../../triplets.validation.html#triplets.validation.register_engine">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">register_engine</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">module</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a custom validation engine for future extensibility.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Register a custom validation engine for future extensibility."""</span>
     <span class="n">_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">module</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="get_engine">
 <a class="viewcode-back" href="../../triplets.validation.html#triplets.validation.get_engine">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_engine</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve validation engine name (with aliases) and return (name, module).&quot;&quot;&quot;</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_engine</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Resolve validation engine name (with aliases) and return (name, module)."""</span>
     <span class="k">return</span> <span class="n">_REGISTRY</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="validate">
 <a class="viewcode-back" href="../../triplets.validation.html#triplets.validation.validate">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">shapes</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">shapes</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
              <span class="n">context</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate triplet data against SHACL shapes; return a violations DataFrame.</span>
+<span class="w">    </span><span class="sd">"""Validate triplet data against SHACL shapes; return a violations DataFrame.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -385,20 +385,20 @@
 <span class="sd">    rdf_map : dict or str, optional</span>
 <span class="sd">        Export schema — xsd-typed literals in the data graph (optional).</span>
 <span class="sd">    scope : iterable of INSTANCE_ID, optional</span>
-<span class="sd">        Validate only these instances&#39; named graphs; all data stays loaded for</span>
+<span class="sd">        Validate only these instances' named graphs; all data stays loaded for</span>
 <span class="sd">        reference resolution. None = full union.</span>
-<span class="sd">    engine : str, default &quot;auto&quot;</span>
-<span class="sd">        &quot;polars&quot; (performance), &quot;pandas&quot; (debugging), &quot;duckdb&quot;</span>
-<span class="sd">        (larger-than-memory) or &quot;pyshacl&quot; (reference). &quot;auto&quot; picks</span>
+<span class="sd">    engine : str, default "auto"</span>
+<span class="sd">        "polars" (performance), "pandas" (debugging), "duckdb"</span>
+<span class="sd">        (larger-than-memory) or "pyshacl" (reference). "auto" picks</span>
 <span class="sd">        polars → pandas → pyshacl; duckdb is always an explicit choice.</span>
 <span class="sd">    lexical : bool, default True</span>
 <span class="sd">        Append the lexical-form datatype findings (the deliberate deviation</span>
-<span class="sd">        from pyshacl — see shacl_pandas) to the engine&#39;s report.</span>
+<span class="sd">        from pyshacl — see shacl_pandas) to the engine's report.</span>
 <span class="sd">    context : bool, default False</span>
 <span class="sd">        Run the slower enrichment pass (triplets.validation.context.enrich):</span>
 <span class="sd">        adds instance/file, object type/name, shape name/description and</span>
 <span class="sd">        schema definition columns to the report.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">compiled</span> <span class="o">=</span> <span class="n">shapes</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shapes</span><span class="p">,</span> <span class="n">CompiledShapes</span><span class="p">)</span> <span class="k">else</span> <span class="nb">compile</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span>
     <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span> <span class="o">=</span> <span class="n">get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
     <span class="n">violations</span> <span class="o">=</span> <span class="n">engine_mod</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="n">scope</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
@@ -406,10 +406,10 @@
     <span class="k">if</span> <span class="n">lexical</span> <span class="ow">and</span> <span class="n">engine_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_LEXICAL_BUILTIN</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">shacl_pandas</span>
         <span class="n">supplement</span> <span class="o">=</span> <span class="n">shacl_pandas</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="n">scope</span><span class="p">,</span>
-                                           <span class="n">components</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;sh:datatype&quot;</span><span class="p">,))</span>
+                                           <span class="n">components</span><span class="o">=</span><span class="p">(</span><span class="s2">"sh:datatype"</span><span class="p">,))</span>
         <span class="n">violations</span> <span class="o">=</span> <span class="p">(</span><span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">violations</span><span class="p">,</span> <span class="n">supplement</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-                      <span class="o">.</span><span class="n">drop_duplicates</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="s2">&quot;VIOLATION_TYPE&quot;</span><span class="p">,</span>
-                                               <span class="s2">&quot;SOURCE_SHAPE&quot;</span><span class="p">,</span> <span class="s2">&quot;SEVERITY&quot;</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+                      <span class="o">.</span><span class="n">drop_duplicates</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"VIOLATION_TYPE"</span><span class="p">,</span>
+                                               <span class="s2">"SOURCE_SHAPE"</span><span class="p">,</span> <span class="s2">"SEVERITY"</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
     <span class="k">if</span> <span class="n">context</span><span class="p">:</span>
         <span class="n">violations</span> <span class="o">=</span> <span class="n">enrich</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">shapes</span><span class="o">=</span><span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">violations</span></div>

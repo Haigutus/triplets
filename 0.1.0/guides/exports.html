@@ -370,21 +370,21 @@ formatting differs.</p>
 <h2>Call Sequence (CIM XML)<a class="headerlink" href="#call-sequence-cim-xml" title="Link to this heading">¶</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span><span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
 <span class="o">|</span>
-<span class="s1">&#39;-&gt; export.export_to_cimxml(data, engine=&quot;auto&quot;)</span>
+<span class="s1">'-&gt; export.export_to_cimxml(data, engine="auto")</span>
     <span class="o">|</span>
-    <span class="o">|-&gt;</span> <span class="n">get_cimxml_engine</span><span class="p">(</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
+    <span class="o">|-&gt;</span> <span class="n">get_cimxml_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)</span>
     <span class="o">|</span>   <span class="k">try</span> <span class="n">cython_pugixml</span> <span class="o">-&gt;</span> <span class="ne">ImportError</span> <span class="p">(</span><span class="ow">not</span> <span class="n">compiled</span><span class="p">)</span>
     <span class="o">|</span>   <span class="n">fall</span> <span class="n">back</span> <span class="n">python_lxml</span> <span class="o">-&gt;</span> <span class="n">always</span> <span class="n">works</span>
     <span class="o">|</span>
-    <span class="o">|-&gt;</span> <span class="n">data</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">)</span>   <span class="c1"># one XML document per instance</span>
+    <span class="o">|-&gt;</span> <span class="n">data</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"INSTANCE_ID"</span><span class="p">)</span>   <span class="c1"># one XML document per instance</span>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="k">for</span> <span class="n">each</span> <span class="n">instance</span><span class="p">:</span>
-    <span class="o">|</span>   <span class="s1">&#39;-&gt; engine.generate_xml(instance, rdf_map, ...)</span>
+    <span class="o">|</span>   <span class="s1">'-&gt; engine.generate_xml(instance, rdf_map, ...)</span>
     <span class="o">|</span>       <span class="o">|</span>
     <span class="o">|</span>       <span class="o">|-&gt;</span> <span class="n">cimxml_utils</span><span class="o">.</span><span class="n">resolve_instance_config</span><span class="p">()</span>
-    <span class="o">|</span>       <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">file_name</span> <span class="kn">from</span><span class="w"> </span><span class="s1">&#39;label&#39;</span> <span class="p">(</span><span class="n">source</span> <span class="n">filename</span><span class="p">)</span> <span class="ow">or</span> <span class="n">new</span> <span class="n">UUID</span>
+    <span class="o">|</span>       <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">file_name</span> <span class="kn">from</span><span class="w"> </span><span class="s1">'label'</span> <span class="p">(</span><span class="n">source</span> <span class="n">filename</span><span class="p">)</span> <span class="ow">or</span> <span class="n">new</span> <span class="n">UUID</span>
     <span class="o">|</span>       <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">profile</span> <span class="n">sub</span><span class="o">-</span><span class="n">schema</span> <span class="n">via</span> <span class="n">Model</span><span class="o">.</span><span class="n">messageType</span> <span class="o">/</span> <span class="n">Model</span><span class="o">.</span><span class="n">profile</span>
-    <span class="o">|</span>       <span class="o">|</span>   <span class="s1">&#39;-&gt; namespace map: given &gt; instance NamespaceMap &gt; schema</span>
+    <span class="o">|</span>       <span class="o">|</span>   <span class="s1">'-&gt; namespace map: given &gt; instance NamespaceMap &gt; schema</span>
     <span class="o">|</span>       <span class="o">|</span>
     <span class="o">|</span>       <span class="o">|</span>  <span class="n">python_lxml</span>                     <span class="n">cython_pugixml</span>
     <span class="o">|</span>       <span class="o">|</span>  <span class="o">-----------</span>                     <span class="o">--------------</span>
@@ -393,12 +393,12 @@ formatting differs.</p>
     <span class="o">|</span>       <span class="o">|</span>  <span class="n">etree</span><span class="o">.</span><span class="n">tostring</span><span class="p">()</span>                <span class="n">pugixml</span> <span class="n">DOM</span> <span class="o">-&gt;</span> <span class="n">serialize</span>
     <span class="o">|</span>       <span class="o">|</span>        <span class="o">|</span>                                <span class="o">|</span>
     <span class="o">|</span>       <span class="o">|</span>        <span class="n">v</span>                                <span class="n">v</span>
-    <span class="o">|</span>       <span class="s1">&#39;-&gt; {&quot;filename&quot;: ..., &quot;file&quot;: xml bytes}</span>
+    <span class="o">|</span>       <span class="s1">'-&gt; {"filename": ..., "file": xml bytes}</span>
     <span class="o">|</span>
-    <span class="s1">&#39;-&gt; package per export_type:</span>
+    <span class="s1">'-&gt; package per export_type:</span>
         <span class="o">|-&gt;</span> <span class="n">XML_PER_INSTANCE</span>             <span class="o">-&gt;</span> <span class="n">one</span> <span class="n">BytesIO</span> <span class="n">per</span> <span class="n">XML</span>
         <span class="o">|-&gt;</span> <span class="n">XML_PER_INSTANCE_ZIP_PER_ALL</span> <span class="o">-&gt;</span> <span class="nb">all</span> <span class="n">XMLs</span> <span class="ow">in</span> <span class="n">one</span> <span class="n">ZIP</span>
-        <span class="s1">&#39;-&gt; XML_PER_INSTANCE_ZIP_PER_XML -&gt; each XML in its own ZIP (default)</span>
+        <span class="s1">'-&gt; XML_PER_INSTANCE_ZIP_PER_XML -&gt; each XML in its own ZIP (default)</span>
 </pre></div>
 </div>
 </section>
@@ -417,7 +417,7 @@ formatting differs.</p>
 <span class="o">|--</span> <span class="n">nquads_pandas</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># N-Quads via pandas</span>
 <span class="o">|--</span> <span class="n">nquads_polars</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># N-Quads via polars</span>
 <span class="o">|--</span> <span class="n">excel_pandas</span><span class="o">.</span><span class="n">py</span>            <span class="c1"># Excel via openpyxl</span>
-<span class="s1">&#39;-- networkx_pandas.py         # NetworkX graph</span>
+<span class="s1">'-- networkx_pandas.py         # NetworkX graph</span>
 </pre></div>
 </div>
 </section>
@@ -427,21 +427,21 @@ formatting differs.</p>
 <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">triplets.export_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">schemas</span>
 
-<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="s2">&quot;grid.zip&quot;</span><span class="p">])</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="s2">"grid.zip"</span><span class="p">])</span>
 
 <span class="c1"># CIM XML — auto picks the fastest available engine</span>
 <span class="n">files</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span>
     <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">,</span>
-    <span class="n">export_type</span><span class="o">=</span><span class="s2">&quot;xml_per_instance&quot;</span><span class="p">,</span>
+    <span class="n">export_type</span><span class="o">=</span><span class="s2">"xml_per_instance"</span><span class="p">,</span>
     <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="c1"># explicit engine selection</span>
-<span class="n">files</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span><span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;python_lxml&quot;</span><span class="p">)</span>
-<span class="n">files</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span><span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;cython_pugixml&quot;</span><span class="p">)</span>
+<span class="n">files</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span><span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"python_lxml"</span><span class="p">)</span>
+<span class="n">files</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span><span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"cython_pugixml"</span><span class="p">)</span>
 
 <span class="c1"># N-Quads (fast input for SPARQL engines like qlever); schema enables enum namespaces</span>
-<span class="n">data</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">&quot;grid.nq&quot;</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">"grid.nq"</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
 
 <span class="c1"># other formats</span>
 <span class="n">data</span><span class="o">.</span><span class="n">export_to_csv</span><span class="p">(</span><span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -453,8 +453,8 @@ formatting differs.</p>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">duckdb</span>
 <span class="n">con</span> <span class="o">=</span> <span class="n">duckdb</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
-<span class="n">con</span><span class="o">.</span><span class="n">read_rdf</span><span class="p">([</span><span class="s2">&quot;grid.zip&quot;</span><span class="p">])</span>
-<span class="n">con</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">&quot;grid.nq&quot;</span><span class="p">)</span>
+<span class="n">con</span><span class="o">.</span><span class="n">read_rdf</span><span class="p">([</span><span class="s2">"grid.zip"</span><span class="p">])</span>
+<span class="n">con</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">"grid.nq"</span><span class="p">)</span>
 <span class="n">con</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">export_to_csv</span><span class="p">(</span><span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>

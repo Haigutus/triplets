@@ -285,7 +285,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.sparql.sparql_oxigraph</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;SPARQL engine — pyoxigraph (embedded Rust oxigraph, in-memory store).</span>
+<span></span><span class="sd">"""SPARQL engine — pyoxigraph (embedded Rust oxigraph, in-memory store).</span>
 
 <span class="sd">The portable performance engine: a plain pip wheel, no compiled extension,</span>
 <span class="sd">Rust-speed queries. Sits between qlever (fastest, needs the compiled</span>
@@ -293,12 +293,12 @@
 
 <span class="sd">Data is loaded through the N-Quads export (datatype-annotated, INSTANCE_ID as</span>
 <span class="sd">named graph) via Store.bulk_load — loaded stores are cached in-process by</span>
-<span class="sd">content key, same logic as the qlever engine&#39;s index cache. After loading,</span>
-<span class="sd">the deduplicated union of the named graphs is projected into the store&#39;s</span>
-<span class="sd">default graph, so unscoped queries match rdflib&#39;s default_union set semantics</span>
-<span class="sd">(oxigraph&#39;s own union of named graphs keeps one solution per graph).</span>
+<span class="sd">content key, same logic as the qlever engine's index cache. After loading,</span>
+<span class="sd">the deduplicated union of the named graphs is projected into the store's</span>
+<span class="sd">default graph, so unscoped queries match rdflib's default_union set semantics</span>
+<span class="sd">(oxigraph's own union of named graphs keeps one solution per graph).</span>
 
-<span class="sd">Scope is not a data operation: the scoped instances&#39; named graphs are passed</span>
+<span class="sd">Scope is not a data operation: the scoped instances' named graphs are passed</span>
 <span class="sd">to Store.query as SPARQL-protocol default graphs, so one store serves every</span>
 <span class="sd">scope and the query text is never modified. Caveat: a multi-instance scope is</span>
 <span class="sd">a protocol dataset union — a triple present in several scoped instances</span>
@@ -308,14 +308,14 @@
 <span class="sd">Results follow the engine contract shared with qlever — all values are</span>
 <span class="sd">lexical strings (triplets are all-string; consumers cast):</span>
 
-<span class="sd">- SELECT decodes via oxigraph&#39;s SPARQL-CSV serializer (lexical forms: IRIs</span>
+<span class="sd">- SELECT decodes via oxigraph's SPARQL-CSV serializer (lexical forms: IRIs</span>
 <span class="sd">  bare, literals unquoted; unbound → null, indistinguishable from an</span>
 <span class="sd">  empty-string literal — the W3C CSV-results tradeoff) straight into</span>
 <span class="sd">  pandas/polars, no per-term Python loop.</span>
 <span class="sd">- CONSTRUCT/DESCRIBE serializes to N-Quads (Rust-side) and comes back</span>
 <span class="sd">  through read_nquads — the same round-trip that loaded the data.</span>
 <span class="sd">- ASK stays a bool.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">io</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 
@@ -337,22 +337,22 @@
 
 <div class="viewcode-block" id="query">
 <a class="viewcode-back" href="../../../triplets.sparql.html#triplets.sparql.sparql_oxigraph.query">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Execute query_string over data; shape the result by query type.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Execute query_string over data; shape the result by query type.</span>
 
 <span class="sd">    Queries are executed exactly as given — the text is never modified.</span>
-<span class="sd">    A rejected query raises ValueError carrying oxigraph&#39;s message plus the</span>
+<span class="sd">    A rejected query raises ValueError carrying oxigraph's message plus the</span>
 <span class="sd">    query text, so the failure is directly actionable. ``scope`` travels</span>
 <span class="sd">    beside the query as SPARQL-protocol default graphs: the query runs</span>
-<span class="sd">    against exactly the union of the scoped instances&#39; named graphs on the</span>
+<span class="sd">    against exactly the union of the scoped instances' named graphs on the</span>
 <span class="sd">    one shared store, and per the protocol these take precedence over any</span>
-<span class="sd">    FROM inside the query. None → the store&#39;s default graph (the</span>
+<span class="sd">    FROM inside the query. None → the store's default graph (the</span>
 <span class="sd">    deduplicated union of all named graphs).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">store</span> <span class="o">=</span> <span class="n">_store_for</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="p">)</span>
-    <span class="n">graphs</span> <span class="o">=</span> <span class="p">[</span><span class="n">NamedNode</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;urn:uuid:</span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">]</span> <span class="k">if</span> <span class="n">scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
-        <span class="n">return_type</span> <span class="o">=</span> <span class="s2">&quot;polars&quot;</span> <span class="k">if</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span> <span class="k">else</span> <span class="s2">&quot;pandas&quot;</span>
+    <span class="n">graphs</span> <span class="o">=</span> <span class="p">[</span><span class="n">NamedNode</span><span class="p">(</span><span class="sa">f</span><span class="s2">"urn:uuid:</span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">]</span> <span class="k">if</span> <span class="n">scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
+        <span class="n">return_type</span> <span class="o">=</span> <span class="s2">"polars"</span> <span class="k">if</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"polars"</span> <span class="k">else</span> <span class="s2">"pandas"</span>
 
     <span class="n">result</span> <span class="o">=</span> <span class="n">_run</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">graphs</span><span class="p">)</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">pyoxigraph</span><span class="o">.</span><span class="n">QueryBoolean</span><span class="p">):</span>
@@ -367,20 +367,20 @@
     <span class="k">try</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">store</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">query_string</span><span class="p">,</span> <span class="n">default_graph</span><span class="o">=</span><span class="n">default_graph</span><span class="p">)</span>
     <span class="k">except</span> <span class="p">(</span><span class="ne">SyntaxError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>   <span class="c1"># oxigraph parse/execution error</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;oxigraph rejected the query: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-                         <span class="sa">f</span><span class="s2">&quot;--- query ---</span><span class="se">\n</span><span class="si">{</span><span class="n">query_string</span><span class="o">.</span><span class="n">strip</span><span class="p">()[:</span><span class="mi">2000</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"oxigraph rejected the query: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+                         <span class="sa">f</span><span class="s2">"--- query ---</span><span class="se">\n</span><span class="si">{</span><span class="n">query_string</span><span class="o">.</span><span class="n">strip</span><span class="p">()[:</span><span class="mi">2000</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_store_for</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Load (or build) the engine state for this exact data + schema.</span>
+<span class="w">    </span><span class="sd">"""Load (or build) the engine state for this exact data + schema.</span>
 
 <span class="sd">    Identity via content_hash, load via the N-Quads export — executed only</span>
 <span class="sd">    on a cache miss. Scope does not key the state (it travels with each</span>
 <span class="sd">    query as protocol default graphs).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;content_hash&quot;</span><span class="p">):</span>  <span class="c1"># pyarrow — no registered methods</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"content_hash"</span><span class="p">):</span>  <span class="c1"># pyarrow — no registered methods</span>
         <span class="n">data</span> <span class="o">=</span> <span class="n">to_pandas</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-    <span class="n">key</span> <span class="o">=</span> <span class="n">content_key</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;triplets-oxigraph-1&quot;</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="p">)</span>
+    <span class="n">key</span> <span class="o">=</span> <span class="n">content_key</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="sa">b</span><span class="s2">"triplets-oxigraph-1"</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">_STORES</span><span class="p">:</span>
         <span class="n">cached</span> <span class="o">=</span> <span class="n">_STORES</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cached</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">):</span>   <span class="c1"># this exact data+schema already failed to load</span>
@@ -399,21 +399,21 @@
         <span class="k">raise</span>
     <span class="c1"># default graph := deduplicated union of the named graphs (rdflib</span>
     <span class="c1"># default_union set-semantics parity for unscoped queries)</span>
-    <span class="n">store</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;INSERT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }&quot;</span><span class="p">)</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;loaded oxigraph store: </span><span class="si">%d</span><span class="s2"> quads&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">store</span><span class="p">))</span>
+    <span class="n">store</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">"INSERT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }"</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"loaded oxigraph store: </span><span class="si">%d</span><span class="s2"> quads"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">store</span><span class="p">))</span>
     <span class="n">_STORES</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">store</span>
     <span class="k">return</span> <span class="n">store</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_select_frame</span><span class="p">(</span><span class="n">csv_bytes</span><span class="p">,</span> <span class="n">return_type</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;SPARQL-CSV → DataFrame, decoded vectorized (no per-term Python loop).</span>
+<span class="w">    </span><span class="sd">"""SPARQL-CSV → DataFrame, decoded vectorized (no per-term Python loop).</span>
 <span class="sd">    Lexical forms are the shared all-strings convention; the empty CSV field</span>
-<span class="sd">    (unbound or empty-string literal) → null.&quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span><span class="p">:</span>
+<span class="sd">    (unbound or empty-string literal) → null."""</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">polars</span>
         <span class="k">return</span> <span class="n">polars</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="n">csv_bytes</span><span class="p">),</span> <span class="n">infer_schema_length</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-    <span class="n">frame</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="n">csv_bytes</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">keep_default_na</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">na_values</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;&quot;</span><span class="p">])</span>
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;arrow&quot;</span><span class="p">:</span>
+    <span class="n">frame</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">BytesIO</span><span class="p">(</span><span class="n">csv_bytes</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">keep_default_na</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">na_values</span><span class="o">=</span><span class="p">[</span><span class="s2">""</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"arrow"</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span>
         <span class="k">return</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="o">.</span><span class="n">from_pandas</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">preserve_index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">frame</span>

@@ -340,7 +340,7 @@ content is split across instances.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">diff</span> <span class="o">=</span> <span class="n">diff_triplets_by_instance</span><span class="p">(</span><span class="s1">&#39;uuid1&#39;</span><span class="p">,</span> <span class="s1">&#39;uuid2&#39;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">diff</span> <span class="o">=</span> <span class="n">diff_triplets_by_instance</span><span class="p">(</span><span class="s1">'uuid1'</span><span class="p">,</span> <span class="s1">'uuid2'</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -415,7 +415,7 @@ indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">diff</span> <span class="o">=</span> <span class="n">diff_triplets_by_instance</span><span class="p">(</span><span class="s1">&#39;uuid1&#39;</span><span class="p">,</span> <span class="s1">&#39;uuid2&#39;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">diff</span> <span class="o">=</span> <span class="n">diff_triplets_by_instance</span><span class="p">(</span><span class="s1">'uuid1'</span><span class="p">,</span> <span class="s1">'uuid2'</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -464,7 +464,7 @@ indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"ACLineSegment"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -496,9 +496,9 @@ regex=True the value(s) are regex patterns (re.search).</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="s2">&quot;IdentifiedObject.name&quot;</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">&quot;.*Substation.*&quot;</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="s2">"Type"</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">"ACLineSegment"</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="p">[</span><span class="s2">"Type"</span><span class="p">,</span> <span class="s2">"IdentifiedObject.name"</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">".*Substation.*"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -547,7 +547,7 @@ regex=True the value(s) are regex patterns (re.search).</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"ACLineSegment"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -578,7 +578,7 @@ by ID with the type row first within each ID group.</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets_by_value</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;DOWGEN_LD1&quot;</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets_by_value</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"DOWGEN_LD1"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -611,14 +611,14 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ns_map</span><span class="p">,</span> <span class="n">base</span> <span class="o">=</span> <span class="n">get_namespace_map</span><span class="p">(</span><span class="n">triplet_data</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">ns_map</span><span class="p">)</span>
-<span class="go">{&#39;cim&#39;: &#39;http://iec.ch/TC57/2013/CIM-schema-cim16#&#39;, &#39;rdf&#39;: &#39;http://www.w3.org/1999/02/22-rdf-syntax-ns#&#39;}</span>
+<span class="go">{'cim': 'http://iec.ch/TC57/2013/CIM-schema-cim16#', 'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'}</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
-<span class="go">&#39;http://example.com/base/&#39;</span>
+<span class="go">'http://example.com/base/'</span>
 </pre></div>
 </div>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ns_map</span><span class="p">,</span> <span class="n">base</span> <span class="o">=</span> <span class="n">get_namespace_map</span><span class="p">(</span><span class="n">empty_data</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">ns_map</span><span class="p">,</span> <span class="n">base</span><span class="p">)</span>
-<span class="go">{} &quot;&quot;</span>
+<span class="go">{} ""</span>
 </pre></div>
 </div>
 <p class="rubric">Notes</p>
@@ -648,7 +648,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">obj_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get_object_data</span><span class="p">(</span><span class="s2">&quot;uuid1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">obj_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get_object_data</span><span class="p">(</span><span class="s2">"uuid1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -675,9 +675,9 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">types</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">types_dict</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">types</span><span class="p">)</span>
-<span class="go">{&#39;ACLineSegment&#39;: 10, &#39;PowerTransformer&#39;: 5, ...}</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">types_dict</span><span class="p">(</span><span class="n">contains</span><span class="o">=</span><span class="s2">&quot;Settlement&quot;</span><span class="p">)</span>
-<span class="go">{&#39;MarketEvaluationPoint&#39;: 3, ...}</span>
+<span class="go">{'ACLineSegment': 10, 'PowerTransformer': 5, ...}</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">types_dict</span><span class="p">(</span><span class="n">contains</span><span class="o">=</span><span class="s2">"Settlement"</span><span class="p">)</span>
+<span class="go">{'MarketEvaluationPoint': 3, ...}</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -703,9 +703,9 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;UUID&#39;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;UUID_1&#39;</span><span class="p">,</span> <span class="s1">&#39;UUID_2&#39;</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">&quot;ID&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;UUID_1&#39;</span><span class="p">,</span> <span class="s1">&#39;UUID_2&#39;</span><span class="p">]}))</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'UUID'</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s1">'UUID_1'</span><span class="p">,</span> <span class="s1">'UUID_2'</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">"ID"</span><span class="p">:</span> <span class="p">[</span><span class="s1">'UUID_1'</span><span class="p">,</span> <span class="s1">'UUID_2'</span><span class="p">]}))</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -731,7 +731,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">key_tableview</span><span class="p">(</span><span class="s2">&quot;GeneratingUnit.maxOperatingP&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">key_tableview</span><span class="p">(</span><span class="s2">"GeneratingUnit.maxOperatingP"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -758,7 +758,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <li><p>TODO: Add name field for better reporting with Type.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;NamespaceMap&quot;</span><span class="p">])</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">"NamespaceMap"</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -785,7 +785,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <li><p>TODO: Add name field for better reporting with Type.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;NamespaceMap&quot;</span><span class="p">])</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">"NamespaceMap"</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -810,7 +810,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -864,7 +864,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <li><p>TODO: Add the key on which the connection was made.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_from</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_from</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -889,7 +889,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_from_simple</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_from_simple</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -915,7 +915,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_simple</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">])</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_simple</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"Type"</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -944,7 +944,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <li><p>TODO: Add the key on which the connection was made.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_to</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_to</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -969,7 +969,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_to_simple</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_to_simple</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1043,7 +1043,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <li><p>TODO: Store changes in a changes DataFrame.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;new_label&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key</span><span class="p">(</span><span class="s2">"label"</span><span class="p">,</span> <span class="s2">"new_label"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1063,7 +1063,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key_and_id</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;new_label&quot;</span><span class="p">,</span> <span class="s2">&quot;uuid1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key_and_id</span><span class="p">(</span><span class="s2">"label"</span><span class="p">,</span> <span class="s2">"new_label"</span><span class="p">,</span> <span class="s2">"uuid1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1087,7 +1087,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <li><p>TODO: Store changes in a changes DataFrame.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;new_label&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key</span><span class="p">(</span><span class="s2">"label"</span><span class="p">,</span> <span class="s2">"new_label"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1107,7 +1107,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key_and_id</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;new_label&quot;</span><span class="p">,</span> <span class="s2">&quot;uuid1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key_and_id</span><span class="p">(</span><span class="s2">"label"</span><span class="p">,</span> <span class="s2">"new_label"</span><span class="p">,</span> <span class="s2">"uuid1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1133,9 +1133,9 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;UUID&#39;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;UUID_1&#39;</span><span class="p">,</span> <span class="s1">&#39;UUID_2&#39;</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">&quot;ID&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;UUID_1&#39;</span><span class="p">,</span> <span class="s1">&#39;UUID_2&#39;</span><span class="p">]}))</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'UUID'</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s1">'UUID_1'</span><span class="p">,</span> <span class="s1">'UUID_2'</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">"ID"</span><span class="p">:</span> <span class="p">[</span><span class="s1">'UUID_1'</span><span class="p">,</span> <span class="s1">'UUID_2'</span><span class="p">]}))</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1161,7 +1161,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">key_tableview</span><span class="p">(</span><span class="s2">&quot;GeneratingUnit.maxOperatingP&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">key_tableview</span><span class="p">(</span><span class="s2">"GeneratingUnit.maxOperatingP"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1188,7 +1188,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">"ACLineSegment"</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1351,7 +1351,7 @@ does.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">"ACLineSegment"</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1378,9 +1378,9 @@ does.</p>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">types</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">types_dict</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">types</span><span class="p">)</span>
-<span class="go">{&#39;ACLineSegment&#39;: 10, &#39;PowerTransformer&#39;: 5, ...}</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">types_dict</span><span class="p">(</span><span class="n">contains</span><span class="o">=</span><span class="s2">&quot;Settlement&quot;</span><span class="p">)</span>
-<span class="go">{&#39;MarketEvaluationPoint&#39;: 3, ...}</span>
+<span class="go">{'ACLineSegment': 10, 'PowerTransformer': 5, ...}</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">types_dict</span><span class="p">(</span><span class="n">contains</span><span class="o">=</span><span class="s2">"Settlement"</span><span class="p">)</span>
+<span class="go">{'MarketEvaluationPoint': 3, ...}</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1407,7 +1407,7 @@ does.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">updated_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">update_triplets_from_tableview</span><span class="p">(</span><span class="n">table_view</span><span class="p">,</span> <span class="n">instance_id</span><span class="o">=</span><span class="s2">&quot;uuid1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">updated_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">update_triplets_from_tableview</span><span class="p">(</span><span class="n">table_view</span><span class="p">,</span> <span class="n">instance_id</span><span class="o">=</span><span class="s2">"uuid1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1465,7 +1465,7 @@ does.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">updated_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">update_triplets_from_tableview</span><span class="p">(</span><span class="n">table_view</span><span class="p">,</span> <span class="n">instance_id</span><span class="o">=</span><span class="s2">&quot;uuid1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">updated_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">update_triplets_from_tableview</span><span class="p">(</span><span class="n">table_view</span><span class="p">,</span> <span class="n">instance_id</span><span class="o">=</span><span class="s2">"uuid1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1531,14 +1531,14 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ns_map</span><span class="p">,</span> <span class="n">base</span> <span class="o">=</span> <span class="n">get_namespace_map</span><span class="p">(</span><span class="n">triplet_data</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">ns_map</span><span class="p">)</span>
-<span class="go">{&#39;cim&#39;: &#39;http://iec.ch/TC57/2013/CIM-schema-cim16#&#39;, &#39;rdf&#39;: &#39;http://www.w3.org/1999/02/22-rdf-syntax-ns#&#39;}</span>
+<span class="go">{'cim': 'http://iec.ch/TC57/2013/CIM-schema-cim16#', 'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'}</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
-<span class="go">&#39;http://example.com/base/&#39;</span>
+<span class="go">'http://example.com/base/'</span>
 </pre></div>
 </div>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ns_map</span><span class="p">,</span> <span class="n">base</span> <span class="o">=</span> <span class="n">get_namespace_map</span><span class="p">(</span><span class="n">empty_data</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">ns_map</span><span class="p">,</span> <span class="n">base</span><span class="p">)</span>
-<span class="go">{} &quot;&quot;</span>
+<span class="go">{} ""</span>
 </pre></div>
 </div>
 <p class="rubric">Notes</p>
@@ -1571,7 +1571,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">"ACLineSegment"</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1597,7 +1597,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">key_tableview</span><span class="p">(</span><span class="s2">&quot;GeneratingUnit.maxOperatingP&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">key_tableview</span><span class="p">(</span><span class="s2">"GeneratingUnit.maxOperatingP"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1623,9 +1623,9 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">&#39;UUID&#39;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;UUID_1&#39;</span><span class="p">,</span> <span class="s1">&#39;UUID_2&#39;</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">&quot;ID&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;UUID_1&#39;</span><span class="p">,</span> <span class="s1">&#39;UUID_2&#39;</span><span class="p">]}))</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s1">'UUID'</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s1">'UUID_1'</span><span class="p">,</span> <span class="s1">'UUID_2'</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">id_tableview</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">"ID"</span><span class="p">:</span> <span class="p">[</span><span class="s1">'UUID_1'</span><span class="p">,</span> <span class="s1">'UUID_2'</span><span class="p">]}))</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1650,7 +1650,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_to_simple</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_to_simple</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1679,7 +1679,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <li><p>TODO: Add the key on which the connection was made.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_to</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_to</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1704,7 +1704,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_from_simple</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_from_simple</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1733,7 +1733,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <li><p>TODO: Add the key on which the connection was made.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_from</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_from</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1784,7 +1784,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_simple</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">])</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references_simple</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"Type"</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1809,7 +1809,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references</span><span class="p">(</span><span class="s2">&quot;99722373_VL_TN1&quot;</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">refs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">references</span><span class="p">(</span><span class="s2">"99722373_VL_TN1"</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1836,9 +1836,9 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">types</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">types_dict</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">types</span><span class="p">)</span>
-<span class="go">{&#39;ACLineSegment&#39;: 10, &#39;PowerTransformer&#39;: 5, ...}</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">types_dict</span><span class="p">(</span><span class="n">contains</span><span class="o">=</span><span class="s2">&quot;Settlement&quot;</span><span class="p">)</span>
-<span class="go">{&#39;MarketEvaluationPoint&#39;: 3, ...}</span>
+<span class="go">{'ACLineSegment': 10, 'PowerTransformer': 5, ...}</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">types_dict</span><span class="p">(</span><span class="n">contains</span><span class="o">=</span><span class="s2">"Settlement"</span><span class="p">)</span>
+<span class="go">{'MarketEvaluationPoint': 3, ...}</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1862,7 +1862,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 <li><p>TODO: Store changes in a changes DataFrame.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;new_label&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key</span><span class="p">(</span><span class="s2">"label"</span><span class="p">,</span> <span class="s2">"new_label"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1882,7 +1882,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key_and_id</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;new_label&quot;</span><span class="p">,</span> <span class="s2">&quot;uuid1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">data</span><span class="o">.</span><span class="n">set_value_at_key_and_id</span><span class="p">(</span><span class="s2">"label"</span><span class="p">,</span> <span class="s2">"new_label"</span><span class="p">,</span> <span class="s2">"uuid1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1926,7 +1926,7 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">obj_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get_object_data</span><span class="p">(</span><span class="s2">&quot;uuid1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">obj_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get_object_data</span><span class="p">(</span><span class="s2">"uuid1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2012,7 +2012,7 @@ does.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">updated_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">update_triplets_from_tableview</span><span class="p">(</span><span class="n">table_view</span><span class="p">,</span> <span class="n">instance_id</span><span class="o">=</span><span class="s2">&quot;uuid1&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">updated_data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">update_triplets_from_tableview</span><span class="p">(</span><span class="n">table_view</span><span class="p">,</span> <span class="n">instance_id</span><span class="o">=</span><span class="s2">"uuid1"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2086,7 +2086,7 @@ does.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"ACLineSegment"</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2118,9 +2118,9 @@ regex=True the value(s) are regex patterns (re.search).</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="s2">&quot;IdentifiedObject.name&quot;</span><span class="p">])</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">&quot;.*Substation.*&quot;</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="s2">"Type"</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">"ACLineSegment"</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">KEY</span><span class="o">=</span><span class="p">[</span><span class="s2">"Type"</span><span class="p">,</span> <span class="s2">"IdentifiedObject.name"</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">".*Substation.*"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2151,7 +2151,7 @@ by ID with the type row first within each ID group.</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets_by_value</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;DOWGEN_LD1&quot;</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets_by_value</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"DOWGEN_LD1"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2201,7 +2201,7 @@ indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">diff</span> <span class="o">=</span> <span class="n">diff_triplets_by_instance</span><span class="p">(</span><span class="s1">&#39;uuid1&#39;</span><span class="p">,</span> <span class="s1">&#39;uuid2&#39;</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">diff</span> <span class="o">=</span> <span class="n">diff_triplets_by_instance</span><span class="p">(</span><span class="s1">'uuid1'</span><span class="p">,</span> <span class="s1">'uuid2'</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2228,7 +2228,7 @@ indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
 <li><p>TODO: Add name field for better reporting with Type.</p></li>
 </ul>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;NamespaceMap&quot;</span><span class="p">])</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">"NamespaceMap"</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2407,7 +2407,7 @@ by ID with the type row first within each ID group.</p></li>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets_by_value</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;DOWGEN_LD1&quot;</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filter_triplets_by_value</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"DOWGEN_LD1"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>

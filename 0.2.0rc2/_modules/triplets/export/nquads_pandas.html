@@ -285,7 +285,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.export.nquads_pandas</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;N-Quads export using pandas — schema-aware value classification.&quot;&quot;&quot;</span>
+<span></span><span class="sd">"""N-Quads export using pandas — schema-aware value classification."""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">io</span><span class="w"> </span><span class="kn">import</span> <span class="n">BytesIO</span>
 
@@ -300,7 +300,7 @@
 <div class="viewcode-block" id="export_to_nquads">
 <a class="viewcode-back" href="../../../triplets.export.html#triplets.export.nquads_pandas.export_to_nquads">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">export_to_nquads</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Export triplet DataFrame to N-Quads file.</span>
+<span class="w">    </span><span class="sd">"""Export triplet DataFrame to N-Quads file.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -310,19 +310,19 @@
 <span class="sd">        Output file path (.nq). Ignored when export_to_memory=True.</span>
 <span class="sd">    rdf_map : dict or str, optional</span>
 <span class="sd">        Export schema for proper enum/association detection and literal</span>
-<span class="sd">        datatype annotations (&quot;400&quot;^^&lt;...XMLSchema#float&gt;). If None,</span>
-<span class="sd">        enumerations won&#39;t get namespace and literals stay untyped.</span>
+<span class="sd">        datatype annotations ("400"^^&lt;...XMLSchema#float&gt;). If None,</span>
+<span class="sd">        enumerations won't get namespace and literals stay untyped.</span>
 <span class="sd">    export_to_memory : bool, default False</span>
 <span class="sd">        If True, return an in-memory BytesIO (with .name) instead of writing to disk.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">enum_keys</span><span class="p">,</span> <span class="n">key_namespaces</span><span class="p">,</span> <span class="n">key_datatypes</span> <span class="o">=</span> <span class="n">build_key_metadata</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span> <span class="k">if</span> <span class="n">rdf_map</span> <span class="k">else</span> <span class="p">(</span><span class="nb">set</span><span class="p">(),</span> <span class="p">{},</span> <span class="p">{})</span>
 
-    <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()]</span>  <span class="c1"># no object to state (parity with the polars engine)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()]</span>  <span class="c1"># no object to state (parity with the polars engine)</span>
 
-    <span class="n">id_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
-    <span class="n">key_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;KEY&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
-    <span class="n">val_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;VALUE&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
-    <span class="n">inst_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+    <span class="n">id_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+    <span class="n">key_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+    <span class="n">val_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+    <span class="n">inst_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
 
     <span class="n">subjects</span> <span class="o">=</span> <span class="n">id_col</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">make_subject</span><span class="p">)</span>
     <span class="n">predicates</span> <span class="o">=</span> <span class="n">key_col</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="n">make_predicate</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">key_namespaces</span><span class="p">))</span>
@@ -332,15 +332,15 @@
     <span class="p">)</span>
     <span class="n">graphs</span> <span class="o">=</span> <span class="n">inst_col</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">make_graph</span><span class="p">)</span>
 
-    <span class="n">quads</span> <span class="o">=</span> <span class="n">subjects</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">predicates</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">objects</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">graphs</span> <span class="o">+</span> <span class="s2">&quot; .&quot;</span>
-    <span class="n">content</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">quads</span><span class="o">.</span><span class="n">values</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">quads</span> <span class="o">=</span> <span class="n">subjects</span> <span class="o">+</span> <span class="s2">" "</span> <span class="o">+</span> <span class="n">predicates</span> <span class="o">+</span> <span class="s2">" "</span> <span class="o">+</span> <span class="n">objects</span> <span class="o">+</span> <span class="s2">" "</span> <span class="o">+</span> <span class="n">graphs</span> <span class="o">+</span> <span class="s2">" ."</span>
+    <span class="n">content</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">quads</span><span class="o">.</span><span class="n">values</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
 
     <span class="k">if</span> <span class="n">export_to_memory</span><span class="p">:</span>
-        <span class="n">buffer</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">(</span><span class="n">content</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">))</span>
-        <span class="n">buffer</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;export.nq&quot;</span>
+        <span class="n">buffer</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">(</span><span class="n">content</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span>
+        <span class="n">buffer</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s2">"export.nq"</span>
         <span class="k">return</span> <span class="n">buffer</span>
 
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">"w"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
         <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">content</span><span class="p">)</span></div>
 
 </pre></div>

@@ -278,7 +278,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.export</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Triplet DataFrame export functions.</span>
+<span></span><span class="sd">"""Triplet DataFrame export functions.</span>
 
 <span class="sd">Formats: Excel, CSV, CIM XML, N-Quads, NetworkX.</span>
 <span class="sd">Each format has its own {format}_{engine}.py file.</span>
@@ -293,7 +293,7 @@
 <span class="sd">- N-Quads: polars when installed (pandas input is converted), else pandas.</span>
 <span class="sd">- CIM XML: the fastest available compiled engine (cython_pugixml → python_lxml).</span>
 <span class="sd">- Excel / NetworkX: pandas only — polars input is converted to pandas first.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
@@ -318,8 +318,8 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_to_pandas_input</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The Excel/NetworkX exporters are pandas-only; accept any flavor by converting</span>
-<span class="sd">    first (like export_to_cimxml does for polars input).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""The Excel/NetworkX exporters are pandas-only; accept any flavor by converting</span>
+<span class="sd">    first (like export_to_cimxml does for polars input)."""</span>
     <span class="k">if</span> <span class="n">_is_polars</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">data</span>
@@ -343,29 +343,29 @@
 <span class="n">export_to_networkx</span><span class="o">.</span><span class="vm">__doc__</span> <span class="o">=</span> <span class="n">_export_to_networkx</span><span class="o">.</span><span class="vm">__doc__</span>
 
 
-<span class="n">REQUIRED_COLUMNS</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">,</span> <span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">)</span>
+<span class="n">REQUIRED_COLUMNS</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"INSTANCE_ID"</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_check_columns</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fail early with a clear message when the input is not a triplets dataset.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Fail early with a clear message when the input is not a triplets dataset."""</span>
     <span class="n">missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">column</span> <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">REQUIRED_COLUMNS</span> <span class="k">if</span> <span class="n">column</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
     <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Not a triplets dataset — missing columns </span><span class="si">{</span><span class="n">missing</span><span class="si">}</span><span class="s2">, &quot;</span>
-                         <span class="sa">f</span><span class="s2">&quot;expected </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">REQUIRED_COLUMNS</span><span class="p">)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Not a triplets dataset — missing columns </span><span class="si">{</span><span class="n">missing</span><span class="si">}</span><span class="s2">, "</span>
+                         <span class="sa">f</span><span class="s2">"expected </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">REQUIRED_COLUMNS</span><span class="p">)</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="export_to_csv">
 <a class="viewcode-back" href="../../triplets.export.html#triplets.export.export_to_csv">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">export_to_csv</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">single_file</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">base_filename</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Export triplet DataFrame to CSV files.</span>
+<span class="w">    </span><span class="sd">"""Export triplet DataFrame to CSV files.</span>
 
 <span class="sd">    Auto-detects engine: polars if input is polars DataFrame, else pandas.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">_is_polars</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;format=csv, engine=polars (auto-detected)&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"format=csv, engine=polars (auto-detected)"</span><span class="p">)</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.csv_polars</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_to_csv</span> <span class="k">as</span> <span class="n">_fn</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;format=csv, engine=pandas (auto-detected)&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"format=csv, engine=pandas (auto-detected)"</span><span class="p">)</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.csv_pandas</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_to_csv</span> <span class="k">as</span> <span class="n">_fn</span>
     <span class="k">return</span> <span class="n">_fn</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="n">export_to_memory</span><span class="p">,</span> <span class="n">single_file</span><span class="o">=</span><span class="n">single_file</span><span class="p">,</span> <span class="n">base_filename</span><span class="o">=</span><span class="n">base_filename</span><span class="p">)</span></div>
 
@@ -373,8 +373,8 @@
 
 <div class="viewcode-block" id="export_to_nquads">
 <a class="viewcode-back" href="../../triplets.export.html#triplets.export.export_to_nquads">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">export_to_nquads</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Export triplet DataFrame to N-Quads file.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">export_to_nquads</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Export triplet DataFrame to N-Quads file.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -383,24 +383,24 @@
 <span class="sd">    rdf_map : dict or str, optional</span>
 <span class="sd">        Export schema for proper enum detection and literal datatype</span>
 <span class="sd">        annotations. If None, enums exported as literals.</span>
-<span class="sd">    engine : str, default &quot;auto&quot;</span>
-<span class="sd">        &quot;polars&quot; (lazy expression plan, ~4x faster) or &quot;pandas&quot;.</span>
-<span class="sd">        &quot;auto&quot; picks polars when installed, converting pandas input</span>
+<span class="sd">    engine : str, default "auto"</span>
+<span class="sd">        "polars" (lazy expression plan, ~4x faster) or "pandas".</span>
+<span class="sd">        "auto" picks polars when installed, converting pandas input</span>
 <span class="sd">        (~17 ms per million rows); falls back to pandas otherwise.</span>
 <span class="sd">    export_to_memory : bool, default False</span>
 <span class="sd">        If True, return an in-memory BytesIO (with .name) instead of</span>
 <span class="sd">        writing to disk — same convention as export_to_csv / export_to_cimxml.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">_check_columns</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">polars</span>  <span class="c1"># noqa: F401</span>
-            <span class="n">engine</span> <span class="o">=</span> <span class="s2">&quot;polars&quot;</span>
+            <span class="n">engine</span> <span class="o">=</span> <span class="s2">"polars"</span>
         <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-            <span class="n">engine</span> <span class="o">=</span> <span class="s2">&quot;pandas&quot;</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;format=nquads, engine=</span><span class="si">{</span><span class="n">engine</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">engine</span> <span class="o">=</span> <span class="s2">"pandas"</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">"format=nquads, engine=</span><span class="si">{</span><span class="n">engine</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">polars</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.nquads_polars</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_to_nquads</span> <span class="k">as</span> <span class="n">_fn</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">_is_polars</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
@@ -417,41 +417,41 @@
 <span class="c1"># ── CIM XML engine dispatch ──────────────────────────────────────────────────</span>
 <span class="c1"># Engine name → module (lazy import). Auto preference: first importable.</span>
 <span class="n">_CIMXML_ENGINE_MODULES</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;cython_pugixml&quot;</span><span class="p">:</span> <span class="s2">&quot;.cimxml_pugixml&quot;</span><span class="p">,</span>  <span class="c1"># compiled extension, fastest</span>
-    <span class="s2">&quot;python_lxml&quot;</span><span class="p">:</span> <span class="s2">&quot;.cimxml_pandas&quot;</span><span class="p">,</span>      <span class="c1"># pure python, always available</span>
+    <span class="s2">"cython_pugixml"</span><span class="p">:</span> <span class="s2">".cimxml_pugixml"</span><span class="p">,</span>  <span class="c1"># compiled extension, fastest</span>
+    <span class="s2">"python_lxml"</span><span class="p">:</span> <span class="s2">".cimxml_pandas"</span><span class="p">,</span>      <span class="c1"># pure python, always available</span>
 <span class="p">}</span>
 <span class="n">_CIMXML_ENGINE_ALIASES</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;performance&quot;</span><span class="p">:</span> <span class="s2">&quot;cython_pugixml&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;pugixml&quot;</span><span class="p">:</span> <span class="s2">&quot;cython_pugixml&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;lxml&quot;</span><span class="p">:</span> <span class="s2">&quot;python_lxml&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;pandas&quot;</span><span class="p">:</span> <span class="s2">&quot;python_lxml&quot;</span><span class="p">,</span>
+    <span class="s2">"performance"</span><span class="p">:</span> <span class="s2">"cython_pugixml"</span><span class="p">,</span>
+    <span class="s2">"pugixml"</span><span class="p">:</span> <span class="s2">"cython_pugixml"</span><span class="p">,</span>
+    <span class="s2">"lxml"</span><span class="p">:</span> <span class="s2">"python_lxml"</span><span class="p">,</span>
+    <span class="s2">"pandas"</span><span class="p">:</span> <span class="s2">"python_lxml"</span><span class="p">,</span>
 <span class="p">}</span>
 <span class="n">_cimxml_engines</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># loaded module cache</span>
 
 
 <div class="viewcode-block" id="get_cimxml_engine">
 <a class="viewcode-back" href="../../triplets.export.html#triplets.export.get_cimxml_engine">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_cimxml_engine</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve CIM XML engine name (with aliases) and return (name, module).&quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_cimxml_engine</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Resolve CIM XML engine name (with aliases) and return (name, module)."""</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="n">_CIMXML_ENGINE_MODULES</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cimxml auto - test engine availability: </span><span class="si">{</span><span class="n">candidate</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">"cimxml auto - test engine availability: </span><span class="si">{</span><span class="n">candidate</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
                 <span class="k">return</span> <span class="n">candidate</span><span class="p">,</span> <span class="n">_load_cimxml_engine</span><span class="p">(</span><span class="n">candidate</span><span class="p">)</span>
             <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
                 <span class="k">continue</span>
 
     <span class="n">resolved</span> <span class="o">=</span> <span class="n">_CIMXML_ENGINE_ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cimxml engine set: </span><span class="si">{</span><span class="n">resolved</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">"cimxml engine set: </span><span class="si">{</span><span class="n">resolved</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">resolved</span><span class="p">,</span> <span class="n">_load_cimxml_engine</span><span class="p">(</span><span class="n">resolved</span><span class="p">)</span></div>
 
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_load_cimxml_engine</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Import CIM XML engine module on demand.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Import CIM XML engine module on demand."""</span>
     <span class="n">module_name</span> <span class="o">=</span> <span class="n">_CIMXML_ENGINE_MODULES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">module_name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown cimxml engine: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">. Known: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_CIMXML_ENGINE_MODULES</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown cimxml engine: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">. Known: </span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_CIMXML_ENGINE_MODULES</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_cimxml_engines</span><span class="p">:</span>
         <span class="n">_cimxml_engines</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">import_module</span><span class="p">(</span><span class="n">module_name</span><span class="p">,</span> <span class="n">__package__</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_cimxml_engines</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
@@ -460,9 +460,9 @@
 <div class="viewcode-block" id="ExportType">
 <a class="viewcode-back" href="../../triplets.export.html#triplets.export.ExportType">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">ExportType</span><span class="p">(</span><span class="n">StrEnum</span><span class="p">):</span>
-    <span class="n">XML_PER_INSTANCE</span> <span class="o">=</span> <span class="s2">&quot;xml_per_instance&quot;</span>
-    <span class="n">XML_PER_INSTANCE_ZIP_PER_ALL</span> <span class="o">=</span> <span class="s2">&quot;xml_per_instance_zip_per_all&quot;</span>
-    <span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span> <span class="o">=</span> <span class="s2">&quot;xml_per_instance_zip_per_xml&quot;</span></div>
+    <span class="n">XML_PER_INSTANCE</span> <span class="o">=</span> <span class="s2">"xml_per_instance"</span>
+    <span class="n">XML_PER_INSTANCE_ZIP_PER_ALL</span> <span class="o">=</span> <span class="s2">"xml_per_instance_zip_per_all"</span>
+    <span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span> <span class="o">=</span> <span class="s2">"xml_per_instance_zip_per_xml"</span></div>
 
 
 
@@ -471,18 +471,18 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">export_to_cimxml</span><span class="p">(</span><span class="n">data</span><span class="p">,</span>
                      <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                      <span class="n">namespace_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-                     <span class="n">class_KEY</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span>
+                     <span class="n">class_KEY</span><span class="o">=</span><span class="s2">"Type"</span><span class="p">,</span>
                      <span class="n">export_undefined</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                      <span class="n">export_type</span><span class="o">=</span><span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span><span class="p">,</span>
-                     <span class="n">global_zip_filename</span><span class="o">=</span><span class="s2">&quot;Export.zip&quot;</span><span class="p">,</span>
+                     <span class="n">global_zip_filename</span><span class="o">=</span><span class="s2">"Export.zip"</span><span class="p">,</span>
                      <span class="n">debug</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                      <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                     <span class="n">export_base_path</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                     <span class="n">export_base_path</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
                      <span class="n">comment</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                      <span class="n">max_workers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-                     <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+                     <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span>
                      <span class="n">datatypes</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Export a full triplet dataset to CIM RDF XML files or ZIP archives.</span>
+<span class="w">    </span><span class="sd">"""Export a full triplet dataset to CIM RDF XML files or ZIP archives.</span>
 
 <span class="sd">    Processes all instances (grouped by ``INSTANCE_ID``) and exports them according to the</span>
 <span class="sd">    specified ``export_type``. Supports parallel processing and in-memory or disk output.</span>
@@ -490,12 +490,12 @@
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    data : pandas.DataFrame</span>
-<span class="sd">        Full triplet dataset with columns [&#39;INSTANCE_ID&#39;, &#39;ID&#39;, &#39;KEY&#39;, &#39;VALUE&#39;].</span>
+<span class="sd">        Full triplet dataset with columns ['INSTANCE_ID', 'ID', 'KEY', 'VALUE'].</span>
 <span class="sd">    rdf_map : dict or str, optional</span>
 <span class="sd">        RDF mapping configuration (see :func:`generate_xml`).</span>
 <span class="sd">    namespace_map : dict, optional</span>
 <span class="sd">        Namespace prefix-to-URI mapping (see :func:`generate_xml`).</span>
-<span class="sd">    class_KEY : str, default &quot;Type&quot;</span>
+<span class="sd">    class_KEY : str, default "Type"</span>
 <span class="sd">        Key identifying object types in triplet data.</span>
 <span class="sd">    export_undefined : bool, default False</span>
 <span class="sd">        If True, also export classes/attributes without a schema definition</span>
@@ -507,26 +507,26 @@
 <span class="sd">        - ``XML_PER_INSTANCE``: One XML file per instance.</span>
 <span class="sd">        - ``XML_PER_INSTANCE_ZIP_PER_ALL``: All XMLs in a single ZIP.</span>
 <span class="sd">        - ``XML_PER_INSTANCE_ZIP_PER_XML``: Each XML in its own ZIP.</span>
-<span class="sd">    global_zip_filename : str, default &quot;Export.zip&quot;</span>
+<span class="sd">    global_zip_filename : str, default "Export.zip"</span>
 <span class="sd">        Filename for the global ZIP archive (used with ``ZIP_PER_ALL``).</span>
 <span class="sd">    debug : bool, default False</span>
 <span class="sd">        Enable detailed timing and debug logging.</span>
 <span class="sd">    export_to_memory : bool, default False</span>
 <span class="sd">        If True, return file-like objects (``BytesIO``); if False, save to disk.</span>
-<span class="sd">    export_base_path : str, default &quot;&quot;</span>
+<span class="sd">    export_base_path : str, default ""</span>
 <span class="sd">        Directory to save files when ``export_to_memory=False``. Uses current directory if empty.</span>
 <span class="sd">    comment : str, optional</span>
 <span class="sd">        Optional XML comment added to each generated file.</span>
 <span class="sd">    max_workers : int, optional</span>
 <span class="sd">        Number of parallel workers for XML generation. If ``None``, runs sequentially.</span>
-<span class="sd">    engine : str, default &quot;auto&quot;</span>
-<span class="sd">        XML generation engine. &quot;auto&quot; picks best available.</span>
-<span class="sd">        Options: &quot;python_lxml&quot; (lxml, always available), &quot;cython_pugixml&quot; (compiled, fastest).</span>
-<span class="sd">        Aliases: &quot;performance&quot;/&quot;pugixml&quot; → cython_pugixml, &quot;lxml&quot;/&quot;pandas&quot; → python_lxml.</span>
+<span class="sd">    engine : str, default "auto"</span>
+<span class="sd">        XML generation engine. "auto" picks best available.</span>
+<span class="sd">        Options: "python_lxml" (lxml, always available), "cython_pugixml" (compiled, fastest).</span>
+<span class="sd">        Aliases: "performance"/"pugixml" → cython_pugixml, "lxml"/"pandas" → python_lxml.</span>
 <span class="sd">    datatypes : bool, default False</span>
-<span class="sd">        If True, annotate literal elements with rdf:datatype from the schema&#39;s</span>
-<span class="sd">        xsd:type, like the N-Quads export (&quot;44.84&quot; → rdf:datatype xsd#float;</span>
-<span class="sd">        xsd:string stays plain). Currently python_lxml only — &quot;auto&quot; picks it.</span>
+<span class="sd">        If True, annotate literal elements with rdf:datatype from the schema's</span>
+<span class="sd">        xsd:type, like the N-Quads export ("44.84" → rdf:datatype xsd#float;</span>
+<span class="sd">        xsd:string stays plain). Currently python_lxml only — "auto" picks it.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -538,13 +538,13 @@
 <span class="sd">    --------</span>
 <span class="sd">    &gt;&gt;&gt; files = export_to_cimxml(</span>
 <span class="sd">    ...     data,</span>
-<span class="sd">    ...     rdf_map=&quot;config/cim_map.json&quot;,</span>
+<span class="sd">    ...     rdf_map="config/cim_map.json",</span>
 <span class="sd">    ...     export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,</span>
 <span class="sd">    ...     export_to_memory=True,</span>
 <span class="sd">    ...     max_workers=4</span>
 <span class="sd">    ... )</span>
 <span class="sd">    &gt;&gt;&gt; for f in files:</span>
-<span class="sd">    ...     print(f&quot;name:&quot;, f.name)</span>
+<span class="sd">    ...     print(f"name:", f.name)</span>
 
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
@@ -552,7 +552,7 @@
 <span class="sd">    - All XML files are UTF-8 encoded with XML declaration.</span>
 <span class="sd">    - ZIP files use DEFLATED compression.</span>
 <span class="sd">    - Filenames are derived from instance ``label`` or UUID.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
         <span class="n">start_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
         <span class="n">init_time</span> <span class="o">=</span> <span class="n">start_time</span>
@@ -560,18 +560,18 @@
     <span class="n">_check_columns</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">_is_polars</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
         <span class="c1"># the per-instance pipeline is pandas (groupby + engine contract)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;format=cimxml: polars input → pandas&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"format=cimxml: polars input → pandas"</span><span class="p">)</span>
         <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">(</span><span class="n">use_pyarrow_extension_array</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">datatypes</span> <span class="ow">and</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;cimxml engine set: python_lxml (datatypes=True not yet in cython engine)&quot;</span><span class="p">)</span>
-        <span class="n">engine</span> <span class="o">=</span> <span class="s2">&quot;python_lxml&quot;</span>
+    <span class="k">if</span> <span class="n">datatypes</span> <span class="ow">and</span> <span class="n">engine</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"cimxml engine set: python_lxml (datatypes=True not yet in cython engine)"</span><span class="p">)</span>
+        <span class="n">engine</span> <span class="o">=</span> <span class="s2">"python_lxml"</span>
     <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_module</span> <span class="o">=</span> <span class="n">get_cimxml_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
     <span class="n">generate</span> <span class="o">=</span> <span class="n">engine_module</span><span class="o">.</span><span class="n">generate_xml</span>
 
-    <span class="n">instances</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">,</span> <span class="n">observed</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">instances</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"INSTANCE_ID"</span><span class="p">,</span> <span class="n">observed</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;All file instance ID-s identified&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">"All file instance ID-s identified"</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
 
     <span class="c1"># Generate one XML document per instance</span>
     <span class="k">if</span> <span class="n">max_workers</span><span class="p">:</span>
@@ -591,7 +591,7 @@
     <span class="n">xml_documents</span> <span class="o">=</span> <span class="p">[</span><span class="n">document</span> <span class="k">for</span> <span class="n">document</span> <span class="ow">in</span> <span class="n">xml_documents</span> <span class="k">if</span> <span class="n">document</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;All XML created in memory &quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">start_time</span> <span class="o">=</span> <span class="n">_print_duration</span><span class="p">(</span><span class="s2">"All XML created in memory "</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
 
     <span class="c1">### Export XML ###</span>
     <span class="n">exported_files</span> <span class="o">=</span> <span class="p">[]</span>
@@ -599,12 +599,12 @@
     <span class="k">if</span> <span class="n">export_type</span> <span class="o">==</span> <span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">document</span> <span class="ow">in</span> <span class="n">xml_documents</span><span class="p">:</span>
 
-            <span class="n">file_object</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">(</span><span class="n">document</span><span class="p">[</span><span class="s2">&quot;file&quot;</span><span class="p">])</span>
-            <span class="n">file_object</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">document</span><span class="p">[</span><span class="s2">&quot;filename&quot;</span><span class="p">]</span>
+            <span class="n">file_object</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">(</span><span class="n">document</span><span class="p">[</span><span class="s2">"file"</span><span class="p">])</span>
+            <span class="n">file_object</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">document</span><span class="p">[</span><span class="s2">"filename"</span><span class="p">]</span>
 
             <span class="n">exported_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">file_object</span><span class="p">)</span>
 
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Exported </span><span class="si">{</span><span class="n">document</span><span class="p">[</span><span class="s1">&#39;filename&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> to memory&quot;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Exported </span><span class="si">{</span><span class="n">document</span><span class="p">[</span><span class="s1">'filename'</span><span class="p">]</span><span class="si">}</span><span class="s2"> to memory"</span><span class="p">)</span>
 
     <span class="c1">### Export ZIP containing all xml ###</span>
     <span class="k">elif</span> <span class="n">export_type</span> <span class="o">==</span> <span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE_ZIP_PER_ALL</span><span class="p">:</span>
@@ -612,14 +612,14 @@
         <span class="n">gloabl_zip_fileobject</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">()</span>
         <span class="n">gloabl_zip_fileobject</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">global_zip_filename</span>
 
-        <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">gloabl_zip_fileobject</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">,</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZIP_DEFLATED</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="k">as</span> <span class="n">zip_file</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">gloabl_zip_fileobject</span><span class="p">,</span> <span class="s2">"a"</span><span class="p">,</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZIP_DEFLATED</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="k">as</span> <span class="n">zip_file</span><span class="p">:</span>
 
             <span class="k">for</span> <span class="n">document</span> <span class="ow">in</span> <span class="n">xml_documents</span><span class="p">:</span>
-                <span class="n">zip_file</span><span class="o">.</span><span class="n">writestr</span><span class="p">(</span><span class="n">document</span><span class="p">[</span><span class="s2">&quot;filename&quot;</span><span class="p">],</span> <span class="n">document</span><span class="p">[</span><span class="s2">&quot;file&quot;</span><span class="p">])</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Added </span><span class="si">{</span><span class="n">document</span><span class="p">[</span><span class="s2">&quot;filename&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1"> to ZIP&#39;</span><span class="p">)</span>
+                <span class="n">zip_file</span><span class="o">.</span><span class="n">writestr</span><span class="p">(</span><span class="n">document</span><span class="p">[</span><span class="s2">"filename"</span><span class="p">],</span> <span class="n">document</span><span class="p">[</span><span class="s2">"file"</span><span class="p">])</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Added </span><span class="si">{</span><span class="n">document</span><span class="p">[</span><span class="s2">"filename"</span><span class="p">]</span><span class="si">}</span><span class="s1"> to ZIP'</span><span class="p">)</span>
 
         <span class="n">exported_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">gloabl_zip_fileobject</span><span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Exported ZIP named </span><span class="si">{</span><span class="n">global_zip_filename</span><span class="si">}</span><span class="s1"> to memory&#39;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Exported ZIP named </span><span class="si">{</span><span class="n">global_zip_filename</span><span class="si">}</span><span class="s1"> to memory'</span><span class="p">)</span>
 
     <span class="c1">### Export each xml in separate zip ###</span>
     <span class="k">elif</span> <span class="n">export_type</span> <span class="o">==</span> <span class="n">ExportType</span><span class="o">.</span><span class="n">XML_PER_INSTANCE_ZIP_PER_XML</span><span class="p">:</span>
@@ -627,21 +627,21 @@
         <span class="k">for</span> <span class="n">document</span> <span class="ow">in</span> <span class="n">xml_documents</span><span class="p">:</span>
 
             <span class="n">zip_file_object</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">()</span>
-            <span class="n">zip_file_object</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">document</span><span class="p">[</span><span class="s2">&quot;filename&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;.xml&#39;</span><span class="p">,</span> <span class="s1">&#39;.zip&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;.XML&#39;</span><span class="p">,</span> <span class="s1">&#39;.zip&#39;</span><span class="p">)</span>
+            <span class="n">zip_file_object</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">document</span><span class="p">[</span><span class="s2">"filename"</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'.xml'</span><span class="p">,</span> <span class="s1">'.zip'</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'.XML'</span><span class="p">,</span> <span class="s1">'.zip'</span><span class="p">)</span>
 
-            <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">zip_file_object</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="n">compression</span><span class="o">=</span><span class="n">zipfile</span><span class="o">.</span><span class="n">ZIP_DEFLATED</span><span class="p">)</span> <span class="k">as</span> <span class="n">zip_file</span><span class="p">:</span>
-                <span class="n">zip_file</span><span class="o">.</span><span class="n">writestr</span><span class="p">(</span><span class="n">document</span><span class="p">[</span><span class="s2">&quot;filename&quot;</span><span class="p">],</span> <span class="n">document</span><span class="p">[</span><span class="s2">&quot;file&quot;</span><span class="p">])</span>
+            <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">zip_file_object</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">'w'</span><span class="p">,</span> <span class="n">compression</span><span class="o">=</span><span class="n">zipfile</span><span class="o">.</span><span class="n">ZIP_DEFLATED</span><span class="p">)</span> <span class="k">as</span> <span class="n">zip_file</span><span class="p">:</span>
+                <span class="n">zip_file</span><span class="o">.</span><span class="n">writestr</span><span class="p">(</span><span class="n">document</span><span class="p">[</span><span class="s2">"filename"</span><span class="p">],</span> <span class="n">document</span><span class="p">[</span><span class="s2">"file"</span><span class="p">])</span>
 
             <span class="n">exported_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">zip_file_object</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Exported </span><span class="si">{</span><span class="n">zip_file_object</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s1"> to memory&#39;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Exported </span><span class="si">{</span><span class="n">zip_file_object</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s1"> to memory'</span><span class="p">)</span>
 
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Not supported option&quot;</span><span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Supported options are: xml_per_instance, xml_per_instance_zip_per_all, xml_per_instance_zip_per_xml&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Not supported option"</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Supported options are: xml_per_instance, xml_per_instance_zip_per_all, xml_per_instance_zip_per_xml"</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
-        <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;Files saved in&quot;</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
-        <span class="n">_print_duration</span><span class="p">(</span><span class="s2">&quot;Whole Export done in&quot;</span><span class="p">,</span> <span class="n">init_time</span><span class="p">)</span>
+        <span class="n">_print_duration</span><span class="p">(</span><span class="s2">"Files saved in"</span><span class="p">,</span> <span class="n">start_time</span><span class="p">)</span>
+        <span class="n">_print_duration</span><span class="p">(</span><span class="s2">"Whole Export done in"</span><span class="p">,</span> <span class="n">init_time</span><span class="p">)</span>
 
     <span class="c1"># Save files to disk</span>
     <span class="k">if</span> <span class="n">export_to_memory</span><span class="p">:</span>
@@ -652,37 +652,37 @@
 
         <span class="k">for</span> <span class="n">file_object</span> <span class="ow">in</span> <span class="n">exported_files</span><span class="p">:</span>
             <span class="n">export_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">export_base_path</span><span class="p">,</span> <span class="n">file_object</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">export_path</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">export_file_object</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">export_path</span><span class="p">,</span> <span class="s1">'wb'</span><span class="p">)</span> <span class="k">as</span> <span class="n">export_file_object</span><span class="p">:</span>
 
                 <span class="c1"># Ensure that the read pointer is at the start of the file</span>
                 <span class="n">file_object</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
                 <span class="n">export_file_object</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">file_object</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
 
             <span class="n">exported_file_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">file_object</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Saved </span><span class="si">{</span><span class="n">export_path</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Saved </span><span class="si">{</span><span class="n">export_path</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">exported_file_names</span></div>
 
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_print_duration</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">start_time</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Log duration since start_time; return (duration, now).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Log duration since start_time; return (duration, now)."""</span>
     <span class="n">end_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span>
     <span class="n">duration</span> <span class="o">=</span> <span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">duration</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">duration</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">duration</span><span class="p">,</span> <span class="n">end_time</span>
 
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="s2">&quot;export_to_excel&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;export_to_csv&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;export_to_cimxml&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;export_to_nquads&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;export_to_networkx&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;generate_xml&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;get_cimxml_engine&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;ExportType&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;_get_qname&quot;</span><span class="p">,</span>
+    <span class="s2">"export_to_excel"</span><span class="p">,</span>
+    <span class="s2">"export_to_csv"</span><span class="p">,</span>
+    <span class="s2">"export_to_cimxml"</span><span class="p">,</span>
+    <span class="s2">"export_to_nquads"</span><span class="p">,</span>
+    <span class="s2">"export_to_networkx"</span><span class="p">,</span>
+    <span class="s2">"generate_xml"</span><span class="p">,</span>
+    <span class="s2">"get_cimxml_engine"</span><span class="p">,</span>
+    <span class="s2">"ExportType"</span><span class="p">,</span>
+    <span class="s2">"_get_qname"</span><span class="p">,</span>
 <span class="p">]</span>
 
 <span class="c1"># Register monkey-patches on pandas.DataFrame</span>

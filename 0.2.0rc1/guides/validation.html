@@ -517,7 +517,7 @@ pins the registries together:</p>
 together with the SPARQL engines’ loaded state, and
 <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">triplets.cache_scope():</span></code> bounds the state created inside the block —
 see <a class="reference internal" href="sparql.html"><span class="std std-doc">sparql.md</span></a>.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">compiled</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile</span><span class="p">([</span><span class="s2">&quot;equipment.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;topology.ttl&quot;</span><span class="p">])</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">compiled</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile</span><span class="p">([</span><span class="s2">"equipment.ttl"</span><span class="p">,</span> <span class="s2">"topology.ttl"</span><span class="p">])</span>
 <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data_a</span><span class="p">,</span> <span class="n">compiled</span><span class="p">)</span>
 <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data_b</span><span class="p">,</span> <span class="n">compiled</span><span class="p">)</span>   <span class="c1"># shapes parsed once, plans reused</span>
 </pre></div>
@@ -739,18 +739,18 @@ a query over the same data see an identical graph:</p>
 <h2>Call Sequence<a class="headerlink" href="#call-sequence" title="Link to this heading">¶</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span>
 <span class="o">|</span>
-<span class="s1">&#39;-&gt; validation.validate(data, shapes, engine=&quot;auto&quot;, lexical=True)</span>
+<span class="s1">'-&gt; validation.validate(data, shapes, engine="auto", lexical=True)</span>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="nb">compile</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span>                        <span class="c1"># cached by content hash</span>
-    <span class="o">|</span>   <span class="s1">&#39;-&gt; _load_shapes -&gt; parse_ir           # rdflib parses ONCE</span>
+    <span class="o">|</span>   <span class="s1">'-&gt; _load_shapes -&gt; parse_ir           # rdflib parses ONCE</span>
     <span class="o">|</span>
-    <span class="o">|-&gt;</span> <span class="n">get_engine</span><span class="p">(</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>                     <span class="c1"># polars (first importable)</span>
-    <span class="o">|</span>   <span class="s1">&#39;-&gt; shacl_polars.validate(data, compiled, rdf_map)</span>
+    <span class="o">|-&gt;</span> <span class="n">get_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)</span>                     <span class="c1"># polars (first importable)</span>
+    <span class="o">|</span>   <span class="s1">'-&gt; shacl_polars.validate(data, compiled, rdf_map)</span>
     <span class="o">|</span>       <span class="c1"># reads raw VALUEs; lexical findings emitted inline</span>
     <span class="o">|</span>       <span class="c1"># (pyshacl path instead: load_dataset -&gt; scoped_graph -&gt;</span>
     <span class="o">|</span>       <span class="c1">#  pyshacl.validate(compiled.graph) -&gt; report_to_violations)</span>
     <span class="o">|</span>
-    <span class="s1">&#39;-&gt; + shacl_pandas datatype/lexical supplement   # ONLY for engine=&quot;pyshacl&quot;</span>
+    <span class="s1">'-&gt; + shacl_pandas datatype/lexical supplement   # ONLY for engine="pyshacl"</span>
 </pre></div>
 </div>
 </section>
@@ -758,7 +758,7 @@ a query over the same data see an identical graph:</p>
 <h2>File Layout<a class="headerlink" href="#file-layout" title="Link to this heading">¶</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">triplets</span><span class="o">/</span>
 <span class="o">|--</span> <span class="n">_rdflib_loader</span><span class="o">.</span><span class="n">py</span>        <span class="c1"># shared with sparql: load_dataset(), scoped_graph()</span>
-<span class="s1">&#39;-- validation/</span>
+<span class="s1">'-- validation/</span>
     <span class="o">|--</span> <span class="fm">__init__</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># validate() + compile() dispatcher, engine registry</span>
     <span class="o">|--</span> <span class="n">shacl_ir</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># shapes -&gt; CompiledShapes (IR compiler, content-hash cache)</span>
     <span class="o">|--</span> <span class="n">shacl_pyshacl</span><span class="o">.</span><span class="n">py</span>     <span class="c1"># reference engine: data + compiled.graph -&gt; report</span>
@@ -768,7 +768,7 @@ a query over the same data see an identical graph:</p>
     <span class="o">|--</span> <span class="n">shacl_report</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># ValidationReport &lt;-&gt; violations; multi-format export</span>
     <span class="o">|--</span> <span class="n">context</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># optional enrichment pass (instance/object/shape/schema context)</span>
     <span class="o">|--</span> <span class="n">locations</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># violations -&gt; source line/column (the sources= grep pass)</span>
-    <span class="s1">&#39;-- sarif.py             # violations -&gt; SARIF 2.1.0 (grouped by default)</span>
+    <span class="s1">'-- sarif.py             # violations -&gt; SARIF 2.1.0 (grouped by default)</span>
 </pre></div>
 </div>
 </section>
@@ -778,27 +778,27 @@ a query over the same data see an identical graph:</p>
 <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">triplets.export_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">schemas</span>
 
-<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="s2">&quot;grid.zip&quot;</span><span class="p">])</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="s2">"grid.zip"</span><span class="p">])</span>
 
 <span class="c1"># validate against a shapes file (format auto-detected by extension) — empty = conforms</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;shapes.ttl&quot;</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
 
 <span class="c1"># compile once, validate many</span>
-<span class="n">compiled</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile</span><span class="p">([</span><span class="s2">&quot;equipment.ttl&quot;</span><span class="p">,</span> <span class="s2">&quot;topology.ttl&quot;</span><span class="p">])</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile</span><span class="p">([</span><span class="s2">"equipment.ttl"</span><span class="p">,</span> <span class="s2">"topology.ttl"</span><span class="p">])</span>
 <span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">compiled</span><span class="p">)</span>
 
 <span class="c1"># scope restricts the validated graphs; all data stays loaded for reference resolution</span>
-<span class="n">one_instance</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;shapes.ttl&quot;</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="p">[</span><span class="n">one_instance</span><span class="p">])</span>
+<span class="n">one_instance</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="p">[</span><span class="n">one_instance</span><span class="p">])</span>
 
 <span class="c1"># engines: auto is polars -&gt; pandas -&gt; pyshacl; works on any input flavor</span>
-<span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;shapes.ttl&quot;</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;pyshacl&quot;</span><span class="p">)</span>      <span class="c1"># or &quot;polars&quot; / &quot;pandas&quot; / &quot;duckdb&quot;</span>
-<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">con</span><span class="p">,</span> <span class="s2">&quot;shapes.ttl&quot;</span><span class="p">)</span>          <span class="c1"># DuckDB connection</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;shapes.ttl&quot;</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>   <span class="c1"># pure pyshacl report</span>
+<span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"pyshacl"</span><span class="p">)</span>      <span class="c1"># or "polars" / "pandas" / "duckdb"</span>
+<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">con</span><span class="p">,</span> <span class="s2">"shapes.ttl"</span><span class="p">)</span>          <span class="c1"># DuckDB connection</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>   <span class="c1"># pure pyshacl report</span>
 
-<span class="c1"># pyshacl on the oxigraph engine&#39;s cached store (identical results; opt in</span>
+<span class="c1"># pyshacl on the oxigraph engine's cached store (identical results; opt in</span>
 <span class="c1"># when the store is already loaded for SPARQL — Memory is faster otherwise)</span>
-<span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;shapes.ttl&quot;</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;pyshacl&quot;</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="s2">&quot;oxigraph&quot;</span><span class="p">)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"pyshacl"</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="s2">"oxigraph"</span><span class="p">)</span>
 
 <span class="c1"># slower optional context pass — adds instance/file, object type/name,</span>
 <span class="c1"># shape sh:name/sh:description and schema definition columns</span>
@@ -806,25 +806,25 @@ a query over the same data see an identical graph:</p>
 <span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">enrich</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">shapes</span><span class="o">=</span><span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=...</span><span class="p">)</span>  <span class="c1"># same, standalone</span>
 
 <span class="c1"># SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer</span>
-<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_sarif</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;report.sarif&quot;</span><span class="p">)</span>
+<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_sarif</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"report.sarif"</span><span class="p">)</span>
 
 <span class="c1"># standard sh:ValidationReport for SHACL tooling (format from path suffix,</span>
-<span class="c1"># or format=); sources= adds a &quot;Source: file line N&quot; message per</span>
+<span class="c1"># or format=); sources= adds a "Source: file line N" message per</span>
 <span class="c1"># result (SHACL has no location vocabulary — plain-text messages travel</span>
 <span class="c1"># everywhere); the dcterms metadata (timestamp, creator, data/shape file</span>
 <span class="c1"># names) comes from violations.attrs — stamped by validate(), overridable</span>
 <span class="c1"># with report_source=/report_references=</span>
-<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_shacl_report</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;report.ttl&quot;</span><span class="p">,</span> <span class="n">sources</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;grid.zip&quot;</span><span class="p">])</span>
-<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_shacl_report</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;report.xml&quot;</span><span class="p">)</span>  <span class="c1"># RDF/XML via .xml</span>
+<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_shacl_report</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"report.ttl"</span><span class="p">,</span> <span class="n">sources</span><span class="o">=</span><span class="p">[</span><span class="s2">"grid.zip"</span><span class="p">])</span>
+<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_shacl_report</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"report.xml"</span><span class="p">)</span>  <span class="c1"># RDF/XML via .xml</span>
 
 <span class="c1"># tabular exports with the same metadata: CSV writes a report_meta.csv</span>
-<span class="c1"># sidecar, Excel a second &quot;metadata&quot; sheet</span>
-<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;report.csv&quot;</span><span class="p">)</span>
-<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_excel</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;report.xlsx&quot;</span><span class="p">)</span>
+<span class="c1"># sidecar, Excel a second "metadata" sheet</span>
+<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"report.csv"</span><span class="p">)</span>
+<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_excel</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"report.xlsx"</span><span class="p">)</span>
 
 <span class="c1"># the location pass standalone — SOURCE_URI/LINE/COLUMN/COLUMN_END columns,</span>
 <span class="c1"># reused by both report exports</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">locate</span><span class="p">(</span><span class="n">sources</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;grid.zip&quot;</span><span class="p">])</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">locate</span><span class="p">(</span><span class="n">sources</span><span class="o">=</span><span class="p">[</span><span class="s2">"grid.zip"</span><span class="p">])</span>
 </pre></div>
 </div>
 <p>pyshacl pass-through options (<code class="docutils literal notranslate"><span class="pre">inference</span></code>, <code class="docutils literal notranslate"><span class="pre">advanced</span></code>, <code class="docutils literal notranslate"><span class="pre">abort_on_first</span></code>,

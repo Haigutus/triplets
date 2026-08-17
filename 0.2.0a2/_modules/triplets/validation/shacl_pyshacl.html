@@ -284,12 +284,12 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.validation.shacl_pyshacl</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;SHACL reference engine — pyshacl (spec-complete, rdflib-based).</span>
+<span></span><span class="sd">"""SHACL reference engine — pyshacl (spec-complete, rdflib-based).</span>
 
 <span class="sd">Correctness-first reference; the data is loaded into an in-memory rdflib graph</span>
 <span class="sd">via the N-Quads export. Consumes ``CompiledShapes.graph`` (shapes are parsed</span>
 <span class="sd">once by the IR compiler); the constraint table is for the vectorized engines.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">importlib.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_spec</span>
@@ -297,17 +297,17 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._rdflib_loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataset</span><span class="p">,</span> <span class="n">scoped_graph</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_report</span><span class="w"> </span><span class="kn">import</span> <span class="n">report_to_violations</span>
 
-<span class="k">if</span> <span class="n">find_spec</span><span class="p">(</span><span class="s2">&quot;pyshacl&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># registry contract: an unavailable engine fails at import</span>
-    <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">&quot;pyshacl is not installed&quot;</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">find_spec</span><span class="p">(</span><span class="s2">"pyshacl"</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># registry contract: an unavailable engine fails at import</span>
+    <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">"pyshacl is not installed"</span><span class="p">)</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="validate">
 <a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_pyshacl.validate">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">inference</span><span class="o">=</span><span class="s2">&quot;none&quot;</span><span class="p">,</span>
-             <span class="n">advanced</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">abort_on_first</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="s2">&quot;memory&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate triplet data against compiled shapes; return a violations DataFrame.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">inference</span><span class="o">=</span><span class="s2">"none"</span><span class="p">,</span>
+             <span class="n">advanced</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">abort_on_first</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="s2">"memory"</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Validate triplet data against compiled shapes; return a violations DataFrame.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -320,12 +320,12 @@
 <span class="sd">        Validate only these instances (named graphs); all data stays loaded for</span>
 <span class="sd">        reference resolution. None = full union (all profiles).</span>
 <span class="sd">    inference, advanced, abort_on_first : passed to pyshacl.validate.</span>
-<span class="sd">    **kwargs : other engines&#39; options (components, max_workers, table_name) —</span>
+<span class="sd">    **kwargs : other engines' options (components, max_workers, table_name) —</span>
 <span class="sd">        accepted and ignored, per the shared engine contract.</span>
-<span class="sd">    store : str, default &quot;memory&quot;</span>
+<span class="sd">    store : str, default "memory"</span>
 <span class="sd">        rdflib store backend for the data graph (see ``load_dataset``):</span>
-<span class="sd">        &quot;oxigraph&quot; loads through the oxigraph engine&#39;s cached store</span>
-<span class="sd">        (Rust N-Quads parse instead of rdflib&#39;s Python parser); &quot;auto&quot; picks</span>
+<span class="sd">        "oxigraph" loads through the oxigraph engine's cached store</span>
+<span class="sd">        (Rust N-Quads parse instead of rdflib's Python parser); "auto" picks</span>
 <span class="sd">        it when pyoxigraph + oxrdflib are installed. Measured (2026-07-12):</span>
 <span class="sd">        results are identical, but memory stays the default — pyshacl</span>
 <span class="sd">        force-clones the data graph into rdflib Memory regardless</span>
@@ -333,7 +333,7 @@
 <span class="sd">        more than the Rust parse saves (95k warm: 1.8 s vs 1.2 s; 1.14M</span>
 <span class="sd">        load+clone: 40 s vs 33 s). Opt in when the store is already loaded</span>
 <span class="sd">        for SPARQL anyway — then the load leg is free.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">pyshacl</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate</span> <span class="k">as</span> <span class="n">pyshacl_validate</span>
 
     <span class="n">data_graph</span> <span class="o">=</span> <span class="n">scoped_graph</span><span class="p">(</span><span class="n">load_dataset</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">),</span> <span class="n">scope</span><span class="p">)</span>
@@ -342,7 +342,7 @@
         <span class="n">data_graph</span><span class="p">,</span> <span class="n">shacl_graph</span><span class="o">=</span><span class="n">compiled</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span>
         <span class="n">inference</span><span class="o">=</span><span class="n">inference</span><span class="p">,</span> <span class="n">advanced</span><span class="o">=</span><span class="n">advanced</span><span class="p">,</span> <span class="n">abort_on_first</span><span class="o">=</span><span class="n">abort_on_first</span><span class="p">,</span>
     <span class="p">)</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;SHACL conforms=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">conforms</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"SHACL conforms=</span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">conforms</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">report_to_violations</span><span class="p">(</span><span class="n">report_graph</span><span class="p">)</span></div>
 
 </pre></div>

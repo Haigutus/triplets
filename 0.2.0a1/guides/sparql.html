@@ -400,7 +400,7 @@ serializations out (SPARQL 1.1 JSON / Turtle / CSV).</p></li>
 <span class="o">|</span>                              <span class="c1">#   scope), select_arrow() / construct_arrow() -&gt; Arrow columns</span>
 <span class="o">|--</span> <span class="n">_qlever_arrow_parser</span><span class="o">.</span><span class="n">h</span><span class="o">/.</span><span class="n">cpp</span><span class="c1"># ArrowTripleParser: Arrow batches -&gt; TurtleTriples</span>
 <span class="o">|--</span> <span class="n">_qlever</span><span class="o">.</span><span class="n">pyx</span>                <span class="c1"># dumb Cython binding (zero-copy both ways, GIL released)</span>
-<span class="s1">&#39;-- sparql_qlever.py           # engine: index cache, conventions, output flavor</span>
+<span class="s1">'-- sparql_qlever.py           # engine: index cache, conventions, output flavor</span>
 </pre></div>
 </div>
 <p>Build (one-time; the pixi <code class="docutils literal notranslate"><span class="pre">qlever</span></code> environment pins the whole toolchain —
@@ -491,32 +491,32 @@ and date literals carry their real type into the query result.</p>
 <h2>Call Sequence<a class="headerlink" href="#call-sequence" title="Link to this heading">¶</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>
 <span class="o">|</span>
-<span class="s1">&#39;-&gt; sparql.query(data, q, engine=&quot;auto&quot;)</span>
+<span class="s1">'-&gt; sparql.query(data, q, engine="auto")</span>
     <span class="o">|</span>
-    <span class="o">|-&gt;</span> <span class="n">get_engine</span><span class="p">(</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>                     <span class="c1"># qlever when built, else oxigraph, else rdflib</span>
+    <span class="o">|-&gt;</span> <span class="n">get_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)</span>                     <span class="c1"># qlever when built, else oxigraph, else rdflib</span>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="n">qlever</span> <span class="n">path</span> <span class="p">(</span><span class="n">performance</span><span class="p">)</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">_index_for</span><span class="p">:</span> <span class="n">content_key</span> <span class="o">-&gt;</span> <span class="n">cached</span> <span class="n">index</span> <span class="o">|</span> <span class="n">build</span> <span class="p">(</span><span class="n">export_to_arrow</span> <span class="o">-&gt;</span> <span class="n">ArrowTripleParser</span><span class="p">)</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">scope</span> <span class="o">-&gt;</span> <span class="n">SPARQL</span><span class="o">-</span><span class="n">protocol</span> <span class="n">dataset</span> <span class="n">clauses</span> <span class="p">(</span><span class="n">one</span> <span class="n">index</span> <span class="n">serves</span> <span class="n">every</span> <span class="n">scope</span><span class="p">)</span>
-    <span class="o">|</span>   <span class="s1">&#39;-&gt; C++ decode -&gt; Arrow columns (GIL released) -&gt; zero-copy wrap</span>
+    <span class="o">|</span>   <span class="s1">'-&gt; C++ decode -&gt; Arrow columns (GIL released) -&gt; zero-copy wrap</span>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="n">oxigraph</span> <span class="n">path</span> <span class="p">(</span><span class="n">portable</span> <span class="n">performance</span><span class="p">)</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">_store_for</span><span class="p">:</span> <span class="n">content_key</span> <span class="o">-&gt;</span> <span class="n">cached</span> <span class="n">store</span> <span class="o">|</span> <span class="n">bulk_load</span><span class="p">(</span><span class="n">export_to_nquads</span><span class="p">)</span>
-    <span class="o">|</span>   <span class="o">|</span>   <span class="s1">&#39;-&gt; default graph := deduplicated union of the named graphs</span>
+    <span class="o">|</span>   <span class="o">|</span>   <span class="s1">'-&gt; default graph := deduplicated union of the named graphs</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">scope</span> <span class="o">-&gt;</span> <span class="n">SPARQL</span><span class="o">-</span><span class="n">protocol</span> <span class="n">default</span> <span class="n">graphs</span> <span class="p">(</span><span class="n">one</span> <span class="n">store</span> <span class="n">serves</span> <span class="n">every</span> <span class="n">scope</span><span class="p">)</span>
-    <span class="o">|</span>   <span class="s1">&#39;-&gt; SELECT: SPARQL-CSV -&gt; read_csv | CONSTRUCT: N-Quads -&gt; read_nquads</span>
+    <span class="o">|</span>   <span class="s1">'-&gt; SELECT: SPARQL-CSV -&gt; read_csv | CONSTRUCT: N-Quads -&gt; read_nquads</span>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="n">rdflib</span> <span class="n">path</span> <span class="p">(</span><span class="n">reference</span><span class="p">)</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">load_dataset</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">)</span>        <span class="c1"># cached by content_key</span>
-    <span class="o">|</span>   <span class="o">|</span>   <span class="s1">&#39;-&gt; export_to_nquads(..., export_to_memory=True)</span>
-    <span class="o">|</span>   <span class="o">|</span>       <span class="s1">&#39;-&gt; rdflib.Dataset.parse(nquads)   # INSTANCE_ID -&gt; named graph</span>
+    <span class="o">|</span>   <span class="o">|</span>   <span class="s1">'-&gt; export_to_nquads(..., export_to_memory=True)</span>
+    <span class="o">|</span>   <span class="o">|</span>       <span class="s1">'-&gt; rdflib.Dataset.parse(nquads)   # INSTANCE_ID -&gt; named graph</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">scoped_graph</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span>       <span class="c1"># union, or just scoped instances</span>
-    <span class="o">|</span>   <span class="s1">&#39;-&gt; graph.query(q)</span>
+    <span class="o">|</span>   <span class="s1">'-&gt; graph.query(q)</span>
     <span class="o">|</span>
-    <span class="s1">&#39;-&gt; result by query form (finalized to return_type)</span>
+    <span class="s1">'-&gt; result by query form (finalized to return_type)</span>
         <span class="o">|-&gt;</span> <span class="n">ASK</span>                <span class="o">-&gt;</span> <span class="nb">bool</span>
         <span class="o">|-&gt;</span> <span class="n">SELECT</span>             <span class="o">-&gt;</span> <span class="n">DataFrame</span> <span class="p">(</span><span class="n">columns</span> <span class="o">=</span> <span class="n">projected</span> <span class="nb">vars</span><span class="p">)</span>
-        <span class="s1">&#39;-&gt; CONSTRUCT/DESCRIBE -&gt; triplet DataFrame [ID, KEY, VALUE, INSTANCE_ID]</span>
+        <span class="s1">'-&gt; CONSTRUCT/DESCRIBE -&gt; triplet DataFrame [ID, KEY, VALUE, INSTANCE_ID]</span>
 </pre></div>
 </div>
 </section>
@@ -581,11 +581,11 @@ naming conventions so the output drops straight back into the pipeline.</p>
 <span class="o">|</span>                            <span class="c1">#   data_unchanged digest memo with weakref eviction)</span>
 <span class="o">|--</span> <span class="n">_rdflib_loader</span><span class="o">.</span><span class="n">py</span>        <span class="c1"># shared with validation: load_dataset(), scoped_graph()</span>
 <span class="o">|--</span> <span class="n">parser</span><span class="o">/</span><span class="n">nquads</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># read_nquads: N-Quads -&gt; triplets (inverse of the export);</span>
-<span class="o">|</span>                            <span class="c1">#   terms_to_triplets shared by the engines&#39; CONSTRUCT decode</span>
-<span class="s1">&#39;-- sparql/</span>
+<span class="o">|</span>                            <span class="c1">#   terms_to_triplets shared by the engines' CONSTRUCT decode</span>
+<span class="s1">'-- sparql/</span>
     <span class="o">|--</span> <span class="fm">__init__</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># query() dispatcher + engine registry</span>
     <span class="o">|--</span> <span class="n">sparql_oxigraph</span><span class="o">.</span><span class="n">py</span>   <span class="c1"># oxigraph engine: store cache, CSV/N-Quads decode</span>
-    <span class="s1">&#39;-- sparql_rdflib.py     # rdflib engine: result -&gt; DataFrame / bool / triplets</span>
+    <span class="s1">'-- sparql_rdflib.py     # rdflib engine: result -&gt; DataFrame / bool / triplets</span>
 </pre></div>
 </div>
 </section>
@@ -595,35 +595,35 @@ naming conventions so the output drops straight back into the pipeline.</p>
 <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">triplets.export_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">schemas</span>
 
-<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="s2">&quot;grid.zip&quot;</span><span class="p">])</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="s2">"grid.zip"</span><span class="p">])</span>
 
-<span class="n">PREFIXES</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="n">PREFIXES</span> <span class="o">=</span> <span class="s2">"""</span>
 <span class="s2">PREFIX rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt;</span>
 <span class="s2">PREFIX cim: &lt;http://iec.ch/TC57/CIM100#&gt;</span>
-<span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">"""</span>
 
 <span class="c1"># SELECT -&gt; DataFrame (columns = projected variables)</span>
-<span class="n">lines</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">&quot;SELECT ?s ?name WHERE { ?s cim:IdentifiedObject.name ?name }&quot;</span><span class="p">)</span>
+<span class="n">lines</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">"SELECT ?s ?name WHERE { ?s cim:IdentifiedObject.name ?name }"</span><span class="p">)</span>
 
 <span class="c1"># ASK -&gt; bool</span>
-<span class="n">has_substation</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">&quot;ASK { ?s rdf:type cim:Substation }&quot;</span><span class="p">)</span>
+<span class="n">has_substation</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">"ASK { ?s rdf:type cim:Substation }"</span><span class="p">)</span>
 
 <span class="c1"># CONSTRUCT -&gt; triplet DataFrame [ID, KEY, VALUE, INSTANCE_ID]</span>
 <span class="n">constructed</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span>
-    <span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">&quot;CONSTRUCT { ?s rdf:type cim:ACLineSegment } WHERE { ?s rdf:type cim:ACLineSegment }&quot;</span><span class="p">)</span>
+    <span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">"CONSTRUCT { ?s rdf:type cim:ACLineSegment } WHERE { ?s rdf:type cim:ACLineSegment }"</span><span class="p">)</span>
 
 <span class="c1"># rdf_map types the literals in the loaded graph (numeric comparisons and</span>
 <span class="c1"># ORDER BY inside the query work) — returned values stay lexical strings</span>
 <span class="n">typed</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span>
-    <span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">&quot;SELECT ?l WHERE { ?s cim:Conductor.length ?l }&quot;</span><span class="p">,</span>
+    <span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">"SELECT ?l WHERE { ?s cim:Conductor.length ?l }"</span><span class="p">,</span>
     <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
 
 <span class="c1"># scope restricts the queried graphs; all data stays loaded for reference resolution</span>
-<span class="n">one_instance</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;INSTANCE_ID&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-<span class="n">scoped</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">&quot;SELECT ?s WHERE { ?s rdf:type cim:ACLineSegment }&quot;</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="p">[</span><span class="n">one_instance</span><span class="p">])</span>
+<span class="n">one_instance</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">scoped</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">"SELECT ?s WHERE { ?s rdf:type cim:ACLineSegment }"</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="p">[</span><span class="n">one_instance</span><span class="p">])</span>
 
 <span class="c1"># explicit engine selection, and use on any input (e.g. a DuckDB connection)</span>
-<span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;oxigraph&quot;</span><span class="p">)</span>   <span class="c1"># or &quot;qlever&quot; / &quot;rdflib&quot;</span>
+<span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"oxigraph"</span><span class="p">)</span>   <span class="c1"># or "qlever" / "rdflib"</span>
 <span class="n">triplets</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">con</span><span class="p">,</span> <span class="n">q</span><span class="p">)</span>
 
 <span class="c1"># N-Quads round-trip: export and read back (also pandas/polars.read_nquads)</span>

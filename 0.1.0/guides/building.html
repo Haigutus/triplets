@@ -302,8 +302,8 @@ python<span class="w"> </span>setup_cython_parser.py<span class="w"> </span>buil
 </div>
 <p>Verify:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
-<span class="n">engine_name</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">get_engine</span><span class="p">(</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">engine_name</span><span class="p">)</span>  <span class="c1"># &quot;cython_pugixml_arrow&quot; if built</span>
+<span class="n">engine_name</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">parser</span><span class="o">.</span><span class="n">get_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">engine_name</span><span class="p">)</span>  <span class="c1"># "cython_pugixml_arrow" if built</span>
 </pre></div>
 </div>
 </section>
@@ -329,9 +329,9 @@ python<span class="w"> </span>setup.py<span class="w"> </span>bdist_wheel<span c
 auditwheel<span class="w"> </span>show<span class="w"> </span>dist/triplets-*.whl
 
 <span class="c1"># Repair (apply manylinux tag, exclude arrow libs provided by pyarrow at runtime)</span>
-<span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="k">$(</span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import pyarrow; print(pyarrow.get_library_dirs()[0])&#39;</span><span class="k">)</span><span class="w"> </span><span class="se">\</span>
+<span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="k">$(</span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">'import pyarrow; print(pyarrow.get_library_dirs()[0])'</span><span class="k">)</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>auditwheel<span class="w"> </span>repair<span class="w"> </span>-w<span class="w"> </span>dist/repaired<span class="w"> </span>dist/triplets-*.whl<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--exclude<span class="w"> </span><span class="s1">&#39;libarrow_python.so*&#39;</span><span class="w"> </span>--exclude<span class="w"> </span><span class="s1">&#39;libarrow.so*&#39;</span>
+<span class="w">  </span>--exclude<span class="w"> </span><span class="s1">'libarrow_python.so*'</span><span class="w"> </span>--exclude<span class="w"> </span><span class="s1">'libarrow.so*'</span>
 
 <span class="c1"># Check the result</span>
 ls<span class="w"> </span>dist/repaired/<span class="w">  </span><span class="c1"># should show manylinux_*_x86_64.whl</span>
@@ -358,10 +358,10 @@ ls<span class="w"> </span>dist/repaired/<span class="w">  </span><span class="c1
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>cibuildwheel
 
 <span class="c1"># Build one Python version on Linux (fast test)</span>
-<span class="nv">CIBW_BUILD</span><span class="o">=</span><span class="s2">&quot;cp313-manylinux_x86_64&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="nv">CIBW_REPAIR_WHEEL_COMMAND_LINUX</span><span class="o">=</span><span class="s2">&quot;LD_LIBRARY_PATH=\$(python -c &#39;import pyarrow; print(pyarrow.get_library_dirs()[0])&#39;) auditwheel repair -w {dest_dir} {wheel} --exclude &#39;libarrow_python.so*&#39; --exclude &#39;libarrow.so*&#39;&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="nv">CIBW_TEST_REQUIRES</span><span class="o">=</span><span class="s2">&quot;pytest pyarrow&gt;=14.0&quot;</span><span class="w"> </span><span class="se">\</span>
-<span class="nv">CIBW_TEST_COMMAND</span><span class="o">=</span><span class="s1">&#39;pytest {project}/tests/test_parser_backends.py -q --tb=short -k &quot;not realgrid&quot;&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="nv">CIBW_BUILD</span><span class="o">=</span><span class="s2">"cp313-manylinux_x86_64"</span><span class="w"> </span><span class="se">\</span>
+<span class="nv">CIBW_REPAIR_WHEEL_COMMAND_LINUX</span><span class="o">=</span><span class="s2">"LD_LIBRARY_PATH=\$(python -c 'import pyarrow; print(pyarrow.get_library_dirs()[0])') auditwheel repair -w {dest_dir} {wheel} --exclude 'libarrow_python.so*' --exclude 'libarrow.so*'"</span><span class="w"> </span><span class="se">\</span>
+<span class="nv">CIBW_TEST_REQUIRES</span><span class="o">=</span><span class="s2">"pytest pyarrow&gt;=14.0"</span><span class="w"> </span><span class="se">\</span>
+<span class="nv">CIBW_TEST_COMMAND</span><span class="o">=</span><span class="s1">'pytest {project}/tests/test_parser_backends.py -q --tb=short -k "not realgrid"'</span><span class="w"> </span><span class="se">\</span>
 cibuildwheel<span class="w"> </span>--platform<span class="w"> </span>linux<span class="w"> </span>--output-dir<span class="w"> </span>dist/
 </pre></div>
 </div>

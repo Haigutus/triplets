@@ -309,7 +309,7 @@ pip<span class="w"> </span>install<span class="w"> </span>triplets<span class="o
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
 
-<span class="n">path</span> <span class="o">=</span> <span class="s2">&quot;CGMES_v2.4.15_RealGridTestConfiguration_v2.zip&quot;</span>
+<span class="n">path</span> <span class="o">=</span> <span class="s2">"CGMES_v2.4.15_RealGridTestConfiguration_v2.zip"</span>
 <span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="n">path</span><span class="p">])</span>
 </pre></div>
 </div>
@@ -318,7 +318,7 @@ pip<span class="w"> </span>install<span class="w"> </span>triplets<span class="o
 <h2>Result:<a class="headerlink" href="#result" title="Link to this heading">¶</a></h2>
 <p><img alt="image" src="https://user-images.githubusercontent.com/11408965/64228384-53350500-ceef-11e9-9a8b-473ed1dc6e4d.png" /></p>
 <p>You can then query a dataframe of all same type elements and its parameters across all [EQ, SSH, TP, SV etc.] instance files, where parameters are columns and index is object ID-s</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">"ACLineSegment"</span><span class="p">)</span>
 </pre></div>
 </div>
 <p><img alt="image" src="https://user-images.githubusercontent.com/11408965/64228433-7eb7ef80-ceef-11e9-81d4-43e39ecf099d.png" /></p>
@@ -369,13 +369,13 @@ It requires pyarrow at runtime, so install with <code class="docutils literal no
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
 
-<span class="n">data</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">read_rdf</span><span class="p">([</span><span class="s2">&quot;grid_EQ.xml&quot;</span><span class="p">,</span> <span class="s2">&quot;data.zip&quot;</span><span class="p">])</span>   <span class="c1"># returns polars DataFrame</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">polars</span><span class="o">.</span><span class="n">read_rdf</span><span class="p">([</span><span class="s2">"grid_EQ.xml"</span><span class="p">,</span> <span class="s2">"data.zip"</span><span class="p">])</span>   <span class="c1"># returns polars DataFrame</span>
 
 <span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">types_dict</span><span class="p">()</span>
-<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
-<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">KEY</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">&quot;.*Generator.*&quot;</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">"ACLineSegment"</span><span class="p">)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">KEY</span><span class="o">=</span><span class="s2">"Type"</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">".*Generator.*"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">export_to_csv</span><span class="p">(</span><span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">&quot;/tmp/output.nq&quot;</span><span class="p">)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">"/tmp/output.nq"</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
@@ -385,30 +385,30 @@ It requires pyarrow at runtime, so install with <code class="docutils literal no
 <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
 
 <span class="n">data</span> <span class="o">=</span> <span class="n">duckdb</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>                              <span class="c1"># in-memory</span>
-<span class="n">data</span> <span class="o">=</span> <span class="n">duckdb</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s2">&quot;grid.duckdb&quot;</span><span class="p">)</span>                 <span class="c1"># persistent (no re-parsing next session)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">duckdb</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s2">"grid.duckdb"</span><span class="p">)</span>                 <span class="c1"># persistent (no re-parsing next session)</span>
 
-<span class="n">data</span><span class="o">.</span><span class="n">read_rdf</span><span class="p">([</span><span class="s2">&quot;grid_EQ.xml&quot;</span><span class="p">,</span> <span class="s2">&quot;data.zip&quot;</span><span class="p">])</span>           <span class="c1"># parse via Arrow (zero-copy into DuckDB)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">read_rdf</span><span class="p">([</span><span class="s2">"grid_EQ.xml"</span><span class="p">,</span> <span class="s2">"data.zip"</span><span class="p">])</span>           <span class="c1"># parse via Arrow (zero-copy into DuckDB)</span>
 <span class="n">data</span><span class="o">.</span><span class="n">types_dict</span><span class="p">()</span>                                     <span class="c1"># → dict</span>
-<span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>             <span class="c1"># → pandas DataFrame</span>
-<span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">pl</span><span class="p">()</span>             <span class="c1"># → polars DataFrame</span>
-<span class="n">data</span><span class="o">.</span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">KEY</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">&quot;.*Sub.*&quot;</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>
-<span class="n">data</span><span class="o">.</span><span class="n">filter_by_type</span><span class="p">(</span><span class="s2">&quot;Terminal&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>
-<span class="n">data</span><span class="o">.</span><span class="n">references_to</span><span class="p">(</span><span class="s2">&quot;some-uuid&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>
-<span class="n">data</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">&quot;/tmp/output.nq&quot;</span><span class="p">)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">"ACLineSegment"</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>             <span class="c1"># → pandas DataFrame</span>
+<span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">"ACLineSegment"</span><span class="p">)</span><span class="o">.</span><span class="n">pl</span><span class="p">()</span>             <span class="c1"># → polars DataFrame</span>
+<span class="n">data</span><span class="o">.</span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">KEY</span><span class="o">=</span><span class="s2">"Type"</span><span class="p">,</span> <span class="n">VALUE</span><span class="o">=</span><span class="s2">".*Sub.*"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>
+<span class="n">data</span><span class="o">.</span><span class="n">filter_by_type</span><span class="p">(</span><span class="s2">"Terminal"</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>
+<span class="n">data</span><span class="o">.</span><span class="n">references_to</span><span class="p">(</span><span class="s2">"some-uuid"</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>
+<span class="n">data</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">"/tmp/output.nq"</span><span class="p">)</span>
 
 <span class="c1"># Direct SQL (full DuckDB SQL on the triplets table)</span>
-<span class="n">data</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s2">&quot;SELECT VALUE, COUNT(*) FROM triplets WHERE KEY = &#39;Type&#39; GROUP BY VALUE&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>
+<span class="n">data</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s2">"SELECT VALUE, COUNT(*) FROM triplets WHERE KEY = 'Type' GROUP BY VALUE"</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>
 </pre></div>
 </div>
 </section>
 <section id="accessor-namespace">
 <h2>Accessor namespace<a class="headerlink" href="#accessor-namespace" title="Link to this heading">¶</a></h2>
 <p>All engines share the same <code class="docutils literal notranslate"><span class="pre">df.triplets.*</span></code> accessor:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">&quot;ACLineSegment&quot;</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">"ACLineSegment"</span><span class="p">)</span>
 <span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">types_dict</span><span class="p">()</span>
-<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">KEY</span><span class="o">=</span><span class="s2">&quot;Type&quot;</span><span class="p">)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">filter_triplets</span><span class="p">(</span><span class="n">KEY</span><span class="o">=</span><span class="s2">"Type"</span><span class="p">)</span>
 <span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">export_to_excel</span><span class="p">(</span><span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">&quot;/tmp/output.nq&quot;</span><span class="p">)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">"/tmp/output.nq"</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>

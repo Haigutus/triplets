@@ -284,16 +284,16 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.sparql.sparql_qlever</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;SPARQL performance engine — embedded qlever (C++), no server.</span>
+<span></span><span class="sd">"""SPARQL performance engine — embedded qlever (C++), no server.</span>
 
-<span class="sd">Uses qlever&#39;s official embedding facade (src/libqlever) through the</span>
+<span class="sd">Uses qlever's official embedding facade (src/libqlever) through the</span>
 <span class="sd">triplets.sparql._qlever Cython extension (build: setup_qlever.py).</span>
 
 <span class="sd">Flavor-blind by construction: the input (pandas / polars DataFrame or a DuckDB</span>
 <span class="sd">connection) carries everything as registered methods — ``content_hash`` keys</span>
 <span class="sd">the engine state, ``export_to_arrow`` feeds the index build — so this module</span>
 <span class="sd">never inspects input types. Scope is not a data operation: the scoped</span>
-<span class="sd">instances&#39; named graphs are passed to qlever as SPARQL-protocol dataset</span>
+<span class="sd">instances' named graphs are passed to qlever as SPARQL-protocol dataset</span>
 <span class="sd">clauses (``default-graph-uri``), so one index serves every scope and the</span>
 <span class="sd">query text is never modified.</span>
 
@@ -307,8 +307,8 @@
 <span class="sd">- out: the wrapper decodes the query result straight into Arrow string</span>
 <span class="sd">  buffers (unbound → null), the Cython layer wraps them zero-copy, and this</span>
 <span class="sd">  module only maps conventions and finalizes the output flavor</span>
-<span class="sd">  (``return_type``: &quot;auto&quot; matches the input — polars in, polars out;</span>
-<span class="sd">  explicit &quot;pandas&quot; / &quot;polars&quot; / &quot;arrow&quot; also accepted). All values are</span>
+<span class="sd">  (``return_type``: "auto" matches the input — polars in, polars out;</span>
+<span class="sd">  explicit "pandas" / "polars" / "arrow" also accepted). All values are</span>
 <span class="sd">  strings (triplets are all-string; consumers cast); ASK stays a bool via</span>
 <span class="sd">  the tiny JSON path.</span>
 
@@ -321,7 +321,7 @@
 
 <span class="sd">Benchmarked 3.5–216x faster than the alternatives on CGMES data; index load</span>
 <span class="sd">from disk ~4 ms.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
@@ -351,36 +351,36 @@
 <span class="n">_INDEXES</span> <span class="o">=</span> <span class="n">register_cache</span><span class="p">({})</span>    <span class="c1"># content hash → loaded _qlever.QleverIndex</span>
 
 <span class="c1"># SPARQL grammar: [comments +] prologue (PREFIX/BASE declarations), then the</span>
-<span class="c1"># query form keyword — anchored so &#39;select&#39; inside a comment, PREFIX IRI or</span>
+<span class="c1"># query form keyword — anchored so 'select' inside a comment, PREFIX IRI or</span>
 <span class="c1"># string literal cannot misclassify the query.</span>
-<span class="n">_PROLOGUE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^(?:\s*(?:#[^\n]*|PREFIX\s+\S*\s*&lt;[^&gt;]*&gt;|BASE\s*&lt;[^&gt;]*&gt;))*\s*&quot;</span><span class="p">,</span>
+<span class="n">_PROLOGUE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"^(?:\s*(?:#[^\n]*|PREFIX\s+\S*\s*&lt;[^&gt;]*&gt;|BASE\s*&lt;[^&gt;]*&gt;))*\s*"</span><span class="p">,</span>
                        <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span>
-<span class="n">_QUERY_FORM</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;(select|ask|construct|describe)\b&quot;</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span>
+<span class="n">_QUERY_FORM</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"(select|ask|construct|describe)\b"</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="query">
 <a class="viewcode-back" href="../../../triplets.sparql.html#triplets.sparql.sparql_qlever.query">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Execute query_string over data; shape the result by query type.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Execute query_string over data; shape the result by query type.</span>
 
 <span class="sd">    Queries are executed exactly as given — the text is never modified.</span>
-<span class="sd">    qlever&#39;s parser is strict; a rejected query raises ValueError carrying</span>
-<span class="sd">    qlever&#39;s message plus the query text, so the failure is directly</span>
+<span class="sd">    qlever's parser is strict; a rejected query raises ValueError carrying</span>
+<span class="sd">    qlever's message plus the query text, so the failure is directly</span>
 <span class="sd">    actionable (broken constraint queries belong upstream, see TODO.md).</span>
 <span class="sd">    ``scope`` travels beside the query as SPARQL-protocol dataset clauses</span>
 <span class="sd">    (``default-graph-uri``): the query runs against exactly the union of the</span>
-<span class="sd">    scoped instances&#39; named graphs on the one shared index, and per the</span>
+<span class="sd">    scoped instances' named graphs on the one shared index, and per the</span>
 <span class="sd">    protocol these take precedence over any FROM inside the query.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">index</span> <span class="o">=</span> <span class="n">_index_for</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="p">)</span>
-    <span class="n">graphs</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;urn:uuid:</span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">]</span> <span class="k">if</span> <span class="n">scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">graphs</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">"urn:uuid:</span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">]</span> <span class="k">if</span> <span class="n">scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
     <span class="n">form</span> <span class="o">=</span> <span class="n">_query_form</span><span class="p">(</span><span class="n">query_string</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
-        <span class="n">return_type</span> <span class="o">=</span> <span class="s2">&quot;polars&quot;</span> <span class="k">if</span> <span class="n">is_polars</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;pandas&quot;</span>
+    <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
+        <span class="n">return_type</span> <span class="o">=</span> <span class="s2">"polars"</span> <span class="k">if</span> <span class="n">is_polars</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="k">else</span> <span class="s2">"pandas"</span>
 
-    <span class="k">if</span> <span class="n">form</span> <span class="o">==</span> <span class="s2">&quot;ask&quot;</span><span class="p">:</span>
-        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">_run</span><span class="p">(</span><span class="n">index</span><span class="o">.</span><span class="n">query</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="s2">&quot;sparqljson&quot;</span><span class="p">,</span> <span class="n">graphs</span><span class="p">))[</span><span class="s2">&quot;boolean&quot;</span><span class="p">])</span>
-    <span class="k">if</span> <span class="n">form</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;construct&quot;</span><span class="p">,</span> <span class="s2">&quot;describe&quot;</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">form</span> <span class="o">==</span> <span class="s2">"ask"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">_run</span><span class="p">(</span><span class="n">index</span><span class="o">.</span><span class="n">query</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="s2">"sparqljson"</span><span class="p">,</span> <span class="n">graphs</span><span class="p">))[</span><span class="s2">"boolean"</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">form</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"construct"</span><span class="p">,</span> <span class="s2">"describe"</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">_finalize</span><span class="p">(</span><span class="n">_terms_to_triplets</span><span class="p">(</span><span class="n">_run</span><span class="p">(</span><span class="n">index</span><span class="o">.</span><span class="n">construct_arrow</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">graphs</span><span class="p">)),</span>
                          <span class="n">return_type</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_finalize</span><span class="p">(</span><span class="n">_run</span><span class="p">(</span><span class="n">index</span><span class="o">.</span><span class="n">select_arrow</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">graphs</span><span class="p">),</span> <span class="n">return_type</span><span class="p">)</span></div>
@@ -391,35 +391,35 @@
     <span class="k">try</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">call</span><span class="p">(</span><span class="n">query_string</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">RuntimeError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>                          <span class="c1"># qlever parse/execution error</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qlever rejected the query: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
-                         <span class="sa">f</span><span class="s2">&quot;--- query ---</span><span class="se">\n</span><span class="si">{</span><span class="n">query_string</span><span class="o">.</span><span class="n">strip</span><span class="p">()[:</span><span class="mi">2000</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"qlever rejected the query: </span><span class="si">{</span><span class="n">error</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span>
+                         <span class="sa">f</span><span class="s2">"--- query ---</span><span class="se">\n</span><span class="si">{</span><span class="n">query_string</span><span class="o">.</span><span class="n">strip</span><span class="p">()[:</span><span class="mi">2000</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_finalize</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">return_type</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Canonical result (RecordBatch from the C++ decode, or the pandas</span>
+<span class="w">    </span><span class="sd">"""Canonical result (RecordBatch from the C++ decode, or the pandas</span>
 <span class="sd">    triplet frame from _terms_to_triplets) → requested flavor. Arrow is the</span>
-<span class="sd">    hub: pandas/polars conversions are zero-copy buffer wraps.&quot;&quot;&quot;</span>
+<span class="sd">    hub: pandas/polars conversions are zero-copy buffer wraps."""</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">RecordBatch</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;polars&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
             <span class="kn">import</span><span class="w"> </span><span class="nn">polars</span>
             <span class="k">return</span> <span class="n">polars</span><span class="o">.</span><span class="n">from_arrow</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">&quot;arrow&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"arrow"</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">Table</span><span class="o">.</span><span class="n">from_batches</span><span class="p">([</span><span class="n">result</span><span class="p">])</span>
         <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">(</span><span class="n">types_mapper</span><span class="o">=</span><span class="n">pandas</span><span class="o">.</span><span class="n">ArrowDtype</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">to_return_type</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">return_type</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_index_for</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Load (or build) the engine state for this exact data + schema.</span>
+<span class="w">    </span><span class="sd">"""Load (or build) the engine state for this exact data + schema.</span>
 
 <span class="sd">    Everything goes through the flavor-registered methods: identity via</span>
 <span class="sd">    content_hash, index input via export_to_arrow — executed only on a</span>
 <span class="sd">    cache miss. Scope does not key the state (it travels with each query</span>
 <span class="sd">    as dataset clauses).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;content_hash&quot;</span><span class="p">):</span>  <span class="c1"># pyarrow — no registered methods</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"content_hash"</span><span class="p">):</span>  <span class="c1"># pyarrow — no registered methods</span>
         <span class="n">data</span> <span class="o">=</span> <span class="n">_to_loadable</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-    <span class="n">key</span> <span class="o">=</span> <span class="n">content_key</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;triplets-qlever-2&quot;</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="p">)</span>
+    <span class="n">key</span> <span class="o">=</span> <span class="n">content_key</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="sa">b</span><span class="s2">"triplets-qlever-2"</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">_INDEXES</span><span class="p">:</span>
         <span class="n">cached</span> <span class="o">=</span> <span class="n">_INDEXES</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
@@ -427,60 +427,60 @@
             <span class="k">raise</span> <span class="n">cached</span>
         <span class="k">return</span> <span class="n">cached</span>
 
-    <span class="n">index_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;TRIPLETS_QLEVER_DIR&quot;</span><span class="p">,</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">gettempdir</span><span class="p">()))</span> \
-        <span class="o">/</span> <span class="s2">&quot;triplets-qlever&quot;</span> <span class="o">/</span> <span class="n">key</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">index_dir</span> <span class="o">/</span> <span class="s2">&quot;build-complete&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+    <span class="n">index_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"TRIPLETS_QLEVER_DIR"</span><span class="p">,</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">gettempdir</span><span class="p">()))</span> \
+        <span class="o">/</span> <span class="s2">"triplets-qlever"</span> <span class="o">/</span> <span class="n">key</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">index_dir</span> <span class="o">/</span> <span class="s2">"build-complete"</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
         <span class="c1"># Concurrency-safe publish: build into a private directory, then rename</span>
         <span class="c1"># it into place — atomic, so no process/thread ever sees a half-built</span>
         <span class="c1"># index. build-complete marks the directory as a finished build.</span>
         <span class="n">index_dir</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="n">build_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">.build-&quot;</span><span class="p">,</span> <span class="nb">dir</span><span class="o">=</span><span class="n">index_dir</span><span class="o">.</span><span class="n">parent</span><span class="p">))</span>
+        <span class="n">build_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">.build-"</span><span class="p">,</span> <span class="nb">dir</span><span class="o">=</span><span class="n">index_dir</span><span class="o">.</span><span class="n">parent</span><span class="p">))</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">_build_index</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">export_to_arrow</span><span class="p">(),</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">build_dir</span> <span class="o">/</span> <span class="s2">&quot;index&quot;</span><span class="p">))</span>
+            <span class="n">_build_index</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">export_to_arrow</span><span class="p">(),</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">build_dir</span> <span class="o">/</span> <span class="s2">"index"</span><span class="p">))</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
             <span class="c1"># Cache the failure: the build is deterministic for this content</span>
             <span class="c1"># hash, so every retry would pay the full build just to fail again.</span>
             <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">build_dir</span><span class="p">,</span> <span class="n">ignore_errors</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="n">_INDEXES</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">error</span>
             <span class="k">raise</span>
-        <span class="p">(</span><span class="n">build_dir</span> <span class="o">/</span> <span class="s2">&quot;build-complete&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">touch</span><span class="p">()</span>
+        <span class="p">(</span><span class="n">build_dir</span> <span class="o">/</span> <span class="s2">"build-complete"</span><span class="p">)</span><span class="o">.</span><span class="n">touch</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">build_dir</span><span class="p">,</span> <span class="n">index_dir</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">index_dir</span> <span class="o">/</span> <span class="s2">&quot;build-complete&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>  <span class="c1"># leftover of a crashed build — replace it</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">index_dir</span> <span class="o">/</span> <span class="s2">"build-complete"</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>  <span class="c1"># leftover of a crashed build — replace it</span>
                 <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">index_dir</span><span class="p">,</span> <span class="n">ignore_errors</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
                 <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">build_dir</span><span class="p">,</span> <span class="n">index_dir</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>                                            <span class="c1"># a concurrent build won — use its index</span>
                 <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">build_dir</span><span class="p">)</span>
 
-    <span class="n">_INDEXES</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">_qlever</span><span class="o">.</span><span class="n">QleverIndex</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">index_dir</span> <span class="o">/</span> <span class="s2">&quot;index&quot;</span><span class="p">))</span>
+    <span class="n">_INDEXES</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">_qlever</span><span class="o">.</span><span class="n">QleverIndex</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">index_dir</span> <span class="o">/</span> <span class="s2">"index"</span><span class="p">))</span>
     <span class="k">return</span> <span class="n">_INDEXES</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_build_index</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">basename</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Feed the triplet columns to qlever&#39;s index builder directly — zero-copy</span>
+<span class="w">    </span><span class="sd">"""Feed the triplet columns to qlever's index builder directly — zero-copy</span>
 <span class="sd">    Arrow batches into an injected parser, no RDF text round-trip. The term</span>
 <span class="sd">    mapping is the N-Quads export rules, applied on the C++ side from the</span>
 <span class="sd">    flattened schema maps (build_key_metadata stays the single source of</span>
-<span class="sd">    truth for rdf_map interpretation).&quot;&quot;&quot;</span>
+<span class="sd">    truth for rdf_map interpretation)."""</span>
     <span class="n">enum_keys</span><span class="p">,</span> <span class="n">key_namespaces</span><span class="p">,</span> <span class="n">key_datatypes</span> <span class="o">=</span> \
         <span class="n">build_key_metadata</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span> <span class="k">if</span> <span class="n">rdf_map</span> <span class="k">else</span> <span class="p">(</span><span class="nb">set</span><span class="p">(),</span> <span class="p">{},</span> <span class="p">{})</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;building qlever index from </span><span class="si">%d</span><span class="s2"> arrow rows&quot;</span><span class="p">,</span> <span class="n">table</span><span class="o">.</span><span class="n">num_rows</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"building qlever index from </span><span class="si">%d</span><span class="s2"> arrow rows"</span><span class="p">,</span> <span class="n">table</span><span class="o">.</span><span class="n">num_rows</span><span class="p">)</span>
     <span class="n">_qlever</span><span class="o">.</span><span class="n">build_index_from_arrow</span><span class="p">(</span><span class="n">table</span><span class="o">.</span><span class="n">to_batches</span><span class="p">(),</span> <span class="n">basename</span><span class="p">,</span>
                                    <span class="n">enum_keys</span><span class="p">,</span> <span class="n">key_namespaces</span><span class="p">,</span> <span class="n">key_datatypes</span><span class="p">,</span> <span class="n">CIM_NS</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_query_form</span><span class="p">(</span><span class="n">query_string</span><span class="p">):</span>
-    <span class="n">match</span> <span class="o">=</span> <span class="n">_QUERY_FORM</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">_PROLOGUE</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">if</span> <span class="n">match</span> <span class="k">else</span> <span class="s2">&quot;select&quot;</span>
+    <span class="n">match</span> <span class="o">=</span> <span class="n">_QUERY_FORM</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">_PROLOGUE</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="s2">""</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">if</span> <span class="n">match</span> <span class="k">else</span> <span class="s2">"select"</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_terms_to_triplets</span><span class="p">(</span><span class="n">batch</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;CONSTRUCT/DESCRIBE term columns (N-Triples-form, decoded on the C++</span>
+<span class="w">    </span><span class="sd">"""CONSTRUCT/DESCRIBE term columns (N-Triples-form, decoded on the C++</span>
 <span class="sd">    side) → triplet DataFrame via the shared term conversion (the inverse of</span>
-<span class="sd">    the N-Quads export conventions, see parser.nquads.terms_to_triplets).&quot;&quot;&quot;</span>
+<span class="sd">    the N-Quads export conventions, see parser.nquads.terms_to_triplets)."""</span>
     <span class="n">frame</span> <span class="o">=</span> <span class="n">batch</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">(</span><span class="n">types_mapper</span><span class="o">=</span><span class="n">pandas</span><span class="o">.</span><span class="n">ArrowDtype</span><span class="p">)</span>
-    <span class="n">frame</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;ID&quot;</span><span class="p">,</span> <span class="s2">&quot;KEY&quot;</span><span class="p">,</span> <span class="s2">&quot;VALUE&quot;</span><span class="p">]</span>
+    <span class="n">frame</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]</span>
     <span class="k">return</span> <span class="n">terms_to_triplets</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
 </pre></div>
         </article>
