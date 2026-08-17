@@ -103,7 +103,9 @@ jobs:
           CIBW_ENVIRONMENT: "TRIPLETS_REQUIRE_COMPILED=1"
           # Force UTF-8 on Windows (versioneer's find_sources hits cp1252 encoding errors)
           CIBW_ENVIRONMENT_WINDOWS: "PYTHONUTF8=1 TRIPLETS_REQUIRE_COMPILED=1"
-          CIBW_TEST_REQUIRES: "pytest pyarrow>=25.0.1,<26"
+          # exact build version — tests the ABI pairing precisely; also: '<' in a
+          # version range is shell redirection on the Windows runner (hard fail)
+          CIBW_TEST_REQUIRES: "pytest pyarrow==25.0.1"
           CIBW_TEST_COMMAND: "pytest {project}/tests/test_parser.py {project}/tests/test_compiled_modules.py -q --tb=short -k \"not realgrid\""
 
       - uses: actions/upload-artifact@v7
