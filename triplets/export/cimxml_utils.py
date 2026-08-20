@@ -8,6 +8,7 @@ import logging
 
 from triplets.tools import get_namespace_map
 from triplets._engine_detect import flavor
+from triplets._header import PROFILE_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ def _instance_profile_hints(instance_data):
     old header messageType, new dcat:Dataset keyword, then the URI fields
     (both can repeat — e.g. multiple Model.profile rows)."""
     hints = []
-    for key in ("Model.messageType", "keyword", "Model.profile", "conformsTo"):
+    for key in PROFILE_KEYS:
         hints.extend(str(value) for value in _values_for_key(instance_data, key))
     return hints
 

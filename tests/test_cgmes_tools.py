@@ -21,6 +21,14 @@ SVEDALA_FILES = [
 
 SKIP_REASON = "Svedala test data not available (needs git submodule)"
 
+# New dcat:Dataset-header NC instances + hybrid FullModel example (same submodule)
+NC_DIR = Path("test_data/relicapgrid/Instance/NetworkCode/Svedala/Svedala_instance")
+SVEDALA_ER = str(NC_DIR / "Svedala_ER.xml")        # Dataset; requires the Svedala EQ FullModel
+SVEDALA_RA = str(NC_DIR / "Svedala_RA.xml")        # Dataset; target of other instances' requires
+SVEDALA_RAS = str(NC_DIR / "Svedala_RAS.xml")      # Dataset; requires Svedala_RA
+HYBRID_FULLMODEL = str(Path("test_data/relicapgrid/Instance/BoundaryConfigurationExamples")
+                       / "TC-Boundary-Header-FullModelExtended" / "20241223T0642Z_ENTSO-E_EQ_BD_1.xml")
+
 
 @pytest.fixture(scope="module")
 def svedala_data():
@@ -110,6 +118,134 @@ class TestGetLoadedModelParts:
         parts = cgmes_tools.get_loaded_model_parts(svedala_data)
         assert isinstance(parts, pandas.DataFrame)
         assert len(parts) == 4  # EQ, SSH, TP, SV
+
+    def test_metadata_stays_text(self, svedala_data):
+        parts = cgmes_tools.get_loaded_model_parts(svedala_data)
+        assert parts["Model.version"].map(type).eq(str).all()
+
+    def test_both_header_kinds(self, svedala_data):
+        if not Path(SVEDALA_ER).exists():
+            pytest.skip(SKIP_REASON)
+        data = pandas.concat([svedala_data, pandas.read_RDF([SVEDALA_ER])], ignore_index=True)
+        parts = cgmes_tools.get_loaded_model_parts(data)
+        assert len(parts) == 5
+        assert set(parts["Type"]) == {"FullModel", "Dataset"}
+        # union of columns across header kinds
+        assert "Model.profile" in parts.columns and "conformsTo" in parts.columns
+
+
+PROFILE_COLUMNS = ["INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE", "PROFILE"]
+
+
+@pytest.fixture(scope="module")
+def mixed_data(svedala_data):
+    """Old-header IGM + new-header NC instance in one frame."""
+    if not Path(SVEDALA_ER).exists():
+        pytest.skip(SKIP_REASON)
+    return pandas.concat([svedala_data, pandas.read_RDF([SVEDALA_ER])], ignore_index=True)
+
+
+class TestGetLoadedProfiles:
+    def test_fullmodel_header(self, svedala_data):
+        profiles = cgmes_tools.get_loaded_profiles(svedala_data)
+        assert list(profiles.columns) == PROFILE_COLUMNS
+        assert set(profiles["HEADER"]) == {"FullModel"}
+        assert profiles["INSTANCE_ID"].nunique() == 4
+        assert set(profiles["KEY"]) == {"Model.profile"}
+        assert profiles["label"].str.endswith(".xml").all()
+        assert profiles["PROFILE"].isna().all()  # no rdf_map given
+
+    def test_dataset_header(self, mixed_data):
+        profiles = cgmes_tools.get_loaded_profiles(mixed_data)
+        er = profiles[profiles["HEADER"] == "Dataset"]
+        assert set(er["KEY"]) == {"keyword", "conformsTo"}
+        # keyword outranks conformsTo (priority order within the instance)
+        assert er["KEY"].tolist() == ["keyword", "conformsTo"]
+        assert er[er["KEY"] == "keyword"]["VALUE"].tolist() == ["ER"]
+
+    def test_hybrid_fullmodel_extended(self):
+        if not Path(HYBRID_FULLMODEL).exists():
+            pytest.skip(SKIP_REASON)
+        profiles = cgmes_tools.get_loaded_profiles(pandas.read_RDF([HYBRID_FULLMODEL]))
+        assert set(profiles["HEADER"]) == {"FullModel"}
+        # extended header declares identity through old AND new keys
+        assert {"Model.profile", "keyword", "conformsTo"} <= set(profiles["KEY"])
+
+    def test_non_header_conformsto_reported_verbatim(self):
+        # profile-registry objects (e.g. prof:Profile carrying dcterms:conformsTo)
+        # are picked up too — pinned: distinguishable by the verbatim HEADER column
+        rows = pandas.DataFrame([
+            {"ID": "fm", "KEY": "Type", "VALUE": "FullModel", "INSTANCE_ID": "i1"},
+            {"ID": "fm", "KEY": "Model.profile", "VALUE": "http://entsoe.eu/CIM/EquipmentCore/3/1", "INSTANCE_ID": "i1"},
+            {"ID": "reg", "KEY": "Type", "VALUE": "Profile", "INSTANCE_ID": "i2"},
+            {"ID": "reg", "KEY": "conformsTo", "VALUE": "https://ap.cim4.eu/Example/1.0", "INSTANCE_ID": "i2"},
+        ])
+        profiles = cgmes_tools.get_loaded_profiles(rows)
+        assert set(profiles["HEADER"]) == {"FullModel", "Profile"}
+
+    def test_rdf_map_resolution(self, mixed_data):
+        # exact ProfileMetadata identity — no URL prefixes hardcoded anywhere
+        rdf_map = {"EQ": {"ProfileMetadata": {"versionIRI": "http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0"}},
+                   "ER": {"ProfileMetadata": {"keyword": "ER",
+                                              "conformsTo": "https://ap.cim4.eu/EquipmentReliability/2.4"}}}
+        profiles = cgmes_tools.get_loaded_profiles(mixed_data, rdf_map=rdf_map)
+        by_key = profiles.set_index("KEY")["PROFILE"]
+        assert by_key["keyword"] == "ER" and by_key["conformsTo"] == "ER"
+        assert set(profiles[profiles["VALUE"].str.contains("CoreEquipment")]["PROFILE"]) == {"EQ"}
+
+    def test_rdf_map_legacy_url_fallback(self):
+        legacy = pandas.DataFrame([
+            {"ID": "fm", "KEY": "Type", "VALUE": "FullModel", "INSTANCE_ID": "i1"},
+            {"ID": "fm", "KEY": "Model.profile", "VALUE": "http://entsoe.eu/CIM/EquipmentCore/3/1", "INSTANCE_ID": "i1"},
+        ])
+        profiles = cgmes_tools.get_loaded_profiles(legacy, rdf_map={"EQ": {}})
+        assert profiles["PROFILE"].tolist() == ["EQ"]
+
+    def test_empty_data(self):
+        empty = pandas.DataFrame(columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+        profiles = cgmes_tools.get_loaded_profiles(empty)
+        assert list(profiles.columns) == PROFILE_COLUMNS and profiles.empty
+
+
+class TestGetModelRelations:
+    RELATION_COLUMNS = ["ID_FROM", "KEY", "ID_TO", "INSTANCE_ID_FROM", "INSTANCE_ID_TO"]
+
+    def test_dependenton_edges(self, svedala_data):
+        relations = cgmes_tools.get_model_relations(svedala_data)
+        assert list(relations.columns) == self.RELATION_COLUMNS
+        assert set(relations["KEY"]) == {"Model.DependentOn"}
+        # SSH/TP/SV depend on loaded parts; EQ depends on unloaded boundary parts
+        assert relations["INSTANCE_ID_TO"].notna().any()
+        assert relations["INSTANCE_ID_TO"].isna().any()
+
+    def test_cross_header_requires(self, mixed_data):
+        relations = cgmes_tools.get_model_relations(mixed_data)
+        requires = relations[relations["KEY"] == "requires"]
+        # new-header ER requires the old-header EQ FullModel — resolved across kinds
+        assert requires["ID_TO"].tolist() == ["bea45848-a05d-496b-9ab2-f42c6714183e"]
+        assert requires["INSTANCE_ID_TO"].notna().all()
+
+    def test_missing_dependency(self):
+        if not Path(SVEDALA_ER).exists():
+            pytest.skip(SKIP_REASON)
+        relations = cgmes_tools.get_model_relations(pandas.read_RDF([SVEDALA_ER]))
+        requires = relations[relations["KEY"] == "requires"]
+        assert requires["INSTANCE_ID_TO"].isna().all()  # EQ not loaded
+
+    def test_identifier_alias_no_duplicate_edges(self):
+        if not Path(SVEDALA_RA).exists():
+            pytest.skip(SKIP_REASON)
+        # RA declares the same uuid as rdf:about and dcterms:identifier — the
+        # alias must not duplicate the resolved edge
+        data = pandas.read_RDF([SVEDALA_RA, SVEDALA_RAS])
+        relations = cgmes_tools.get_model_relations(data)
+        to_ra = relations[relations["ID_TO"] == "f7b94ef6-e043-4d2a-a359-2718e6e20507"]
+        assert len(to_ra) == 1 and to_ra["INSTANCE_ID_TO"].notna().all()
+
+    def test_empty_data(self):
+        empty = pandas.DataFrame(columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+        relations = cgmes_tools.get_model_relations(empty)
+        assert list(relations.columns) == self.RELATION_COLUMNS and relations.empty
 
 
 # ── Deprecated aliases ──────────────────────────────────────────────────────

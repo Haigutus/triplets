@@ -13,10 +13,13 @@ import math
 import polars as pl
 
 from triplets import tools as rdf_parser
+from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES
+from triplets.tools.polars_engine import _tableview
 from .pandas_engine import (  # pure, engine-agnostic helpers
     default_filename_mask,
     get_metadata_from_filename,
     get_filename_from_metadata,
+    _profile_section_index,
 )
 
 
@@ -124,9 +127,81 @@ def get_model_triplets(data, model_instances_dataframe):
     return data.join(inst, on="INSTANCE_ID", how="inner")
 
 
-def get_loaded_model_parts(data):
-    """FullModel table view of the loaded model parts."""
-    return data.type_tableview("FullModel")
+def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False):
+    """Wide table of the loaded header objects (FullModel / Dataset), one row each."""
+    rows = data.filter((pl.col("KEY").cast(pl.Utf8) == "Type")
+                       & pl.col("VALUE").cast(pl.Utf8).is_in(list(header_types)))
+    return _tableview(rows, data, string_to_number, False, list(header_types))
+
+
+def _bare(column):
+    """Parser ``clean_ID`` as an expression: strip urn:uuid: / #_ / _ prefixes."""
+    return column.cast(pl.Utf8).str.strip_prefix("urn:uuid:").str.strip_prefix("#_").str.strip_prefix("_")
+
+
+def _meta_rows(data, keys):
+    """The (small) header slice: rows whose KEY is in *keys*, columns cast to Utf8.
+
+    One KEY scan on the full frame (predicate cast only — never recast the
+    whole grid), everything downstream joins on this slice.
+    """
+    return (data.filter(pl.col("KEY").cast(pl.Utf8).is_in(list(keys)))
+            .select([pl.col(c).cast(pl.Utf8) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")]))
+
+
+def get_loaded_profiles(data, profile_keys=PROFILE_KEYS, rdf_map=None):
+    """Tidy per-instance profile inventory across old/new headers (see pandas engine)."""
+    keys = list(profile_keys)
+    meta = _meta_rows(data, [*keys, "Type", "label"])
+    hints = meta.filter(pl.col("KEY").is_in(keys)).unique(maintain_order=True)
+    header = (meta.filter(pl.col("KEY") == "Type").unique(subset="ID", keep="first")
+              .select(pl.col("ID").alias("HEADER_ID"), pl.col("VALUE").alias("HEADER")))
+    labels = (meta.filter(pl.col("KEY") == "label").unique(subset="INSTANCE_ID", keep="first")
+              .select("INSTANCE_ID", pl.col("VALUE").alias("label")))
+
+    out = (hints.rename({"ID": "HEADER_ID"})
+           .join(header, on="HEADER_ID", how="left")
+           .join(labels, on="INSTANCE_ID", how="left"))
+
+    profile = pl.lit(None, dtype=pl.Utf8)
+    if rdf_map is not None:
+        identity, url_map = _profile_section_index(rdf_map)
+        profile = pl.col("VALUE").replace_strict(identity, default=None, return_dtype=pl.Utf8)
+        for url_part, section in url_map.items():
+            profile = (pl.when(profile.is_null()
+                               & pl.col("VALUE").str.contains(url_part, literal=True))
+                       .then(pl.lit(section)).otherwise(profile))
+    out = out.with_columns(profile.alias("PROFILE"))
+
+    rank = {key: position for position, key in enumerate(keys)}
+    out = out.sort("INSTANCE_ID", pl.col("KEY").replace_strict(rank, default=len(rank)),
+                   maintain_order=True)
+    return out.select("INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE", "PROFILE")
+
+
+def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
+    """Header→header dependency edges with target-instance resolution (see pandas engine)."""
+    refs, profs = list(reference_keys), list(profile_keys)
+    meta = _meta_rows(data, [*refs, *profs, "identifier"])
+
+    carriers = (meta.filter(pl.col("KEY").is_in(refs + profs))
+                .select("ID", "INSTANCE_ID").unique(maintain_order=True))
+    aliases = meta.filter(pl.col("KEY") == "identifier").join(
+        carriers.select("ID").unique(), on="ID", how="inner")
+    targets = pl.concat([
+        carriers.select(_bare(pl.col("ID")).alias("ID_TO"),
+                        pl.col("INSTANCE_ID").alias("INSTANCE_ID_TO")),
+        aliases.select(_bare(pl.col("VALUE")).alias("ID_TO"),
+                       pl.col("INSTANCE_ID").alias("INSTANCE_ID_TO")),
+    ]).unique(subset="ID_TO", keep="first", maintain_order=True)
+
+    edges = (meta.filter(pl.col("KEY").is_in(refs))
+             .select(_bare(pl.col("ID")).alias("ID_FROM"), "KEY",
+                     _bare(pl.col("VALUE")).alias("ID_TO"),
+                     pl.col("INSTANCE_ID").alias("INSTANCE_ID_FROM"))
+             .unique(maintain_order=True))
+    return (edges.join(targets, on="ID_TO", how="left")
+            .select("ID_FROM", "KEY", "ID_TO", "INSTANCE_ID_FROM", "INSTANCE_ID_TO"))
 
 
 def get_EIC_to_mRID_map(data, type):

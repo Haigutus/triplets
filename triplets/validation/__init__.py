@@ -37,6 +37,7 @@ from typing import Any
 import pandas
 
 from .._engine_detect import flavor
+from .._header import PROFILE_KEYS as _HEADER_KEYS
 from .._registry import EngineRegistry
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
 from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
@@ -346,9 +347,6 @@ def _type_map(data, table_name="triplets"):
         return dict(zip(rows["ID"].to_list(), rows["VALUE"].to_list()))
     rows = data.loc[data["KEY"] == "Type"]
     return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
-
-
-_HEADER_KEYS = ("Model.messageType", "keyword", "Model.profile", "conformsTo")
 
 
 def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, **kwargs):

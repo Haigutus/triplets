@@ -6,6 +6,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `cgmes_tools.get_loaded_profiles(data, profile_keys=..., rdf_map=None)` —
+  tidy inventory of the profiles each loaded instance declares
+  (`INSTANCE_ID | label | HEADER | HEADER_ID | KEY | VALUE | PROFILE`),
+  key-driven across old (FullModel) and new (dcat:Dataset) headers: the
+  header class is reported verbatim, never matched. With `rdf_map=` each
+  declaration resolves to the schema section it identifies (exact
+  ProfileMetadata identity, legacy 2.4 profile-URL substring fallback) —
+  the same resolution `validate_schema` and the cimxml export use.
+- `cgmes_tools.get_model_relations(data)` — dependency edges between
+  model-part headers (`Model.DependentOn` / `requires`), resolved across
+  header generations (a dcat:Dataset requiring a FullModel resolves like
+  any other); `INSTANCE_ID_TO` is NA when the referenced part is not
+  loaded. Targets are matched by header object ID with `dcterms:identifier`
+  as alias; IDs normalized like parsed IDs (urn:uuid: / #_ / _ stripped).
+- The shared header vocabulary is public: `cgmes_tools.PROFILE_KEYS`,
+  `REFERENCE_KEYS`, `HEADER_TYPES` (one definition, also used by
+  `validate_schema` and the cimxml export resolver).
+
 ### Fixed
 - `validate_schema` on a DuckDB connection with a non-default table/schema
   (`connect(table=...)`, `set_triplets_table`, `table=`/`schema=` kwargs):
@@ -23,6 +42,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   longer match the wrong section.
 
 ### Changed
+- `cgmes_tools.get_loaded_model_parts` covers both header generations: it
+  selects `header_types=("FullModel", "Dataset")` (parameterizable) and
+  pivots the union of their keys. Header metadata now stays text
+  (`string_to_number=False` default — `Model.version` "1" is no longer
+  converted to 1.0). Repeated keys still keep the first value only —
+  use `get_model_relations` for the dependency edges.
 - `validate_schema` runs one raw engine pass per (instance, profile) and
   builds the presentation (TARGET/EXPECTED/enrichment) once on the merged
   result instead of per pair.

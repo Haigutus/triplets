@@ -48,6 +48,8 @@ CALL_SPECS = {
     "get_loaded_models": lambda d, c: cgmes.get_loaded_models(d),
     "get_model_triplets": lambda d, c: cgmes.get_model_triplets(d, c["models"]),
     "get_loaded_model_parts": lambda d, c: cgmes.get_loaded_model_parts(d),
+    "get_loaded_profiles": lambda d, c: cgmes.get_loaded_profiles(d),
+    "get_model_relations": lambda d, c: cgmes.get_model_relations(d),
     "get_EIC_to_mRID_map": lambda d, c: cgmes.get_EIC_to_mRID_map(d, c["eic_type"]),
     "get_GeneratingUnits": lambda d, c: cgmes.get_GeneratingUnits(d),
     "count_GeneratingUnit_types": lambda d, c: cgmes.count_GeneratingUnit_types(d),
