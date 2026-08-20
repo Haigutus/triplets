@@ -12,9 +12,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`INSTANCE_ID | label | HEADER | HEADER_ID | KEY | VALUE | PROFILE`),
   key-driven across old (FullModel) and new (dcat:Dataset) headers: the
   header class is reported verbatim, never matched. With `rdf_map=` each
-  declaration resolves to the schema section it identifies (exact
-  ProfileMetadata identity, legacy 2.4 profile-URL substring fallback) —
-  the same resolution `validate_schema` and the cimxml export use.
+  declaration resolves to the schema section it identifies, per row: exact
+  ProfileMetadata identity first, legacy 2.4 profile-URL substring fallback —
+  the same identity index and URL map `validate_schema` and the cimxml
+  export resolve with (now defined once in `triplets/_header.py`).
 - `cgmes_tools.get_model_relations(data)` — dependency edges between
   model-part headers (`Model.DependentOn` / `requires`), resolved across
   header generations (a dcat:Dataset requiring a FullModel resolves like

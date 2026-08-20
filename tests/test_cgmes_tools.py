@@ -201,6 +201,18 @@ class TestGetLoadedProfiles:
         profiles = cgmes_tools.get_loaded_profiles(legacy, rdf_map={"EQ": {}})
         assert profiles["PROFILE"].tolist() == ["EQ"]
 
+    def test_null_and_empty_values_dropped(self):
+        rows = pandas.DataFrame([
+            {"ID": "fm", "KEY": "Type", "VALUE": "FullModel", "INSTANCE_ID": "i1"},
+            {"ID": "fm", "KEY": "Model.profile", "VALUE": None, "INSTANCE_ID": "i1"},
+            {"ID": "fm", "KEY": "conformsTo", "VALUE": "", "INSTANCE_ID": "i1"},
+            {"ID": "fm", "KEY": "keyword", "VALUE": "EQ", "INSTANCE_ID": "i1"},
+        ])
+        profiles = cgmes_tools.get_loaded_profiles(rows)
+        assert profiles["VALUE"].tolist() == ["EQ"]
+        polars = pytest.importorskip("polars")
+        assert cgmes_tools.get_loaded_profiles(polars.from_pandas(rows))["VALUE"].to_list() == ["EQ"]
+
     def test_empty_data(self):
         empty = pandas.DataFrame(columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
         profiles = cgmes_tools.get_loaded_profiles(empty)
@@ -241,6 +253,21 @@ class TestGetModelRelations:
         relations = cgmes_tools.get_model_relations(data)
         to_ra = relations[relations["ID_TO"] == "f7b94ef6-e043-4d2a-a359-2718e6e20507"]
         assert len(to_ra) == 1 and to_ra["INSTANCE_ID_TO"].notna().all()
+
+    def test_prefixed_identifier_alias_resolves(self):
+        # a header whose identifier carries the urn:uuid: prefix (element text
+        # is not clean_ID'd at parse — TC-Boundary-Header-Dataset style) still
+        # resolves as a target through the normalized alias
+        rows = pandas.DataFrame([
+            {"ID": "aaa", "KEY": "conformsTo", "VALUE": "https://ap.cim4.eu/Example/1.0", "INSTANCE_ID": "i1"},
+            {"ID": "aaa", "KEY": "identifier", "VALUE": "urn:uuid:1234", "INSTANCE_ID": "i1"},
+            {"ID": "bbb", "KEY": "requires", "VALUE": "urn:uuid:1234", "INSTANCE_ID": "i2"},
+        ])
+        for frame in (rows, pytest.importorskip("polars").from_pandas(rows)):
+            relations = cgmes_tools.get_model_relations(frame)
+            edge = pandas.DataFrame(relations) if isinstance(relations, pandas.DataFrame) else relations.to_pandas()
+            assert edge["ID_TO"].tolist() == ["1234"]
+            assert edge["INSTANCE_ID_TO"].tolist() == ["i1"]
 
     def test_empty_data(self):
         empty = pandas.DataFrame(columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])

@@ -13,13 +13,13 @@ import math
 import polars as pl
 
 from triplets import tools as rdf_parser
-from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES
+from triplets._header import (PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES,
+                              _profile_section_index)
 from triplets.tools.polars_engine import _tableview
 from .pandas_engine import (  # pure, engine-agnostic helpers
     default_filename_mask,
     get_metadata_from_filename,
     get_filename_from_metadata,
-    _profile_section_index,
 )
 
 
@@ -131,7 +131,7 @@ def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=Fal
     """Wide table of the loaded header objects (FullModel / Dataset), one row each."""
     rows = data.filter((pl.col("KEY").cast(pl.Utf8) == "Type")
                        & pl.col("VALUE").cast(pl.Utf8).is_in(list(header_types)))
-    return _tableview(rows, data, string_to_number, False, list(header_types))
+    return _tableview(rows, data, string_to_number, False, "/".join(header_types))
 
 
 def _bare(column):
@@ -140,24 +140,32 @@ def _bare(column):
 
 
 def _meta_rows(data, keys):
-    """The (small) header slice: rows whose KEY is in *keys*, columns cast to Utf8.
+    """The (small) header slice: rows whose KEY is in *keys* and VALUE is set,
+    columns cast to Utf8.
 
     One KEY scan on the full frame (predicate cast only — never recast the
     whole grid), everything downstream joins on this slice.
     """
     return (data.filter(pl.col("KEY").cast(pl.Utf8).is_in(list(keys)))
-            .select([pl.col(c).cast(pl.Utf8) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")]))
+            .select([pl.col(c).cast(pl.Utf8) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
+            .drop_nulls(subset="VALUE"))
 
 
 def get_loaded_profiles(data, profile_keys=PROFILE_KEYS, rdf_map=None):
     """Tidy per-instance profile inventory across old/new headers (see pandas engine)."""
     keys = list(profile_keys)
-    meta = _meta_rows(data, [*keys, "Type", "label"])
-    hints = meta.filter(pl.col("KEY").is_in(keys)).unique(maintain_order=True)
-    header = (meta.filter(pl.col("KEY") == "Type").unique(subset="ID", keep="first")
-              .select(pl.col("ID").alias("HEADER_ID"), pl.col("VALUE").alias("HEADER")))
-    labels = (meta.filter(pl.col("KEY") == "label").unique(subset="INSTANCE_ID", keep="first")
-              .select("INSTANCE_ID", pl.col("VALUE").alias("label")))
+    hints = (_meta_rows(data, keys).filter(pl.col("VALUE") != "")
+             .unique(maintain_order=True))
+    # only the hint-carrying IDs' Type rows — never the whole Type column
+    header = (data.filter((pl.col("KEY").cast(pl.Utf8) == "Type")
+                          & pl.col("ID").cast(pl.Utf8).is_in(hints["ID"].to_list()))
+              .select(pl.col("ID").cast(pl.Utf8).alias("HEADER_ID"),
+                      pl.col("VALUE").cast(pl.Utf8).alias("HEADER"))
+              .unique(subset="HEADER_ID", keep="first"))
+    labels = (data.filter(pl.col("KEY").cast(pl.Utf8) == "label")
+              .select(pl.col("INSTANCE_ID").cast(pl.Utf8),
+                      pl.col("VALUE").cast(pl.Utf8).alias("label"))
+              .drop_nulls(subset="label").unique(subset="INSTANCE_ID", keep="first"))
 
     out = (hints.rename({"ID": "HEADER_ID"})
            .join(header, on="HEADER_ID", how="left")

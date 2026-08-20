@@ -454,7 +454,7 @@ def _match_profiles(hints, compiled_set):
         if section and section not in sections:
             sections.append(section)
     if not sections:
-        from ..export.cimxml_utils import PROFILE_URL_MAP
+        from .._header import PROFILE_URL_MAP
         for hint in hints:
             for url_part, section in PROFILE_URL_MAP.items():
                 if url_part in hint and section in compiled_set.profiles \

@@ -20,8 +20,9 @@ from uuid import uuid4
 from lxml import etree
 from builtins import str
 from triplets import tools as rdf_parser  # backwards compat alias; tools replaces rdf_parser
-from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES
+from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES, _profile_section_index
 from triplets.parser import parse as load_all_to_dataframe
+from triplets.parser.utils import clean_ID
 from triplets.tools.pandas_engine import _tableview
 
 import logging
@@ -516,28 +517,12 @@ def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=Fal
     >>> model_parts = get_loaded_model_parts(data)
     """
     rows = data[(data["KEY"] == "Type") & (data["VALUE"].isin(list(header_types)))]
-    return _tableview(rows, data, string_to_number, False, list(header_types))
+    return _tableview(rows, data, string_to_number, False, "/".join(header_types))
 
 
 def _bare_id(values):
-    """Vectorized parser ``clean_ID``: strip urn:uuid: / #_ / _ prefixes."""
-    return values.astype(str).str.replace(r"^(?:urn:uuid:)?(?:#_)?_?", "", regex=True)
-
-
-def _profile_section_index(rdf_map):
-    """Exact identity index + legacy URL substring map for the given schema.
-
-    Same resolution the export/validation paths use: the schema's own
-    ProfileMetadata identity first (section key / keyword / versionIRI /
-    conformsTo), legacy 2.4 profile-URL substrings limited to sections the
-    schema actually contains.
-    """
-    from triplets.export.cimxml_utils import (
-        PROFILE_URL_MAP, _profile_identity_index, load_rdf_map)
-    schema = load_rdf_map(rdf_map)
-    url_map = {part: section for part, section in PROFILE_URL_MAP.items()
-               if section in schema}
-    return _profile_identity_index(schema), url_map
+    """Parser ``clean_ID`` element-wise — the header slices this runs on are tiny."""
+    return values.astype(str).map(clean_ID)
 
 
 def get_loaded_profiles(data, profile_keys=PROFILE_KEYS, rdf_map=None):
@@ -575,11 +560,15 @@ def get_loaded_profiles(data, profile_keys=PROFILE_KEYS, rdf_map=None):
     >>> profiles[profiles.KEY == "keyword"]
     """
     keys = list(profile_keys)
-    meta = data.loc[data["KEY"].isin([*keys, "Type", "label"]),
-                    ["ID", "KEY", "VALUE", "INSTANCE_ID"]].astype(str)
-    hints = meta.loc[meta["KEY"].isin(keys)].drop_duplicates()
-    header = meta.loc[meta["KEY"] == "Type"].drop_duplicates("ID").set_index("ID")["VALUE"]
-    labels = meta.loc[meta["KEY"] == "label"].drop_duplicates("INSTANCE_ID").set_index("INSTANCE_ID")["VALUE"]
+    hints = (data.loc[data["KEY"].isin(keys), ["ID", "KEY", "VALUE", "INSTANCE_ID"]]
+             .dropna(subset=["VALUE"]).astype(str))
+    hints = hints.loc[hints["VALUE"] != ""].drop_duplicates()
+    # only the hint-carrying IDs' Type rows — never the whole Type column
+    header = (data.loc[(data["KEY"] == "Type") & data["ID"].isin(hints["ID"]), ["ID", "VALUE"]]
+              .astype(str).drop_duplicates("ID").set_index("ID")["VALUE"])
+    labels = (data.loc[data["KEY"] == "label", ["INSTANCE_ID", "VALUE"]]
+              .dropna(subset=["VALUE"]).astype(str)
+              .drop_duplicates("INSTANCE_ID").set_index("INSTANCE_ID")["VALUE"])
 
     out = hints.rename(columns={"ID": "HEADER_ID"})
     out["HEADER"] = out["HEADER_ID"].map(header)
@@ -631,8 +620,9 @@ def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFIL
     >>> missing = relations[relations.INSTANCE_ID_TO.isna()]
     """
     refs, profs = list(reference_keys), list(profile_keys)
-    meta = data.loc[data["KEY"].isin([*refs, *profs, "identifier"]),
-                    ["ID", "KEY", "VALUE", "INSTANCE_ID"]].astype(str)
+    meta = (data.loc[data["KEY"].isin([*refs, *profs, "identifier"]),
+                     ["ID", "KEY", "VALUE", "INSTANCE_ID"]]
+            .dropna(subset=["VALUE"]).astype(str))
 
     # loaded headers: objects carrying a profile or reference key; their
     # identifier values are aliases for the same instance (the localname is
