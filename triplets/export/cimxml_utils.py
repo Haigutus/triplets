@@ -2,69 +2,18 @@
 # Name:        export/cimxml_utils.py
 # Purpose:     Shared helpers for CIM XML export engines (python_lxml, cython_pugixml)
 # -------------------------------------------------------------------------------
-import json
 import uuid
 import logging
 
 from triplets.tools import get_namespace_map
 from triplets._engine_detect import flavor
+from triplets._header import (  # noqa: F401 — load_rdf_map re-exported for the cimxml engines
+    PROFILE_KEYS, PROFILE_URL_MAP, load_rdf_map, _profile_identity_index)
 
 logger = logging.getLogger(__name__)
 
-# Legacy fallback only: maps a substring of old-style (CGMES 2.4.15)
-# Model.profile URLs to the schema section. Modern schemas resolve via their
-# embedded ProfileMetadata (keyword / versionIRI / conformsTo) instead.
-PROFILE_URL_MAP = {
-    "EquipmentCore": "EQ",
-    "EquipmentOperation": "EQ",
-    "EquipmentShortCircuit": "EQ",
-    "SteadyState": "SSH",
-    "StateVariables": "SV",
-    "Topology/": "TP",
-    "EquipmentBoundary": "EQBD",
-    "TopologyBoundary": "TPBD",
-    "DiagramLayout": "DL",
-    "Dynamics": "DY",
-    "GeographicalLocation": "GL",
-    "FileHeader": "FH",
-}
-
 # Namespace for internal/undefined structures when export_undefined=True
 TRIPLETS_NS = "http://triplets#"
-
-
-def load_rdf_map(rdf_map):
-    """Return the export schema as a dict; load from JSON file path if needed."""
-    if isinstance(rdf_map, dict):
-        return rdf_map
-    with open(rdf_map, "r") as conf_file:
-        return json.load(conf_file)
-
-
-def _profile_identity_index(rdf_map):
-    """Map every identifier a schema section declares to the section name.
-
-    Sections identify themselves via their key ("EQ") and the ProfileMetadata
-    entry: keyword ("EQ"), versionIRI (the profile URI, matches old-header
-    Model.profile), conformsTo. The schema defines what to match — no
-    hardcoded knowledge per CGMES generation. An identifier several sections
-    share (e.g. the IEC document URN every CGMES 3.0 section carries as
-    conformsTo) identifies none of them and is dropped from the index.
-    """
-    index, ambiguous = {}, set()
-    for section_name, section in rdf_map.items():
-        if not isinstance(section, dict):
-            continue
-        metadata = section.get("ProfileMetadata", {})
-        identifiers = [section_name, metadata.get("keyword"),
-                       metadata.get("versionIRI"), metadata.get("conformsTo")]
-        for identifier in identifiers:
-            if isinstance(identifier, str) and identifier:
-                if index.setdefault(identifier, section_name) != section_name:
-                    ambiguous.add(identifier)
-    for identifier in ambiguous:
-        del index[identifier]
-    return index
 
 
 def _values_for_key(instance_data, key):
@@ -82,7 +31,7 @@ def _instance_profile_hints(instance_data):
     old header messageType, new dcat:Dataset keyword, then the URI fields
     (both can repeat — e.g. multiple Model.profile rows)."""
     hints = []
-    for key in ("Model.messageType", "keyword", "Model.profile", "conformsTo"):
+    for key in PROFILE_KEYS:
         hints.extend(str(value) for value in _values_for_key(instance_data, key))
     return hints
 

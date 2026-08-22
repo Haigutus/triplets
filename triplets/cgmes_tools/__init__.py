@@ -21,6 +21,7 @@ import pandas
 
 from . import pandas_engine
 from .._engine_detect import flavor, match_flavor, to_pandas
+from .._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES  # noqa: F401 — header vocabulary, re-exported
 from ..tools import _engine_functions, _deprecated_alias
 from .pandas_engine import (  # noqa: F401 — no triplet-data argument, re-exported as-is
     dependencies,
@@ -122,4 +123,5 @@ __all__ = [
     "dependencies", "default_filename_mask", "generate_instance_ids",
     "get_metadata_from_filename", "get_filename_from_metadata",
     "get_metadata_from_xml",
+    "PROFILE_KEYS", "REFERENCE_KEYS", "HEADER_TYPES",
 ] + DATA_FUNCTIONS + list(DEPRECATED_ALIASES)

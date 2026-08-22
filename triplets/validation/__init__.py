@@ -37,6 +37,7 @@ from typing import Any
 import pandas
 
 from .._engine_detect import flavor
+from .._header import PROFILE_KEYS as _HEADER_KEYS
 from .._registry import EngineRegistry
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
 from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
@@ -348,9 +349,6 @@ def _type_map(data, table_name="triplets"):
     return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
 
 
-_HEADER_KEYS = ("Model.messageType", "keyword", "Model.profile", "conformsTo")
-
-
 def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, **kwargs):
     """Validate triplet data against the export schema — per instance, per
     declared profile; profiles are never merged.
@@ -456,7 +454,7 @@ def _match_profiles(hints, compiled_set):
         if section and section not in sections:
             sections.append(section)
     if not sections:
-        from ..export.cimxml_utils import PROFILE_URL_MAP
+        from .._header import PROFILE_URL_MAP
         for hint in hints:
             for url_part, section in PROFILE_URL_MAP.items():
                 if url_part in hint and section in compiled_set.profiles \
