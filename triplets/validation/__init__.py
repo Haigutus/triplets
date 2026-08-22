@@ -38,7 +38,7 @@ import pandas
 
 from .._engine_detect import flavor
 from .._registry import EngineRegistry
-from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
+from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
 from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
                            violations_to_csv, violations_to_excel)
@@ -123,8 +123,20 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
     started = datetime.now(timezone.utc)   # after compile — duration is the run, cache-independent
     engine_name, engine_mod = get_engine(engine)
-    violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, scope=scope, **kwargs)
+    table_ref = _table_ref(data, **kwargs)
+    violations = _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, **kwargs)
+    violations = _present(violations, data, compiled.ir, compiled.language, table_ref)
+    if context:
+        violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
+    violations.attrs["validation"] = _report_metadata(
+        violations, data, compiled, engine_name, started, table_name=table_ref)
+    return violations
 
+
+def _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, **kwargs):
+    """One engine pass, plus the lexical datatype supplement when the engine
+    does not emit it itself — raw violations, presentation columns not yet added."""
+    violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, scope=scope, **kwargs)
     if lexical and engine_name not in _LEXICAL_BUILTIN:
         from . import shacl_pandas
         supplement = shacl_pandas.validate(data, compiled, rdf_map=rdf_map, scope=scope,
@@ -132,22 +144,35 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         violations = (pandas.concat([violations, supplement], ignore_index=True)
                       .drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
                                                "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
-    violations = _describe_associations(violations, data, compiled,
-                                        table_name=kwargs.get("table_name", "triplets"))
-    violations["EXPECTED"] = _expected(violations, compiled)
-    violations["MESSAGE_SOURCE"] = _message_sources(violations, compiled)
-    if compiled.language != "shacl":     # present vocabulary-accurate types, not fake SHACL
-        violations["VIOLATION_TYPE"] = (violations["VIOLATION_TYPE"].map(_PRESENTED)
-                                        .fillna(violations["VIOLATION_TYPE"]))
-    if context:
-        violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
-    violations.attrs["validation"] = _report_metadata(
-        violations, data, compiled, engine_name, started,
-        table_name=kwargs.get("table_name", "triplets"))
     return violations
 
 
-def _describe_associations(violations, data, compiled, table_name="triplets"):
+def _present(violations, data, ir, language, table_name="triplets"):
+    """The shared presentation pass: TARGET / EXPECTED / MESSAGE_SOURCE and
+    the vocabulary-accurate violation types for non-SHACL constraint languages."""
+    violations = _describe_associations(violations, data, ir, table_name=table_name)
+    violations["EXPECTED"] = _expected(violations, ir)
+    violations["MESSAGE_SOURCE"] = _message_sources(violations, ir)
+    if language != "shacl":              # present vocabulary-accurate types, not fake SHACL
+        violations["VIOLATION_TYPE"] = (violations["VIOLATION_TYPE"].map(_PRESENTED)
+                                        .fillna(violations["VIOLATION_TYPE"]))
+    return violations
+
+
+def _table_ref(data, **kwargs):
+    """The SQL relation the helper queries read: duckdb inputs resolve through
+    the connection's configured table/schema exactly like the duckdb engine
+    (call kwargs → connection config → package default); other flavors never
+    read it."""
+    if flavor(data) == "duckdb":
+        from ..tools.duckdb_engine import _resolve_table
+        return _resolve_table(data, table=kwargs.get("table"),
+                              schema=kwargs.get("schema"),
+                              table_name=kwargs.get("table_name"))
+    return kwargs.get("table_name", "triplets")
+
+
+def _describe_associations(violations, data, ir, table_name="triplets"):
     """Findings get a TARGET entry stating what was actually found in the
     data — the raw MESSAGE stays verbatim (exporters emit TARGET as its own
     [context_message] entry), so the error is self-contained:
@@ -159,10 +184,10 @@ def _describe_associations(violations, data, compiled, table_name="triplets"):
     One shared pass over the violations frame; no per-engine code.
     """
     violations["TARGET"] = pandas.Series(None, index=violations.index, dtype=object)
-    if violations.empty or compiled.ir.empty:
+    if violations.empty or ir.empty:
         return violations
-    via_rules = set(zip(compiled.ir.loc[compiled.ir["via_type"], "shape_id"],
-                        compiled.ir.loc[compiled.ir["via_type"], "path"]))
+    via_rules = set(zip(ir.loc[ir["via_type"], "shape_id"],
+                        ir.loc[ir["via_type"], "path"]))
     keys = pandas.Series(list(zip(violations["SOURCE_SHAPE"], violations["KEY"])),
                          index=violations.index)
     described = violations["VALUE"].notna()
@@ -264,10 +289,10 @@ _EXPECTED = {
 }
 
 
-def _expected(violations, compiled):
+def _expected(violations, ir):
     """EXPECTED column: the violated constraint's requirement in words."""
     params = {(rule.shape_id, rule.path, rule.component): rule.params
-              for rule in compiled.ir.itertuples() if rule.component in _EXPECTED}
+              for rule in ir.itertuples() if rule.component in _EXPECTED}
 
     def lookup(shape, key, violation_type):
         component = "sh:datatype" if violation_type == "triplets:lexicalForm" else violation_type
@@ -297,10 +322,10 @@ def _source_shape_graphs(violations, compiled):
     return graphs
 
 
-def _message_sources(violations, compiled):
+def _message_sources(violations, ir):
     """Per row: "shacl" when the text is the shape's own sh:message (engines
     use it verbatim; post-pass suffixes append after it), else "engine"."""
-    authored = tuple(sorted({rule.message for rule in compiled.ir.itertuples()
+    authored = tuple(sorted({rule.message for rule in ir.itertuples()
                              if isinstance(rule.message, str) and rule.message},
                             key=len, reverse=True))
     return ["shacl" if isinstance(message, str) and message.startswith(authored) else "engine"
@@ -350,7 +375,10 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, *
 
     started = datetime.now(timezone.utc)
     compiled_set = compile_schema(rdf_map, closed=closed)
-    table_name = kwargs.get("table_name", "triplets")
+    table_name = _table_ref(data, **kwargs)
+    engine_name, engine_mod = get_engine(engine)
+    lexical = kwargs.pop("lexical", True)
+    context = kwargs.pop("context", False)
 
     chosen = None
     if profiles is not None:
@@ -372,19 +400,26 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, *
             continue
         runs.extend((instance, section) for section in sections)
 
+    # one raw engine pass per (instance, profile) — the scope filter keeps
+    # counting per instance; describe/expected/enrich run ONCE on the concat
     frames = []
     for instance, section in runs:
-        sub = validate(data, compiled_set.profiles[section], rdf_map=rdf_map,
-                       engine=engine, scope=[instance], **kwargs)
+        sub = _run(data, compiled_set.profiles[section], engine_name, engine_mod,
+                   rdf_map, [instance], lexical, **kwargs)
         sub["PROFILE"] = section
         frames.append(sub)
 
-    columns = VIOLATION_COLUMNS + ["TARGET", "EXPECTED", "MESSAGE_SOURCE", "PROFILE"]
-    violations = (pandas.concat(frames, ignore_index=True)[columns] if frames
-                  else pandas.DataFrame(columns=columns))
-
     used = sorted({section for _, section in runs})
-    engine_name = get_engine(engine)[0]
+    violations = (pandas.concat(frames, ignore_index=True) if frames
+                  else pandas.DataFrame(columns=VIOLATION_COLUMNS + ["PROFILE"]))
+    ir = (pandas.concat([compiled_set.profiles[section].ir for section in used],
+                        ignore_index=True) if used
+          else pandas.DataFrame(columns=IR_COLUMNS))
+    violations = _present(violations, data, ir, "rdfs", table_name)
+    if context:
+        union = CompiledShapes(graph=None, ir=ir, hash=compiled_set.hash,
+                               sources=compiled_set.sources, language="rdfs")
+        violations = enrich(violations, data=data, shapes=union, rdf_map=rdf_map)
     skipped = sorted(
         {f"{section}: {entry}" for section in used
          for entry in compiled_set.profiles[section].stats["skipped_shapes"]}

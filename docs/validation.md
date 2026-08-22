@@ -1,8 +1,10 @@
 # SHACL Validation Architecture
 
-## Status & known limitations (alpha)
+## Status & known limitations
 
-The module is new — APIs may still shift. Know these before relying on it:
+The validation API is frozen as of 0.2.0rc1. Known engine gaps (each
+reported in the run's coverage metadata, `skipped_shapes` /
+`skipped_components`):
 
 - **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
   Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /

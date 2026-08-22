@@ -6,6 +6,30 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- `validate_schema` on a DuckDB connection with a non-default table/schema
+  (`connect(table=...)`, `set_triplets_table`, `table=`/`schema=` kwargs):
+  instance discovery and the describe helpers now resolve the relation the
+  same way the duckdb engine does instead of assuming `triplets`.
+- `validate_schema(..., context=True)` kept discarding the enrichment
+  columns; enrichment now runs once on the merged result and its columns
+  survive.
+- Legacy CGMES 2.4 profile-URL fallback now also resolves DL, DY, GL, FH
+  instances and EQ files declaring only EquipmentOperation /
+  EquipmentShortCircuit.
+- Profile-identity resolution ignores identifiers shared by several schema
+  sections (e.g. the IEC document URN every CGMES 3.0 section carries as
+  `conformsTo`) — a shared identifier identifies no profile, so it can no
+  longer match the wrong section.
+
+### Changed
+- `validate_schema` runs one raw engine pass per (instance, profile) and
+  builds the presentation (TARGET/EXPECTED/enrichment) once on the merged
+  result instead of per pair.
+- The 0.1 deprecation shims (`rdf_parser`, old `rdfs_tools`/`cgmes_tools`
+  names) stay in 0.2; they are under consideration for removal in a future
+  version (0.1.0 announced removal in 0.2 — superseded).
+
 ## [0.2.0rc5] - 2026-08-17
 
 Schema-validation semantics: per instance, per declared profile —
