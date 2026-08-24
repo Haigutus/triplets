@@ -392,6 +392,12 @@ def get_loaded_models(data):
         Dictionary where keys are StateVariables (SV) UUIDs and values are DataFrames
         containing model parts (ID, PROFILE, INSTANCE_ID) and their dependencies.
 
+    Notes
+    -----
+    - CGMES 2.4 only: anchors on the 2.4 StateVariables profile URI — returns
+      {} for CGMES 3.0 / dcat:Dataset headers. See :func:`get_model_relations`
+      for the header-generation-agnostic dependency edges.
+
     Examples
     --------
     >>> models = get_loaded_models(data)
@@ -494,8 +500,8 @@ def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=Fal
         Header classes to select (default: old ``FullModel`` and new dcat
         ``Dataset``); the result is the union of their columns.
     string_to_number : bool, optional
-        If True, convert numeric-looking columns (default False — header
-        metadata like ``Model.version`` "1" stays text).
+        If True, convert numeric-looking columns to numeric types (default
+        False — header metadata like ``Model.version`` "1" stays text).
     multivalue : bool, optional
         If True, repeated keys (``Model.DependentOn``, ``requires``) become
         lists (pandas/polars input only — list cells cannot convert back to
@@ -626,10 +632,6 @@ def get_GeneratingUnits(data):
        ID  GeneratingUnit.maxOperatingP  ...
     """
     return data.key_tableview("GeneratingUnit.maxOperatingP")
-
-
-
-
 
 
 def get_limits(data):
