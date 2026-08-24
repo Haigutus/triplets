@@ -484,12 +484,63 @@ def get_EIC_to_mRID_map(data, type):
 
 
 def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False, multivalue=False):
-    """Wide table of loaded header objects (FullModel and Dataset). Repeated keys (DependentOn, requires) keep the first value; multivalue=True returns them as lists (pandas/polars input only - list cells cannot convert back to arrow)."""
+    """Wide table of the loaded header objects (model parts), one row each.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    header_types : sequence of str, optional
+        Header classes to select (default: old ``FullModel`` and new dcat
+        ``Dataset``); the result is the union of their columns.
+    string_to_number : bool, optional
+        If True, convert numeric-looking columns (default False — header
+        metadata like ``Model.version`` "1" stays text).
+    multivalue : bool, optional
+        If True, repeated keys (``Model.DependentOn``, ``requires``) become
+        lists (pandas/polars input only — list cells cannot convert back to
+        arrow). Default False keeps the first value.
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        Pivoted DataFrame with header IDs as index and keys as columns,
+        or None when no header object is present.
+
+    Examples
+    --------
+    >>> model_parts = get_loaded_model_parts(data)
+    """
     return data.type_tableview(header_types, string_to_number=string_to_number, multivalue=multivalue)
 
 
 def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
-    """One row per profile declaration. Header class is reported verbatim, never matched."""
+    """Inventory of the profiles each loaded instance declares.
+
+    Key-driven across old (FullModel) and new (dcat:Dataset) headers: scans
+    for *profile_keys* wherever they appear; the header class is reported
+    verbatim in HEADER, never matched.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    profile_keys : sequence of str, optional
+        Header KEYs that declare profile identity (default covers both
+        header generations).
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per profile declaration, columns
+        ``INSTANCE_ID | label | HEADER | HEADER_ID | KEY | VALUE``.
+        ``label`` is the source filename, ``HEADER`` the header object's Type.
+
+    Examples
+    --------
+    >>> profiles = get_loaded_profiles(data)
+    >>> profiles[profiles.KEY == "keyword"]
+    """
     hints = data.loc[data["KEY"].isin(profile_keys) & data["VALUE"].notna() & (data["VALUE"] != ""), ["ID", "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={"ID": "HEADER_ID"})
     types = data.loc[(data["KEY"] == "Type") & data["ID"].isin(hints["HEADER_ID"]), ["ID", "VALUE"]].drop_duplicates("ID").rename(columns={"ID": "HEADER_ID", "VALUE": "HEADER"})
     labels = data.loc[data["KEY"] == "label", ["INSTANCE_ID", "VALUE"]].drop_duplicates("INSTANCE_ID").rename(columns={"VALUE": "label"})
@@ -497,7 +548,31 @@ def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
 
 
 def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
-    """Header-to-header dependency edges. INSTANCE_ID_TO is NA when the referenced part is not loaded."""
+    """Dependency edges between model-part headers, across header generations.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    reference_keys : sequence of str, optional
+        Header KEYs that reference other model parts
+        (default: ``Model.DependentOn``, ``requires``).
+    profile_keys : sequence of str, optional
+        Header KEYs that identify header objects — together with
+        *reference_keys* they define the loaded parts targets resolve to.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per reference, columns
+        ``ID_FROM | KEY | ID_TO | INSTANCE_ID_FROM | INSTANCE_ID_TO``.
+        INSTANCE_ID_TO is NA when the referenced part is not loaded.
+
+    Examples
+    --------
+    >>> relations = get_model_relations(data)
+    >>> missing = relations[relations.INSTANCE_ID_TO.isna()]
+    """
     edges = data.loc[data["KEY"].isin(reference_keys), ["ID", "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={"ID": "ID_FROM", "VALUE": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_FROM"})
     parts = data.loc[data["KEY"].isin([*profile_keys, *reference_keys]), ["ID", "INSTANCE_ID"]].drop_duplicates().rename(columns={"ID": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_TO"})
     return edges.merge(parts, on="ID_TO", how="left")
