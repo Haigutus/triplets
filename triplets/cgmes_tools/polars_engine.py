@@ -13,9 +13,7 @@ import math
 import polars as pl
 
 from triplets import tools as rdf_parser
-from triplets._header import (PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES,
-                              _profile_section_index)
-from triplets.tools.polars_engine import _tableview
+from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES
 from .pandas_engine import (  # pure, engine-agnostic helpers
     default_filename_mask,
     get_metadata_from_filename,
@@ -127,63 +125,22 @@ def get_model_triplets(data, model_instances_dataframe):
     return data.join(inst, on="INSTANCE_ID", how="inner")
 
 
-def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False):
-    """Wide table of the loaded header objects (FullModel / Dataset), one row each."""
-    rows = data.filter((pl.col("KEY").cast(pl.Utf8) == "Type")
-                       & pl.col("VALUE").cast(pl.Utf8).is_in(list(header_types)))
-    return _tableview(rows, data, string_to_number, False, "/".join(header_types))
+def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False, multivalue=False):
+    """Wide table of loaded header objects (FullModel / Dataset). Repeated keys keep the first value; multivalue=True returns lists."""
+    return data.type_tableview(header_types, string_to_number=string_to_number, multivalue=multivalue)
 
 
-def _meta_rows(data, keys):
-    """The (small) header slice: rows whose KEY is in *keys* and VALUE is set,
-    columns cast to Utf8.
-
-    One KEY scan on the full frame (predicate cast only — never recast the
-    whole grid), everything downstream joins on this slice.
-    """
-    return (data.filter(pl.col("KEY").cast(pl.Utf8).is_in(list(keys)))
-            .select([pl.col(c).cast(pl.Utf8) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
-            .drop_nulls(subset="VALUE"))
-
-
-def get_loaded_profiles(data, profile_keys=PROFILE_KEYS, rdf_map=None):
-    """Tidy per-instance profile inventory across old/new headers (see pandas engine)."""
-    keys = list(profile_keys)
-    hints = (_meta_rows(data, keys).filter(pl.col("VALUE") != "")
-             .unique(maintain_order=True))
-    # only the hint-carrying IDs' Type rows — never the whole Type column
-    header = (data.filter((pl.col("KEY").cast(pl.Utf8) == "Type")
-                          & pl.col("ID").cast(pl.Utf8).is_in(hints["ID"].to_list()))
-              .select(pl.col("ID").cast(pl.Utf8).alias("HEADER_ID"),
-                      pl.col("VALUE").cast(pl.Utf8).alias("HEADER"))
-              .unique(subset="HEADER_ID", keep="first"))
-    labels = (data.filter(pl.col("KEY").cast(pl.Utf8) == "label")
-              .select(pl.col("INSTANCE_ID").cast(pl.Utf8),
-                      pl.col("VALUE").cast(pl.Utf8).alias("label"))
-              .drop_nulls(subset="label").unique(subset="INSTANCE_ID", keep="first"))
-
-    out = (hints.rename({"ID": "HEADER_ID"})
-           .join(header, on="HEADER_ID", how="left")
-           .join(labels, on="INSTANCE_ID", how="left"))
-
-    profile = pl.lit(None, dtype=pl.Utf8)
-    if rdf_map is not None:
-        identity, url_map = _profile_section_index(rdf_map)
-        profile = pl.col("VALUE").replace_strict(identity, default=None, return_dtype=pl.Utf8)
-        for url_part, section in url_map.items():
-            profile = (pl.when(profile.is_null()
-                               & pl.col("VALUE").str.contains(url_part, literal=True))
-                       .then(pl.lit(section)).otherwise(profile))
-    out = out.with_columns(profile.alias("PROFILE"))
-
-    rank = {key: position for position, key in enumerate(keys)}
-    out = out.sort("INSTANCE_ID", pl.col("KEY").replace_strict(rank, default=len(rank)),
-                   maintain_order=True)
-    return out.select("INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE", "PROFILE")
+def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
+    """One row per profile declaration. Header class is reported verbatim, never matched."""
+    key = pl.col("KEY").cast(pl.Utf8)
+    hints = (data.filter(key.is_in(list(profile_keys)) & pl.col("VALUE").is_not_null() & (pl.col("VALUE").cast(pl.Utf8) != "")).select("ID", "KEY", "VALUE", "INSTANCE_ID").rename({"ID": "HEADER_ID"}))
+    types = (data.filter((key == "Type") & pl.col("ID").is_in(hints.get_column("HEADER_ID").to_list())).select("ID", "VALUE").unique(subset="ID", keep="first").rename({"ID": "HEADER_ID", "VALUE": "HEADER"}))
+    labels = (data.filter(key == "label").select("INSTANCE_ID", "VALUE").unique(subset="INSTANCE_ID", keep="first").rename({"VALUE": "label"}))
+    return hints.join(types, on="HEADER_ID", how="left").join(labels, on="INSTANCE_ID", how="left").select("INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE")
 
 
 def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
-    """Header→header dependency edges with target-instance resolution (see pandas engine)."""
+    """Header-to-header dependency edges. INSTANCE_ID_TO is NA when the referenced part is not loaded."""
     key = pl.col("KEY").cast(pl.Utf8)
     edges = (data.filter(key.is_in(list(reference_keys)))
              .select("ID", "KEY", "VALUE", "INSTANCE_ID")

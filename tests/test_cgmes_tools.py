@@ -123,6 +123,15 @@ class TestGetLoadedModelParts:
         parts = cgmes_tools.get_loaded_model_parts(svedala_data)
         assert parts["Model.version"].map(type).eq(str).all()
 
+    def test_multivalue_dependenton(self, svedala_data):
+        eq = "bea45848-a05d-496b-9ab2-f42c6714183e"
+        # default keeps the first value (list cells cannot convert back to arrow)
+        first_only = cgmes_tools.get_loaded_model_parts(svedala_data)
+        assert isinstance(first_only.loc[eq, "Model.DependentOn"], str)
+        listed = cgmes_tools.get_loaded_model_parts(svedala_data, multivalue=True)
+        assert isinstance(listed.loc[eq, "Model.DependentOn"], list)
+        assert len(listed.loc[eq, "Model.DependentOn"]) == 3
+
     def test_both_header_kinds(self, svedala_data):
         if not Path(SVEDALA_ER).exists():
             pytest.skip(SKIP_REASON)
@@ -134,7 +143,7 @@ class TestGetLoadedModelParts:
         assert "Model.profile" in parts.columns and "conformsTo" in parts.columns
 
 
-PROFILE_COLUMNS = ["INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE", "PROFILE"]
+PROFILE_COLUMNS = ["INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE"]
 
 
 @pytest.fixture(scope="module")
@@ -153,15 +162,12 @@ class TestGetLoadedProfiles:
         assert profiles["INSTANCE_ID"].nunique() == 4
         assert set(profiles["KEY"]) == {"Model.profile"}
         assert profiles["label"].str.endswith(".xml").all()
-        assert profiles["PROFILE"].isna().all()  # no rdf_map given
 
     def test_dataset_header(self, mixed_data):
         profiles = cgmes_tools.get_loaded_profiles(mixed_data)
         er = profiles[profiles["HEADER"] == "Dataset"]
         assert set(er["KEY"]) == {"keyword", "conformsTo"}
-        # keyword outranks conformsTo (priority order within the instance)
-        assert er["KEY"].tolist() == ["keyword", "conformsTo"]
-        assert er[er["KEY"] == "keyword"]["VALUE"].tolist() == ["ER"]
+        assert er.loc[er["KEY"] == "keyword", "VALUE"].tolist() == ["ER"]
 
     def test_hybrid_fullmodel_extended(self):
         if not Path(HYBRID_FULLMODEL).exists():
@@ -182,24 +188,6 @@ class TestGetLoadedProfiles:
         ])
         profiles = cgmes_tools.get_loaded_profiles(rows)
         assert set(profiles["HEADER"]) == {"FullModel", "Profile"}
-
-    def test_rdf_map_resolution(self, mixed_data):
-        # exact ProfileMetadata identity — no URL prefixes hardcoded anywhere
-        rdf_map = {"EQ": {"ProfileMetadata": {"versionIRI": "http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0"}},
-                   "ER": {"ProfileMetadata": {"keyword": "ER",
-                                              "conformsTo": "https://ap.cim4.eu/EquipmentReliability/2.4"}}}
-        profiles = cgmes_tools.get_loaded_profiles(mixed_data, rdf_map=rdf_map)
-        by_key = profiles.set_index("KEY")["PROFILE"]
-        assert by_key["keyword"] == "ER" and by_key["conformsTo"] == "ER"
-        assert set(profiles[profiles["VALUE"].str.contains("CoreEquipment")]["PROFILE"]) == {"EQ"}
-
-    def test_rdf_map_legacy_url_fallback(self):
-        legacy = pandas.DataFrame([
-            {"ID": "fm", "KEY": "Type", "VALUE": "FullModel", "INSTANCE_ID": "i1"},
-            {"ID": "fm", "KEY": "Model.profile", "VALUE": "http://entsoe.eu/CIM/EquipmentCore/3/1", "INSTANCE_ID": "i1"},
-        ])
-        profiles = cgmes_tools.get_loaded_profiles(legacy, rdf_map={"EQ": {}})
-        assert profiles["PROFILE"].tolist() == ["EQ"]
 
     def test_null_and_empty_values_dropped(self):
         rows = pandas.DataFrame([

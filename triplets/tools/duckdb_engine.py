@@ -242,15 +242,17 @@ def types_dict(self, contains=None, case_insensitive=True, table=None, schema=No
 def type_tableview(self, type_name, table=None, schema=None, table_name=None, view_name=None,
                    string_to_number=False, multivalue=False):
     """Create a named SQL view pivoting all objects of a type; return a relation
-    over it. The view defaults to the type name (override with view_name) and is
-    created in the resolved schema, next to the data. multivalue=True renders
+    over it. *type_name* is a string or a sequence of strings (a plain string is
+    a one-item list). The view defaults to the type name, or ``FullModel/Dataset``
+    style join for several types (override with view_name). multivalue=True renders
     multi-valued keys as the literal ['a', 'b'] text (pandas/polars encoding);
     string_to_number is accepted for signature parity but not implemented."""
     _check_string_to_number(string_to_number)
+    types = [type_name] if isinstance(type_name, str) else list(type_name)
     sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
     ref = _sql_name(sch, tbl)
-    ids = f"SELECT DISTINCT ID FROM {ref} WHERE KEY = 'Type' AND VALUE = {_lit(type_name)}"
-    return _pivot_view(self, view_name or type_name, ids, ref, _ord_expr(self, sch, tbl), sch,
+    ids = f"SELECT DISTINCT ID FROM {ref} WHERE KEY = 'Type' AND VALUE IN ({_in_list(types)})" if types else "SELECT NULL AS ID WHERE FALSE"
+    return _pivot_view(self, view_name or "/".join(types), ids, ref, _ord_expr(self, sch, tbl), sch,
                        multivalue=multivalue)
 
 

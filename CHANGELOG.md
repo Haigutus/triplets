@@ -7,15 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- `cgmes_tools.get_loaded_profiles(data, profile_keys=..., rdf_map=None)` —
+- `cgmes_tools.get_loaded_profiles(data, profile_keys=...)` —
   tidy inventory of the profiles each loaded instance declares
-  (`INSTANCE_ID | label | HEADER | HEADER_ID | KEY | VALUE | PROFILE`),
+  (`INSTANCE_ID | label | HEADER | HEADER_ID | KEY | VALUE`),
   key-driven across old (FullModel) and new (dcat:Dataset) headers: the
-  header class is reported verbatim, never matched. With `rdf_map=` each
-  declaration resolves to the schema section it identifies, per row: exact
-  ProfileMetadata identity first, legacy 2.4 profile-URL substring fallback —
-  the same identity index and URL map `validate_schema` and the cimxml
-  export resolve with (now defined once in `triplets/_header.py`).
+  header class is reported verbatim, never matched.
 - `cgmes_tools.get_model_relations(data)` — dependency edges between
   model-part headers (`Model.DependentOn` / `requires`), resolved across
   header generations (a dcat:Dataset requiring a FullModel resolves like
@@ -42,12 +38,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   longer match the wrong section.
 
 ### Changed
+- `type_tableview` accepts a sequence of types as well as a single string
+  (a string is treated as a one-item list); several types pivot into one
+  table with the union of columns.
 - `cgmes_tools.get_loaded_model_parts` covers both header generations: it
   selects `header_types=("FullModel", "Dataset")` (parameterizable) and
   pivots the union of their keys. Header metadata now stays text
   (`string_to_number=False` default — `Model.version` "1" is no longer
-  converted to 1.0). Repeated keys still keep the first value only —
-  use `get_model_relations` for the dependency edges.
+  converted to 1.0). Repeated keys (`Model.DependentOn`, `requires`) keep
+  the first value; `multivalue=True` returns them as lists (pandas/polars
+  input — list cells cannot convert back to arrow).
 - `validate_schema` runs one raw engine pass per (instance, profile) and
   builds the presentation (TARGET/EXPECTED/enrichment) once on the merged
   result instead of per pair.

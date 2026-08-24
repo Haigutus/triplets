@@ -77,12 +77,3 @@ def _profile_identity_index(rdf_map):
     for identifier in ambiguous:
         del index[identifier]
     return index
-
-
-def _profile_section_index(rdf_map):
-    """Exact identity index + legacy URL substring map for the given schema,
-    the substrings limited to sections the schema actually contains."""
-    schema = load_rdf_map(rdf_map)
-    url_map = {part: section for part, section in PROFILE_URL_MAP.items()
-               if section in schema}
-    return _profile_identity_index(schema), url_map

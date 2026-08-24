@@ -117,8 +117,9 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type", mult
     ----------
     data : pandas.DataFrame
         Triplet dataset containing RDF data.
-    type_name : str
-        The type of objects to filter (e.g., 'ACLineSegment').
+    type_name : str or sequence of str
+        Type(s) to select (e.g. ``"ACLineSegment"`` or ``("FullModel", "Dataset")``).
+        A plain string is treated as a one-item list.
     string_to_number : bool, optional
         If True, convert columns containing numbers to numeric types (default is True).
     type_key : str, optional
@@ -134,9 +135,11 @@ def type_tableview(data, type_name, string_to_number=True, type_key="Type", mult
     Examples
     --------
     >>> table = data.type_tableview("ACLineSegment", multivalue=True)
+    >>> headers = data.type_tableview(("FullModel", "Dataset"), string_to_number=False)
     """
-    rows = data[(data["VALUE"] == type_name) & (data["KEY"] == type_key)]
-    return _tableview(rows, data, string_to_number, multivalue, type_name)
+    types = [type_name] if isinstance(type_name, str) else list(type_name)
+    rows = data[(data["KEY"] == type_key) & (data["VALUE"].isin(types))]
+    return _tableview(rows, data, string_to_number, multivalue, "/".join(types))
 
 
 def key_tableview(data, key, string_to_number=True, multivalue=False):

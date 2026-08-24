@@ -20,9 +20,8 @@ from uuid import uuid4
 from lxml import etree
 from builtins import str
 from triplets import tools as rdf_parser  # backwards compat alias; tools replaces rdf_parser
-from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES, _profile_section_index
+from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES
 from triplets.parser import parse as load_all_to_dataframe
-from triplets.tools.pandas_engine import _tableview
 
 import logging
 
@@ -484,133 +483,21 @@ def get_EIC_to_mRID_map(data, type):
     return rdf_parser.filter_triplets_by_type(data, type).drop_duplicates().query("KEY == 'IdentifiedObject.energyIdentCodeEic'")[name_map.keys()].rename(columns=name_map)
 
 
-def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False):
-    """Wide table of the loaded header objects (model parts), one row each.
-
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        Triplet dataset containing CGMES data.
-    header_types : sequence of str, optional
-        Header classes to select (default: old ``FullModel`` and new dcat
-        ``Dataset``). The result is the union of columns across header
-        kinds, NaN where a kind lacks a key.
-    string_to_number : bool, optional
-        If True, convert numeric-looking columns to numeric types (default
-        False — header metadata like ``Model.version`` "1" stays text).
-
-    Returns
-    -------
-    pandas.DataFrame or None
-        Pivoted DataFrame with header IDs as index and keys as columns, or
-        None when no header object is present.
-
-    Notes
-    -----
-    - Repeated keys (``Model.DependentOn``, ``requires``) keep only the
-      first value — use :func:`get_model_relations` for the dependency
-      edges and :func:`get_loaded_profiles` for a tidy profile inventory.
-
-    Examples
-    --------
-    >>> model_parts = get_loaded_model_parts(data)
-    """
-    rows = data[(data["KEY"] == "Type") & (data["VALUE"].isin(list(header_types)))]
-    return _tableview(rows, data, string_to_number, False, "/".join(header_types))
+def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False, multivalue=False):
+    """Wide table of loaded header objects (FullModel and Dataset). Repeated keys (DependentOn, requires) keep the first value; multivalue=True returns them as lists (pandas/polars input only - list cells cannot convert back to arrow)."""
+    return data.type_tableview(header_types, string_to_number=string_to_number, multivalue=multivalue)
 
 
-def get_loaded_profiles(data, profile_keys=PROFILE_KEYS, rdf_map=None):
-    """Tidy inventory of the profiles each loaded instance declares.
-
-    Key-driven across old (FullModel) and new (dcat:Dataset) headers: scans
-    for *profile_keys* wherever they appear; the header class is reported
-    verbatim, never matched.
-
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        Triplet dataset containing CGMES data.
-    profile_keys : sequence of str, optional
-        Header KEYs that declare profile identity, in priority order
-        (default covers both header generations).
-    rdf_map : dict or str, optional
-        Export schema (or path to its JSON). When given, each VALUE is
-        resolved to the schema section it identifies (exact ProfileMetadata
-        identity, then legacy 2.4 profile-URL substrings) in the PROFILE
-        column; PROFILE is NA when omitted or nothing matches.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per header profile declaration, columns
-        ``INSTANCE_ID | label | HEADER | HEADER_ID | KEY | VALUE | PROFILE``,
-        sorted by INSTANCE_ID and *profile_keys* priority. ``label`` is the
-        source filename (Distribution meta object), ``HEADER`` the header
-        object's Type.
-
-    Examples
-    --------
-    >>> profiles = get_loaded_profiles(data)
-    >>> profiles[profiles.KEY == "keyword"]
-    """
-    keys = list(profile_keys)
-    hints = (data.loc[data["KEY"].isin(keys), ["ID", "KEY", "VALUE", "INSTANCE_ID"]]
-             .dropna(subset=["VALUE"]).astype(str))
-    hints = hints.loc[hints["VALUE"] != ""].drop_duplicates()
-    # only the hint-carrying IDs' Type rows — never the whole Type column
-    header = (data.loc[(data["KEY"] == "Type") & data["ID"].isin(hints["ID"]), ["ID", "VALUE"]]
-              .astype(str).drop_duplicates("ID").set_index("ID")["VALUE"])
-    labels = (data.loc[data["KEY"] == "label", ["INSTANCE_ID", "VALUE"]]
-              .dropna(subset=["VALUE"]).astype(str)
-              .drop_duplicates("INSTANCE_ID").set_index("INSTANCE_ID")["VALUE"])
-
-    out = hints.rename(columns={"ID": "HEADER_ID"})
-    out["HEADER"] = out["HEADER_ID"].map(header)
-    out["label"] = out["INSTANCE_ID"].map(labels)
-    out["PROFILE"] = pandas.NA
-    if rdf_map is not None:
-        identity, url_map = _profile_section_index(rdf_map)
-        out["PROFILE"] = out["VALUE"].map(identity)
-        for url_part, section in url_map.items():
-            unresolved = out["PROFILE"].isna() & out["VALUE"].str.contains(url_part, regex=False)
-            out.loc[unresolved, "PROFILE"] = section
-
-    rank = {key: position for position, key in enumerate(keys)}
-    out = out.sort_values(["INSTANCE_ID", "KEY"], kind="stable",
-                          key=lambda column: column.map(rank) if column.name == "KEY" else column)
-    return out[["INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE", "PROFILE"]].reset_index(drop=True)
+def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
+    """One row per profile declaration. Header class is reported verbatim, never matched."""
+    hints = data.loc[data["KEY"].isin(profile_keys) & data["VALUE"].notna() & (data["VALUE"] != ""), ["ID", "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={"ID": "HEADER_ID"})
+    types = data.loc[(data["KEY"] == "Type") & data["ID"].isin(hints["HEADER_ID"]), ["ID", "VALUE"]].drop_duplicates("ID").rename(columns={"ID": "HEADER_ID", "VALUE": "HEADER"})
+    labels = data.loc[data["KEY"] == "label", ["INSTANCE_ID", "VALUE"]].drop_duplicates("INSTANCE_ID").rename(columns={"VALUE": "label"})
+    return hints.merge(types, on="HEADER_ID", how="left").merge(labels, on="INSTANCE_ID", how="left")[["INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE"]]
 
 
 def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
-    """Dependency edges between model-part headers, across header generations.
-
-    Collects every reference row (old ``Model.DependentOn``, new dcat
-    ``requires``) and resolves each target against the headers loaded in the
-    frame — regardless of header kind on either side, so a new-header
-    instance requiring an old-header FullModel resolves like any other.
-
-    Parameters
-    ----------
-    data : pandas.DataFrame
-        Triplet dataset containing CGMES data.
-    reference_keys : sequence of str, optional
-        Header KEYs that reference other model parts.
-    profile_keys : sequence of str, optional
-        Header KEYs that identify header objects (used, together with
-        *reference_keys*, to find the loaded headers targets resolve to).
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per reference, columns
-        ``ID_FROM | KEY | ID_TO | INSTANCE_ID_FROM | INSTANCE_ID_TO``.
-        INSTANCE_ID_TO is NA when the referenced part is not loaded.
-
-    Examples
-    --------
-    >>> relations = get_model_relations(data)
-    >>> missing = relations[relations.INSTANCE_ID_TO.isna()]
-    """
+    """Header-to-header dependency edges. INSTANCE_ID_TO is NA when the referenced part is not loaded."""
     edges = data.loc[data["KEY"].isin(reference_keys), ["ID", "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={"ID": "ID_FROM", "VALUE": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_FROM"})
     parts = data.loc[data["KEY"].isin([*profile_keys, *reference_keys]), ["ID", "INSTANCE_ID"]].drop_duplicates().rename(columns={"ID": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_TO"})
     return edges.merge(parts, on="ID_TO", how="left")
