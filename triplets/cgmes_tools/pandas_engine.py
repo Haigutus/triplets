@@ -22,7 +22,6 @@ from builtins import str
 from triplets import tools as rdf_parser  # backwards compat alias; tools replaces rdf_parser
 from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES, _profile_section_index
 from triplets.parser import parse as load_all_to_dataframe
-from triplets.parser.utils import clean_ID
 from triplets.tools.pandas_engine import _tableview
 
 import logging
@@ -520,11 +519,6 @@ def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=Fal
     return _tableview(rows, data, string_to_number, False, "/".join(header_types))
 
 
-def _bare_id(values):
-    """Parser ``clean_ID`` element-wise — the header slices this runs on are tiny."""
-    return values.astype(str).map(clean_ID)
-
-
 def get_loaded_profiles(data, profile_keys=PROFILE_KEYS, rdf_map=None):
     """Tidy inventory of the profiles each loaded instance declares.
 
@@ -610,36 +604,16 @@ def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFIL
     pandas.DataFrame
         One row per reference, columns
         ``ID_FROM | KEY | ID_TO | INSTANCE_ID_FROM | INSTANCE_ID_TO``.
-        IDs are normalized like parsed IDs (urn:uuid: / #_ / _ stripped);
-        targets are matched by header object ID with ``identifier`` as
-        alias. INSTANCE_ID_TO is NA when the referenced part is not loaded.
+        INSTANCE_ID_TO is NA when the referenced part is not loaded.
 
     Examples
     --------
     >>> relations = get_model_relations(data)
     >>> missing = relations[relations.INSTANCE_ID_TO.isna()]
     """
-    refs, profs = list(reference_keys), list(profile_keys)
-    meta = (data.loc[data["KEY"].isin([*refs, *profs, "identifier"]),
-                     ["ID", "KEY", "VALUE", "INSTANCE_ID"]]
-            .dropna(subset=["VALUE"]).astype(str))
-
-    # loaded headers: objects carrying a profile or reference key; their
-    # identifier values are aliases for the same instance (the localname is
-    # generic, so identifier rows of other objects are ignored)
-    carriers = meta.loc[meta["KEY"].isin(refs + profs), ["ID", "INSTANCE_ID"]].drop_duplicates()
-    aliases = meta.loc[meta["KEY"] == "identifier"].merge(carriers[["ID"]].drop_duplicates(), on="ID")
-    targets = pandas.concat([
-        pandas.DataFrame({"ID_TO": _bare_id(carriers["ID"]), "INSTANCE_ID_TO": carriers["INSTANCE_ID"]}),
-        pandas.DataFrame({"ID_TO": _bare_id(aliases["VALUE"]), "INSTANCE_ID_TO": aliases["INSTANCE_ID"]}),
-    ]).drop_duplicates("ID_TO")
-
-    edges = meta.loc[meta["KEY"].isin(refs)]
-    out = pandas.DataFrame({
-        "ID_FROM": _bare_id(edges["ID"]), "KEY": edges["KEY"],
-        "ID_TO": _bare_id(edges["VALUE"]), "INSTANCE_ID_FROM": edges["INSTANCE_ID"],
-    }).drop_duplicates()
-    return out.merge(targets, on="ID_TO", how="left").reset_index(drop=True)
+    edges = data.loc[data["KEY"].isin(reference_keys), ["ID", "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={"ID": "ID_FROM", "VALUE": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_FROM"})
+    parts = data.loc[data["KEY"].isin([*profile_keys, *reference_keys]), ["ID", "INSTANCE_ID"]].drop_duplicates().rename(columns={"ID": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_TO"})
+    return edges.merge(parts, on="ID_TO", how="left")
 
 
 def count_GeneratingUnit_types(data):

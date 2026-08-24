@@ -134,11 +134,6 @@ def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=Fal
     return _tableview(rows, data, string_to_number, False, "/".join(header_types))
 
 
-def _bare(column):
-    """Parser ``clean_ID`` as an expression: strip urn:uuid: / #_ / _ prefixes."""
-    return column.cast(pl.Utf8).str.strip_prefix("urn:uuid:").str.strip_prefix("#_").str.strip_prefix("_")
-
-
 def _meta_rows(data, keys):
     """The (small) header slice: rows whose KEY is in *keys* and VALUE is set,
     columns cast to Utf8.
@@ -189,27 +184,14 @@ def get_loaded_profiles(data, profile_keys=PROFILE_KEYS, rdf_map=None):
 
 def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
     """Header→header dependency edges with target-instance resolution (see pandas engine)."""
-    refs, profs = list(reference_keys), list(profile_keys)
-    meta = _meta_rows(data, [*refs, *profs, "identifier"])
-
-    carriers = (meta.filter(pl.col("KEY").is_in(refs + profs))
-                .select("ID", "INSTANCE_ID").unique(maintain_order=True))
-    aliases = meta.filter(pl.col("KEY") == "identifier").join(
-        carriers.select("ID").unique(), on="ID", how="inner")
-    targets = pl.concat([
-        carriers.select(_bare(pl.col("ID")).alias("ID_TO"),
-                        pl.col("INSTANCE_ID").alias("INSTANCE_ID_TO")),
-        aliases.select(_bare(pl.col("VALUE")).alias("ID_TO"),
-                       pl.col("INSTANCE_ID").alias("INSTANCE_ID_TO")),
-    ]).unique(subset="ID_TO", keep="first", maintain_order=True)
-
-    edges = (meta.filter(pl.col("KEY").is_in(refs))
-             .select(_bare(pl.col("ID")).alias("ID_FROM"), "KEY",
-                     _bare(pl.col("VALUE")).alias("ID_TO"),
-                     pl.col("INSTANCE_ID").alias("INSTANCE_ID_FROM"))
-             .unique(maintain_order=True))
-    return (edges.join(targets, on="ID_TO", how="left")
-            .select("ID_FROM", "KEY", "ID_TO", "INSTANCE_ID_FROM", "INSTANCE_ID_TO"))
+    key = pl.col("KEY").cast(pl.Utf8)
+    edges = (data.filter(key.is_in(list(reference_keys)))
+             .select("ID", "KEY", "VALUE", "INSTANCE_ID")
+             .rename({"ID": "ID_FROM", "VALUE": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_FROM"}))
+    parts = (data.filter(key.is_in(list(profile_keys) + list(reference_keys)))
+             .select("ID", "INSTANCE_ID").unique()
+             .rename({"ID": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_TO"}))
+    return edges.join(parts, on="ID_TO", how="left")
 
 
 def get_EIC_to_mRID_map(data, type):

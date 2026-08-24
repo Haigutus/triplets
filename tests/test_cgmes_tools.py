@@ -244,30 +244,16 @@ class TestGetModelRelations:
         requires = relations[relations["KEY"] == "requires"]
         assert requires["INSTANCE_ID_TO"].isna().all()  # EQ not loaded
 
-    def test_identifier_alias_no_duplicate_edges(self):
-        if not Path(SVEDALA_RA).exists():
-            pytest.skip(SKIP_REASON)
-        # RA declares the same uuid as rdf:about and dcterms:identifier — the
-        # alias must not duplicate the resolved edge
-        data = pandas.read_RDF([SVEDALA_RA, SVEDALA_RAS])
-        relations = cgmes_tools.get_model_relations(data)
-        to_ra = relations[relations["ID_TO"] == "f7b94ef6-e043-4d2a-a359-2718e6e20507"]
-        assert len(to_ra) == 1 and to_ra["INSTANCE_ID_TO"].notna().all()
-
-    def test_prefixed_identifier_alias_resolves(self):
-        # a header whose identifier carries the urn:uuid: prefix (element text
-        # is not clean_ID'd at parse — TC-Boundary-Header-Dataset style) still
-        # resolves as a target through the normalized alias
+    def test_duplicate_loaded_part_fans_out(self):
+        # a part loaded under two INSTANCE_IDs yields one edge row per target
+        # instance — deliberate: the reference resolves to both loads
         rows = pandas.DataFrame([
-            {"ID": "aaa", "KEY": "conformsTo", "VALUE": "https://ap.cim4.eu/Example/1.0", "INSTANCE_ID": "i1"},
-            {"ID": "aaa", "KEY": "identifier", "VALUE": "urn:uuid:1234", "INSTANCE_ID": "i1"},
-            {"ID": "bbb", "KEY": "requires", "VALUE": "urn:uuid:1234", "INSTANCE_ID": "i2"},
+            {"ID": "eq", "KEY": "Model.profile", "VALUE": "p", "INSTANCE_ID": "i1"},
+            {"ID": "eq", "KEY": "Model.profile", "VALUE": "p", "INSTANCE_ID": "i2"},
+            {"ID": "sv", "KEY": "Model.DependentOn", "VALUE": "eq", "INSTANCE_ID": "i3"},
         ])
-        for frame in (rows, pytest.importorskip("polars").from_pandas(rows)):
-            relations = cgmes_tools.get_model_relations(frame)
-            edge = pandas.DataFrame(relations) if isinstance(relations, pandas.DataFrame) else relations.to_pandas()
-            assert edge["ID_TO"].tolist() == ["1234"]
-            assert edge["INSTANCE_ID_TO"].tolist() == ["i1"]
+        relations = cgmes_tools.get_model_relations(rows)
+        assert sorted(relations["INSTANCE_ID_TO"]) == ["i1", "i2"]
 
     def test_empty_data(self):
         empty = pandas.DataFrame(columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])

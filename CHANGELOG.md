@@ -20,8 +20,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   model-part headers (`Model.DependentOn` / `requires`), resolved across
   header generations (a dcat:Dataset requiring a FullModel resolves like
   any other); `INSTANCE_ID_TO` is NA when the referenced part is not
-  loaded. Targets are matched by header object ID with `dcterms:identifier`
-  as alias; IDs normalized like parsed IDs (urn:uuid: / #_ / _ stripped).
+  loaded.
 - The shared header vocabulary is public: `cgmes_tools.PROFILE_KEYS`,
   `REFERENCE_KEYS`, `HEADER_TYPES` (one definition, also used by
   `validate_schema` and the cimxml export resolver).
