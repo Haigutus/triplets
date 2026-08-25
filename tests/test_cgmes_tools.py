@@ -108,9 +108,38 @@ class TestUpdateFullModelFromDict:
 
 
 class TestGetLoadedModels:
-    def test_returns_dict(self, svedala_data):
+    SV_ID = "2ffd3555-f572-494e-b35e-e56ae740eeb2"  # Svedala SV FullModel
+
+    def test_default_graph_roots(self, svedala_data):
         models = cgmes_tools.get_loaded_models(svedala_data)
-        assert isinstance(models, dict)
+        assert list(models) == [self.SV_ID]  # only header nothing depends on
+        assert models[self.SV_ID]["INSTANCE_ID"].nunique() == 4  # SV, TP, SSH, EQ
+
+    def test_root_filter(self, svedala_data):
+        # "SV" matches the 3.0 StateVariables URI via the legacy section map
+        assert list(cgmes_tools.get_loaded_models(svedala_data, root="SV")) == [self.SV_ID]
+        assert list(cgmes_tools.get_loaded_models(svedala_data, root="StateVariables")) == [self.SV_ID]
+        assert cgmes_tools.get_loaded_models(svedala_data, root="ZZ") == {}
+
+    def test_mixed_frames_are_two_models(self, mixed_data):
+        assert len(cgmes_tools.get_loaded_models(mixed_data)) == 2  # SV root + ER root
+        er = cgmes_tools.get_loaded_models(mixed_data, root="ER")
+        assert len(er) == 1
+        parts = next(iter(er.values()))
+        assert parts["INSTANCE_ID"].nunique() == 2  # ER Dataset + the EQ it requires
+
+    def test_cycle_does_not_hang(self):
+        rows = pandas.DataFrame([
+            {"ID": "a", "KEY": "keyword", "VALUE": "A", "INSTANCE_ID": "i1"},
+            {"ID": "a", "KEY": "requires", "VALUE": "b", "INSTANCE_ID": "i1"},
+            {"ID": "b", "KEY": "keyword", "VALUE": "B", "INSTANCE_ID": "i2"},
+            {"ID": "b", "KEY": "requires", "VALUE": "c", "INSTANCE_ID": "i2"},
+            {"ID": "c", "KEY": "keyword", "VALUE": "C", "INSTANCE_ID": "i3"},
+            {"ID": "c", "KEY": "requires", "VALUE": "b", "INSTANCE_ID": "i3"},  # cycle b <-> c
+        ])
+        models = cgmes_tools.get_loaded_models(rows)
+        assert list(models) == ["a"]
+        assert set(models["a"]["ID"]) == {"a", "b", "c"}
 
 
 class TestGetLoadedModelParts:
@@ -320,7 +349,13 @@ class TestInputFlavors:
     def test_results_match_pandas(self, svedala_data):
         polars = pytest.importorskip("polars")
         expected = cgmes_tools.get_loaded_models(svedala_data)
-        assert cgmes_tools.get_loaded_models(polars.from_pandas(svedala_data)) == expected
+        result = cgmes_tools.get_loaded_models(polars.from_pandas(svedala_data))
+        assert set(result) == set(expected)
+        order = ["ID", "PROFILE", "INSTANCE_ID"]
+        for key, frame in expected.items():
+            want = frame.astype(str).sort_values(order).reset_index(drop=True)
+            got = result[key].to_pandas().astype(str).sort_values(order).reset_index(drop=True)
+            assert got.equals(want)
 
 
 # ── Data quality ────────────────────────────────────────────────────────────

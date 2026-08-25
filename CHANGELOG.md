@@ -38,6 +38,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   longer match the wrong section.
 
 ### Changed
+- `cgmes_tools.get_loaded_models` works across both header generations:
+  models anchor on graph roots — loaded headers nothing loaded depends on
+  (the SV part of a power-flow set, the process instance of a network-code
+  set) — instead of the hardcoded CGMES 2.4 StateVariables URI (which
+  returned {} for 3.0 and dcat:Dataset data). Optional `root=` restricts
+  roots by profile identity ("SV" also matches the 2.4/3.0 URIs via the
+  legacy section map); dependency cycles terminate.
 - `type_tableview` accepts a sequence of types as well as a single string
   (a string is treated as a one-item list); several types pivot into one
   table with the union of columns.
