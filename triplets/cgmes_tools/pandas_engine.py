@@ -12,6 +12,7 @@
 import html
 import json
 import os
+import re
 import webbrowser
 import pandas
 import math
@@ -20,7 +21,7 @@ from uuid import uuid4
 from lxml import etree
 from builtins import str
 from triplets import tools as rdf_parser  # backwards compat alias; tools replaces rdf_parser
-from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES
+from triplets._header import PROFILE_KEYS, PROFILE_URL_MAP, REFERENCE_KEYS, HEADER_TYPES
 from triplets.parser import parse as load_all_to_dataframe
 
 import logging
@@ -378,62 +379,74 @@ def update_filename_from_FullModel(data, filename_mask=default_filename_mask, fi
     return data.update_triplets_from_triplets(update_data, add=False)
 
 
-def get_loaded_models(data):
-    """Retrieve a dictionary of loaded CGMES model parts and their UUIDs.
+def _value_matches(values, root):
+    """Mask: VALUE identifies *root* — contains it, or a legacy section's
+    URL fragment (root="SV" → "StateVariables")."""
+    fragments = [root] + [part for part, section in PROFILE_URL_MAP.items() if section == root]
+    return values.str.contains("|".join(re.escape(fragment) for fragment in fragments))
+
+
+def _walk_models(relations, profiles, root):
+    """{root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
+    rows of each root's dependency closure over the resolved edges.
+
+    Roots are the loaded headers nothing loaded depends on (never a resolved
+    ID_TO); *root* optionally restricts them by profile identity. BFS with a
+    visited set — dependency cycles terminate.
+    """
+    resolved = relations.dropna(subset=["INSTANCE_ID_TO"])
+    roots = (set(profiles["HEADER_ID"]) | set(relations["ID_FROM"])) - set(resolved["ID_TO"])
+    if root is not None:
+        roots &= set(profiles.loc[_value_matches(profiles["VALUE"], root), "HEADER_ID"])
+    adjacency = resolved.groupby("ID_FROM")["ID_TO"].agg(list)
+    parts = profiles.rename(columns={"HEADER_ID": "ID", "VALUE": "PROFILE"})[["ID", "PROFILE", "INSTANCE_ID"]]
+
+    models = {}
+    for header in sorted(roots):
+        seen, queue = {header}, [header]
+        for node in queue:
+            for target in adjacency.get(node, ()):
+                if target not in seen:
+                    seen.add(target)
+                    queue.append(target)
+        models[header] = parts[parts["ID"].isin(seen)].drop_duplicates().reset_index(drop=True)
+    return models
+
+
+def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
+    """Loaded models: each root header with its dependency closure.
+
+    A model starts from a root — a loaded header nothing loaded depends on
+    (in-degree 0 over :func:`get_model_relations` edges): the SV part of a
+    power-flow set, the process instance of a network-code set. Works across
+    header generations; a mixed frame yields one entry per root.
 
     Parameters
     ----------
     data : pandas.DataFrame
-        Triplet dataset containing CGMES data with 'Model.profile' and 'Model.DependentOn' keys.
+        Triplet dataset containing CGMES data.
+    root : str, optional
+        Restrict roots by profile identity — matched against the root
+        header's profile hint VALUEs exactly, as substring, or as a legacy
+        section name ("SV" also matches the 2.4/3.0 StateVariables URIs).
+        Default None keeps every root.
+    reference_keys, profile_keys : sequence of str, optional
+        Header vocabulary, as in :func:`get_model_relations`.
 
     Returns
     -------
     dict
-        Dictionary where keys are StateVariables (SV) UUIDs and values are DataFrames
-        containing model parts (ID, PROFILE, INSTANCE_ID) and their dependencies.
-
-    Notes
-    -----
-    - CGMES 2.4 only: anchors on the 2.4 StateVariables profile URI — returns
-      {} for CGMES 3.0 / dcat:Dataset headers. See :func:`get_model_relations`
-      for the header-generation-agnostic dependency edges.
+        {root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
+        declarations of every model part in the root's dependency closure.
 
     Examples
     --------
     >>> models = get_loaded_models(data)
-    >>> print(models)
-    {'SV_UUID': DataFrame(...), ...}
+    >>> sv_models = get_loaded_models(data, root="SV")
     """
-    FullModel_data = data.query("KEY == 'Model.profile' or KEY == 'Model.DependentOn'")
+    return _walk_models(get_model_relations(data, reference_keys, profile_keys),
+                        get_loaded_profiles(data, profile_keys), root)
 
-    SV_iterator = FullModel_data.query("VALUE == 'http://entsoe.eu/CIM/StateVariables/4/1'").itertuples()
-
-    dependancies_dict = {}
-
-    for SV in SV_iterator:
-
-        current_dependencies = []
-
-        dependancies_list = [SV.ID]
-
-        for instance in dependancies_list:
-
-            # Append current instance
-            PROFILES = FullModel_data.query("ID == @instance & KEY == 'Model.profile'")
-
-            for PROFILE in PROFILES.itertuples():
-                current_dependencies.append(dict(ID=instance, PROFILE=PROFILE.VALUE, INSTANCE_ID=PROFILE.INSTANCE_ID))
-
-            # Add newly found dependacies to processing
-            dependancies_list.extend(FullModel_data.query("ID == @instance & KEY == 'Model.DependentOn'").VALUE.tolist())
-
-
-        dependancies_dict[SV.ID] = pandas.DataFrame(current_dependencies).drop_duplicates()
-
-        #print dependancies_dict
-
-
-    return dependancies_dict
 
 def get_model_triplets(data, model_instances_dataframe):
     """Extract data for specific CGMES model instances.
