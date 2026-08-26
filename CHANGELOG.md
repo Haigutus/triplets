@@ -6,6 +6,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-26
+
+First stable release of the 0.2 line — identical in content to 0.2.0rc6.
+Everything new since 0.1.0 is in the 0.2.0rc1–rc6 sections below: one engine
+registry with shared flavor conversion, first-class DuckDB and Arrow support,
+SHACL and schema validation with SARIF reporting, and the loaded-profiles
+model inventory API.
+
 ## [0.2.0rc6] - 2026-08-26
 
 ### Added
@@ -515,6 +523,7 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   modules. Several `tools` and `cgmes_tools` functions were renamed; the old names keep
   working with a warning. All of these will be removed in 0.2.
 
+[0.2.0]: https://github.com/Haigutus/triplets/releases/tag/0.2.0
 [0.2.0rc6]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc6
 [0.2.0rc5]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc5
 [0.2.0rc4]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc4
