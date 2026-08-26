@@ -12,6 +12,7 @@
 import html
 import json
 import os
+import re
 import webbrowser
 import pandas
 import math
@@ -378,31 +379,27 @@ def update_filename_from_FullModel(data, filename_mask=default_filename_mask, fi
     return data.update_triplets_from_triplets(update_data, add=False)
 
 
-def _root_matches(hints, root):
-    """Does any profile hint VALUE identify *root*? Exact, substring, or a
-    legacy PROFILE_URL_MAP section name (root="SV" → substring "StateVariables")."""
-    fragments = [part for part, section in PROFILE_URL_MAP.items() if section == root]
-    return any(root in hint or any(fragment in hint for fragment in fragments)
-               for hint in hints)
+def _value_matches(values, root):
+    """Mask: VALUE identifies *root* — contains it, or a legacy section's
+    URL fragment (root="SV" → "StateVariables")."""
+    fragments = [root] + [part for part, section in PROFILE_URL_MAP.items() if section == root]
+    return values.str.contains("|".join(re.escape(fragment) for fragment in fragments))
 
 
 def _walk_models(relations, profiles, root):
-    """{root header ID: closure ID set} over the resolved dependency edges.
+    """{root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
+    rows of each root's dependency closure over the resolved edges.
 
     Roots are the loaded headers nothing loaded depends on (never a resolved
     ID_TO); *root* optionally restricts them by profile identity. BFS with a
     visited set — dependency cycles terminate.
     """
     resolved = relations.dropna(subset=["INSTANCE_ID_TO"])
-    loaded = set(profiles["HEADER_ID"]) | set(relations["ID_FROM"])
-    roots = loaded - set(resolved["ID_TO"])
+    roots = (set(profiles["HEADER_ID"]) | set(relations["ID_FROM"])) - set(resolved["ID_TO"])
     if root is not None:
-        hints = profiles.groupby("HEADER_ID")["VALUE"].agg(list)
-        roots = {header for header in roots if _root_matches(hints.get(header, []), root)}
-
-    adjacency = {}
-    for id_from, id_to in zip(resolved["ID_FROM"], resolved["ID_TO"]):
-        adjacency.setdefault(id_from, []).append(id_to)
+        roots &= set(profiles.loc[_value_matches(profiles["VALUE"], root), "HEADER_ID"])
+    adjacency = resolved.groupby("ID_FROM")["ID_TO"].agg(list)
+    parts = profiles.rename(columns={"HEADER_ID": "ID", "VALUE": "PROFILE"})[["ID", "PROFILE", "INSTANCE_ID"]]
 
     models = {}
     for header in sorted(roots):
@@ -412,7 +409,7 @@ def _walk_models(relations, profiles, root):
                 if target not in seen:
                     seen.add(target)
                     queue.append(target)
-        models[header] = seen
+        models[header] = parts[parts["ID"].isin(seen)].drop_duplicates().reset_index(drop=True)
     return models
 
 
@@ -447,11 +444,8 @@ def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_ke
     >>> models = get_loaded_models(data)
     >>> sv_models = get_loaded_models(data, root="SV")
     """
-    relations = get_model_relations(data, reference_keys, profile_keys)
-    profiles = get_loaded_profiles(data, profile_keys)
-    parts = profiles.rename(columns={"HEADER_ID": "ID", "VALUE": "PROFILE"})[["ID", "PROFILE", "INSTANCE_ID"]]
-    return {header: parts[parts["ID"].isin(closure)].drop_duplicates().reset_index(drop=True)
-            for header, closure in _walk_models(relations, profiles, root).items()}
+    return _walk_models(get_model_relations(data, reference_keys, profile_keys),
+                        get_loaded_profiles(data, profile_keys), root)
 
 
 def get_model_triplets(data, model_instances_dataframe):

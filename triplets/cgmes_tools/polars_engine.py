@@ -107,11 +107,9 @@ def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_ke
     them by profile identity. The walk runs on the tiny relation/profile
     frames via pandas; dict values stay polars.
     """
-    relations = get_model_relations(data, reference_keys, profile_keys).to_pandas()
-    profiles = get_loaded_profiles(data, profile_keys).to_pandas()
-    parts = profiles.rename(columns={"HEADER_ID": "ID", "VALUE": "PROFILE"})[["ID", "PROFILE", "INSTANCE_ID"]]
-    return {header: pl.from_pandas(parts[parts["ID"].isin(closure)].drop_duplicates())
-            for header, closure in _walk_models(relations, profiles, root).items()}
+    models = _walk_models(get_model_relations(data, reference_keys, profile_keys).to_pandas(),
+                          get_loaded_profiles(data, profile_keys).to_pandas(), root)
+    return {header: pl.from_pandas(parts) for header, parts in models.items()}
 
 
 def get_model_triplets(data, model_instances_dataframe):
