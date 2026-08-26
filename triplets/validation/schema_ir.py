@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 
 import pandas
 
-from ..export.cimxml_utils import _profile_identity_index
+from .._header import _profile_identity_index
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
 
 logger = logging.getLogger(__name__)

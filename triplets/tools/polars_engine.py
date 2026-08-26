@@ -59,9 +59,13 @@ def _tableview(ids, data, string_to_number, multivalue, label):
 
 
 def type_tableview(data, type_name, string_to_number=True, type_key="Type", multivalue=False):
-    """Create a table view of all objects of a specified type using polars pivot."""
-    ids = data.filter((pl.col("VALUE") == type_name) & (pl.col("KEY") == type_key))
-    return _tableview(ids, data, string_to_number, multivalue, type_name)
+    """Create a table view of all objects of a specified type using polars pivot.
+
+    *type_name* is a string or a sequence of strings; a plain string is treated as a one-item list.
+    """
+    types = [type_name] if isinstance(type_name, str) else list(type_name)
+    ids = data.filter((pl.col("KEY") == type_key) & pl.col("VALUE").is_in(types))
+    return _tableview(ids, data, string_to_number, multivalue, "/".join(types))
 
 
 def key_tableview(data, key, string_to_number=True, multivalue=False):

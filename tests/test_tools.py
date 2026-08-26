@@ -75,6 +75,14 @@ class TestTypeTableview:
         tv = svedala_data.type_tableview("NonExistentType123")
         assert tv is None
 
+    def test_list_of_types(self, svedala_data):
+        one = svedala_data.type_tableview("FullModel", string_to_number=False)
+        listed = svedala_data.type_tableview(["FullModel"], string_to_number=False)
+        assert set(one.index) == set(listed.index)
+        both = svedala_data.type_tableview(["FullModel", "Distribution"], string_to_number=False)
+        assert set(both["Type"]) == {"FullModel", "Distribution"}
+        assert len(both) == len(one) + len(svedala_data.type_tableview("Distribution", string_to_number=False))
+
     def test_multivalue(self, svedala_data):
         tv = svedala_data.type_tableview("FullModel", multivalue=True)
         assert tv is not None

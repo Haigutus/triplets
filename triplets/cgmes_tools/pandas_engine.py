@@ -12,6 +12,7 @@
 import html
 import json
 import os
+import re
 import webbrowser
 import pandas
 import math
@@ -20,6 +21,7 @@ from uuid import uuid4
 from lxml import etree
 from builtins import str
 from triplets import tools as rdf_parser  # backwards compat alias; tools replaces rdf_parser
+from triplets._header import PROFILE_KEYS, PROFILE_URL_MAP, REFERENCE_KEYS, HEADER_TYPES
 from triplets.parser import parse as load_all_to_dataframe
 
 import logging
@@ -377,56 +379,74 @@ def update_filename_from_FullModel(data, filename_mask=default_filename_mask, fi
     return data.update_triplets_from_triplets(update_data, add=False)
 
 
-def get_loaded_models(data):
-    """Retrieve a dictionary of loaded CGMES model parts and their UUIDs.
+def _value_matches(values, root):
+    """Mask: VALUE identifies *root* — contains it, or a legacy section's
+    URL fragment (root="SV" → "StateVariables")."""
+    fragments = [root] + [part for part, section in PROFILE_URL_MAP.items() if section == root]
+    return values.str.contains("|".join(re.escape(fragment) for fragment in fragments))
+
+
+def _walk_models(relations, profiles, root):
+    """{root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
+    rows of each root's dependency closure over the resolved edges.
+
+    Roots are the loaded headers nothing loaded depends on (never a resolved
+    ID_TO); *root* optionally restricts them by profile identity. BFS with a
+    visited set — dependency cycles terminate.
+    """
+    resolved = relations.dropna(subset=["INSTANCE_ID_TO"])
+    roots = (set(profiles["HEADER_ID"]) | set(relations["ID_FROM"])) - set(resolved["ID_TO"])
+    if root is not None:
+        roots &= set(profiles.loc[_value_matches(profiles["VALUE"], root), "HEADER_ID"])
+    adjacency = resolved.groupby("ID_FROM")["ID_TO"].agg(list)
+    parts = profiles.rename(columns={"HEADER_ID": "ID", "VALUE": "PROFILE"})[["ID", "PROFILE", "INSTANCE_ID"]]
+
+    models = {}
+    for header in sorted(roots):
+        seen, queue = {header}, [header]
+        for node in queue:
+            for target in adjacency.get(node, ()):
+                if target not in seen:
+                    seen.add(target)
+                    queue.append(target)
+        models[header] = parts[parts["ID"].isin(seen)].drop_duplicates().reset_index(drop=True)
+    return models
+
+
+def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
+    """Loaded models: each root header with its dependency closure.
+
+    A model starts from a root — a loaded header nothing loaded depends on
+    (in-degree 0 over :func:`get_model_relations` edges): the SV part of a
+    power-flow set, the process instance of a network-code set. Works across
+    header generations; a mixed frame yields one entry per root.
 
     Parameters
     ----------
     data : pandas.DataFrame
-        Triplet dataset containing CGMES data with 'Model.profile' and 'Model.DependentOn' keys.
+        Triplet dataset containing CGMES data.
+    root : str, optional
+        Restrict roots by profile identity — matched against the root
+        header's profile hint VALUEs exactly, as substring, or as a legacy
+        section name ("SV" also matches the 2.4/3.0 StateVariables URIs).
+        Default None keeps every root.
+    reference_keys, profile_keys : sequence of str, optional
+        Header vocabulary, as in :func:`get_model_relations`.
 
     Returns
     -------
     dict
-        Dictionary where keys are StateVariables (SV) UUIDs and values are DataFrames
-        containing model parts (ID, PROFILE, INSTANCE_ID) and their dependencies.
+        {root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
+        declarations of every model part in the root's dependency closure.
 
     Examples
     --------
     >>> models = get_loaded_models(data)
-    >>> print(models)
-    {'SV_UUID': DataFrame(...), ...}
+    >>> sv_models = get_loaded_models(data, root="SV")
     """
-    FullModel_data = data.query("KEY == 'Model.profile' or KEY == 'Model.DependentOn'")
+    return _walk_models(get_model_relations(data, reference_keys, profile_keys),
+                        get_loaded_profiles(data, profile_keys), root)
 
-    SV_iterator = FullModel_data.query("VALUE == 'http://entsoe.eu/CIM/StateVariables/4/1'").itertuples()
-
-    dependancies_dict = {}
-
-    for SV in SV_iterator:
-
-        current_dependencies = []
-
-        dependancies_list = [SV.ID]
-
-        for instance in dependancies_list:
-
-            # Append current instance
-            PROFILES = FullModel_data.query("ID == @instance & KEY == 'Model.profile'")
-
-            for PROFILE in PROFILES.itertuples():
-                current_dependencies.append(dict(ID=instance, PROFILE=PROFILE.VALUE, INSTANCE_ID=PROFILE.INSTANCE_ID))
-
-            # Add newly found dependacies to processing
-            dependancies_list.extend(FullModel_data.query("ID == @instance & KEY == 'Model.DependentOn'").VALUE.tolist())
-
-
-        dependancies_dict[SV.ID] = pandas.DataFrame(current_dependencies).drop_duplicates()
-
-        #print dependancies_dict
-
-
-    return dependancies_dict
 
 def get_model_triplets(data, model_instances_dataframe):
     """Extract data for specific CGMES model instances.
@@ -482,28 +502,99 @@ def get_EIC_to_mRID_map(data, type):
     return rdf_parser.filter_triplets_by_type(data, type).drop_duplicates().query("KEY == 'IdentifiedObject.energyIdentCodeEic'")[name_map.keys()].rename(columns=name_map)
 
 
-def get_loaded_model_parts(data):
-    """Retrieve a DataFrame of loaded CGMES model parts with their FullModel metadata.
+def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False, multivalue=False):
+    """Wide table of the loaded header objects (model parts), one row each.
 
     Parameters
     ----------
     data : pandas.DataFrame
         Triplet dataset containing CGMES data.
+    header_types : sequence of str, optional
+        Header classes to select (default: old ``FullModel`` and new dcat
+        ``Dataset``); the result is the union of their columns.
+    string_to_number : bool, optional
+        If True, convert numeric-looking columns to numeric types (default
+        False — header metadata like ``Model.version`` "1" stays text).
+    multivalue : bool, optional
+        If True, repeated keys (``Model.DependentOn``, ``requires``) become
+        lists (pandas/polars input only — list cells cannot convert back to
+        arrow). Default False keeps the first value.
 
     Returns
     -------
-    pandas.DataFrame
-        DataFrame containing FullModel data for loaded model parts.
-
-    Notes
-    -----
-    - Does not correctly resolve 'Model.DependentOn' relationships.
+    pandas.DataFrame or None
+        Pivoted DataFrame with header IDs as index and keys as columns,
+        or None when no header object is present.
 
     Examples
     --------
     >>> model_parts = get_loaded_model_parts(data)
     """
-    return data.type_tableview("FullModel")
+    return data.type_tableview(header_types, string_to_number=string_to_number, multivalue=multivalue)
+
+
+def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
+    """Inventory of the profiles each loaded instance declares.
+
+    Key-driven across old (FullModel) and new (dcat:Dataset) headers: scans
+    for *profile_keys* wherever they appear; the header class is reported
+    verbatim in HEADER, never matched.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    profile_keys : sequence of str, optional
+        Header KEYs that declare profile identity (default covers both
+        header generations).
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per profile declaration, columns
+        ``INSTANCE_ID | label | HEADER | HEADER_ID | KEY | VALUE``.
+        ``label`` is the source filename, ``HEADER`` the header object's Type.
+
+    Examples
+    --------
+    >>> profiles = get_loaded_profiles(data)
+    >>> profiles[profiles.KEY == "keyword"]
+    """
+    hints = data.loc[data["KEY"].isin(profile_keys) & data["VALUE"].notna() & (data["VALUE"] != ""), ["ID", "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={"ID": "HEADER_ID"})
+    types = data.loc[(data["KEY"] == "Type") & data["ID"].isin(hints["HEADER_ID"]), ["ID", "VALUE"]].drop_duplicates("ID").rename(columns={"ID": "HEADER_ID", "VALUE": "HEADER"})
+    labels = data.loc[data["KEY"] == "label", ["INSTANCE_ID", "VALUE"]].drop_duplicates("INSTANCE_ID").rename(columns={"VALUE": "label"})
+    return hints.merge(types, on="HEADER_ID", how="left").merge(labels, on="INSTANCE_ID", how="left")[["INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE"]]
+
+
+def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
+    """Dependency edges between model-part headers, across header generations.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Triplet dataset containing CGMES data.
+    reference_keys : sequence of str, optional
+        Header KEYs that reference other model parts
+        (default: ``Model.DependentOn``, ``requires``).
+    profile_keys : sequence of str, optional
+        Header KEYs that identify header objects — together with
+        *reference_keys* they define the loaded parts targets resolve to.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per reference, columns
+        ``ID_FROM | KEY | ID_TO | INSTANCE_ID_FROM | INSTANCE_ID_TO``.
+        INSTANCE_ID_TO is NA when the referenced part is not loaded.
+
+    Examples
+    --------
+    >>> relations = get_model_relations(data)
+    >>> missing = relations[relations.INSTANCE_ID_TO.isna()]
+    """
+    edges = data.loc[data["KEY"].isin(reference_keys), ["ID", "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={"ID": "ID_FROM", "VALUE": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_FROM"})
+    parts = data.loc[data["KEY"].isin([*profile_keys, *reference_keys]), ["ID", "INSTANCE_ID"]].drop_duplicates().rename(columns={"ID": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_TO"})
+    return edges.merge(parts, on="ID_TO", how="left")
 
 
 def count_GeneratingUnit_types(data):
@@ -554,10 +645,6 @@ def get_GeneratingUnits(data):
        ID  GeneratingUnit.maxOperatingP  ...
     """
     return data.key_tableview("GeneratingUnit.maxOperatingP")
-
-
-
-
 
 
 def get_limits(data):

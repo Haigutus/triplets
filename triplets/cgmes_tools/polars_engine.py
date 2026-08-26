@@ -13,10 +13,12 @@ import math
 import polars as pl
 
 from triplets import tools as rdf_parser
+from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES
 from .pandas_engine import (  # pure, engine-agnostic helpers
     default_filename_mask,
     get_metadata_from_filename,
     get_filename_from_metadata,
+    _walk_models,
 )
 
 
@@ -98,24 +100,16 @@ def update_filename_from_FullModel(data, filename_mask=default_filename_mask, fi
 
 # ── model inventory ─────────────────────────────────────────────────────────────
 
-def get_loaded_models(data):
-    """SV UUID → DataFrame of model parts (ID, PROFILE, INSTANCE_ID) via DependentOn walk."""
-    fm = _u(data).filter((pl.col("KEY") == "Model.profile") | (pl.col("KEY") == "Model.DependentOn"))
-    sv_ids = fm.filter(pl.col("VALUE") == "http://entsoe.eu/CIM/StateVariables/4/1")["ID"].to_list()
+def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
+    """{root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — see pandas engine.
 
-    result = {}
-    for sv in sv_ids:
-        current = []
-        queue = [sv]
-        for instance in queue:                                # queue grows as dependencies are found
-            profiles = fm.filter((pl.col("ID") == instance) & (pl.col("KEY") == "Model.profile"))
-            for p in profiles.iter_rows(named=True):
-                current.append({"ID": instance, "PROFILE": p["VALUE"], "INSTANCE_ID": p["INSTANCE_ID"]})
-            queue.extend(fm.filter((pl.col("ID") == instance)
-                                   & (pl.col("KEY") == "Model.DependentOn"))["VALUE"].to_list())
-        result[sv] = (pl.DataFrame(current).unique(maintain_order=True) if current
-                      else pl.DataFrame(schema={"ID": pl.Utf8, "PROFILE": pl.Utf8, "INSTANCE_ID": pl.Utf8}))
-    return result
+    Roots are the loaded headers nothing loaded depends on; *root* restricts
+    them by profile identity. The walk runs on the tiny relation/profile
+    frames via pandas; dict values stay polars.
+    """
+    models = _walk_models(get_model_relations(data, reference_keys, profile_keys).to_pandas(),
+                          get_loaded_profiles(data, profile_keys).to_pandas(), root)
+    return {header: pl.from_pandas(parts) for header, parts in models.items()}
 
 
 def get_model_triplets(data, model_instances_dataframe):
@@ -124,9 +118,30 @@ def get_model_triplets(data, model_instances_dataframe):
     return data.join(inst, on="INSTANCE_ID", how="inner")
 
 
-def get_loaded_model_parts(data):
-    """FullModel table view of the loaded model parts."""
-    return data.type_tableview("FullModel")
+def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False, multivalue=False):
+    """Wide table of loaded header objects (FullModel / Dataset). Repeated keys keep the first value; multivalue=True returns lists."""
+    return data.type_tableview(header_types, string_to_number=string_to_number, multivalue=multivalue)
+
+
+def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
+    """One row per profile declaration. Header class is reported verbatim, never matched."""
+    key = pl.col("KEY").cast(pl.Utf8)
+    hints = (data.filter(key.is_in(list(profile_keys)) & pl.col("VALUE").is_not_null() & (pl.col("VALUE").cast(pl.Utf8) != "")).select("ID", "KEY", "VALUE", "INSTANCE_ID").rename({"ID": "HEADER_ID"}))
+    types = (data.filter((key == "Type") & pl.col("ID").is_in(hints.get_column("HEADER_ID").to_list())).select("ID", "VALUE").unique(subset="ID", keep="first").rename({"ID": "HEADER_ID", "VALUE": "HEADER"}))
+    labels = (data.filter(key == "label").select("INSTANCE_ID", "VALUE").unique(subset="INSTANCE_ID", keep="first").rename({"VALUE": "label"}))
+    return hints.join(types, on="HEADER_ID", how="left").join(labels, on="INSTANCE_ID", how="left").select("INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE")
+
+
+def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
+    """Header-to-header dependency edges. INSTANCE_ID_TO is NA when the referenced part is not loaded."""
+    key = pl.col("KEY").cast(pl.Utf8)
+    edges = (data.filter(key.is_in(list(reference_keys)))
+             .select("ID", "KEY", "VALUE", "INSTANCE_ID")
+             .rename({"ID": "ID_FROM", "VALUE": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_FROM"}))
+    parts = (data.filter(key.is_in(list(profile_keys) + list(reference_keys)))
+             .select("ID", "INSTANCE_ID").unique()
+             .rename({"ID": "ID_TO", "INSTANCE_ID": "INSTANCE_ID_TO"}))
+    return edges.join(parts, on="ID_TO", how="left")
 
 
 def get_EIC_to_mRID_map(data, type):
