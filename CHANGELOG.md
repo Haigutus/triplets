@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0rc6] - 2026-08-26
+
 ### Added
 - `cgmes_tools.get_loaded_profiles(data, profile_keys=...)` —
   tidy inventory of the profiles each loaded instance declares
@@ -513,6 +515,7 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   modules. Several `tools` and `cgmes_tools` functions were renamed; the old names keep
   working with a warning. All of these will be removed in 0.2.
 
+[0.2.0rc6]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc6
 [0.2.0rc5]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc5
 [0.2.0rc4]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc4
 [0.2.0rc3]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc3
