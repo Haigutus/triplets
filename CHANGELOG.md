@@ -6,6 +6,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Exclude pandas 2.3.3**: `pivot()` on ArrowDtype dictionary columns still
+  crashes with `'Series' object has no attribute '_pa_array'` (same bug as
+  2.2.x, which is already excluded). Constraint is now
+  `pandas>=2.0,!=2.2.*,!=2.3.3`. Fixed upstream in pandas 3.0.
+
 ## [0.2.0] - 2026-08-26
 
 First stable release of the 0.2 line — identical in content to 0.2.0rc6.
