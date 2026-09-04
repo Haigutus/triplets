@@ -7,13 +7,15 @@ generation is reproducible offline and upstream changes arrive as reviewable dif
 | Directory | Source | Version authority |
 |---|---|---|
 | `ENTSOE_NC_2.4.1/` | [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) release branch `ncp-v2-4-1` — the most recent official NCP publication | branch name + `SOURCE.json` commit pin |
+| `ENTSOE_NC_2.5-dev/` | same repo, `main` / `NCP/RDFS` — unpublished NCP 2.5 draft (`-dev` until an `ncp-v2-5-0` release branch exists) | `SOURCE.json` commit pin |
 | `ENTSOE_CGMES_2.4.15/`, `ENTSOE_CGMES_3.0.0/`, `ENTSOE_FH/` | legacy hand-collected sets (predate the fetch workflow) | version in filenames |
 
-NCP 2.4.2 and the 2.5 draft are deliberately **not** onboarded: both carry the
-DatasetMetadata `rdfs:domain` defect below, and neither is an official publication.
-Onboard them (one `SOURCES` + `BUNDLES` entry each) once
-[application-profiles-library#92](https://github.com/entsoe/application-profiles-library/issues/92)
-is resolved and/or they are officially released.
+NCP 2.4.2 is **not** onboarded (already published; ENTSO-E will not patch it). The 2.5
+draft **is** onboarded as `ENTSOE_NC_2.5-dev` after
+[application-profiles-library#99](https://github.com/entsoe/application-profiles-library/pull/99)
+restored DatasetMetadata class linkage via `schema:domainIncludes` (fixes
+[#92](https://github.com/entsoe/application-profiles-library/issues/92)). Drop the
+`-dev` suffix when `ncp-v2-5-0` is cut.
 
 Upstream files are versionless by name (git-diff friendly); the release branch is the
 authoritative version — per-profile `owl:versionInfo` inside the files lags the release
@@ -57,13 +59,14 @@ Generation is deterministic: rerunning `cim_rdfs_to_json` must produce no diff
 
 ## Known upstream defects (reported)
 
-- `ncp-v2-4-2` (and the 2.5 draft) dropped `rdfs:domain` from 11 URI-typed
-  `dcat:Dataset` properties in `DatasetMetadata-AP-Voc-RDFS2020.rdf` (`conformsTo`,
-  `publisher`, `license`, `accessRights`, …; upstream commit `489c5c51ac4f`) — they can
-  no longer be tied to the Dataset class, so schemas generated from those versions
-  would lack the header attributes and exports would drop them; this is why only
-  2.4.1 is onboarded. Reported:
-  [application-profiles-library#92](https://github.com/entsoe/application-profiles-library/issues/92).
+- `ncp-v2-4-2` dropped `rdfs:domain` from 11 URI-typed `dcat:Dataset` properties
+  in `DatasetMetadata-AP-Voc-RDFS2020.rdf` (`conformsTo`, `publisher`, `license`,
+  `accessRights`, …; upstream commit `489c5c51ac4f`) — they cannot be tied to the
+  Dataset class, so a schema from that branch would lack header attributes.
+  Reported as [application-profiles-library#92](https://github.com/entsoe/application-profiles-library/issues/92);
+  fixed on `main` (and therefore in `ENTSOE_NC_2.5-dev`) by
+  [PR #99](https://github.com/entsoe/application-profiles-library/pull/99) using
+  `schema:domainIncludes` for reused external terms. 2.4.2 stays unpatched.
 - Several ReliCapGrid example instances do not conform to the released NCP 2.4.x
   profiles (draft-only attributes; `AssociationUsed=No` directions serialized) — the
   cases for the pinned submodule commit live in `KNOWN_MISMATCH` in
