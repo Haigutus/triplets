@@ -27,8 +27,8 @@ import pandas
 import polars
 
 from .shacl_report import VIOLATION_COLUMNS
-from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
+from .shacl_ir import split_rules, FALLBACK_COMPONENTS
+from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind, _class_names
 
 logger = logging.getLogger(__name__)
 
@@ -66,23 +66,32 @@ class _Context(SchemaKind):
     def all_ids(self):
         return self._all_ids
 
-    def _subjects_of(self, key):
-        if key not in self._subjects:
-            ids = self._frame.filter(polars.col("KEY") == key)["ID"].unique()
-            self._subjects[key] = (ids, ids.implode())
-        return self._subjects[key]
+    def _ids_of(self, key, column):
+        cache_key = f"{column}:{key}"
+        if cache_key not in self._subjects:
+            ids = self._frame.filter(polars.col("KEY") == key)[column].unique()
+            self._subjects[cache_key] = (ids, ids.implode())
+        return self._subjects[cache_key]
+
+    def _focus(self, rule):
+        """(flat IDs, imploded IDs) for the rule's target kind."""
+        kind = getattr(rule, "target_kind", "class")
+        if kind == "subjectsOf":
+            return self._ids_of(rule.target_class, "ID")
+        if kind == "objectsOf":
+            return self._ids_of(rule.target_class, "VALUE")
+        if kind == "node":
+            ids = polars.Series("ID", [rule.target_class], dtype=polars.Utf8)
+            return ids, ids.implode()
+        return self.class_ids(rule.target_class), self.class_ids_in(rule.target_class)
 
     def focus_ids(self, rule):
         """Flat focus ID Series (plan data, e.g. focus_frame)."""
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
-            return self._subjects_of(rule.target_class)[0]
-        return self.class_ids(rule.target_class)
+        return self._focus(rule)[0]
 
     def focus_ids_in(self, rule):
         """Imploded focus IDs for is_in membership tests."""
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
-            return self._subjects_of(rule.target_class)[1]
-        return self.class_ids_in(rule.target_class)
+        return self._focus(rule)[1]
 
     def path_rows(self, rule):
         """The rule's path as a lazy (FOCUS, PATH_VALUE) plan, restricted to the rule's focus."""
@@ -197,7 +206,7 @@ def _range(comparison, description):
 
 def _in(context, rule):
     local = (polars.col("PATH_VALUE").str.split("#").list.last()
-             .str.split("/").list.last())
+             .str.split("/").list.last())  # = local_name
     allowed = [str(value) for value in rule.params]
     plan = context.path_rows(rule).filter(~local.is_in(allowed))
     return _emit(plan, rule, f"value is not one of {sorted(allowed)}")
@@ -212,8 +221,15 @@ def _has_value(context, rule):
 
 
 def _class(context, rule):
-    plan = context.path_rows(rule).filter(~polars.col("PATH_VALUE").is_in(context.class_ids_in(rule.params)))
-    return _emit(plan, rule, f"referenced object is not of class {rule.params}")
+    names = _class_names(rule.params)
+    if len(names) == 1:
+        allowed = context.class_ids_in(names[0])
+    else:
+        parts = [ids for ids in (context.class_ids(name) for name in names) if len(ids)]
+        allowed = (polars.concat(parts, rechunk=True).implode() if parts else _NO_IDS_IMPLODED)
+    plan = context.path_rows(rule).filter(~polars.col("PATH_VALUE").is_in(allowed))
+    label = names[0] if len(names) == 1 else sorted(names)
+    return _emit(plan, rule, f"referenced object is not of class {label}")
 
 
 def _schema_range(context, rule):
@@ -462,7 +478,7 @@ def _batch_in(context, rules):
         "_LOCAL": [str(value) for rule in rules for value in rule.params],
     })
     local = (polars.col("VALUE").str.split("#").list.last()
-             .str.split("/").list.last())
+             .str.split("/").list.last())  # = local_name
     plan = (_batch_path_rows(context, rules_frame)
             .with_columns(local.alias("_LOCAL"))
             .join(allowed, on=["KEY", "CLASS", "SOURCE_SHAPE", "_LOCAL"], how="anti"))

@@ -62,7 +62,7 @@ def get_engine(name: str = "auto"):
 
 
 # Re-exports for compat layer (rdf_parser.py)
-from .utils import find_all_xml, iter_all_xml, clean_ID  # noqa: F401
+from .utils import find_all_xml, iter_all_xml, local_ID, local_name, local_resource, clean_ID  # noqa: F401
 
 from .nquads import read_nquads  # noqa: F401
 

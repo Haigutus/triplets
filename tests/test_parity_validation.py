@@ -198,6 +198,8 @@ cim:VoltageLevelShape a sh:NodeShape ;
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
                                              lexical=False)
     for engine in ("pandas", "polars", "duckdb"):
+        if engine != "pandas":
+            pytest.importorskip(engine)
         ours = triplets.validation.validate(data, str(shape), engine=engine)
         assert set(ours.loc[ours["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, f"{engine} engine disagrees"
     assert set(reference.loc[reference["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, "pyshacl disagrees"
@@ -300,6 +302,36 @@ def test_benchmark_real_profile_vectorized(benchmark, svedala_eq, engine):
                                              components=vectorized,
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1),
         rounds=2, iterations=1)
+
+
+@pytest.mark.performance
+@pytest.mark.benchmark(group="shacl-polars-split")
+def test_benchmark_polars_time_split(benchmark, svedala_eq):
+    """Polars-only scoreboard: bind fan-out size + validate wall. No pass/fail
+    on absolute times."""
+    pytest.importorskip("polars")
+    import time
+    from triplets.export_schema import schemas
+    from triplets.validation import _bind_inheritance
+    from triplets.validation.shacl_ir import split_rules, FALLBACK_COMPONENTS
+    from triplets.validation import shacl_polars
+
+    rdf_map = schemas.ENTSOE_CGMES_3_0_0_552_ED1
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=TIMING_SHAPE.replace("cim:ACLineSegment", "cim:Equipment"), format="turtle")
+    compiled = triplets.validation.compile(graph)
+    t0 = time.perf_counter()
+    bound = _bind_inheritance(compiled, rdf_map)
+    bind_s = time.perf_counter() - t0
+    _, fallback, _ = split_rules(bound.ir, shacl_polars.PLAN_BUILDERS, FALLBACK_COMPONENTS, "polars")
+    benchmark.extra_info.update({
+        "bind_s": round(bind_s, 4),
+        "ir_rows_before": len(compiled.ir), "ir_rows_after": len(bound.ir),
+        "fallback_rows": len(fallback),
+    })
+    benchmark(lambda: triplets.validation.validate(
+        svedala_eq, bound, engine="polars", rdf_map=rdf_map, lexical=False))
 
 
 def test_input_flavor_parity(mixed_data, shape_file):

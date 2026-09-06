@@ -87,6 +87,14 @@ Two class flavors matter for export:
   associations to EQ equipment, or CGMES SSH updating `RegulatingCondEq`.
   `"stereotyped": true` marks them.
 
+Abstract classes are **not** Class entries. Their names survive only as
+ancestors in each concrete class's `inheritance` list (self first, then
+`rdfs:subClassOf` BFS) and as association `range` values. That list **is**
+the subclass graph: validation inverts it (`Equipment` → `{Breaker, …}`)
+for association ranges, `sh:targetClass` / `sh:class` expansion, and the
+"do not instantiate abstract" Type check. Do not add abstract Class
+objects to the JSON — a Class entry is an instantiable target.
+
 ## How Exporters Pick a Section
 
 `export/cimxml_utils.py` matches each instance against the schema's own

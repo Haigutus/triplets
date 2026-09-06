@@ -124,6 +124,10 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
     started = datetime.now(timezone.utc)   # after compile — duration is the run, cache-independent
     engine_name, engine_mod = get_engine(engine)
+    if rdf_map is not None and compiled.language == "shacl" and engine_name != "pyshacl":
+        compiled = _bind_inheritance(compiled, rdf_map)
+    if engine_name != "pyshacl":
+        data = _apply_rules(data, compiled, rdf_map)
     table_ref = _table_ref(data, **kwargs)
     violations = _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, **kwargs)
     violations = _present(violations, data, compiled.ir, compiled.language, table_ref)
@@ -146,6 +150,47 @@ def _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, **kwa
                       .drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
                                                "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
     return violations
+
+
+def _bind_inheritance(compiled, rdf_map):
+    """Schema-driven subclass fan-out, cached on compiled.plans per schema digest."""
+    from .schema_ir import bind_inheritance, _load
+
+    schema, digest, _ = _load(rdf_map)
+    key = f"inherit|{digest}"
+    bound = compiled.plans.get(key)
+    if bound is not None:
+        return bound
+    bound = CompiledShapes(
+        graph=compiled.graph, ir=bind_inheritance(compiled.ir, schema),
+        hash=compiled.hash, sources=compiled.sources, language=compiled.language,
+        stats=compiled.stats, rules=compiled.rules)
+    compiled.plans[key] = bound
+    return bound
+
+
+def _apply_rules(data, compiled, rdf_map):
+    """SHACL-AF SPARQLRule CONSTRUCT pre-pass — inferred triples join the data
+    before the constraint engines run. pyshacl does this itself (advanced=True)."""
+    if not compiled.rules:
+        return data
+    from .. import sparql
+    from .._engine_detect import to_pandas
+
+    frames = [to_pandas(data)]
+    for rule in compiled.rules:
+        # SHACL-AF binds $this per focus node; SPARQL engines see a variable
+        query_text = (rule["prefixes"] + rule["construct"]).replace("$this", "?this")
+        try:
+            constructed = sparql.query(data, query_text, rdf_map=rdf_map, return_type="pandas")
+        except Exception as error:  # noqa: BLE001 — defective rule
+            logger.warning("sh:rule CONSTRUCT of %s failed (%s) — skipped", rule["shape"], error)
+            continue
+        if isinstance(constructed, pandas.DataFrame) and not constructed.empty:
+            if "INSTANCE_ID" not in constructed.columns:
+                constructed["INSTANCE_ID"] = None
+            frames.append(constructed)
+    return pandas.concat(frames, ignore_index=True)
 
 
 def _present(violations, data, ir, language, table_name="triplets"):
@@ -217,41 +262,35 @@ def _describe_associations(violations, data, ir, table_name="triplets"):
     return violations
 
 
-def _name_map(data, table_name="triplets"):
-    """{ID: IdentifiedObject.name} from the data (any input flavor)."""
+def _key_rows(data, keys, table_name="triplets", columns=("ID", "KEY", "VALUE")):
+    """Any flavor → pandas frame of rows whose KEY is in *keys*."""
+    keys = list(keys)
     kind = flavor(data)
     if kind == "duckdb":
-        return dict(data.execute(
-            f"SELECT ID, VALUE FROM {table_name} "
-            f"WHERE KEY = 'IdentifiedObject.name'").fetchall())
+        placeholders = ", ".join("?" for _ in keys)
+        return pandas.DataFrame(
+            data.execute(f"SELECT {', '.join(columns)} FROM {table_name} "
+                         f"WHERE KEY IN ({placeholders})", keys).fetchall(),
+            columns=list(columns))
     if kind == "pyarrow":
         data = data.to_pandas(types_mapper=pandas.ArrowDtype)
         kind = "pandas"
     if kind == "polars":
-        rows = data.filter(data["KEY"] == "IdentifiedObject.name")
-        return dict(zip(rows["ID"].to_list(), rows["VALUE"].to_list()))
-    rows = data.loc[data["KEY"] == "IdentifiedObject.name"]
+        return data.filter(data["KEY"].is_in(keys)).select(list(columns)).to_pandas()
+    return data.loc[data["KEY"].isin(keys), list(columns)].copy()
+
+
+def _name_map(data, table_name="triplets"):
+    """{ID: IdentifiedObject.name} from the data (any input flavor)."""
+    rows = _key_rows(data, ["IdentifiedObject.name"], table_name)
     return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
 
 
 def _found_values(pairs, data, table_name="triplets", cap=5):
     """Per violated (ID, KEY): "found N values: 'a', 'b', …" — the validator
     sees WHICH duplicates to remove without opening the instance data."""
-    kind = flavor(data)
     keys = list(pairs["KEY"].astype(str).unique())
-    if kind == "duckdb":
-        placeholders = ", ".join("?" for _ in keys)
-        rows = pandas.DataFrame(data.execute(
-            f"SELECT ID, KEY, VALUE FROM {table_name} WHERE KEY IN ({placeholders})",
-            keys).fetchall(), columns=["ID", "KEY", "VALUE"])
-    else:
-        if kind == "pyarrow":
-            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-            kind = "pandas"
-        if kind == "polars":
-            rows = data.filter(data["KEY"].is_in(keys)).to_pandas()
-        else:
-            rows = data.loc[data["KEY"].isin(keys)]
+    rows = _key_rows(data, keys, table_name)
     rows = rows.astype({"ID": str, "KEY": str})
 
     def describe(values):
@@ -278,10 +317,12 @@ _EXPECTED = {
     "sh:maxExclusive": "value < {}".format,
     "sh:pattern": "value matching {}".format,
     "sh:datatype": "a {} value".format,
-    "sh:class": "a reference to a {}".format,
+    "sh:class": lambda params: ("a reference to a {}".format(params) if isinstance(params, str)
+                                else "a reference to one of: " + ", ".join(map(str, params))),
     "sh:nodeKind": "an {} value".format,
     "sh:hasValue": "value {}".format,
     "sh:in": lambda params: "one of: " + ", ".join(map(str, params)),
+    "sh:xone": lambda params: "exactly one of {} alternatives".format(len(params)),
     "triplets:range": lambda params: "a reference to one of: " + ", ".join(map(str, params)),
     "sh:equals": "equal to {}".format,
     "sh:disjoint": "different from {}".format,
@@ -335,17 +376,7 @@ def _message_sources(violations, ir):
 
 def _type_map(data, table_name="triplets"):
     """{ID: Type} from the data's Type rows (any input flavor)."""
-    kind = flavor(data)
-    if kind == "duckdb":
-        return dict(data.execute(
-            f"SELECT ID, VALUE FROM {table_name} WHERE KEY = 'Type'").fetchall())
-    if kind == "pyarrow":
-        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-        kind = "pandas"
-    if kind == "polars":
-        rows = data.filter(data["KEY"] == "Type")
-        return dict(zip(rows["ID"].to_list(), rows["VALUE"].to_list()))
-    rows = data.loc[data["KEY"] == "Type"]
+    rows = _key_rows(data, ["Type"], table_name)
     return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
 
 
@@ -463,27 +494,25 @@ def _match_profiles(hints, compiled_set):
     return sections
 
 
+def _instance_ids(data, table_name="triplets"):
+    """Distinct INSTANCE_ID values (any input flavor)."""
+    kind = flavor(data)
+    if kind == "duckdb":
+        return [row[0] for row in data.execute(
+            f"SELECT DISTINCT INSTANCE_ID FROM {table_name}").fetchall()]
+    if kind == "pyarrow":
+        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+        kind = "pandas"
+    if kind == "polars":
+        return data["INSTANCE_ID"].unique().to_list()
+    return data["INSTANCE_ID"].unique().tolist()
+
+
 def _instance_hints(data, table_name="triplets"):
     """{INSTANCE_ID: [header profile hints, priority-ordered]} — every
     instance appears, hint-less ones with an empty list (any input flavor)."""
-    kind = flavor(data)
-    if kind == "duckdb":
-        placeholders = ", ".join("?" for _ in _HEADER_KEYS)
-        header = pandas.DataFrame(data.execute(
-            f"SELECT INSTANCE_ID, KEY, VALUE FROM {table_name} WHERE KEY IN ({placeholders})",
-            list(_HEADER_KEYS)).fetchall(), columns=["INSTANCE_ID", "KEY", "VALUE"])
-        instances = [row[0] for row in data.execute(
-            f"SELECT DISTINCT INSTANCE_ID FROM {table_name}").fetchall()]
-    else:
-        if kind == "pyarrow":
-            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-            kind = "pandas"
-        if kind == "polars":
-            header = data.filter(data["KEY"].is_in(list(_HEADER_KEYS))).to_pandas()
-            instances = data["INSTANCE_ID"].unique().to_list()
-        else:
-            header = data.loc[data["KEY"].isin(_HEADER_KEYS)]
-            instances = data["INSTANCE_ID"].unique().tolist()
+    header = _key_rows(data, _HEADER_KEYS, table_name, columns=("INSTANCE_ID", "KEY", "VALUE"))
+    instances = _instance_ids(data, table_name)
 
     hints = {str(instance): [] for instance in instances}
     priority = {key: rank for rank, key in enumerate(_HEADER_KEYS)}
@@ -537,14 +566,5 @@ def _iso(moment):
 def _source_labels(data, table_name="triplets"):
     """File names from the data's Distribution meta rows (``KEY="label"``, the
     parser convention — the same lookup context.enrich uses), any input flavor."""
-    kind = flavor(data)
-    if kind == "duckdb":
-        rows = data.execute(f"SELECT VALUE FROM {table_name} WHERE KEY = 'label'").fetchall()
-        labels = (value for (value,) in rows)
-    elif kind == "polars":
-        labels = data.filter(data["KEY"] == "label")["VALUE"]
-    else:   # pandas — and pyarrow through its arrow-backed pandas view
-        if kind == "pyarrow":
-            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-        labels = data.loc[data["KEY"] == "label", "VALUE"]
-    return [label for label in dict.fromkeys(labels) if label]
+    rows = _key_rows(data, ["label"], table_name, columns=("VALUE",))
+    return [label for label in dict.fromkeys(rows["VALUE"]) if label]

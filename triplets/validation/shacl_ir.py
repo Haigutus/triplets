@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._caches import register_cache
+from ..parser.utils import local_ID, local_name as _local
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class CompiledShapes:
     language: str = "shacl"       # constraint language — "rdfs" for schema-compiled IR
     stats: dict = field(default_factory=dict)  # coverage facts (see _shape_stats)
     plans: dict = field(default_factory=dict)  # engine name → compiled artifact (lazy)
+    rules: tuple = ()             # SHACL-AF SPARQLRule CONSTRUCT pre-pass ({construct, prefixes, shape})
 
 
 _COMPILE_CACHE: dict = register_cache({})  # content hash → CompiledShapes
@@ -63,10 +65,10 @@ def compile_shapes(shapes) -> CompiledShapes:
         return _COMPILE_CACHE[key]
 
     graph = _load_shapes(shapes)
-    ir = parse_ir(graph)
+    ir, rules = parse_ir(graph)
     logger.debug("compiled %d constraint rows from %d shape triples", len(ir), len(graph))
     compiled = CompiledShapes(graph=graph, ir=ir, hash=key, sources=_source_names(shapes),
-                              stats=_shape_stats(graph, ir))
+                              stats=_shape_stats(graph, ir), rules=rules)
     _COMPILE_CACHE[key] = compiled
     return compiled
 
@@ -80,9 +82,12 @@ def _shape_stats(graph, ir):
 
     SH = rdflib.Namespace("http://www.w3.org/ns/shacl#")
     skipped = set()
-    for term in (SH.targetNode, SH.targetObjectsOf, SH.target, SH.xone):
-        skipped |= {f"{subject}: sh:{_local(term)} not walked"
-                    for subject, _ in graph.subject_objects(term)}
+    # SPARQLTarget without sh:select (or a non-SPARQL custom target) is still
+    # invisible; targetNode / targetObjectsOf / xone / SPARQLTarget-with-select
+    # now compile into the IR
+    for subject, target in graph.subject_objects(SH.target):
+        if graph.value(target, SH.select) is None:
+            skipped.add(f"{subject}: sh:target not walked (no sh:select)")
     for subject in set(graph.subjects(SH.path)):
         path_node = graph.value(subject, SH.path)
         if path_node is not None and _resolve_path(graph, SH, path_node)[0] is None:
@@ -173,7 +178,7 @@ def _content_hash(shapes):
 # Nested/query components every vectorized engine delegates to the pandas
 # implementations — part of the shared IR contract, defined here so no engine
 # needs to import another engine for a constant.
-FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:not", "sh:node", "sh:sparql"}
+FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:not", "sh:node", "sh:sparql", "sh:xone"}
 
 
 def split_rules(ir, implemented, fallback_components, engine):
@@ -183,10 +188,17 @@ def split_rules(ir, implemented, fallback_components, engine):
     Engines cache the result in ``CompiledShapes.plans[engine]`` so the split
     runs once per compiled shapes, not once per validate call; validate()
     reads the skipped components into the report metadata.
+
+    A row whose *component* is lazy still falls back when its *target* is not
+    (SPARQLTarget) — polars never sees a SELECT it cannot plan.
     """
     rules = list(ir.itertuples())
-    vectorized = [rule for rule in rules if rule.component in implemented]
-    fallback = [rule for rule in rules if rule.component in fallback_components]
+    vectorized, fallback = [], []
+    for rule in rules:
+        if getattr(rule, "target_kind", "class") == "sparql" or rule.component in fallback_components:
+            fallback.append(rule)
+        elif rule.component in implemented:
+            vectorized.append(rule)
     skipped = {rule.component for rule in rules} - set(implemented) - set(fallback_components)
     if skipped:
         logger.debug("%s engine skips components: %s (pyshacl covers them)",
@@ -196,39 +208,52 @@ def split_rules(ir, implemented, fallback_components, engine):
 
 # ── shapes graph → constraint table ──────────────────────────────────────────
 
-def parse_ir(graph) -> pandas.DataFrame:
-    """Walk NodeShapes → property shapes → one IR row per constraint component.
+def parse_ir(graph):
+    """Walk NodeShapes → property shapes → (constraint table, SPARQLRule list).
 
     A NodeShape may declare several sh:targetClass (the ENTSO-E profiles do);
     every constraint row is emitted once per target. ``sh:targetSubjectsOf``
     targets compile the same way with target_kind="subjectsOf" — the engines
     resolve the focus as the subjects carrying that KEY instead of a class's
-    instances.
+    instances. SPARQLRule CONSTRUCT blocks are collected here (data pre-pass,
+    not IR rows).
     """
     import rdflib
 
     SH = rdflib.Namespace("http://www.w3.org/ns/shacl#")
-    rows = []
+    rows, rules = [], []
     for shape in graph.subjects(rdflib.RDF.type, SH.NodeShape):
+        if _is_deactivated(graph, SH, shape):
+            continue
+        for rule in graph.objects(shape, SH.rule):
+            construct = graph.value(rule, SH.construct)
+            if construct is not None:
+                rules.append({"shape": str(shape), "construct": str(construct),
+                              "prefixes": _sparql_prefixes(graph, SH, rule)})
         for target in graph.objects(shape, SH.targetClass):
             rows.extend(_node_rows(graph, SH, shape, _local(target)))
         for target in graph.objects(shape, SH.targetSubjectsOf):
             rows.extend(_node_rows(graph, SH, shape, _local(target), target_kind="subjectsOf"))
+        for target in graph.objects(shape, SH.targetObjectsOf):
+            rows.extend(_node_rows(graph, SH, shape, _local(target), target_kind="objectsOf"))
+        for target in graph.objects(shape, SH.targetNode):
+            rows.extend(_node_rows(graph, SH, shape, _node_id(target), target_kind="node"))
+        for target in graph.objects(shape, SH.target):
+            select = graph.value(target, SH.select)
+            if select is None:
+                continue
+            query = _sparql_prefixes(graph, SH, target) + str(select)
+            rows.extend(_node_rows(graph, SH, shape, query, target_kind="sparql"))
 
-    # Only sh:targetClass / sh:targetSubjectsOf are walked into the IR —
-    # shapes reached exclusively through other target declarations (or
-    # sh:xone) are INVISIBLE to the vectorized engines and would silently
-    # under-validate. Warn loudly; the pyshacl reference engine covers them
-    # (engine="pyshacl").
-    invisible = {term: count for term in
-                 (SH.targetNode, SH.targetObjectsOf, SH.target, SH.xone)
-                 if (count := sum(1 for _ in graph.subject_objects(term)))}
+    # Custom sh:target without sh:select (and inexpressible sh:path) stay
+    # invisible to the vectorized engines. Warn; pyshacl covers them.
+    invisible = sum(1 for _, target in graph.subject_objects(SH.target)
+                    if graph.value(target, SH.select) is None)
     if invisible:
         logger.warning(
             "shapes use SHACL features the vectorized engines do not implement — "
             "affected shapes are skipped by the polars/pandas/duckdb engines; "
-            "use engine=\"pyshacl\" for full coverage: %s",
-            ", ".join(f"sh:{_local(term)} (x{count})" for term, count in invisible.items()))
+            "use engine=\"pyshacl\" for full coverage: sh:target (x%d)", invisible)
 
     ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
     # identical re-declarations behave like ONE shape (issue #99): the ENTSO-E
@@ -243,7 +268,7 @@ def parse_ir(graph) -> pandas.DataFrame:
     unknown = ir.loc[~ir["component"].isin(KNOWN_COMPONENTS), "component"].unique()
     if len(unknown):
         logger.info("IR contains components no vectorized engine implements yet: %s", ", ".join(unknown))
-    return ir
+    return ir, tuple(rules)
 
 
 def _node_rows(graph, SH, shape, target_class, target_kind="class"):
@@ -265,6 +290,7 @@ def _node_rows(graph, SH, shape, target_class, target_kind="class"):
         rows.append({**meta, "component": "sh:closed", "params": allowed})
 
     rows.extend(_sparql_rows(graph, SH, shape, meta))
+    rows.extend(_logical_rows(graph, SH, shape, meta, target_class, target_kind))
     for property_shape in graph.objects(shape, SH.property):
         rows.extend(_shape_rows(graph, SH, property_shape, target_class, parent=meta,
                                 target_kind=target_kind))
@@ -282,6 +308,8 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
     """
     if str(shape_uri) in visited:
         logger.warning("shape reference cycle at %s — constraint dropped", shape_uri)
+        return []
+    if _is_deactivated(graph, SH, shape_uri):
         return []
     visited = visited | {str(shape_uri)}
     path_node = graph.value(shape_uri, SH.path)
@@ -305,20 +333,7 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
             rows.append({**meta, "component": component, "params": transform(graph, value)})
 
     rows.extend(_sparql_rows(graph, SH, shape_uri, meta))
-
-    # logical operators: params are nested row-dict lists, recursion via RDF lists
-    for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and")):
-        head = graph.value(shape_uri, term)
-        if head is not None:
-            nested = [_shape_rows(graph, SH, item, target_class, visited, target_kind=target_kind)
-                      for item in _rdf_list(graph, head, lambda node: node)]
-            rows.append({**meta, "component": component, "params": nested})
-
-    negated = graph.value(shape_uri, SH["not"])
-    if negated is not None:
-        rows.append({**meta, "component": "sh:not",
-                     "params": _shape_rows(graph, SH, negated, target_class, visited,
-                                           target_kind=target_kind)})
+    rows.extend(_logical_rows(graph, SH, shape_uri, meta, target_class, target_kind, visited))
 
     node_shape = graph.value(shape_uri, SH.node)
     if node_shape is not None:
@@ -329,6 +344,23 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
             rows.append({**meta, "component": "sh:node",
                          "params": {"shape": _local(node_shape), "rows": nested}})
 
+    return rows
+
+
+def _logical_rows(graph, SH, node, meta, target_class, target_kind, visited=frozenset()):
+    """sh:or / sh:and / sh:xone / sh:not on a node or property shape."""
+    rows = []
+    for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and"), (SH.xone, "sh:xone")):
+        head = graph.value(node, term)
+        if head is not None:
+            nested = [_shape_rows(graph, SH, item, target_class, visited, target_kind=target_kind)
+                      for item in _rdf_list(graph, head, lambda item: item)]
+            rows.append({**meta, "component": component, "params": nested})
+    negated = graph.value(node, SH["not"])
+    if negated is not None:
+        rows.append({**meta, "component": "sh:not",
+                     "params": _shape_rows(graph, SH, negated, target_class, visited,
+                                           target_kind=target_kind)})
     return rows
 
 
@@ -354,6 +386,14 @@ def _node_expansion(graph, SH, node_shape, target_class, visited, target_kind="c
     return rows
 
 
+def _sparql_prefixes(graph, SH, node):
+    """Resolved PREFIX header from sh:prefixes → sh:declare on *node*."""
+    return "".join(
+        f"PREFIX {graph.value(declaration, SH.prefix)}: <{graph.value(declaration, SH.namespace)}>\n"
+        for ontology in graph.objects(node, SH.prefixes)
+        for declaration in graph.objects(ontology, SH.declare))
+
+
 def _sparql_rows(graph, SH, shape_uri, meta):
     """sh:sparql constraints. params carries everything an engine needs to run
     the query without rdflib:
@@ -370,19 +410,25 @@ def _sparql_rows(graph, SH, shape_uri, meta):
         select = graph.value(sparql, SH.select)
         if select is None:
             continue
-        prefixes = "".join(
-            f"PREFIX {graph.value(declaration, SH.prefix)}: <{graph.value(declaration, SH.namespace)}>\n"
-            for ontology in graph.objects(sparql, SH.prefixes)
-            for declaration in graph.objects(ontology, SH.declare))
         message = graph.value(sparql, SH.message)
         row = {**meta, "component": "sh:sparql",
-               "params": {"select": str(select), "prefixes": prefixes,
+               "params": {"select": str(select), "prefixes": _sparql_prefixes(graph, SH, sparql),
                           # $PATH substitution needs the full IRI; only direct paths qualify
                           "path": str(path) if type(path).__name__ == "URIRef" else None}}
         if message is not None:
             row["message"] = str(message)
         rows.append(row)
     return rows
+
+
+def _is_deactivated(graph, SH, node):
+    flag = graph.value(node, SH.deactivated)
+    return flag is not None and bool(flag.toPython())
+
+
+def _node_id(term):
+    """sh:targetNode IRI → triplet ID."""
+    return _local(local_ID(term))
 
 
 def _shape_meta(graph, SH, shape_uri, target_class, path, inverse, target_kind="class",
@@ -471,7 +517,7 @@ KNOWN_COMPONENTS = {
     "sh:maxInclusive", "sh:minExclusive", "sh:maxExclusive", "sh:pattern",
     "sh:minLength", "sh:maxLength", "sh:nodeKind", "sh:hasValue", "sh:in",
     "sh:equals", "sh:disjoint", "sh:lessThan", "sh:lessThanOrEquals", "sh:node",
-    "sh:closed", "sh:sparql", "sh:or", "sh:and", "sh:not",
+    "sh:closed", "sh:sparql", "sh:or", "sh:and", "sh:not", "sh:xone",
     "triplets:range",   # schema validation: reference target's ANY type in the
                         # allowed set (RDF types are cumulative — issue #100);
                         # dangling references are silent (cross-profile sets)
@@ -481,11 +527,6 @@ KNOWN_COMPONENTS = {
 def _rdf_list(graph, head, transform):
     from rdflib.collection import Collection
     return [transform(item) for item in Collection(graph, head)]
-
-
-def _local(term):
-    """IRI → local name (matches the short KEY/VALUE names in triplet data)."""
-    return str(term).split("#")[-1].split("/")[-1]
 
 
 def _value(term):

@@ -15,7 +15,7 @@ import pyarrow as pa
 
 from .utils import (
     RDF_NS, RDF_ID, RDF_ABOUT, RDF_NODEID, RDF_RESOURCE,
-    clean_ID, _split_prefixed_name,
+    local_ID, local_resource, _split_prefixed_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
     # RDF objects
     for rdf_object in root.iterchildren():
         attribs = rdf_object.attrib
-        obj_id = clean_ID(
+        obj_id = local_ID(
             attribs.get(RDF_ID)
             or attribs.get(RDF_ABOUT)
             or attribs.get(RDF_NODEID)
@@ -95,13 +95,12 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
             key = _split_prefixed_name(element.tag)
             value = element.text
             if value is None and element.attrib:
-                value = clean_ID(
+                value = local_resource(
                     element.attrib.get(RDF_RESOURCE)
                     or element.attrib.get(RDF_NODEID)
-                    or ""
+                    or "",
+                    shorten=shorten_resources,
                 )
-                if shorten_resources and value and value.startswith("http"):
-                    value = value.split("#")[-1] if "#" in value else value
             id_b.append(obj_id)
             key_b.append(key)
             val_b.append(value if value is not None else "")

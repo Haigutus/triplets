@@ -44,6 +44,7 @@ import numpy
 import pandas
 
 from ..export.nquads_utils import CIM_NS, make_subject
+from ..parser.utils import local_ID
 from .shacl_ir import _local
 from .shacl_report import VIOLATION_COLUMNS
 
@@ -166,9 +167,31 @@ class _Context(SchemaKind):
         focus_ids = getattr(rule, "focus_ids", None)
         if focus_ids is not None:
             return focus_ids
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
+        kind = getattr(rule, "target_kind", "class")
+        if kind == "subjectsOf":
             return self.key_rows(rule.target_class)["ID"].unique()
+        if kind == "objectsOf":
+            return self.key_rows(rule.target_class)["VALUE"].astype(str).unique()
+        if kind == "node":
+            return numpy.array([rule.target_class], dtype=object)
+        if kind == "sparql":
+            return self._sparql_focus(rule.target_class)
         return self.class_ids(rule.target_class)
+
+    def _sparql_focus(self, query_text):
+        """Focus IDs from a SPARQLTarget SELECT (the ?this column)."""
+        from .. import sparql
+        try:
+            result = sparql.query(self.data, query_text, rdf_map=self.rdf_map,
+                                  data_unchanged=self.data_hashed, return_type="pandas")
+            self.data_hashed = True
+        except Exception:  # noqa: BLE001 — defective target query
+            logger.warning("sh:target SPARQL SELECT failed — shape has no focus nodes")
+            return _NO_IDS
+        if result is None or len(result) == 0:
+            return _NO_IDS
+        column = "this" if "this" in result.columns else result.columns[0]
+        return result[column].astype(str).map(local_ID).unique()
 
     def path_rows(self, rule):
         """The rule's path as (FOCUS, PATH_VALUE) pairs, restricted to the rule's focus.
@@ -310,7 +333,7 @@ def _range(comparison, description):
 def _in(context, rule):
     rows = context.path_rows(rule)
     allowed = {str(value) for value in rule.params}
-    local = rows["PATH_VALUE"].astype(str).str.split("#").str[-1].str.split("/").str[-1]
+    local = rows["PATH_VALUE"].astype(str).str.split("#").str[-1].str.split("/").str[-1]  # = local_name
     bad = ~local.isin(allowed)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not one of {sorted(allowed)}")
@@ -323,12 +346,21 @@ def _has_value(context, rule):
     return _frame(rule, missing, None, f"{rule.path} does not have required value '{rule.params}'")
 
 
+def _class_names(params):
+    """sh:class params: a single name, or the descendant list from bind_inheritance."""
+    if isinstance(params, str):
+        return [params]
+    return list(params)
+
+
 def _class(context, rule):
     rows = context.path_rows(rule)
-    of_class = context.class_ids(rule.params)
+    names = _class_names(rule.params)
+    of_class = pandas.Index([]).append([pandas.Index(context.class_ids(name)) for name in names])
     bad = ~rows["PATH_VALUE"].isin(of_class)
+    label = names[0] if len(names) == 1 else sorted(names)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
-                  f"referenced object is not of class {rule.params}")
+                  f"referenced object is not of class {label}")
 
 
 def _schema_range(context, rule):
@@ -436,8 +468,8 @@ def _sparql_violations(rule, result):
     result = result[result["this"].notna()]   # a row without a focus node is no violation
     if len(result) == 0:                      # (rdflib serializes a spurious empty binding
         return _empty()                       #  for some aggregate queries)
-    focus = result["this"].astype(str).str.removeprefix("urn:uuid:")
-    values = (result["value"].astype(str).str.removeprefix("urn:uuid:").str.removeprefix(CIM_NS)
+    focus = result["this"].astype(str).map(local_ID)
+    values = (result["value"].astype(str).map(local_ID).str.removeprefix(CIM_NS)
               if "value" in result.columns else None)
     return _frame(rule, focus, values, "sparql constraint violated")
 
@@ -593,6 +625,17 @@ def _or(context, rule):
     return _frame(rule, focus, None, "no sh:or alternative is satisfied")
 
 
+def _xone(context, rule):
+    """sh:xone — a focus node violates unless exactly one alternative is satisfied."""
+    focus_ids = getattr(rule, "focus_ids", None)
+    ids = list(context.focus(rule) if focus_ids is None else focus_ids)
+    violating_sets = [set(_run_nested(context, alternative, focus_ids)["ID"])
+                      for alternative in rule.params]
+    bad = [focus for focus in ids
+           if sum(focus not in violated for violated in violating_sets) != 1]
+    return _frame(rule, bad, None, "exactly one sh:xone alternative must be satisfied")
+
+
 def _node(context, rule):
     """sh:node — every value at the path must conform to the referenced shape.
 
@@ -646,6 +689,7 @@ CONSTRAINT_VALIDATORS = {
     "sh:and": _and,
     "sh:or": _or,
     "sh:not": _not,
+    "sh:xone": _xone,
 }
 
 

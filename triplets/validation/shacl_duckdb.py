@@ -25,7 +25,7 @@ import pandas
 from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .shacl_report import VIOLATION_COLUMNS
-from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
+from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind, _class_names
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +38,14 @@ def _class_sql(table):
 
 
 def _focus_sql(rule, table):
-    """The rule's focus nodes (bound with one target_class parameter): a class's
-    instances, or the subjects carrying the target property (sh:targetSubjectsOf)."""
-    if getattr(rule, "target_kind", "class") == "subjectsOf":
+    """The rule's focus nodes (bound with one target_class parameter)."""
+    kind = getattr(rule, "target_kind", "class")
+    if kind == "subjectsOf":
         return f"SELECT DISTINCT ID FROM {table} WHERE KEY = ?"
+    if kind == "objectsOf":
+        return f"SELECT DISTINCT VALUE AS ID FROM {table} WHERE KEY = ?"
+    if kind == "node":
+        return "SELECT ? AS ID"
     return _class_sql(table)
 
 
@@ -150,7 +154,7 @@ def _range(operator, description):
 def _in(rule, table, context):
     rows, rows_params = _rows_sql(rule, table)
     allowed = [str(value) for value in rule.params]
-    local = "list_extract(string_split(list_extract(string_split(PV, '#'), -1), '/'), -1)"
+    local = "list_extract(string_split(list_extract(string_split(PV, '#'), -1), '/'), -1)"  # = local_name
     return _wrap(rule, f"value is not one of {sorted(allowed)}",
                  rows, rows_params, f"NOT list_contains(?, {local})", [allowed])
 
@@ -166,8 +170,12 @@ def _has_value(rule, table, context):
 
 def _class(rule, table, context):
     rows, rows_params = _rows_sql(rule, table)
-    return _wrap(rule, f"referenced object is not of class {rule.params}",
-                 rows, rows_params, f"PV NOT IN ({_class_sql(table)})", [rule.params])
+    names = _class_names(rule.params)
+    placeholders = ", ".join("?" for _ in names)
+    label = names[0] if len(names) == 1 else sorted(names)
+    condition = f"PV NOT IN (SELECT ID FROM {table} WHERE KEY = 'Type' AND VALUE IN ({placeholders}))"
+    return _wrap(rule, f"referenced object is not of class {label}",
+                 rows, rows_params, condition, names)
 
 
 def _schema_range(rule, table, context):
@@ -277,13 +285,6 @@ SQL_BUILDERS = {
 }
 
 
-class _Context(SchemaKind):
-    """Schema-driven term-kind decisions (shared with the other vectorized engines)."""
-
-    def __init__(self, rdf_map):
-        self.rdf_map = rdf_map
-
-
 def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
              table=None, schema=None, table_name=None, **kwargs):
     """Validate triplet data against the compiled constraint table (DuckDB SQL).
@@ -308,7 +309,8 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]
 
-    context = _Context(rdf_map)
+    context = SchemaKind()
+    context.rdf_map = rdf_map
     built = [statement for rule in vectorized
              if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]
 

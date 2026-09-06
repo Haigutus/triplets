@@ -49,7 +49,7 @@ python setup_cython_parser.py build_ext --inplace
 
 | File | What it tests | Needs external data? |
 |------|--------------|----------------------|
-| `test_parser.py` | `parse()`, `clean_ID`, `find_all_xml`, nodeID support, categorical encoding, return types | No (uses `tests/data/minimal_cim.xml`) |
+| `test_parser.py` | `parse()`, `local_ID`, `find_all_xml`, nodeID support, categorical encoding, return types | No (uses `tests/data/minimal_cim.xml`) |
 | `test_parity_parser.py` | Cross-engine parser parity, `pandas.read_RDF` registration, all engines produce identical output | No |
 | `test_import.py` | Loading NC and CGMES files, column structure, metadata (Distribution, NamespaceMap) | Yes (relicapgrid submodule) |
 | `test_tools.py` | Data-manipulation tool functions on the Svedala IGM dataset | Yes (relicapgrid submodule) |
