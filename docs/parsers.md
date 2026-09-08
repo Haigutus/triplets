@@ -136,9 +136,10 @@ data = triplets.parser.parse(path, return_type="polars")
 `parse()` / `read_RDF` accept (see `triplets/parser/__init__.py`):
 
 - `shorten_resources` (default `True`) — shorten http(s) resource values to
-  their `#fragment` (CIM instance-data convention). `False` keeps lossless
-  full URIs (e.g. for RDFS schema parsing); **not supported by the
-  `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
+  their `#fragment` (CIM instance-data convention). Enumerations are stored as
+  `ControlAreaTypeKind.Interchange`; a filter on the full CIM URI will not match.
+  `False` keeps lossless full URIs (e.g. for RDFS schema parsing); **not supported
+  by the `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
 - `categorical_columns` (default `("INSTANCE_ID", "KEY")`) — columns to
   dictionary-encode (Arrow) / categorize (pandas) for memory savings; `None`
   disables.

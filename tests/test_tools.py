@@ -712,6 +712,27 @@ class TestExportToCimxml:
         assert len(real_diff) == 0, f"Engines differ:\n{real_diff.head(10)}"
 
 
+class TestNquadsEnumerationExport:
+    """N-Quads expands short enum names from EnumerationValue.namespace; full URIs pass through."""
+
+    CIM16_INTERCHANGE = "http://iec.ch/TC57/2013/CIM-schema-cim16#ControlAreaTypeKind.Interchange"
+
+    def test_nquads_enumeration_uses_schema_namespace(self):
+        from triplets.export.nquads_utils import build_key_metadata, make_object
+        from triplets.export_schema import schemas
+        enum_keys, key_ns, key_dt = build_key_metadata(schemas.ENTSOE_CGMES_2_4_15_552_ED1)
+        expected = f"<{self.CIM16_INTERCHANGE}>"
+        assert make_object("ControlArea.type", "ControlAreaTypeKind.Interchange", enum_keys, key_dt, key_ns) == expected
+        assert make_object("ControlArea.type", self.CIM16_INTERCHANGE, enum_keys, key_dt, key_ns) == expected
+
+        data = pandas.DataFrame(
+            [("ca", "Type", "ControlArea", "i"), ("ca", "ControlArea.type", "ControlAreaTypeKind.Interchange", "i")],
+            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"],
+        )
+        buf = triplets.export.export_to_nquads(data, rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1, export_to_memory=True)
+        assert expected in buf.getvalue().decode()
+
+
 class TestExportToNetworkx:
     def test_returns_graph(self, svedala_eq):
         networkx = pytest.importorskip("networkx")

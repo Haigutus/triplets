@@ -117,13 +117,13 @@ def make_predicate(key, key_namespaces=None):
     return f"<{ns}{key}>"
 
 
-def make_object(key, value, enum_keys=None, key_datatypes=None):
+def make_object(key, value, enum_keys=None, key_datatypes=None, key_namespaces=None):
     """Convert VALUE to object (URI or literal).
 
     Rules:
     - Type row → <namespace#ClassName>
     - Already starts with http/https/urn → <value> (pass through)
-    - Enum KEY → <namespace#EnumValue>
+    - Enum KEY → <EnumerationValue.namespace#EnumValue> (schema; CIM100 fallback)
     - KEY with schema datatype → "literal"^^<xsd type> (plain for xsd:string);
       takes precedence over the UUID heuristic (e.g. IdentifiedObject.mRID is
       a string attribute, not a reference)
@@ -139,9 +139,10 @@ def make_object(key, value, enum_keys=None, key_datatypes=None):
     if value.startswith("http://") or value.startswith("https://") or value.startswith("urn:"):
         return f"<{value}>"
 
-    # Enumeration value — add namespace
+    # Enumeration value — expand short name via schema EnumerationValue.namespace
     if enum_keys and key in enum_keys:
-        return f"<{CIM_NS}{value}>"
+        ns = (key_namespaces or {}).get(value, CIM_NS)
+        return f"<{ns}{value}>"
 
     # Literal attribute by schema — annotate with its xsd datatype
     if key_datatypes and key in key_datatypes:

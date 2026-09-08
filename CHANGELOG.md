@@ -20,6 +20,8 @@ Start of the 0.3 line.
   crashes with `'Series' object has no attribute '_pa_array'` (same bug as
   2.2.x, which is already excluded). Constraint is now
   `pandas>=2.0,!=2.2.*,!=2.3.3`. Fixed upstream in pandas 3.0.
+- N-Quads enumeration export uses the schema `EnumerationValue.namespace`
+  instead of always CIM100 (CGMES 2.4 `ControlAreaTypeKind` is CIM16) (#116).
 
 ## [0.2.0] - 2026-08-26
 
@@ -532,6 +534,9 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   engine for plain `str` dtypes.
 - Triplet values are always strings (or null).
 - `export_to_cimxml` exports schema-defined content only by default.
+- Parse shortens http(s) `#fragment` resource values to the local name
+  (`ControlAreaTypeKind.Interchange`, not the full CIM URI). This landed in
+  0.0.13; filters that compare against the full URI no longer match.
 
 ### Deprecated
 - All `rdf_parser.py` functions now emit `DeprecationWarning` and delegate to the new

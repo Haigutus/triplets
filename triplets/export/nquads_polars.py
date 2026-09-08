@@ -56,7 +56,10 @@ def _quads(data, enum_keys, key_namespaces, key_datatypes):
     objects = (pl.when(is_type & val_is_uri).then(pl.format("<{}>", pl.col("VALUE")))
                .when(is_type).then(pl.format("<{}{}>", pl.lit(CIM_NS), pl.col("VALUE")))
                .when(val_is_uri).then(pl.format("<{}>", pl.col("VALUE")))
-               .when(is_enum).then(pl.format("<{}{}>", pl.lit(CIM_NS), pl.col("VALUE")))
+               .when(is_enum).then(pl.format("<{}{}>",
+                   pl.col("VALUE").replace_strict(key_namespaces, default=CIM_NS, return_dtype=pl.Utf8)
+                   if key_namespaces else pl.lit(CIM_NS),
+                   pl.col("VALUE")))
                .when(is_literal_by_schema & datatype.is_not_null())
                .then(pl.format('"{}"^^<{}>', escaped, datatype))
                .when(is_literal_by_schema).then(plain_literal)   # xsd:string — plain
