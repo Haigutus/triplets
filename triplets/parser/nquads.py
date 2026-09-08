@@ -3,7 +3,7 @@
 read_nquads turns N-Quads / N-Triples text (path, bytes, or file-like) back
 into a triplet DataFrame [ID, KEY, VALUE, INSTANCE_ID], applying the inverse
 of the export conventions (triplets.export.nquads_utils): urn:uuid: stripped,
-CIM namespace shortened, rdf:type → 'Type', datatype / language annotations
+http(s) #fragment shortened (any schema namespace), rdf:type → 'Type', datatype / language annotations
 dropped (values keep their lexical form), graph → INSTANCE_ID (absent → None).
 
 Everything is vectorized pandas string ops. terms_to_triplets is the shared
@@ -18,9 +18,7 @@ from pathlib import Path
 import pandas
 
 from .._engine_detect import to_return_type
-from ..export.nquads_utils import CIM_NS, RDF_TYPE
-
-_UUID_PREFIX = "urn:uuid:"
+from ..export.nquads_utils import RDF_TYPE, shorten_iris
 
 # subject predicate object [graph] . — subject/predicate are space-free terms,
 # the object may contain spaces inside a quoted literal, the graph is an IRI
@@ -70,7 +68,7 @@ def terms_to_triplets(frame):
     instance). Term shapes: ``<iri>``, ``_:bnode``, ``"literal"`` (optionally
     with a ``^^<datatype>`` / ``@lang`` suffix — dropped, the value keeps its
     lexical form; string escapes decoded), or bare turtle-shorthand
-    numbers/booleans. IRIs lose urn:uuid: and the CIM namespace,
+    numbers/booleans. IRIs lose urn:uuid: and any http(s) #fragment namespace,
     rdf:type → 'Type'.
     """
     rdf_type = frame["KEY"] == f"<{RDF_TYPE}>"
@@ -85,8 +83,7 @@ def terms_to_triplets(frame):
 
 
 def _iri(column):
-    return (column.str.replace(r"^<(.*)>$", r"\1", regex=True)
-            .str.removeprefix("_:").str.removeprefix(_UUID_PREFIX).str.removeprefix(CIM_NS))
+    return shorten_iris(column.str.replace(r"^<(.*)>$", r"\1", regex=True).str.removeprefix("_:"))
 
 
 def _unescape(column):

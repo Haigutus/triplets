@@ -731,9 +731,14 @@ class TestNquadsSchemaIRIs:
             [("ca", "Type", "ControlArea", "i"), ("ca", "ControlArea.type", "ControlAreaTypeKind.Interchange", "i")],
             columns=["ID", "KEY", "VALUE", "INSTANCE_ID"],
         )
-        text = triplets.export.export_to_nquads(data, rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1, export_to_memory=True).getvalue().decode()
+        buf = triplets.export.export_to_nquads(data, rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1, export_to_memory=True)
+        text = buf.getvalue().decode()
         assert class_iri in text
         assert enum_iri in text
+        buf.seek(0)
+        back = triplets.parser.nquads.read_nquads(buf)
+        assert set(back.loc[back["KEY"] == "Type", "VALUE"]) == {"ControlArea"}
+        assert set(back.loc[back["KEY"] == "ControlArea.type", "VALUE"]) == {"ControlAreaTypeKind.Interchange"}
 
 
 class TestExportToNetworkx:

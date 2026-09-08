@@ -20,9 +20,11 @@ Start of the 0.3 line.
   crashes with `'Series' object has no attribute '_pa_array'` (same bug as
   2.2.x, which is already excluded). Constraint is now
   `pandas>=2.0,!=2.2.*,!=2.3.3`. Fixed upstream in pandas 3.0.
-- N-Quads class and enumeration IRIs use the schema namespace (`Class.namespace` /
-  `EnumerationValue.namespace`) instead of always CIM100 (CGMES 2.4 `ControlArea`
-  and `ControlAreaTypeKind` are CIM16) (#116).
+- N-Quads / SPARQL ingest expand class and enum IRIs from the schema namespace
+  when `rdf_map` is passed (`Class.namespace` / `EnumerationValue.namespace`);
+  CIM100 is only the no-schema fallback. The inverse (`read_nquads`, CONSTRUCT,
+  SHACL report) shortens any http(s) `#fragment`, not just CIM100, so CGMES 2.4
+  CIM16 round-trips to the same short names as 3.0 (#116).
 
 ## [0.2.0] - 2026-08-26
 

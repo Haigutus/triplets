@@ -43,7 +43,7 @@ from types import SimpleNamespace
 import numpy
 import pandas
 
-from ..export.nquads_utils import CIM_NS, make_subject
+from ..export.nquads_utils import make_subject
 from .shacl_ir import _local
 from .shacl_report import VIOLATION_COLUMNS
 
@@ -436,9 +436,9 @@ def _sparql_violations(rule, result):
     result = result[result["this"].notna()]   # a row without a focus node is no violation
     if len(result) == 0:                      # (rdflib serializes a spurious empty binding
         return _empty()                       #  for some aggregate queries)
-    focus = result["this"].astype(str).str.removeprefix("urn:uuid:")
-    values = (result["value"].astype(str).str.removeprefix("urn:uuid:").str.removeprefix(CIM_NS)
-              if "value" in result.columns else None)
+    from ..export.nquads_utils import shorten_iris
+    focus = shorten_iris(result["this"].astype(str))
+    values = shorten_iris(result["value"].astype(str)) if "value" in result.columns else None
     return _frame(rule, focus, values, "sparql constraint violated")
 
 

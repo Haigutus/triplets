@@ -38,7 +38,7 @@ struct TermMapping {
   std::unordered_map<std::string, std::string> keyNamespaces;
   // KEY → full xsd datatype IRI; "" means schema-typed as plain xsd:string.
   std::unordered_map<std::string, std::string> keyDatatypes;
-  // Namespace for bare predicates / Type classes / enum values (CIM_NS).
+  // Fallback namespace when a KEY/class/enum name is not in keyNamespaces.
   std::string defaultNamespace;
 };
 
