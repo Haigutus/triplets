@@ -23,11 +23,9 @@ RDFS_ROOT = REPO_ROOT / "rdfs"
 UPSTREAM = "https://github.com/entsoe/application-profiles-library.git"
 SOURCES = {
     "ENTSOE_NC_2.4.1": {"repo": UPSTREAM, "ref": "ncp-v2-4-1", "path": "NCP/RDFS"},
-    # Not onboarded: DatasetMetadata lost rdfs:domain on 11 URI-typed Dataset properties,
-    # https://github.com/entsoe/application-profiles-library/issues/92 — and neither is
-    # an official publication. Uncomment (here and in cim_rdfs_to_json.BUNDLES) when fixed.
-    # "ENTSOE_NC_2.4.2":   {"repo": UPSTREAM, "ref": "ncp-v2-4-2", "path": "NCP/RDFS"},
-    # "ENTSOE_NC_2.5-dev": {"repo": UPSTREAM, "ref": "main", "path": "NCP/CurrentRelease/RDFS"},
+    # Draft on main (no ncp-v2-5-0 branch yet). DatasetMetadata class linkage restored
+    # via schema:domainIncludes in application-profiles-library#99 (fixes #92).
+    "ENTSOE_NC_2.5-dev": {"repo": UPSTREAM, "ref": "main", "path": "NCP/RDFS"},
 }
 
 

@@ -19,6 +19,7 @@ One JSON per (profile release, IEC 61970-552 serialization edition):
 | `ENTSOE_CGMES_2.4.15_552_ED1/ED2.json` | `rdfs/ENTSOE_CGMES_2.4.15/` (legacy hand-collected) | `schemas.ENTSOE_CGMES_2_4_15_552_ED1/ED2` |
 | `ENTSOE_CGMES_3.0.0_552_ED1/ED2.json` | `rdfs/ENTSOE_CGMES_3.0.0/` (legacy hand-collected) | `schemas.ENTSOE_CGMES_3_0_0_552_ED1/ED2` |
 | `ENTSOE_NC_2.4.1_552_ED1/ED2.json` | `rdfs/ENTSOE_NC_2.4.1/` — snapshot of [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) branch `ncp-v2-4-1`, commit-pinned in `SOURCE.json` | `schemas.ENTSOE_NC_2_4_1_552_ED1/ED2` |
+| `ENTSOE_NC_2.5-dev_552_ED1/ED2.json` | `rdfs/ENTSOE_NC_2.5-dev/` — unpublished NCP 2.5 draft from `main` (`NCP/RDFS`) | `schemas.ENTSOE_NC_2_5_dev_552_ED1/ED2` |
 
 `triplets/export_schema/__init__.py` walks the directory at import time and
 exposes every JSON as an attribute on the `schemas` object (filename sanitized:
@@ -162,8 +163,8 @@ git diff --exit-code triplets/export_schema
 ## Onboarding a New Release
 
 1. Add one entry to `SOURCES` (`fetch_profiles.py`) and one to `BUNDLES`
-   (`cim_rdfs_to_json.py`) — commented-out templates for NCP 2.4.2/2.5 sit in
-   both registries.
+   (`cim_rdfs_to_json.py`). Unpublished drafts keep a `-dev` suffix
+   (e.g. `ENTSOE_NC_2.5-dev`) until a release branch exists.
 2. Fetch, generate, and run the roundtrip suite:
 
 ```shell
@@ -186,6 +187,7 @@ requires exact row-set equality — deviations are named per case in a
 rdfs/                              # RDFS sources (committed snapshots)
 |-- README.md                      # provenance, onboarding, upstream defects
 |-- ENTSOE_NC_2.4.1/               # fetched: *.rdf + SOURCE.json commit pin
+|-- ENTSOE_NC_2.5-dev/             # fetched from main; unpublished 2.5 draft
 |-- ENTSOE_CGMES_2.4.15/           # legacy hand-collected
 |-- ENTSOE_CGMES_3.0.0/            # legacy hand-collected
 '-- ENTSOE_FH/                     # header profiles for the CGMES bundles
