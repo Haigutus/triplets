@@ -121,7 +121,7 @@ def make_object(key, value, enum_keys=None, key_datatypes=None, key_namespaces=N
     """Convert VALUE to object (URI or literal).
 
     Rules:
-    - Type row → <namespace#ClassName>
+    - Type row → <Class.namespace#ClassName> (schema; CIM100 fallback)
     - Already starts with http/https/urn → <value> (pass through)
     - Enum KEY → <EnumerationValue.namespace#EnumValue> (schema; CIM100 fallback)
     - KEY with schema datatype → "literal"^^<xsd type> (plain for xsd:string);
@@ -133,7 +133,8 @@ def make_object(key, value, enum_keys=None, key_datatypes=None, key_namespaces=N
     if key == "Type":
         if value.startswith("http://") or value.startswith("urn:"):
             return f"<{value}>"
-        return f"<{CIM_NS}{value}>"
+        ns = (key_namespaces or {}).get(value, CIM_NS)
+        return f"<{ns}{value}>"
 
     # Already a full URI
     if value.startswith("http://") or value.startswith("https://") or value.startswith("urn:"):

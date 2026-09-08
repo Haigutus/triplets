@@ -20,8 +20,9 @@ Start of the 0.3 line.
   crashes with `'Series' object has no attribute '_pa_array'` (same bug as
   2.2.x, which is already excluded). Constraint is now
   `pandas>=2.0,!=2.2.*,!=2.3.3`. Fixed upstream in pandas 3.0.
-- N-Quads enumeration export uses the schema `EnumerationValue.namespace`
-  instead of always CIM100 (CGMES 2.4 `ControlAreaTypeKind` is CIM16) (#116).
+- N-Quads class and enumeration IRIs use the schema namespace (`Class.namespace` /
+  `EnumerationValue.namespace`) instead of always CIM100 (CGMES 2.4 `ControlArea`
+  and `ControlAreaTypeKind` are CIM16) (#116).
 
 ## [0.2.0] - 2026-08-26
 

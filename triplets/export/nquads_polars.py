@@ -35,6 +35,8 @@ def _quads(data, enum_keys, key_namespaces, key_datatypes):
 
     namespace = (pl.col("KEY").replace_strict(key_namespaces, default=CIM_NS, return_dtype=pl.Utf8)
                  if key_namespaces else pl.lit(CIM_NS))
+    value_ns = (pl.col("VALUE").replace_strict(key_namespaces, default=CIM_NS, return_dtype=pl.Utf8)
+                if key_namespaces else pl.lit(CIM_NS))
     # split typed (xsd URI) from plain-string (None) schema literals
     typed_map = {k: v for k, v in key_datatypes.items() if v}
     datatype = (pl.col("KEY").replace_strict(typed_map, default=None, return_dtype=pl.Utf8)
@@ -54,12 +56,9 @@ def _quads(data, enum_keys, key_namespaces, key_datatypes):
                  .then(pl.format("<{}>", pl.col("KEY")))
                  .otherwise(pl.format("<{}{}>", namespace, pl.col("KEY"))))
     objects = (pl.when(is_type & val_is_uri).then(pl.format("<{}>", pl.col("VALUE")))
-               .when(is_type).then(pl.format("<{}{}>", pl.lit(CIM_NS), pl.col("VALUE")))
+               .when(is_type).then(pl.format("<{}{}>", value_ns, pl.col("VALUE")))
                .when(val_is_uri).then(pl.format("<{}>", pl.col("VALUE")))
-               .when(is_enum).then(pl.format("<{}{}>",
-                   pl.col("VALUE").replace_strict(key_namespaces, default=CIM_NS, return_dtype=pl.Utf8)
-                   if key_namespaces else pl.lit(CIM_NS),
-                   pl.col("VALUE")))
+               .when(is_enum).then(pl.format("<{}{}>", value_ns, pl.col("VALUE")))
                .when(is_literal_by_schema & datatype.is_not_null())
                .then(pl.format('"{}"^^<{}>', escaped, datatype))
                .when(is_literal_by_schema).then(plain_literal)   # xsd:string — plain
