@@ -113,8 +113,8 @@ def _shorten(term):
     value = str(term)
     if value == RDF_TYPE:
         return "Type"
-    if value.startswith(CIM_NS):
-        return value[len(CIM_NS):]
+    if value.startswith("http") and "#" in value:
+        return value.rsplit("#", 1)[-1]
     return value
 
 

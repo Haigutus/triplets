@@ -23,7 +23,7 @@ import pandas
 
 from .._engine_detect import flavor, to_return_type
 from .._rdflib_loader import load_dataset, scoped_graph
-from ..export.nquads_utils import CIM_NS, RDF_TYPE
+from ..export.nquads_utils import RDF_TYPE, shorten_iri
 
 if find_spec("rdflib") is None:  # registry contract: an unavailable engine fails at import
     raise ImportError("rdflib is not installed")
@@ -93,17 +93,10 @@ def _strip_uuid(value):
 def _shorten_predicate(predicate):
     if predicate == RDF_TYPE:
         return "Type"
-    if predicate.startswith(CIM_NS):
-        return predicate[len(CIM_NS):]
-    return predicate
+    return shorten_iri(predicate)
 
 
 def _shorten_object(obj):
     if type(obj).__name__ == "Literal":
         return str(obj)
-    value = str(obj)
-    if value.startswith(_UUID_PREFIX):
-        return value[len(_UUID_PREFIX):]
-    if value.startswith(CIM_NS):
-        return value[len(CIM_NS):]
-    return value
+    return shorten_iri(str(obj))

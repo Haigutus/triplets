@@ -38,7 +38,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     subjects = id_col.apply(make_subject)
     predicates = key_col.apply(lambda k: make_predicate(k, key_namespaces))
     objects = pandas.Series(
-        [make_object(k, v, enum_keys, key_datatypes) for k, v in zip(key_col, val_col)],
+        [make_object(k, v, enum_keys, key_datatypes, key_namespaces) for k, v in zip(key_col, val_col)],
         index=data.index,
     )
     graphs = inst_col.apply(make_graph)

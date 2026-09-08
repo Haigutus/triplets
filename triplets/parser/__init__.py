@@ -94,8 +94,9 @@ def parse(
         Columns to dictionary-encode for memory savings. Pass None to disable.
     shorten_resources : bool, default True
         Shorten http(s) resource values to their #fragment (CIM instance data convention).
-        Pass False for lossless URIs (e.g. RDFS schema parsing); only the python engines
-        support this.
+        Enumerations are stored as ``ControlAreaTypeKind.Interchange``; filters against
+        the full CIM URI will not match. Pass False for lossless URIs (e.g. RDFS schema
+        parsing); only the python engines support this.
     string_type : str, default "auto"
         Arrow layout of the ID and VALUE string columns (arrow/polars output,
         and pandas via ArrowDtype): "utf8" (32-bit offsets), "large_utf8"

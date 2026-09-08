@@ -712,6 +712,35 @@ class TestExportToCimxml:
         assert len(real_diff) == 0, f"Engines differ:\n{real_diff.head(10)}"
 
 
+class TestNquadsSchemaIRIs:
+    """N-Quads class and enum IRIs follow schema namespaces; full URIs pass through."""
+
+    CIM16 = "http://iec.ch/TC57/2013/CIM-schema-cim16#"
+
+    def test_nquads_class_and_enum_use_schema_namespace(self):
+        from triplets.export.nquads_utils import build_key_metadata, make_object
+        from triplets.export_schema import schemas
+        enum_keys, key_ns, key_dt = build_key_metadata(schemas.ENTSOE_CGMES_2_4_15_552_ED1)
+        class_iri = f"<{self.CIM16}ControlArea>"
+        enum_iri = f"<{self.CIM16}ControlAreaTypeKind.Interchange>"
+        assert make_object("Type", "ControlArea", enum_keys, key_dt, key_ns) == class_iri
+        assert make_object("ControlArea.type", "ControlAreaTypeKind.Interchange", enum_keys, key_dt, key_ns) == enum_iri
+        assert make_object("ControlArea.type", f"{self.CIM16}ControlAreaTypeKind.Interchange", enum_keys, key_dt, key_ns) == enum_iri
+
+        data = pandas.DataFrame(
+            [("ca", "Type", "ControlArea", "i"), ("ca", "ControlArea.type", "ControlAreaTypeKind.Interchange", "i")],
+            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"],
+        )
+        buf = triplets.export.export_to_nquads(data, rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1, export_to_memory=True)
+        text = buf.getvalue().decode()
+        assert class_iri in text
+        assert enum_iri in text
+        buf.seek(0)
+        back = triplets.parser.nquads.read_nquads(buf)
+        assert set(back.loc[back["KEY"] == "Type", "VALUE"]) == {"ControlArea"}
+        assert set(back.loc[back["KEY"] == "ControlArea.type", "VALUE"]) == {"ControlAreaTypeKind.Interchange"}
+
+
 class TestExportToNetworkx:
     def test_returns_graph(self, svedala_eq):
         networkx = pytest.importorskip("networkx")

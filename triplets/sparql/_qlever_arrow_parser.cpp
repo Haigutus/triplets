@@ -80,6 +80,12 @@ class RangeConverter {
     std::string name;                              // for ingest error context
   };
 
+  std::string namespaceFor(std::string_view name) const {
+    auto found = mapping_.keyNamespaces.find(std::string{name});
+    return found != mapping_.keyNamespaces.end() ? found->second
+                                                 : mapping_.defaultNamespace;
+  }
+
   TripleComponent iriComponent(std::string_view iri) const {
     auto component = TripleComponent::Iri::fromIrirefWithoutBrackets(iri);
     // Same folding the text parser applies after building each IRI.
@@ -138,12 +144,12 @@ class RangeConverter {
   TripleComponent makeObject(const KeyInfo& key, std::string_view value) const {
     if (key.rule == ObjectRule::Type) {
       if (isUri(value)) return iriComponent(value);
-      return iriComponent(absl::StrCat(mapping_.defaultNamespace, value));
+      return iriComponent(absl::StrCat(namespaceFor(value), value));
     }
     if (isUri(value)) return iriComponent(value);
     switch (key.rule) {
       case ObjectRule::Enum:
-        return iriComponent(absl::StrCat(mapping_.defaultNamespace, value));
+        return iriComponent(absl::StrCat(namespaceFor(value), value));
       case ObjectRule::Typed:
         // qlever's own typed-literal path (identical to the N-Quads parse).
         // Strict by design: an ill-typed value is a data-vs-schema error to be

@@ -9,8 +9,28 @@ import json
 CIM_NS = "http://iec.ch/TC57/CIM100#"
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 XSD_NS = "http://www.w3.org/2001/XMLSchema#"
+_UUID_PREFIX = "urn:uuid:"
 
 UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+
+
+def shorten_iri(value):
+    """Inverse of IRI expand: strip urn:uuid:, take http(s) #fragment (any schema namespace)."""
+    if value is None:
+        return value
+    value = str(value)
+    if value.startswith(_UUID_PREFIX):
+        value = value[len(_UUID_PREFIX):]
+    if value.startswith("http") and "#" in value:
+        return value.rsplit("#", 1)[-1]
+    return value
+
+
+def shorten_iris(series):
+    """Vectorized ``shorten_iri``."""
+    out = series.str.removeprefix(_UUID_PREFIX)
+    hashed = out.str.startswith("http") & out.str.contains("#", regex=False)
+    return out.mask(hashed, out.str.rsplit("#", n=1).str.get(-1))
 
 
 def build_key_metadata(rdf_map):
@@ -117,13 +137,13 @@ def make_predicate(key, key_namespaces=None):
     return f"<{ns}{key}>"
 
 
-def make_object(key, value, enum_keys=None, key_datatypes=None):
+def make_object(key, value, enum_keys=None, key_datatypes=None, key_namespaces=None):
     """Convert VALUE to object (URI or literal).
 
     Rules:
-    - Type row → <namespace#ClassName>
+    - Type row → <Class.namespace#ClassName> (schema; CIM100 fallback)
     - Already starts with http/https/urn → <value> (pass through)
-    - Enum KEY → <namespace#EnumValue>
+    - Enum KEY → <EnumerationValue.namespace#EnumValue> (schema; CIM100 fallback)
     - KEY with schema datatype → "literal"^^<xsd type> (plain for xsd:string);
       takes precedence over the UUID heuristic (e.g. IdentifiedObject.mRID is
       a string attribute, not a reference)
@@ -133,15 +153,17 @@ def make_object(key, value, enum_keys=None, key_datatypes=None):
     if key == "Type":
         if value.startswith("http://") or value.startswith("urn:"):
             return f"<{value}>"
-        return f"<{CIM_NS}{value}>"
+        ns = (key_namespaces or {}).get(value, CIM_NS)
+        return f"<{ns}{value}>"
 
     # Already a full URI
     if value.startswith("http://") or value.startswith("https://") or value.startswith("urn:"):
         return f"<{value}>"
 
-    # Enumeration value — add namespace
+    # Enumeration value — expand short name via schema EnumerationValue.namespace
     if enum_keys and key in enum_keys:
-        return f"<{CIM_NS}{value}>"
+        ns = (key_namespaces or {}).get(value, CIM_NS)
+        return f"<{ns}{value}>"
 
     # Literal attribute by schema — annotate with its xsd datatype
     if key_datatypes and key in key_datatypes:
