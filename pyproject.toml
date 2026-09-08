@@ -24,9 +24,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    # pandas 2.2.x excluded: pivot() on ArrowDtype dictionary columns crashes with
-    # "'Series' object has no attribute '_pa_array'" (fixed upstream in 2.3)
-    "pandas>=2.0,!=2.2.*",
+    # pandas 2.2.x and 2.3.3 excluded: pivot() on ArrowDtype dictionary columns crashes
+    # with "'Series' object has no attribute '_pa_array'" (fixed upstream in 3.0)
+    "pandas>=2.0,!=2.2.*,!=2.3.3",
     "lxml>=4.9",
 ]
 
