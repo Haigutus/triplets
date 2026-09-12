@@ -443,6 +443,46 @@ def test_legacy_url_map_covers_all_24_sections():
     assert sections <= set(PROFILE_URL_MAP.values())
 
 
+class TestSubclassIris:
+    """Class IRIs for rdfs:subClassOf — each name uses its own namespace."""
+
+    def test_nc_child_subclasses_cim_abstract(self):
+        from triplets.validation.schema_ir import CIM_NS, subclass_triples
+        schema = {"AE": {
+            "AssessedElement": {
+                "type": "Class",
+                "namespace": "https://cim4.eu/ns/nc#",
+                "inheritance": ["#AssessedElement", "#IdentifiedObject"],
+            },
+        }}
+        triples = set(subclass_triples(schema))
+        child = "https://cim4.eu/ns/nc#AssessedElement"
+        assert (child, CIM_NS + "IdentifiedObject") in triples
+        assert (child, "https://cim4.eu/ns/nc#IdentifiedObject") not in triples
+
+    def test_full_uri_inheritance_kept(self):
+        from triplets.validation.schema_ir import subclass_triples
+        parent = "http://iec.ch/TC57/CIM100#Equipment"
+        schema = {"EQ": {
+            "Breaker": {
+                "type": "Class",
+                "namespace": "http://iec.ch/TC57/CIM100#",
+                "inheritance": ["#Breaker", parent],
+            },
+        }}
+        assert ( "http://iec.ch/TC57/CIM100#Breaker", parent) in subclass_triples(schema)
+
+    def test_descendants_index(self):
+        from triplets.validation.schema_ir import descendants
+        schema = {"EQ": {
+            "Breaker": {"type": "Class", "inheritance": ["#Breaker", "#Switch", "#Equipment"]},
+            "Disconnector": {"type": "Class", "inheritance": ["#Disconnector", "#Switch", "#Equipment"]},
+        }}
+        index = descendants(schema)
+        assert index["Equipment"] == frozenset({"Breaker", "Disconnector"})
+        assert index["Breaker"] == frozenset({"Breaker"})
+
+
 def test_accessor():
     data = frame(breaker("b1") + CONTAINED)
     v = data.shacl.validate_schema(SCHEMA, profiles=("EQ",))
