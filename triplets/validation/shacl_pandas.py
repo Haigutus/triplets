@@ -146,11 +146,28 @@ class _Context(SchemaKind):
         return self._by_key.get(key, self.data.iloc[0:0])
 
     def class_ids(self, target_class):
-        """IDs of all instances of *target_class*."""
+        """IDs of all instances of *target_class* (and, with rdf_map, its descendants)."""
         if self._class_ids is None:
-            self._class_ids = {value: frame["ID"].unique() for value, frame
-                               in self.key_rows("Type").groupby("VALUE", observed=True, sort=False)}
+            exact = {value: frame["ID"].unique() for value, frame
+                     in self.key_rows("Type").groupby("VALUE", observed=True, sort=False)}
+            self._class_ids = self._with_ancestors(exact)
         return self._class_ids.get(target_class, _NO_IDS)
+
+    def _with_ancestors(self, exact):
+        """Precompute ancestor → concat(descendant IDs). One pass; then O(1) lookup."""
+        if self.rdf_map is None:
+            return exact
+        from .schema_ir import _load, expand_type_index
+        schema, _, _ = _load(self.rdf_map)
+        expanded = expand_type_index(exact, schema)
+        out = {}
+        for name, parts in expanded.items():
+            if isinstance(parts, list):
+                out[name] = pandas.unique(numpy.concatenate(
+                    [numpy.asarray(part, dtype=object) for part in parts]))
+            else:
+                out[name] = parts
+        return out
 
     @property
     def all_ids(self):
