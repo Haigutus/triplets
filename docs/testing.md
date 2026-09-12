@@ -55,6 +55,7 @@ python setup_cython_parser.py build_ext --inplace
 | `test_tools.py` | Data-manipulation tool functions on the Svedala IGM dataset | Yes (relicapgrid submodule) |
 | `test_parity_tools.py` | Cross-engine tool parity (pandas/polars/duckdb), including `type_tableview` / pivot correctness | Yes (relicapgrid submodule) |
 | `test_benchmarks_realgrid.py` | Performance benchmarks for parsing and tools across all engines | Yes (RealGrid LFS zip) |
+| `test_benchmarks_validation_twophase.py` | ASK/exists-first vs one-pass report collection on RealGrid (issue #122) | Yes (RealGrid LFS zip; oxigraph or qlever for the SPARQL group) |
 | `test_compiled_modules.py` | Compiled-extension import guard (see below) | No |
 
 ## Test Data
@@ -130,6 +131,9 @@ pytest tests/test_benchmarks_realgrid.py -m performance -k "parse" -v
 # save results to JSON
 pytest tests/test_benchmarks_realgrid.py -m performance \
   --benchmark-json=tests/performance_results/parsers_performance.json -k "parse"
+
+# two-phase SHACL/SPARQL collection vs one-pass (issue #122)
+pytest tests/test_benchmarks_validation_twophase.py -m performance -v
 ```
 
 ## pixi Tasks
