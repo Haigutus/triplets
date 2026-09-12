@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._header import _profile_identity_index
-from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
+from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE, _local
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ CIM_NS = "http://iec.ch/TC57/CIM100#"
 
 # engine dispatch key → presented violation type (vocabulary-accurate)
 PRESENTED = {"sh:minCount": "xsd:minOccurs", "sh:maxCount": "xsd:maxOccurs",
-             "sh:datatype": "xsd:type", "sh:in": "rdfs:range",
+             "sh:datatype": "xsd:type", "sh:in": "rdfs:range", "sh:not": "rdfs:range",
              "triplets:range": "rdfs:range", "sh:closed": "schema:domainIncludes"}
 
 
@@ -89,7 +89,7 @@ def compile_schema(rdf_map, closed=False) -> CompiledSchema:
         logger.debug("schema compile cache hit: %s", key[:30])
         return _COMPILE_CACHE[key]
 
-    concrete = _concrete_index(schema)
+    concrete = descendants(schema)
     profiles, skipped = {}, []
     for section, entries in schema.items():
         if not isinstance(entries, dict):
@@ -195,13 +195,13 @@ def subclass_triples(schema):
 
 
 def descendants(schema):
-    """ancestor local name → frozenset of concrete Class names inheriting it."""
-    return {key: frozenset(names) for key, names in _concrete_index(schema).items()}
+    """ancestor local name → frozenset of concrete Class names, across ALL
+    sections — inheritance is model knowledge, not a profile constraint.
 
-
-def _concrete_index(schema):
-    """ancestor local name → concrete classes inheriting it, across ALL
-    sections — inheritance is model knowledge, not a profile constraint."""
+    Each Class entry's ``inheritance`` list already includes itself, so a
+    concrete class maps to at least ``{itself}``. Abstract names (not Class
+    entries) map to every concrete descendant that listed them.
+    """
     concrete = {}
     for entries in schema.values():
         if not isinstance(entries, dict):
@@ -210,7 +210,34 @@ def _concrete_index(schema):
             if isinstance(entry, dict) and entry.get("type") == "Class":
                 for ancestor in entry.get("inheritance", ()):
                     concrete.setdefault(_local(ancestor), set()).add(name)
-    return concrete
+    return {ancestor: frozenset(names) for ancestor, names in concrete.items()}
+
+
+def bind_inheritance(ir, schema):
+    """Fan out ``sh:targetClass`` rows and expand ``sh:class`` params via the
+    schema subclass graph. Unknown names stay exact (``{themselves}``).
+
+    *schema* is the loaded export-schema dict (caller already ran ``_load``).
+    A NodeShape that already lists both an ancestor and a descendant does not
+    double-count — the same signature-dedup parse_ir uses (issue #99).
+    """
+    if ir is None or ir.empty:
+        return ir
+    index = descendants(schema)
+    expanded = []
+    for record in ir.to_dict("records"):
+        if record.get("component") == "sh:class" and isinstance(record.get("params"), str):
+            record = {**record, "params": sorted(index.get(record["params"], {record["params"]}))}
+        if record.get("target_kind", "class") == "class":
+            for target in sorted(index.get(record["target_class"], {record["target_class"]})):
+                expanded.append({**record, "target_class": target})
+        else:
+            expanded.append(record)
+    out = pandas.DataFrame(expanded, columns=IR_COLUMNS)
+    signature = out.assign(params=out["params"].astype(str))
+    out = out.loc[~signature.duplicated()].reset_index(drop=True)
+    out["message"] = out["message"].astype(object).where(out["message"].notna(), None)
+    return out
 
 
 def _section_rows(section, entries, concrete, closed, skipped):
@@ -233,6 +260,24 @@ def _section_rows(section, entries, concrete, closed, skipped):
                 rows.extend(_property_rows(meta, prop, prop_entry, concrete, skipped))
         if closed and parameters:
             rows.append({**meta, "component": "sh:closed", "params": [*parameters, "Type"]})
+    classes = {name for name, entry in entries.items()
+               if isinstance(entry, dict) and entry.get("type") == "Class"}
+    abstracts = sorted({_local(ancestor) for name in classes
+                        for ancestor in entries[name].get("inheritance", ())
+                        if _local(ancestor) not in classes})
+    if abstracts:
+        # deny-list: Type in a known abstract (not a Class entry). Unknown
+        # types and extra concrete types on a multi-profile instance are silent
+        # — combined EQ+SSH files would otherwise fail SSH's allow-list.
+        type_meta = {
+            "shape_id": f"urn:triplets:schema#{section}:Type", "target_class": "Type",
+            "target_kind": "subjectsOf", "path": "Type", "inverse": False, "via_type": False,
+            "component": "sh:not", "params": None, "severity": "Violation",
+            "message": None, "name": None, "description": None,
+        }
+        nested = {**type_meta, "shape_id": f"{type_meta['shape_id']}.in",
+                  "component": "sh:in", "params": abstracts}
+        rows.append({**type_meta, "params": [nested]})
     return rows
 
 
@@ -269,7 +314,3 @@ def _property_rows(meta, prop, entry, concrete, skipped):
             skipped.append(f"{meta['target_class']}.{prop}: association range "
                            f"{entry.get('range')!r} names no known class")
     return rows
-
-
-def _local(term):
-    return str(term).lstrip("#").rsplit("#", 1)[-1].rsplit("/", 1)[-1]

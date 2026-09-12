@@ -6,7 +6,7 @@ import pytest
 import pandas
 
 import triplets
-from triplets.parser import parse, find_all_xml, clean_ID, read_rdf
+from triplets.parser import parse, find_all_xml, local_ID, local_name, local_resource, clean_ID, read_rdf
 
 from pathlib import Path
 
@@ -31,12 +31,23 @@ except Exception:
 
 # ── Utilities ───────────────────────────────────────────────────────────────
 
-def test_clean_ID():
-    assert clean_ID("urn:uuid:abc-123") == "abc-123"
-    assert clean_ID("#_foo_bar") == "foo_bar"
-    assert clean_ID("_123") == "123"
-    assert clean_ID(None) == ""
-    assert clean_ID("") == ""
+def test_local_ID():
+    assert local_ID("urn:uuid:abc-123") == "abc-123"
+    assert local_ID("#_foo_bar") == "foo_bar"
+    assert local_ID("_123") == "123"
+    assert local_ID(None) == ""
+    assert local_ID("") == ""
+    assert clean_ID is local_ID  # public alias
+
+
+def test_local_name_and_resource():
+    assert local_name("http://iec.ch/TC57/CIM100#Breaker") == "Breaker"
+    assert local_name("http://example.org/vocab/Breaker") == "Breaker"
+    assert local_name("Breaker") == "Breaker"
+    assert local_resource("urn:uuid:abc-123") == "abc-123"
+    assert local_resource("http://iec.ch/TC57/CIM100#Breaker") == "Breaker"
+    assert local_resource("http://example.org/vocab/Breaker") == "http://example.org/vocab/Breaker"
+    assert local_resource("http://iec.ch/TC57/CIM100#Breaker", shorten=False) == "http://iec.ch/TC57/CIM100#Breaker"
 
 
 def test_find_all_xml_minimal():

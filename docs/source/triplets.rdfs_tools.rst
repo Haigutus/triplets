@@ -28,14 +28,6 @@ triplets.rdfs\_tools.cim\_rdfs\_to\_json module
    :show-inheritance:
    :undoc-members:
 
-triplets.rdfs\_tools.cim\_rdfs\_to\_json\_deprecated module
------------------------------------------------------------
-
-.. automodule:: triplets.rdfs_tools.cim_rdfs_to_json_deprecated
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
 triplets.rdfs\_tools.rdfs\_tools module
 ---------------------------------------
 

@@ -15,11 +15,24 @@ Start of the 0.3 line.
   class IRI uses that class's own namespace; abstracts with no Class entry
   (`Equipment`, `IdentifiedObject`) stay on CIM100, so an NC class does not
   invent `cim4.eu#Equipment`.
+- SHACL `sh:targetClass` / `sh:class` follow subclass semantics when `rdf_map` is
+  passed: the export schema's `inheritance` lists fan the IR out to concrete
+  classes. Without a schema, match stays exact `Type`.
+- Vectorized engines now walk `sh:targetNode`, `sh:targetObjectsOf`, SPARQL
+  `sh:target`, and `sh:xone` (pandas fallback). `sh:rule` SPARQLRule CONSTRUCT
+  runs as a data pre-pass before validation. `sh:deactivated` drops the shape
+  at compile.
+- Schema validation flags objects whose only `Type` is a known abstract class.
+- `local_ID` / `local_name` / `local_resource` in `parser.utils` — one place IDs
+  become local. `clean_ID` remains as an alias.
 - **NCP 2.5-dev export schemas** (`ENTSOE_NC_2.5-dev_552_ED1/ED2.json`) generated
   from [application-profiles-library](https://github.com/entsoe/application-profiles-library)
   `main` (`NCP/RDFS`). Named `-dev` until the pin is an `ncp-v2-5-0` release branch.
   DatasetMetadata header attributes bind again via `schema:domainIncludes`
   ([#99](https://github.com/entsoe/application-profiles-library/pull/99) / [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
+
+### Removed
+- Unused `cim_rdfs_to_json_deprecated`.
 
 ### Fixed
 - **Exclude pandas 2.3.3**: `pivot()` on ArrowDtype dictionary columns still

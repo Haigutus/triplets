@@ -153,11 +153,8 @@ def test_ir_real_cgmes_eq_shapes():
     assert not unknown, f"unexpected components in real shapes: {unknown}"
 
 
-def test_invisible_targets_warn_at_compile(caplog, tmp_path):
-    """Shapes reached only through targets the IR does not walk must warn —
-    the vectorized engines would otherwise silently under-validate."""
-    import logging
-    path = tmp_path / "invisible.ttl"
+def test_target_node_compiles_into_ir(tmp_path):
+    path = tmp_path / "node.ttl"
     path.write_text("""
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix cim: <http://iec.ch/TC57/CIM100#> .
@@ -166,11 +163,105 @@ cim:PickedNodeShape a sh:NodeShape ;
     sh:targetNode <urn:uuid:11111111-2222-3333-4444-555555555555> ;
     sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
 """)
+    ir = compile_shapes(str(path)).ir
+    assert list(ir["target_kind"]) == ["node"]
+    assert list(ir["target_class"]) == ["11111111-2222-3333-4444-555555555555"]
+    assert list(ir["component"]) == ["sh:minCount"]
+
+
+def test_deactivated_shape_emits_no_rows(tmp_path):
+    path = tmp_path / "off.ttl"
+    path.write_text("""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:Off a sh:NodeShape ; sh:deactivated true ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+""")
+    compiled = compile_shapes(str(path))
+    assert compiled.ir.empty
+
+
+def test_sparql_rule_collected_not_as_ir_row(tmp_path):
+    path = tmp_path / "rule.ttl"
+    path.write_text("""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:Inferred a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:rule [ a sh:SPARQLRule ;
+        sh:construct "CONSTRUCT { $this cim:IdentifiedObject.name \\"x\\" } WHERE { $this a cim:Breaker }" ] .
+""")
+    compiled = compile_shapes(str(path))
+    assert compiled.ir.empty
+    assert len(compiled.rules) == 1
+    assert "CONSTRUCT" in compiled.rules[0]["construct"]
+
+
+def test_custom_target_without_select_warns(caplog, tmp_path):
+    """Custom sh:target without sh:select stays invisible — warn so the
+    vectorized engines do not silently under-validate."""
+    import logging
+    path = tmp_path / "invisible.ttl"
+    path.write_text("""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix ex: <http://example.org/> .
+
+cim:Custom a sh:NodeShape ;
+    sh:target ex:NotSparql ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+""")
     with caplog.at_level(logging.WARNING, logger="triplets.validation.shacl_ir"):
         compiled = compile_shapes(str(path))
-    assert len(compiled.ir) == 0                           # invisible to the IR
-    assert any("sh:targetNode" in record.getMessage()
+    assert len(compiled.ir) == 0
+    assert any("sh:target" in record.getMessage()
                for record in caplog.records if record.levelname == "WARNING")
+
+
+def test_xone_compiles_like_or(tmp_path):
+    path = tmp_path / "xone.ttl"
+    path.write_text("""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:Xor a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:xone ( [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]
+              [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) .
+""")
+    ir = compile_shapes(str(path)).ir
+    assert list(ir["component"]) == ["sh:xone"]
+    assert len(ir.iloc[0]["params"]) == 2
+
+
+def test_bind_inheritance_fans_out_abstract_target():
+    import pandas
+    from triplets.validation.schema_ir import bind_inheritance
+    from triplets.validation.shacl_ir import IR_COLUMNS
+    rows = [{col: None for col in IR_COLUMNS}]
+    rows[0].update({"shape_id": "s", "target_class": "Equipment", "target_kind": "class",
+                    "path": "IdentifiedObject.name", "inverse": False, "via_type": False,
+                    "component": "sh:minCount", "params": 1, "severity": "Violation"})
+    schema = {"EQ": {
+        "Breaker": {"type": "Class", "inheritance": ["#Breaker", "#Switch", "#Equipment"]},
+        "Disconnector": {"type": "Class", "inheritance": ["#Disconnector", "#Switch", "#Equipment"]},
+    }}
+    out = bind_inheritance(pandas.DataFrame(rows, columns=IR_COLUMNS), schema)
+    assert sorted(out["target_class"]) == ["Breaker", "Disconnector"]
+
+
+def test_bind_inheritance_expands_sh_class_params():
+    import pandas
+    from triplets.validation.schema_ir import bind_inheritance
+    from triplets.validation.shacl_ir import IR_COLUMNS
+    rows = [{col: None for col in IR_COLUMNS}]
+    rows[0].update({"shape_id": "s", "target_class": "Breaker", "target_kind": "class",
+                    "path": "Equipment.EquipmentContainer", "inverse": False, "via_type": False,
+                    "component": "sh:class", "params": "EquipmentContainer", "severity": "Violation"})
+    schema = {"EQ": {
+        "Breaker": {"type": "Class", "inheritance": ["#Breaker"]},
+        "Bay": {"type": "Class", "inheritance": ["#Bay", "#EquipmentContainer"]},
+        "VoltageLevel": {"type": "Class", "inheritance": ["#VoltageLevel", "#EquipmentContainer"]},
+    }}
+    out = bind_inheritance(pandas.DataFrame(rows, columns=IR_COLUMNS), schema)
+    assert out.iloc[0]["params"] == ["Bay", "VoltageLevel"]
 
 
 def test_component_registries_agree():
@@ -190,6 +281,8 @@ def test_component_registries_agree():
         from triplets.validation import shacl_polars
         assert set(shacl_polars.PLAN_BUILDERS) | shacl_ir.FALLBACK_COMPONENTS == known
         assert set(shacl_polars.BATCH_BUILDERS) <= set(shacl_polars.PLAN_BUILDERS)
+        assert "sh:xone" in shacl_ir.FALLBACK_COMPONENTS
+        assert "sh:xone" not in shacl_polars.PLAN_BUILDERS
     if importlib.util.find_spec("duckdb"):
         from triplets.validation import shacl_duckdb
         assert set(shacl_duckdb.SQL_BUILDERS) | shacl_ir.FALLBACK_COMPONENTS == known
@@ -211,7 +304,7 @@ def test_logical_operator_cycle_dropped(caplog):
     graph = rdflib.Graph().parse(shapes, format="turtle")
     from triplets.validation.shacl_ir import parse_ir
     with caplog.at_level("WARNING"):
-        ir = parse_ir(graph)
+        ir, _ = parse_ir(graph)
     assert any("cycle" in record.message for record in caplog.records)
     assert (ir["component"] == "sh:or").any()          # the outer constraint survives
 

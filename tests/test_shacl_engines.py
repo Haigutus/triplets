@@ -484,6 +484,12 @@ TOY_SCHEMA = {"EQ": {
                 "inheritance": ["#Breaker", "#Switch", "#Equipment"]},
     "Disconnector": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
                      "inheritance": ["#Disconnector", "#Switch", "#Equipment"]},
+    "Bay": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+            "inheritance": ["#Bay", "#EquipmentContainer"]},
+    "VoltageLevel": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                     "inheritance": ["#VoltageLevel", "#EquipmentContainer"]},
+    "Substation": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                   "inheritance": ["#Substation"]},
 }}
 
 
@@ -503,3 +509,81 @@ def test_pyshacl_ont_graph_abstract_target():
     assert violating(bare, "sh:minCount") == set()
     bound = triplets.validation.validate(data, graph, engine="pyshacl", rdf_map=TOY_SCHEMA)
     assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
+
+
+def test_abstract_target_class_expands_with_schema(engine):
+    """sh:targetClass Equipment (abstract) hits Breaker/Disconnector when rdf_map
+    is provided; without the schema it matches nothing."""
+    shape = """cim:EqShape a sh:NodeShape ; sh:targetClass cim:Equipment ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = (breaker("b1") + [("d1", "Type", "Disconnector", "eq"),
+                             ("x1", "Type", "Substation", "eq")])
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    bare = triplets.validation.validate(data, graph, engine=engine)
+    assert violating(bare, "sh:minCount") == set()
+    bound = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
+
+
+def test_sh_class_accepts_subclasses_with_schema(engine):
+    shape = """cim:BayShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:class cim:EquipmentContainer ] ."""
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "bay1"))
+            + breaker("b2", ("Equipment.EquipmentContainer", "sub1"))
+            + [("bay1", "Type", "Bay", "eq"), ("sub1", "Type", "Substation", "eq")])
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    assert violating(v, "sh:class") == {("b2", "sub1")}
+
+
+def test_target_node(engine):
+    shape = """cim:One a sh:NodeShape ;
+        sh:targetNode <urn:uuid:b1> ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = breaker("b1") + breaker("b2", ("IdentifiedObject.name", "B2"))
+    v = run(rows, shape, engine)
+    assert violating(v, "sh:minCount") == {("b1", None)}
+
+
+def test_target_objects_of(engine):
+    shape = """cim:Containers a sh:NodeShape ;
+        sh:targetObjectsOf cim:Equipment.EquipmentContainer ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "bay1"))
+            + [("bay1", "Type", "Bay", "eq")])
+    v = run(rows, shape, engine)
+    assert violating(v, "sh:minCount") == {("bay1", None)}
+
+
+def test_xone_exactly_one_alternative(engine):
+    shape = """cim:Xor a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:xone (
+            [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]
+            [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) ."""
+    rows = (breaker("both", ("IdentifiedObject.name", "n"), ("IdentifiedObject.description", "d"))
+            + breaker("name", ("IdentifiedObject.name", "n"))
+            + breaker("neither"))
+    v = run(rows, shape, engine)
+    assert violating(v, "sh:xone") == {("both", None), ("neither", None)}
+
+
+def test_sparql_rule_prepass_feeds_constraints(engine):
+    """A SPARQLRule CONSTRUCT materializes triples before the constraint run —
+    a missing name inferred by the rule satisfies sh:minCount."""
+    shape = '''cim:Named a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:rule [ a sh:SPARQLRule ;
+            sh:construct """CONSTRUCT { ?s <http://iec.ch/TC57/CIM100#IdentifiedObject.name> "inferred" . }
+                            WHERE { ?s a <http://iec.ch/TC57/CIM100#Breaker> }""" ] ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .'''
+    rows = breaker("b1")
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    assert violating(v, "sh:minCount") == set()

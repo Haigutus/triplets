@@ -19,15 +19,34 @@ RDF_NODEID = f"{{{RDF_NS}}}nodeID"
 RDF_RESOURCE = f"{{{RDF_NS}}}resource"
 
 
-def clean_ID(ID: Any) -> str:
-    """Removes ID prefixes used in CIM - urn:uuid:, #_, _ ."""
-    if not ID:
+def local_ID(value: Any) -> str:
+    """Strip CIM ID prefixes: urn:uuid:, #_, _ ."""
+    if not value:
         return ""
-    ID = str(ID)
+    value = str(value)
     for prefix in ("urn:uuid:", "#_", "_"):
-        if ID.startswith(prefix):
-            ID = ID[len(prefix):]
-    return ID
+        if value.startswith(prefix):
+            value = value[len(prefix):]
+    return value
+
+
+clean_ID = local_ID  # public alias
+
+
+def local_name(value: Any) -> str:
+    """IRI → last segment after '#' or '/'."""
+    return str(value).split("#")[-1].split("/")[-1]
+
+
+def local_resource(value: Any, shorten: bool = True) -> str:
+    """Parser resource VALUE: local_ID, then local_name for http# IRIs.
+
+    Slash-only http IRIs stay full (same as today's parse).
+    """
+    value = local_ID(value)
+    if shorten and value.startswith("http") and "#" in value:
+        return local_name(value)
+    return value
 
 
 def _split_prefixed_name(name: str) -> str:

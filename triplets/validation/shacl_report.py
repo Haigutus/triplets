@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import pandas
 
 from ..export.nquads_utils import CIM_NS, RDF_TYPE
+from ..parser.utils import local_ID, local_name
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ _COMPONENT_MAP = {
     "OrConstraintComponent": "sh:or",
     "AndConstraintComponent": "sh:and",
     "NotConstraintComponent": "sh:not",
+    "XoneConstraintComponent": "sh:xone",
     "SPARQLConstraintComponent": "sh:sparql",
 }
 
@@ -81,7 +83,7 @@ def report_to_violations(report_graph):
         columns["VALUE"].append(_term_value(value))
         columns["VIOLATION_TYPE"].append(_component(component))
         columns["MESSAGE"].append(message)
-        columns["SEVERITY"].append(_local_name(severity) if severity is not None else "Violation")
+        columns["SEVERITY"].append(local_name(severity) if severity is not None else "Violation")
         columns["SOURCE_SHAPE"].append(str(shape) if shape is not None else None)
 
     return pandas.DataFrame(columns, columns=VIOLATION_COLUMNS)
@@ -102,8 +104,7 @@ def _constraint_message(messages):
 def _strip_uuid(term):
     if term is None:
         return None
-    value = str(term)
-    return value[len(_UUID_PREFIX):] if value.startswith(_UUID_PREFIX) else value
+    return local_ID(term)
 
 
 def _shorten(term):
@@ -130,7 +131,7 @@ def _component(term):
     if term is None:
         return "sh:unknown"
     value = str(term)
-    suffix = value.split("#")[-1]
+    suffix = local_name(value)
     if value.startswith(_TRIPLETS_NS):
         return f"triplets:{suffix}"
     if value.startswith(_RDFS):
@@ -140,10 +141,6 @@ def _component(term):
     if value.startswith(_SCHEMA_ORG):    # schema.org has no '#' — suffix is the path tail
         return f"schema:{value[len(_SCHEMA_ORG):]}"
     return _COMPONENT_MAP.get(suffix, f"sh:{suffix}")
-
-
-def _local_name(term):
-    return str(term).split("#")[-1]
 
 
 # short violation type → sh:sourceConstraintComponent URI (inverse of _COMPONENT_MAP)

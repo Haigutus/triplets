@@ -9,13 +9,23 @@ reported in the run's coverage metadata, `skipped_shapes` /
 - **pyshacl + `rdf_map`:** `rdfs:subClassOf` from the export schema is
   mixed in as pyshacl `ont_graph` (instance data is not mutated). Class IRIs
   use each Class entry's own namespace; abstract parents with no Class
-  entry stay on CIM100. Vectorized engines still match exact `Type` unless
-  a later layer expands focus.
-- **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
-  Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /
-  `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —
-  `compile()` logs a warning naming them; use `engine="pyshacl"` for full
-  spec coverage.
+  entry stay on CIM100.
+- **`sh:targetClass` / `sh:class` follow SHACL instance semantics when
+  `rdf_map` is passed:** the export schema's `inheritance` lists are inverted
+  once (ancestor → concrete Class names) and the IR is fanned out to those
+  descendants, so a shape targeting an abstract class (e.g. `Equipment`)
+  hits `Breaker`, `Disconnector`, …. Without `rdf_map`, match is exact
+  `Type == name`.
+- **Vectorized engines walk `sh:targetClass`, `sh:targetSubjectsOf`,
+  `sh:targetObjectsOf`, `sh:targetNode`, and SPARQL `sh:target` (via pandas
+  fallback).** A custom `sh:target` without `sh:select` is still invisible —
+  `compile()` logs a warning; use `engine="pyshacl"` for those.
+- **`sh:xone`** compiles into the IR and runs on pandas (polars/duckdb
+  defer). **`sh:rule` SPARQLRule** is a CONSTRUCT pre-pass on the data
+  before any engine runs (pyshacl does this itself via `advanced=True`).
+- Nested/query components that cannot be a polars LazyFrame plan
+  (`sh:or`/`and`/`not`/`node`/`sparql`/`xone`, SPARQLTarget) always defer
+  to pandas — nothing in the IR is silently skipped.
 - **Property paths**: direct, `sh:inversePath`, and the two-step sequence
   `sh:path ( assoc rdf:type )` (the ENTSO-E "valueType" pattern — the
   constraint applies to the referenced object's type; a dangling reference
@@ -67,7 +77,7 @@ registries that consume it are internal.
 |-------|------|---------|
 | `shape_id` | str | full shape IRI (blank-node id for anonymous property shapes) — becomes `SOURCE_SHAPE` in reports and the join key for `enrich` |
 | `target_class` | str | local name: the class for `target_kind="class"`, the property KEY for `"subjectsOf"` |
-| `target_kind` | `"class"` / `"subjectsOf"` | which target declaration produced the row |
+| `target_kind` | `"class"` / `"subjectsOf"` / `"objectsOf"` / `"node"` / `"sparql"` | which target declaration produced the row |
 | `path` | str \| None | the property as one triplet KEY (local name); None for node-level constraints (`sh:closed`, node-level `sh:sparql`) |
 | `inverse` | bool | `sh:inversePath` — engines swap the FOCUS/VALUE direction |
 | `via_type` | bool | the `( assoc rdf:type )` sequence path: the value nodes are the referenced objects' *types* |
@@ -83,13 +93,18 @@ registries that consume it are internal.
 |------------|----------------|
 | `sh:minCount` `sh:maxCount` `sh:minLength` `sh:maxLength` | int |
 | `sh:minInclusive` `sh:maxInclusive` `sh:minExclusive` `sh:maxExclusive` | float (integer bounds are coerced) |
-| `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern`, `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str |
+| `sh:datatype` (`"xsd:float"`), `sh:nodeKind`, `sh:pattern`, `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str |
+| `sh:class` | str, or list[str] of concrete descendants after `rdf_map` bind |
 | `sh:in` | list[str] (IRIs shortened to local names) |
 | `sh:closed` | list[str] — the **fully resolved** allowed KEY list: `sh:ignoredProperties` + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included) |
-| `sh:or` / `sh:and` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
+| `sh:or` / `sh:and` / `sh:xone` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
 | `sh:not` | list[dict] — nested IR row dicts |
 | `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time |
 | `sh:sparql` | `{"select": SELECT text with `$this`/`$PATH` placeholders, "prefixes": resolved `PREFIX` header, "path": full IRI of the owning `sh:path` or None}` |
+
+When `validate(..., rdf_map=...)` runs, `bind_inheritance` fans each `sh:targetClass`
+row out to the schema's concrete descendants and expands `sh:class` params the
+same way (cached on `compiled.plans`). Compile itself stays schema-free.
 
 Compile-time behaviors worth knowing: a NodeShape with several `sh:targetClass`
 (the ENTSO-E profiles do this) emits every row once per target class; shape
@@ -106,17 +121,17 @@ the same shapes never recompiles anything.
 
 ### Component coverage per engine
 
-The shared contract lives in `shacl_ir`: `KNOWN_COMPONENTS` (all 24 keys) and
-`FALLBACK_COMPONENTS` (`sh:or/and/not/node/sparql` — the nested/query components
-every vectorized engine delegates to the pandas implementations via
-`split_rules`). A test (`test_shacl_ir.py::test_component_registries_agree`)
-pins the registries together:
+The shared contract lives in `shacl_ir`: `KNOWN_COMPONENTS` and
+`FALLBACK_COMPONENTS` (`sh:or/and/not/node/sparql/xone` — nested/query
+components every vectorized engine delegates to pandas via `split_rules`).
+A test (`test_shacl_ir.py::test_component_registries_agree`) pins the
+registries together: every IR component is in `PLAN_BUILDERS ∪ FALLBACK`.
 
 | engine | registry | coverage |
 |--------|----------|----------|
-| pandas | `CONSTRAINT_VALIDATORS` | all 24 (the fallback target) |
-| polars | `PLAN_BUILDERS` (+ `BATCH_BUILDERS` fast path) | 19 vectorized + 5 delegated |
-| duckdb | `SQL_BUILDERS` | 19 vectorized + 5 delegated |
+| pandas | `CONSTRAINT_VALIDATORS` | all known (the fallback target) |
+| polars | `PLAN_BUILDERS` (+ `BATCH_BUILDERS` fast path) | vectorized + fallback |
+| duckdb | `SQL_BUILDERS` | vectorized + fallback |
 | pyshacl | consumes `compiled.graph`, not the IR | full spec; report vocabulary mapped back via `shacl_report._COMPONENT_MAP` |
 
 The compile cache participates in the shared engine-state lifecycle:
@@ -219,7 +234,7 @@ all formats tell the same story:
 | `source` | data file names (from the data's Distribution label meta rows) |
 | `references` | shape file names (recorded at compile) |
 | `node_shapes` / `constraints` | shape count / compiled IR constraint rows |
-| `skipped_shapes` | feature-level gaps THIS run did not evaluate: unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — empty for `engine="pyshacl"` (spec-complete) and empty when coverage is full |
+| `skipped_shapes` | feature-level gaps THIS run did not evaluate: custom `sh:target` without `sh:select`, and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — empty for `engine="pyshacl"` (spec-complete) and empty when coverage is full |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates |
 
 The coverage keys turn the compile/engine warnings into data: a report that
@@ -334,9 +349,14 @@ Per profile the checks are: cardinality from the resolved `xsd:minOccours`/
 declares it 0..1/not serialized, CGMES 3.0/NCP 1..1), datatype lexical checks
 from `xsd:type`, enumeration membership from `values`, association targets
 from `range` expanded to concrete subclasses via `inheritance` (the expansion
-index spans all sections — inheritance is model knowledge). A referenced
+index spans all sections — inheritance is model knowledge). The same invert
+is the subclass graph SHACL bind uses — abstract classes are **not** schema
+Class entries (that would make them instantiable targets). A referenced
 object conforms when ANY of its types is in the range set; dangling
 references are silent (cross-instance references resolve outside the scope).
+An object whose *only* `Type` values are known abstracts (ancestors that are
+not Class entries) fails as `rdfs:range` on `Type`. Extra ancestor types on a
+concrete object, and unknown type names, are silent.
 `closed=True` adds an unknown-property check per class and profile
 (`schema:domainIncludes`). The same vectorized engines run everything (plans
 cached per compiled profile); the pyshacl engine refuses schema-compiled IR.

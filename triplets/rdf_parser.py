@@ -62,36 +62,6 @@ def _print_duration(text, start_time):
     return duration, end_time
 
 
-def _remove_prefix(original_string, prefix_string):
-    """Remove a specified prefix from a string.
-
-    Parameters
-    ----------
-    original_string : str
-        The input string to process.
-    prefix_string : str
-        The prefix to remove from the input string.
-
-    Returns
-    -------
-    str
-        The input string with the prefix removed if present; otherwise, the original string.
-
-    Examples
-    --------
-    >>> _remove_prefix("urn:uuid:1234", "urn:uuid:")
-    '1234'
-    >>> _remove_prefix("abc", "xyz")
-    'abc'
-    """
-    prefix_length = len(prefix_string)
-
-    if original_string[0:prefix_length] == prefix_string:
-        return original_string[prefix_length:]
-
-    return original_string
-
-
 def get_namespace_map(data: pandas.DataFrame):
     """Extract namespace prefix-to-URI mapping and optional xml:base from a triplet dataset.
 
@@ -101,31 +71,7 @@ def get_namespace_map(data: pandas.DataFrame):
     return _fn(data)
 
 
-def clean_ID(ID):
-    """Remove common CIM ID prefixes from a string.
-
-    Parameters
-    ----------
-    ID : str
-        The input ID string to clean.
-
-    Returns
-    -------
-    str
-        The ID with prefixes ('urn:uuid:', '#_', '_') removed from the start.
-
-    Examples
-    --------
-    >>> clean_ID("urn:uuid:1234")
-    '1234'
-    >>> clean_ID("#_abc")
-    'abc'
-    """
-    ID = _remove_prefix(ID, "urn:uuid:")
-    ID = _remove_prefix(ID, "#_")
-    ID = _remove_prefix(ID, "_")
-
-    return ID
+from .parser.utils import local_ID, local_resource, clean_ID  # noqa: F401 — public compat names
 
 
 def load_RDF_objects_from_XML(path_or_fileobject, debug=False):
@@ -242,7 +188,7 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
 
     for RDF_object in RDF_objects:
         # Priority matches triplets.parser: rdf:ID > rdf:about > rdf:nodeID
-        ID = clean_ID(
+        ID = local_ID(
             RDF_object.attrib.get(RDF_ID)
             or RDF_object.attrib.get(RDF_ABOUT)
             or RDF_object.attrib.get(RDF_NODEID)
@@ -264,15 +210,11 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
 
                 # TODO - NB CIM ID specific, to be skipped for generic parsing
                 # Also accept rdf:nodeID references (parity with triplets.parser)
-                VALUE = clean_ID(
+                VALUE = local_resource(
                     element.attrib.get(RDF_RESOURCE)
                     or element.attrib.get(RDF_NODEID)
-                    or ""
+                    or "",
                 )
-
-                # TODO - NB CIM enumeration specific
-                if VALUE.startswith("http"):
-                    VALUE = VALUE.split("#")[-1]
 
             data_list.append((ID, KEY, VALUE, INSTANCE_ID))
 
