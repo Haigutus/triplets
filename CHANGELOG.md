@@ -15,6 +15,10 @@ Start of the 0.3 line.
   class IRI uses that class's own namespace; abstracts with no Class entry
   (`Equipment`, `IdentifiedObject`) stay on CIM100, so an NC class does not
   invent `cim4.eu#Equipment`.
+- **Vectorized SHACL engines precompute a Type index** from the export schema
+  `inheritance` lists: `class_ids("Equipment")` is the union of descendant
+  IDs, built once per run. The IR is not fanned out. Without `rdf_map`,
+  match stays exact `Type`.
 - **NCP 2.5-dev export schemas** (`ENTSOE_NC_2.5-dev_552_ED1/ED2.json`) generated
   from [application-profiles-library](https://github.com/entsoe/application-profiles-library)
   `main` (`NCP/RDFS`). Named `-dev` until the pin is an `ncp-v2-5-0` release branch.
