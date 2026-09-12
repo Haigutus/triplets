@@ -134,6 +134,10 @@ pytest tests/test_benchmarks_realgrid.py -m performance \
 
 # two-phase SHACL/SPARQL collection vs one-pass (issue #122)
 pytest tests/test_benchmarks_validation_twophase.py -m performance -v
+
+# subclass inheritance: pyshacl ont_graph vs IR fan-out (#117) vs Type-index walk (#121)
+# needs worktrees triplets-wt-{exact,fanout,walk} (see the script header)
+uv run python examples/bench_shacl_inheritance.py
 ```
 
 ## pixi Tasks
