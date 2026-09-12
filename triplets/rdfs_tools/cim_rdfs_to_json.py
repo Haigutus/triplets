@@ -13,6 +13,8 @@ REPO_ROOT = Path(__file__).parents[2]
 RDFS_ROOT = REPO_ROOT / "rdfs"
 EXPORT_DIR = REPO_ROOT / "triplets" / "export_schema"
 
+XSD_NS = "http://www.w3.org/2001/XMLSchema#"
+
 cgmes_data_types_map = {
  'String': 'xsd:string',
  'Simple_Float': 'xsd:float',
@@ -54,6 +56,108 @@ cgmes_data_types_map = {
  "URI": "xsd:anyURI"
 }
 
+
+def _as_xsd_curie(uri):
+    """Return ``xsd:float`` if *uri* is an XML Schema datatype, else None."""
+    if not uri or not isinstance(uri, str):
+        return None
+    if uri.startswith("xsd:") and len(uri) > 4:
+        return uri
+    if uri.startswith(XSD_NS) and len(uri) > len(XSD_NS):
+        return "xsd:" + uri[len(XSD_NS):]
+    return None
+
+
+def _local_name(uri, default_namespace=""):
+    if not uri:
+        return ""
+    return rdfs_tools.get_namespace_and_name(uri, default_namespace=default_namespace)[1]
+
+
+def _value_property_id(profile_data, type_uri):
+    """CIMDatatype / Primitive ``.value`` property ID, or None."""
+    if not type_uri or profile_data is None or profile_data.empty:
+        return None
+    domains = profile_data.loc[
+        (profile_data["KEY"] == "domain") & (profile_data["VALUE"] == type_uri), "ID"
+    ]
+    for pid in domains:
+        local = pid.rsplit("#", 1)[-1].rsplit("/", 1)[-1]
+        if local == "value" or local.endswith(".value"):
+            return pid
+    return None
+
+
+def _property_range_or_datatype(profile_data, prop_id):
+    """``rdfs:range`` or ``cims:dataType`` of a property, preferring range."""
+    if not prop_id:
+        return None
+    rows = profile_data.loc[profile_data["ID"] == prop_id]
+    for key in ("range", "dataType"):
+        hit = rows.loc[rows["KEY"] == key, "VALUE"]
+        if not hit.empty:
+            return hit.iloc[0]
+    return None
+
+
+def _is_cim_literal_type(profile_data, uri):
+    """True if *uri* is a CIM Primitive / CIMDatatype (not an enum or class)."""
+    if not uri or _as_xsd_curie(uri) or profile_data is None or profile_data.empty:
+        return False
+    if _value_property_id(profile_data, uri):
+        return True
+    rows = profile_data.loc[profile_data["ID"] == uri]
+    for value in rows.loc[rows["KEY"] == "stereotype", "VALUE"]:
+        if value in ("Primitive", "CIMDatatype") or (
+            isinstance(value, str) and value.rsplit("#", 1)[-1] in ("Primitive", "CIMDatatype")
+        ):
+            return True
+    flags = rows.loc[rows["KEY"].isin(["isPrimitive", "isCIMDatatype"]), "VALUE"]
+    return bool(
+        len(flags) and flags.astype(str).str.strip().str.lower().isin(["true", "1"]).any()
+    )
+
+
+def resolve_xsd_type(profile_data, data_type_uri=None, range_uri=None,
+                     data_types_map=None):
+    """XSD curie for a literal attribute, or None (caller omits ``xsd:type``).
+
+    Order: RDFS first (``rdfs:range`` to XMLSchema, or a CIMDatatype ``.value``
+    that ranges to XMLSchema), then an optional CIM-name lookup table. Neither
+    yields a type → None.
+    """
+    if (xsd := _as_xsd_curie(range_uri)):
+        return xsd
+
+    cim_uri = data_type_uri
+    if not cim_uri and range_uri and not _as_xsd_curie(range_uri):
+        cim_uri = range_uri
+
+    value_target = None
+    if cim_uri:
+        value_target = _property_range_or_datatype(
+            profile_data, _value_property_id(profile_data, cim_uri)
+        )
+        if (xsd := _as_xsd_curie(value_target)):
+            return xsd
+
+    if not data_types_map:
+        return None
+
+    names = []
+    if data_type_uri:
+        names.append(_local_name(data_type_uri))
+    if cim_uri and cim_uri != data_type_uri:
+        names.append(_local_name(cim_uri))
+    if value_target and not _as_xsd_curie(value_target):
+        names.append(_local_name(value_target))
+
+    for name in names:
+        mapped = data_types_map.get(name)
+        if mapped:
+            return mapped
+    return None
+
 cim_serializations = {
 "552_ED1": {
     "conformsTo":"urn:iso:std:iec:61970-552:2013",
@@ -79,7 +183,8 @@ cim_serializations = {
     }
 }
 
-def convert_profile(profile_data, serialization_version="552_ED2"):
+def convert_profile(profile_data, serialization_version="552_ED2",
+                    data_types_map=cgmes_data_types_map):
 
     id_attribute = cim_serializations[serialization_version]["id_attribute"]
     id_prefix = cim_serializations[serialization_version]["id_prefix"]
@@ -145,34 +250,48 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
         else:
             data_type = parameter_dict.get("dataType")
+            range_uri = parameter_dict.get("range")
+            # Ed2 CIMDatatype attributes range to the CIM type, not to XSD
+            if not data_type and range_uri and _is_cim_literal_type(profile_data, range_uri):
+                data_type = range_uri
 
-            # If regular attribute, find its data type and add to export
-            if data_type:
+            # Literal attribute: cims:dataType (RDFS2020) or rdfs:range to an
+            # XML Schema type / CIMDatatype (IEC 61970-501 Ed2 Voc). xsd:type
+            # comes from the RDFS when it is there, else from data_types_map,
+            # else is omitted.
+            if data_type or _as_xsd_curie(range_uri):
 
-                # Set parameter type to Attribute
                 parameter_def["type"] = "Attribute"
 
-                # Get the attribute data type and add to export
-                data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(data_type, default_namespace=xml_base)
+                xsd = resolve_xsd_type(
+                    profile_data,
+                    data_type_uri=data_type,
+                    range_uri=range_uri,
+                    data_types_map=data_types_map,
+                )
+                if xsd:
+                    parameter_def["xsd:type"] = xsd
 
-                data_type_meta = profile_data.get_object_data(data_type).to_dict()
+                if data_type:
+                    data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(
+                        data_type, default_namespace=xml_base)
 
-                if data_type_namespace == "":
-                    data_type_namespace = xml_base
+                    data_type_meta = profile_data.get_object_data(data_type)
+                    data_type_meta = data_type_meta.to_dict() if len(data_type_meta) else {}
 
-                data_type_def = {
-                    "description": data_type_meta.get("comment", ""),
-                    "type": data_type_meta.get("stereotype", ""),
-                    "xsd:type": cgmes_data_types_map.get(data_type_name, ""),
-                    "namespace": data_type_namespace
-                }
+                    if data_type_namespace == "":
+                        data_type_namespace = xml_base
 
-                # Add data type to export
-                profile[data_type_name] = data_type_def
+                    data_type_def = {
+                        "description": data_type_meta.get("comment", ""),
+                        "type": data_type_meta.get("stereotype", ""),
+                        "namespace": data_type_namespace,
+                    }
+                    if xsd:
+                        data_type_def["xsd:type"] = xsd
 
-                # Add data type to attribute definition
-                parameter_def["dataType"] = data_type_name
-                parameter_def["xsd:type"] = data_type_def["xsd:type"]
+                    profile[data_type_name] = data_type_def
+                    parameter_def["dataType"] = data_type_name
 
             # If enumeration
             else:
@@ -271,7 +390,8 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
     return profile
 
-def convert(data, serialization_version="552_ED2"):
+def convert(data, serialization_version="552_ED2",
+            data_types_map=cgmes_data_types_map):
 
    # Dictionary to keep all configurations
     #conf_dict = {}
@@ -290,7 +410,8 @@ def convert(data, serialization_version="552_ED2"):
 
         profile = {"ProfileMetadata": metadata}
 
-        profile.update(convert_profile(profile_data, serialization_version))
+        profile.update(convert_profile(profile_data, serialization_version,
+                                       data_types_map=data_types_map))
 
         #conf_dict[profile_name] = profile
         conf_list.append(profile)
