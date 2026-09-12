@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._header import _profile_identity_index
-from ..iri import TYPE_KEY, load_schema, local_value
+from ..iri import CIM_NS, TYPE_KEY, absolute_name, is_absolute, load_schema, local_value, namespaces, rdf_map_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
 
 logger = logging.getLogger(__name__)
@@ -109,6 +109,32 @@ def compile_schema(rdf_map, closed=False) -> CompiledSchema:
     _COMPILE_CACHE[key] = compiled
     logger.debug("compiled %d schema profiles: %s", len(profiles), ", ".join(sorted(profiles)))
     return compiled
+
+
+def subclass_triples(rdf_map, undefined_namespace=CIM_NS):
+    """``(child_iri, parent_iri)`` for each ``inheritance`` step.
+
+    A child uses its own Class entry's namespace. Parents are absolute IRIs in the
+    shipped bundles; a local one resolves like the child, and an abstract parent with
+    no Class entry (``Equipment``, ``IdentifiedObject``, …) takes *undefined_namespace*
+    (CIM100), so an NC class in ``cim4.eu`` still subclasses ``CIM100#Equipment``.
+    """
+    names = namespaces(rdf_map)
+
+    def to_iri(name):
+        return name if is_absolute(name) else absolute_name(local_value(name, "class"), names, undefined_namespace)
+
+    return list(dict.fromkeys(
+        (child, parent)
+        for name, entry in rdf_map_entries(rdf_map) if entry.get("type") == "Class"
+        for child in (to_iri(name),)
+        for parent in map(to_iri, entry.get("inheritance", ()))
+        if parent != child))
+
+
+def descendants(schema):
+    """ancestor local name → frozenset of concrete Class names inheriting it."""
+    return {key: frozenset(names) for key, names in _concrete_index(schema).items()}
 
 
 def _concrete_index(schema):
