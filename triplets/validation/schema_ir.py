@@ -42,6 +42,7 @@ from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
 logger = logging.getLogger(__name__)
 
 _PROPERTY_TYPES = ("Attribute", "Association", "Enumeration")
+CIM_NS = "http://iec.ch/TC57/CIM100#"
 
 # engine dispatch key → presented violation type (vocabulary-accurate)
 PRESENTED = {"sh:minCount": "xsd:minOccurs", "sh:maxCount": "xsd:maxOccurs",
@@ -123,6 +124,79 @@ def _load(rdf_map):
         content = file.read()
     return (json.loads(content), hashlib.sha256(content).hexdigest(),
             os.path.basename(str(rdf_map)))
+
+
+def _norm_ns(namespace):
+    """Schema ``namespace`` field → URI prefix ending in ``#`` or ``/``."""
+    if not namespace:
+        return CIM_NS
+    if not str(namespace).endswith(("#", "/")):
+        return str(namespace) + "#"
+    return str(namespace)
+
+
+def class_namespaces(schema):
+    """Concrete class local name → namespace prefix, across ALL sections.
+
+    Abstract ancestors that are not Class entries are absent — callers fall
+    back to :data:`CIM_NS` (CIM abstracts live in the CIM namespace even when
+    an NC class inherits them).
+    """
+    names = {}
+    for entries in schema.values():
+        if not isinstance(entries, dict):
+            continue
+        for name, entry in entries.items():
+            if isinstance(entry, dict) and entry.get("type") == "Class" and name not in names:
+                names[name] = _norm_ns(entry.get("namespace"))
+    return names
+
+
+def class_iri(name, namespaces, fallback_ns=None):
+    """Absolute IRI for a class name or fragment, using *that* class's namespace.
+
+    A full ``http(s):`` URI is returned unchanged. Otherwise the local name is
+    looked up in *namespaces* (from :func:`class_namespaces`); missing
+    abstracts use *fallback_ns* or :data:`CIM_NS` — never the child's
+    namespace.
+    """
+    if isinstance(name, str) and name.startswith(("http://", "https://")):
+        return name
+    local = _local(name)
+    return (namespaces.get(local) or fallback_ns or CIM_NS) + local
+
+
+def subclass_triples(schema):
+    """``(child_iri, parent_iri)`` for each ``inheritance`` step.
+
+    Each local name is resolved from its own Class entry. An abstract parent
+    with no Class entry (``Equipment``, ``IdentifiedObject``, …) uses
+    :data:`CIM_NS`, so an NC class in ``cim4.eu`` still subclasses
+    ``http://iec.ch/TC57/CIM100#Equipment``.
+    """
+    namespaces = class_namespaces(schema)
+    seen, triples = set(), []
+    for entries in schema.values():
+        if not isinstance(entries, dict):
+            continue
+        for name, entry in entries.items():
+            if not isinstance(entry, dict) or entry.get("type") != "Class":
+                continue
+            child_iri = class_iri(name, namespaces)
+            for ancestor in entry.get("inheritance", ()):
+                if _local(ancestor) == name:
+                    continue
+                parent_iri = class_iri(ancestor, namespaces)
+                pair = (child_iri, parent_iri)
+                if pair not in seen:
+                    seen.add(pair)
+                    triples.append(pair)
+    return triples
+
+
+def descendants(schema):
+    """ancestor local name → frozenset of concrete Class names inheriting it."""
+    return {key: frozenset(names) for key, names in _concrete_index(schema).items()}
 
 
 def _concrete_index(schema):

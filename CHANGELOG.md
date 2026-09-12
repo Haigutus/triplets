@@ -9,6 +9,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Start of the 0.3 line.
 
 ### Added
+- **pyshacl `ont_graph` from the export schema:** when `rdf_map` is passed,
+  `rdfs:subClassOf` triples are mixed into the run (not the instance graph)
+  so `sh:targetClass` / `sh:class` follow SHACL instance semantics. Each
+  class IRI uses that class's own namespace; abstracts with no Class entry
+  (`Equipment`, `IdentifiedObject`) stay on CIM100, so an NC class does not
+  invent `cim4.eu#Equipment`.
 - **NCP 2.5-dev export schemas** (`ENTSOE_NC_2.5-dev_552_ED1/ED2.json`) generated
   from [application-profiles-library](https://github.com/entsoe/application-profiles-library)
   `main` (`NCP/RDFS`). Named `-dev` until the pin is an `ncp-v2-5-0` release branch.

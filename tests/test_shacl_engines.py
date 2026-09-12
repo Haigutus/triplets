@@ -477,3 +477,29 @@ def test_unsupported_property_paths_still_skip_with_warning(caplog):
         compiled = triplets.validation.compile(graph)
     assert len(compiled.ir) == 0
     assert sum("cannot express" in record.message for record in caplog.records) == 2
+
+
+TOY_SCHEMA = {"EQ": {
+    "Breaker": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                "inheritance": ["#Breaker", "#Switch", "#Equipment"]},
+    "Disconnector": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                     "inheritance": ["#Disconnector", "#Switch", "#Equipment"]},
+}}
+
+
+def test_pyshacl_ont_graph_abstract_target():
+    """pyshacl + rdf_map: sh:targetClass Equipment hits concrete subclasses via
+    ont_graph rdfs:subClassOf — instance Type stays Breaker."""
+    pytest.importorskip("pyshacl")
+    shape = """cim:EqShape a sh:NodeShape ; sh:targetClass cim:Equipment ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = breaker("b1") + [("d1", "Type", "Disconnector", "eq"),
+                            ("x1", "Type", "Substation", "eq")]
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    bare = triplets.validation.validate(data, graph, engine="pyshacl")
+    assert violating(bare, "sh:minCount") == set()
+    bound = triplets.validation.validate(data, graph, engine="pyshacl", rdf_map=TOY_SCHEMA)
+    assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}

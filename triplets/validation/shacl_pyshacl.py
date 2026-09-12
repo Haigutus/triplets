@@ -27,7 +27,9 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
     compiled : CompiledShapes
         From ``triplets.validation.compile`` — this engine uses the shapes graph.
     rdf_map : dict or str, optional
-        Export schema — xsd-typed literals in the data graph (optional).
+        Export schema — xsd-typed literals in the data graph, and (when
+        present) ``rdfs:subClassOf`` mixed in via pyshacl ``ont_graph`` so
+        ``sh:targetClass`` / ``sh:class`` see SHACL instances of ancestors.
     scope : iterable of INSTANCE_ID, optional
         Validate only these instances' named graphs — data outside the scope
         is not loaded, so references into unscoped instances count as absent.
@@ -55,10 +57,27 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
     from pyshacl import validate as pyshacl_validate
 
     data_graph = scoped_graph(load_dataset(data, rdf_map=rdf_map, store=store), scope)
+    ont_graph = _ontology_graph(rdf_map) if rdf_map is not None else None
 
     conforms, report_graph, _report_text = pyshacl_validate(
-        data_graph, shacl_graph=compiled.graph,
+        data_graph, shacl_graph=compiled.graph, ont_graph=ont_graph,
         inference=inference, advanced=advanced, abort_on_first=abort_on_first,
     )
     logger.debug("SHACL conforms=%s", conforms)
     return report_to_violations(report_graph)
+
+
+def _ontology_graph(rdf_map):
+    """``rdfs:subClassOf`` triples from the export schema, as a pyshacl ont_graph.
+
+    Each class IRI uses that class's own namespace (abstract parents without a
+    Class entry fall back to CIM100). The instance data graph is not mutated.
+    """
+    import rdflib
+    from .schema_ir import _load, subclass_triples
+
+    schema, _, _ = _load(rdf_map)
+    graph = rdflib.Graph()
+    for child, parent in subclass_triples(schema):
+        graph.add((rdflib.URIRef(child), rdflib.RDFS.subClassOf, rdflib.URIRef(parent)))
+    return graph
