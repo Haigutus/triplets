@@ -205,6 +205,9 @@ def expand_type_index(exact, schema):
     expanded = dict(exact)
     for ancestor, leaves in descendants(schema).items():
         parts = [exact[leaf] for leaf in leaves if leaf in exact]
+        # instances typed as the abstract ancestor itself (Type=Equipment)
+        if ancestor in exact and ancestor not in leaves:
+            parts = [exact[ancestor], *parts]
         if parts:
             expanded[ancestor] = parts[0] if len(parts) == 1 else parts
     return expanded

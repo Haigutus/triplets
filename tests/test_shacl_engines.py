@@ -513,6 +513,21 @@ def test_abstract_target_class_walks_type_index(engine):
     assert compiled.ir["target_class"].tolist() == ["Equipment"]
 
 
+def test_abstract_target_keeps_direct_equipment_type_rows(engine):
+    """Type=Equipment in the data must not hide descendant IDs, and must stay
+    in the Equipment index (batched minCount uses membership)."""
+    shape = """cim:EqShape a sh:NodeShape ; sh:targetClass cim:Equipment ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = (breaker("b1") + [("e1", "Type", "Equipment", "eq"),
+                             ("x1", "Type", "Substation", "eq")])
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    bound = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    assert violating(bound, "sh:minCount") == {("b1", None), ("e1", None)}
+
+
 def test_sh_class_accepts_subclasses_via_index(engine):
     shape = """cim:BayShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
         sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:class cim:EquipmentContainer ] ."""

@@ -47,9 +47,9 @@ class _Context(SchemaKind):
         self._class_ids = {key[0]: part["ID"] for key, part
                            in type_rows.partition_by("VALUE", as_dict=True).items()}
         if rdf_map is not None:
-            self._class_ids, extra = self._with_ancestors(rdf_map)
-            if extra is not None:
-                self.membership = polars.concat([self.membership, extra.lazy()])
+            self._class_ids, membership = self._with_ancestors(rdf_map)
+            if membership is not None:
+                self.membership = membership.lazy()
         # is_in wants the membership collection as one list value (imploded);
         # precompute per class so thousands of rule plans share them.
         self._class_ids_imploded = {key: ids.implode()
@@ -64,18 +64,18 @@ class _Context(SchemaKind):
         schema, _, _ = _load(rdf_map)
         expanded = expand_type_index(self._class_ids, schema)
         class_ids = {}
-        extra_frames = []
+        frames = []
         for name, parts in expanded.items():
             if isinstance(parts, list):
                 class_ids[name] = polars.concat(parts).unique()
             else:
                 class_ids[name] = parts
-            if name not in self._class_ids and len(class_ids[name]):
-                extra_frames.append(polars.DataFrame({
+            if len(class_ids[name]):
+                frames.append(polars.DataFrame({
                     "CLASS": [name] * len(class_ids[name]), "ID": class_ids[name],
                 }))
-        extra = polars.concat(extra_frames) if extra_frames else None
-        return class_ids, extra
+        membership = polars.concat(frames) if frames else None
+        return class_ids, membership
 
     def class_ids(self, target_class):
         """Flat ID Series (plan *data*, e.g. focus_frame)."""
