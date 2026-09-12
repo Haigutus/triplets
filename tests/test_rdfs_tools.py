@@ -175,3 +175,191 @@ class TestOrphanedAttributes:
         assert profile["title"].get("dataType") == "String"     # with its datatype preserved
         assert "title" not in profile["Dataset"]["parameters"]  # but no class references it
         assert any("no class binding" in r.getMessage() for r in caplog.records)
+
+
+# ── xsd:type: RDFS first, optional lookup table, else omit ──────────────────
+
+_M01 = "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#M:0..1"
+_NS = "http://example.org/cim"
+_RDF = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+_RDFS = "http://www.w3.org/2000/01/rdf-schema#"
+_CIMS = "http://iec.ch/TC57/1999/rdf-schema-extensions-19990926#"
+_XSD = "http://www.w3.org/2001/XMLSchema#"
+
+
+def _parse_rdfs(tmp_path, body, name="mini.rdf"):
+    rdfs = tmp_path / name
+    rdfs.write_text(
+        f"""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="{_RDF}" xmlns:rdfs="{_RDFS}" xmlns:cims="{_CIMS}">
+  <rdf:Description rdf:about="{_NS}#Thing">
+    <rdf:type rdf:resource="{_RDFS}Class"/>
+    <cims:stereotype>concrete</cims:stereotype>
+  </rdf:Description>
+{body}
+</rdf:RDF>
+""",
+        encoding="utf-8",
+    )
+    return rdfs_tools.load_all_to_dataframe(str(rdfs))
+
+
+def _attr(name, extra):
+    return f"""  <rdf:Description rdf:about="{_NS}#{name}">
+    <rdf:type rdf:resource="{_RDF}Property"/>
+    <rdfs:domain rdf:resource="{_NS}#Thing"/>
+    <cims:multiplicity rdf:resource="{_M01}"/>
+    {extra}
+  </rdf:Description>"""
+
+
+class TestXsdTypeResolution:
+    """xsd:type on attributes: RDFS XMLSchema range, then lookup table, else omit."""
+
+    def test_rdfs_range_xsd_wins_without_lookup(self, tmp_path):
+        from triplets.rdfs_tools import cim_rdfs_to_json as c
+        data = _parse_rdfs(tmp_path, _attr(
+            "Thing.x", f'<rdfs:range rdf:resource="{_XSD}float"/>'))
+        profile = c.convert_profile(data, data_types_map=None)
+        assert profile["Thing.x"]["type"] == "Attribute"
+        assert profile["Thing.x"]["xsd:type"] == "xsd:float"
+        assert "dataType" not in profile["Thing.x"]
+
+    def test_ed2_range_to_cimdatatype_without_cims_datatype(self, tmp_path):
+        """501 Ed2: attribute rdfs:range is the CIMDatatype; XSD sits on .value."""
+        from triplets.rdfs_tools import cim_rdfs_to_json as c
+        body = "\n".join([
+            _attr("Thing.rotation", f'<rdfs:range rdf:resource="{_NS}#AngleDegrees"/>'),
+            f"""  <rdf:Description rdf:about="{_NS}#AngleDegrees">
+    <rdf:type rdf:resource="{_RDFS}Class"/>
+    <cims:stereotype>CIMDatatype</cims:stereotype>
+  </rdf:Description>
+  <rdf:Description rdf:about="{_NS}#AngleDegrees.value">
+    <rdf:type rdf:resource="{_RDF}Property"/>
+    <rdfs:domain rdf:resource="{_NS}#AngleDegrees"/>
+    <rdfs:range rdf:resource="{_XSD}float"/>
+    <cims:multiplicity rdf:resource="{_M01}"/>
+  </rdf:Description>""",
+        ])
+        data = _parse_rdfs(tmp_path, body)
+        profile = c.convert_profile(data, data_types_map=None)
+        assert profile["Thing.rotation"]["type"] == "Attribute"
+        assert profile["Thing.rotation"]["dataType"] == "AngleDegrees"
+        assert profile["Thing.rotation"]["xsd:type"] == "xsd:float"
+
+    def test_cimdatatype_value_xsd_range_without_lookup(self, tmp_path):
+        from triplets.rdfs_tools import cim_rdfs_to_json as c
+        body = "\n".join([
+            _attr("Thing.rotation", f'<cims:dataType rdf:resource="{_NS}#AngleDegrees"/>'),
+            f"""  <rdf:Description rdf:about="{_NS}#AngleDegrees">
+    <rdf:type rdf:resource="{_RDFS}Class"/>
+    <cims:stereotype>CIMDatatype</cims:stereotype>
+  </rdf:Description>
+  <rdf:Description rdf:about="{_NS}#AngleDegrees.value">
+    <rdf:type rdf:resource="{_RDF}Property"/>
+    <rdfs:domain rdf:resource="{_NS}#AngleDegrees"/>
+    <rdfs:range rdf:resource="{_XSD}float"/>
+    <cims:multiplicity rdf:resource="{_M01}"/>
+  </rdf:Description>""",
+        ])
+        data = _parse_rdfs(tmp_path, body)
+        profile = c.convert_profile(data, data_types_map=None)
+        assert profile["Thing.rotation"]["xsd:type"] == "xsd:float"
+        assert profile["Thing.rotation"]["dataType"] == "AngleDegrees"
+        assert profile["AngleDegrees"]["xsd:type"] == "xsd:float"
+
+    def test_lookup_table_when_rdfs_has_no_xsd(self, tmp_path):
+        from triplets.rdfs_tools import cim_rdfs_to_json as c
+        body = "\n".join([
+            _attr("Thing.length", f'<cims:dataType rdf:resource="{_NS}#Float"/>'),
+            f"""  <rdf:Description rdf:about="{_NS}#Float">
+    <rdf:type rdf:resource="{_RDFS}Class"/>
+    <cims:stereotype>Primitive</cims:stereotype>
+  </rdf:Description>""",
+        ])
+        data = _parse_rdfs(tmp_path, body)
+        profile = c.convert_profile(data)  # default cgmes_data_types_map
+        assert profile["Thing.length"]["xsd:type"] == "xsd:float"
+        assert profile["Float"]["xsd:type"] == "xsd:float"
+
+    def test_lookup_walks_cimdatatype_value_to_primitive(self, tmp_path):
+        from triplets.rdfs_tools import cim_rdfs_to_json as c
+        body = "\n".join([
+            _attr("Thing.energy", f'<cims:dataType rdf:resource="{_NS}#RealEnergy"/>'),
+            f"""  <rdf:Description rdf:about="{_NS}#RealEnergy">
+    <rdf:type rdf:resource="{_RDFS}Class"/>
+    <cims:stereotype>CIMDatatype</cims:stereotype>
+  </rdf:Description>
+  <rdf:Description rdf:about="{_NS}#RealEnergy.value">
+    <rdf:type rdf:resource="{_RDF}Property"/>
+    <rdfs:domain rdf:resource="{_NS}#RealEnergy"/>
+    <cims:dataType rdf:resource="{_NS}#Float"/>
+    <cims:multiplicity rdf:resource="{_M01}"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="{_NS}#Float">
+    <rdf:type rdf:resource="{_RDFS}Class"/>
+    <cims:stereotype>Primitive</cims:stereotype>
+  </rdf:Description>""",
+        ])
+        data = _parse_rdfs(tmp_path, body)
+        # RealEnergy is not in the default map; Float is
+        profile = c.convert_profile(data, data_types_map={"Float": "xsd:float"})
+        assert profile["Thing.energy"]["xsd:type"] == "xsd:float"
+
+    def test_omit_xsd_type_when_neither_rdfs_nor_table(self, tmp_path):
+        from triplets.rdfs_tools import cim_rdfs_to_json as c
+        body = "\n".join([
+            _attr("Thing.d", f'<cims:dataType rdf:resource="{_NS}#Duration"/>'),
+            f"""  <rdf:Description rdf:about="{_NS}#Duration">
+    <rdf:type rdf:resource="{_RDFS}Class"/>
+    <cims:stereotype>Primitive</cims:stereotype>
+  </rdf:Description>""",
+        ])
+        data = _parse_rdfs(tmp_path, body)
+        profile = c.convert_profile(data, data_types_map=None)
+        assert profile["Thing.d"]["type"] == "Attribute"
+        assert profile["Thing.d"]["dataType"] == "Duration"
+        assert "xsd:type" not in profile["Thing.d"]
+        assert "xsd:type" not in profile["Duration"]
+
+    def test_default_map_also_omits_unknown_cim_names(self, tmp_path):
+        from triplets.rdfs_tools import cim_rdfs_to_json as c
+        body = "\n".join([
+            _attr("Thing.d", f'<cims:dataType rdf:resource="{_NS}#Duration"/>'),
+            f"""  <rdf:Description rdf:about="{_NS}#Duration">
+    <rdf:type rdf:resource="{_RDFS}Class"/>
+    <cims:stereotype>Primitive</cims:stereotype>
+  </rdf:Description>""",
+        ])
+        data = _parse_rdfs(tmp_path, body)
+        profile = c.convert_profile(data)  # Duration is not in cgmes_data_types_map
+        assert "xsd:type" not in profile["Thing.d"]
+
+    def test_rdfs_xsd_beats_lookup_table(self, tmp_path):
+        from triplets.rdfs_tools import cim_rdfs_to_json as c
+        data = _parse_rdfs(tmp_path, _attr(
+            "Thing.flag",
+            f'<cims:dataType rdf:resource="{_NS}#Float"/>'
+            f'<rdfs:range rdf:resource="{_XSD}boolean"/>',
+        ) + f"""
+  <rdf:Description rdf:about="{_NS}#Float">
+    <rdf:type rdf:resource="{_RDFS}Class"/>
+    <cims:stereotype>Primitive</cims:stereotype>
+  </rdf:Description>""")
+        profile = c.convert_profile(data, data_types_map={"Float": "xsd:float"})
+        assert profile["Thing.flag"]["xsd:type"] == "xsd:boolean"
+
+    def test_resolve_xsd_type_helper_direct(self, tmp_path):
+        from triplets.rdfs_tools import cim_rdfs_to_json as c
+        data = _parse_rdfs(tmp_path, _attr(
+            "Thing.x", f'<rdfs:range rdf:resource="{_XSD}integer"/>'))
+        assert c.resolve_xsd_type(
+            data, range_uri=f"{_XSD}integer", data_types_map=None
+        ) == "xsd:integer"
+        assert c.resolve_xsd_type(
+            data, data_type_uri=f"{_NS}#NoSuchType", data_types_map=None
+        ) is None
+        assert c.resolve_xsd_type(
+            data, data_type_uri=f"{_NS}#Float",
+            data_types_map={"Float": "xsd:float"},
+        ) == "xsd:float"

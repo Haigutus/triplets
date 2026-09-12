@@ -15,6 +15,14 @@ Start of the 0.3 line.
   DatasetMetadata header attributes bind again via `schema:domainIncludes`
   ([#99](https://github.com/entsoe/application-profiles-library/pull/99) / [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
 
+### Changed
+- **Export-schema `xsd:type` comes from the RDFS when it is there.**
+  `cim_rdfs_to_json` reads an XML Schema range on the attribute (or on a
+  CIMDatatype `.value`) before falling back to the CIM-name lookup table.
+  Unknown types no longer get an empty `"xsd:type": ""` — the key is omitted.
+  Pass `data_types_map=None` (or `{}`) to skip the table. Regeneration of
+  committed bundles is unchanged until the next `cim_rdfs_to_json` run.
+
 ### Fixed
 - **Exclude pandas 2.3.3**: `pivot()` on ArrowDtype dictionary columns still
   crashes with `'Series' object has no attribute '_pa_array'` (same bug as
