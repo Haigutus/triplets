@@ -6,6 +6,11 @@ The validation API is frozen as of 0.2.0rc1. Known engine gaps (each
 reported in the run's coverage metadata, `skipped_shapes` /
 `skipped_components`):
 
+- **pyshacl + `rdf_map`:** `rdfs:subClassOf` from the export schema is
+  mixed in as pyshacl `ont_graph` (instance data is not mutated). Class IRIs
+  use each Class entry's own namespace; abstract parents with no Class
+  entry stay on CIM100. Vectorized engines still match exact `Type` unless
+  a later layer expands focus.
 - **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
   Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /
   `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —
