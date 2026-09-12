@@ -26,9 +26,10 @@ Expected direction (RealGrid ACLineSegment; oxigraph-sized engines):
   mass_skinny   same 7561 hits, SELECT only ?this. two-phase is an extra
                 ASK/skinny with no projection to save → loss or tie
 
-IR (pandas compiled engine, one constraint):
-  one_phase              validate() as today
-  exists_then_validate   cheap pandas predicate; skip validate() when empty
+IR (polars compiled engine — the in-memory fast path; pandas is the
+reference implementation, not timed here):
+  one_phase              validate(engine="polars") as today
+  exists_then_validate   cheap polars predicate; skip validate() when empty
 
   clean (name minCount 1)     → exists_then_validate should win (skip)
   rare (name minLength 7)     → 1 hit, still runs full validate → loss
@@ -49,6 +50,7 @@ from triplets.validation.shacl_report import VIOLATION_COLUMNS
 from _parity import REALGRID_ZIP, REALGRID_SKIP_REASON
 
 pytest.importorskip("rdflib")
+polars = pytest.importorskip("polars")
 
 pytestmark = pytest.mark.performance
 
@@ -133,21 +135,21 @@ def _empty():
     return pandas.DataFrame(columns=VIOLATION_COLUMNS)
 
 
-def _class_ids(data, target):
-    return data.loc[(data["KEY"] == "Type") & (data["VALUE"] == target), "ID"].unique()
+def _class_ids(frame, target):
+    return (frame.filter((polars.col("KEY") == "Type") & (polars.col("VALUE") == target))
+            .select("ID").unique())
 
 
-def _missing_count(data, target, path):
-    focus = pandas.Index(_class_ids(data, target))
-    having = pandas.Index(data.loc[data["KEY"] == path, "ID"].unique())
-    return int(focus.difference(having).size)
+def _missing_count(frame, target, path):
+    having = frame.filter(polars.col("KEY") == path).select("ID").unique()
+    return _class_ids(frame, target).join(having, on="ID", how="anti").height
 
 
-def _min_length_hits(data, target, path, minimum):
-    focus = pandas.Index(_class_ids(data, target))
-    rows = data.loc[data["KEY"] == path]
-    rows = rows[rows["ID"].isin(focus)]
-    return int((rows["VALUE"].astype(str).str.len() < minimum).sum())
+def _min_length_hits(frame, target, path, minimum):
+    return (frame.filter(polars.col("KEY") == path)
+            .join(_class_ids(frame, target), on="ID", how="semi")
+            .filter(polars.col("VALUE").str.len_chars() < minimum)
+            .height)
 
 
 def _select(filter_pattern, fat):
@@ -202,14 +204,14 @@ def run_sparql(data, engine, case, approach):
     raise ValueError(approach)
 
 
-def run_ir(data, compiled, case, approach):
+def run_ir(frame, compiled, case, approach):
     spec = IR_CASES[case]
     if approach == "one_phase":
-        return triplets.validation.validate(data, compiled, engine="pandas")
+        return triplets.validation.validate(frame, compiled, engine="polars")
     if approach == "exists_then_validate":
-        if not spec["exists"](data):
+        if not spec["exists"](frame):
             return _empty()
-        return triplets.validation.validate(data, compiled, engine="pandas")
+        return triplets.validation.validate(frame, compiled, engine="polars")
     raise ValueError(approach)
 
 
@@ -234,6 +236,12 @@ def sparql_ready(realgrid):
     if n != 7561:
         pytest.skip(f"RealGrid ACLineSegment count changed ({n}, expected 7561)")
     return realgrid, engine
+
+
+@pytest.fixture(scope="module")
+def realgrid_polars(realgrid):
+    """Polars copy of RealGrid — conversion is fixture setup, not timed."""
+    return polars.from_pandas(realgrid)
 
 
 @pytest.fixture(scope="module")
@@ -271,13 +279,13 @@ def test_sparql_twophase(benchmark, sparql_ready, case, approach):
 @pytest.mark.benchmark(group="twophase-ir")
 @pytest.mark.parametrize("approach", ["one_phase", "exists_then_validate"])
 @pytest.mark.parametrize("case", list(IR_CASES))
-def test_ir_twophase(benchmark, realgrid, ir_compiled, case, approach):
+def test_ir_twophase(benchmark, realgrid_polars, ir_compiled, case, approach):
     spec = IR_CASES[case]
     compiled = ir_compiled[case]
     benchmark.extra_info.update({
-        "case": case, "approach": approach,
+        "case": case, "approach": approach, "engine": "polars",
         "expect": spec["expect"], "tradeoff": spec["tradeoff"],
     })
-    violations = benchmark(lambda: run_ir(realgrid, compiled, case, approach))
+    violations = benchmark(lambda: run_ir(realgrid_polars, compiled, case, approach))
     n = len(violations)
     assert n == spec["expect"], f"{case}/{approach} hit {n}, expected {spec['expect']}"
