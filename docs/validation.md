@@ -11,9 +11,11 @@ reported in the run's coverage metadata, `skipped_shapes` /
   mutated), so `sh:targetClass` / `sh:class` on a parent reach its
   subclasses. Parents are the absolute IRIs the schema records; a bare name
   resolves like `rdf:type` in the data graph (schema namespace, else
-  `undefined_namespace`). polars / pandas / duckdb, and the lexical
-  `sh:datatype` supplement of a pyshacl run, match `sh:targetClass` against
-  the exact `Type`.
+  `undefined_namespace`).
+- **Vectorized engines + `rdf_map`:** a Type index is expanded once
+  (ancestor → union of descendant IDs). `sh:targetClass Equipment` hits
+  `Breaker` without cloning IR rows. Without `rdf_map`, match is exact
+  `Type`.
 - **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
   Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /
   `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —

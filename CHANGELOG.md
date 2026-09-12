@@ -20,6 +20,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its subclasses. Parent IRIs come from the schema as is
   (`https://cim.ucaiug.io/ns#IdentifiedObject` for NC);
   `schema_ir.subclass_triples(rdf_map, undefined_namespace=TRIPLETS_NS)`.
+- **Vectorized SHACL engines precompute a Type index** from the export schema
+  `inheritance` lists: `class_ids("Equipment")` is the union of descendant
+  IDs, built once per run. The IR is not fanned out. Without `rdf_map`,
+  match stays exact `Type`.
 - **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
   `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
   [application-profiles-library](https://github.com/entsoe/application-profiles-library)
