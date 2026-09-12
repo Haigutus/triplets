@@ -194,6 +194,25 @@ def subclass_triples(schema):
     return triples
 
 
+def expand_type_index(exact, schema):
+    """``{Type value: id-collection}`` plus ancestor keys → union of descendants.
+
+    *exact* is the per-``Type`` grouping already built from instance data.
+    Abstract names (``Equipment``) gain an entry; concrete names are unchanged
+    (their descendant set is themselves). Collections are concatenated in the
+    caller's type (list / ndarray / Series) — the caller unique-s them.
+    """
+    expanded = dict(exact)
+    for ancestor, leaves in descendants(schema).items():
+        parts = [exact[leaf] for leaf in leaves if leaf in exact]
+        # instances typed as the abstract ancestor itself (Type=Equipment)
+        if ancestor in exact and ancestor not in leaves:
+            parts = [exact[ancestor], *parts]
+        if parts:
+            expanded[ancestor] = parts[0] if len(parts) == 1 else parts
+    return expanded
+
+
 def descendants(schema):
     """ancestor local name → frozenset of concrete Class names inheriting it."""
     return {key: frozenset(names) for key, names in _concrete_index(schema).items()}

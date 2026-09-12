@@ -484,7 +484,62 @@ TOY_SCHEMA = {"EQ": {
                 "inheritance": ["#Breaker", "#Switch", "#Equipment"]},
     "Disconnector": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
                      "inheritance": ["#Disconnector", "#Switch", "#Equipment"]},
+    "Bay": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+            "inheritance": ["#Bay", "#EquipmentContainer"]},
+    "VoltageLevel": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                     "inheritance": ["#VoltageLevel", "#EquipmentContainer"]},
+    "Substation": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                   "inheritance": ["#Substation"]},
 }}
+
+
+def test_abstract_target_class_walks_type_index(engine):
+    """sh:targetClass Equipment hits Breaker/Disconnector via a precomputed
+    Type index (IR is not fanned out). Without rdf_map, match is exact."""
+    shape = """cim:EqShape a sh:NodeShape ; sh:targetClass cim:Equipment ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = (breaker("b1") + [("d1", "Type", "Disconnector", "eq"),
+                             ("x1", "Type", "Substation", "eq")])
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    bare = triplets.validation.validate(data, graph, engine=engine)
+    assert violating(bare, "sh:minCount") == set()
+    bound = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
+    # IR stays one row per constraint — walk is in the Type index, not a fan-out
+    compiled = triplets.validation.compile(graph)
+    assert compiled.ir["target_class"].tolist() == ["Equipment"]
+
+
+def test_abstract_target_keeps_direct_equipment_type_rows(engine):
+    """Type=Equipment in the data must not hide descendant IDs, and must stay
+    in the Equipment index (batched minCount uses membership)."""
+    shape = """cim:EqShape a sh:NodeShape ; sh:targetClass cim:Equipment ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = (breaker("b1") + [("e1", "Type", "Equipment", "eq"),
+                             ("x1", "Type", "Substation", "eq")])
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    bound = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    assert violating(bound, "sh:minCount") == {("b1", None), ("e1", None)}
+
+
+def test_sh_class_accepts_subclasses_via_index(engine):
+    shape = """cim:BayShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:class cim:EquipmentContainer ] ."""
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "bay1"))
+            + breaker("b2", ("Equipment.EquipmentContainer", "sub1"))
+            + [("bay1", "Type", "Bay", "eq"), ("sub1", "Type", "Substation", "eq")])
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    assert violating(v, "sh:class") == {("b2", "sub1")}
 
 
 def test_pyshacl_ont_graph_abstract_target():
