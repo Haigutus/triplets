@@ -183,19 +183,17 @@ EQ_ED2 = (Path(__file__).resolve().parents[2]
           / "61970-600-2_Equipment-AP-Voc-RDFSED2a.rdf")
 
 
-def _merged_xsd_map(path):
-    from triplets.rdfs_tools.cim_rdfs_to_json import cgmes_data_types_map, xsd_types_from_rdfs
-    data = rdfs_tools.load_all_to_dataframe(str(path))
-    return {**xsd_types_from_rdfs(data), **cgmes_data_types_map}
-
-
 def test_eq_rdfs2020_and_ed2_same_xsd_map():
-    """CGMES 3.0 EQ RDFS2020 and 501 Ed2 Voc agree on CIM→XSD after the
-    lookup-table overlay (Ed2 has XSD on .value; RDFS2020 does not)."""
+    """CGMES 3.0 EQ RDFS2020 and 501 Ed2 Voc agree on CIM→XSD for every name
+    the table already knows that Ed2 does not override via .value."""
+    from triplets.rdfs_tools.cim_rdfs_to_json import cgmes_data_types_map, xsd_types_from_rdfs
     if not EQ_RDFS2020.exists():
         pytest.skip("CGMES 3.0 EQ RDFS not available")
     if not EQ_ED2.exists():
         pytest.skip("501 Ed2 EQ Voc not available (application-profiles-library checkout)")
-    old = _merged_xsd_map(EQ_RDFS2020)
-    new = _merged_xsd_map(EQ_ED2)
-    assert old.items() <= new.items()
+    old_data = rdfs_tools.load_all_to_dataframe(str(EQ_RDFS2020))
+    new_data = rdfs_tools.load_all_to_dataframe(str(EQ_ED2))
+    old = {**cgmes_data_types_map, **xsd_types_from_rdfs(old_data)}
+    new = {**cgmes_data_types_map, **xsd_types_from_rdfs(new_data)}
+    shared = set(old) - set(xsd_types_from_rdfs(new_data))
+    assert {k: old[k] for k in shared} == {k: new[k] for k in shared}

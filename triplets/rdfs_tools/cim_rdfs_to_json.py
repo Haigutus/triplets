@@ -62,24 +62,16 @@ def _local_name(uri):
 
 
 def _as_xsd(uri):
-    if isinstance(uri, str) and uri.startswith(XSD_NS) and len(uri) > len(XSD_NS):
-        return "xsd:" + uri[len(XSD_NS):]
-    return None
+    return uri.replace(XSD_NS, "xsd:", 1) if isinstance(uri, str) and uri.startswith(XSD_NS) else None
 
 
 def xsd_types_from_rdfs(profile_data):
     """CIMDatatype/Primitive local name → ``xsd:float`` from ``.value`` ``rdfs:range``."""
     domain = profile_data.loc[profile_data["KEY"] == "domain", ["ID", "VALUE"]]
     ranges = profile_data.loc[profile_data["KEY"] == "range"].set_index("ID")["VALUE"]
-    out = {}
-    for prop_id, type_uri in zip(domain["ID"], domain["VALUE"]):
-        local = _local_name(prop_id)
-        if local != "value" and not local.endswith(".value"):
-            continue
-        xsd = _as_xsd(ranges.get(prop_id))
-        if xsd:
-            out[_local_name(type_uri)] = xsd
-    return out
+    return {_local_name(typ): xsd for prop_id, typ in zip(domain["ID"], domain["VALUE"])
+            if _local_name(prop_id).rsplit(".", 1)[-1] == "value"
+            and (xsd := _as_xsd(ranges.get(prop_id)))}
 
 
 cim_serializations = {
@@ -107,11 +99,9 @@ cim_serializations = {
     }
 }
 
-def convert_profile(profile_data, serialization_version="552_ED2",
-                    data_types_map=None):
+def convert_profile(profile_data, serialization_version="552_ED2"):
 
-    types = {**xsd_types_from_rdfs(profile_data),
-             **(cgmes_data_types_map if data_types_map is None else data_types_map)}
+    types = {**cgmes_data_types_map, **xsd_types_from_rdfs(profile_data)}
 
     id_attribute = cim_serializations[serialization_version]["id_attribute"]
     id_prefix = cim_serializations[serialization_version]["id_prefix"]
@@ -178,23 +168,17 @@ def convert_profile(profile_data, serialization_version="552_ED2",
         else:
             data_type = parameter_dict.get("dataType")
             range_uri = parameter_dict.get("range")
-            if not data_type and _as_xsd(range_uri):
-                parameter_def["type"] = "Attribute"
-                parameter_def["xsd:type"] = _as_xsd(range_uri)
-            elif not data_type and range_uri and _local_name(range_uri) in types:
+            if not data_type and range_uri and _local_name(range_uri) in types:
                 data_type = range_uri
 
-            if parameter_def.get("type") == "Attribute":
-                pass
-            elif data_type:
+            if data_type:
 
                 parameter_def["type"] = "Attribute"
 
                 data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(
                     data_type, default_namespace=xml_base)
 
-                data_type_meta = profile_data.get_object_data(data_type)
-                data_type_meta = data_type_meta.to_dict() if len(data_type_meta) else {}
+                data_type_meta = profile_data.get_object_data(data_type).to_dict()
 
                 if data_type_namespace == "":
                     data_type_namespace = xml_base
@@ -211,6 +195,10 @@ def convert_profile(profile_data, serialization_version="552_ED2",
 
                 profile[data_type_name] = data_type_def
                 parameter_def["dataType"] = data_type_name
+
+            elif xsd := _as_xsd(range_uri):
+                parameter_def["type"] = "Attribute"
+                parameter_def["xsd:type"] = xsd
 
             # If enumeration
             else:

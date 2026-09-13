@@ -17,11 +17,11 @@ Start of the 0.3 line.
 
 ### Changed
 - **Export-schema `xsd:type` is filled from the RDFS when present.**
-  `cim_rdfs_to_json` builds a CIM-name → XSD map from CIMDatatype `.value`
-  `rdfs:range` (IEC 61970-501 Ed2), then overlays `cgmes_data_types_map`
-  (fills RDFS2020 Primitives that have no XSD). Unknown types omit the
-  `xsd:type` key instead of writing `""`. Bundles regenerate on the next
-  `cim_rdfs_to_json` run.
+  `cim_rdfs_to_json` starts from `cgmes_data_types_map` and overlays XSD
+  ranges found on CIMDatatype `.value` (IEC 61970-501 Ed2). RDFS2020
+  Primitives have no XSD, so the table still fills those. Unknown types
+  omit the `xsd:type` key instead of writing `""`. Bundles regenerate on
+  the next `cim_rdfs_to_json` run.
 
 ### Fixed
 - **Exclude pandas 2.3.3**: `pivot()` on ArrowDtype dictionary columns still
