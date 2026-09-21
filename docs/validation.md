@@ -182,7 +182,7 @@ conforms** — identical across all engines:
 
 | Column | Meaning |
 |--------|---------|
-| `ID` | focus node (instance UUID, `urn:uuid:` stripped) |
+| `ID` | focus node (instance UUID, `urn:uuid:` stripped — `triplets.iri.local_id`) |
 | `KEY` | property path (CIM short name, e.g. `IdentifiedObject.name`) |
 | `VALUE` | offending value |
 | `VIOLATION_TYPE` | constraint component (`sh:minCount`, `sh:datatype`, `triplets:lexicalForm`, `triplets:invalidSparql`, ...) |

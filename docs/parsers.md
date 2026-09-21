@@ -131,6 +131,28 @@ table = triplets.parser.parse(path, return_type="arrow")
 data = triplets.parser.parse(path, return_type="polars")
 ```
 
+## The ID / KEY / VALUE contract
+
+Every engine produces the same *short* form; `triplets.iri` is the one
+definition of the rules (scalar functions, `iri_pandas` / `iri_polars`
+flavors, the cython engine mirrors them in C++ — all held to the case table
+in `tests/test_iri.py`).
+
+| column | shape | rule (`triplets.iri`) |
+|---|---|---|
+| `ID` | bare UUID / bare name | `local_id`: strip exactly **one** of `urn:uuid:`, `#_`, `_` (longest first) |
+| `KEY` | `Class.attr` or `Type` | element tag local name |
+| `VALUE` (Type) | `Breaker` | tag local name |
+| `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then `http(s)…#frag` → `frag` (`#` only, never `/`) |
+| `VALUE` (literal) | text verbatim | — |
+| `INSTANCE_ID` | bare UUID | fresh `uuid4()` per parsed file |
+
+Expansion back to IRIs (N-Quads, SPARQL stores, SHACL reports) is the inverse,
+driven by the export schema: `expand_id`, `expand_key`, `expand_value` with a
+`SchemaTerms` built from `rdf_map`; CIM100 is only the fallback when there is
+no schema or the name is not in it. `shorten_resources=False` skips only the
+`#frag` step.
+
 ## Options
 
 `parse()` / `read_RDF` accept (see `triplets/parser/__init__.py`):
