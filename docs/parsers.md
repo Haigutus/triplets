@@ -102,7 +102,7 @@ pd.read_RDF([paths])
 ```
 triplets/parser/
 |-- __init__.py              # parse() dispatcher, get_engine(), find_all_xml re-export
-|-- utils.py                 # find_all_xml, clean_ID, _split_prefixed_name, RDF constants
+|-- utils.py                 # find_all_xml, _split_prefixed_name, RDF constants (ID/VALUE shortening: triplets.iri)
 |-- python_lxml_pandas.py    # lxml -> list of tuples -> pd.DataFrame (default)
 |-- python_lxml_arrow.py     # lxml -> Arrow StringBuilders -> pa.RecordBatch
 '-- cython_pugixml_arrow.pyx # pugixml C++ -> Arrow C++ builders -> pa.RecordBatch

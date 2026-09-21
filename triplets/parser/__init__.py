@@ -61,8 +61,9 @@ def get_engine(name: str = "auto"):
     return _REGISTRY.get(name)
 
 
-# Re-exports for compat layer (rdf_parser.py)
-from .utils import find_all_xml, iter_all_xml, clean_ID  # noqa: F401
+# Re-exports (rdf_parser.py compat layer, public parser surface)
+from .utils import find_all_xml, iter_all_xml  # noqa: F401
+from ..iri import local_id  # noqa: F401
 
 from .nquads import read_nquads  # noqa: F401
 

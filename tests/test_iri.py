@@ -230,3 +230,49 @@ def test_schema_terms_cached_by_content():
     assert SchemaTerms.from_rdf_map(None) is iri.EMPTY_TERMS
     triplets.clear_caches()
     assert SchemaTerms.from_rdf_map(SCHEMA) is not first
+
+
+# ── native mirrors: the cython parser applies local_id / local_value in C++ ───
+
+PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:cim="http://iec.ch/TC57/CIM100#" xmlns:nc="https://cim4.eu/ns/nc#">
+  <cim:Breaker rdf:about="urn:uuid:_x">
+    <cim:Equipment.EquipmentContainer rdf:resource="#_{uuid}"/>
+    <cim:Switch.open>false</cim:Switch.open>
+    <cim:Breaker.kind rdf:resource="http://iec.ch/TC57/CIM100#SwitchKind.breaker"/>
+    <cim:Breaker.ref rdf:resource="https://cim4.eu/ns/nc#Kind.value"/>
+    <cim:Breaker.uri rdf:resource="http://example.org/path/only"/>
+  </cim:Breaker>
+  <nc:Thing rdf:ID="_abc">
+    <nc:Thing.ref rdf:resource="urn:uuid:{uuid}"/>
+  </nc:Thing>
+</rdf:RDF>
+""".format(uuid=UUID)
+
+
+def _parse_engine_or_skip(engine):
+    try:
+        triplets.parser.get_engine(engine)
+    except Exception as error:      # extension not built in this environment
+        pytest.skip(f"{engine} not available: {error}")
+
+
+@pytest.mark.parametrize("engine", ["python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow"])
+def test_parse_engines_apply_local_id_and_local_value(engine, tmp_path):
+    """Every parse engine shortens IDs / reference VALUEs exactly like the scalar rule."""
+    _parse_engine_or_skip(engine)
+    path = tmp_path / "iri_cases.xml"
+    path.write_text(PARSE_FIXTURE)
+    frame = triplets.parse(str(path), engine=engine, return_type="pandas")
+    frame = frame[~frame["KEY"].isin(["label"]) & ~frame["VALUE"].isin(["Distribution", "NamespaceMap"])]
+    rows = {(row.KEY, row.VALUE) for row in frame.itertuples() if row.KEY != "Type"} | \
+           {("Type", row.VALUE) for row in frame[frame["KEY"] == "Type"].itertuples()}
+    ids = set(frame["ID"])
+    assert {iri.local_id("urn:uuid:_x"), iri.local_id("_abc")} <= ids
+    assert ("Equipment.EquipmentContainer", iri.local_value("#_" + UUID)) in rows
+    assert ("Thing.ref", iri.local_value("urn:uuid:" + UUID)) in rows
+    assert ("Breaker.kind", iri.local_value("http://iec.ch/TC57/CIM100#SwitchKind.breaker")) in rows
+    assert ("Breaker.ref", iri.local_value("https://cim4.eu/ns/nc#Kind.value")) in rows
+    assert ("Breaker.uri", iri.local_value("http://example.org/path/only")) in rows
+    assert ("Switch.open", "false") in rows

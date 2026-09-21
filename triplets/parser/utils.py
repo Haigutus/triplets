@@ -12,22 +12,12 @@ from typing import List, Union, IO, Any
 
 logger = logging.getLogger(__name__)
 
-RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+from ..iri import RDF_NS
+
 RDF_ID = f"{{{RDF_NS}}}ID"
 RDF_ABOUT = f"{{{RDF_NS}}}about"
 RDF_NODEID = f"{{{RDF_NS}}}nodeID"
 RDF_RESOURCE = f"{{{RDF_NS}}}resource"
-
-
-def clean_ID(ID: Any) -> str:
-    """Removes ID prefixes used in CIM - urn:uuid:, #_, _ ."""
-    if not ID:
-        return ""
-    ID = str(ID)
-    for prefix in ("urn:uuid:", "#_", "_"):
-        if ID.startswith(prefix):
-            ID = ID[len(prefix):]
-    return ID
 
 
 def _split_prefixed_name(name: str) -> str:
