@@ -44,7 +44,7 @@ import numpy
 import pandas
 
 from ..export.nquads_utils import make_subject
-from .shacl_ir import _local
+from ..iri import iri_pandas, local_term
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -303,7 +303,7 @@ def _range(comparison, description):
 def _in(context, rule):
     rows = context.path_rows(rule)
     allowed = {str(value) for value in rule.params}
-    local = rows["PATH_VALUE"].astype(str).str.split("#").str[-1].str.split("/").str[-1]
+    local = iri_pandas.local_term(rows["PATH_VALUE"].astype(str))
     bad = ~local.isin(allowed)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not one of {sorted(allowed)}")
@@ -492,7 +492,7 @@ def _not_evaluated(rule, error):
     its target/path (anonymous property shapes only have a blank-node id),
     say plainly that nothing was checked — a shapes bug, not a data finding."""
     where = f"{rule.target_class}/{rule.path}" if rule.path else rule.target_class
-    return (f"sh:sparql constraint of shape {_local(str(rule.shape_id))} ({where}) was "
+    return (f"sh:sparql constraint of shape {local_term(str(rule.shape_id))} ({where}) was "
             f"NOT evaluated — the query is defective on every engine "
             f"(rdflib: {str(error).splitlines()[0]}). "
             f"A shapes bug, not a data finding; this constraint went unchecked.")

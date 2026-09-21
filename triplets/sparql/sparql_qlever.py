@@ -52,7 +52,7 @@ from . import _qlever  # ImportError here → the registry falls back to rdflib
 from .._caches import register_cache
 from .._content_key import content_key
 from .._engine_detect import flavor, to_pandas, to_return_type
-from ..iri import SchemaTerms
+from ..iri import SchemaTerms, expand_id
 from ..parser.nquads import terms_to_triplets
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data
     protocol these take precedence over any FROM inside the query.
     """
     index = _index_for(data, rdf_map, data_unchanged)
-    graphs = [f"urn:uuid:{instance}" for instance in scope] if scope is not None else None
+    graphs = [expand_id(instance) for instance in scope] if scope is not None else None
     form = _query_form(query_string)
     if return_type == "auto":
         return_type = "polars" if flavor(data) == "polars" else "pandas"

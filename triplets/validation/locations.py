@@ -28,13 +28,17 @@ substrings in every serialization (N-Quads, Turtle, JSON-LD).
 import re
 import logging
 
+from ..iri import ID_PREFIXES
+
 logger = logging.getLogger(__name__)
 
 LOCATION_COLUMNS = ["SOURCE_URI", "SOURCE_LINE", "SOURCE_SNIPPET"]
 
 # an object definition: <cim:Breaker rdf:ID="_uuid"> / rdf:about="#_uuid" /
-# rdf:about="urn:uuid:uuid" — group(1) is the bare ID, triplets conventions
-_DEFINITION = re.compile(rb'rdf:(?:ID|about)="(?:urn:uuid:)?[#_]*([^"]+)"')
+# rdf:about="urn:uuid:uuid" — group(1) is the bare ID (one prefix stripped,
+# the triplets.iri.local_id rule)
+_DEFINITION = re.compile(rb'rdf:(?:ID|about)="(?:' + "|".join(map(re.escape, ID_PREFIXES)).encode()
+                         + rb')?([^"]+)"')
 
 
 def locate(wanted, sources):

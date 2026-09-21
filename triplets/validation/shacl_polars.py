@@ -28,6 +28,7 @@ import polars
 
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
+from ..iri import iri_polars
 from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
 
 logger = logging.getLogger(__name__)
@@ -196,8 +197,7 @@ def _range(comparison, description):
 
 
 def _in(context, rule):
-    local = (polars.col("PATH_VALUE").str.split("#").list.last()
-             .str.split("/").list.last())
+    local = iri_polars.local_term("PATH_VALUE")
     allowed = [str(value) for value in rule.params]
     plan = context.path_rows(rule).filter(~local.is_in(allowed))
     return _emit(plan, rule, f"value is not one of {sorted(allowed)}")
@@ -461,8 +461,7 @@ def _batch_in(context, rules):
         "SOURCE_SHAPE": [rule.shape_id for rule in rules for _ in rule.params],
         "_LOCAL": [str(value) for rule in rules for value in rule.params],
     })
-    local = (polars.col("VALUE").str.split("#").list.last()
-             .str.split("/").list.last())
+    local = iri_polars.local_term("VALUE")
     plan = (_batch_path_rows(context, rules_frame)
             .with_columns(local.alias("_LOCAL"))
             .join(allowed, on=["KEY", "CLASS", "SOURCE_SHAPE", "_LOCAL"], how="anti"))

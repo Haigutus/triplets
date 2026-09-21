@@ -1,4 +1,5 @@
 from triplets.parser import parse
+from triplets.iri import iri_pandas
 import pandas
 import os
 
@@ -267,7 +268,7 @@ fullmodel_conf = { "FullModel": {
 
 def get_used_relations(data):
     relations = data.query("KEY == 'AssociationUsed' and VALUE == 'Yes'").rename(columns={"ID": "RELATION_NAME"})
-    return relations.RELATION_NAME.str.split("#").str[-1]
+    return iri_pandas.local_term(relations.RELATION_NAME)
 
 def dangling_references(data, relation_names):
     references = data.merge(relation_names, left_on="KEY", right_on="RELATION_NAME")

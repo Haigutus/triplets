@@ -12,8 +12,7 @@ from triplets._header import (  # noqa: F401 — load_rdf_map re-exported for th
 
 logger = logging.getLogger(__name__)
 
-# Namespace for internal/undefined structures when export_undefined=True
-TRIPLETS_NS = "http://triplets#"
+from triplets.iri import TRIPLETS_NS  # noqa: F401 — namespace for undefined structures (export_undefined=True)
 
 
 def _values_for_key(instance_data, key):

@@ -23,7 +23,7 @@ import pandas
 from .context import ENRICHMENT_COLUMNS, enrich
 from .locations import LOCATION_COLUMNS, locate_violations
 from .shacl_report import message_prefix
-from .shacl_ir import _local
+from ..iri import local_term
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ def _fallback_name(shape, first, language):
     key = _value(first["KEY"])
     if language != "shacl":
         profile = _value(first.get("PROFILE"))
-        cls = None if pandas.isna(shape) else _local(str(shape))
+        cls = None if pandas.isna(shape) else local_term(str(shape))
         if cls and profile and cls.startswith(f"{profile}:"):   # shape id: <profile>:Class.<key>
             cls = cls[len(profile) + 1:]
         if cls and key and cls.endswith(f".{key}"):             # per-property shape id
@@ -172,7 +172,7 @@ def _samples(records):
 
 
 def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shacl"):
-    identifier = f"{_local(str(shape))}/{constraint}" if not pandas.isna(shape) else str(constraint)
+    identifier = f"{local_term(str(shape))}/{constraint}" if not pandas.isna(shape) else str(constraint)
     if identifier in seen_ids:                       # distinct shapes, same local name
         seen_ids[identifier] += 1
         identifier = f"{identifier}-{seen_ids[identifier]}"
