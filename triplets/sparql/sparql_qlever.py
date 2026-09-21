@@ -17,7 +17,7 @@ heavy lifting happens on the C++ side:
 - in: the triplet columns go to the index builder as Arrow batches, feeding
   an injected parser (no N-Quads serialization or text re-parsing anywhere;
   the term mapping applies the same rules as the N-Quads export, from the
-  same ``build_key_metadata`` schema interpretation).
+  same ``triplets.iri`` schema interpretation).
 - out: the wrapper decodes the query result straight into Arrow string
   buffers (unbound → null), the Cython layer wraps them zero-copy, and this
   module only maps conventions and finalizes the output flavor
@@ -52,7 +52,7 @@ from . import _qlever  # ImportError here → the registry falls back to rdflib
 from .._caches import register_cache
 from .._content_key import content_key
 from .._engine_detect import flavor, to_pandas, to_return_type
-from ..export.nquads_utils import CIM_NS, build_key_metadata
+from ..iri import SchemaTerms
 from ..parser.nquads import terms_to_triplets
 
 logger = logging.getLogger(__name__)
@@ -171,13 +171,12 @@ def _build_index(table, rdf_map, basename):
     """Feed the triplet columns to qlever's index builder directly — zero-copy
     Arrow batches into an injected parser, no RDF text round-trip. The term
     mapping is the N-Quads export rules, applied on the C++ side from the
-    flattened schema maps (build_key_metadata stays the single source of
-    truth for rdf_map interpretation)."""
-    enum_keys, key_namespaces, key_datatypes = \
-        build_key_metadata(rdf_map) if rdf_map else (set(), {}, {})
+    SchemaTerms table (triplets.iri stays the single source of truth for
+    rdf_map interpretation; the C++ mirrors expand_name / is_iri / UUID_RE)."""
+    terms = SchemaTerms.from_rdf_map(rdf_map)
     logger.debug("building qlever index from %d arrow rows", table.num_rows)
-    _qlever.build_index_from_arrow(table.to_batches(), basename,
-                                   enum_keys, key_namespaces, key_datatypes, CIM_NS)
+    _qlever.build_index_from_arrow(table.to_batches(), basename, terms.enum_keys,
+                                   terms.namespaces, terms.datatypes, terms.default_ns)
 
 
 def _query_form(query_string):

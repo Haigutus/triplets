@@ -1,13 +1,15 @@
-"""N-Quads export using pandas — schema-aware value classification."""
+"""N-Quads export using pandas — vectorized over the ``triplets.iri`` pandas flavor."""
 
 from io import BytesIO
 
-import pandas
+from ..iri import SchemaTerms, iri_pandas
 
-from .nquads_utils import (
-    make_subject, make_predicate, make_object, make_graph,
-    build_key_metadata,
-)
+
+def _escape(series):
+    return (series.str.replace("\\", "\\\\", regex=False)
+            .str.replace('"', '\\"', regex=False)
+            .str.replace("\n", "\\n", regex=False)
+            .str.replace("\r", "\\r", regex=False))
 
 
 def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
@@ -26,22 +28,23 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     export_to_memory : bool, default False
         If True, return an in-memory BytesIO (with .name) instead of writing to disk.
     """
-    enum_keys, key_namespaces, key_datatypes = build_key_metadata(rdf_map) if rdf_map else (set(), {}, {})
+    terms = SchemaTerms.from_rdf_map(rdf_map)
 
     data = data[data["VALUE"].notna()]  # no object to state (parity with the polars engine)
 
-    id_col = data["ID"].astype(str)
-    key_col = data["KEY"].astype(str)
-    val_col = data["VALUE"].astype(str)
-    inst_col = data["INSTANCE_ID"].astype(str)
+    ids = data["ID"].astype(str)
+    keys = data["KEY"].astype(str)
+    values = data["VALUE"].astype(str)
+    instances = data["INSTANCE_ID"].astype(str)
 
-    subjects = id_col.apply(make_subject)
-    predicates = key_col.apply(lambda k: make_predicate(k, key_namespaces))
-    objects = pandas.Series(
-        [make_object(k, v, enum_keys, key_datatypes, key_namespaces) for k, v in zip(key_col, val_col)],
-        index=data.index,
-    )
-    graphs = inst_col.apply(make_graph)
+    subjects = "<" + iri_pandas.expand_id(ids) + ">"
+    predicates = "<" + iri_pandas.expand_key(keys, terms) + ">"
+    kind, payload = iri_pandas.expand_value(keys, values, terms)
+    payload = payload.fillna("")
+    literal = '"' + _escape(values) + '"'
+    objects = ("<" + payload + ">").where(kind == "iri",
+                                          literal.where(payload == "", literal + "^^<" + payload + ">"))
+    graphs = "<" + iri_pandas.expand_id(instances) + ">"
 
     quads = subjects + " " + predicates + " " + objects + " " + graphs + " ."
     content = "\n".join(quads.values) + "\n"

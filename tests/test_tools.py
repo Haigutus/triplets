@@ -718,14 +718,15 @@ class TestNquadsSchemaIRIs:
     CIM16 = "http://iec.ch/TC57/2013/CIM-schema-cim16#"
 
     def test_nquads_class_and_enum_use_schema_namespace(self):
-        from triplets.export.nquads_utils import build_key_metadata, make_object
+        from triplets.export.nquads_utils import make_object
         from triplets.export_schema import schemas
-        enum_keys, key_ns, key_dt = build_key_metadata(schemas.ENTSOE_CGMES_2_4_15_552_ED1)
+        from triplets.iri import SchemaTerms
+        terms = SchemaTerms.from_rdf_map(schemas.ENTSOE_CGMES_2_4_15_552_ED1)
         class_iri = f"<{self.CIM16}ControlArea>"
         enum_iri = f"<{self.CIM16}ControlAreaTypeKind.Interchange>"
-        assert make_object("Type", "ControlArea", enum_keys, key_dt, key_ns) == class_iri
-        assert make_object("ControlArea.type", "ControlAreaTypeKind.Interchange", enum_keys, key_dt, key_ns) == enum_iri
-        assert make_object("ControlArea.type", f"{self.CIM16}ControlAreaTypeKind.Interchange", enum_keys, key_dt, key_ns) == enum_iri
+        assert make_object("Type", "ControlArea", terms) == class_iri
+        assert make_object("ControlArea.type", "ControlAreaTypeKind.Interchange", terms) == enum_iri
+        assert make_object("ControlArea.type", f"{self.CIM16}ControlAreaTypeKind.Interchange", terms) == enum_iri
 
         data = pandas.DataFrame(
             [("ca", "Type", "ControlArea", "i"), ("ca", "ControlArea.type", "ControlAreaTypeKind.Interchange", "i")],

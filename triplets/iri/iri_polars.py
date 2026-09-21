@@ -5,7 +5,8 @@ Categorical first, as the N-Quads exporter does).
 """
 import polars
 
-from . import EMPTY_TERMS, ID_PREFIX_RE, RDF_TYPE, URI_PREFIXES, UUID_PREFIX, UUID_RE
+from . import (EMPTY_TERMS, HTTP_FRAGMENT_RE, ID_PREFIX_RE, RDF_TYPE, TERM_PREFIX_RE,
+               URI_PREFIX_RE, UUID_PREFIX, UUID_RE)
 
 
 def _col(column):
@@ -13,8 +14,7 @@ def _col(column):
 
 
 def _fragment_after_hash(expr):
-    hashed = expr.str.starts_with("http") & expr.str.contains("#", literal=True)
-    return polars.when(hashed).then(expr.str.split("#").list.last()).otherwise(expr)
+    return expr.str.replace(HTTP_FRAGMENT_RE.pattern, "")
 
 
 def local_id(column):
@@ -32,13 +32,11 @@ def local_key(column):
 
 
 def local_term(column):
-    return (_col(column).str.strip_chars_start("#")
-            .str.split("#").list.last().str.split("/").list.last())
+    return _col(column).str.replace(TERM_PREFIX_RE.pattern, "")
 
 
 def is_iri(column):
-    expr = _col(column)
-    return polars.any_horizontal(*[expr.str.starts_with(prefix) for prefix in URI_PREFIXES])
+    return _col(column).str.contains(URI_PREFIX_RE.pattern)
 
 
 def expand_id(column):

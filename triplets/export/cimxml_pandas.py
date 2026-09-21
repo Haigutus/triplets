@@ -149,8 +149,8 @@ def generate_xml(instance_data,
     key_datatypes = {}
     if datatypes:
         # same KEY → xsd URI mapping the N-Quads export uses (string → None, anyURI excluded)
-        from .nquads_utils import build_key_metadata
-        _, _, key_datatypes = build_key_metadata(rdf_map)
+        from ..iri import SchemaTerms
+        key_datatypes = SchemaTerms.from_rdf_map(rdf_map).datatypes
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))

@@ -2,8 +2,9 @@
 
 read_nquads turns N-Quads / N-Triples text (path, bytes, or file-like) back
 into a triplet DataFrame [ID, KEY, VALUE, INSTANCE_ID], applying the inverse
-of the export conventions (triplets.export.nquads_utils): urn:uuid: stripped,
-http(s) #fragment shortened (any schema namespace), rdf:type → 'Type', datatype / language annotations
+of the export conventions (triplets.iri): ID / INSTANCE_ID via local_id,
+KEY via local_key (rdf:type → 'Type'), VALUE via local_value (urn:uuid: and any
+http(s) #fragment namespace shortened), datatype / language annotations
 dropped (values keep their lexical form), graph → INSTANCE_ID (absent → None).
 
 Everything is vectorized pandas string ops. terms_to_triplets is the shared
@@ -18,7 +19,7 @@ from pathlib import Path
 import pandas
 
 from .._engine_detect import to_return_type
-from ..export.nquads_utils import RDF_TYPE, shorten_iris
+from ..iri import iri_pandas
 
 # subject predicate object [graph] . — subject/predicate are space-free terms,
 # the object may contain spaces inside a quoted literal, the graph is an IRI
@@ -68,22 +69,23 @@ def terms_to_triplets(frame):
     instance). Term shapes: ``<iri>``, ``_:bnode``, ``"literal"`` (optionally
     with a ``^^<datatype>`` / ``@lang`` suffix — dropped, the value keeps its
     lexical form; string escapes decoded), or bare turtle-shorthand
-    numbers/booleans. IRIs lose urn:uuid: and any http(s) #fragment namespace,
-    rdf:type → 'Type'.
+    numbers/booleans. IDs lose urn:uuid:, VALUE IRIs also any http(s)
+    #fragment namespace, rdf:type → 'Type' (triplets.iri rules).
     """
-    rdf_type = frame["KEY"] == f"<{RDF_TYPE}>"
-    frame["ID"] = _iri(frame["ID"])
-    frame["KEY"] = _iri(frame["KEY"]).mask(rdf_type, "Type")
+    frame["ID"] = iri_pandas.local_id(_term(frame["ID"]))
+    frame["KEY"] = iri_pandas.local_key(_term(frame["KEY"]))
     unquoted = _unescape(
         frame["VALUE"].str.replace(r'(?s)^"(.*)"(\^\^<[^>]*>|@[\w-]+)?$', r"\1", regex=True))
-    frame["VALUE"] = unquoted.where(frame["VALUE"].str.startswith('"'), _iri(frame["VALUE"]))
-    graphs = _iri(frame["INSTANCE_ID"]) if "INSTANCE_ID" in frame.columns else None
+    frame["VALUE"] = unquoted.where(frame["VALUE"].str.startswith('"'),
+                                    iri_pandas.local_value(_term(frame["VALUE"])))
+    graphs = iri_pandas.local_id(_term(frame["INSTANCE_ID"])) if "INSTANCE_ID" in frame.columns else None
     frame["INSTANCE_ID"] = graphs.where(graphs.notna(), None) if graphs is not None else None
     return frame
 
 
-def _iri(column):
-    return shorten_iris(column.str.replace(r"^<(.*)>$", r"\1", regex=True).str.removeprefix("_:"))
+def _term(column):
+    """``<iri>`` / ``_:bnode`` → bare text; shortening is per column (triplets.iri)."""
+    return column.str.replace(r"^<(.*)>$", r"\1", regex=True).str.removeprefix("_:")
 
 
 def _unescape(column):

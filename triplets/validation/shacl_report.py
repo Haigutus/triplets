@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pandas
 
-from ..export.nquads_utils import CIM_NS, RDF_TYPE
+from ..iri import CIM_NS, RDF_TYPE
 
 logger = logging.getLogger(__name__)
 

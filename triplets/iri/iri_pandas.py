@@ -6,13 +6,20 @@ boolean, which treats null as "no".
 import numpy
 import pandas
 
-from . import (CIM_NS, EMPTY_TERMS, ID_PREFIX_RE, RDF_TYPE, URI_PREFIXES, UUID_PREFIX,
-               UUID_RE)
+from . import (EMPTY_TERMS, HTTP_FRAGMENT_RE, ID_PREFIX_RE, RDF_TYPE, TERM_PREFIX_RE,
+               URI_PREFIX_RE, UUID_PREFIX, UUID_RE)
+
+# Regex replaces only: they work the same on object and arrow-backed string
+# Series (rsplit/list access does not).
+
+
+def _eq(series, value):
+    """Null-safe equality: arrow-backed strings compare to <NA>, which mask() reads as True."""
+    return (series == value).fillna(False).astype(bool)
 
 
 def _fragment_after_hash(series):
-    hashed = (series.str.startswith("http") & series.str.contains("#", regex=False)).fillna(False)
-    return series.mask(hashed, series.str.rsplit("#", n=1).str[-1])
+    return series.str.replace(HTTP_FRAGMENT_RE.pattern, "", regex=True)
 
 
 def local_id(series):
@@ -24,15 +31,15 @@ def local_value(series):
 
 
 def local_key(series):
-    return _fragment_after_hash(series).mask(series == RDF_TYPE, "Type")
+    return _fragment_after_hash(series).mask(_eq(series, RDF_TYPE), "Type")
 
 
 def local_term(series):
-    return series.str.lstrip("#").str.rsplit("#", n=1).str[-1].str.rsplit("/", n=1).str[-1]
+    return series.str.replace(TERM_PREFIX_RE.pattern, "", regex=True)
 
 
 def is_iri(series):
-    return series.str.startswith(URI_PREFIXES).fillna(False)
+    return series.str.match(URI_PREFIX_RE.pattern).fillna(False).astype(bool)
 
 
 def expand_id(series):
@@ -51,7 +58,7 @@ def expand_name(series, terms=None):
 
 
 def expand_key(series, terms=None):
-    return expand_name(series, terms).mask(series == "Type", RDF_TYPE)
+    return expand_name(series, terms).mask(_eq(series, "Type"), RDF_TYPE)
 
 
 expand_class = expand_name
@@ -62,7 +69,7 @@ def expand_value(key, value, terms=None):
     IRI, or the xsd datatype IRI / None for literals. Same branch order as the
     scalar rule."""
     terms = terms or EMPTY_TERMS
-    is_type = (key == "Type").to_numpy()
+    is_type = _eq(key, "Type").to_numpy()
     uri = is_iri(value).to_numpy()
     enum = key.isin(terms.enum_keys).to_numpy() if terms.enum_keys else numpy.zeros(len(key), bool)
     typed = key.isin(terms.datatypes).to_numpy() if terms.datatypes else numpy.zeros(len(key), bool)

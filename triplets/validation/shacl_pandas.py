@@ -85,7 +85,7 @@ _NO_IDS = numpy.array([], dtype=object)
 class SchemaKind:
     """Schema-driven term-kind decision, shared by the vectorized engines' contexts.
 
-    Mirrors the N-Quads exporter's classification (build_key_metadata): a key
+    Mirrors the N-Quads exporter's classification (triplets.iri.SchemaTerms): a key
     with a schema datatype (incl. xsd:string) holds literals; an enumeration
     key holds IRIs; anyURI/unknown keys return None (decide by value form).
     Without rdf_map everything is None.
@@ -98,15 +98,8 @@ class SchemaKind:
         """"literal" / "iri" / None — what the export schema says values at *key* are."""
         if self.rdf_map is None:
             return None
-        if self._key_metadata is None:
-            from ..export.nquads_utils import build_key_metadata
-            self._key_metadata = build_key_metadata(self.rdf_map)
-        enum_keys, _namespaces, key_datatypes = self._key_metadata
-        if key in enum_keys:
-            return "iri"
-        if key in key_datatypes:
-            return "literal"
-        return None
+        from ..iri import SchemaTerms
+        return SchemaTerms.from_rdf_map(self.rdf_map).key_kind(key)
 
 
 class _Context(SchemaKind):
@@ -436,9 +429,9 @@ def _sparql_violations(rule, result):
     result = result[result["this"].notna()]   # a row without a focus node is no violation
     if len(result) == 0:                      # (rdflib serializes a spurious empty binding
         return _empty()                       #  for some aggregate queries)
-    from ..export.nquads_utils import shorten_iris
-    focus = shorten_iris(result["this"].astype(str))
-    values = shorten_iris(result["value"].astype(str)) if "value" in result.columns else None
+    from ..iri import iri_pandas
+    focus = iri_pandas.local_id(result["this"].astype(str))
+    values = iri_pandas.local_value(result["value"].astype(str)) if "value" in result.columns else None
     return _frame(rule, focus, values, "sparql constraint violated")
 
 

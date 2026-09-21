@@ -23,14 +23,13 @@ import pandas
 
 from .._engine_detect import flavor, to_return_type
 from .._rdflib_loader import load_dataset, scoped_graph
-from ..export.nquads_utils import RDF_TYPE, shorten_iri
+from ..iri import local_id, local_key, local_value
 
 if find_spec("rdflib") is None:  # registry contract: an unavailable engine fails at import
     raise ImportError("rdflib is not installed")
 
 logger = logging.getLogger(__name__)
 
-_UUID_PREFIX = "urn:uuid:"
 
 
 def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data_unchanged=False):
@@ -75,8 +74,8 @@ def _graph_to_triplets(graph):
         # Tuples are faster than dicts to convert to dataframe
         rows.append(
             (
-                _strip_uuid(str(subject)),              # ID
-                _shorten_predicate(str(predicate)),     # KEY
+                local_id(str(subject)),                 # ID
+                local_key(str(predicate)),              # KEY
                 _shorten_object(obj),                   # VALUE
                 None,                                   # INSTANCE_ID — constructed graph has no source instance
             )
@@ -86,17 +85,7 @@ def _graph_to_triplets(graph):
     return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
 
-def _strip_uuid(value):
-    return value[len(_UUID_PREFIX):] if value.startswith(_UUID_PREFIX) else value
-
-
-def _shorten_predicate(predicate):
-    if predicate == RDF_TYPE:
-        return "Type"
-    return shorten_iri(predicate)
-
-
 def _shorten_object(obj):
     if type(obj).__name__ == "Literal":
         return str(obj)
-    return shorten_iri(str(obj))
+    return local_value(str(obj))

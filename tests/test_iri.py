@@ -104,7 +104,7 @@ VALUE_CASES = [
 
 
 def _norm(value):
-    return None if value is None or (isinstance(value, float) and math.isnan(value)) else value
+    return None if value is None or value is pandas.NA or (isinstance(value, float) and math.isnan(value)) else value
 
 
 # ── scalar ─────────────────────────────────────────────────────────────────────
@@ -133,10 +133,21 @@ def _grouped(cases):
     return groups
 
 
+def _string_dtypes():
+    dtypes = [object]
+    try:
+        import pyarrow
+        dtypes.append(pandas.ArrowDtype(pyarrow.string()))   # qlever CONSTRUCT results arrive like this
+    except ImportError:
+        pass
+    return dtypes
+
+
+@pytest.mark.parametrize("dtype", _string_dtypes(), ids=str)
 @pytest.mark.parametrize("name", sorted(_grouped(CASES)))
-def test_pandas_matches_scalar(name):
+def test_pandas_matches_scalar(name, dtype):
     inputs = [text for text, _ in _grouped(CASES)[name] if not (name.startswith("expand") and text is None)]
-    got = getattr(iri_pandas, name)(pandas.Series(inputs, dtype=object))
+    got = getattr(iri_pandas, name)(pandas.Series(inputs, dtype=dtype))
     assert [_norm(v) for v in got.tolist()] == [getattr(iri, name)(text) for text in inputs]
 
 

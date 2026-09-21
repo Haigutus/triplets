@@ -18,7 +18,7 @@ pytest.importorskip("triplets.sparql._qlever", reason="qlever extension not buil
 import pandas
 import triplets
 from triplets.sparql import _qlever
-from triplets.export.nquads_utils import CIM_NS
+from triplets.iri import CIM_NS
 
 from _parity import SVEDALA_DIR
 
