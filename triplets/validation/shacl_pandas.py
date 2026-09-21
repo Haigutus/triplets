@@ -44,7 +44,7 @@ import numpy
 import pandas
 
 from ..export.nquads_utils import make_subject
-from ..iri import iri_pandas, local_term
+from ..iri import REFERENCE_LIKE, SchemaTerms, iri_pandas, local_term
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -76,33 +76,10 @@ DATATYPES = {
     # string / anyURI / unlisted types: every lexical form is valid — no check
 }
 
-_UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-_REFERENCE_LIKE = re.compile(rf"(?:{_UUID}|\w+://\S+|urn:\S+|[A-Za-z]\w*\.\w+)$")
-
 _NO_IDS = numpy.array([], dtype=object)
 
 
-class SchemaKind:
-    """Schema-driven term-kind decision, shared by the vectorized engines' contexts.
-
-    Mirrors the N-Quads exporter's classification (triplets.iri.SchemaTerms): a key
-    with a schema datatype (incl. xsd:string) holds literals; an enumeration
-    key holds IRIs; anyURI/unknown keys return None (decide by value form).
-    Without rdf_map everything is None.
-    """
-
-    rdf_map = None
-    _key_metadata = None
-
-    def key_kind(self, key):
-        """"literal" / "iri" / None — what the export schema says values at *key* are."""
-        if self.rdf_map is None:
-            return None
-        from ..iri import SchemaTerms
-        return SchemaTerms.from_rdf_map(self.rdf_map).key_kind(key)
-
-
-class _Context(SchemaKind):
+class _Context:
     """Shared per-validation state: data and memoized lookups.
 
     Hundreds of IR rules hit the same per-class indices — build them once here
@@ -112,6 +89,7 @@ class _Context(SchemaKind):
     def __init__(self, data, rdf_map=None):
         self.data = data
         self.rdf_map = rdf_map
+        self.terms = SchemaTerms.from_rdf_map(rdf_map)   # key_kind: schema-driven literal/IRI decision
         self._by_key = None
         self._class_ids = None
         self._all_ids = None
@@ -348,12 +326,12 @@ def _node_kind(context, rule):
 
     rows = context.path_rows(rule)
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else context.key_kind(rule.path)
+    kind = "iri" if getattr(rule, "via_type", False) else context.terms.key_kind(rule.path)
     if kind is not None:
         is_iri = pandas.Series(kind == "iri", index=rows.index)
     else:
         values = rows["PATH_VALUE"].astype(str)
-        is_iri = values.str.fullmatch(_REFERENCE_LIKE) | values.isin(context.all_ids)
+        is_iri = values.str.fullmatch(REFERENCE_LIKE) | values.isin(context.all_ids)
     bad = ~is_iri if rule.params == "IRI" else is_iri
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not of node kind sh:{rule.params}")

@@ -28,20 +28,21 @@ import polars
 
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from ..iri import iri_polars
-from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
+from ..iri import REFERENCE_LIKE, SchemaTerms, iri_polars
+from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
 
 _COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 
 
-class _Context(SchemaKind):
+class _Context:
     """Lazy base + eagerly materialized shared indices (built once per validate)."""
 
     def __init__(self, frame, rdf_map=None):
         self.base = frame.lazy()
         self.rdf_map = rdf_map
+        self.terms = SchemaTerms.from_rdf_map(rdf_map)
         type_rows = frame.filter(polars.col("KEY") == "Type").select("VALUE", "ID")
         # (ID, CLASS) pairs — the class-membership side of the batched joins
         self.membership = type_rows.rename({"VALUE": "CLASS"}).lazy()
@@ -233,13 +234,13 @@ def _node_kind(context, rule):
         logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)", rule.params, rule.shape_id)
         return None
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else context.key_kind(rule.path)
+    kind = "iri" if getattr(rule, "via_type", False) else context.terms.key_kind(rule.path)
     if kind is not None:                     # schema decides for the whole path
         if (kind == "iri") == (rule.params == "IRI"):
             return None                      # every value conforms — no plan at all
         plan = context.path_rows(rule)       # every value violates
     else:                                    # value-form heuristic
-        is_iri = (polars.col("PATH_VALUE").str.contains(f"^(?:{_REFERENCE_LIKE.pattern})$")
+        is_iri = (polars.col("PATH_VALUE").str.contains(f"^(?:{REFERENCE_LIKE.pattern})$")
                   | polars.col("PATH_VALUE").is_in(context.all_ids))
         plan = context.path_rows(rule).filter(~is_iri if rule.params == "IRI" else is_iri)
     return _emit(plan, rule, f"value is not of node kind sh:{rule.params}")
@@ -427,7 +428,7 @@ def _batch_node_kind(context, rules):
             logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)",
                          rule.params, rule.shape_id)
             continue
-        kind = context.key_kind(rule.path)
+        kind = context.terms.key_kind(rule.path)
         if kind is not None:                 # schema decides for the whole path
             if (kind == "iri") == (rule.params == "IRI"):
                 continue                     # every value conforms — no plan at all
@@ -442,7 +443,7 @@ def _batch_node_kind(context, rules):
         group = [rule for rule in heuristic if rule.params == expected]
         if not group:
             continue
-        is_iri = (polars.col("VALUE").str.contains(f"^(?:{_REFERENCE_LIKE.pattern})$")
+        is_iri = (polars.col("VALUE").str.contains(f"^(?:{REFERENCE_LIKE.pattern})$")
                   | polars.col("VALUE").is_in(context.all_ids))
         plan = (_batch_path_rows(context, _rules_frame(group, message))
                 .filter(~is_iri if expected == "IRI" else is_iri))
