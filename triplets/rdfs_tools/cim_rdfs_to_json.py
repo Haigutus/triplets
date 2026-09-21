@@ -38,7 +38,7 @@ cgmes_data_types_map = {
  'ApparentPower': 'xsd:float',
  'Seconds': 'xsd:float',
  'Inductance': 'xsd:float',
- 'Money': 'xsd:float',
+ 'Money': 'xsd:decimal',
  'MonthDay': 'xsd:integer',
  'VoltagePerReactivePower': 'xsd:float',
  'Capacitance': 'xsd:float',
