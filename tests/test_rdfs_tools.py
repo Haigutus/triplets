@@ -175,3 +175,24 @@ class TestOrphanedAttributes:
         assert profile["title"].get("dataType") == "String"     # with its datatype preserved
         assert "title" not in profile["Dataset"]["parameters"]  # but no class references it
         assert any("no class binding" in r.getMessage() for r in caplog.records)
+
+
+EQ_RDFS2020 = Path("rdfs/ENTSOE_CGMES_3.0.0/61970-600-2_Equipment-AP-Voc-RDFS2020_v3-0-0.rdf")
+EQ_ED2 = (Path(__file__).resolve().parents[2]
+          / "application-profiles-library/CGMES/RDFS_Beta_501_Ed2_CD"
+          / "61970-600-2_Equipment-AP-Voc-RDFSED2a.rdf")
+
+
+def test_eq_rdfs2020_and_ed2_same_xsd_map():
+    """CGMES 3.0 EQ RDFS2020 and 501 Ed2 Voc agree on CIM→XSD after merge
+    (Ed2 has XSD on .value; RDFS2020 does not — the table fills that hole)."""
+    from triplets.rdfs_tools.cim_rdfs_to_json import cgmes_data_types_map, xsd_types_from_rdfs
+    if not EQ_RDFS2020.exists():
+        pytest.skip("CGMES 3.0 EQ RDFS not available")
+    if not EQ_ED2.exists():
+        pytest.skip("501 Ed2 EQ Voc not available (application-profiles-library checkout)")
+    old_data = rdfs_tools.load_all_to_dataframe(str(EQ_RDFS2020))
+    new_data = rdfs_tools.load_all_to_dataframe(str(EQ_ED2))
+    old = {**cgmes_data_types_map, **xsd_types_from_rdfs(old_data)}
+    new = {**cgmes_data_types_map, **xsd_types_from_rdfs(new_data)}
+    assert old.items() <= new.items()

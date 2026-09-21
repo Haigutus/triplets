@@ -15,6 +15,15 @@ Start of the 0.3 line.
   DatasetMetadata header attributes bind again via `schema:domainIncludes`
   ([#99](https://github.com/entsoe/application-profiles-library/pull/99) / [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
 
+### Changed
+- **Export-schema `xsd:type` is filled from the RDFS when present.**
+  `cim_rdfs_to_json` starts from `cgmes_data_types_map` and overlays XSD
+  ranges found on CIMDatatype `.value` (IEC 61970-501 Ed2). RDFS2020
+  Primitives have no XSD, so the table still fills those. `Money` is
+  `xsd:decimal` (was `xsd:float`; matches 501 Ed2 `Money.value`). Unknown
+  types omit the `xsd:type` key instead of writing `""`. Bundles regenerate
+  on the next `cim_rdfs_to_json` run.
+
 ### Fixed
 - **Exclude pandas 2.3.3**: `pivot()` on ArrowDtype dictionary columns still
   crashes with `'Series' object has no attribute '_pa_array'` (same bug as
