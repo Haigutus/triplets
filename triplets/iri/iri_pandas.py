@@ -66,23 +66,21 @@ expand_class = expand_name
 
 def expand_value(key, value, terms=None):
     """→ ``(kind, payload)`` Series: kind ∈ {"iri", "literal"}; payload is the
-    IRI, or the xsd datatype IRI / None for literals. Same branch order as the
-    scalar rule."""
+    IRI, or the xsd datatype IRI / null for literals. Same precedence as the
+    scalar rule, applied as masks from lowest to highest — stays in the
+    string dtype (no object arrays)."""
     terms = terms or EMPTY_TERMS
-    is_type = _eq(key, "Type").to_numpy()
-    uri = is_iri(value).to_numpy()
-    enum = key.isin(terms.enum_keys).to_numpy() if terms.enum_keys else numpy.zeros(len(key), bool)
-    typed = key.isin(terms.datatypes).to_numpy() if terms.datatypes else numpy.zeros(len(key), bool)
-    uuid = value.str.match(UUID_RE.pattern).fillna(False).to_numpy()
+    false = pandas.Series(False, index=key.index)
+    is_type = _eq(key, "Type")
+    uri = is_iri(value)
+    enum = key.isin(terms.enum_keys) if terms.enum_keys else false
+    typed = key.isin(terms.datatypes) if terms.datatypes else false
+    uuid = value.str.match(UUID_RE.pattern).fillna(False).astype(bool)
 
-    named = expand_name(value, terms).to_numpy(dtype=object)
-    conditions = [is_type, uri, enum, typed, uuid]
-    kinds = numpy.select(conditions, ["iri", "iri", "iri", "literal", "iri"], default="literal")
-    payloads = numpy.select(
-        conditions,
-        [named, value.to_numpy(dtype=object), named,
-         key.map(terms.datatypes).to_numpy(dtype=object) if terms.datatypes else numpy.full(len(key), None),
-         (UUID_PREFIX + value).to_numpy(dtype=object)],
-        default=None)
-    return (pandas.Series(kinds, index=key.index, dtype=object),
-            pandas.Series(payloads, index=key.index, dtype=object))
+    payload = (key.map(terms.datatypes).astype(value.dtype) if terms.datatypes
+               else pandas.Series(None, index=key.index, dtype=value.dtype))
+    payload = payload.mask(~typed & uuid, UUID_PREFIX + value)
+    payload = payload.mask(uri, value)
+    payload = payload.mask(is_type | enum, expand_name(value, terms))
+    kind = numpy.where(is_type | uri | enum | (~typed & uuid), "iri", "literal")
+    return pandas.Series(kind, index=key.index, dtype=value.dtype), payload

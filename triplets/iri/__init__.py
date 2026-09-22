@@ -75,7 +75,11 @@ def local_id(text):
     """``urn:uuid:x`` / ``#_x`` / ``_x`` → ``x``. One prefix, longest first. None → None."""
     if text is None:
         return None
-    return ID_PREFIX_RE.sub("", str(text), count=1)
+    text = str(text)
+    for prefix in ID_PREFIXES:          # a startswith loop beats ID_PREFIX_RE.sub per call
+        if text.startswith(prefix):
+            return text[len(prefix):]
+    return text
 
 
 def local_value(text):

@@ -28,18 +28,22 @@ def _quads(data, terms):
     kind, payload = iri_polars.expand_value("KEY", "VALUE", terms)
     subject = pl.format("<{}>", iri_polars.expand_id("ID"))
     predicate = pl.format("<{}>", iri_polars.expand_key("KEY", terms))
-    objects = (pl.when(kind == "iri").then(pl.format("<{}>", payload))
-               .when(payload.is_not_null()).then(pl.format('"{}"^^<{}>', escaped, payload))
+    objects = (pl.when(pl.col("_kind") == "iri").then(pl.format("<{}>", pl.col("_payload")))
+               .when(pl.col("_payload").is_not_null())
+               .then(pl.format('"{}"^^<{}>', escaped, pl.col("_payload")))
                .otherwise(plain_literal))
     graph = pl.format("<{}>", iri_polars.expand_id("INSTANCE_ID"))
 
     # one lazy plan: stringify (KEY/INSTANCE_ID may be Categorical), filter
-    # null VALUE rows, build the four quad terms + the "." terminator as
-    # separate columns, collect once. The aliases are required (not cosmetic):
-    # several terms auto-name to "literal" and collide in select otherwise.
+    # null VALUE rows, materialize the value classification once (its
+    # conditions would otherwise be re-evaluated per when-branch), build the
+    # four quad terms + the "." terminator as separate columns, collect once.
+    # The aliases are required (not cosmetic): several terms auto-name to
+    # "literal" and collide in select otherwise.
     return (data.lazy()
             .with_columns(pl.col("ID", "KEY", "VALUE", "INSTANCE_ID").cast(pl.Utf8))
             .filter(pl.col("VALUE").is_not_null())
+            .with_columns(kind.alias("_kind"), payload.alias("_payload"))
             .select(subject.alias("s"), predicate.alias("p"), objects.alias("o"),
                     graph.alias("g"), pl.lit(".").alias("end"))
             .collect())
