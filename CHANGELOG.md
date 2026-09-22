@@ -34,6 +34,13 @@ Start of the 0.3 line.
   (cached per schema content). `make_predicate` / `make_object` take a
   `SchemaTerms` instead of the three dicts. The pandas N-Quads exporter is
   vectorized (no per-row `apply`).
+- **Performance** (RealGrid, 1.15M rows): `read_nquads` 12.2 s → 2.9 s (line
+  splitting and graph detection in Arrow compute, slice-based term unwrap;
+  columns come back arrow-backed), pandas `export_to_nquads` 3.9 s → 2.2 s
+  (mask-chain classification, lines joined in Arrow), polars export unchanged
+  at 0.6 s. Regex replaces stay in the flavors — measured 2-8x faster than
+  split/list ops in pandas and 1.5-2x in polars; the scalar `local_id` uses a
+  prefix loop (faster per call for the python parsers).
 - `read_nquads` / CONSTRUCT decoding shorten per column: `ID` / `INSTANCE_ID`
   via `local_id`, `KEY` via `local_key`, `VALUE` via `local_value` — a
   URI-shaped `INSTANCE_ID` now survives the round trip.
