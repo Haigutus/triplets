@@ -100,6 +100,7 @@ VALUE_CASES = [
     ("Model.DependentOn", "urn:uuid:" + UUID, TERMS, "iri", "urn:uuid:" + UUID),
     ("X.y", "https://example.org/thing", None, "iri", "https://example.org/thing"),
     ("X.y", "plain text", None, "literal", None),
+    ("X.y", None, None, "literal", None),                             # null in → literal/null out, as the flavors do
 ]
 
 
@@ -162,7 +163,7 @@ def test_pandas_expand_name_matches_scalar(name):
 def test_pandas_expand_value_matches_scalar():
     for terms in (TERMS, None):
         rows = [(k, v) for k, v, t, _, _ in VALUE_CASES if t is terms]
-        keys = pandas.Series([k for k, _ in rows], dtype=object)
+        keys = pandas.Series([k for k, _ in rows], dtype=object)   # includes a None VALUE row
         values = pandas.Series([v for _, v in rows], dtype=object)
         kinds, payloads = iri_pandas.expand_value(keys, values, terms)
         expected = [iri.expand_value(k, v, terms) for k, v in rows]

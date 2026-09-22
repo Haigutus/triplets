@@ -235,6 +235,8 @@ def expand_value(key, value, terms=None):
     Quoting and escaping belong to the serializer, not here.
     """
     terms = terms or EMPTY_TERMS
+    if value is None:                    # no term — same answer as the flavors' null rows
+        return "literal", None
     if key == "Type":
         return "iri", expand_name(value, terms)
     if is_iri(value):

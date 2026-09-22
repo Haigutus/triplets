@@ -106,7 +106,7 @@ def terms_to_triplets(frame):
     frame["ID"] = iri_pandas.local_id(_term(frame["ID"]))
     frame["KEY"] = iri_pandas.local_key(_term(frame["KEY"]))
     value = frame["VALUE"]
-    quoted = value.str.startswith('"').fillna(False).astype(bool)
+    quoted = value.str.startswith('"', na=False).astype(bool)
     # drop a ^^<datatype> / @lang suffix, then slice the quotes off — cheaper
     # than one back-reference regex over the whole literal
     unquoted = _unescape(value.str.replace(r'"(\^\^<[^>]*>|@[\w-]+)?$', '"', regex=True).str.slice(1, -1))
@@ -123,13 +123,13 @@ def _term(column):
 
     Slice + mask, not ``^<(.*)>$`` → ``\1``: the back-reference regex is ~7x
     slower on arrow-backed strings."""
-    wrapped = (column.str.startswith("<") & column.str.endswith(">")).fillna(False).astype(bool)
+    wrapped = (column.str.startswith("<", na=False) & column.str.endswith(">", na=False)).astype(bool)
     return column.str.slice(1, -1).where(wrapped, column).str.removeprefix("_:")
 
 
 def _unescape(column):
     """Decode N-Triples string escapes — only rows that carry a backslash."""
-    escaped = column.str.contains("\\", regex=False).fillna(False)
+    escaped = column.str.contains("\\", regex=False, na=False)
     if not escaped.any():
         return column
     column = column.copy()

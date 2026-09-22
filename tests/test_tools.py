@@ -742,6 +742,27 @@ class TestNquadsSchemaIRIs:
         assert set(back.loc[back["KEY"] == "ControlArea.type", "VALUE"]) == {"ControlAreaTypeKind.Interchange"}
 
 
+class TestNquadsNullGraph:
+    """A null INSTANCE_ID writes an N-Triples line (no graph term) from both writers,
+    and reads back as INSTANCE_ID None."""
+
+    ROWS = [("a", "Type", "Breaker", None), ("a", "IdentifiedObject.name", "x", None),
+            ("b", "Type", "Breaker", "inst")]
+
+    def test_pandas_and_polars_agree(self):
+        polars = pytest.importorskip("polars")
+        frame = pandas.DataFrame(self.ROWS, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+        pandas_lines = triplets.export.export_to_nquads(frame, export_to_memory=True).getvalue().decode().splitlines()
+        polars_lines = triplets.export.export_to_nquads(polars.from_pandas(frame), export_to_memory=True).getvalue().decode().splitlines()
+        assert sorted(pandas_lines) == sorted(polars_lines)
+        assert all("  " not in line for line in pandas_lines)
+        assert pandas_lines[0].endswith("<http://iec.ch/TC57/CIM100#Breaker> .")
+        assert pandas_lines[2].endswith("<urn:uuid:inst> .")
+        back = triplets.parser.nquads.read_nquads("\n".join(pandas_lines))
+        assert back["INSTANCE_ID"].tolist()[:2] == [None, None] or back["INSTANCE_ID"].isna().tolist()[:2] == [True, True]
+        assert back["INSTANCE_ID"].tolist()[2] == "inst"
+
+
 class TestExportToNetworkx:
     def test_returns_graph(self, svedala_eq):
         networkx = pytest.importorskip("networkx")

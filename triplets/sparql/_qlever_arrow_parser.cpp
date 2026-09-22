@@ -108,7 +108,7 @@ class RangeConverter {
       info.predicate = iriComponent(RDF_TYPE);
       info.rule = ObjectRule::Type;
     } else {
-      if (key.starts_with("http://") || key.starts_with("https://")) {
+      if (isUri(key)) {   // mirror of triplets.iri.expand_key: absolute IRIs pass through
         info.predicate = iriComponent(key);
       } else {
         auto ns = mapping_.keyNamespaces.find(std::string{key});

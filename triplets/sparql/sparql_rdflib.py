@@ -60,9 +60,10 @@ def _select_to_dataframe(result):
 def _graph_to_triplets(graph):
     """CONSTRUCT/DESCRIBE result graph → triplet DataFrame (ID/KEY/VALUE).
 
-    Inverse of the N-Quads export conventions: strips urn:uuid: from subjects,
-    CIM namespace from predicates, maps rdf:type → 'Type'. INSTANCE_ID is empty
-    (a constructed graph has no source instance).
+    Inverse of the N-Quads export conventions (triplets.iri): local_id on
+    subjects, local_key on predicates (rdf:type → 'Type'), local_value on
+    IRI objects, literals verbatim. INSTANCE_ID is None (a constructed graph
+    has no source instance).
 
     Measured: serialize(format="nt") + read_nquads loses to this loop (~9%
     slower per 84k triples — rdflib's NT serializer overhead exceeds the

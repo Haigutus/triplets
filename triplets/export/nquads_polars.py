@@ -32,12 +32,15 @@ def _quads(data, terms):
                .when(pl.col("_payload").is_not_null())
                .then(pl.format('"{}"^^<{}>', escaped, pl.col("_payload")))
                .otherwise(plain_literal))
-    graph = pl.format("<{}>", iri_polars.expand_id("INSTANCE_ID"))
+    # a null INSTANCE_ID writes no graph term (an N-Triples line), same as the pandas writer
+    graph = (pl.when(pl.col("INSTANCE_ID").is_null()).then(pl.lit("."))
+             .otherwise(pl.format("<{}> .", iri_polars.expand_id("INSTANCE_ID"))))
 
     # one lazy plan: stringify (KEY/INSTANCE_ID may be Categorical), filter
     # null VALUE rows, materialize the value classification once (its
     # conditions would otherwise be re-evaluated per when-branch), build the
-    # four quad terms + the "." terminator as separate columns, collect once.
+    # four quad terms (the graph column carries the "." terminator) as
+    # separate columns, collect once.
     # The aliases are required (not cosmetic): several terms auto-name to
     # "literal" and collide in select otherwise.
     return (data.lazy()
@@ -45,7 +48,7 @@ def _quads(data, terms):
             .filter(pl.col("VALUE").is_not_null())
             .with_columns(kind.alias("_kind"), payload.alias("_payload"))
             .select(subject.alias("s"), predicate.alias("p"), objects.alias("o"),
-                    graph.alias("g"), pl.lit(".").alias("end"))
+                    graph.alias("g"))
             .collect())
 
 

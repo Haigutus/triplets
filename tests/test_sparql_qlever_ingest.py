@@ -48,8 +48,9 @@ def torture_frame():
         ("http://example.com/thing", "Type", "http://example.com/Class", INSTANCE_2),
         (UUID_B, "Type", f"{CIM_NS}Terminal", INSTANCE_1),                  # http class as-is
         ("urn:example:id1", "Type", "urn:example:Class", INSTANCE_1),       # urn passthrough
-        # P2: full-URI KEY
+        # P2: full-URI KEY (http and urn pass through, like iri.expand_key)
         (UUID_A, "http://example.com/ns#pred", "plain", INSTANCE_1),
+        (UUID_A, "urn:example:pred", "plain", INSTANCE_1),
         # P3 + schema namespace
         (UUID_A, "Test.other", "otherval", INSTANCE_1),
         # O3: URI VALUE under unmapped KEY

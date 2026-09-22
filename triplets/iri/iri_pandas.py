@@ -1,7 +1,8 @@
 """pandas flavor of :mod:`triplets.iri` — Series in, Series out, same names.
 
 Nulls propagate (None/NaN in → None/NaN out) except where a rule needs a
-boolean, which treats null as "no".
+boolean, which treats null as "no" (``na=False``, never ``fillna`` — that
+downcast is deprecated on object columns).
 """
 import numpy
 import pandas
@@ -15,7 +16,7 @@ from . import (EMPTY_TERMS, HTTP_FRAGMENT_RE, ID_PREFIX_RE, RDF_TYPE, TERM_PREFI
 
 def _eq(series, value):
     """Null-safe equality: arrow-backed strings compare to <NA>, which mask() reads as True."""
-    return (series == value).fillna(False).astype(bool)
+    return (series == value).where(series.notna(), False).astype(bool)
 
 
 def _fragment_after_hash(series):
@@ -39,7 +40,7 @@ def local_term(series):
 
 
 def is_iri(series):
-    return series.str.match(URI_PREFIX_RE.pattern).fillna(False).astype(bool)
+    return series.str.match(URI_PREFIX_RE.pattern, na=False).astype(bool)
 
 
 def expand_id(series):
@@ -75,7 +76,7 @@ def expand_value(key, value, terms=None):
     uri = is_iri(value)
     enum = key.isin(terms.enum_keys) if terms.enum_keys else false
     typed = key.isin(terms.datatypes) if terms.datatypes else false
-    uuid = value.str.match(UUID_RE.pattern).fillna(False).astype(bool)
+    uuid = value.str.match(UUID_RE.pattern, na=False).astype(bool)
 
     payload = (key.map(terms.datatypes).astype(value.dtype) if terms.datatypes
                else pandas.Series(None, index=key.index, dtype=value.dtype))

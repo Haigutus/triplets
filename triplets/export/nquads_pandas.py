@@ -38,7 +38,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     ids = data["ID"].astype(str)
     keys = data["KEY"].astype(str)
     values = data["VALUE"].astype(str)
-    instances = data["INSTANCE_ID"].astype(str)
+    instances = data["INSTANCE_ID"].astype(str).where(data["INSTANCE_ID"].notna(), None)
 
     kind, payload = iri_pandas.expand_value(keys, values, terms)
     is_iri = (kind == "iri").to_numpy()
@@ -47,10 +47,11 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     objects[typed] = objects[typed] + "^^<" + payload[typed] + ">"
     objects[is_iri] = "<" + payload[is_iri] + ">"
 
+    graphs = ("<" + iri_pandas.expand_id(instances) + ">").where(instances.notna(), ".")
     content = _lines("<" + iri_pandas.expand_id(ids) + ">",
                      "<" + iri_pandas.expand_key(keys, terms) + ">",
                      objects,
-                     "<" + iri_pandas.expand_id(instances) + ">")
+                     graphs)
 
     if export_to_memory:
         buffer = BytesIO(content)
@@ -61,13 +62,16 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
         f.write(content)
 
 
-def _lines(*columns):
+def _lines(subjects, predicates, objects, graphs):
     """Term columns → ``s p o g .\n`` lines as UTF-8 bytes, joined in Arrow
-    (one C++ pass; ~4x faster than str concat + ``"\n".join``)."""
-    arrays = [pyarrow.array(column, type=pyarrow.string()) for column in columns]
+    (one C++ pass; ~4x faster than str concat + ``"\n".join``). A row with no
+    graph carries ``.`` in *graphs* and comes out as an N-Triples line."""
+    arrays = [pyarrow.array(column, type=pyarrow.string()) for column in (subjects, predicates, objects, graphs)]
     arrays = [array.combine_chunks() if isinstance(array, pyarrow.ChunkedArray) else array
               for array in arrays]
-    quads = pyarrow.compute.binary_join_element_wise(*arrays, ".", " ")
+    quads = pyarrow.compute.binary_join_element_wise(*arrays, " ")
+    quads = pyarrow.compute.if_else(pyarrow.compute.ends_with(quads, " ."), quads,
+                                    pyarrow.compute.binary_join_element_wise(quads, ".", " "))
     offsets = pyarrow.array([0, len(quads)], type=pyarrow.int32())
     joined = pyarrow.compute.binary_join(pyarrow.ListArray.from_arrays(offsets, quads), "\n")
     return joined[0].as_buffer().to_pybytes() + b"\n"
