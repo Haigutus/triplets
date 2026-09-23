@@ -43,8 +43,8 @@ from types import SimpleNamespace
 import numpy
 import pandas
 
-from ..export.nquads_utils import CIM_NS, make_subject
-from .shacl_ir import _local
+from ..export.nquads_utils import make_subject
+from ..iri import REFERENCE_LIKE, SchemaTerms, iri_pandas, local_term
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -76,40 +76,10 @@ DATATYPES = {
     # string / anyURI / unlisted types: every lexical form is valid — no check
 }
 
-_UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-_REFERENCE_LIKE = re.compile(rf"(?:{_UUID}|\w+://\S+|urn:\S+|[A-Za-z]\w*\.\w+)$")
-
 _NO_IDS = numpy.array([], dtype=object)
 
 
-class SchemaKind:
-    """Schema-driven term-kind decision, shared by the vectorized engines' contexts.
-
-    Mirrors the N-Quads exporter's classification (build_key_metadata): a key
-    with a schema datatype (incl. xsd:string) holds literals; an enumeration
-    key holds IRIs; anyURI/unknown keys return None (decide by value form).
-    Without rdf_map everything is None.
-    """
-
-    rdf_map = None
-    _key_metadata = None
-
-    def key_kind(self, key):
-        """"literal" / "iri" / None — what the export schema says values at *key* are."""
-        if self.rdf_map is None:
-            return None
-        if self._key_metadata is None:
-            from ..export.nquads_utils import build_key_metadata
-            self._key_metadata = build_key_metadata(self.rdf_map)
-        enum_keys, _namespaces, key_datatypes = self._key_metadata
-        if key in enum_keys:
-            return "iri"
-        if key in key_datatypes:
-            return "literal"
-        return None
-
-
-class _Context(SchemaKind):
+class _Context:
     """Shared per-validation state: data and memoized lookups.
 
     Hundreds of IR rules hit the same per-class indices — build them once here
@@ -119,6 +89,7 @@ class _Context(SchemaKind):
     def __init__(self, data, rdf_map=None):
         self.data = data
         self.rdf_map = rdf_map
+        self.terms = SchemaTerms.from_rdf_map(rdf_map)   # key_kind: schema-driven literal/IRI decision
         self._by_key = None
         self._class_ids = None
         self._all_ids = None
@@ -310,7 +281,7 @@ def _range(comparison, description):
 def _in(context, rule):
     rows = context.path_rows(rule)
     allowed = {str(value) for value in rule.params}
-    local = rows["PATH_VALUE"].astype(str).str.split("#").str[-1].str.split("/").str[-1]
+    local = iri_pandas.local_term(rows["PATH_VALUE"].astype(str))
     bad = ~local.isin(allowed)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not one of {sorted(allowed)}")
@@ -355,12 +326,12 @@ def _node_kind(context, rule):
 
     rows = context.path_rows(rule)
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else context.key_kind(rule.path)
+    kind = "iri" if getattr(rule, "via_type", False) else context.terms.key_kind(rule.path)
     if kind is not None:
         is_iri = pandas.Series(kind == "iri", index=rows.index)
     else:
         values = rows["PATH_VALUE"].astype(str)
-        is_iri = values.str.fullmatch(_REFERENCE_LIKE) | values.isin(context.all_ids)
+        is_iri = values.str.fullmatch(REFERENCE_LIKE) | values.isin(context.all_ids)
     bad = ~is_iri if rule.params == "IRI" else is_iri
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not of node kind sh:{rule.params}")
@@ -436,10 +407,15 @@ def _sparql_violations(rule, result):
     result = result[result["this"].notna()]   # a row without a focus node is no violation
     if len(result) == 0:                      # (rdflib serializes a spurious empty binding
         return _empty()                       #  for some aggregate queries)
-    focus = result["this"].astype(str).str.removeprefix("urn:uuid:")
-    values = (result["value"].astype(str).str.removeprefix("urn:uuid:").str.removeprefix(CIM_NS)
-              if "value" in result.columns else None)
+    focus = _shorten(result["this"].astype(str), iri_pandas.local_id)
+    values = _shorten(result["value"].astype(str), iri_pandas.local_value) if "value" in result.columns else None
     return _frame(rule, focus, values, "sparql constraint violated")
+
+
+def _shorten(terms, rule):
+    """SPARQL result terms → triplet form: IRIs shortened by *rule*, literals verbatim
+    (a literal ``_name`` or a blank node ``_:b0`` must not lose its ``_``)."""
+    return rule(terms).where(iri_pandas.is_iri(terms), terms)
 
 
 def _sparql(context, rule):
@@ -499,7 +475,7 @@ def _not_evaluated(rule, error):
     its target/path (anonymous property shapes only have a blank-node id),
     say plainly that nothing was checked — a shapes bug, not a data finding."""
     where = f"{rule.target_class}/{rule.path}" if rule.path else rule.target_class
-    return (f"sh:sparql constraint of shape {_local(str(rule.shape_id))} ({where}) was "
+    return (f"sh:sparql constraint of shape {local_term(str(rule.shape_id))} ({where}) was "
             f"NOT evaluated — the query is defective on every engine "
             f"(rdflib: {str(error).splitlines()[0]}). "
             f"A shapes bug, not a data finding; this constraint went unchecked.")

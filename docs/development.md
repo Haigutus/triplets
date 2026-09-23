@@ -57,6 +57,38 @@ constraints still apply regardless of overrides (cimxml `datatypes=True`
 requires python_lxml; validation keeps duckdb out of auto because it is the
 explicit larger-than-memory choice).
 
+## IRI contract (`triplets.iri`)
+
+Short triplet names ↔ absolute IRIs is defined once, in `triplets/iri/`. Never
+split on `#`, strip `urn:uuid:` or prepend `CIM100#` at a call site — pick the
+function for the column:
+
+| column / context | local | absolute |
+|---|---|---|
+| `ID`, `INSTANCE_ID`, focus node, graph | `local_id` | `absolute_id` |
+| `KEY` | `local_key` (`rdf:type` → `Type`, else `#frag` only) | `absolute_key` |
+| `VALUE` (Type, reference, enum) | `local_value` (`local_id`, then `#frag`; never `/`) | `absolute_value` → `(kind, payload)` |
+| SHACL / RDFS vocabulary, `sh:in`, SARIF, `schema_ir` | `local_term` (`#` then `/`) | not instance data |
+
+- `SchemaTerms.from_rdf_map(rdf_map)` is the cached absolute-side table (one
+  `namespaces` dict for every schema entry, `enum_keys`, `datatypes`).
+  `absolute_name` covers classes, enum values and keys alike; a name absent from
+  the schema (CIM abstracts) gets `default_ns` (CIM100).
+- Flavors: `iri_pandas` (Series in/out), `iri_polars` (Expr in/out, no UDFs),
+  `iri_duckdb` (SQL text in/out) carry the same names.
+  `__init__` imports only the standard library — the parser imports it per file.
+- Native mirrors (cython parser `clean_id`/`clean_ref_value`, qlever C++
+  `isUri`/`isUuid`/`namespaceFor`) are commented as such and checked by the
+  parse / ingest parity tests. Vectorized patterns derive from the constants
+  (`ID_PREFIX_RE`, `URI_PREFIXES` / `URI_PREFIX_RE`, `UUID_RE.pattern`), so a prefix change
+  cannot miss a flavor.
+- `UUID_RE` (strict lowercase, export rule) and `REFERENCE_LIKE` (loose
+  nodeKind heuristic) are different contracts on purpose.
+- CIM XML export is *not* on `absolute_id`: `rdf:about` / `rdf:resource` prefixes
+  are the per-class schema `value_prefix`, and enum namespaces come from the
+  resolved instance profile map (both CIM XML engines agree); only the
+  `rdf:datatype` annotation uses `SchemaTerms.datatypes`.
+
 ## Flavor conversion
 
 Triplet data arrives as pandas, polars, pyarrow, or a DuckDB connection. Convert

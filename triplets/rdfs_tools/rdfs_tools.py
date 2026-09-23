@@ -1,4 +1,5 @@
 from triplets.parser import parse
+from triplets.iri import iri_pandas
 import pandas
 import os
 
@@ -34,7 +35,7 @@ def get_profile_metadata(data):
     profile_domain = base_uml["ID"].to_list()[0].split(".")[0]
     profile_metadata = data[data.ID.str.contains(profile_domain)].query("KEY == 'isFixed'").copy(deep=True)
 
-    profile_metadata["ID"] = profile_metadata.ID.str.split("#", expand=True)[1].str.split(".", expand=True)[1]
+    profile_metadata["ID"] = iri_pandas.local_term(profile_metadata.ID).str.split(".", expand=True)[1]
 
     return profile_metadata.set_index("ID")["VALUE"]
 
@@ -267,7 +268,7 @@ fullmodel_conf = { "FullModel": {
 
 def get_used_relations(data):
     relations = data.query("KEY == 'AssociationUsed' and VALUE == 'Yes'").rename(columns={"ID": "RELATION_NAME"})
-    return relations.RELATION_NAME.str.split("#").str[-1]
+    return iri_pandas.local_term(relations.RELATION_NAME)
 
 def dangling_references(data, relation_names):
     references = data.merge(relation_names, left_on="KEY", right_on="RELATION_NAME")

@@ -17,8 +17,9 @@ from lxml import etree
 
 from .utils import (
     RDF_NS, RDF_ID, RDF_ABOUT, RDF_NODEID, RDF_RESOURCE,
-    clean_ID, _split_prefixed_name,
+    _split_prefixed_name,
 )
+from ..iri import local_id, local_value
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
     # RDF objects
     for rdf_object in root.iterchildren():
         attribs = rdf_object.attrib
-        obj_id = clean_ID(
+        obj_id = local_id(
             attribs.get(RDF_ID)
             or attribs.get(RDF_ABOUT)
             or attribs.get(RDF_NODEID)
@@ -87,13 +88,11 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
             key = _split_prefixed_name(element.tag)
             value = element.text
             if value is None and element.attrib:
-                value = clean_ID(
+                value = (local_value if shorten_resources else local_id)(
                     element.attrib.get(RDF_RESOURCE)
                     or element.attrib.get(RDF_NODEID)
                     or ""
                 )
-                if shorten_resources and value and value.startswith("http"):
-                    value = value.split("#")[-1] if "#" in value else value
             # Use empty string instead of None for parity with arrow engines
             if value is None:
                 value = ""

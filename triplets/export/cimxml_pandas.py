@@ -11,11 +11,11 @@ from lxml import etree
 from lxml.builder import ElementMaker
 from lxml.etree import QName
 
-from .cimxml_utils import TRIPLETS_NS, load_rdf_map, resolve_instance_config
+from ..iri import RDF_NS, TRIPLETS_NS, UUID_PREFIX, SchemaTerms
+from .cimxml_utils import load_rdf_map, resolve_instance_config
 
 logger = logging.getLogger(__name__)
 
-RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
 
 def _print_duration(text, start_time):
@@ -146,11 +146,8 @@ def generate_xml(instance_data,
     rdf_map = load_rdf_map(rdf_map)
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
 
-    key_datatypes = {}
-    if datatypes:
-        # same KEY → xsd URI mapping the N-Quads export uses (string → None, anyURI excluded)
-        from .nquads_utils import build_key_metadata
-        _, _, key_datatypes = build_key_metadata(rdf_map)
+    # KEY → xsd datatype IRI as the N-Quads export annotates it (string → None, anyURI excluded)
+    key_datatypes = SchemaTerms.from_rdf_map(rdf_map).datatypes if datatypes else {}
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))
@@ -165,7 +162,7 @@ def generate_xml(instance_data,
     E = ElementMaker(nsmap=namespace_map)
 
     # Create xml root element
-    RDF = E(QName(namespace_map.get("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"), "RDF"))
+    RDF = E(QName(namespace_map.get("rdf", RDF_NS), "RDF"))
 
     # Add comment
     if comment:
@@ -199,8 +196,8 @@ def generate_xml(instance_data,
 
             if export_undefined:
                 class_namespace = TRIPLETS_NS
-                id_name = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about"
-                id_value_prefix = "urn:uuid:"
+                id_name = f"{{{RDF_NS}}}about"
+                id_value_prefix = UUID_PREFIX   # undefined-class fallback; defined classes use the schema value_prefix
             else:
                 logger.debug(f"{class_name} not Exported")
                 continue
@@ -246,8 +243,7 @@ def generate_xml(instance_data,
 
                     value_prefix = attrib.get("value_prefix", "")
 
-                    # Get namespace for enumerations
-                    if not value_prefix:
+                    if not value_prefix:                     # enumeration: namespace from the resolved profile (same as the cython exporter)
                         value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace", "")
 
                     tag.attrib[_get_qname(attrib["attribute"])] = f"{value_prefix}{VALUE}"

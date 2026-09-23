@@ -15,11 +15,55 @@ Start of the 0.3 line.
   DatasetMetadata header attributes bind again via `schema:domainIncludes`
   ([#99](https://github.com/entsoe/application-profiles-library/pull/99) / [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
 
+### Changed
+- **`triplets.iri`** — one public package for the triplet ↔ IRI contract:
+  `local_id` / `local_key` / `local_value` / `local_term` (local names),
+  `absolute_id` / `absolute_name` / `absolute_key` / `absolute_value` (absolute IRIs, via a
+  cached `SchemaTerms` built from `rdf_map`), the namespace constants, and
+  `iri_pandas` / `iri_polars` / `iri_duckdb` flavors with the same names. The parsers, N-Quads
+  export/read-back, the qlever ingest bridge, SPARQL result decoding, SHACL
+  reports, SARIF and the validation engines all use it; the six private
+  local-name helpers and the duplicated `"urn:uuid:"` / namespace literals are
+  gone. `tests/test_iri.py` is the case table every flavor is held to.
+- `triplets.parser.clean_ID` → `triplets.parser.local_id` (also
+  `triplets.iri.local_id`). `rdf_parser.clean_ID` stays as a deprecation
+  wrapper. ID prefixes (`urn:uuid:`, `#_`, `_`) are stripped **once**, longest
+  first — the python engines stripped cumulatively (`urn:uuid:_x` → `x`) while
+  the cython engine stripped one (`_x`); every engine now agrees.
+- `export.nquads_utils.build_key_metadata` → `iri.SchemaTerms.from_rdf_map`
+  (cached per schema content). `make_predicate` / `make_object` take a
+  `SchemaTerms` instead of the three dicts. The pandas N-Quads exporter is
+  vectorized (no per-row `apply`).
+- **Performance** (RealGrid, 1.15M rows): `read_nquads` 12.2 s → 2.9 s (line
+  splitting and graph detection in Arrow compute, slice-based term unwrap;
+  columns come back arrow-backed), pandas `export_to_nquads` 3.9 s → 2.2 s
+  (mask-chain classification, lines joined in Arrow), polars export unchanged
+  at 0.6 s. Regex replaces stay in the flavors — measured 2-8x faster than
+  split/list ops in pandas and 1.5-2x in polars; the scalar `local_id` uses a
+  prefix loop (faster per call for the python parsers).
+- `read_nquads` / CONSTRUCT decoding shorten per column: `ID` / `INSTANCE_ID`
+  via `local_id`, `KEY` via `local_key`, `VALUE` via `local_value` — a
+  URI-shaped `INSTANCE_ID` now survives the round trip.
+- `violations_to_report_graph` / `export_to_shacl_report` accept `rdf_map`;
+  `sh:resultPath` then keeps the profile namespace instead of CIM100.
+- SPARQL / validation `scope` builds graph IRIs with `absolute_id`: a URI-shaped
+  `INSTANCE_ID` scopes correctly (was silently empty), and an `https:` one is
+  no longer prefixed with `urn:uuid:` by the N-Quads graph term.
+
 ### Fixed
 - **Exclude pandas 2.3.3**: `pivot()` on ArrowDtype dictionary columns still
   crashes with `'Series' object has no attribute '_pa_array'` (same bug as
   2.2.x, which is already excluded). Constraint is now
   `pandas>=2.0,!=2.2.*,!=2.3.3`. Fixed upstream in pandas 3.0.
+- N-Quads / SPARQL ingest expand class and enum IRIs from the schema namespace
+  when `rdf_map` is passed (`Class.namespace` / `EnumerationValue.namespace`);
+  CIM100 is only the no-schema fallback. The inverse (`read_nquads`, CONSTRUCT,
+  SHACL report) shortens any http(s) `#fragment`, not just CIM100, so CGMES 2.4
+  CIM16 round-trips to the same short names as 3.0 (#116).
+- Source builds in a conda/pixi environment: the cython extensions link
+  `libarrow_python` behind `--no-as-needed`, so the module imports instead of
+  failing with undefined `arrow::` symbols (conda toolchains default to
+  `--as-needed`; pip-wheel builds never hit this).
 
 ## [0.2.0] - 2026-08-26
 
@@ -532,6 +576,9 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   engine for plain `str` dtypes.
 - Triplet values are always strings (or null).
 - `export_to_cimxml` exports schema-defined content only by default.
+- Parse shortens http(s) `#fragment` resource values to the local name
+  (`ControlAreaTypeKind.Interchange`, not the full CIM URI). This landed in
+  0.0.13; filters that compare against the full URI no longer match.
 
 ### Deprecated
 - All `rdf_parser.py` functions now emit `DeprecationWarning` and delegate to the new

@@ -244,6 +244,19 @@ def test_sparql_path_placeholder(engine):
     assert violating(v, "sh:sparql") == {("b1", "bad")}
 
 
+def test_sparql_literal_values_keep_leading_underscore(engine):
+    """?value literals come back verbatim — only IRIs are shortened (a literal
+    ``_name`` must not lose its ``_`` to the ID prefix rule)."""
+    shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [
+            sh:path cim:IdentifiedObject.name ;
+            sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (STRSTARTS(str(?value), "_")) }' ] ;
+        ] ."""
+    rows = breaker("b1", ("IdentifiedObject.name", "_name")) + breaker("b2", ("IdentifiedObject.name", "name"))
+    v = run(rows, shape, engine)
+    assert violating(v, "sh:sparql") == {("b1", "_name")}
+
+
 def test_sparql_max_workers_matches_sequential(engine):
     import rdflib
     graph = rdflib.Graph()

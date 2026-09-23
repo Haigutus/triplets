@@ -102,7 +102,7 @@ pd.read_RDF([paths])
 ```
 triplets/parser/
 |-- __init__.py              # parse() dispatcher, get_engine(), find_all_xml re-export
-|-- utils.py                 # find_all_xml, clean_ID, _split_prefixed_name, RDF constants
+|-- utils.py                 # find_all_xml, _split_prefixed_name, RDF constants (ID/VALUE shortening: triplets.iri)
 |-- python_lxml_pandas.py    # lxml -> list of tuples -> pd.DataFrame (default)
 |-- python_lxml_arrow.py     # lxml -> Arrow StringBuilders -> pa.RecordBatch
 '-- cython_pugixml_arrow.pyx # pugixml C++ -> Arrow C++ builders -> pa.RecordBatch
@@ -131,14 +131,37 @@ table = triplets.parser.parse(path, return_type="arrow")
 data = triplets.parser.parse(path, return_type="polars")
 ```
 
+## The ID / KEY / VALUE contract
+
+Every engine produces the same *short* form; `triplets.iri` is the one
+definition of the rules (scalar functions, `iri_pandas` / `iri_polars`
+flavors, the cython engine mirrors them in C++ — all held to the case table
+in `tests/test_iri.py`).
+
+| column | shape | rule (`triplets.iri`) |
+|---|---|---|
+| `ID` | bare UUID / bare name | `local_id`: strip exactly **one** of `urn:uuid:`, `#_`, `_` (longest first) |
+| `KEY` | `Class.attr` or `Type` | element tag local name |
+| `VALUE` (Type) | `Breaker` | tag local name |
+| `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then `http(s)…#frag` → `frag` (`#` only, never `/`) |
+| `VALUE` (literal) | text verbatim | — |
+| `INSTANCE_ID` | bare UUID | fresh `uuid4()` per parsed file |
+
+The absolute form (N-Quads, SPARQL stores, SHACL reports) is the inverse,
+driven by the export schema: `absolute_id`, `absolute_key`, `absolute_value` with a
+`SchemaTerms` built from `rdf_map`; CIM100 is only the fallback when there is
+no schema or the name is not in it. `shorten_resources=False` skips only the
+`#frag` step.
+
 ## Options
 
 `parse()` / `read_RDF` accept (see `triplets/parser/__init__.py`):
 
 - `shorten_resources` (default `True`) — shorten http(s) resource values to
-  their `#fragment` (CIM instance-data convention). `False` keeps lossless
-  full URIs (e.g. for RDFS schema parsing); **not supported by the
-  `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
+  their `#fragment` (CIM instance-data convention). Enumerations are stored as
+  `ControlAreaTypeKind.Interchange`; a filter on the full CIM URI will not match.
+  `False` keeps lossless full URIs (e.g. for RDFS schema parsing); **not supported
+  by the `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
 - `categorical_columns` (default `("INSTANCE_ID", "KEY")`) — columns to
   dictionary-encode (Arrow) / categorize (pandas) for memory savings; `None`
   disables.

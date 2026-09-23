@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._caches import register_cache
+from ..iri import SH_NS, local_term
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +79,10 @@ def _shape_stats(graph, ir):
     these only for vectorized runs)."""
     import rdflib
 
-    SH = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    SH = rdflib.Namespace(SH_NS)
     skipped = set()
     for term in (SH.targetNode, SH.targetObjectsOf, SH.target, SH.xone):
-        skipped |= {f"{subject}: sh:{_local(term)} not walked"
+        skipped |= {f"{subject}: sh:{local_term(term)} not walked"
                     for subject, _ in graph.subject_objects(term)}
     for subject in set(graph.subjects(SH.path)):
         path_node = graph.value(subject, SH.path)
@@ -207,13 +208,13 @@ def parse_ir(graph) -> pandas.DataFrame:
     """
     import rdflib
 
-    SH = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    SH = rdflib.Namespace(SH_NS)
     rows = []
     for shape in graph.subjects(rdflib.RDF.type, SH.NodeShape):
         for target in graph.objects(shape, SH.targetClass):
-            rows.extend(_node_rows(graph, SH, shape, _local(target)))
+            rows.extend(_node_rows(graph, SH, shape, local_term(target)))
         for target in graph.objects(shape, SH.targetSubjectsOf):
-            rows.extend(_node_rows(graph, SH, shape, _local(target), target_kind="subjectsOf"))
+            rows.extend(_node_rows(graph, SH, shape, local_term(target), target_kind="subjectsOf"))
 
     # Only sh:targetClass / sh:targetSubjectsOf are walked into the IR —
     # shapes reached exclusively through other target declarations (or
@@ -228,7 +229,7 @@ def parse_ir(graph) -> pandas.DataFrame:
             "shapes use SHACL features the vectorized engines do not implement — "
             "affected shapes are skipped by the polars/pandas/duckdb engines; "
             "use engine=\"pyshacl\" for full coverage: %s",
-            ", ".join(f"sh:{_local(term)} (x{count})" for term, count in invisible.items()))
+            ", ".join(f"sh:{local_term(term)} (x{count})" for term, count in invisible.items()))
 
     ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
     # identical re-declarations behave like ONE shape (issue #99): the ENTSO-E
@@ -257,7 +258,7 @@ def _node_rows(graph, SH, shape, target_class, target_kind="class"):
         # params = the complete allowed list, resolved at compile time:
         # sh:ignoredProperties + every (non-inverse) sh:property path of THIS shape
         ignored = graph.value(shape, SH.ignoredProperties)
-        allowed = _rdf_list(graph, ignored, _local) if ignored is not None else []
+        allowed = _rdf_list(graph, ignored, local_term) if ignored is not None else []
         for property_shape in graph.objects(shape, SH.property):
             path, inverse, _ = _resolve_path(graph, SH, graph.value(property_shape, SH.path))
             if path is not None and not inverse:
@@ -327,7 +328,7 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
             logger.warning("sh:node cycle at %s — constraint dropped (%s)", node_shape, shape_uri)
         else:
             rows.append({**meta, "component": "sh:node",
-                         "params": {"shape": _local(node_shape), "rows": nested}})
+                         "params": {"shape": local_term(node_shape), "rows": nested}})
 
     return rows
 
@@ -402,7 +403,7 @@ def _shape_meta(graph, SH, shape_uri, target_class, path, inverse, target_kind="
         # ( assoc rdf:type ) sequence path: the constraint's value nodes are
         # the types of the referenced objects, not the association values
         "via_type": via_type,
-        "severity": _local(severity) if severity is not None else "Violation",
+        "severity": local_term(severity) if severity is not None else "Violation",
         "message": str(message) if message is not None else None,
         "name": str(name) if name is not None else None,
         "description": str(description) if description is not None else None,
@@ -422,21 +423,21 @@ def _resolve_path(graph, SH, path_node):
     if path_node is None:
         return None, False, False
     if isinstance(path_node, rdflib.URIRef):
-        return _local(path_node), False, False
+        return local_term(path_node), False, False
     inverse = graph.value(path_node, SH.inversePath)
     if inverse is not None:
-        return _local(inverse), True, False
+        return local_term(inverse), True, False
     alternative = graph.value(path_node, SH.alternativePath)
     if alternative is not None:
         for item in _rdf_list(graph, alternative, lambda node: node):
             nested_inverse = graph.value(item, SH.inversePath)
             if nested_inverse is not None:
-                return _local(nested_inverse), True, False
+                return local_term(nested_inverse), True, False
     if graph.value(path_node, rdflib.RDF.first) is not None:   # sequence path
         steps = _rdf_list(graph, path_node, lambda node: node)
         if (len(steps) == 2 and isinstance(steps[0], rdflib.URIRef)
                 and steps[1] == rdflib.RDF.type):
-            return _local(steps[0]), False, True
+            return local_term(steps[0]), False, True
     return None, False, False
 
 
@@ -447,8 +448,8 @@ def _components(SH):
     return [
         (SH.minCount, "sh:minCount", lambda g, v: int(v)),
         (SH.maxCount, "sh:maxCount", lambda g, v: int(v)),
-        (SH.datatype, "sh:datatype", lambda g, v: f"xsd:{_local(v)}"),
-        (SH["class"], "sh:class", lambda g, v: _local(v)),
+        (SH.datatype, "sh:datatype", lambda g, v: f"xsd:{local_term(v)}"),
+        (SH["class"], "sh:class", lambda g, v: local_term(v)),
         (SH.minInclusive, "sh:minInclusive", lambda g, v: float(v)),
         (SH.maxInclusive, "sh:maxInclusive", lambda g, v: float(v)),
         (SH.minExclusive, "sh:minExclusive", lambda g, v: float(v)),
@@ -456,13 +457,13 @@ def _components(SH):
         (SH.pattern, "sh:pattern", lambda g, v: str(v)),
         (SH.minLength, "sh:minLength", lambda g, v: int(v)),
         (SH.maxLength, "sh:maxLength", lambda g, v: int(v)),
-        (SH.nodeKind, "sh:nodeKind", lambda g, v: _local(v)),
+        (SH.nodeKind, "sh:nodeKind", lambda g, v: local_term(v)),
         (SH.hasValue, "sh:hasValue", lambda g, v: _value(v)),
         (SH["in"], "sh:in", lambda g, v: _rdf_list(g, v, _value)),
-        (SH.equals, "sh:equals", lambda g, v: _local(v)),
-        (SH.disjoint, "sh:disjoint", lambda g, v: _local(v)),
-        (SH.lessThan, "sh:lessThan", lambda g, v: _local(v)),
-        (SH.lessThanOrEquals, "sh:lessThanOrEquals", lambda g, v: _local(v)),
+        (SH.equals, "sh:equals", lambda g, v: local_term(v)),
+        (SH.disjoint, "sh:disjoint", lambda g, v: local_term(v)),
+        (SH.lessThan, "sh:lessThan", lambda g, v: local_term(v)),
+        (SH.lessThanOrEquals, "sh:lessThanOrEquals", lambda g, v: local_term(v)),
     ]
 
 
@@ -483,13 +484,8 @@ def _rdf_list(graph, head, transform):
     return [transform(item) for item in Collection(graph, head)]
 
 
-def _local(term):
-    """IRI → local name (matches the short KEY/VALUE names in triplet data)."""
-    return str(term).split("#")[-1].split("/")[-1]
-
-
 def _value(term):
     """sh:in / sh:hasValue member → comparable VALUE string (IRIs → local name)."""
     if type(term).__name__ == "Literal":
         return str(term)
-    return _local(term)
+    return local_term(term)

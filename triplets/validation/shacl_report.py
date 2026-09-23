@@ -12,19 +12,14 @@ from datetime import datetime, timezone
 
 import pandas
 
-from ..export.nquads_utils import CIM_NS, RDF_TYPE
+from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
+                   XSD_NS, SchemaTerms, absolute_id, absolute_key, is_iri, local_id, local_key,
+                   local_term)
 
 logger = logging.getLogger(__name__)
 
 VIOLATION_COLUMNS = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"]
 
-_UUID_PREFIX = "urn:uuid:"
-_SH = "http://www.w3.org/ns/shacl#"
-_PROV = "http://www.w3.org/ns/prov#"
-_DCTERMS = "http://purl.org/dc/terms/"
-_XSD = "http://www.w3.org/2001/XMLSchema#"
-_RDFS = "http://www.w3.org/2000/01/rdf-schema#"
-_SCHEMA_ORG = "https://schema.org/"
 
 # path suffix → rdflib serialize format (traversed in order for the reverse,
 # so .xml — the suffix the docs push for RDF/XML — is the default before .rdf)
@@ -64,7 +59,7 @@ def report_to_violations(report_graph):
     """ValidationReport rdflib graph → violations DataFrame (single columnar pass)."""
     import rdflib
 
-    sh = rdflib.Namespace(_SH)
+    sh = rdflib.Namespace(SH_NS)
     # collect into per-column lists, build the DataFrame once (no per-row concat)
     columns = {name: [] for name in VIOLATION_COLUMNS}
 
@@ -76,12 +71,12 @@ def report_to_violations(report_graph):
         shape = report_graph.value(result, sh.sourceShape)
         message = _constraint_message(report_graph.objects(result, sh.resultMessage))
 
-        columns["ID"].append(_strip_uuid(report_graph.value(result, sh.focusNode)))
-        columns["KEY"].append(_shorten(path))
+        columns["ID"].append(local_id(report_graph.value(result, sh.focusNode)))
+        columns["KEY"].append(local_key(path))
         columns["VALUE"].append(_term_value(value))
         columns["VIOLATION_TYPE"].append(_component(component))
         columns["MESSAGE"].append(message)
-        columns["SEVERITY"].append(_local_name(severity) if severity is not None else "Violation")
+        columns["SEVERITY"].append(local_term(severity) if severity is not None else "Violation")
         columns["SOURCE_SHAPE"].append(str(shape) if shape is not None else None)
 
     return pandas.DataFrame(columns, columns=VIOLATION_COLUMNS)
@@ -99,62 +94,40 @@ def _constraint_message(messages):
     return texts[0] if texts else None
 
 
-def _strip_uuid(term):
-    if term is None:
-        return None
-    value = str(term)
-    return value[len(_UUID_PREFIX):] if value.startswith(_UUID_PREFIX) else value
-
-
-def _shorten(term):
-    """Predicate/path IRI → short KEY (CIM local name, rdf:type → 'Type')."""
-    if term is None:
-        return None
-    value = str(term)
-    if value == RDF_TYPE:
-        return "Type"
-    if value.startswith(CIM_NS):
-        return value[len(CIM_NS):]
-    return value
-
-
 def _term_value(term):
     if term is None:
         return None
     if type(term).__name__ == "Literal":
         return str(term)
-    return _strip_uuid(term)
+    return local_id(term)
 
 
 def _component(term):
     if term is None:
         return "sh:unknown"
     value = str(term)
-    suffix = value.split("#")[-1]
-    if value.startswith(_TRIPLETS_NS):
+    suffix = local_term(value)
+    if value.startswith(TRIPLETS_NS):
         return f"triplets:{suffix}"
-    if value.startswith(_RDFS):
+    if value.startswith(RDFS_NS):
         return f"rdfs:{suffix}"
-    if value.startswith(_XSD):
+    if value.startswith(XSD_NS):
         return f"xsd:{suffix}"
-    if value.startswith(_SCHEMA_ORG):    # schema.org has no '#' — suffix is the path tail
-        return f"schema:{value[len(_SCHEMA_ORG):]}"
+    if value.startswith(SCHEMA_ORG_NS):    # schema.org has no '#' — suffix is the path tail
+        return f"schema:{value[len(SCHEMA_ORG_NS):]}"
     return _COMPONENT_MAP.get(suffix, f"sh:{suffix}")
 
 
-def _local_name(term):
-    return str(term).split("#")[-1]
-
-
 # short violation type → sh:sourceConstraintComponent URI (inverse of _COMPONENT_MAP)
-_COMPONENT_URI = {short: f"{_SH}{suffix}" for suffix, short in _COMPONENT_MAP.items()}
-
-_TRIPLETS_NS = "http://triplets#"
+_COMPONENT_URI = {short: f"{SH_NS}{suffix}" for suffix, short in _COMPONENT_MAP.items()}
 
 
-def violations_to_report_graph(violations, report_source=None, report_references=None):
+
+def violations_to_report_graph(violations, report_source=None, report_references=None,
+                               rdf_map=None):
     """Violations DataFrame → sh:ValidationReport rdflib graph (inverse of
-    report_to_violations; KEYs expand to the CIM namespace unless already URIs).
+    report_to_violations; KEYs expand through the export schema namespaces —
+    ``rdf_map`` — CIM100 without one, unless already URIs).
 
     A result carries several plain-text ``sh:resultMessage``s when the frame
     has the context/location columns: the engine message, the shape and
@@ -185,9 +158,10 @@ def violations_to_report_graph(violations, report_source=None, report_references
     if meta.get("engine"):
         creator = f"{creator} (engine: {meta['engine']})"
 
-    sh = rdflib.Namespace(_SH)
-    prov = rdflib.Namespace(_PROV)
-    dcterms = rdflib.Namespace(_DCTERMS)
+    terms = SchemaTerms.from_rdf_map(rdf_map)
+    sh = rdflib.Namespace(SH_NS)
+    prov = rdflib.Namespace(PROV_NS)
+    dcterms = rdflib.Namespace(DCTERMS_NS)
     graph = rdflib.Graph()
     graph.bind("sh", sh)
     graph.bind("prov", prov)
@@ -206,7 +180,7 @@ def violations_to_report_graph(violations, report_source=None, report_references
     graph.add((report, rdflib.RDF.type, sh.ValidationReport))
     graph.add((report, sh.conforms, rdflib.Literal(violations.empty)))
     graph.add((report, prov.generatedAtTime,
-               rdflib.Literal(generated_at, datatype=rdflib.URIRef(f"{_XSD}dateTime"))))
+               rdflib.Literal(generated_at, datatype=rdflib.URIRef(f"{XSD_NS}dateTime"))))
     graph.add((report, dcterms.creator, rdflib.Literal(creator)))
     for value in _as_list(report_source):
         graph.add((report, dcterms.source, rdflib.Literal(value)))
@@ -219,19 +193,19 @@ def violations_to_report_graph(violations, report_source=None, report_references
         graph.add((result, rdflib.RDF.type, sh.ValidationResult))
         graph.add((result, sh.resultSeverity, sh[row.SEVERITY if pandas.notna(row.SEVERITY) else "Violation"]))
         if pandas.notna(row.ID):
-            graph.add((result, sh.focusNode, rdflib.URIRef(f"{_UUID_PREFIX}{row.ID}")))
+            graph.add((result, sh.focusNode, rdflib.URIRef(absolute_id(str(row.ID)))))
         if pandas.notna(row.KEY):
-            graph.add((result, sh.resultPath, rdflib.URIRef(_expand(row.KEY))))
+            graph.add((result, sh.resultPath, rdflib.URIRef(_expand(row.KEY, terms))))
         if pandas.notna(row.VALUE):
             graph.add((result, sh.value, rdflib.Literal(row.VALUE)))
         if pandas.notna(row.VIOLATION_TYPE):
-            graph.add((result, sh.sourceConstraintComponent, rdflib.URIRef(_expand(row.VIOLATION_TYPE))))
+            graph.add((result, sh.sourceConstraintComponent, rdflib.URIRef(_expand(row.VIOLATION_TYPE, terms))))
         for message in _messages(row, language):
             graph.add((result, sh.resultMessage, rdflib.Literal(message)))
         if pandas.notna(row.SOURCE_SHAPE):
             shape = str(row.SOURCE_SHAPE)   # anonymous property shapes stay blank nodes
             graph.add((result, sh.sourceShape,
-                       rdflib.URIRef(shape) if "://" in shape or shape.startswith("urn:") else rdflib.BNode(shape)))
+                       rdflib.URIRef(shape) if is_iri(shape) else rdflib.BNode(shape)))
 
     return graph
 
@@ -299,26 +273,28 @@ def message_prefix(violation_type, source=None, language="shacl"):
             else f"[{language}_message]")
 
 
-def _expand(value):
-    """Short KEY / violation type / shape name → URI (inverse of _shorten/_component)."""
+def _expand(value, terms=None):
+    """Short KEY / violation type → URI (inverse of local_key / _component).
+
+    Vocabulary prefixes (sh:, rdfs:, xsd:, schema:, triplets:) are report
+    terms; anything else is a data KEY and expands through the schema
+    namespaces (CIM100 without one)."""
     value = str(value)
-    if value == "Type":
-        return RDF_TYPE
-    if "://" in value or value.startswith("urn:"):
+    if is_iri(value):
         return value
     if value in _COMPONENT_URI:
         return _COMPONENT_URI[value]
     if value.startswith("rdfs:"):        # schema-validation types are real vocabulary terms
-        return f"{_RDFS}{value[5:]}"
+        return f"{RDFS_NS}{value[5:]}"
     if value.startswith("xsd:"):
-        return f"{_XSD}{value[4:]}"
+        return f"{XSD_NS}{value[4:]}"
     if value.startswith("schema:"):
-        return f"{_SCHEMA_ORG}{value[7:]}"
+        return f"{SCHEMA_ORG_NS}{value[7:]}"
     if value.startswith("sh:"):
-        return f"{_SH}{value[3:]}"
+        return f"{SH_NS}{value[3:]}"
     if value.startswith("triplets:"):
-        return f"{_TRIPLETS_NS}{value[len('triplets:'):]}"
-    return f"{CIM_NS}{value}"
+        return f"{TRIPLETS_NS}{value[len('triplets:'):]}"
+    return absolute_key(value, terms)
 
 
 def _resolve_format(path, format):
@@ -339,7 +315,8 @@ def _default_path(fmt):
 
 
 def export_to_shacl_report(violations, sources=None, path=None, export_to_memory=False,
-                           format=None, report_source=None, report_references=None):
+                           format=None, report_source=None, report_references=None,
+                           rdf_map=None):
     """Violations frame → standard sh:ValidationReport (any rdflib format).
 
     Parameters
@@ -369,6 +346,9 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         ``dcterms:references`` on the ValidationReport (shape file name(s)).
         Plain labels — not the shapes object ``to_sarif(shapes=)`` takes.
         Default: the shape file names from ``violations.attrs["validation"]``.
+    rdf_map : dict or str, optional
+        Export schema — ``sh:resultPath`` KEYs expand to their profile namespace
+        (CIM100 without it).
     """
     if sources is not None:
         from .locations import LOCATION_COLUMNS, locate_violations
@@ -377,7 +357,8 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
     fmt = _resolve_format(path, format)
     path = _default_path(fmt) if path is None else os.fspath(path)
     payload = (violations_to_report_graph(violations, report_source=report_source,
-                                          report_references=report_references)
+                                          report_references=report_references,
+                                          rdf_map=rdf_map)
                .serialize(format=fmt).encode("utf-8"))
     if export_to_memory:
         buffer = io.BytesIO(payload)

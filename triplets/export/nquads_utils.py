@@ -1,75 +1,38 @@
-"""Shared N-Quads logic — schema parsing and value classification.
+"""N-Quads serialization — term quoting on top of the :mod:`triplets.iri` absolute rules.
 
-Used by nquads_pandas.py and nquads_polars.py.
+The IRI rules (what becomes a subject IRI, which namespace a KEY or enum
+takes, what is a literal) live in ``triplets.iri``; this module only wraps the
+results in ``<>`` / ``"..."^^<datatype>``. ``nquads_pandas`` / ``nquads_polars``
+do the same vectorized through ``iri_pandas`` / ``iri_polars``.
 """
-
-import re
-import json
-
-CIM_NS = "http://iec.ch/TC57/CIM100#"
-RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
-XSD_NS = "http://www.w3.org/2001/XMLSchema#"
-
-UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+from ..iri import absolute_id, absolute_value, load_schema, schema_entries
 
 
-def build_key_metadata(rdf_map):
-    """Extract enum keys, key→namespace, and key→datatype mappings from export schema.
+def escape_literal(text):
+    """N-Triples string escaping (backslash, quote, newline, carriage return)."""
+    return text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
 
-    Parameters
-    ----------
-    rdf_map : dict or str
-        Export schema (loaded JSON dict or path to JSON file).
 
-    Returns
-    -------
-    enum_keys : set
-        KEY names whose values are enumerations (need namespace on VALUE).
-    key_namespaces : dict
-        KEY name → namespace URI for predicate construction.
-    key_datatypes : dict
-        KEY name → full xsd datatype URI (from the schema's "xsd:type",
-        e.g. "xsd:float" → "http://www.w3.org/2001/XMLSchema#float").
-        A key present here is a literal attribute by schema. xsd:string
-        keys map to None: literal, but no annotation (RDF 1.1 default).
-    """
-    if not isinstance(rdf_map, dict):
-        with open(str(rdf_map)) as f:
-            rdf_map = json.load(f)
+def make_subject(id_val):
+    """ID → ``<urn:uuid:…>`` (an absolute IRI passes through)."""
+    return f"<{absolute_id(id_val)}>"
 
-    enum_keys = set()
-    key_namespaces = {}
-    key_datatypes = {}
 
-    for profile_name, profile_data in rdf_map.items():
-        if not isinstance(profile_data, dict):
-            continue
-        for prop_name, prop_data in profile_data.items():
-            if not isinstance(prop_data, dict):
-                continue
-            prop_type = prop_data.get("type")
-            namespace = prop_data.get("namespace", CIM_NS)
-            xsd_type = prop_data.get("xsd:type")
-
-            if prop_type == "Enumeration":
-                enum_keys.add(prop_name)
-            if namespace:
-                key_namespaces[prop_name] = namespace
-            if xsd_type and xsd_type.startswith("xsd:"):
-                datatype = xsd_type.removeprefix("xsd:")
-                if datatype == "anyURI":
-                    continue  # references (e.g. Model.DependentOn) — keep IRI handling
-                key_datatypes[prop_name] = None if datatype == "string" else f"{XSD_NS}{datatype}"
-
-    return enum_keys, key_namespaces, key_datatypes
+def make_object(key, value, terms=None):
+    """VALUE → ``<iri>`` or ``"literal"[^^<datatype>]`` per :func:`triplets.iri.absolute_value`."""
+    kind, payload = absolute_value(key, value, terms)
+    if kind == "iri":
+        return f"<{payload}>"
+    escaped = escape_literal(value)
+    return f'"{escaped}"^^<{payload}>' if payload else f'"{escaped}"'
 
 
 def flatten_schema(rdf_map):
     """Flatten the export schema across profiles for human-context lookups.
 
     The same class/property key repeats per profile with essentially the same
-    definition — the first occurrence wins. Complements build_key_metadata
-    (which extracts the machine fields); this pulls the human ones.
+    definition — the first occurrence wins. Complements ``SchemaTerms`` (the
+    machine fields); this pulls the human ones.
 
     Returns
     -------
@@ -79,87 +42,9 @@ def flatten_schema(rdf_map):
     class_info : dict
         "Class" → description for class entries.
     """
-    if not isinstance(rdf_map, dict):
-        with open(str(rdf_map)) as f:
-            rdf_map = json.load(f)
-
-    key_info = {}
-    class_info = {}
-    for profile_data in rdf_map.values():
-        if not isinstance(profile_data, dict):
-            continue
-        for name, entry in profile_data.items():
-            if not isinstance(entry, dict):
-                continue
-            entry_type = entry.get("type")
-            if entry_type == "Class":
-                class_info.setdefault(name, entry.get("description"))
-            elif entry_type in ("Attribute", "Association", "Enumeration"):
-                key_info.setdefault(name, {"description": entry.get("description"),
-                                           "multiplicity": entry.get("multiplicity")})
+    schema, _, _ = load_schema(rdf_map)
+    entries = schema_entries(schema)[::-1]     # reversed: the dict keeps the last write → first occurrence wins
+    key_info = {name: {"description": entry.get("description"), "multiplicity": entry.get("multiplicity")}
+                for name, entry in entries if entry.get("type") in ("Attribute", "Association", "Enumeration")}
+    class_info = {name: entry.get("description") for name, entry in entries if entry.get("type") == "Class"}
     return key_info, class_info
-
-
-def make_subject(id_val):
-    """Convert ID to subject URI."""
-    if id_val.startswith("http://") or id_val.startswith("https://") or id_val.startswith("urn:"):
-        return f"<{id_val}>"
-    return f"<urn:uuid:{id_val}>"
-
-
-def make_predicate(key, key_namespaces=None):
-    """Convert KEY to predicate URI."""
-    if key == "Type":
-        return f"<{RDF_TYPE}>"
-    if key.startswith("http://") or key.startswith("https://"):
-        return f"<{key}>"
-    ns = key_namespaces.get(key, CIM_NS) if key_namespaces else CIM_NS
-    return f"<{ns}{key}>"
-
-
-def make_object(key, value, enum_keys=None, key_datatypes=None):
-    """Convert VALUE to object (URI or literal).
-
-    Rules:
-    - Type row → <namespace#ClassName>
-    - Already starts with http/https/urn → <value> (pass through)
-    - Enum KEY → <namespace#EnumValue>
-    - KEY with schema datatype → "literal"^^<xsd type> (plain for xsd:string);
-      takes precedence over the UUID heuristic (e.g. IdentifiedObject.mRID is
-      a string attribute, not a reference)
-    - UUID pattern → <urn:uuid:value>
-    - Everything else → "literal" (with escaping)
-    """
-    if key == "Type":
-        if value.startswith("http://") or value.startswith("urn:"):
-            return f"<{value}>"
-        return f"<{CIM_NS}{value}>"
-
-    # Already a full URI
-    if value.startswith("http://") or value.startswith("https://") or value.startswith("urn:"):
-        return f"<{value}>"
-
-    # Enumeration value — add namespace
-    if enum_keys and key in enum_keys:
-        return f"<{CIM_NS}{value}>"
-
-    # Literal attribute by schema — annotate with its xsd datatype
-    if key_datatypes and key in key_datatypes:
-        escaped = value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
-        datatype = key_datatypes[key]
-        return f'"{escaped}"^^<{datatype}>' if datatype else f'"{escaped}"'
-
-    # UUID reference
-    if UUID_RE.match(value):
-        return f"<urn:uuid:{value}>"
-
-    # Literal — escape for N-Triples
-    escaped = value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
-    return f'"{escaped}"'
-
-
-def make_graph(instance_id):
-    """Convert INSTANCE_ID to graph URI."""
-    if instance_id.startswith("http://") or instance_id.startswith("urn:"):
-        return f"<{instance_id}>"
-    return f"<urn:uuid:{instance_id}>"

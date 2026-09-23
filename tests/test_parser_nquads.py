@@ -72,6 +72,14 @@ def test_source_bytes_str_filelike_and_path(tmp_path):
         assert result.iloc[0].tolist() == ["a", "IdentifiedObject.name", "n", "g"]
 
 
+def test_cim16_fragment_shortens_like_cim100():
+    """Any schema namespace #fragment shortens, not only CIM100."""
+    cim16 = "http://iec.ch/TC57/2013/CIM-schema-cim16#"
+    quad = f'<urn:uuid:a> <{cim16}ControlArea.type> <{cim16}ControlAreaTypeKind.Interchange> <urn:uuid:g> .\n'
+    result = read_nquads(quad)
+    assert result.iloc[0].tolist() == ["a", "ControlArea.type", "ControlAreaTypeKind.Interchange", "g"]
+
+
 def test_ntriples_without_graph_gets_null_instance_id():
     result = read_nquads(f'<urn:uuid:a> <{CIM}IdentifiedObject.name> "n" .')
     assert result["INSTANCE_ID"].isna().all()

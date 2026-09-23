@@ -27,12 +27,13 @@ constexpr std::string_view RDF_TYPE =
 // Rows per conversion task — same batch size as the RdfParserBase contract.
 constexpr int64_t ROWS_PER_TASK = 100'000;
 
+// Native mirror of triplets.iri.is_iri (URI_PREFIXES).
 bool isUri(std::string_view value) {
   return value.starts_with("http://") || value.starts_with("https://") ||
          value.starts_with("urn:");
 }
 
-// Lowercase-hex 8-4-4-4-12, same as nquads_utils.UUID_RE.
+// Lowercase-hex 8-4-4-4-12, same as triplets.iri.UUID_RE (parity: qlever ingest vs export_to_nquads).
 bool isUuid(std::string_view value) {
   if (value.size() != 36) return false;
   for (size_t i = 0; i < 36; ++i) {
@@ -80,6 +81,14 @@ class RangeConverter {
     std::string name;                              // for ingest error context
   };
 
+  // Mirror of triplets.iri.SchemaTerms.namespace / absolute_name: the schema
+  // namespace for a short name, defaultNamespace (CIM100) when absent.
+  std::string namespaceFor(std::string_view name) const {
+    auto found = mapping_.keyNamespaces.find(std::string{name});
+    return found != mapping_.keyNamespaces.end() ? found->second
+                                                 : mapping_.defaultNamespace;
+  }
+
   TripleComponent iriComponent(std::string_view iri) const {
     auto component = TripleComponent::Iri::fromIrirefWithoutBrackets(iri);
     // Same folding the text parser applies after building each IRI.
@@ -99,7 +108,7 @@ class RangeConverter {
       info.predicate = iriComponent(RDF_TYPE);
       info.rule = ObjectRule::Type;
     } else {
-      if (key.starts_with("http://") || key.starts_with("https://")) {
+      if (isUri(key)) {   // mirror of triplets.iri.absolute_key: absolute IRIs pass through
         info.predicate = iriComponent(key);
       } else {
         auto ns = mapping_.keyNamespaces.find(std::string{key});
@@ -138,12 +147,12 @@ class RangeConverter {
   TripleComponent makeObject(const KeyInfo& key, std::string_view value) const {
     if (key.rule == ObjectRule::Type) {
       if (isUri(value)) return iriComponent(value);
-      return iriComponent(absl::StrCat(mapping_.defaultNamespace, value));
+      return iriComponent(absl::StrCat(namespaceFor(value), value));
     }
     if (isUri(value)) return iriComponent(value);
     switch (key.rule) {
       case ObjectRule::Enum:
-        return iriComponent(absl::StrCat(mapping_.defaultNamespace, value));
+        return iriComponent(absl::StrCat(namespaceFor(value), value));
       case ObjectRule::Typed:
         // qlever's own typed-literal path (identical to the N-Quads parse).
         // Strict by design: an ill-typed value is a data-vs-schema error to be

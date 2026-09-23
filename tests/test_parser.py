@@ -6,7 +6,7 @@ import pytest
 import pandas
 
 import triplets
-from triplets.parser import parse, find_all_xml, clean_ID, read_rdf
+from triplets.parser import parse, find_all_xml, local_id, read_rdf
 
 from pathlib import Path
 
@@ -31,12 +31,13 @@ except Exception:
 
 # ── Utilities ───────────────────────────────────────────────────────────────
 
-def test_clean_ID():
-    assert clean_ID("urn:uuid:abc-123") == "abc-123"
-    assert clean_ID("#_foo_bar") == "foo_bar"
-    assert clean_ID("_123") == "123"
-    assert clean_ID(None) == ""
-    assert clean_ID("") == ""
+def test_local_id():
+    assert local_id("urn:uuid:abc-123") == "abc-123"
+    assert local_id("#_foo_bar") == "foo_bar"
+    assert local_id("_123") == "123"
+    assert local_id("urn:uuid:_x") == "_x"      # one prefix, like the cython engine
+    assert local_id(None) is None
+    assert local_id("") == ""
 
 
 def test_find_all_xml_minimal():

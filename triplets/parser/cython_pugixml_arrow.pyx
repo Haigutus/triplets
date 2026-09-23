@@ -243,7 +243,8 @@ cdef extern from *:
     #include <string>
     #include <string_view>
 
-    // Clean CIM ID prefixes: "urn:uuid:", "#_", "_"
+    // Clean CIM ID prefixes: "urn:uuid:", "#_", "_" — exactly one, longest first.
+    // Native mirror of triplets.iri.local_id (parity: tests/test_iri.py).
     // Pure string_view — zero-copy slice into the original pugixml buffer.
     static inline std::string_view clean_id(std::string_view sv) {
         using namespace std::string_view_literals;
@@ -258,6 +259,7 @@ cdef extern from *:
 
     // Clean a reference value (for rdf:resource etc).
     // Strips CIM ID prefixes, then extracts fragment after '#' for http URIs.
+    // Native mirror of triplets.iri.local_value (parity: tests/test_iri.py).
     // Returns a (possibly shortened) view into the original buffer.
     static inline std::string_view clean_ref_value(std::string_view sv) {
         using namespace std::string_view_literals;

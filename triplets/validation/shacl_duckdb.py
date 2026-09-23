@@ -25,7 +25,8 @@ import pandas
 from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .shacl_report import VIOLATION_COLUMNS
-from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
+from ..iri import REFERENCE_LIKE, SchemaTerms, iri_duckdb
+from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +151,7 @@ def _range(operator, description):
 def _in(rule, table, context):
     rows, rows_params = _rows_sql(rule, table)
     allowed = [str(value) for value in rule.params]
-    local = "list_extract(string_split(list_extract(string_split(PV, '#'), -1), '/'), -1)"
+    local = iri_duckdb.local_term("PV")
     return _wrap(rule, f"value is not one of {sorted(allowed)}",
                  rows, rows_params, f"NOT list_contains(?, {local})", [allowed])
 
@@ -188,7 +189,7 @@ def _node_kind(rule, table, context):
         return None
     rows, rows_params = _rows_sql(rule, table)
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else context.key_kind(rule.path)
+    kind = "iri" if getattr(rule, "via_type", False) else context.terms.key_kind(rule.path)
     if kind is not None:                                 # schema decides for the whole path
         if (kind == "iri") == (rule.params == "IRI"):
             return None                                  # every value conforms — no query
@@ -196,7 +197,7 @@ def _node_kind(rule, table, context):
     else:                                                # value-form heuristic
         is_iri = f"(regexp_full_match(PV, ?) OR PV IN (SELECT DISTINCT ID FROM {table}))"
         condition = f"NOT {is_iri}" if rule.params == "IRI" else is_iri
-        condition_params = [_REFERENCE_LIKE.pattern]
+        condition_params = [REFERENCE_LIKE.pattern]
     return _wrap(rule, f"value is not of node kind sh:{rule.params}",
                  rows, rows_params, condition, condition_params)
 
@@ -277,11 +278,12 @@ SQL_BUILDERS = {
 }
 
 
-class _Context(SchemaKind):
+class _Context:
     """Schema-driven term-kind decisions (shared with the other vectorized engines)."""
 
     def __init__(self, rdf_map):
         self.rdf_map = rdf_map
+        self.terms = SchemaTerms.from_rdf_map(rdf_map)
 
 
 def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
