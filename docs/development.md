@@ -85,8 +85,9 @@ function for the column:
 - `UUID_RE` (strict lowercase, export rule) and `REFERENCE_LIKE` (loose
   nodeKind heuristic) are different contracts on purpose.
 - CIM XML export is *not* on `absolute_id`: `rdf:about` / `rdf:resource` prefixes
-  are the per-class schema `value_prefix`. Enum namespaces and literal
-  datatypes come from `SchemaTerms`.
+  are the per-class schema `value_prefix`, and enum namespaces come from the
+  resolved instance profile map (both CIM XML engines agree); only the
+  `rdf:datatype` annotation uses `SchemaTerms.datatypes`.
 
 ## Flavor conversion
 

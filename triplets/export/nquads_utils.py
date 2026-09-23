@@ -1,11 +1,11 @@
-"""N-Quads serialization — term quoting on top of the :mod:`triplets.iri` expand rules.
+"""N-Quads serialization — term quoting on top of the :mod:`triplets.iri` absolute rules.
 
 The IRI rules (what becomes a subject IRI, which namespace a KEY or enum
 takes, what is a literal) live in ``triplets.iri``; this module only wraps the
 results in ``<>`` / ``"..."^^<datatype>``. ``nquads_pandas`` / ``nquads_polars``
 do the same vectorized through ``iri_pandas`` / ``iri_polars``.
 """
-from ..iri import absolute_id, absolute_key, absolute_value, load_schema, schema_entries
+from ..iri import absolute_id, absolute_value, load_schema, schema_entries
 
 
 def escape_literal(text):
@@ -18,11 +18,6 @@ def make_subject(id_val):
     return f"<{absolute_id(id_val)}>"
 
 
-def make_predicate(key, terms=None):
-    """KEY → ``<predicate>``: ``Type`` → rdf:type, else the schema namespace + KEY."""
-    return f"<{absolute_key(key, terms)}>"
-
-
 def make_object(key, value, terms=None):
     """VALUE → ``<iri>`` or ``"literal"[^^<datatype>]`` per :func:`triplets.iri.absolute_value`."""
     kind, payload = absolute_value(key, value, terms)
@@ -30,11 +25,6 @@ def make_object(key, value, terms=None):
         return f"<{payload}>"
     escaped = escape_literal(value)
     return f'"{escaped}"^^<{payload}>' if payload else f'"{escaped}"'
-
-
-def make_graph(instance_id):
-    """INSTANCE_ID → ``<urn:uuid:…>`` graph IRI (an absolute IRI passes through)."""
-    return f"<{absolute_id(instance_id)}>"
 
 
 def flatten_schema(rdf_map):

@@ -146,8 +146,8 @@ def generate_xml(instance_data,
     rdf_map = load_rdf_map(rdf_map)
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
 
-    terms = SchemaTerms.from_rdf_map(rdf_map)       # enum namespaces; KEY → xsd datatype (string → None, anyURI excluded)
-    key_datatypes = terms.datatypes if datatypes else {}
+    # KEY → xsd datatype IRI as the N-Quads export annotates it (string → None, anyURI excluded)
+    key_datatypes = SchemaTerms.from_rdf_map(rdf_map).datatypes if datatypes else {}
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))
@@ -243,8 +243,8 @@ def generate_xml(instance_data,
 
                     value_prefix = attrib.get("value_prefix", "")
 
-                    if not value_prefix:                     # enumeration: the value's own schema namespace
-                        value_prefix = terms.namespaces.get(VALUE, "")
+                    if not value_prefix:                     # enumeration: namespace from the resolved profile (same as the cython exporter)
+                        value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace", "")
 
                     tag.attrib[_get_qname(attrib["attribute"])] = f"{value_prefix}{VALUE}"
                 else:
