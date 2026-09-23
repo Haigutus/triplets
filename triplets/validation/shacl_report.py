@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import pandas
 
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
-                   XSD_NS, SchemaTerms, expand_id, expand_key, is_iri, local_id, local_key,
+                   XSD_NS, SchemaTerms, absolute_id, absolute_key, is_iri, local_id, local_key,
                    local_term)
 
 logger = logging.getLogger(__name__)
@@ -193,7 +193,7 @@ def violations_to_report_graph(violations, report_source=None, report_references
         graph.add((result, rdflib.RDF.type, sh.ValidationResult))
         graph.add((result, sh.resultSeverity, sh[row.SEVERITY if pandas.notna(row.SEVERITY) else "Violation"]))
         if pandas.notna(row.ID):
-            graph.add((result, sh.focusNode, rdflib.URIRef(expand_id(str(row.ID)))))
+            graph.add((result, sh.focusNode, rdflib.URIRef(absolute_id(str(row.ID)))))
         if pandas.notna(row.KEY):
             graph.add((result, sh.resultPath, rdflib.URIRef(_expand(row.KEY, terms))))
         if pandas.notna(row.VALUE):
@@ -294,7 +294,7 @@ def _expand(value, terms=None):
         return f"{SH_NS}{value[3:]}"
     if value.startswith("triplets:"):
         return f"{TRIPLETS_NS}{value[len('triplets:'):]}"
-    return expand_key(value, terms)
+    return absolute_key(value, terms)
 
 
 def _resolve_format(path, format):

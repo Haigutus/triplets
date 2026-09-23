@@ -11,7 +11,7 @@ from lxml import etree
 from lxml.builder import ElementMaker
 from lxml.etree import QName
 
-from ..iri import RDF_NS, TRIPLETS_NS, UUID_PREFIX
+from ..iri import RDF_NS, TRIPLETS_NS, UUID_PREFIX, SchemaTerms
 from .cimxml_utils import load_rdf_map, resolve_instance_config
 
 logger = logging.getLogger(__name__)
@@ -146,11 +146,8 @@ def generate_xml(instance_data,
     rdf_map = load_rdf_map(rdf_map)
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
 
-    key_datatypes = {}
-    if datatypes:
-        # same KEY → xsd URI mapping the N-Quads export uses (string → None, anyURI excluded)
-        from ..iri import SchemaTerms
-        key_datatypes = SchemaTerms.from_rdf_map(rdf_map).datatypes
+    terms = SchemaTerms.from_rdf_map(rdf_map)       # enum namespaces; KEY → xsd datatype (string → None, anyURI excluded)
+    key_datatypes = terms.datatypes if datatypes else {}
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))
@@ -246,9 +243,8 @@ def generate_xml(instance_data,
 
                     value_prefix = attrib.get("value_prefix", "")
 
-                    # Get namespace for enumerations
-                    if not value_prefix:
-                        value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace", "")
+                    if not value_prefix:                     # enumeration: the value's own schema namespace
+                        value_prefix = terms.namespaces.get(VALUE, "")
 
                     tag.attrib[_get_qname(attrib["attribute"])] = f"{value_prefix}{VALUE}"
                 else:

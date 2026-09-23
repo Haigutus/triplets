@@ -17,10 +17,10 @@ Start of the 0.3 line.
 
 ### Changed
 - **`triplets.iri`** — one public package for the triplet ↔ IRI contract:
-  `local_id` / `local_key` / `local_value` / `local_term` (shorten),
-  `expand_id` / `expand_name` / `expand_key` / `expand_value` (expand, via a
+  `local_id` / `local_key` / `local_value` / `local_term` (local names),
+  `absolute_id` / `absolute_name` / `absolute_key` / `absolute_value` (absolute IRIs, via a
   cached `SchemaTerms` built from `rdf_map`), the namespace constants, and
-  `iri_pandas` / `iri_polars` flavors with the same names. The parsers, N-Quads
+  `iri_pandas` / `iri_polars` / `iri_duckdb` flavors with the same names. The parsers, N-Quads
   export/read-back, the qlever ingest bridge, SPARQL result decoding, SHACL
   reports, SARIF and the validation engines all use it; the six private
   local-name helpers and the duplicated `"urn:uuid:"` / namespace literals are
@@ -46,7 +46,7 @@ Start of the 0.3 line.
   URI-shaped `INSTANCE_ID` now survives the round trip.
 - `violations_to_report_graph` / `export_to_shacl_report` accept `rdf_map`;
   `sh:resultPath` then keeps the profile namespace instead of CIM100.
-- SPARQL / validation `scope` builds graph IRIs with `expand_id`: a URI-shaped
+- SPARQL / validation `scope` builds graph IRIs with `absolute_id`: a URI-shaped
   `INSTANCE_ID` scopes correctly (was silently empty), and an `https:` one is
   no longer prefixed with `urn:uuid:` by the N-Quads graph term.
 

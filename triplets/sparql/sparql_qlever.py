@@ -52,7 +52,7 @@ from . import _qlever  # ImportError here → the registry falls back to rdflib
 from .._caches import register_cache
 from .._content_key import content_key
 from .._engine_detect import flavor, to_pandas, to_return_type
-from ..iri import SchemaTerms, expand_id
+from ..iri import SchemaTerms, absolute_id
 from ..parser.nquads import terms_to_triplets
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data
     protocol these take precedence over any FROM inside the query.
     """
     index = _index_for(data, rdf_map, data_unchanged)
-    graphs = [expand_id(instance) for instance in scope] if scope is not None else None
+    graphs = [absolute_id(instance) for instance in scope] if scope is not None else None
     form = _query_form(query_string)
     if return_type == "auto":
         return_type = "polars" if flavor(data) == "polars" else "pandas"
@@ -172,7 +172,7 @@ def _build_index(table, rdf_map, basename):
     Arrow batches into an injected parser, no RDF text round-trip. The term
     mapping is the N-Quads export rules, applied on the C++ side from the
     SchemaTerms table (triplets.iri stays the single source of truth for
-    rdf_map interpretation; the C++ mirrors expand_name / is_iri / UUID_RE)."""
+    rdf_map interpretation; the C++ mirrors absolute_name / is_iri / UUID_RE)."""
     terms = SchemaTerms.from_rdf_map(rdf_map)
     logger.debug("building qlever index from %d arrow rows", table.num_rows)
     _qlever.build_index_from_arrow(table.to_batches(), basename, terms.enum_keys,

@@ -25,16 +25,16 @@ def _quads(data, terms):
                .str.replace_all("\r", "\\r", literal=True))
     plain_literal = pl.format('"{}"', escaped)
 
-    kind, payload = iri_polars.expand_value("KEY", "VALUE", terms)
-    subject = pl.format("<{}>", iri_polars.expand_id("ID"))
-    predicate = pl.format("<{}>", iri_polars.expand_key("KEY", terms))
+    kind, payload = iri_polars.absolute_value("KEY", "VALUE", terms)
+    subject = pl.format("<{}>", iri_polars.absolute_id("ID"))
+    predicate = pl.format("<{}>", iri_polars.absolute_key("KEY", terms))
     objects = (pl.when(pl.col("_kind") == "iri").then(pl.format("<{}>", pl.col("_payload")))
                .when(pl.col("_payload").is_not_null())
                .then(pl.format('"{}"^^<{}>', escaped, pl.col("_payload")))
                .otherwise(plain_literal))
     # a null INSTANCE_ID writes no graph term (an N-Triples line), same as the pandas writer
     graph = (pl.when(pl.col("INSTANCE_ID").is_null()).then(pl.lit("."))
-             .otherwise(pl.format("<{}> .", iri_polars.expand_id("INSTANCE_ID"))))
+             .otherwise(pl.format("<{}> .", iri_polars.absolute_id("INSTANCE_ID"))))
 
     # one lazy plan: stringify (KEY/INSTANCE_ID may be Categorical), filter
     # null VALUE rows, materialize the value classification once (its

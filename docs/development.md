@@ -63,30 +63,30 @@ Short triplet names ↔ absolute IRIs is defined once, in `triplets/iri/`. Never
 split on `#`, strip `urn:uuid:` or prepend `CIM100#` at a call site — pick the
 function for the column:
 
-| column / context | shorten | expand |
+| column / context | local | absolute |
 |---|---|---|
-| `ID`, `INSTANCE_ID`, focus node, graph | `local_id` | `expand_id` |
-| `KEY` | `local_key` (`rdf:type` → `Type`, else `#frag` only) | `expand_key` |
-| `VALUE` (Type, reference, enum) | `local_value` (`local_id`, then `#frag`; never `/`) | `expand_value` → `(kind, payload)` |
+| `ID`, `INSTANCE_ID`, focus node, graph | `local_id` | `absolute_id` |
+| `KEY` | `local_key` (`rdf:type` → `Type`, else `#frag` only) | `absolute_key` |
+| `VALUE` (Type, reference, enum) | `local_value` (`local_id`, then `#frag`; never `/`) | `absolute_value` → `(kind, payload)` |
 | SHACL / RDFS vocabulary, `sh:in`, SARIF, `schema_ir` | `local_term` (`#` then `/`) | not instance data |
 
-- `SchemaTerms.from_rdf_map(rdf_map)` is the cached expand-side table (one
+- `SchemaTerms.from_rdf_map(rdf_map)` is the cached absolute-side table (one
   `namespaces` dict for every schema entry, `enum_keys`, `datatypes`).
-  `expand_name` covers classes, enum values and keys alike; a name absent from
+  `absolute_name` covers classes, enum values and keys alike; a name absent from
   the schema (CIM abstracts) gets `default_ns` (CIM100).
-- Flavors: `iri_pandas` (Series in/out), `iri_polars` (Expr in/out, no UDFs)
-  carry the same names; `SQL_LOCAL_TERM` is the duckdb form of `local_term`.
+- Flavors: `iri_pandas` (Series in/out), `iri_polars` (Expr in/out, no UDFs),
+  `iri_duckdb` (SQL text in/out) carry the same names.
   `__init__` imports only the standard library — the parser imports it per file.
 - Native mirrors (cython parser `clean_id`/`clean_ref_value`, qlever C++
   `isUri`/`isUuid`/`namespaceFor`) are commented as such and checked by the
   parse / ingest parity tests. Vectorized patterns derive from the constants
-  (`ID_PREFIX_RE`, `URI_PREFIX_RE`, `UUID_RE.pattern`), so a prefix change
+  (`ID_PREFIX_RE`, `URI_PREFIXES` / `URI_PREFIX_RE`, `UUID_RE.pattern`), so a prefix change
   cannot miss a flavor.
 - `UUID_RE` (strict lowercase, export rule) and `REFERENCE_LIKE` (loose
   nodeKind heuristic) are different contracts on purpose.
-- CIM XML export is *not* on `expand_id`: `rdf:about` / `rdf:resource` prefixes
-  are the per-class schema `value_prefix`, and enum namespaces come from the
-  instance profile map.
+- CIM XML export is *not* on `absolute_id`: `rdf:about` / `rdf:resource` prefixes
+  are the per-class schema `value_prefix`. Enum namespaces and literal
+  datatypes come from `SchemaTerms`.
 
 ## Flavor conversion
 

@@ -8,7 +8,7 @@ import numpy
 import pandas
 
 from . import (EMPTY_TERMS, HTTP_FRAGMENT_RE, ID_PREFIX_RE, RDF_TYPE, TERM_PREFIX_RE,
-               URI_PREFIX_RE, UUID_PREFIX, UUID_RE)
+               URI_PREFIXES, UUID_PREFIX, UUID_RE)
 
 # Regex replaces only: they work the same on object and arrow-backed string
 # Series (rsplit/list access does not).
@@ -40,10 +40,10 @@ def local_term(series):
 
 
 def is_iri(series):
-    return series.str.match(URI_PREFIX_RE.pattern, na=False).astype(bool)
+    return series.str.startswith(URI_PREFIXES, na=False).astype(bool)   # ~3x faster than a regex match on arrow strings
 
 
-def expand_id(series):
+def absolute_id(series):
     return series.where(is_iri(series), UUID_PREFIX + series)
 
 
@@ -53,19 +53,16 @@ def _namespace(series, terms):
     return series.map(terms.namespaces).fillna(terms.default_ns)
 
 
-def expand_name(series, terms=None):
+def absolute_name(series, terms=None):
     terms = terms or EMPTY_TERMS
     return series.where(is_iri(series), _namespace(series, terms) + series)
 
 
-def expand_key(series, terms=None):
-    return expand_name(series, terms).mask(_eq(series, "Type"), RDF_TYPE)
+def absolute_key(series, terms=None):
+    return absolute_name(series, terms).mask(_eq(series, "Type"), RDF_TYPE)
 
 
-expand_class = expand_name
-
-
-def expand_value(key, value, terms=None):
+def absolute_value(key, value, terms=None):
     """→ ``(kind, payload)`` Series: kind ∈ {"iri", "literal"}; payload is the
     IRI, or the xsd datatype IRI / null for literals. Same precedence as the
     scalar rule, applied as masks from lowest to highest — stays in the
@@ -82,6 +79,6 @@ def expand_value(key, value, terms=None):
                else pandas.Series(None, index=key.index, dtype=value.dtype))
     payload = payload.mask(~typed & uuid, UUID_PREFIX + value)
     payload = payload.mask(uri, value)
-    payload = payload.mask(is_type | enum, expand_name(value, terms))
+    payload = payload.mask(is_type | enum, absolute_name(value, terms))
     kind = numpy.where(is_type | uri | enum | (~typed & uuid), "iri", "literal")
     return pandas.Series(kind, index=key.index, dtype=value.dtype), payload

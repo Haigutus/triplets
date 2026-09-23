@@ -23,7 +23,7 @@ import uuid
 
 import logging
 
-from .iri import local_id, local_value
+from .iri import RDF_NS, local_id, local_value
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +168,6 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
     if debug:
         start_time = datetime.datetime.now()
 
-    RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     RDF_ID = f"{{{RDF_NS}}}ID"
     RDF_ABOUT = f"{{{RDF_NS}}}about"
     RDF_NODEID = f"{{{RDF_NS}}}nodeID"

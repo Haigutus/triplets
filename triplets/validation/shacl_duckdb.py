@@ -25,7 +25,7 @@ import pandas
 from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .shacl_report import VIOLATION_COLUMNS
-from ..iri import REFERENCE_LIKE, SQL_LOCAL_TERM, SchemaTerms
+from ..iri import REFERENCE_LIKE, SchemaTerms, iri_duckdb
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -151,7 +151,7 @@ def _range(operator, description):
 def _in(rule, table, context):
     rows, rows_params = _rows_sql(rule, table)
     allowed = [str(value) for value in rule.params]
-    local = SQL_LOCAL_TERM.format(col="PV")
+    local = iri_duckdb.local_term("PV")
     return _wrap(rule, f"value is not one of {sorted(allowed)}",
                  rows, rows_params, f"NOT list_contains(?, {local})", [allowed])
 

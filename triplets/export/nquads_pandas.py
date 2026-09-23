@@ -40,16 +40,16 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     values = data["VALUE"].astype(str)
     instances = data["INSTANCE_ID"].astype(str).where(data["INSTANCE_ID"].notna(), None)
 
-    kind, payload = iri_pandas.expand_value(keys, values, terms)
+    kind, payload = iri_pandas.absolute_value(keys, values, terms)
     is_iri = (kind == "iri").to_numpy()
     typed = payload.notna().to_numpy() & ~is_iri
     objects = '"' + _escape(values) + '"'                     # plain literal by default
     objects[typed] = objects[typed] + "^^<" + payload[typed] + ">"
     objects[is_iri] = "<" + payload[is_iri] + ">"
 
-    graphs = ("<" + iri_pandas.expand_id(instances) + ">").where(instances.notna(), ".")
-    content = _lines("<" + iri_pandas.expand_id(ids) + ">",
-                     "<" + iri_pandas.expand_key(keys, terms) + ">",
+    graphs = ("<" + iri_pandas.absolute_id(instances) + ">").where(instances.notna(), ".")
+    content = _lines("<" + iri_pandas.absolute_id(ids) + ">",
+                     "<" + iri_pandas.absolute_key(keys, terms) + ">",
                      objects,
                      graphs)
 

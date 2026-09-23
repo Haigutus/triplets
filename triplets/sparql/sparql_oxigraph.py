@@ -41,7 +41,7 @@ from .._caches import register_cache
 from .._content_key import content_key
 from .._engine_detect import as_frame, flavor, to_pandas
 from ..export import export_to_nquads
-from ..iri import expand_id
+from ..iri import absolute_id
 from ..parser.nquads import read_nquads
 
 logger = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data
     deduplicated union of all named graphs).
     """
     store = _store_for(data, rdf_map, data_unchanged)
-    graphs = [NamedNode(expand_id(instance)) for instance in scope] if scope is not None else None
+    graphs = [NamedNode(absolute_id(instance)) for instance in scope] if scope is not None else None
     if return_type == "auto":
         return_type = "polars" if flavor(data) == "polars" else "pandas"
 

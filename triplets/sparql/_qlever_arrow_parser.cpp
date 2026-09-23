@@ -81,7 +81,7 @@ class RangeConverter {
     std::string name;                              // for ingest error context
   };
 
-  // Mirror of triplets.iri.SchemaTerms.namespace / expand_name: the schema
+  // Mirror of triplets.iri.SchemaTerms.namespace / absolute_name: the schema
   // namespace for a short name, defaultNamespace (CIM100) when absent.
   std::string namespaceFor(std::string_view name) const {
     auto found = mapping_.keyNamespaces.find(std::string{name});
@@ -108,7 +108,7 @@ class RangeConverter {
       info.predicate = iriComponent(RDF_TYPE);
       info.rule = ObjectRule::Type;
     } else {
-      if (isUri(key)) {   // mirror of triplets.iri.expand_key: absolute IRIs pass through
+      if (isUri(key)) {   // mirror of triplets.iri.absolute_key: absolute IRIs pass through
         info.predicate = iriComponent(key);
       } else {
         auto ns = mapping_.keyNamespaces.find(std::string{key});

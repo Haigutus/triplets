@@ -1,7 +1,7 @@
 """The IRI contract case table — every flavor must match the scalar definition.
 
 Scalar ``triplets.iri`` is the readable rule; this table is the contract. The
-pandas and polars flavors are checked against it here; the cython parser and
+pandas, polars and duckdb flavors are checked against it here; the cython parser and
 the qlever C++ ingest are checked against it in the parse / export parity
 harnesses.
 """
@@ -64,24 +64,25 @@ CASES = [
     ("is_iri", "urn:uuid:a", True),
     ("is_iri", "abc", False),
     ("is_iri", "urn", False),
-    # expand_id
-    ("expand_id", UUID, "urn:uuid:" + UUID),
-    ("expand_id", "http://example.org/ns#g", "http://example.org/ns#g"),
-    ("expand_id", "https://example.org/g", "https://example.org/g"),
+    # absolute_id
+    ("absolute_id", None, None),
+    ("absolute_id", UUID, "urn:uuid:" + UUID),
+    ("absolute_id", "http://example.org/ns#g", "http://example.org/ns#g"),
+    ("absolute_id", "https://example.org/g", "https://example.org/g"),
 ]
 
 # (function name, input, terms, expected)
 NAME_CASES = [
-    ("expand_name", "Breaker", TERMS, CIM16 + "Breaker"),
-    ("expand_name", "Equipment", TERMS, CIM_NS + "Equipment"),      # abstract: no entry → default
-    ("expand_name", "NcClass", TERMS, NC + "NcClass"),
-    ("expand_name", "Breaker", None, CIM_NS + "Breaker"),
-    ("expand_name", "http://x#Y", TERMS, "http://x#Y"),
-    ("expand_key", "Type", TERMS, RDF_TYPE),
-    ("expand_key", "ACLineSegment.r", TERMS, CIM16 + "ACLineSegment.r"),
-    ("expand_key", "Unknown.x", TERMS, CIM_NS + "Unknown.x"),
-    ("expand_key", "http://purl.org/dc/terms/created", TERMS, "http://purl.org/dc/terms/created"),
-    ("expand_key", "ACLineSegment.r", None, CIM_NS + "ACLineSegment.r"),
+    ("absolute_name", "Breaker", TERMS, CIM16 + "Breaker"),
+    ("absolute_name", "Equipment", TERMS, CIM_NS + "Equipment"),      # abstract: no entry → default
+    ("absolute_name", "NcClass", TERMS, NC + "NcClass"),
+    ("absolute_name", "Breaker", None, CIM_NS + "Breaker"),
+    ("absolute_name", "http://x#Y", TERMS, "http://x#Y"),
+    ("absolute_key", "Type", TERMS, RDF_TYPE),
+    ("absolute_key", "ACLineSegment.r", TERMS, CIM16 + "ACLineSegment.r"),
+    ("absolute_key", "Unknown.x", TERMS, CIM_NS + "Unknown.x"),
+    ("absolute_key", "http://purl.org/dc/terms/created", TERMS, "http://purl.org/dc/terms/created"),
+    ("absolute_key", "ACLineSegment.r", None, CIM_NS + "ACLineSegment.r"),
 ]
 
 # (key, value, terms, expected kind, expected payload)
@@ -116,13 +117,13 @@ def test_scalar(name, text, expected):
 
 
 @pytest.mark.parametrize("name,text,terms,expected", NAME_CASES)
-def test_scalar_expand_name(name, text, terms, expected):
+def test_scalar_absolute_name(name, text, terms, expected):
     assert getattr(iri, name)(text, terms) == expected
 
 
 @pytest.mark.parametrize("key,value,terms,kind,payload", VALUE_CASES)
-def test_scalar_expand_value(key, value, terms, kind, payload):
-    assert iri.expand_value(key, value, terms) == (kind, payload)
+def test_scalar_absolute_value(key, value, terms, kind, payload):
+    assert iri.absolute_value(key, value, terms) == (kind, payload)
 
 
 # ── pandas flavor vs scalar ────────────────────────────────────────────────────
@@ -147,26 +148,26 @@ def _string_dtypes():
 @pytest.mark.parametrize("dtype", _string_dtypes(), ids=str)
 @pytest.mark.parametrize("name", sorted(_grouped(CASES)))
 def test_pandas_matches_scalar(name, dtype):
-    inputs = [text for text, _ in _grouped(CASES)[name] if not (name.startswith("expand") and text is None)]
+    inputs = [text for text, _ in _grouped(CASES)[name]]
     got = getattr(iri_pandas, name)(pandas.Series(inputs, dtype=dtype))
     assert [_norm(v) for v in got.tolist()] == [getattr(iri, name)(text) for text in inputs]
 
 
 @pytest.mark.parametrize("name", sorted(_grouped(NAME_CASES)))
-def test_pandas_expand_name_matches_scalar(name):
+def test_pandas_absolute_name_matches_scalar(name):
     for terms in (TERMS, None):
         inputs = [text for text, t, _ in _grouped(NAME_CASES)[name] if t is terms]
         got = getattr(iri_pandas, name)(pandas.Series(inputs, dtype=object), terms)
         assert got.tolist() == [getattr(iri, name)(text, terms) for text in inputs]
 
 
-def test_pandas_expand_value_matches_scalar():
+def test_pandas_absolute_value_matches_scalar():
     for terms in (TERMS, None):
         rows = [(k, v) for k, v, t, _, _ in VALUE_CASES if t is terms]
         keys = pandas.Series([k for k, _ in rows], dtype=object)   # includes a None VALUE row
         values = pandas.Series([v for _, v in rows], dtype=object)
-        kinds, payloads = iri_pandas.expand_value(keys, values, terms)
-        expected = [iri.expand_value(k, v, terms) for k, v in rows]
+        kinds, payloads = iri_pandas.absolute_value(keys, values, terms)
+        expected = [iri.absolute_value(k, v, terms) for k, v in rows]
         assert list(zip(kinds.tolist(), [_norm(p) for p in payloads.tolist()])) == expected
 
 
@@ -178,14 +179,14 @@ from triplets.iri import iri_polars  # noqa: E402
 
 @pytest.mark.parametrize("name", sorted(_grouped(CASES)))
 def test_polars_matches_scalar(name):
-    inputs = [text for text, _ in _grouped(CASES)[name] if not (name.startswith("expand") and text is None)]
+    inputs = [text for text, _ in _grouped(CASES)[name]]
     frame = polars.DataFrame({"x": inputs}, schema={"x": polars.Utf8})
     got = frame.select(getattr(iri_polars, name)("x").alias("y"))["y"].to_list()
     assert got == [getattr(iri, name)(text) for text in inputs]
 
 
 @pytest.mark.parametrize("name", sorted(_grouped(NAME_CASES)))
-def test_polars_expand_name_matches_scalar(name):
+def test_polars_absolute_name_matches_scalar(name):
     for terms in (TERMS, None):
         inputs = [text for text, t, _ in _grouped(NAME_CASES)[name] if t is terms]
         frame = polars.DataFrame({"x": inputs}, schema={"x": polars.Utf8})
@@ -193,15 +194,15 @@ def test_polars_expand_name_matches_scalar(name):
         assert got == [getattr(iri, name)(text, terms) for text in inputs]
 
 
-def test_polars_expand_value_matches_scalar():
+def test_polars_absolute_value_matches_scalar():
     for terms in (TERMS, None):
         rows = [(k, v) for k, v, t, _, _ in VALUE_CASES if t is terms]
         frame = polars.DataFrame({"KEY": [k for k, _ in rows], "VALUE": [v for _, v in rows]},
                                  schema={"KEY": polars.Utf8, "VALUE": polars.Utf8})
-        kind, payload = iri_polars.expand_value("KEY", "VALUE", terms)
+        kind, payload = iri_polars.absolute_value("KEY", "VALUE", terms)
         got = frame.select(kind.alias("kind"), payload.alias("payload"))
         assert list(zip(got["kind"].to_list(), got["payload"].to_list())) == \
-            [iri.expand_value(k, v, terms) for k, v in rows]
+            [iri.absolute_value(k, v, terms) for k, v in rows]
 
 
 # ── SchemaTerms from a shipped schema ──────────────────────────────────────────
@@ -277,3 +278,17 @@ def test_parse_engines_apply_local_id_and_local_value(engine, tmp_path):
     assert ("Breaker.ref", iri.local_value("https://cim4.eu/ns/nc#Kind.value")) in rows
     assert ("Breaker.uri", iri.local_value("http://example.org/path/only")) in rows
     assert ("Switch.open", "false") in rows
+
+
+# ── duckdb flavor ──────────────────────────────────────────────────────────────
+
+duckdb = pytest.importorskip("duckdb")
+from triplets.iri import iri_duckdb  # noqa: E402
+
+
+@pytest.mark.parametrize("name", sorted(name for name in _grouped(CASES) if hasattr(iri_duckdb, name)))
+def test_duckdb_matches_scalar(name):
+    inputs = [text for text, _ in _grouped(CASES)[name]]
+    frame = pandas.DataFrame({"x": pandas.Series(inputs, dtype=object)})
+    got = duckdb.sql(f"SELECT {getattr(iri_duckdb, name)('x')} AS y FROM frame")["y"].fetchall()
+    assert [row[0] for row in got] == [getattr(iri, name)(text) for text in inputs]

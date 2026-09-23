@@ -39,7 +39,7 @@ def is_iri(column):
     return _col(column).str.contains(URI_PREFIX_RE.pattern)
 
 
-def expand_id(column):
+def absolute_id(column):
     expr = _col(column)
     return polars.when(is_iri(expr)).then(expr).otherwise(polars.lit(UUID_PREFIX) + expr)
 
@@ -50,22 +50,19 @@ def _namespace(expr, terms):
     return expr.replace_strict(terms.namespaces, default=terms.default_ns, return_dtype=polars.Utf8)
 
 
-def expand_name(column, terms=None):
+def absolute_name(column, terms=None):
     terms = terms or EMPTY_TERMS
     expr = _col(column)
     return polars.when(is_iri(expr)).then(expr).otherwise(_namespace(expr, terms) + expr)
 
 
-def expand_key(column, terms=None):
+def absolute_key(column, terms=None):
     expr = _col(column)
     return (polars.when(expr == "Type").then(polars.lit(RDF_TYPE))
-            .otherwise(expand_name(expr, terms)))
+            .otherwise(absolute_name(expr, terms)))
 
 
-expand_class = expand_name
-
-
-def expand_value(key, value, terms=None):
+def absolute_value(key, value, terms=None):
     """→ ``(kind, payload)`` Exprs; same branch order as the scalar rule."""
     terms = terms or EMPTY_TERMS
     key, value = _col(key), _col(value)
@@ -82,7 +79,7 @@ def expand_value(key, value, terms=None):
             .when(typed).then(polars.lit("literal"))
             .when(uuid).then(polars.lit("iri"))
             .otherwise(polars.lit("literal")))
-    payload = (polars.when(is_type | enum).then(expand_name(value, terms))
+    payload = (polars.when(is_type | enum).then(absolute_name(value, terms))
                .when(uri).then(value)
                .when(typed).then(datatype)
                .when(uuid).then(polars.lit(UUID_PREFIX) + value)

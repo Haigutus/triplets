@@ -1,27 +1,29 @@
 """The triplet ↔ IRI contract — one definition for ID, KEY and VALUE.
 
-Instance data in a triplet frame is stored *short*: bare IDs, ``Class.attr``
-KEYs, local-name VALUEs. RDF serializations (N-Quads, SPARQL stores, SHACL
-reports) are *long*: absolute IRIs. This package owns both directions.
+Instance data in a triplet frame is stored *local*: bare IDs, ``Class.attr``
+KEYs, local-name VALUEs (W3C: *local name*). RDF serializations (N-Quads,
+SPARQL stores, SHACL reports) are *absolute*: absolute IRIs. This package owns
+both directions.
 
 Which function for which column
 -------------------------------
-=====================================  ==============  ==============
-column / context                       shorten         expand
-=====================================  ==============  ==============
-``ID``, ``INSTANCE_ID``, focus, graph  ``local_id``    ``expand_id``
-``KEY``                                ``local_key``   ``expand_key``
-``VALUE`` (Type, reference, enum)      ``local_value`` ``expand_value``
-SHACL / RDFS vocabulary terms          ``local_term``  —
-=====================================  ==============  ==============
+=====================================  ===============  ==================
+column / context                       local            absolute
+=====================================  ===============  ==================
+``ID``, ``INSTANCE_ID``, focus, graph  ``local_id``     ``absolute_id``
+``KEY``                                ``local_key``    ``absolute_key``
+``VALUE`` (Type, reference, enum)      ``local_value``  ``absolute_value``
+SHACL / RDFS vocabulary terms          ``local_term``   —
+=====================================  ===============  ==================
 
-Shorten rules are schema-free (a parse has no schema). Expand rules take a
+Local rules are schema-free (a parse has no schema). Absolute rules take a
 :class:`SchemaTerms` built from the export schema; without one, CIM100 is the
 namespace for everything.
 
-Flavors: :mod:`triplets.iri.iri_pandas` and :mod:`triplets.iri.iri_polars`
-implement the same names over Series / Expr. The cython parser and the qlever
-C++ ingest mirror the same rules natively. All of them are held to one case
+Flavors: :mod:`triplets.iri.iri_pandas`, :mod:`triplets.iri.iri_polars` and
+:mod:`triplets.iri.iri_duckdb` implement the same names over Series / Expr /
+SQL text. The cython parser and the qlever C++ ingest mirror the same rules
+natively. All of them are held to one case
 table in ``tests/test_iri.py`` — the scalar functions here are the readable
 definition, the table is the contract.
 
@@ -65,11 +67,8 @@ REFERENCE_LIKE = re.compile(
 """Loose "looks like a reference" heuristic for SHACL nodeKind when the schema
 says nothing about a key. Not the export rule — see :data:`UUID_RE`."""
 
-SQL_LOCAL_TERM = "list_extract(string_split(list_extract(string_split({col}, '#'), -1), '/'), -1)"
-"""``local_term`` as a duckdb expression template (``{col}`` = column)."""
 
-
-# ── shorten (schema-free) ──────────────────────────────────────────────────────
+# ── local (schema-free) ──────────────────────────────────────────────────────
 
 def local_id(text):
     """``urn:uuid:x`` / ``#_x`` / ``_x`` → ``x``. One prefix, longest first. None → None."""
@@ -140,9 +139,15 @@ def load_schema(rdf_map):
 _TERMS_CACHE: dict = register_cache({})  # schema digest → SchemaTerms
 
 
+def schema_entries(schema):
+    """Export schema → ``[(name, entry), …]`` over every profile, in file order."""
+    return [(name, entry) for profile in schema.values() if isinstance(profile, dict)
+            for name, entry in profile.items() if isinstance(entry, dict)]
+
+
 @dataclass(frozen=True)
 class SchemaTerms:
-    """What the export schema says about names — the expand-side lookup table.
+    """What the export schema says about names — the absolute-side lookup table.
 
     ``namespaces`` covers every schema entry (classes, attributes, associations,
     enumerations, enumeration values, datatypes) — one dict, first occurrence
@@ -172,22 +177,14 @@ class SchemaTerms:
 
     @classmethod
     def _build(cls, schema):
-        namespaces, enum_keys, datatypes = {}, set(), {}
-        for entries in schema.values():
-            if not isinstance(entries, dict):
-                continue
-            for name, entry in entries.items():
-                if not isinstance(entry, dict):
-                    continue
-                if entry.get("namespace"):
-                    namespaces.setdefault(name, entry["namespace"])
-                if entry.get("type") == "Enumeration":
-                    enum_keys.add(name)
-                xsd_type = entry.get("xsd:type") or ""
-                if xsd_type.startswith("xsd:") and xsd_type != "xsd:anyURI":
-                    datatype = xsd_type.removeprefix("xsd:")
-                    datatypes.setdefault(name, None if datatype == "string" else XSD_NS + datatype)
-        return cls(namespaces, frozenset(enum_keys), datatypes)
+        entries = schema_entries(schema)
+        reverse = entries[::-1]                    # dict comprehension keeps the last write → first occurrence wins
+        namespaces = {name: entry["namespace"] for name, entry in reverse if entry.get("namespace")}
+        enum_keys = frozenset(name for name, entry in entries if entry.get("type") == "Enumeration")
+        xsd = {name: str(entry["xsd:type"]).removeprefix("xsd:") for name, entry in reverse
+               if str(entry.get("xsd:type", "")).startswith("xsd:") and entry["xsd:type"] != "xsd:anyURI"}
+        datatypes = {name: None if datatype == "string" else XSD_NS + datatype for name, datatype in xsd.items()}
+        return cls(namespaces, enum_keys, datatypes)
 
     def namespace(self, name):
         return self.namespaces.get(name, self.default_ns)
@@ -204,29 +201,28 @@ class SchemaTerms:
 EMPTY_TERMS = SchemaTerms({}, frozenset(), {})
 
 
-# ── expand (schema-driven) ─────────────────────────────────────────────────────
+# ── absolute (schema-driven) ─────────────────────────────────────────────────────
 
-def expand_id(text):
-    """Bare ID / INSTANCE_ID → ``urn:uuid:…``; an absolute IRI passes through."""
-    return text if is_iri(text) else UUID_PREFIX + text
+def absolute_id(text):
+    """Bare ID / INSTANCE_ID → ``urn:uuid:…``; an absolute IRI passes through. None → None."""
+    return text if text is None or is_iri(text) else UUID_PREFIX + text
 
 
-def expand_name(name, terms=None):
-    """Short schema name (class, enum value, key) → its namespace + name; IRIs pass through."""
-    if is_iri(name):
+def absolute_name(name, terms=None):
+    """Local schema name (class, enum value, key) → its namespace + name; IRIs pass through. None → None."""
+    if name is None or is_iri(name):
         return name
     return (terms or EMPTY_TERMS).namespace(name) + name
 
 
-def expand_key(key, terms=None):
-    """KEY → predicate IRI: ``Type`` → ``rdf:type``, else :func:`expand_name`."""
-    return RDF_TYPE if key == "Type" else expand_name(key, terms)
+def absolute_key(key, terms=None):
+    """KEY → predicate IRI: ``Type`` → ``rdf:type``, else :func:`absolute_name`."""
+    return RDF_TYPE if key == "Type" else absolute_name(key, terms)
 
 
-expand_class = expand_name
 
 
-def expand_value(key, value, terms=None):
+def absolute_value(key, value, terms=None):
     """VALUE → ``("iri", iri)`` or ``("literal", xsd_datatype_or_None)``.
 
     Type → class IRI; absolute IRI → itself; enumeration key → enum IRI;
@@ -238,11 +234,11 @@ def expand_value(key, value, terms=None):
     if value is None:                    # no term — same answer as the flavors' null rows
         return "literal", None
     if key == "Type":
-        return "iri", expand_name(value, terms)
+        return "iri", absolute_name(value, terms)
     if is_iri(value):
         return "iri", value
     if key in terms.enum_keys:
-        return "iri", expand_name(value, terms)
+        return "iri", absolute_name(value, terms)
     if key in terms.datatypes:
         return "literal", terms.datatypes[key]
     if UUID_RE.match(value):

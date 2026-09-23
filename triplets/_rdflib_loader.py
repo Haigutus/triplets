@@ -14,7 +14,7 @@ import logging
 from ._caches import register_cache
 from ._content_key import content_key
 from ._engine_detect import as_frame, to_pandas
-from .iri import expand_id
+from .iri import absolute_id
 
 logger = logging.getLogger(__name__)
 
@@ -115,5 +115,5 @@ def scoped_graph(dataset, scope=None):
 
     graph = rdflib.Graph()
     for instance_id in scope:
-        graph += dataset.get_context(rdflib.URIRef(expand_id(instance_id)))
+        graph += dataset.get_context(rdflib.URIRef(absolute_id(instance_id)))
     return graph

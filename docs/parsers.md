@@ -147,8 +147,8 @@ in `tests/test_iri.py`).
 | `VALUE` (literal) | text verbatim | — |
 | `INSTANCE_ID` | bare UUID | fresh `uuid4()` per parsed file |
 
-Expansion back to IRIs (N-Quads, SPARQL stores, SHACL reports) is the inverse,
-driven by the export schema: `expand_id`, `expand_key`, `expand_value` with a
+The absolute form (N-Quads, SPARQL stores, SHACL reports) is the inverse,
+driven by the export schema: `absolute_id`, `absolute_key`, `absolute_value` with a
 `SchemaTerms` built from `rdf_map`; CIM100 is only the fallback when there is
 no schema or the name is not in it. `shorten_resources=False` skips only the
 `#frag` step.
