@@ -52,7 +52,7 @@ from . import _qlever  # ImportError here → the registry falls back to rdflib
 from .._caches import register_cache
 from .._content_key import content_key
 from .._engine_detect import flavor, to_pandas, to_return_type
-from ..iri import SchemaTerms, absolute_id
+from ..iri import CIM_NS, absolute_id, datatypes, load_rdf_map, namespaces, value_types
 from ..parser.nquads import terms_to_triplets
 
 logger = logging.getLogger(__name__)
@@ -171,12 +171,12 @@ def _build_index(table, rdf_map, basename):
     """Feed the triplet columns to qlever's index builder directly — zero-copy
     Arrow batches into an injected parser, no RDF text round-trip. The term
     mapping is the N-Quads export rules, applied on the C++ side from the
-    SchemaTerms table (triplets.iri stays the single source of truth for
-    rdf_map interpretation; the C++ mirrors absolute_name / is_iri / UUID_RE)."""
-    terms = SchemaTerms.from_rdf_map(rdf_map)
+    triplets.iri flat maps (the single source of truth for rdf_map
+    interpretation; the C++ mirrors absolute_name / absolute_value / is_iri / UUID_RE)."""
+    rdf_map = load_rdf_map(rdf_map)
     logger.debug("building qlever index from %d arrow rows", table.num_rows)
-    _qlever.build_index_from_arrow(table.to_batches(), basename, terms.enum_keys,
-                                   terms.namespaces, terms.datatypes, terms.default_ns)
+    _qlever.build_index_from_arrow(table.to_batches(), basename, value_types(rdf_map),
+                                   namespaces(rdf_map), datatypes(rdf_map), CIM_NS)
 
 
 def _query_form(query_string):

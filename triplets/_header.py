@@ -13,7 +13,8 @@ also lives here: the schema's own ProfileMetadata is the authority
 (PROFILE_URL_MAP) as fallback for old-style headers that carry no exact
 identity. Import-light on purpose: stdlib only.
 """
-import json
+
+from .iri import load_rdf_map  # noqa: F401 — re-exported for the export engines
 
 # Profile identity a header may declare, in priority order: old FullModel
 # header messageType, new dcat:Dataset keyword, then the URI fields
@@ -43,14 +44,6 @@ PROFILE_URL_MAP = {
     "GeographicalLocation": "GL",
     "FileHeader": "FH",
 }
-
-
-def load_rdf_map(rdf_map):
-    """Return the export schema as a dict; load from JSON file path if needed."""
-    if isinstance(rdf_map, dict):
-        return rdf_map
-    with open(rdf_map, "r") as conf_file:
-        return json.load(conf_file)
 
 
 def _profile_identity_index(rdf_map):

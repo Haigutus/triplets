@@ -11,7 +11,8 @@ from lxml import etree
 from lxml.builder import ElementMaker
 from lxml.etree import QName
 
-from ..iri import RDF_NS, TRIPLETS_NS, UUID_PREFIX, SchemaTerms
+from .. import iri
+from ..iri import RDF_NS, TRIPLETS_NS, UUID_PREFIX
 from .cimxml_utils import load_rdf_map, resolve_instance_config
 
 logger = logging.getLogger(__name__)
@@ -147,7 +148,7 @@ def generate_xml(instance_data,
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
 
     # KEY → xsd datatype IRI as the N-Quads export annotates it (string → None, anyURI excluded)
-    key_datatypes = SchemaTerms.from_rdf_map(rdf_map).datatypes if datatypes else {}
+    key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))

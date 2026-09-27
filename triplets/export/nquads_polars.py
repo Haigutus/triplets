@@ -5,12 +5,12 @@ from io import BytesIO
 
 import polars as pl
 
-from ..iri import SchemaTerms, iri_polars
+from ..iri import datatypes, iri_polars, load_rdf_map, namespaces, value_types
 
 logger = logging.getLogger(__name__)
 
 
-def _quads(data, terms):
+def _quads(data, maps):
     """Triplets frame → collected quads frame [s, p, o, g, end].
 
     The shared formatting core: the whole-frame export and the per-batch
@@ -25,9 +25,9 @@ def _quads(data, terms):
                .str.replace_all("\r", "\\r", literal=True))
     plain_literal = pl.format('"{}"', escaped)
 
-    kind, payload = iri_polars.absolute_value("KEY", "VALUE", terms)
+    kind, payload = iri_polars.absolute_value("KEY", "VALUE", **maps)
     subject = pl.format("<{}>", iri_polars.absolute_id("ID"))
-    predicate = pl.format("<{}>", iri_polars.absolute_key("KEY", terms))
+    predicate = pl.format("<{}>", iri_polars.absolute_key("KEY", maps["namespaces"]))
     objects = (pl.when(pl.col("_kind") == "iri").then(pl.format("<{}>", pl.col("_payload")))
                .when(pl.col("_payload").is_not_null())
                .then(pl.format('"{}"^^<{}>', escaped, pl.col("_payload")))
@@ -52,6 +52,12 @@ def _quads(data, terms):
             .collect())
 
 
+def _maps(rdf_map):
+    """The three flat schema maps the term rules take, built once per export."""
+    rdf_map = load_rdf_map(rdf_map)
+    return dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map))
+
+
 def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     """Export triplet DataFrame to N-Quads file.
 
@@ -67,7 +73,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     export_to_memory : bool, default False
         If True, return an in-memory BytesIO (with .name) instead of writing to disk.
     """
-    quads = _quads(data, SchemaTerms.from_rdf_map(rdf_map))
+    quads = _quads(data, _maps(rdf_map))
 
     # write straight from Rust with a space separator — the CSV writer joins
     # the columns into "<s> <p> <o> <g> ." per row. No Python string
@@ -91,7 +97,7 @@ def write_nquads_batches(reader, handle, rdf_map=None):
     a single batch regardless of the total size — the out-of-core export
     counterpart of ``parse_batches``. The schema metadata is resolved once.
     """
-    terms = SchemaTerms.from_rdf_map(rdf_map)
+    maps = _maps(rdf_map)
     for batch in reader:
-        _quads(pl.from_arrow(batch), terms).write_csv(
+        _quads(pl.from_arrow(batch), maps).write_csv(
             handle, include_header=False, quote_style="never", separator=" ")

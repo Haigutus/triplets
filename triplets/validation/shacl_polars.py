@@ -28,7 +28,7 @@ import polars
 
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from ..iri import REFERENCE_LIKE, SchemaTerms, iri_polars
+from ..iri import REFERENCE_LIKE, iri_polars, node_kind, value_types
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class _Context:
     def __init__(self, frame, rdf_map=None):
         self.base = frame.lazy()
         self.rdf_map = rdf_map
-        self.terms = SchemaTerms.from_rdf_map(rdf_map)
+        self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         type_rows = frame.filter(polars.col("KEY") == "Type").select("VALUE", "ID")
         # (ID, CLASS) pairs — the class-membership side of the batched joins
         self.membership = type_rows.rename({"VALUE": "CLASS"}).lazy()
@@ -234,7 +234,7 @@ def _node_kind(context, rule):
         logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)", rule.params, rule.shape_id)
         return None
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else context.terms.key_kind(rule.path)
+    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types, rule.params)
     if kind is not None:                     # schema decides for the whole path
         if (kind == "iri") == (rule.params == "IRI"):
             return None                      # every value conforms — no plan at all
@@ -428,7 +428,7 @@ def _batch_node_kind(context, rules):
             logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)",
                          rule.params, rule.shape_id)
             continue
-        kind = context.terms.key_kind(rule.path)
+        kind = node_kind(rule.path, context.value_types, rule.params)
         if kind is not None:                 # schema decides for the whole path
             if (kind == "iri") == (rule.params == "IRI"):
                 continue                     # every value conforms — no plan at all

@@ -5,7 +5,7 @@ from io import BytesIO
 import pyarrow
 import pyarrow.compute
 
-from ..iri import SchemaTerms, iri_pandas
+from ..iri import datatypes, iri_pandas, load_rdf_map, namespaces, value_types
 
 
 def _escape(series):
@@ -31,7 +31,8 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     export_to_memory : bool, default False
         If True, return an in-memory BytesIO (with .name) instead of writing to disk.
     """
-    terms = SchemaTerms.from_rdf_map(rdf_map)
+    rdf_map = load_rdf_map(rdf_map)
+    maps = dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map))
 
     data = data[data["VALUE"].notna()]  # no object to state (parity with the polars engine)
 
@@ -40,7 +41,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     values = data["VALUE"].astype(str)
     instances = data["INSTANCE_ID"].astype(str).where(data["INSTANCE_ID"].notna(), None)
 
-    kind, payload = iri_pandas.absolute_value(keys, values, terms)
+    kind, payload = iri_pandas.absolute_value(keys, values, **maps)
     is_iri = (kind == "iri").to_numpy()
     typed = payload.notna().to_numpy() & ~is_iri
     objects = '"' + _escape(values) + '"'                     # plain literal by default
@@ -49,7 +50,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
 
     graphs = ("<" + iri_pandas.absolute_id(instances) + ">").where(instances.notna(), ".")
     content = _lines("<" + iri_pandas.absolute_id(ids) + ">",
-                     "<" + iri_pandas.absolute_key(keys, terms) + ">",
+                     "<" + iri_pandas.absolute_key(keys, maps["namespaces"]) + ">",
                      objects,
                      graphs)
 

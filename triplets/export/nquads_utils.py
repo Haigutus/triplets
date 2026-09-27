@@ -5,7 +5,7 @@ takes, what is a literal) live in ``triplets.iri``; this module only wraps the
 results in ``<>`` / ``"..."^^<datatype>``. ``nquads_pandas`` / ``nquads_polars``
 do the same vectorized through ``iri_pandas`` / ``iri_polars``.
 """
-from ..iri import absolute_id, absolute_value, load_schema, schema_entries
+from ..iri import absolute_id, absolute_value, rdf_map_entries
 
 
 def escape_literal(text):
@@ -18,9 +18,9 @@ def make_subject(id_val):
     return f"<{absolute_id(id_val)}>"
 
 
-def make_object(key, value, terms=None):
+def make_object(key, value, namespaces=None, value_types=None, datatypes=None):
     """VALUE → ``<iri>`` or ``"literal"[^^<datatype>]`` per :func:`triplets.iri.absolute_value`."""
-    kind, payload = absolute_value(key, value, terms)
+    kind, payload = absolute_value(key, value, namespaces, value_types, datatypes)
     if kind == "iri":
         return f"<{payload}>"
     escaped = escape_literal(value)
@@ -31,8 +31,8 @@ def flatten_schema(rdf_map):
     """Flatten the export schema across profiles for human-context lookups.
 
     The same class/property key repeats per profile with essentially the same
-    definition — the first occurrence wins. Complements ``SchemaTerms`` (the
-    machine fields); this pulls the human ones.
+    definition — the first occurrence wins. Complements the ``triplets.iri``
+    flat maps (the machine fields); this pulls the human ones.
 
     Returns
     -------
@@ -42,8 +42,7 @@ def flatten_schema(rdf_map):
     class_info : dict
         "Class" → description for class entries.
     """
-    schema, _, _ = load_schema(rdf_map)
-    entries = schema_entries(schema)[::-1]     # reversed: the dict keeps the last write → first occurrence wins
+    entries = rdf_map_entries(rdf_map)
     key_info = {name: {"description": entry.get("description"), "multiplicity": entry.get("multiplicity")}
                 for name, entry in entries if entry.get("type") in ("Attribute", "Association", "Enumeration")}
     class_info = {name: entry.get("description") for name, entry in entries if entry.get("type") == "Class"}

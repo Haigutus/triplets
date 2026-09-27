@@ -73,7 +73,7 @@ class RangeConverter {
       : mapping_{mapping}, encodedIriManager_{encodedIriManager} {}
 
   // How the object term of a row is built, resolved once per KEY.
-  enum class ObjectRule { Type, Enum, Typed, PlainString, Default };
+  enum class ObjectRule { Type, Enum, Reference, Typed, PlainString, Default };
   struct KeyInfo {
     TripleComponent predicate;
     ObjectRule rule;
@@ -81,8 +81,8 @@ class RangeConverter {
     std::string name;                              // for ingest error context
   };
 
-  // Mirror of triplets.iri.SchemaTerms.namespace / absolute_name: the schema
-  // namespace for a short name, defaultNamespace (CIM100) when absent.
+  // Mirror of triplets.iri.absolute_name: the schema namespace for a local
+  // name, defaultNamespace (CIM100) when absent.
   std::string namespaceFor(std::string_view name) const {
     auto found = mapping_.keyNamespaces.find(std::string{name});
     return found != mapping_.keyNamespaces.end() ? found->second
@@ -117,12 +117,17 @@ class RangeConverter {
                                                : mapping_.defaultNamespace,
             key));
       }
-      // Object rule precedence mirrors the exporter: enum before datatype.
-      if (mapping_.enumKeys.contains(std::string{key})) {
+      // Object rule by schema — mirror of triplets.iri.absolute_value.
+      auto valueType = mapping_.valueTypes.find(std::string{key});
+      std::string_view kind =
+          valueType != mapping_.valueTypes.end() ? valueType->second : "";
+      if (kind == "enum") {
         info.rule = ObjectRule::Enum;
-      } else if (auto datatype = mapping_.keyDatatypes.find(std::string{key});
-                 datatype != mapping_.keyDatatypes.end()) {
-        if (datatype->second.empty()) {
+      } else if (kind == "reference") {
+        info.rule = ObjectRule::Reference;
+      } else if (kind == "literal") {
+        auto datatype = mapping_.keyDatatypes.find(std::string{key});
+        if (datatype == mapping_.keyDatatypes.end() || datatype->second.empty()) {
           info.rule = ObjectRule::PlainString;
         } else {
           info.rule = ObjectRule::Typed;
@@ -153,6 +158,8 @@ class RangeConverter {
     switch (key.rule) {
       case ObjectRule::Enum:
         return iriComponent(absl::StrCat(namespaceFor(value), value));
+      case ObjectRule::Reference:   // schema decides, like absolute_id on the ID column
+        return iriComponent(absl::StrCat("urn:uuid:", value));
       case ObjectRule::Typed:
         // qlever's own typed-literal path (identical to the N-Quads parse).
         // Strict by design: an ill-typed value is a data-vs-schema error to be

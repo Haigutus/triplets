@@ -134,7 +134,7 @@ files = data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine
 files = data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine="cython_pugixml")
 
 # N-Quads (fast input for SPARQL engines like qlever); the schema gives every
-# class / enum / key its own namespace (triplets.iri.SchemaTerms; CIM100 without one).
+# class / enum / key its own namespace (triplets.iri.namespaces; CIM100 without one).
 # N-Quads output is serialization-edition-independent — references are always
 # emitted as absolute urn:uuid: IRIs, so ED1 and ED2 produce identical, valid
 # input for any SPARQL engine (the ED1 "#uuid" fragment-reference pitfall is a

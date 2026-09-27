@@ -5,8 +5,8 @@ Categorical first, as the N-Quads exporter does).
 """
 import polars
 
-from . import (EMPTY_TERMS, HTTP_FRAGMENT_RE, ID_PREFIX_RE, RDF_TYPE, TERM_PREFIX_RE,
-               URI_PREFIX_RE, UUID_PREFIX, UUID_RE)
+from . import (CIM_NS, HTTP_FRAGMENT_RE, ID_PREFIX_RE, RDF_TYPE, TERM_PREFIX_RE, URI_PREFIX_RE,
+               UUID_PREFIX, UUID_RE)
 
 
 def _col(column):
@@ -27,8 +27,7 @@ def local_value(column):
 
 def local_key(column):
     expr = _col(column)
-    return (polars.when(expr == RDF_TYPE).then(polars.lit("Type"))
-            .otherwise(_fragment_after_hash(expr)))
+    return polars.when(expr == RDF_TYPE).then(polars.lit("Type")).otherwise(_fragment_after_hash(expr))
 
 
 def local_term(column):
@@ -36,7 +35,7 @@ def local_term(column):
 
 
 def is_iri(column):
-    return _col(column).str.contains(URI_PREFIX_RE.pattern)
+    return _col(column).str.contains(URI_PREFIX_RE.pattern).fill_null(False)   # null → False, as the scalar; regex measured as fast as starts_with
 
 
 def absolute_id(column):
@@ -44,44 +43,37 @@ def absolute_id(column):
     return polars.when(is_iri(expr)).then(expr).otherwise(polars.lit(UUID_PREFIX) + expr)
 
 
-def _namespace(expr, terms):
-    if not terms.namespaces:
-        return polars.lit(terms.default_ns)
-    return expr.replace_strict(terms.namespaces, default=terms.default_ns, return_dtype=polars.Utf8)
+def _lookup(expr, mapping, default=None):
+    """Expr → mapped Utf8 Expr; an empty mapping is the default for every row."""
+    if not mapping:
+        return polars.lit(default, dtype=polars.Utf8)
+    return expr.replace_strict(mapping, default=default, return_dtype=polars.Utf8)
 
 
-def absolute_name(column, terms=None):
-    terms = terms or EMPTY_TERMS
+def absolute_name(column, namespaces=None):
     expr = _col(column)
-    return polars.when(is_iri(expr)).then(expr).otherwise(_namespace(expr, terms) + expr)
+    return polars.when(is_iri(expr)).then(expr).otherwise(_lookup(expr, namespaces, CIM_NS) + expr)
 
 
-def absolute_key(column, terms=None):
+def absolute_key(column, namespaces=None):
     expr = _col(column)
-    return (polars.when(expr == "Type").then(polars.lit(RDF_TYPE))
-            .otherwise(absolute_name(expr, terms)))
+    return polars.when(expr == "Type").then(polars.lit(RDF_TYPE)).otherwise(absolute_name(expr, namespaces))
 
 
-def absolute_value(key, value, terms=None):
+def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None):
     """→ ``(kind, payload)`` Exprs; same branch order as the scalar rule."""
-    terms = terms or EMPTY_TERMS
     key, value = _col(key), _col(value)
-    is_type = key == "Type"
-    uri = is_iri(value)
-    enum = key.is_in(list(terms.enum_keys)) if terms.enum_keys else polars.lit(False)
-    typed = key.is_in(list(terms.datatypes)) if terms.datatypes else polars.lit(False)
-    uuid = value.str.contains(UUID_RE.pattern)
-    typed_map = {name: datatype for name, datatype in terms.datatypes.items() if datatype}
-    datatype = (key.replace_strict(typed_map, default=None, return_dtype=polars.Utf8)
-                if typed_map else polars.lit(None, dtype=polars.Utf8))
+    schema = _lookup(key, value_types)
+    is_type, uri = key == "Type", is_iri(value)
+    enum, reference, typed = schema == "enum", schema == "reference", schema == "literal"
+    uuid = schema.is_null() & value.str.contains(UUID_RE.pattern)
+    datatype = _lookup(key, {name: datatype for name, datatype in (datatypes or {}).items() if datatype})
 
-    kind = (polars.when(is_type | uri | enum).then(polars.lit("iri"))
-            .when(typed).then(polars.lit("literal"))
-            .when(uuid).then(polars.lit("iri"))
+    kind = (polars.when(is_type | uri | enum | reference | uuid).then(polars.lit("iri"))
             .otherwise(polars.lit("literal")))
-    payload = (polars.when(is_type | enum).then(absolute_name(value, terms))
+    payload = (polars.when(is_type | enum).then(absolute_name(value, namespaces))
                .when(uri).then(value)
+               .when(reference | uuid).then(polars.lit(UUID_PREFIX) + value)
                .when(typed).then(datatype)
-               .when(uuid).then(polars.lit(UUID_PREFIX) + value)
                .otherwise(polars.lit(None, dtype=polars.Utf8)))
     return kind, payload

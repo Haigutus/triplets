@@ -18,8 +18,9 @@ Start of the 0.3 line.
 ### Changed
 - **`triplets.iri`** — one public package for the triplet ↔ IRI contract:
   `local_id` / `local_key` / `local_value` / `local_term` (local names),
-  `absolute_id` / `absolute_name` / `absolute_key` / `absolute_value` (absolute IRIs, via a
-  cached `SchemaTerms` built from `rdf_map`), the namespace constants, and
+  `absolute_id` / `absolute_name` / `absolute_key` / `absolute_value` (absolute IRIs, taking
+  the flat maps `namespaces` / `value_types` / `datatypes` built from `rdf_map` — one
+  comprehension each, no cache), the namespace constants, and
   `iri_pandas` / `iri_polars` / `iri_duckdb` flavors with the same names. The parsers, N-Quads
   export/read-back, the qlever ingest bridge, SPARQL result decoding, SHACL
   reports, SARIF and the validation engines all use it; the six private
@@ -30,10 +31,16 @@ Start of the 0.3 line.
   wrapper. ID prefixes (`urn:uuid:`, `#_`, `_`) are stripped **once**, longest
   first — the python engines stripped cumulatively (`urn:uuid:_x` → `x`) while
   the cython engine stripped one (`_x`); every engine now agrees.
-- `export.nquads_utils.build_key_metadata` → `iri.SchemaTerms.from_rdf_map`
-  (cached per schema content). `make_predicate` / `make_object` take a
-  `SchemaTerms` instead of the three dicts. The pandas N-Quads exporter is
-  vectorized (no per-row `apply`).
+- `export.nquads_utils.build_key_metadata` → `iri.namespaces` / `iri.value_types` /
+  `iri.datatypes`; `make_object` takes them as keyword maps. The pandas N-Quads
+  exporter is vectorized (no per-row `apply`).
+- **Schema-typed references**: a value under an Association key is exported
+  (N-Quads, qlever ingest) as `urn:uuid:<value>` whatever it looks like — the
+  same rule `absolute_id` applies to the ID column. Before, a non-canonical
+  reference (upper-case UUID, `_`-prefixed name) silently became a string
+  literal. The canonical-UUID heuristic still covers keys the schema does not
+  name. SHACL `sh:nodeKind sh:Literal` on an Association path now violates on
+  every row; `sh:IRI` still checks the value form.
 - **Performance** (RealGrid, 1.15M rows): `read_nquads` 12.2 s → 2.9 s (line
   splitting and graph detection in Arrow compute, slice-based term unwrap;
   columns come back arrow-backed), pandas `export_to_nquads` 3.9 s → 2.2 s

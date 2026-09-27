@@ -36,6 +36,7 @@ RDF_MAP = {"Profile": {
     "Test.string":   {"xsd:type": "xsd:string"},
     "Test.anyURI":   {"xsd:type": "xsd:anyURI"},        # excluded → IRI handling
     "Test.enum":     {"type": "Enumeration"},
+    "Test.assoc":    {"type": "Association"},       # reference by schema, whatever the value looks like
     "Test.other":    {"namespace": "http://example.com/ns#"},
 }}
 
@@ -57,6 +58,9 @@ def torture_frame():
         (UUID_A, "SomeRef", "https://example.com/target", INSTANCE_1),
         # O4: enum
         (UUID_A, "Test.enum", "UnitSymbol.A", INSTANCE_1),
+        # O4b: association — schema-typed reference, no UUID look required
+        (UUID_A, "Test.assoc", "_notuuid", INSTANCE_1),
+        (UUID_A, "Test.assoc", UUID_B.upper(), INSTANCE_1),
         # O5: typed literals (incl. one that LOOKS like a UUID — schema beats heuristic)
         (UUID_A, "Test.float", "1.5", INSTANCE_1),
         (UUID_A, "Test.integer", "42", INSTANCE_1),

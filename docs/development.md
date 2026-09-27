@@ -70,10 +70,20 @@ function for the column:
 | `VALUE` (Type, reference, enum) | `local_value` (`local_id`, then `#frag`; never `/`) | `absolute_value` → `(kind, payload)` |
 | SHACL / RDFS vocabulary, `sh:in`, SARIF, `schema_ir` | `local_term` (`#` then `/`) | not instance data |
 
-- `SchemaTerms.from_rdf_map(rdf_map)` is the cached absolute-side table (one
-  `namespaces` dict for every schema entry, `enum_keys`, `datatypes`).
+- The absolute side takes flat maps built from `rdf_map`, one function per
+  map, each a single comprehension over `rdf_map_entries` (all profile
+  sections, first occurrence wins): `namespaces` (name → namespace IRI),
+  `key_types` (name → schema entry type), `datatypes` (KEY → xsd IRI, `None` =
+  string, anyURI absent), `value_types` (KEY → `enum` / `reference` /
+  `literal`). No cache — all three cost ~6 ms on a 2.8 MB schema, a content
+  key cost 6x that; call sites `load_rdf_map` once and take the maps they need.
   `absolute_name` covers classes, enum values and keys alike; a name absent from
-  the schema (CIM abstracts) gets `default_ns` (CIM100).
+  the schema (CIM abstracts) gets CIM100.
+- `value_types` decides references: an Association key's value is
+  `urn:uuid:<value>` whatever it looks like (same rule as `absolute_id` on the
+  ID column); the canonical-UUID heuristic applies only when the schema is
+  silent. `node_kind` gives the SHACL engines the same decision for
+  `sh:nodeKind`.
 - Flavors: `iri_pandas` (Series in/out), `iri_polars` (Expr in/out, no UDFs),
   `iri_duckdb` (SQL text in/out) carry the same names.
   `__init__` imports only the standard library — the parser imports it per file.
@@ -87,7 +97,7 @@ function for the column:
 - CIM XML export is *not* on `absolute_id`: `rdf:about` / `rdf:resource` prefixes
   are the per-class schema `value_prefix`, and enum namespaces come from the
   resolved instance profile map (both CIM XML engines agree); only the
-  `rdf:datatype` annotation uses `SchemaTerms.datatypes`.
+  `rdf:datatype` annotation uses `iri.datatypes`.
 
 ## Flavor conversion
 

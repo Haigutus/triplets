@@ -1,9 +1,9 @@
-"""The IRI contract case table — every flavor must match the scalar definition.
+"""The IRI contract — one case table per rule, every flavor held to the scalar definition.
 
-Scalar ``triplets.iri`` is the readable rule; this table is the contract. The
-pandas, polars and duckdb flavors are checked against it here; the cython parser and
-the qlever C++ ingest are checked against it in the parse / export parity
-harnesses.
+Scalar ``triplets.iri`` is the readable rule. Each table below is the contract;
+the pandas (object + arrow strings), polars and duckdb flavors are run over the
+same rows through one adapter each. The cython parser is checked on a parse
+fixture; the qlever C++ ingest in ``test_sparql_qlever_ingest.py``.
 """
 import math
 
@@ -12,229 +12,275 @@ import pytest
 
 import triplets
 from triplets import iri
-from triplets.iri import CIM_NS, RDF_TYPE, XSD_NS, SchemaTerms, iri_pandas
+from triplets.iri import CIM_NS, RDF_TYPE, XSD_NS, iri_duckdb, iri_pandas
 
 CIM16 = "http://iec.ch/TC57/2013/CIM-schema-cim16#"
 NC = "https://cim4.eu/ns/nc#"
 UUID = "0f7a1c4e-3b2d-4c5a-9e8f-1a2b3c4d5e6f"
 
-TERMS = SchemaTerms(
-    namespaces={"ACLineSegment.r": CIM16, "Breaker": CIM16, "Diagram.orientation": CIM16,
-                "OrientationKind.negative": CIM16, "NcClass": NC},
-    enum_keys=frozenset({"Diagram.orientation"}),
-    datatypes={"ACLineSegment.r": XSD_NS + "float", "IdentifiedObject.mRID": None,
-               "IdentifiedObject.name": None},
-)
+# Two profiles, one name declared in both (first wins), one non-dict section (skipped).
+RDF_MAP = {
+    "EQ": {
+        "Breaker": {"type": "Class", "namespace": CIM16},
+        "ACLineSegment.r": {"type": "Attribute", "xsd:type": "xsd:float", "namespace": CIM16},
+        "IdentifiedObject.name": {"type": "Attribute", "xsd:type": "xsd:string", "namespace": CIM16},
+        "IdentifiedObject.mRID": {"type": "Attribute", "xsd:type": "xsd:string", "namespace": CIM16},
+        "Model.modelingAuthoritySet": {"type": "Attribute", "xsd:type": "xsd:anyURI", "namespace": CIM16},
+        "Diagram.orientation": {"type": "Enumeration", "xsd:type": "xsd:anyURI", "namespace": CIM16},
+        "OrientationKind.negative": {"type": "EnumerationValue", "namespace": CIM16},
+        "Terminal.ConductingEquipment": {"type": "Association", "xsd:type": "xsd:anyURI", "namespace": CIM16},
+        "NcClass": {"type": "Class", "namespace": NC},
+    },
+    "SSH": {"Breaker": {"type": "Class", "namespace": NC}},
+    "ProfileNamespaceMap": {"cim": CIM16},
+}
+NAMESPACES = iri.namespaces(RDF_MAP)
+VALUE_TYPES = iri.value_types(RDF_MAP)
+DATATYPES = iri.datatypes(RDF_MAP)
+MAPS = dict(namespaces=NAMESPACES, value_types=VALUE_TYPES, datatypes=DATATYPES)
 
-# (function name, input, expected) — unary, schema-free
-CASES = [
-    # local_id: exactly one prefix, longest first
+
+# ── flat maps ──────────────────────────────────────────────────────────────────
+
+def test_namespaces_first_profile_wins():
+    assert NAMESPACES == {"Breaker": CIM16, "ACLineSegment.r": CIM16, "IdentifiedObject.name": CIM16,
+                          "IdentifiedObject.mRID": CIM16, "Model.modelingAuthoritySet": CIM16,
+                          "Diagram.orientation": CIM16, "OrientationKind.negative": CIM16,
+                          "Terminal.ConductingEquipment": CIM16, "NcClass": NC}
+
+
+def test_key_types():
+    assert iri.key_types(RDF_MAP)["Terminal.ConductingEquipment"] == "Association"
+    assert iri.key_types(RDF_MAP)["Breaker"] == "Class"
+
+
+def test_datatypes_string_is_none_anyuri_absent():
+    assert DATATYPES == {"ACLineSegment.r": XSD_NS + "float", "IdentifiedObject.name": None,
+                         "IdentifiedObject.mRID": None}
+
+
+def test_value_types():
+    assert VALUE_TYPES == {"ACLineSegment.r": "literal", "IdentifiedObject.name": "literal",
+                           "IdentifiedObject.mRID": "literal", "Diagram.orientation": "enum",
+                           "Terminal.ConductingEquipment": "reference"}
+
+
+def test_flat_maps_without_schema_are_empty():
+    assert (iri.namespaces(None), iri.key_types(None), iri.datatypes(None), iri.value_types(None)) == ({}, {}, {}, {})
+
+
+def test_flat_maps_from_shipped_schema_path():
+    path = "triplets/export_schema/ENTSOE_CGMES_2.4.15_552_ED1.json"
+    rdf_map = iri.load_rdf_map(path)
+    assert iri.value_types(rdf_map)["Diagram.DiagramStyle"] == "reference"
+    assert iri.value_types(rdf_map)["Diagram.orientation"] == "enum"
+    assert iri.datatypes(rdf_map)["ACLineSegment.r"] == XSD_NS + "float"
+    assert iri.namespaces(rdf_map)["OrientationKind.negative"] == CIM16
+    assert "Equipment" not in iri.namespaces(rdf_map)          # abstract: no entry → CIM100 at use
+
+
+# ── local (schema-free), one row per rule ──────────────────────────────────────
+
+LOCAL_CASES = [
     ("local_id", None, None),
-    ("local_id", "", ""),
     ("local_id", "urn:uuid:" + UUID, UUID),
-    ("local_id", "#_foo_bar", "foo_bar"),
-    ("local_id", "_123", "123"),
-    ("local_id", "urn:uuid:_x", "_x"),
-    ("local_id", "abc", "abc"),
+    ("local_id", "#_" + UUID, UUID),
+    ("local_id", "_" + UUID, UUID),
+    ("local_id", "urn:uuid:_x", "_x"),                       # exactly one prefix
+    ("local_id", "#__x", "_x"),
     ("local_id", "http://example.org/ns#g", "http://example.org/ns#g"),
-    # local_value: ID rule, then http(s)…#frag; never '/'
+    ("local_id", "plain", "plain"),
     ("local_value", None, None),
-    ("local_value", "urn:uuid:" + UUID, UUID),
     ("local_value", "#_" + UUID, UUID),
-    ("local_value", "http://iec.ch/TC57/CIM100#Breaker", "Breaker"),
-    ("local_value", NC + "Kind.value", "Kind.value"),
-    ("local_value", "http://example.org/path/only", "http://example.org/path/only"),
-    ("local_value", "12.5", "12.5"),
-    ("local_value", "a#b", "a#b"),
-    # local_key: rdf:type → Type; http(s)…#frag; '/'-only IRIs stay whole
+    ("local_value", "urn:uuid:" + UUID, UUID),
+    ("local_value", "http://iec.ch/TC57/CIM100#SwitchKind.breaker", "SwitchKind.breaker"),
+    ("local_value", "https://cim4.eu/ns/nc#Kind.value", "Kind.value"),
+    ("local_value", "http://a#b#c", "c"),                     # last '#'
+    ("local_value", "http://example.org/path/only", "http://example.org/path/only"),   # never '/'
+    ("local_value", "urn:example:thing", "urn:example:thing"),
+    ("local_value", "Breaker", "Breaker"),
     ("local_key", None, None),
     ("local_key", RDF_TYPE, "Type"),
-    ("local_key", CIM_NS + "ACLineSegment.r", "ACLineSegment.r"),
-    ("local_key", "http://purl.org/dc/terms/created", "http://purl.org/dc/terms/created"),
-    ("local_key", "ACLineSegment.r", "ACLineSegment.r"),
-    # local_term: vocabulary — '#' then '/'
+    ("local_key", "http://iec.ch/TC57/CIM100#ACLineSegment.r", "ACLineSegment.r"),
+    ("local_key", "urn:example:pred", "urn:example:pred"),
+    ("local_key", "_ACLineSegment.r", "_ACLineSegment.r"),   # a KEY is not an ID
     ("local_term", None, None),
     ("local_term", "http://www.w3.org/ns/shacl#minCount", "minCount"),
     ("local_term", "https://schema.org/domainIncludes", "domainIncludes"),
     ("local_term", "#Equipment", "Equipment"),
     ("local_term", "Breaker", "Breaker"),
-    # is_iri
+    ("is_iri", None, False),
     ("is_iri", "http://a", True),
     ("is_iri", "https://a", True),
     ("is_iri", "urn:uuid:a", True),
     ("is_iri", "abc", False),
     ("is_iri", "urn", False),
-    # absolute_id
     ("absolute_id", None, None),
     ("absolute_id", UUID, "urn:uuid:" + UUID),
+    ("absolute_id", "_x", "urn:uuid:_x"),
     ("absolute_id", "http://example.org/ns#g", "http://example.org/ns#g"),
-    ("absolute_id", "https://example.org/g", "https://example.org/g"),
+    ("absolute_id", "urn:example:g", "urn:example:g"),
 ]
 
-# (function name, input, terms, expected)
+# (function, input, namespaces?, expected)
 NAME_CASES = [
-    ("absolute_name", "Breaker", TERMS, CIM16 + "Breaker"),
-    ("absolute_name", "Equipment", TERMS, CIM_NS + "Equipment"),      # abstract: no entry → default
-    ("absolute_name", "NcClass", TERMS, NC + "NcClass"),
-    ("absolute_name", "Breaker", None, CIM_NS + "Breaker"),
-    ("absolute_name", "http://x#Y", TERMS, "http://x#Y"),
-    ("absolute_key", "Type", TERMS, RDF_TYPE),
-    ("absolute_key", "ACLineSegment.r", TERMS, CIM16 + "ACLineSegment.r"),
-    ("absolute_key", "Unknown.x", TERMS, CIM_NS + "Unknown.x"),
-    ("absolute_key", "http://purl.org/dc/terms/created", TERMS, "http://purl.org/dc/terms/created"),
-    ("absolute_key", "ACLineSegment.r", None, CIM_NS + "ACLineSegment.r"),
+    ("absolute_name", "Breaker", True, CIM16 + "Breaker"),
+    ("absolute_name", "Breaker", False, CIM_NS + "Breaker"),
+    ("absolute_name", "NcClass", True, NC + "NcClass"),
+    ("absolute_name", "Equipment", True, CIM_NS + "Equipment"),             # absent → default
+    ("absolute_name", "http://x#Y", True, "http://x#Y"),
+    ("absolute_name", "urn:example:Y", True, "urn:example:Y"),
+    ("absolute_name", None, True, None),
+    ("absolute_key", "Type", True, RDF_TYPE),
+    ("absolute_key", "ACLineSegment.r", True, CIM16 + "ACLineSegment.r"),
+    ("absolute_key", "ACLineSegment.r", False, CIM_NS + "ACLineSegment.r"),
+    ("absolute_key", "http://x#p", True, "http://x#p"),
 ]
 
-# (key, value, terms, expected kind, expected payload)
+# (key, value, maps?, expected kind, expected payload)
 VALUE_CASES = [
-    ("Type", "Breaker", TERMS, "iri", CIM16 + "Breaker"),
-    ("Type", "Breaker", None, "iri", CIM_NS + "Breaker"),
-    ("Type", "http://x#Y", TERMS, "iri", "http://x#Y"),
-    ("Diagram.orientation", "OrientationKind.negative", TERMS, "iri", CIM16 + "OrientationKind.negative"),
-    ("Diagram.orientation", "OrientationKind.negative", None, "literal", None),
-    ("ACLineSegment.r", "1.5", TERMS, "literal", XSD_NS + "float"),
-    ("IdentifiedObject.mRID", UUID, TERMS, "literal", None),           # schema beats UUID look
-    ("IdentifiedObject.name", "Foo", TERMS, "literal", None),
-    ("Terminal.ConductingEquipment", UUID, TERMS, "iri", "urn:uuid:" + UUID),
-    ("Terminal.ConductingEquipment", UUID, None, "iri", "urn:uuid:" + UUID),
-    ("Terminal.ConductingEquipment", UUID.upper(), TERMS, "literal", None),  # canonical lowercase only
-    ("Model.DependentOn", "urn:uuid:" + UUID, TERMS, "iri", "urn:uuid:" + UUID),
-    ("X.y", "https://example.org/thing", None, "iri", "https://example.org/thing"),
-    ("X.y", "plain text", None, "literal", None),
-    ("X.y", None, None, "literal", None),                             # null in → literal/null out, as the flavors do
+    ("Type", "Breaker", True, "iri", CIM16 + "Breaker"),
+    ("Type", "Breaker", False, "iri", CIM_NS + "Breaker"),
+    ("Type", "http://x#Y", True, "iri", "http://x#Y"),
+    ("X.y", "https://example.org/thing", False, "iri", "https://example.org/thing"),   # IRI passes through
+    ("Diagram.orientation", "OrientationKind.negative", True, "iri", CIM16 + "OrientationKind.negative"),
+    ("Diagram.orientation", "OrientationKind.negative", False, "literal", None),
+    ("Terminal.ConductingEquipment", UUID, True, "iri", "urn:uuid:" + UUID),           # reference by schema…
+    ("Terminal.ConductingEquipment", UUID.upper(), True, "iri", "urn:uuid:" + UUID.upper()),
+    ("Terminal.ConductingEquipment", "_abc", True, "iri", "urn:uuid:_abc"),
+    ("Terminal.ConductingEquipment", "urn:uuid:" + UUID, True, "iri", "urn:uuid:" + UUID),
+    ("Terminal.ConductingEquipment", UUID.upper(), False, "literal", None),           # …UUID look without one
+    ("Terminal.ConductingEquipment", UUID, False, "iri", "urn:uuid:" + UUID),
+    ("ACLineSegment.r", "1.5", True, "literal", XSD_NS + "float"),
+    ("ACLineSegment.r", "1.5", False, "literal", None),
+    ("IdentifiedObject.mRID", UUID, True, "literal", None),                           # schema beats UUID look
+    ("IdentifiedObject.name", "Foo", True, "literal", None),
+    ("Model.modelingAuthoritySet", "http://tso.example", True, "iri", "http://tso.example"),
+    ("X.y", "plain text", False, "literal", None),
+    ("X.y", None, True, "literal", None),
 ]
 
+# (key, maps?, sh:nodeKind, expected)
+NODE_KIND_CASES = [
+    ("Diagram.orientation", "IRI", "iri"),
+    ("Diagram.orientation", "Literal", "iri"),
+    ("Terminal.ConductingEquipment", "Literal", "iri"),       # every reference violates Literal
+    ("Terminal.ConductingEquipment", "IRI", None),            # against IRI the value form still decides
+    ("ACLineSegment.r", "IRI", "literal"),
+    ("IdentifiedObject.name", "Literal", "literal"),
+    ("Unknown.key", "IRI", None),
+]
+
+
+# ── flavors: one adapter each, all held to the scalar rule ─────────────────────
 
 def _norm(value):
     return None if value is None or value is pandas.NA or (isinstance(value, float) and math.isnan(value)) else value
 
 
-# ── scalar ─────────────────────────────────────────────────────────────────────
+def _pandas(dtype):
+    def apply(name, inputs, **maps):
+        series = pandas.Series(inputs, dtype=dtype)
+        return [_norm(v) for v in getattr(iri_pandas, name)(series, **maps).tolist()]
 
-@pytest.mark.parametrize("name,text,expected", CASES)
-def test_scalar(name, text, expected):
+    def apply_value(keys, values, **maps):
+        kind, payload = iri_pandas.absolute_value(pandas.Series(keys, dtype=dtype), pandas.Series(values, dtype=dtype), **maps)
+        return list(zip(kind.tolist(), [_norm(v) for v in payload.tolist()]))
+    return apply, apply_value
+
+
+def _polars():
+    polars = pytest.importorskip("polars")
+    from triplets.iri import iri_polars
+
+    def apply(name, inputs, **maps):
+        frame = polars.DataFrame({"x": inputs}, schema={"x": polars.Utf8})
+        return frame.select(getattr(iri_polars, name)("x", **maps).alias("y"))["y"].to_list()
+
+    def apply_value(keys, values, **maps):
+        frame = polars.DataFrame({"KEY": keys, "VALUE": values}, schema={"KEY": polars.Utf8, "VALUE": polars.Utf8})
+        kind, payload = iri_polars.absolute_value("KEY", "VALUE", **maps)
+        out = frame.select(kind.alias("k"), payload.alias("p"))
+        return list(zip(out["k"].to_list(), out["p"].to_list()))
+    return apply, apply_value
+
+
+def _duckdb():
+    duckdb = pytest.importorskip("duckdb")
+
+    def apply(name, inputs, **maps):
+        frame = pandas.DataFrame({"x": pandas.Series(inputs, dtype=object)})   # noqa: F841 — duckdb sees it by name
+        return [row[0] for row in duckdb.sql(f"SELECT {getattr(iri_duckdb, name)('x')} AS y FROM frame").fetchall()]
+    return apply, None
+
+
+FLAVORS = {
+    "pandas-object": lambda: _pandas(object),
+    "pandas-arrow": lambda: _pandas(pandas.ArrowDtype(pytest.importorskip("pyarrow").string())),
+    "polars": _polars,
+    "duckdb": _duckdb,
+}
+
+
+def _rows(cases, name):
+    return [case[1:] for case in cases if case[0] == name]
+
+
+def _has(flavor, name):
+    module = {"duckdb": iri_duckdb}.get(flavor)
+    return hasattr(module, name) if module else True
+
+
+@pytest.mark.parametrize("name,text,expected", LOCAL_CASES)
+def test_scalar_local(name, text, expected):
     assert getattr(iri, name)(text) == expected
 
 
-@pytest.mark.parametrize("name,text,terms,expected", NAME_CASES)
-def test_scalar_absolute_name(name, text, terms, expected):
-    assert getattr(iri, name)(text, terms) == expected
+@pytest.mark.parametrize("flavor", FLAVORS)
+@pytest.mark.parametrize("name", sorted({case[0] for case in LOCAL_CASES}))
+def test_flavor_local_matches_scalar(flavor, name):
+    if not _has(flavor, name):
+        pytest.skip(f"{flavor} has no {name}")
+    apply, _ = FLAVORS[flavor]()
+    rows = _rows(LOCAL_CASES, name)
+    assert apply(name, [text for text, _ in rows]) == [expected for _, expected in rows]
 
 
-@pytest.mark.parametrize("key,value,terms,kind,payload", VALUE_CASES)
-def test_scalar_absolute_value(key, value, terms, kind, payload):
-    assert iri.absolute_value(key, value, terms) == (kind, payload)
+@pytest.mark.parametrize("name,text,with_namespaces,expected", NAME_CASES)
+def test_scalar_absolute_name(name, text, with_namespaces, expected):
+    assert getattr(iri, name)(text, NAMESPACES if with_namespaces else None) == expected
 
 
-# ── pandas flavor vs scalar ────────────────────────────────────────────────────
-
-def _grouped(cases):
-    groups = {}
-    for name, *rest in cases:
-        groups.setdefault(name, []).append(rest)
-    return groups
-
-
-def _string_dtypes():
-    dtypes = [object]
-    try:
-        import pyarrow
-        dtypes.append(pandas.ArrowDtype(pyarrow.string()))   # qlever CONSTRUCT results arrive like this
-    except ImportError:
-        pass
-    return dtypes
+@pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow", "polars"])
+@pytest.mark.parametrize("name", ["absolute_name", "absolute_key"])
+@pytest.mark.parametrize("with_namespaces", [True, False], ids=["schema", "no-schema"])
+def test_flavor_absolute_name_matches_scalar(flavor, name, with_namespaces):
+    apply, _ = FLAVORS[flavor]()
+    rows = [(t, e) for t, w, e in _rows(NAME_CASES, name) if w == with_namespaces]
+    namespaces = NAMESPACES if with_namespaces else None
+    assert apply(name, [t for t, _ in rows], namespaces=namespaces) == [e for _, e in rows]
 
 
-@pytest.mark.parametrize("dtype", _string_dtypes(), ids=str)
-@pytest.mark.parametrize("name", sorted(_grouped(CASES)))
-def test_pandas_matches_scalar(name, dtype):
-    inputs = [text for text, _ in _grouped(CASES)[name]]
-    got = getattr(iri_pandas, name)(pandas.Series(inputs, dtype=dtype))
-    assert [_norm(v) for v in got.tolist()] == [getattr(iri, name)(text) for text in inputs]
+@pytest.mark.parametrize("key,value,with_maps,kind,payload", VALUE_CASES)
+def test_scalar_absolute_value(key, value, with_maps, kind, payload):
+    assert iri.absolute_value(key, value, **(MAPS if with_maps else {})) == (kind, payload)
 
 
-@pytest.mark.parametrize("name", sorted(_grouped(NAME_CASES)))
-def test_pandas_absolute_name_matches_scalar(name):
-    for terms in (TERMS, None):
-        inputs = [text for text, t, _ in _grouped(NAME_CASES)[name] if t is terms]
-        got = getattr(iri_pandas, name)(pandas.Series(inputs, dtype=object), terms)
-        assert got.tolist() == [getattr(iri, name)(text, terms) for text in inputs]
+@pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow", "polars"])
+@pytest.mark.parametrize("with_maps", [True, False], ids=["schema", "no-schema"])
+def test_flavor_absolute_value_matches_scalar(flavor, with_maps):
+    _, apply_value = FLAVORS[flavor]()
+    rows = [(k, v, kind, p) for k, v, w, kind, p in VALUE_CASES if w == with_maps]
+    got = apply_value([k for k, *_ in rows], [v for _, v, *_ in rows], **(MAPS if with_maps else {}))
+    assert got == [(kind, p) for _, _, kind, p in rows]
 
 
-def test_pandas_absolute_value_matches_scalar():
-    for terms in (TERMS, None):
-        rows = [(k, v) for k, v, t, _, _ in VALUE_CASES if t is terms]
-        keys = pandas.Series([k for k, _ in rows], dtype=object)   # includes a None VALUE row
-        values = pandas.Series([v for _, v in rows], dtype=object)
-        kinds, payloads = iri_pandas.absolute_value(keys, values, terms)
-        expected = [iri.absolute_value(k, v, terms) for k, v in rows]
-        assert list(zip(kinds.tolist(), [_norm(p) for p in payloads.tolist()])) == expected
+@pytest.mark.parametrize("key,expected_kind,result", NODE_KIND_CASES)
+def test_node_kind(key, expected_kind, result):
+    assert iri.node_kind(key, VALUE_TYPES, expected_kind) == result
 
 
-# ── polars flavor vs scalar ────────────────────────────────────────────────────
-
-polars = pytest.importorskip("polars")
-from triplets.iri import iri_polars  # noqa: E402
-
-
-@pytest.mark.parametrize("name", sorted(_grouped(CASES)))
-def test_polars_matches_scalar(name):
-    inputs = [text for text, _ in _grouped(CASES)[name]]
-    frame = polars.DataFrame({"x": inputs}, schema={"x": polars.Utf8})
-    got = frame.select(getattr(iri_polars, name)("x").alias("y"))["y"].to_list()
-    assert got == [getattr(iri, name)(text) for text in inputs]
-
-
-@pytest.mark.parametrize("name", sorted(_grouped(NAME_CASES)))
-def test_polars_absolute_name_matches_scalar(name):
-    for terms in (TERMS, None):
-        inputs = [text for text, t, _ in _grouped(NAME_CASES)[name] if t is terms]
-        frame = polars.DataFrame({"x": inputs}, schema={"x": polars.Utf8})
-        got = frame.select(getattr(iri_polars, name)("x", terms).alias("y"))["y"].to_list()
-        assert got == [getattr(iri, name)(text, terms) for text in inputs]
-
-
-def test_polars_absolute_value_matches_scalar():
-    for terms in (TERMS, None):
-        rows = [(k, v) for k, v, t, _, _ in VALUE_CASES if t is terms]
-        frame = polars.DataFrame({"KEY": [k for k, _ in rows], "VALUE": [v for _, v in rows]},
-                                 schema={"KEY": polars.Utf8, "VALUE": polars.Utf8})
-        kind, payload = iri_polars.absolute_value("KEY", "VALUE", terms)
-        got = frame.select(kind.alias("kind"), payload.alias("payload"))
-        assert list(zip(got["kind"].to_list(), got["payload"].to_list())) == \
-            [iri.absolute_value(k, v, terms) for k, v in rows]
-
-
-# ── SchemaTerms from a shipped schema ──────────────────────────────────────────
-
-SCHEMA = "triplets/export_schema/ENTSOE_CGMES_2.4.15_552_ED1.json"
-
-
-def test_schema_terms_from_shipped_schema():
-    terms = SchemaTerms.from_rdf_map(SCHEMA)
-    assert "Diagram.orientation" in terms.enum_keys
-    assert "Diagram.orientation" not in terms.datatypes            # xsd:anyURI → reference handling
-    assert terms.datatypes["ACLineSegment.r"] == XSD_NS + "float"
-    assert terms.datatypes["IdentifiedObject.name"] is None       # xsd:string: literal, no annotation
-    assert terms.namespace("OrientationKind.negative") == CIM16
-    assert terms.namespace("ACLineSegment") == CIM16
-    assert terms.namespace("Equipment") == CIM_NS                 # abstract, no entry
-    assert terms.key_kind("Diagram.orientation") == "iri"
-    assert terms.key_kind("ACLineSegment.r") == "literal"
-    assert terms.key_kind("Terminal.ConductingEquipment") is None
-
-
-def test_schema_terms_cached_by_content():
-    triplets.clear_caches()
-    first = SchemaTerms.from_rdf_map(SCHEMA)
-    assert SchemaTerms.from_rdf_map(SCHEMA) is first
-    assert SchemaTerms.from_rdf_map(first) is first
-    assert SchemaTerms.from_rdf_map(None) is iri.EMPTY_TERMS
-    triplets.clear_caches()
-    assert SchemaTerms.from_rdf_map(SCHEMA) is not first
-
-
-# ── native mirrors: the cython parser applies local_id / local_value in C++ ───
+# ── native mirror: the cython parser applies local_id / local_value in C++ ─────
 
 PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -253,42 +299,19 @@ PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
 """.format(uuid=UUID)
 
 
-def _parse_engine_or_skip(engine):
+@pytest.mark.parametrize("engine", ["python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow"])
+def test_parse_engines_apply_local_id_and_local_value(engine, tmp_path):
     try:
         triplets.parser.get_engine(engine)
     except Exception as error:      # extension not built in this environment
         pytest.skip(f"{engine} not available: {error}")
-
-
-@pytest.mark.parametrize("engine", ["python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow"])
-def test_parse_engines_apply_local_id_and_local_value(engine, tmp_path):
-    """Every parse engine shortens IDs / reference VALUEs exactly like the scalar rule."""
-    _parse_engine_or_skip(engine)
     path = tmp_path / "iri_cases.xml"
     path.write_text(PARSE_FIXTURE)
     frame = triplets.parse(str(path), engine=engine, return_type="pandas")
-    frame = frame[~frame["KEY"].isin(["label"]) & ~frame["VALUE"].isin(["Distribution", "NamespaceMap"])]
-    rows = {(row.KEY, row.VALUE) for row in frame.itertuples() if row.KEY != "Type"} | \
-           {("Type", row.VALUE) for row in frame[frame["KEY"] == "Type"].itertuples()}
-    ids = set(frame["ID"])
-    assert {iri.local_id("urn:uuid:_x"), iri.local_id("_abc")} <= ids
-    assert ("Equipment.EquipmentContainer", iri.local_value("#_" + UUID)) in rows
-    assert ("Thing.ref", iri.local_value("urn:uuid:" + UUID)) in rows
-    assert ("Breaker.kind", iri.local_value("http://iec.ch/TC57/CIM100#SwitchKind.breaker")) in rows
-    assert ("Breaker.ref", iri.local_value("https://cim4.eu/ns/nc#Kind.value")) in rows
-    assert ("Breaker.uri", iri.local_value("http://example.org/path/only")) in rows
-    assert ("Switch.open", "false") in rows
-
-
-# ── duckdb flavor ──────────────────────────────────────────────────────────────
-
-duckdb = pytest.importorskip("duckdb")
-from triplets.iri import iri_duckdb  # noqa: E402
-
-
-@pytest.mark.parametrize("name", sorted(name for name in _grouped(CASES) if hasattr(iri_duckdb, name)))
-def test_duckdb_matches_scalar(name):
-    inputs = [text for text, _ in _grouped(CASES)[name]]
-    frame = pandas.DataFrame({"x": pandas.Series(inputs, dtype=object)})
-    got = duckdb.sql(f"SELECT {getattr(iri_duckdb, name)('x')} AS y FROM frame")["y"].fetchall()
-    assert [row[0] for row in got] == [getattr(iri, name)(text) for text in inputs]
+    rows = set(zip(frame["KEY"], frame["VALUE"]))
+    assert {iri.local_id("urn:uuid:_x"), iri.local_id("_abc")} <= set(frame["ID"])
+    assert {("Equipment.EquipmentContainer", iri.local_value("#_" + UUID)),
+            ("Thing.ref", iri.local_value("urn:uuid:" + UUID)),
+            ("Breaker.kind", iri.local_value("http://iec.ch/TC57/CIM100#SwitchKind.breaker")),
+            ("Breaker.ref", iri.local_value("https://cim4.eu/ns/nc#Kind.value")),
+            ("Breaker.uri", iri.local_value("http://example.org/path/only"))} <= rows

@@ -44,7 +44,7 @@ import numpy
 import pandas
 
 from ..export.nquads_utils import make_subject
-from ..iri import REFERENCE_LIKE, SchemaTerms, iri_pandas, local_term
+from ..iri import REFERENCE_LIKE, iri_pandas, local_term, node_kind, value_types
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -89,7 +89,7 @@ class _Context:
     def __init__(self, data, rdf_map=None):
         self.data = data
         self.rdf_map = rdf_map
-        self.terms = SchemaTerms.from_rdf_map(rdf_map)   # key_kind: schema-driven literal/IRI decision
+        self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self._by_key = None
         self._class_ids = None
         self._all_ids = None
@@ -326,7 +326,7 @@ def _node_kind(context, rule):
 
     rows = context.path_rows(rule)
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else context.terms.key_kind(rule.path)
+    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types, rule.params)
     if kind is not None:
         is_iri = pandas.Series(kind == "iri", index=rows.index)
     else:

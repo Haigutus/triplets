@@ -25,7 +25,7 @@ import pandas
 from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .shacl_report import VIOLATION_COLUMNS
-from ..iri import REFERENCE_LIKE, SchemaTerms, iri_duckdb
+from ..iri import REFERENCE_LIKE, iri_duckdb, node_kind, value_types
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -189,7 +189,7 @@ def _node_kind(rule, table, context):
         return None
     rows, rows_params = _rows_sql(rule, table)
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else context.terms.key_kind(rule.path)
+    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types, rule.params)
     if kind is not None:                                 # schema decides for the whole path
         if (kind == "iri") == (rule.params == "IRI"):
             return None                                  # every value conforms — no query
@@ -283,7 +283,7 @@ class _Context:
 
     def __init__(self, rdf_map):
         self.rdf_map = rdf_map
-        self.terms = SchemaTerms.from_rdf_map(rdf_map)
+        self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
 
 
 def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,

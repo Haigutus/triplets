@@ -153,6 +153,23 @@ def test_node_kind_heuristic(engine):
     assert violating(v, "sh:nodeKind") == {("b2", "just some text")}
 
 
+def test_node_kind_by_schema(engine):
+    """With an rdf_map the schema decides: an Association path violates sh:Literal on
+    every row (whatever the value looks like) and an Enumeration path violates sh:IRI never."""
+    import rdflib
+    rdf_map = {"EQ": {"Equipment.EquipmentContainer": {"type": "Association", "xsd:type": "xsd:anyURI"},
+                      "Switch.kind": {"type": "Enumeration", "xsd:type": "xsd:anyURI"}}}
+    rows = breaker("b1", ("Equipment.EquipmentContainer", "not-a-uuid"), ("Switch.kind", "SwitchKind.breaker")) \
+        + breaker("b2", ("Equipment.EquipmentContainer", "11111111-1111-1111-1111-111111111111"), ("Switch.kind", "x"))
+    shape = SHAPE.format(body="sh:path cim:Equipment.EquipmentContainer ; sh:nodeKind sh:Literal") \
+        .replace(" .", " ; sh:property [ sh:path cim:Switch.kind ; sh:nodeKind sh:IRI ] .", 1)
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    v = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine=engine)
+    assert violating(v, "sh:nodeKind") == {("b1", "not-a-uuid"), ("b2", "11111111-1111-1111-1111-111111111111")}
+
+
 def test_equals_and_disjoint(engine):
     rows = breaker("b1", ("IdentifiedObject.name", "A"), ("IdentifiedObject.aliasName", "A")) \
         + breaker("b2", ("IdentifiedObject.name", "A"), ("IdentifiedObject.aliasName", "B"))

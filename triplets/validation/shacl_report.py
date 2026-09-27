@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import pandas
 
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
-                   XSD_NS, SchemaTerms, absolute_id, absolute_key, is_iri, local_id, local_key,
+                   XSD_NS, absolute_id, absolute_key, is_iri, local_id, local_key, namespaces,
                    local_term)
 
 logger = logging.getLogger(__name__)
@@ -158,7 +158,7 @@ def violations_to_report_graph(violations, report_source=None, report_references
     if meta.get("engine"):
         creator = f"{creator} (engine: {meta['engine']})"
 
-    terms = SchemaTerms.from_rdf_map(rdf_map)
+    schema_namespaces = namespaces(rdf_map)
     sh = rdflib.Namespace(SH_NS)
     prov = rdflib.Namespace(PROV_NS)
     dcterms = rdflib.Namespace(DCTERMS_NS)
@@ -195,11 +195,11 @@ def violations_to_report_graph(violations, report_source=None, report_references
         if pandas.notna(row.ID):
             graph.add((result, sh.focusNode, rdflib.URIRef(absolute_id(str(row.ID)))))
         if pandas.notna(row.KEY):
-            graph.add((result, sh.resultPath, rdflib.URIRef(_expand(row.KEY, terms))))
+            graph.add((result, sh.resultPath, rdflib.URIRef(_expand(row.KEY, schema_namespaces))))
         if pandas.notna(row.VALUE):
             graph.add((result, sh.value, rdflib.Literal(row.VALUE)))
         if pandas.notna(row.VIOLATION_TYPE):
-            graph.add((result, sh.sourceConstraintComponent, rdflib.URIRef(_expand(row.VIOLATION_TYPE, terms))))
+            graph.add((result, sh.sourceConstraintComponent, rdflib.URIRef(_expand(row.VIOLATION_TYPE, schema_namespaces))))
         for message in _messages(row, language):
             graph.add((result, sh.resultMessage, rdflib.Literal(message)))
         if pandas.notna(row.SOURCE_SHAPE):
@@ -273,7 +273,7 @@ def message_prefix(violation_type, source=None, language="shacl"):
             else f"[{language}_message]")
 
 
-def _expand(value, terms=None):
+def _expand(value, namespaces=None):
     """Short KEY / violation type → URI (inverse of local_key / _component).
 
     Vocabulary prefixes (sh:, rdfs:, xsd:, schema:, triplets:) are report
@@ -294,7 +294,7 @@ def _expand(value, terms=None):
         return f"{SH_NS}{value[3:]}"
     if value.startswith("triplets:"):
         return f"{TRIPLETS_NS}{value[len('triplets:'):]}"
-    return absolute_key(value, terms)
+    return absolute_key(value, namespaces)
 
 
 def _resolve_format(path, format):
