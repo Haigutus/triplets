@@ -75,8 +75,10 @@ function for the column:
   sections, first occurrence wins): `namespaces` (name → namespace IRI),
   `key_types` (name → schema entry type), `datatypes` (KEY → xsd IRI, `None` =
   string, anyURI absent), `value_types` (KEY → `enum` / `reference` /
-  `literal`). No cache — all three cost ~6 ms on a 2.8 MB schema, a content
-  key cost 6x that; call sites `load_rdf_map` once and take the maps they need.
+  `literal`). No cache — each is ~2 ms on a 2.8 MB schema, a content key
+  cost 6x that. Public entry points (`validate`, `validate_schema`,
+  `export_to_*`, the qlever ingest) call `load_rdf_map` once; below them only
+  dicts flow, so a path is parsed once per call.
   `absolute_name` covers classes, enum values and keys alike; a name absent from
   the schema (CIM abstracts) gets CIM100.
 - `value_types` decides references: an Association key's value is

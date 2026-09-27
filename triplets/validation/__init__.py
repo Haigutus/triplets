@@ -39,6 +39,7 @@ import pandas
 from .._engine_detect import flavor
 from .._header import PROFILE_KEYS as _HEADER_KEYS
 from .._registry import EngineRegistry
+from ..iri import load_rdf_map
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
 from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
@@ -122,6 +123,7 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     same story.
     """
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
+    rdf_map = load_rdf_map(rdf_map)        # dict from here on — the engines and enrich take only dicts
     started = datetime.now(timezone.utc)   # after compile — duration is the run, cache-independent
     engine_name, engine_mod = get_engine(engine)
     table_ref = _table_ref(data, **kwargs)
@@ -372,7 +374,8 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, *
     import triplets
 
     started = datetime.now(timezone.utc)
-    compiled_set = compile_schema(rdf_map, closed=closed)
+    compiled_set = compile_schema(rdf_map, closed=closed)   # caches on the file digest — takes the path
+    rdf_map = load_rdf_map(rdf_map)                          # dict for every per-profile engine run
     table_name = _table_ref(data, **kwargs)
     engine_name, engine_mod = get_engine(engine)
     lexical = kwargs.pop("lexical", True)

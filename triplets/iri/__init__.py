@@ -158,11 +158,16 @@ def key_types(rdf_map):
     return {name: entry["type"] for name, entry in rdf_map_entries(rdf_map) if entry.get("type")}
 
 
+def _xsd(entry):
+    """Entry's xsd datatype name (``float``, ``string``, …) or None; ``xsd:anyURI`` is not a datatype here."""
+    xsd = str(entry.get("xsd:type", ""))
+    return xsd.removeprefix("xsd:") if xsd.startswith("xsd:") and xsd != "xsd:anyURI" else None
+
+
 def datatypes(rdf_map):
     """KEY → xsd datatype IRI; ``None`` = ``xsd:string`` (no annotation). ``xsd:anyURI`` absent: references keep IRI handling."""
-    xsd = {name: str(entry["xsd:type"]).removeprefix("xsd:") for name, entry in rdf_map_entries(rdf_map)
-           if str(entry.get("xsd:type", "")).startswith("xsd:") and entry["xsd:type"] != "xsd:anyURI"}
-    return {name: None if datatype == "string" else XSD_NS + datatype for name, datatype in xsd.items()}
+    return {name: None if xsd == "string" else XSD_NS + xsd
+            for name, entry in rdf_map_entries(rdf_map) if (xsd := _xsd(entry))}
 
 
 _VALUE_TYPES = {"Enumeration": "enum", "Association": "reference"}
@@ -170,8 +175,8 @@ _VALUE_TYPES = {"Enumeration": "enum", "Association": "reference"}
 
 def value_types(rdf_map):
     """KEY → ``"enum"`` | ``"reference"`` | ``"literal"``; absent = the schema is silent."""
-    return ({name: "literal" for name in datatypes(rdf_map)}
-            | {name: _VALUE_TYPES[kind] for name, kind in key_types(rdf_map).items() if kind in _VALUE_TYPES})
+    return {name: kind for name, entry in rdf_map_entries(rdf_map)
+            if (kind := _VALUE_TYPES.get(entry.get("type")) or ("literal" if _xsd(entry) else None))}
 
 
 # ── absolute (schema-driven) ───────────────────────────────────────────────────

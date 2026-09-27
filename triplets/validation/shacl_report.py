@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import pandas
 
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
-                   XSD_NS, absolute_id, absolute_key, is_iri, local_id, local_key, namespaces,
+                   XSD_NS, absolute_id, absolute_key, is_iri, load_rdf_map, local_id, local_key, namespaces,
                    local_term)
 
 logger = logging.getLogger(__name__)
@@ -358,7 +358,7 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
     path = _default_path(fmt) if path is None else os.fspath(path)
     payload = (violations_to_report_graph(violations, report_source=report_source,
                                           report_references=report_references,
-                                          rdf_map=rdf_map)
+                                          rdf_map=load_rdf_map(rdf_map))
                .serialize(format=fmt).encode("utf-8"))
     if export_to_memory:
         buffer = io.BytesIO(payload)
