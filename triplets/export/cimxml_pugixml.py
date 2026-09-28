@@ -15,6 +15,7 @@ import pyarrow
 
 from .cimxml_cython_pugixml import generate_xml_from_arrow
 from .cimxml_utils import load_rdf_map, resolve_instance_config
+from ..iri import TRIPLETS_NS
 from .._engine_detect import to_arrow
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,8 @@ def generate_xml(instance_data,
                  export_undefined=False,
                  comment=None,
                  debug=False,
-                 datatypes=False):
+                 datatypes=False,
+                 undefined_namespace=TRIPLETS_NS):
     """Generate an RDF XML file from a triplet dataset instance.
 
     Same parameters and return value as :func:`cimxml_pandas.generate_xml`;
@@ -108,10 +110,14 @@ def generate_xml(instance_data,
             logger.warning("File not created for {}".format(file_name))
             return
 
+    if export_undefined:
+        namespace_map = {**namespace_map, "triplets": undefined_namespace}
+
     batch = _string_batch(instance_data)
 
     xml = generate_xml_from_arrow(batch, rdf_map, namespace_map, instance_rdf_map, file_name,
-                                  class_KEY=class_KEY, export_undefined=export_undefined, comment=comment)
+                                  class_KEY=class_KEY, export_undefined=export_undefined, comment=comment,
+                                  undefined_namespace=undefined_namespace)
 
     logger.info("Exporting RDF to {}".format(file_name))
 

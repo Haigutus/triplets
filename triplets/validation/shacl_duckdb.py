@@ -337,7 +337,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         frame = connection.execute(f"SELECT * FROM {table}").df()
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
-                                           max_workers=max_workers)
+                                           max_workers=max_workers, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     return violations
 

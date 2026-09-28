@@ -757,7 +757,7 @@ class TestNquadsNullGraph:
         polars_lines = triplets.export.export_to_nquads(polars.from_pandas(frame), export_to_memory=True).getvalue().decode().splitlines()
         assert sorted(pandas_lines) == sorted(polars_lines)
         assert all("  " not in line for line in pandas_lines)
-        assert pandas_lines[0].endswith("<http://iec.ch/TC57/CIM100#Breaker> .")
+        assert pandas_lines[0].endswith("<http://triplets#Breaker> .")     # no schema: every name is undefined
         assert pandas_lines[2].endswith("<urn:uuid:inst> .")
         back = triplets.parser.nquads.read_nquads("\n".join(pandas_lines))
         assert back["INSTANCE_ID"].tolist()[:2] == [None, None] or back["INSTANCE_ID"].isna().tolist()[:2] == [True, True]

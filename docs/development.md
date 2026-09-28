@@ -73,19 +73,31 @@ function for the column:
 - The absolute side takes flat maps built from `rdf_map`, one function per
   map, each a single comprehension over `rdf_map_entries` (all profile
   sections, first occurrence wins): `namespaces` (name → namespace IRI),
-  `key_types` (name → schema entry type), `datatypes` (KEY → xsd IRI, `None` =
-  string, anyURI absent), `value_types` (KEY → `enum` / `reference` /
-  `literal`). No cache — each is ~2 ms on a 2.8 MB schema, a content key
-  cost 6x that. Public entry points (`validate`, `validate_schema`,
-  `export_to_*`, the qlever ingest) call `load_rdf_map` once; below them only
-  dicts flow, so a path is parsed once per call.
-  `absolute_name` covers classes, enum values and keys alike; a name absent from
-  the schema (CIM abstracts) gets CIM100.
-- `value_types` decides references: an Association key's value is
-  `urn:uuid:<value>` whatever it looks like (same rule as `absolute_id` on the
-  ID column); the canonical-UUID heuristic applies only when the schema is
-  silent. `node_kind` gives the SHACL engines the same decision for
-  `sh:nodeKind`.
+  `key_types` (name → schema entry type), `value_types` (KEY → `literal` /
+  `reference` / `enum`, by entry type only), `datatypes` (Attribute KEY → xsd
+  IRI, `None` = string; anyURI included). No cache — each is ~2 ms on a 2.8 MB
+  schema, a content key cost 6x that. Public entry points (`validate`,
+  `validate_schema`, `export_to_*`, the qlever ingest) call `load_rdf_map`
+  once; below them only dicts flow, so a path is parsed once per call.
+- **The schema entry type decides the serialisation form, never `xsd:type`**
+  and never the shape of the text: an Attribute value is a literal even when
+  it reads `https://…` or looks like a UUID (`xsd:type` only annotates it), an
+  Association value is `absolute_id(value)` (absolute passes through, else
+  `urn:uuid:`), an Enumeration value an enum IRI. The absolute-IRI / canonical-
+  UUID heuristic applies only to a KEY the schema does not declare.
+  `node_kind` gives the SHACL engines the same decision for `sh:nodeKind`.
+- **Undefined names** — a class not in the schema (abstract CIM classes such as
+  `Equipment` included), a KEY not in it, an enum value not in it, and every
+  name when there is no `rdf_map` — take `undefined_namespace`.
+  `absolute_name` has no schema branch: the map answers or the parameter does.
+  `iri.defined(key, value, namespaces, value_types)` names the row-level test.
+  Every exporter has the same two knobs: `export_undefined` (write such rows
+  or drop them — N-Quads keeps them by default, CIM XML drops them) and
+  `undefined_namespace` (default `http://triplets#`). `sparql.query`,
+  `validate`, `validate_schema` and `export_to_shacl_report` always load every
+  row and default the namespace to CIM100 so schema-less data answers `cim:`
+  queries; the same frame therefore exports `triplets#Equipment` and is
+  queried as `CIM100#Equipment` unless the parameter is passed.
 - Flavors: `iri_pandas` (Series in/out), `iri_polars` (Expr in/out, no UDFs),
   `iri_duckdb` (SQL text in/out) carry the same names.
   `__init__` imports only the standard library — the parser imports it per file.

@@ -45,7 +45,7 @@ pandas materialization) but hold the whole table in memory during the export;
 streaming cimxml is the recorded TODO follow-up.
 
 Both engines expose the same interface:
-`generate_xml(instance_data, rdf_map, namespace_map, class_KEY, export_undefined, comment, debug, datatypes)`
+`generate_xml(instance_data, rdf_map, namespace_map, class_KEY, export_undefined, comment, debug, datatypes, undefined_namespace)`
 returning `{"filename": str, "file": bytes}` for one instance. They produce
 data-identical XML (verified by an engine-equivalence test); only whitespace
 formatting differs.
@@ -134,7 +134,10 @@ files = data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine
 files = data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine="cython_pugixml")
 
 # N-Quads (fast input for SPARQL engines like qlever); the schema gives every
-# class / enum / key its own namespace (triplets.iri.namespaces; CIM100 without one).
+# class / enum / key its own namespace (triplets.iri.namespaces). Names the schema
+# does not declare — every name without one — are kept (export_undefined=True)
+# under undefined_namespace, http://triplets# by default; both are parameters,
+# the same pair export_to_cimxml has (where export_undefined defaults to False).
 # N-Quads output is serialization-edition-independent — references are always
 # emitted as absolute urn:uuid: IRIs, so ED1 and ED2 produce identical, valid
 # input for any SPARQL engine (the ED1 "#uuid" fragment-reference pitfall is a

@@ -5,7 +5,7 @@ from io import BytesIO
 import pyarrow
 import pyarrow.compute
 
-from ..iri import datatypes, iri_pandas, load_rdf_map, namespaces, value_types
+from ..iri import TRIPLETS_NS, datatypes, iri_pandas, load_rdf_map, namespaces, value_types
 
 
 def _escape(series):
@@ -15,7 +15,8 @@ def _escape(series):
             .str.replace("\r", "\\r", regex=False))
 
 
-def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
+def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, export_undefined=True,
+                     undefined_namespace=TRIPLETS_NS):
     """Export triplet DataFrame to N-Quads file.
 
     Parameters
@@ -30,18 +31,26 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
         enumerations won't get namespace and literals stay untyped.
     export_to_memory : bool, default False
         If True, return an in-memory BytesIO (with .name) instead of writing to disk.
+    export_undefined : bool, default True
+        Keep rows the schema does not account for (unknown class, KEY or enum
+        value — every row without a schema); False drops them.
+    undefined_namespace : str, default "http://triplets#"
+        Namespace those names are written in.
     """
     rdf_map = load_rdf_map(rdf_map)
     maps = dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map))
 
     data = data[data["VALUE"].notna()]  # no object to state (parity with the polars engine)
+    if not export_undefined:
+        data = data[iri_pandas.defined(data["KEY"].astype(str), data["VALUE"].astype(str),
+                                       maps["namespaces"], maps["value_types"])]
 
     ids = data["ID"].astype(str)
     keys = data["KEY"].astype(str)
     values = data["VALUE"].astype(str)
     instances = data["INSTANCE_ID"].astype(str).where(data["INSTANCE_ID"].notna(), None)
 
-    kind, payload = iri_pandas.absolute_value(keys, values, **maps)
+    kind, payload = iri_pandas.absolute_value(keys, values, undefined_namespace=undefined_namespace, **maps)
     is_iri = (kind == "iri").to_numpy()
     typed = payload.notna().to_numpy() & ~is_iri
     objects = '"' + _escape(values) + '"'                     # plain literal by default
@@ -50,7 +59,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
 
     graphs = ("<" + iri_pandas.absolute_id(instances) + ">").where(instances.notna(), ".")
     content = _lines("<" + iri_pandas.absolute_id(ids) + ">",
-                     "<" + iri_pandas.absolute_key(keys, maps["namespaces"]) + ">",
+                     "<" + iri_pandas.absolute_key(keys, maps["namespaces"], undefined_namespace) + ">",
                      objects,
                      graphs)
 

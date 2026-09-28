@@ -34,13 +34,36 @@ Start of the 0.3 line.
 - `export.nquads_utils.build_key_metadata` → `iri.namespaces` / `iri.value_types` /
   `iri.datatypes`; `make_object` takes them as keyword maps. The pandas N-Quads
   exporter is vectorized (no per-row `apply`).
-- **Schema-typed references**: a value under an Association key is exported
-  (N-Quads, qlever ingest) as `urn:uuid:<value>` whatever it looks like — the
-  same rule `absolute_id` applies to the ID column. Before, a non-canonical
-  reference (upper-case UUID, `_`-prefixed name) silently became a string
-  literal. The canonical-UUID heuristic still covers keys the schema does not
-  name. SHACL `sh:nodeKind sh:Literal` on an Association path now violates on
-  every row; `sh:IRI` still checks the value form.
+- **The schema entry type decides the serialisation form** (N-Quads, qlever
+  ingest, SHACL `sh:nodeKind`), never `xsd:type` and never the shape of the
+  text. An Attribute value is a literal even when it reads `https://…` or
+  looks like a UUID — `Model.modelingAuthoritySet` is now
+  `"http://…"^^<xsd:anyURI>` and a string attribute holding an IRI stays a
+  string (before, both became IRI nodes and `read_nquads` shortened them). A
+  SPARQL query matching such a value as `<http://…>` must match the literal
+  instead. CIM XML `datatypes=True` annotates anyURI attributes. An
+  Association value is `absolute_id(value)`: an absolute IRI passes through,
+  anything else becomes `urn:uuid:<value>` (before, a non-canonical reference
+  silently became a string literal). The absolute-IRI / canonical-UUID
+  heuristic now applies only to a KEY the schema does not declare. SHACL
+  `sh:nodeKind sh:Literal` on an Association path violates on every row;
+  `sh:IRI` still checks the value form.
+- **Undefined names** — a class the schema does not list (abstract CIM classes
+  such as `Equipment` included; conformant data with concrete `Type` values is
+  unchanged), a KEY or an enum value it does not list, and every name when no
+  `rdf_map` is given — are written under `undefined_namespace`, default
+  `http://triplets#`, in N-Quads and both CIM XML engines. Before: CIM100 in
+  N-Quads / qlever / the SHACL report, `http://triplets#` in the pandas CIM XML
+  engine, unprefixed elements in the cython one, a bare value for an unknown
+  enum value. `export_to_nquads` gains `export_undefined` (default `True`:
+  lossless interchange keeps every row) and `undefined_namespace`;
+  `export_to_cimxml` gains `undefined_namespace` (its `export_undefined`
+  default stays `False`; an unknown enum value now follows the same switch
+  instead of being written bare). Schema-less `export_to_nquads` therefore
+  changes from CIM100 to `http://triplets#`. A schema-less query does not:
+  `sparql.query`, `validate`, `validate_schema` and `export_to_shacl_report`
+  keep every row and default `undefined_namespace` to CIM100, so `cim:`
+  queries keep working; all of them take the parameter.
 - **Performance** (RealGrid, 1.15M rows): `read_nquads` 12.2 s → 2.9 s (line
   splitting and graph detection in Arrow compute, slice-based term unwrap;
   columns come back arrow-backed), pandas `export_to_nquads` 3.9 s → 2.2 s

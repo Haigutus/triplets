@@ -74,7 +74,8 @@ def generate_xml(instance_data,
                  export_undefined=False,
                  comment=None,
                  debug=False,
-                 datatypes=False):
+                 datatypes=False,
+                 undefined_namespace=TRIPLETS_NS):
     """
         Generate an RDF XML file from a triplet dataset instance.
 
@@ -157,7 +158,7 @@ def generate_xml(instance_data,
             return
 
     if export_undefined:
-        namespace_map = {**namespace_map, "triplets": TRIPLETS_NS}
+        namespace_map = {**namespace_map, "triplets": undefined_namespace}
 
     # Create element builder
     E = ElementMaker(nsmap=namespace_map)
@@ -196,7 +197,7 @@ def generate_xml(instance_data,
             logger.debug("Definition missing for class: {} with {}: ".format(class_name, ID))
 
             if export_undefined:
-                class_namespace = TRIPLETS_NS
+                class_namespace = undefined_namespace
                 id_name = f"{{{RDF_NS}}}about"
                 id_value_prefix = UUID_PREFIX   # undefined-class fallback; defined classes use the schema value_prefix
             else:
@@ -245,7 +246,12 @@ def generate_xml(instance_data,
                     value_prefix = attrib.get("value_prefix", "")
 
                     if not value_prefix:                     # enumeration: namespace from the resolved profile (same as the cython exporter)
-                        value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace", "")
+                        value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace")
+                        if not value_prefix:                 # undefined enum value: same switch as undefined classes / keys
+                            if not export_undefined:
+                                logger.debug("Definition missing for enum value: " + str(VALUE))
+                                continue
+                            value_prefix = undefined_namespace
 
                     tag.attrib[_get_qname(attrib["attribute"])] = f"{value_prefix}{VALUE}"
                 else:
@@ -260,7 +266,7 @@ def generate_xml(instance_data,
                 logger.debug("Definition missing for tag: " + KEY)
 
                 if export_undefined:
-                    tag = E(_get_qname(TRIPLETS_NS, KEY))
+                    tag = E(_get_qname(undefined_namespace, KEY))
                     tag.text = str(VALUE)
                     # key_datatypes spans all schema profiles, so annotation works
                     # even when instance profile resolution fell through

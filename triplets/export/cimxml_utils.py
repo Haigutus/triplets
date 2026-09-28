@@ -12,7 +12,6 @@ from triplets._header import (  # noqa: F401 — load_rdf_map re-exported for th
 
 logger = logging.getLogger(__name__)
 
-from triplets.iri import TRIPLETS_NS  # noqa: F401 — namespace for undefined structures (export_undefined=True)
 
 
 def _values_for_key(instance_data, key):

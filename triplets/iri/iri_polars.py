@@ -5,7 +5,7 @@ Categorical first, as the N-Quads exporter does).
 """
 import polars
 
-from . import (CIM_NS, HTTP_FRAGMENT_RE, ID_PREFIX_RE, RDF_TYPE, TERM_PREFIX_RE, URI_PREFIX_RE,
+from . import (HTTP_FRAGMENT_RE, ID_PREFIX_RE, RDF_TYPE, TERM_PREFIX_RE, TRIPLETS_NS, URI_PREFIX_RE,
                UUID_PREFIX, UUID_RE)
 
 
@@ -50,30 +50,37 @@ def _lookup(expr, mapping, default=None):
     return expr.replace_strict(mapping, default=default, return_dtype=polars.Utf8)
 
 
-def absolute_name(column, namespaces=None):
+def absolute_name(column, namespaces=None, undefined_namespace=TRIPLETS_NS):
     expr = _col(column)
-    return polars.when(is_iri(expr)).then(expr).otherwise(_lookup(expr, namespaces, CIM_NS) + expr)
+    return polars.when(is_iri(expr)).then(expr).otherwise(_lookup(expr, namespaces, undefined_namespace) + expr)
 
 
-def absolute_key(column, namespaces=None):
+def absolute_key(column, namespaces=None, undefined_namespace=TRIPLETS_NS):
     expr = _col(column)
-    return polars.when(expr == "Type").then(polars.lit(RDF_TYPE)).otherwise(absolute_name(expr, namespaces))
+    return (polars.when(expr == "Type").then(polars.lit(RDF_TYPE))
+            .otherwise(absolute_name(expr, namespaces, undefined_namespace)))
 
 
-def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None):
+def defined(key, value, namespaces=None, value_types=None):
+    """Boolean Expr of rows the schema accounts for — see the scalar rule."""
+    key, value = _col(key), _col(value)
+    schema, known = _lookup(key, value_types), value.is_in(list(namespaces or ()))
+    return ((key == "Type") & known) | (schema.is_not_null() & ((schema != "enum") | is_iri(value) | known))
+
+
+def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS):
     """→ ``(kind, payload)`` Exprs; same branch order as the scalar rule."""
     key, value = _col(key), _col(value)
     schema = _lookup(key, value_types)
-    is_type, uri = key == "Type", is_iri(value)
+    is_type = key == "Type"
     enum, reference, typed = schema == "enum", schema == "reference", schema == "literal"
-    uuid = schema.is_null() & value.str.contains(UUID_RE.pattern)
+    undefined_ref = schema.is_null() & (is_iri(value) | value.str.contains(UUID_RE.pattern))
     datatype = _lookup(key, {name: datatype for name, datatype in (datatypes or {}).items() if datatype})
 
-    kind = (polars.when(is_type | uri | enum | reference | uuid).then(polars.lit("iri"))
+    kind = (polars.when(is_type | enum | reference | undefined_ref).then(polars.lit("iri"))
             .otherwise(polars.lit("literal")))
-    payload = (polars.when(is_type | enum).then(absolute_name(value, namespaces))
-               .when(uri).then(value)
-               .when(reference | uuid).then(polars.lit(UUID_PREFIX) + value)
+    payload = (polars.when(is_type | enum).then(absolute_name(value, namespaces, undefined_namespace))
+               .when(reference | undefined_ref).then(absolute_id(value))
                .when(typed).then(datatype)
                .otherwise(polars.lit(None, dtype=polars.Utf8)))
     return kind, payload

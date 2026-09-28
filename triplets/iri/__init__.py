@@ -18,8 +18,11 @@ SHACL / RDFS vocabulary terms          ``local_term``   —
 
 Local rules are schema-free (a parse has no schema). Absolute rules take the
 flat maps built from the export schema — :func:`namespaces`, :func:`value_types`,
-:func:`datatypes`, one dict each, only the ones a call site needs; without them
-CIM100 is the namespace for everything and only canonical UUIDs are references.
+:func:`datatypes`, one dict each, only the ones a call site needs. The schema
+entry type decides the serialisation form (Attribute → literal, Association →
+reference, Enumeration → enum IRI); ``xsd:type`` only annotates literals. A name
+the schema does not declare — every name without a schema — takes
+``undefined_namespace`` (``http://triplets#`` unless the caller says otherwise).
 
 Flavors: :mod:`triplets.iri.iri_pandas`, :mod:`triplets.iri.iri_polars` and
 :mod:`triplets.iri.iri_duckdb` implement the same names over Series / Expr /
@@ -159,24 +162,25 @@ def key_types(rdf_map):
 
 
 def _xsd(entry):
-    """Entry's xsd datatype name (``float``, ``string``, …) or None; ``xsd:anyURI`` is not a datatype here."""
+    """Entry's xsd datatype name (``float``, ``string``, ``anyURI``, …) or None."""
     xsd = str(entry.get("xsd:type", ""))
-    return xsd.removeprefix("xsd:") if xsd.startswith("xsd:") and xsd != "xsd:anyURI" else None
+    return xsd.removeprefix("xsd:") if xsd.startswith("xsd:") else None
 
 
 def datatypes(rdf_map):
-    """KEY → xsd datatype IRI; ``None`` = ``xsd:string`` (no annotation). ``xsd:anyURI`` absent: references keep IRI handling."""
-    return {name: None if xsd == "string" else XSD_NS + xsd
-            for name, entry in rdf_map_entries(rdf_map) if (xsd := _xsd(entry))}
+    """KEY → xsd datatype IRI for Attribute entries; ``None`` = ``xsd:string`` (no annotation).
+    Annotation / validation only — it never decides whether a value is a literal or an IRI."""
+    return {name: None if xsd == "string" else XSD_NS + xsd for name, entry in rdf_map_entries(rdf_map)
+            if entry.get("type") == "Attribute" and (xsd := _xsd(entry))}
 
 
-_VALUE_TYPES = {"Enumeration": "enum", "Association": "reference"}
+_VALUE_TYPES = {"Attribute": "literal", "Association": "reference", "Enumeration": "enum"}
 
 
 def value_types(rdf_map):
-    """KEY → ``"enum"`` | ``"reference"`` | ``"literal"``; absent = the schema is silent."""
-    return {name: kind for name, entry in rdf_map_entries(rdf_map)
-            if (kind := _VALUE_TYPES.get(entry.get("type")) or ("literal" if _xsd(entry) else None))}
+    """KEY → ``"literal"`` | ``"reference"`` | ``"enum"`` by schema entry type; absent = undefined KEY."""
+    return {name: _VALUE_TYPES[kind] for name, entry in rdf_map_entries(rdf_map)
+            if (kind := entry.get("type")) in _VALUE_TYPES}
 
 
 # ── absolute (schema-driven) ───────────────────────────────────────────────────
@@ -186,42 +190,52 @@ def absolute_id(text):
     return text if text is None or is_iri(text) else UUID_PREFIX + text
 
 
-def absolute_name(name, namespaces=None):
-    """Local schema name (class, enum value, key) → its namespace + name; IRIs / None pass through."""
+def absolute_name(name, namespaces=None, undefined_namespace=TRIPLETS_NS):
+    """Local schema name (class, enum value, key) → its namespace + name; an undeclared name takes
+    *undefined_namespace*; IRIs / None pass through."""
     if name is None or is_iri(name):
         return name
-    return (namespaces or {}).get(name, CIM_NS) + name
+    return (namespaces or {}).get(name, undefined_namespace) + name
 
 
-def absolute_key(key, namespaces=None):
+def absolute_key(key, namespaces=None, undefined_namespace=TRIPLETS_NS):
     """KEY → predicate IRI: ``Type`` → ``rdf:type``, else :func:`absolute_name`."""
-    return RDF_TYPE if key == "Type" else absolute_name(key, namespaces)
+    return RDF_TYPE if key == "Type" else absolute_name(key, namespaces, undefined_namespace)
 
 
-def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None):
+def defined(key, value, namespaces=None, value_types=None):
+    """Does the schema account for this row? ``Type`` → the class is declared; else the KEY is
+    declared and, for an enum KEY, so is the value. Without a schema nothing is defined."""
+    namespaces, value_types = namespaces or {}, value_types or {}
+    if key == "Type":
+        return value in namespaces
+    return key in value_types and (value_types[key] != "enum" or is_iri(value) or value in namespaces)
+
+
+def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS):
     """VALUE → ``("iri", iri)`` or ``("literal", xsd_datatype_or_None)``.
 
-    Type → class IRI; absolute IRI → itself; then the schema decides by KEY:
-    enum → enum IRI, reference → ``urn:uuid:`` + value (as :func:`absolute_id`
-    on the ID column), literal → datatype (schema wins over the UUID look of an
-    mRID); schema silent → canonical UUID is a reference, anything else a plain
-    literal. Quoting and escaping belong to the serializer, not here.
+    Type → class IRI. Otherwise the schema entry type of the KEY decides, never
+    the shape of the text: enum → enum IRI, reference → :func:`absolute_id` of
+    the value (absolute passes through, else ``urn:uuid:``), literal → datatype
+    annotation (an Attribute stays a literal even when its text looks like an
+    IRI or a UUID). An undefined KEY falls to the shape heuristic: absolute IRI
+    or canonical UUID → reference, else plain literal. Quoting and escaping
+    belong to the serializer, not here.
     """
     if value is None:                    # no term — same answer as the flavors' null rows
         return "literal", None
     if key == "Type":
-        return "iri", absolute_name(value, namespaces)
-    if is_iri(value):
-        return "iri", value
+        return "iri", absolute_name(value, namespaces, undefined_namespace)
     kind = (value_types or {}).get(key)
     if kind == "enum":
-        return "iri", absolute_name(value, namespaces)
+        return "iri", absolute_name(value, namespaces, undefined_namespace)
     if kind == "reference":
-        return "iri", UUID_PREFIX + value
+        return "iri", absolute_id(value)
     if kind == "literal":
         return "literal", (datatypes or {}).get(key)
-    if UUID_RE.match(value):
-        return "iri", UUID_PREFIX + value
+    if is_iri(value) or UUID_RE.match(value):
+        return "iri", absolute_id(value)
     return "literal", None
 
 

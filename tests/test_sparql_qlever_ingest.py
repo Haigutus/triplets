@@ -29,15 +29,15 @@ INSTANCE_2 = "http://example.com/instances/profile2"
 
 # Inline export schema exercising every schema-driven rule.
 RDF_MAP = {"Profile": {
-    "Test.float":    {"xsd:type": "xsd:float"},
-    "Test.integer":  {"xsd:type": "xsd:integer"},
-    "Test.boolean":  {"xsd:type": "xsd:boolean"},
-    "Test.dateTime": {"xsd:type": "xsd:dateTime"},
-    "Test.string":   {"xsd:type": "xsd:string"},
-    "Test.anyURI":   {"xsd:type": "xsd:anyURI"},        # excluded → IRI handling
+    "Test.float":    {"type": "Attribute", "xsd:type": "xsd:float"},
+    "Test.integer":  {"type": "Attribute", "xsd:type": "xsd:integer"},
+    "Test.boolean":  {"type": "Attribute", "xsd:type": "xsd:boolean"},
+    "Test.dateTime": {"type": "Attribute", "xsd:type": "xsd:dateTime"},
+    "Test.string":   {"type": "Attribute", "xsd:type": "xsd:string"},
+    "Test.anyURI":   {"type": "Attribute", "xsd:type": "xsd:anyURI"},   # a literal — the entry type decides, not xsd
     "Test.enum":     {"type": "Enumeration"},
     "Test.assoc":    {"type": "Association"},       # reference by schema, whatever the value looks like
-    "Test.other":    {"namespace": "http://example.com/ns#"},
+    "Test.other":    {"namespace": "http://example.com/ns#"},           # no type: an undefined KEY with a namespace
 }}
 
 
@@ -67,8 +67,10 @@ def torture_frame():
         (UUID_A, "Test.boolean", "true", INSTANCE_1),
         (UUID_A, "Test.dateTime", "2020-01-02T03:04:05", INSTANCE_1),
         (UUID_A, "Test.string", UUID_B, INSTANCE_1),
-        # O6: anyURI excluded from datatypes → UUID/IRI handling applies
+        # O6: anyURI attribute — a typed literal even when the text looks like an IRI / UUID
         (UUID_A, "Test.anyURI", UUID_B, INSTANCE_1),
+        (UUID_A, "Test.anyURI", "http://example.com/literal", INSTANCE_1),
+        (UUID_A, "Test.string", "https://example.com/also-literal", INSTANCE_1),
         # O7: UUID reference under unmapped KEY (lowercase only)
         (UUID_A, "RefKey", UUID_B, INSTANCE_1),
         (UUID_A, "NotRef", UUID_B.upper(), INSTANCE_1),                     # stays literal
@@ -92,7 +94,8 @@ def quad_dump(index):
 
 
 def build_via_nquads(data, rdf_map, directory):
-    buffer = data.export_to_nquads(rdf_map=rdf_map, export_to_memory=True)
+    # the arrow ingest (a query-side loader) defaults undefined names to CIM100; match it here
+    buffer = data.export_to_nquads(rdf_map=rdf_map, export_to_memory=True, undefined_namespace=CIM_NS)
     source = Path(directory, "data.nq")
     source.write_bytes(buffer.read())
     basename = str(Path(directory, "nq", "index"))

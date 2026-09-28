@@ -23,7 +23,7 @@ import pandas
 
 from .._engine_detect import flavor, to_return_type
 from .._rdflib_loader import load_dataset, scoped_graph
-from ..iri import local_id, local_key, local_value
+from ..iri import CIM_NS, local_id, local_key, local_value
 
 if find_spec("rdflib") is None:  # registry contract: an unavailable engine fails at import
     raise ImportError("rdflib is not installed")
@@ -32,9 +32,10 @@ logger = logging.getLogger(__name__)
 
 
 
-def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data_unchanged=False):
+def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data_unchanged=False,
+          undefined_namespace=CIM_NS):
     """Execute query_string over data; shape the result by query type."""
-    dataset = load_dataset(data, rdf_map=rdf_map, data_unchanged=data_unchanged)
+    dataset = load_dataset(data, rdf_map=rdf_map, data_unchanged=data_unchanged, undefined_namespace=undefined_namespace)
     graph = scoped_graph(dataset, scope)
     result = graph.query(query_string)
     if return_type == "auto":

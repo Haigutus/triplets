@@ -149,16 +149,16 @@ class RangeConverter {
         .first->second;
   }
 
+  // Mirror of triplets.iri.absolute_value: the schema entry type decides the
+  // form; the text shape is consulted only for an undefined KEY (Default).
   TripleComponent makeObject(const KeyInfo& key, std::string_view value) const {
-    if (key.rule == ObjectRule::Type) {
-      if (isUri(value)) return iriComponent(value);
-      return iriComponent(absl::StrCat(namespaceFor(value), value));
-    }
-    if (isUri(value)) return iriComponent(value);
     switch (key.rule) {
+      case ObjectRule::Type:
       case ObjectRule::Enum:
+        if (isUri(value)) return iriComponent(value);
         return iriComponent(absl::StrCat(namespaceFor(value), value));
-      case ObjectRule::Reference:   // schema decides, like absolute_id on the ID column
+      case ObjectRule::Reference:   // absolute_id: absolute passes, else urn:uuid:
+        if (isUri(value)) return iriComponent(value);
         return iriComponent(absl::StrCat("urn:uuid:", value));
       case ObjectRule::Typed:
         // qlever's own typed-literal path (identical to the N-Quads parse).
@@ -179,6 +179,7 @@ class RangeConverter {
       default:
         break;
     }
+    if (isUri(value)) return iriComponent(value);
     if (isUuid(value)) return iriComponent(absl::StrCat("urn:uuid:", value));
     return plainLiteral(value);
   }

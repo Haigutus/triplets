@@ -44,7 +44,7 @@ import numpy
 import pandas
 
 from ..export.nquads_utils import make_subject
-from ..iri import REFERENCE_LIKE, iri_pandas, local_term, node_kind, value_types
+from ..iri import CIM_NS, REFERENCE_LIKE, iri_pandas, local_term, node_kind, value_types
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -86,9 +86,10 @@ class _Context:
     instead of once per rule (the polars/duckdb compilers follow the same shape).
     """
 
-    def __init__(self, data, rdf_map=None):
+    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS):
         self.data = data
         self.rdf_map = rdf_map
+        self.undefined_namespace = undefined_namespace
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self._by_key = None
         self._class_ids = None
@@ -106,7 +107,7 @@ class _Context:
         """rdflib dataset for the sh:sparql constraints — loaded once, reused per query."""
         if self._dataset is None:
             from .._rdflib_loader import load_dataset
-            self._dataset = load_dataset(self.data, rdf_map=self.rdf_map)
+            self._dataset = load_dataset(self.data, rdf_map=self.rdf_map, undefined_namespace=self.undefined_namespace)
         return self._dataset
 
     def key_rows(self, key):
@@ -444,7 +445,7 @@ def _sparql(context, rule):
 
     try:
         result = sparql.query(context.data, query_text, rdf_map=context.rdf_map,
-                              data_unchanged=context.data_hashed)
+                              data_unchanged=context.data_hashed, undefined_namespace=context.undefined_namespace)
         context.data_hashed = True
         return _sparql_violations(rule, result)
     except Exception as error:                            # noqa: BLE001 — engine strictness
@@ -625,7 +626,8 @@ CONSTRAINT_VALIDATORS = {
 }
 
 
-def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None, **kwargs):
+def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
+             undefined_namespace=CIM_NS, **kwargs):
     """Validate triplet data against the compiled constraint table.
 
     Parameters
@@ -656,7 +658,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     if skipped:
         logger.debug("pandas engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
 
-    context = _Context(data, rdf_map)
+    context = _Context(data, rdf_map, undefined_namespace)
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
 

@@ -39,7 +39,7 @@ import pandas
 from .._engine_detect import flavor
 from .._header import PROFILE_KEYS as _HEADER_KEYS
 from .._registry import EngineRegistry
-from ..iri import load_rdf_map
+from ..iri import CIM_NS, load_rdf_map
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
 from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
@@ -87,7 +87,7 @@ def get_engine(name: str = "auto"):
 
 
 def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True,
-             context=False, **kwargs):
+             context=False, undefined_namespace=CIM_NS, **kwargs):
     """Validate triplet data against SHACL shapes; return a violations DataFrame.
 
     Parameters
@@ -114,6 +114,9 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         Run the slower enrichment pass (triplets.validation.context.enrich):
         adds instance/file, object type/name, shape name/description and
         schema definition columns to the report.
+    undefined_namespace : str, default CIM100
+        Namespace for names the schema does not declare (every name without
+        an rdf_map) in the graph the sh:sparql constraints and pyshacl see.
 
     The returned frame carries the validation-run metadata in
     ``violations.attrs["validation"]`` (start/end timestamps and duration,
@@ -127,7 +130,8 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     started = datetime.now(timezone.utc)   # after compile — duration is the run, cache-independent
     engine_name, engine_mod = get_engine(engine)
     table_ref = _table_ref(data, **kwargs)
-    violations = _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, **kwargs)
+    violations = _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical,
+                      undefined_namespace=undefined_namespace, **kwargs)
     violations = _present(violations, data, compiled.ir, compiled.language, table_ref)
     if context:
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
@@ -136,14 +140,15 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     return violations
 
 
-def _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, **kwargs):
+def _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, undefined_namespace=CIM_NS, **kwargs):
     """One engine pass, plus the lexical datatype supplement when the engine
     does not emit it itself — raw violations, presentation columns not yet added."""
-    violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, scope=scope, **kwargs)
+    violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, scope=scope,
+                                     undefined_namespace=undefined_namespace, **kwargs)
     if lexical and engine_name not in _LEXICAL_BUILTIN:
         from . import shacl_pandas
         supplement = shacl_pandas.validate(data, compiled, rdf_map=rdf_map, scope=scope,
-                                           components=("sh:datatype",))
+                                           components=("sh:datatype",), undefined_namespace=undefined_namespace)
         violations = (pandas.concat([violations, supplement], ignore_index=True)
                       .drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
                                                "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
@@ -351,7 +356,7 @@ def _type_map(data, table_name="triplets"):
     return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
 
 
-def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, **kwargs):
+def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, undefined_namespace=CIM_NS, **kwargs):
     """Validate triplet data against the export schema — per instance, per
     declared profile; profiles are never merged.
 
@@ -406,7 +411,7 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, *
     frames = []
     for instance, section in runs:
         sub = _run(data, compiled_set.profiles[section], engine_name, engine_mod,
-                   rdf_map, [instance], lexical, **kwargs)
+                   rdf_map, [instance], lexical, undefined_namespace=undefined_namespace, **kwargs)
         sub["PROFILE"] = section
         frames.append(sub)
 

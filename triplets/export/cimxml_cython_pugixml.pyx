@@ -155,7 +155,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                             str file_name,
                             str class_KEY="Type",
                             cbool export_undefined=True,
-                            comment=None):
+                            comment=None,
+                            str undefined_namespace="http://triplets#"):
     """Generate CIM RDF/XML bytes directly from Arrow columnar data.
 
     Reads Arrow string arrays at C++ level (zero-copy GetString),
@@ -290,7 +291,7 @@ def generate_xml_from_arrow(arrow_table_or_batch,
     cdef int cd_idx, td_idx
 
     # Temp C++ strings for reading Arrow data
-    cdef string s_id, s_key, s_value, s_combined
+    cdef string s_id, s_key, s_value, s_combined, s_tag
     cdef string_view sv_id, sv_key, sv_value
     cdef bytes class_key_bytes = class_KEY.encode('utf-8')
     cdef const char* class_key_ptr = class_key_bytes
@@ -321,7 +322,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             s_combined.append(s_id)
             obj_node.append_attribute(class_defs_vec[cd_idx].id_attr.c_str()).set_value(s_combined.c_str())
         elif export_undefined:
-            obj_node = rdf_root.append_child(s_value.c_str())
+            s_tag = _make_prefixed(undefined_namespace, s_value.decode('utf-8')).encode('utf-8')
+            obj_node = rdf_root.append_child(s_tag.c_str())
             s_combined.assign(b"urn:uuid:")
             s_combined.append(s_id)
             obj_node.append_attribute(b"rdf:about").set_value(s_combined.c_str())
@@ -365,10 +367,12 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                     # Need to look up enum namespace from Python dict
                     py_val = s_value.decode('utf-8')
                     enum_def = instance_rdf_map.get(py_val)
-                    if enum_def is not None and isinstance(enum_def, dict):
-                        s_combined = enum_def.get("namespace", "").encode('utf-8')
-                    else:
-                        s_combined.clear()
+                    enum_ns = enum_def.get("namespace") if isinstance(enum_def, dict) else None
+                    if not enum_ns:                       # undefined enum value: same switch as undefined classes / keys
+                        if not export_undefined:
+                            continue
+                        enum_ns = undefined_namespace
+                    s_combined = enum_ns.encode('utf-8')
                     s_combined.append(s_value)
                 else:
                     s_combined = tag_defs_vec[td_idx].value_prefix
@@ -379,7 +383,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                 s_combined.append(s_value)
                 attr_node.append_child(node_pcdata).set_value(s_combined.c_str())
         elif export_undefined:
-            attr_node = store.append_child_to(<int>py_store_idx, s_key.c_str())
+            s_tag = _make_prefixed(undefined_namespace, s_key.decode('utf-8')).encode('utf-8')
+            attr_node = store.append_child_to(<int>py_store_idx, s_tag.c_str())
             attr_node.append_child(node_pcdata).set_value(s_value.c_str())
 
     # Serialize

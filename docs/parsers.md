@@ -149,8 +149,9 @@ in `tests/test_iri.py`).
 
 The absolute form (N-Quads, SPARQL stores, SHACL reports) is the inverse,
 driven by the export schema: `absolute_id`, `absolute_key`, `absolute_value` with the
-flat maps (`namespaces`, `value_types`, `datatypes`) built from `rdf_map`; CIM100 is
-only the fallback when there is no schema or the name is not in it. `shorten_resources=False` skips only the
+flat maps (`namespaces`, `value_types`, `datatypes`) built from `rdf_map`; a name the
+schema does not declare takes the exporter's `undefined_namespace` (`http://triplets#`;
+CIM100 on the SPARQL / validation side). `shorten_resources=False` skips only the
 `#frag` step.
 
 ## Options

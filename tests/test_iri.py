@@ -12,7 +12,7 @@ import pytest
 
 import triplets
 from triplets import iri
-from triplets.iri import CIM_NS, RDF_TYPE, XSD_NS, iri_duckdb, iri_pandas
+from triplets.iri import CIM_NS, RDF_TYPE, TRIPLETS_NS, XSD_NS, iri_duckdb, iri_pandas
 
 CIM16 = "http://iec.ch/TC57/2013/CIM-schema-cim16#"
 NC = "https://cim4.eu/ns/nc#"
@@ -30,6 +30,8 @@ RDF_MAP = {
         "OrientationKind.negative": {"type": "EnumerationValue", "namespace": CIM16},
         "Terminal.ConductingEquipment": {"type": "Association", "xsd:type": "xsd:anyURI", "namespace": CIM16},
         "NcClass": {"type": "Class", "namespace": NC},
+        "Float": {"type": "Primitive", "xsd:type": "xsd:float", "namespace": CIM16},   # not a KEY: no value type, no datatype
+        "Legacy.untyped": {"xsd:type": "xsd:float", "namespace": CIM16},               # no entry type: an undefined KEY
     },
     "SSH": {"Breaker": {"type": "Class", "namespace": NC}},
     "ProfileNamespaceMap": {"cim": CIM16},
@@ -46,7 +48,8 @@ def test_namespaces_first_profile_wins():
     assert NAMESPACES == {"Breaker": CIM16, "ACLineSegment.r": CIM16, "IdentifiedObject.name": CIM16,
                           "IdentifiedObject.mRID": CIM16, "Model.modelingAuthoritySet": CIM16,
                           "Diagram.orientation": CIM16, "OrientationKind.negative": CIM16,
-                          "Terminal.ConductingEquipment": CIM16, "NcClass": NC}
+                          "Terminal.ConductingEquipment": CIM16, "NcClass": NC, "Float": CIM16,
+                          "Legacy.untyped": CIM16}
 
 
 def test_key_types():
@@ -54,15 +57,17 @@ def test_key_types():
     assert iri.key_types(RDF_MAP)["Breaker"] == "Class"
 
 
-def test_datatypes_string_is_none_anyuri_absent():
+def test_datatypes_attributes_only_string_is_none():
+    """Annotation for Attribute literals: anyURI included (it is a literal datatype), string → None;
+    Association / Enumeration entries carry xsd:anyURI too but are not literals."""
     assert DATATYPES == {"ACLineSegment.r": XSD_NS + "float", "IdentifiedObject.name": None,
-                         "IdentifiedObject.mRID": None}
+                         "IdentifiedObject.mRID": None, "Model.modelingAuthoritySet": XSD_NS + "anyURI"}
 
 
-def test_value_types():
+def test_value_types_by_entry_type_only():
     assert VALUE_TYPES == {"ACLineSegment.r": "literal", "IdentifiedObject.name": "literal",
-                           "IdentifiedObject.mRID": "literal", "Diagram.orientation": "enum",
-                           "Terminal.ConductingEquipment": "reference"}
+                           "IdentifiedObject.mRID": "literal", "Model.modelingAuthoritySet": "literal",
+                           "Diagram.orientation": "enum", "Terminal.ConductingEquipment": "reference"}
 
 
 def test_flat_maps_without_schema_are_empty():
@@ -75,8 +80,9 @@ def test_flat_maps_from_shipped_schema_path():
     assert iri.value_types(rdf_map)["Diagram.DiagramStyle"] == "reference"
     assert iri.value_types(rdf_map)["Diagram.orientation"] == "enum"
     assert iri.datatypes(rdf_map)["ACLineSegment.r"] == XSD_NS + "float"
+    assert "Diagram.DiagramStyle" not in iri.datatypes(rdf_map)          # Association: never a datatype
     assert iri.namespaces(rdf_map)["OrientationKind.negative"] == CIM16
-    assert "Equipment" not in iri.namespaces(rdf_map)          # abstract: no entry → CIM100 at use
+    assert "Equipment" not in iri.namespaces(rdf_map)          # abstract: no entry → undefined_namespace at use
 
 
 # ── local (schema-free), one row per rule ──────────────────────────────────────
@@ -122,42 +128,73 @@ LOCAL_CASES = [
     ("absolute_id", "urn:example:g", "urn:example:g"),
 ]
 
-# (function, input, namespaces?, expected)
+# (function, input, with map?, expected) — undefined names take TRIPLETS_NS, with or without a map
 NAME_CASES = [
     ("absolute_name", "Breaker", True, CIM16 + "Breaker"),
-    ("absolute_name", "Breaker", False, CIM_NS + "Breaker"),
+    ("absolute_name", "Breaker", False, TRIPLETS_NS + "Breaker"),           # no map: every name is undefined
     ("absolute_name", "NcClass", True, NC + "NcClass"),
-    ("absolute_name", "Equipment", True, CIM_NS + "Equipment"),             # absent → default
+    ("absolute_name", "Equipment", True, TRIPLETS_NS + "Equipment"),        # not a schema entry
     ("absolute_name", "http://x#Y", True, "http://x#Y"),
     ("absolute_name", "urn:example:Y", True, "urn:example:Y"),
     ("absolute_name", None, True, None),
     ("absolute_key", "Type", True, RDF_TYPE),
     ("absolute_key", "ACLineSegment.r", True, CIM16 + "ACLineSegment.r"),
-    ("absolute_key", "ACLineSegment.r", False, CIM_NS + "ACLineSegment.r"),
+    ("absolute_key", "ACLineSegment.r", False, TRIPLETS_NS + "ACLineSegment.r"),
+    ("absolute_key", "Custom.foo", True, TRIPLETS_NS + "Custom.foo"),
     ("absolute_key", "http://x#p", True, "http://x#p"),
 ]
 
-# (key, value, maps?, expected kind, expected payload)
+# (function, input, with map?, undefined_namespace, expected) — the caller's namespace wins
+UNDEFINED_NS_CASES = [
+    ("absolute_name", "Equipment", True, CIM_NS, CIM_NS + "Equipment"),
+    ("absolute_name", "Breaker", False, CIM_NS, CIM_NS + "Breaker"),
+    ("absolute_name", "Breaker", True, "http://acme#", CIM16 + "Breaker"),    # declared: the map wins
+    ("absolute_key", "Custom.foo", True, "http://acme#", "http://acme#Custom.foo"),
+]
+
+# (key, value, maps?, expected kind, expected payload) — the schema entry type decides, never the text shape
 VALUE_CASES = [
     ("Type", "Breaker", True, "iri", CIM16 + "Breaker"),
-    ("Type", "Breaker", False, "iri", CIM_NS + "Breaker"),
+    ("Type", "Breaker", False, "iri", TRIPLETS_NS + "Breaker"),
+    ("Type", "Equipment", True, "iri", TRIPLETS_NS + "Equipment"),                    # class not in the schema
     ("Type", "http://x#Y", True, "iri", "http://x#Y"),
-    ("X.y", "https://example.org/thing", False, "iri", "https://example.org/thing"),   # IRI passes through
     ("Diagram.orientation", "OrientationKind.negative", True, "iri", CIM16 + "OrientationKind.negative"),
-    ("Diagram.orientation", "OrientationKind.negative", False, "literal", None),
+    ("Diagram.orientation", "https://cim4.eu/ns/nc#Kind.x", True, "iri", "https://cim4.eu/ns/nc#Kind.x"),   # absolute enum value
+    ("Diagram.orientation", "Nope.value", True, "iri", TRIPLETS_NS + "Nope.value"),   # enum value not in the schema
     ("Terminal.ConductingEquipment", UUID, True, "iri", "urn:uuid:" + UUID),           # reference by schema…
     ("Terminal.ConductingEquipment", UUID.upper(), True, "iri", "urn:uuid:" + UUID.upper()),
     ("Terminal.ConductingEquipment", "_abc", True, "iri", "urn:uuid:_abc"),
     ("Terminal.ConductingEquipment", "urn:uuid:" + UUID, True, "iri", "urn:uuid:" + UUID),
-    ("Terminal.ConductingEquipment", UUID.upper(), False, "literal", None),           # …UUID look without one
-    ("Terminal.ConductingEquipment", UUID, False, "iri", "urn:uuid:" + UUID),
+    ("Terminal.ConductingEquipment", "http://example.org/thing", True, "iri", "http://example.org/thing"),
     ("ACLineSegment.r", "1.5", True, "literal", XSD_NS + "float"),
+    ("IdentifiedObject.mRID", UUID, True, "literal", None),                           # attribute: UUID look is irrelevant
+    ("IdentifiedObject.name", "https://cim4.eu/ns/nc#Thing", True, "literal", None),  # attribute: IRI look is irrelevant
+    ("Model.modelingAuthoritySet", "http://tso.example", True, "literal", XSD_NS + "anyURI"),
+    ("Model.modelingAuthoritySet", "not a uri", True, "literal", XSD_NS + "anyURI"),
+    ("Legacy.untyped", "1.5", True, "literal", None),                                 # no entry type → undefined KEY
+    # undefined KEY (or no schema at all): the text shape decides
+    ("X.y", "https://example.org/thing", True, "iri", "https://example.org/thing"),
+    ("X.y", UUID, True, "iri", "urn:uuid:" + UUID),
+    ("X.y", UUID.upper(), True, "literal", None),                                     # canonical lowercase only
+    ("X.y", "plain text", True, "literal", None),
+    ("Diagram.orientation", "OrientationKind.negative", False, "literal", None),
+    ("Terminal.ConductingEquipment", UUID, False, "iri", "urn:uuid:" + UUID),
+    ("Terminal.ConductingEquipment", UUID.upper(), False, "literal", None),
     ("ACLineSegment.r", "1.5", False, "literal", None),
-    ("IdentifiedObject.mRID", UUID, True, "literal", None),                           # schema beats UUID look
-    ("IdentifiedObject.name", "Foo", True, "literal", None),
-    ("Model.modelingAuthoritySet", "http://tso.example", True, "iri", "http://tso.example"),
-    ("X.y", "plain text", False, "literal", None),
     ("X.y", None, True, "literal", None),
+]
+
+# (key, value, defined?) with the map — the rows export_undefined=False keeps
+DEFINED_CASES = [
+    ("Type", "Breaker", True),
+    ("Type", "Equipment", False),
+    ("ACLineSegment.r", "1.5", True),
+    ("Diagram.orientation", "OrientationKind.negative", True),
+    ("Diagram.orientation", "https://cim4.eu/ns/nc#Kind.x", True),                   # absolute enum value passes
+    ("Diagram.orientation", "Nope.value", False),
+    ("Terminal.ConductingEquipment", "anything", True),
+    ("Legacy.untyped", "1.5", False),
+    ("X.y", "1.5", False),
 ]
 
 # (key, maps?, sh:nodeKind, expected)
@@ -168,6 +205,7 @@ NODE_KIND_CASES = [
     ("Terminal.ConductingEquipment", "IRI", None),            # against IRI the value form still decides
     ("ACLineSegment.r", "IRI", "literal"),
     ("IdentifiedObject.name", "Literal", "literal"),
+    ("Model.modelingAuthoritySet", "IRI", "literal"),
     ("Unknown.key", "IRI", None),
 ]
 
@@ -251,6 +289,19 @@ def test_scalar_absolute_name(name, text, with_namespaces, expected):
     assert getattr(iri, name)(text, NAMESPACES if with_namespaces else None) == expected
 
 
+@pytest.mark.parametrize("name,text,with_namespaces,undefined_namespace,expected", UNDEFINED_NS_CASES)
+def test_scalar_undefined_namespace(name, text, with_namespaces, undefined_namespace, expected):
+    assert getattr(iri, name)(text, NAMESPACES if with_namespaces else None, undefined_namespace) == expected
+
+
+@pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow", "polars"])
+def test_flavor_undefined_namespace_matches_scalar(flavor):
+    apply, _ = FLAVORS[flavor]()
+    for name, text, with_namespaces, undefined_namespace, expected in UNDEFINED_NS_CASES:
+        namespaces = NAMESPACES if with_namespaces else None
+        assert apply(name, [text], namespaces=namespaces, undefined_namespace=undefined_namespace) == [expected]
+
+
 @pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow", "polars"])
 @pytest.mark.parametrize("name", ["absolute_name", "absolute_key"])
 @pytest.mark.parametrize("with_namespaces", [True, False], ids=["schema", "no-schema"])
@@ -278,6 +329,27 @@ def test_flavor_absolute_value_matches_scalar(flavor, with_maps):
 @pytest.mark.parametrize("key,expected_kind,result", NODE_KIND_CASES)
 def test_node_kind(key, expected_kind, result):
     assert iri.node_kind(key, VALUE_TYPES, expected_kind) == result
+
+
+@pytest.mark.parametrize("key,value,expected", DEFINED_CASES)
+def test_scalar_defined(key, value, expected):
+    assert iri.defined(key, value, NAMESPACES, VALUE_TYPES) is expected
+    assert iri.defined(key, value) is False                                # no schema: nothing is defined
+
+
+@pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow", "polars"])
+def test_flavor_defined_matches_scalar(flavor):
+    keys, values = [k for k, _, _ in DEFINED_CASES], [v for _, v, _ in DEFINED_CASES]
+    expected = [e for _, _, e in DEFINED_CASES]
+    if flavor == "polars":
+        polars = pytest.importorskip("polars")
+        from triplets.iri import iri_polars
+        frame = polars.DataFrame({"KEY": keys, "VALUE": values})
+        assert frame.select(iri_polars.defined("KEY", "VALUE", NAMESPACES, VALUE_TYPES).alias("d"))["d"].to_list() == expected
+    else:
+        dtype = object if flavor == "pandas-object" else pandas.ArrowDtype(pytest.importorskip("pyarrow").string())
+        got = iri_pandas.defined(pandas.Series(keys, dtype=dtype), pandas.Series(values, dtype=dtype), NAMESPACES, VALUE_TYPES)
+        assert got.tolist() == expected
 
 
 # ── native mirror: the cython parser applies local_id / local_value in C++ ─────

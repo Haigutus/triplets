@@ -5,12 +5,12 @@ from io import BytesIO
 
 import polars as pl
 
-from ..iri import datatypes, iri_polars, load_rdf_map, namespaces, value_types
+from ..iri import TRIPLETS_NS, datatypes, iri_polars, load_rdf_map, namespaces, value_types
 
 logger = logging.getLogger(__name__)
 
 
-def _quads(data, maps):
+def _quads(data, maps, export_undefined=True, undefined_namespace=TRIPLETS_NS):
     """Triplets frame → collected quads frame [s, p, o, g, end].
 
     The shared formatting core: the whole-frame export and the per-batch
@@ -25,9 +25,9 @@ def _quads(data, maps):
                .str.replace_all("\r", "\\r", literal=True))
     plain_literal = pl.format('"{}"', escaped)
 
-    kind, payload = iri_polars.absolute_value("KEY", "VALUE", **maps)
+    kind, payload = iri_polars.absolute_value("KEY", "VALUE", undefined_namespace=undefined_namespace, **maps)
     subject = pl.format("<{}>", iri_polars.absolute_id("ID"))
-    predicate = pl.format("<{}>", iri_polars.absolute_key("KEY", maps["namespaces"]))
+    predicate = pl.format("<{}>", iri_polars.absolute_key("KEY", maps["namespaces"], undefined_namespace))
     objects = (pl.when(pl.col("_kind") == "iri").then(pl.format("<{}>", pl.col("_payload")))
                .when(pl.col("_payload").is_not_null())
                .then(pl.format('"{}"^^<{}>', escaped, pl.col("_payload")))
@@ -46,6 +46,8 @@ def _quads(data, maps):
     return (data.lazy()
             .with_columns(pl.col("ID", "KEY", "VALUE", "INSTANCE_ID").cast(pl.Utf8))
             .filter(pl.col("VALUE").is_not_null())
+            .filter(pl.lit(True) if export_undefined
+                    else iri_polars.defined("KEY", "VALUE", maps["namespaces"], maps["value_types"]))
             .with_columns(kind.alias("_kind"), payload.alias("_payload"))
             .select(subject.alias("s"), predicate.alias("p"), objects.alias("o"),
                     graph.alias("g"))
@@ -58,7 +60,8 @@ def _maps(rdf_map):
     return dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map))
 
 
-def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
+def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, export_undefined=True,
+                     undefined_namespace=TRIPLETS_NS):
     """Export triplet DataFrame to N-Quads file.
 
     Parameters
@@ -72,8 +75,13 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
         datatype annotations ("400"^^<...XMLSchema#float>).
     export_to_memory : bool, default False
         If True, return an in-memory BytesIO (with .name) instead of writing to disk.
+    export_undefined : bool, default True
+        Keep rows the schema does not account for (unknown class, KEY or enum
+        value — every row without a schema); False drops them.
+    undefined_namespace : str, default "http://triplets#"
+        Namespace those names are written in.
     """
-    quads = _quads(data, _maps(rdf_map))
+    quads = _quads(data, _maps(rdf_map), export_undefined, undefined_namespace)
 
     # write straight from Rust with a space separator — the CSV writer joins
     # the columns into "<s> <p> <o> <g> ." per row. No Python string
@@ -90,7 +98,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
     quads.write_csv(path, include_header=False, quote_style="never", separator=" ")
 
 
-def write_nquads_batches(reader, handle, rdf_map=None):
+def write_nquads_batches(reader, handle, rdf_map=None, export_undefined=True, undefined_namespace=TRIPLETS_NS):
     """Stream a ``pyarrow.RecordBatchReader`` into an open binary handle.
 
     One batch is formatted and written at a time, so memory stays bounded by
@@ -99,5 +107,5 @@ def write_nquads_batches(reader, handle, rdf_map=None):
     """
     maps = _maps(rdf_map)
     for batch in reader:
-        _quads(pl.from_arrow(batch), maps).write_csv(
+        _quads(pl.from_arrow(batch), maps, export_undefined, undefined_namespace).write_csv(
             handle, include_header=False, quote_style="never", separator=" ")
