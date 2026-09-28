@@ -103,6 +103,13 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
     classes_defined_externally = profile_data.query(rdfs_tools.stereotype_query("Description")).ID.to_list()
 
+    def absolute(reference):
+        """``rdf:resource`` text → absolute IRI: a relative ``#Name`` resolves against the
+        profile's ``xml:base`` (RDF/XML semantics), an absolute IRI passes through. The schema
+        records inheritance and ranges this way so no consumer has to guess a namespace."""
+        namespace, name = rdfs_tools.get_namespace_and_name(reference, default_namespace=xml_base)
+        return namespace + name
+
     # Concrete classes are instantiated by ID; Description classes are defined in another
     # profile and referenced by about (e.g. NC associations attached to EQ objects)
     export_classes = list(dict.fromkeys(rdfs_tools.concrete_classes_list(profile_data) + classes_defined_externally))
@@ -141,7 +148,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
             parameter_def["type"] = "Association"
             parameter_def["xsd:type"] = "xsd:anyURI"
-            parameter_def["range"] = parameter_dict["range"]
+            parameter_def["range"] = absolute(parameter_dict["range"])
 
         else:
             data_type = parameter_dict.get("dataType")
@@ -182,7 +189,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 }
                 parameter_def["type"] = "Enumeration"
                 parameter_def["xsd:type"] = "xsd:anyURI"
-                parameter_def["range"] = parameter_dict["range"].replace("#", "")
+                parameter_def["range"] = absolute(parameter_dict["range"])
                 parameter_def["values"] = []
 
                 # Add allowed values
@@ -237,7 +244,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 "value_prefix": class_ID_prefix
             },
             "type": "Class",
-            "inheritance": class_inheritance,
+            "inheritance": [absolute(ancestor) for ancestor in class_inheritance],
             "stereotyped": not class_is_local,
             "namespace": class_namespace,
             "description": class_meta.get("comment", ""),
