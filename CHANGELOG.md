@@ -81,6 +81,14 @@ Start of the 0.3 line.
   no longer prefixed with `urn:uuid:` by the N-Quads graph term.
 
 ### Fixed
+- **Export schemas record inheritance and ranges as absolute IRIs.** The
+  generator resolves a relative ``rdf:resource="#Name"`` against the profile's
+  ``xml:base`` (RDF/XML semantics) instead of copying it, so a parent or range
+  in another namespace is stated (`https://cim.ucaiug.io/ns#IdentifiedObject`
+  for an NC class) rather than reconstructed by each consumer from the child's
+  namespace. Enumeration ranges were mangled by a ``replace("#", "")``
+  (`https://cim4.eu/ns/ncBalancingReserveKind`, 107 entries in NC 2.5); all
+  bundles regenerated — only `inheritance` and `range` values change.
 - **Exclude pandas 2.3.3**: `pivot()` on ArrowDtype dictionary columns still
   crashes with `'Series' object has no attribute '_pa_array'` (same bug as
   2.2.x, which is already excluded). Constraint is now
