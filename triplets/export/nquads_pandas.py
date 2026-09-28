@@ -2,9 +2,6 @@
 
 from io import BytesIO
 
-import pyarrow
-import pyarrow.compute
-
 from ..iri import TRIPLETS_NS, datatypes, iri_pandas, load_rdf_map, namespaces, value_types
 
 
@@ -76,6 +73,8 @@ def _lines(subjects, predicates, objects, graphs):
     """Term columns → ``s p o g .\n`` lines as UTF-8 bytes, joined in Arrow
     (one C++ pass; ~4x faster than str concat + ``"\n".join``). A row with no
     graph carries ``.`` in *graphs* and comes out as an N-Triples line."""
+    import pyarrow
+    import pyarrow.compute
     arrays = [pyarrow.array(column, type=pyarrow.string()) for column in (subjects, predicates, objects, graphs)]
     arrays = [array.combine_chunks() if isinstance(array, pyarrow.ChunkedArray) else array
               for array in arrays]

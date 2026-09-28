@@ -176,10 +176,11 @@ def multiplicity_to_XSD_format(data_table_view):
 
 
 def get_namespace_and_name(uri, default_namespace):
-
+    """``ns#name`` / ``ns/name`` → (ns, name); a bare or ``#name`` reference (the parser shortens
+    ``http…#URI`` to ``URI``) takes *default_namespace*."""
     separator = "#" if "#" in uri else "/"
 
-    namespace, name = uri.rsplit(separator, maxsplit=1)
+    namespace, name = uri.rsplit(separator, maxsplit=1) if separator in uri else ("", uri)
 
     if namespace == "":
         namespace = default_namespace

@@ -18,13 +18,10 @@ import re
 from pathlib import Path
 
 import pandas
-import pyarrow
-import pyarrow.compute as pc
 
 from .._engine_detect import to_return_type
 from ..iri import iri_pandas
 
-_STRING = pandas.ArrowDtype(pyarrow.string())
 
 # N-Triples string escapes: \uXXXX / \UXXXXXXXX and single-char (\n \t \" \\ ...)
 _ESCAPE = re.compile(r'\\u([0-9A-Fa-f]{4})|\\U([0-9A-Fa-f]{8})|\\(.)')
@@ -49,6 +46,8 @@ def read_nquads(source, return_type="pandas"):
     the triplets convention: everything is a string). Lines without a graph
     term (N-Triples) get INSTANCE_ID null.
     """
+    import pyarrow
+    import pyarrow.compute as pc
     lines = pc.utf8_trim_whitespace(pyarrow.array(_read_text(source).splitlines(), type=pyarrow.string()))
     lines = lines.filter(pc.and_(pc.not_equal(lines, ""), pc.invert(pc.starts_with(lines, "#"))))
     return to_return_type(terms_to_triplets(_split_terms(lines)), return_type)
@@ -63,6 +62,9 @@ def _split_terms(lines):
     ``_:bnode`` term preceded by something. All Arrow compute — ~10x the
     speed of a lazy-quantifier regex extract over the same lines.
     """
+    import pyarrow
+    import pyarrow.compute as pc
+    _STRING = pandas.ArrowDtype(pyarrow.string())
     ends = pc.ends_with(lines, ".")
     if not pc.all(ends).as_py():
         raise ValueError(f"not N-Quads: {lines.filter(pc.invert(ends))[0].as_py()[:200]!r}")

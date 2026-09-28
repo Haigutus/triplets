@@ -18,7 +18,7 @@ def rdfs_profile():
     """Load first RDFS profile file."""
     if not RDFS_DIR.exists():
         pytest.skip(SKIP_REASON)
-    files = rdfs_tools.list_of_files(str(RDFS_DIR), ".rdf")
+    files = sorted(rdfs_tools.list_of_files(str(RDFS_DIR), ".rdf"))   # os.walk order differs per machine
     if not files:
         pytest.skip(SKIP_REASON)
     from triplets.rdf_parser import load_all_to_dataframe
