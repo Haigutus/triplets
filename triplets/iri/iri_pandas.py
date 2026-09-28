@@ -79,7 +79,6 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     payload = (key.map(datatypes).astype(value.dtype) if datatypes
                else pandas.Series(None, index=key.index, dtype=value.dtype)).where(typed)
     payload = payload.mask(reference | undefined_ref, absolute_id(value))
-    payload = payload.mask(enum, absolute_name(value, namespaces, undefined_namespace))
-    payload = payload.mask(is_type, absolute_name(value, namespaces, undefined_namespace))
+    payload = payload.mask(is_type | enum, absolute_name(value, namespaces, undefined_namespace))
     kind = numpy.where(is_type | enum | reference | undefined_ref, "iri", "literal")
     return pandas.Series(kind, index=key.index, dtype=value.dtype), payload
