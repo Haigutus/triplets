@@ -15,14 +15,13 @@ SKIP_REASON = "RDFS profile data not available"
 
 @pytest.fixture(scope="module")
 def rdfs_profile():
-    """Load first RDFS profile file."""
+    """Load first RDFS profile file the way the schema generator does (absolute form)."""
     if not RDFS_DIR.exists():
         pytest.skip(SKIP_REASON)
     files = sorted(rdfs_tools.list_of_files(str(RDFS_DIR), ".rdf"))   # os.walk order differs per machine
     if not files:
         pytest.skip(SKIP_REASON)
-    from triplets.rdf_parser import load_all_to_dataframe
-    return load_all_to_dataframe([files[0]])
+    return rdfs_tools.load_all_to_dataframe([files[0]])
 
 
 # ── Pure utility functions (no data needed) ─────────────────────────────────
@@ -149,6 +148,15 @@ class TestCimRdfsToJson:
         result = cim_rdfs_to_json.convert_profile(rdfs_profile)
         assert isinstance(result, dict)
         assert len(result) > 0
+
+    def test_relative_reference_is_a_parse_bug(self):
+        """The generator takes absolute IRIs only — no xml:base fallback to guess with."""
+        from triplets.rdfs_tools import cim_rdfs_to_json
+        assert cim_rdfs_to_json._split_iri("http://iec.ch/TC57/CIM100#ACLineSegment") == \
+            ("http://iec.ch/TC57/CIM100#", "ACLineSegment")
+        assert cim_rdfs_to_json._split_iri("http://purl.org/dc/terms/issued") == ("http://purl.org/dc/terms/", "issued")
+        with pytest.raises(ValueError, match="absolute IRI"):
+            cim_rdfs_to_json._split_iri("#DiagramStyle")
 
 
 class TestOrphanedAttributes:

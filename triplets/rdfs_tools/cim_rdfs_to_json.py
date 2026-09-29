@@ -5,6 +5,7 @@ import pandas
 from triplets.tools import get_namespace_map
 from triplets.rdfs_tools import rdfs_tools
 from triplets.rdfs_tools.rdfs_tools import load_all_to_dataframe
+from triplets.iri import is_iri, local_name
 import logging
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,16 @@ cim_serializations = {
     }
 }
 
+def _split_iri(reference):
+    """Absolute IRI → (namespace, local name). The RDFS is parsed in absolute form
+    (``local_resources=False`` resolves against ``xml:base``), so a relative reference here
+    is a parse bug, not something to guess a namespace for."""
+    if not is_iri(reference):
+        raise ValueError(f"expected an absolute IRI from the RDFS parse, got {reference!r}")
+    name = local_name(reference)
+    return reference[:len(reference) - len(name)], name
+
+
 def convert_profile(profile_data, serialization_version="552_ED2"):
 
     id_attribute = cim_serializations[serialization_version]["id_attribute"]
@@ -103,13 +114,6 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
     classes_defined_externally = profile_data.query(rdfs_tools.stereotype_query("Description")).ID.to_list()
 
-    def absolute(reference):
-        """``rdf:resource`` text → absolute IRI: a relative ``#Name`` resolves against the
-        profile's ``xml:base`` (RDF/XML semantics), an absolute IRI passes through. The schema
-        records inheritance and ranges this way so no consumer has to guess a namespace."""
-        namespace, name = rdfs_tools.get_namespace_and_name(reference, default_namespace=xml_base)
-        return namespace + name
-
     # Concrete classes are instantiated by ID; Description classes are defined in another
     # profile and referenced by about (e.g. NC associations attached to EQ objects)
     export_classes = list(dict.fromkeys(rdfs_tools.concrete_classes_list(profile_data) + classes_defined_externally))
@@ -129,7 +133,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
         if association_used == 'No':
             return None
 
-        parameter_namespace, parameter_name = rdfs_tools.get_namespace_and_name(parameter, default_namespace=xml_base)
+        parameter_namespace, parameter_name = _split_iri(parameter)
 
         parameter_def = {
             "description": parameter_dict.get("comment", ""),
@@ -148,7 +152,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
             parameter_def["type"] = "Association"
             parameter_def["xsd:type"] = "xsd:anyURI"
-            parameter_def["range"] = absolute(parameter_dict["range"])
+            parameter_def["range"] = parameter_dict["range"]
 
         else:
             data_type = parameter_dict.get("dataType")
@@ -160,12 +164,9 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 parameter_def["type"] = "Attribute"
 
                 # Get the attribute data type and add to export
-                data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(data_type, default_namespace=xml_base)
+                data_type_namespace, data_type_name = _split_iri(data_type)
 
                 data_type_meta = profile_data.get_object_data(data_type).to_dict()
-
-                if data_type_namespace == "":
-                    data_type_namespace = xml_base
 
                 data_type_def = {
                     "description": data_type_meta.get("comment", ""),
@@ -189,7 +190,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 }
                 parameter_def["type"] = "Enumeration"
                 parameter_def["xsd:type"] = "xsd:anyURI"
-                parameter_def["range"] = absolute(parameter_dict["range"])
+                parameter_def["range"] = parameter_dict["range"]
                 parameter_def["values"] = []
 
                 # Add allowed values
@@ -197,11 +198,8 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
                 for value in values:
 
-                    value_namespace, value_name = rdfs_tools.get_namespace_and_name(value, default_namespace=xml_base)
+                    value_namespace, value_name = _split_iri(value)
                     value_meta = profile_data.get_object_data(value).to_dict()
-
-                    if value_namespace == "":
-                        value_namespace = xml_base
 
                     value_def = {
                         "description": value_meta.get("comment", ""),
@@ -219,7 +217,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
     for concrete_class in export_classes:
 
         # Define class namespace
-        class_namespace, class_name = rdfs_tools.get_namespace_and_name(concrete_class, default_namespace=xml_base)
+        class_namespace, class_name = _split_iri(concrete_class)
 
         class_meta = profile_data.get_object_data(concrete_class).to_dict()
 
@@ -244,7 +242,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 "value_prefix": class_ID_prefix
             },
             "type": "Class",
-            "inheritance": [absolute(ancestor) for ancestor in class_inheritance],
+            "inheritance": list(class_inheritance),
             "stereotyped": not class_is_local,
             "namespace": class_namespace,
             "description": class_meta.get("comment", ""),
