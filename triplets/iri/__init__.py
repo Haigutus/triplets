@@ -12,7 +12,8 @@ column / context                       local            absolute
 =====================================  ===============  ==================
 ``ID``, ``INSTANCE_ID``, focus, graph  ``local_id``     ``absolute_id``
 ``KEY``                                ``local_key``    ``absolute_key``
-``VALUE`` (Type, reference, enum)      ``local_value``  ``absolute_value``
+``VALUE`` of ``Type`` (class)          ``local_name``   ``absolute_value``
+``VALUE`` (reference, enum)            ``local_value``  ``absolute_value``
 SHACL / RDFS vocabulary terms          ``local_term``   —
 =====================================  ===============  ==================
 
@@ -59,7 +60,7 @@ URI_PREFIXES = ("http://", "https://", "urn:")
 ID_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, ID_PREFIXES)) + ")")
 URI_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, URI_PREFIXES)) + ")")
 HTTP_FRAGMENT_RE = re.compile(r"^http.*#")   # greedy: everything up to the LAST "#"
-HTTP_KEY_PREFIX_RE = re.compile(r"^http.*[#/]")   # greedy: up to the last "#" or "/"
+HTTP_NAME_PREFIX_RE = re.compile(r"^http.*[#/]")   # greedy: up to the last "#" or "/"
 TERM_PREFIX_RE = re.compile(r"^.*[#/]")      # greedy: up to the last "#" or "/"
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 """Canonical lowercase mRID — what the exporters turn into ``urn:uuid:``."""
@@ -103,22 +104,28 @@ def local_value(text):
     return text
 
 
-def local_key(iri):
-    """Predicate → KEY: ``rdf:type`` → ``Type``, ``http(s)…`` → after the last ``#`` or ``/``,
-    else unchanged.
+def local_name(iri):
+    """Element IRI (predicate, class) → XML local name: ``http(s)…`` → after the last ``#``
+    or ``/``, else unchanged.
 
-    A KEY is an XML element local name, which holds neither ``#`` nor ``/`` — so this
-    is what the CIM XML parser keeps for ``#`` and ``/`` namespaces alike
-    (``dcterms:issued`` → ``issued``). VALUEs never split on ``/``: see :func:`local_value`.
+    The CIM XML parsers read KEY and ``Type`` VALUE from element tags, where XML already
+    separates namespace and local name (lxml ``{ns}local``, pugixml ``prefix:local``) —
+    they split the QName natively, no IRI string exists. This is the same split for an
+    IRI string: an XML local name holds neither ``#`` nor ``/``, so ``dcterms:issued``
+    → ``issued`` exactly as the parser gives it. References never split on ``/``: see
+    :func:`local_value`.
     """
     if iri is None:
         return None
     iri = str(iri)
-    if iri == RDF_TYPE:
-        return "Type"
-    if iri.startswith("http"):
-        return HTTP_KEY_PREFIX_RE.sub("", iri)
-    return iri
+    return HTTP_NAME_PREFIX_RE.sub("", iri) if iri.startswith("http") else iri
+
+
+def local_key(iri):
+    """Predicate → KEY: ``rdf:type`` → ``Type``, else :func:`local_name`."""
+    if iri is None:
+        return None
+    return "Type" if str(iri) == RDF_TYPE else local_name(iri)
 
 
 def local_term(iri):

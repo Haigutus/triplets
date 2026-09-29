@@ -66,8 +66,9 @@ function for the column:
 | column / context | local | absolute |
 |---|---|---|
 | `ID`, `INSTANCE_ID`, focus node, graph | `local_id` | `absolute_id` |
-| `KEY` | `local_key` (`rdf:type` → `Type`, else after the last `#` or `/`) | `absolute_key` |
-| `VALUE` (Type, reference, enum) | `local_value` (`local_id`, then `#frag`; never `/`) | `absolute_value` → `(kind, payload)` |
+| `KEY` | `local_key` (`rdf:type` → `Type`, else `local_name`) | `absolute_key` |
+| `VALUE` of `Type` (class) | `local_name` (after the last `#` or `/`: the XML local name) | `absolute_value` |
+| `VALUE` (reference, enum) | `local_value` (`local_id`, then `#frag`; never `/`) | `absolute_value` → `(kind, payload)` |
 | SHACL / RDFS vocabulary, `sh:in`, SARIF, `schema_ir` | `local_term` (`#` then `/`) | not instance data |
 
 - The absolute side takes flat maps built from `rdf_map`, one function per
@@ -104,6 +105,11 @@ function for the column:
 - Flavors: `iri_pandas` (Series in/out), `iri_polars` (Expr in/out, no UDFs),
   `iri_duckdb` (SQL text in/out) carry the same names.
   `__init__` imports only the standard library — the parser imports it per file.
+- The CIM XML parsers read KEY and `Type` VALUE from element tags, where XML has
+  already split namespace and local name (lxml `{ns}local` →
+  `_split_prefixed_name`, pugixml `prefix:local` → `local_name`); there is no IRI
+  string to pass to `local_key`. `iri.local_name` is the same split for an IRI and
+  `test_parse_engines_keys_and_types_are_local_name` holds every parser to it.
 - Native mirrors (cython parser `clean_id`/`clean_ref_value`, qlever C++
   `isUri`/`isUuid`/`namespaceFor`/`encodeIri`) are commented as such and checked by the
   parse / ingest parity tests. Vectorized patterns derive from the constants

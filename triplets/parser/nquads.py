@@ -112,13 +112,15 @@ def terms_to_triplets(frame):
     with a ``^^<datatype>`` / ``@lang`` suffix — dropped, the value keeps its
     lexical form; string escapes decoded), or bare turtle-shorthand
     numbers/booleans. IDs lose urn:uuid:, VALUE IRIs also any http(s)
-    #fragment namespace, rdf:type → 'Type' (triplets.iri rules). A VALUE IRI
+    #fragment namespace, rdf:type → 'Type', a Type VALUE (class) via local_name
+    (triplets.iri rules). A VALUE IRI
     that is a subject in the same frame shortens like an ID, so the reference
     still joins it. IRI escapes the exporter wrote (``%20``) are decoded.
     """
     subjects = _term(frame["ID"])
     frame["ID"] = iri_pandas.local_id(subjects)
     frame["KEY"] = iri_pandas.local_key(_term(frame["KEY"]))
+    is_type = (frame["KEY"] == "Type").fillna(False).astype(bool)
     value = frame["VALUE"]
     quoted = value.str.startswith('"', na=False).astype(bool)
     # drop a ^^<datatype> / @lang suffix, then slice the quotes off — cheaper
@@ -126,8 +128,9 @@ def terms_to_triplets(frame):
     unquoted = _unescape(value.str.replace(r'"(\^\^<[^>]*>|@[\w-]+)?$', '"', regex=True).str.slice(1, -1))
     objects = _term(value)
     shortened = iri_pandas.local_value(objects)
-    frame["VALUE"] = unquoted.where(quoted, shortened.where(~_subject_references(objects, shortened, subjects),
-                                                            iri_pandas.local_id(objects)))
+    shortened = shortened.where(~_subject_references(objects, shortened, subjects), iri_pandas.local_id(objects))
+    # a class is an element local name, like a KEY (the CIM XML parser reads it from the tag)
+    frame["VALUE"] = unquoted.where(quoted, shortened.where(~is_type, iri_pandas.local_name(objects)))
     graphs = iri_pandas.local_id(_term(frame["INSTANCE_ID"])) if "INSTANCE_ID" in frame.columns else None
     # no graph term anywhere (N-Triples, CONSTRUCT results) → plain None column,
     # the same shape every SPARQL engine returns for a constructed graph

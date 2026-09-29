@@ -113,6 +113,13 @@ LOCAL_CASES = [
     ("local_key", "https://schema.org/name", "name"),
     ("local_key", "http://a/b#c", "c"),
     ("local_key", "_ACLineSegment.r", "_ACLineSegment.r"),   # a KEY is not an ID
+    ("local_name", None, None),
+    ("local_name", "http://iec.ch/TC57/CIM100#Breaker", "Breaker"),
+    ("local_name", "http://purl.org/dc/terms/issued", "issued"),
+    ("local_name", "https://example.org/vocab/Thing", "Thing"),
+    ("local_name", RDF_TYPE, "type"),                                  # no Type mapping: that is local_key
+    ("local_name", "urn:example:Thing", "urn:example:Thing"),
+    ("local_name", "Breaker", "Breaker"),
     ("local_term", None, None),
     ("local_term", "http://www.w3.org/ns/shacl#minCount", "minCount"),
     ("local_term", "https://schema.org/domainIncludes", "domainIncludes"),
@@ -375,7 +382,8 @@ def test_flavor_defined_matches_scalar(flavor):
 
 PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-         xmlns:cim="http://iec.ch/TC57/CIM100#" xmlns:nc="https://cim4.eu/ns/nc#">
+         xmlns:cim="http://iec.ch/TC57/CIM100#" xmlns:nc="https://cim4.eu/ns/nc#"
+         xmlns:dcterms="http://purl.org/dc/terms/" xmlns:voc="https://example.org/vocab/">
   <cim:Breaker rdf:about="urn:uuid:_x">
     <cim:Equipment.EquipmentContainer rdf:resource="#_{uuid}"/>
     <cim:Switch.open>false</cim:Switch.open>
@@ -385,7 +393,11 @@ PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
   </cim:Breaker>
   <nc:Thing rdf:ID="_abc">
     <nc:Thing.ref rdf:resource="urn:uuid:{uuid}"/>
+    <dcterms:issued>2024-01-01T00:00:00Z</dcterms:issued>
   </nc:Thing>
+  <voc:Dataset rdf:about="urn:uuid:_d">
+    <dcterms:conformsTo rdf:resource="http://example.org/profile/EQ/3.0"/>
+  </voc:Dataset>
 </rdf:RDF>
 """.format(uuid=UUID)
 
@@ -406,3 +418,25 @@ def test_parse_engines_apply_local_id_and_local_value(engine, tmp_path):
             ("Breaker.kind", iri.local_value("http://iec.ch/TC57/CIM100#SwitchKind.breaker")),
             ("Breaker.ref", iri.local_value("https://cim4.eu/ns/nc#Kind.value")),
             ("Breaker.uri", iri.local_value("http://example.org/path/only"))} <= rows
+
+
+@pytest.mark.parametrize("engine", ["python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow"])
+def test_parse_engines_keys_and_types_are_local_name(engine, tmp_path):
+    """The parsers split element QNames natively (no IRI string exists); every KEY and
+    Type VALUE must equal local_key / local_name of the element's IRI — the rule
+    read_nquads applies — for "#" and "/" namespaces alike."""
+    from lxml import etree
+    try:
+        triplets.parser.get_engine(engine)
+    except Exception as error:      # extension not built in this environment
+        pytest.skip(f"{engine} not available: {error}")
+    path = tmp_path / "iri_cases.xml"
+    path.write_text(PARSE_FIXTURE)
+    frame = triplets.parse(str(path), engine=engine, return_type="pandas")
+    root = etree.fromstring(PARSE_FIXTURE.encode())
+    iri_of = lambda element: "".join(etree.QName(element).namespace or "") + etree.QName(element).localname  # noqa: E731
+    types = {iri.local_name(iri_of(element)) for element in root}
+    keys = {iri.local_key(iri_of(child)) for element in root for child in element}
+    assert types == {"Breaker", "Thing", "Dataset"} and {"issued", "conformsTo"} <= keys
+    assert types <= set(frame.loc[frame["KEY"] == "Type", "VALUE"])
+    assert keys <= set(frame["KEY"])

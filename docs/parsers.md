@@ -141,8 +141,8 @@ in `tests/test_iri.py`).
 | column | shape | rule (`triplets.iri`) |
 |---|---|---|
 | `ID` | bare UUID / bare name | `local_id`: strip exactly **one** of `urn:uuid:`, `#_`, `_` (longest first) |
-| `KEY` | `Class.attr` or `Type` | element tag local name (N-Quads / SPARQL: `local_key`, after the last `#` or `/` — `dcterms:issued` → `issued`) |
-| `VALUE` (Type) | `Breaker` | tag local name |
+| `KEY` | `Class.attr` or `Type` | element tag local name (N-Quads / SPARQL: `local_key` → `local_name`, after the last `#` or `/` — `dcterms:issued` → `issued`) |
+| `VALUE` (Type) | `Breaker` | tag local name (N-Quads / SPARQL: `local_name`) |
 | `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then `http(s)…#frag` → `frag` (`#` only, never `/`) |
 | `VALUE` (literal) | text verbatim | — |
 | `INSTANCE_ID` | bare UUID | fresh `uuid4()` per parsed file |

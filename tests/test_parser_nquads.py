@@ -162,6 +162,17 @@ def test_slash_namespace_keys_roundtrip():
     pandas.testing.assert_frame_equal(canon(read_nquads(buffer)), canon(frame))
 
 
+def test_type_value_is_a_local_name():
+    """A class from a "/" namespace reads back as its local name (like a KEY), while a
+    "/" reference stays whole."""
+    result = read_nquads("<urn:uuid:d> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> "
+                         "<https://example.org/vocab/Dataset> <urn:uuid:g> .\n"
+                         "<urn:uuid:d> <http://purl.org/dc/terms/conformsTo> "
+                         "<http://example.org/profile/EQ/3.0> <urn:uuid:g> .")
+    assert result[["KEY", "VALUE"]].values.tolist() == [["Type", "Dataset"],
+                                                        ["conformsTo", "http://example.org/profile/EQ/3.0"]]
+
+
 def test_reference_to_a_subject_iri_still_joins():
     """A VALUE IRI that is a subject in the same data shortens like its ID, so the
     reference keeps joining; enum / class IRIs still shorten to the fragment."""

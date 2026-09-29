@@ -23,7 +23,7 @@ import pandas
 
 from .._engine_detect import flavor, to_return_type
 from .._rdflib_loader import load_dataset, scoped_graph
-from ..iri import CIM_NS, decode_iri, local_id, local_key, local_value
+from ..iri import CIM_NS, RDF_TYPE, decode_iri, local_id, local_key, local_name, local_value
 
 if find_spec("rdflib") is None:  # registry contract: an unavailable engine fails at import
     raise ImportError("rdflib is not installed")
@@ -62,8 +62,8 @@ def _graph_to_triplets(graph):
     """CONSTRUCT/DESCRIBE result graph → triplet DataFrame (ID/KEY/VALUE).
 
     Inverse of the N-Quads export conventions (triplets.iri): local_id on
-    subjects, local_key on predicates (rdf:type → 'Type'), local_value on
-    IRI objects — local_id when the object is a subject too, so it still
+    subjects, local_key on predicates (rdf:type → 'Type'), local_name on a
+    class, local_value on other IRI objects — local_id when the object is a subject too, so it still
     joins — literals verbatim, IRI escapes decoded (same as read_nquads).
     INSTANCE_ID is None (a constructed graph has no source instance).
 
@@ -80,7 +80,7 @@ def _graph_to_triplets(graph):
             (
                 local_id(decode_iri(str(subject))),     # ID
                 local_key(decode_iri(str(predicate))),  # KEY
-                _shorten_object(obj, subjects),         # VALUE
+                _shorten_object(obj, subjects, str(predicate) == RDF_TYPE),   # VALUE
                 None,                                   # INSTANCE_ID — constructed graph has no source instance
             )
         )
@@ -89,7 +89,8 @@ def _graph_to_triplets(graph):
     return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
 
-def _shorten_object(obj, subjects):
+def _shorten_object(obj, subjects, is_type=False):
     if type(obj).__name__ == "Literal":
         return str(obj)
-    return (local_id if obj in subjects else local_value)(decode_iri(str(obj)))
+    rule = local_name if is_type else local_id if obj in subjects else local_value
+    return rule(decode_iri(str(obj)))
