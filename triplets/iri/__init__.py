@@ -59,6 +59,7 @@ URI_PREFIXES = ("http://", "https://", "urn:")
 ID_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, ID_PREFIXES)) + ")")
 URI_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, URI_PREFIXES)) + ")")
 HTTP_FRAGMENT_RE = re.compile(r"^http.*#")   # greedy: everything up to the LAST "#"
+HTTP_KEY_PREFIX_RE = re.compile(r"^http.*[#/]")   # greedy: up to the last "#" or "/"
 TERM_PREFIX_RE = re.compile(r"^.*[#/]")      # greedy: up to the last "#" or "/"
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 """Canonical lowercase mRID — what the exporters turn into ``urn:uuid:``."""
@@ -103,14 +104,20 @@ def local_value(text):
 
 
 def local_key(iri):
-    """Predicate → KEY: ``rdf:type`` → ``Type``, ``http(s)…#frag`` → ``frag``, else unchanged."""
+    """Predicate → KEY: ``rdf:type`` → ``Type``, ``http(s)…`` → after the last ``#`` or ``/``,
+    else unchanged.
+
+    A KEY is an XML element local name, which holds neither ``#`` nor ``/`` — so this
+    is what the CIM XML parser keeps for ``#`` and ``/`` namespaces alike
+    (``dcterms:issued`` → ``issued``). VALUEs never split on ``/``: see :func:`local_value`.
+    """
     if iri is None:
         return None
     iri = str(iri)
     if iri == RDF_TYPE:
         return "Type"
-    if iri.startswith("http") and "#" in iri:
-        return iri.rsplit("#", 1)[-1]
+    if iri.startswith("http"):
+        return HTTP_KEY_PREFIX_RE.sub("", iri)
     return iri
 
 
@@ -259,8 +266,8 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
         return "iri", absolute_id(value)
     if kind == "literal":
         return "literal", (datatypes or {}).get(key)
-    if is_iri(value) or UUID_RE.match(value):
-        return "iri", absolute_id(value)
+    if is_iri(value) or UUID_RE.match(str(value)):
+        return "iri", absolute_id(str(value))
     return "literal", None
 
 

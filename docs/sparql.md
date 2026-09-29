@@ -15,6 +15,9 @@ The module is new — APIs may still shift. Know these before relying on it:
   a multi-instance `scope` yields one solution per instance for shared
   triples (`DISTINCT` dedupes); the CSV SELECT decode nulls empty-string
   literals; its parser accepts some queries qlever rejects (bare `HAVING`).
+- **SELECT returns IRIs as stored** — absolute and percent-encoded
+  (`urn:uuid:a%20b`); CONSTRUCT decodes and shortens them to triplet form. Other
+  import / export deviations: [parsers.md — Known limitations](parsers.md#known-limitations).
 - Engine state caches (indexes, stores, datasets) are unbounded by design —
   long-lived processes over many distinct datasets grow memory/disk. Manage
   the lifecycle explicitly: `triplets.clear_caches()` drops all in-memory

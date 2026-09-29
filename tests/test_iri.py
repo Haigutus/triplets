@@ -109,6 +109,9 @@ LOCAL_CASES = [
     ("local_key", RDF_TYPE, "Type"),
     ("local_key", "http://iec.ch/TC57/CIM100#ACLineSegment.r", "ACLineSegment.r"),
     ("local_key", "urn:example:pred", "urn:example:pred"),
+    ("local_key", "http://purl.org/dc/terms/issued", "issued"),       # "/" namespace: the XML element local name
+    ("local_key", "https://schema.org/name", "name"),
+    ("local_key", "http://a/b#c", "c"),
     ("local_key", "_ACLineSegment.r", "_ACLineSegment.r"),   # a KEY is not an ID
     ("local_term", None, None),
     ("local_term", "http://www.w3.org/ns/shacl#minCount", "minCount"),

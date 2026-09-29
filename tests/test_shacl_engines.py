@@ -170,6 +170,17 @@ def test_node_kind_by_schema(engine):
     assert violating(v, "sh:nodeKind") == {("b1", "not-a-uuid"), ("b2", "11111111-1111-1111-1111-111111111111")}
 
 
+def test_datatype_any_uri_lexical(engine):
+    """xsd:anyURI attributes are literals, so the lexical form is checked: an IRI reference
+    (relative and non-ASCII allowed), no space / <>"{}|^`\\ / controls, "%" only as %XX."""
+    rows = [(f"b{index}", "Type", "Breaker", "eq") for index in range(6)] + [
+        ("b0", "Model.uri", "http://tso.example/a", "eq"), ("b1", "Model.uri", "urn:uuid:x", "eq"),
+        ("b2", "Model.uri", "http://ä.example/%20", "eq"), ("b3", "Model.uri", "has space", "eq"),
+        ("b4", "Model.uri", "a%2", "eq"), ("b5", "Model.uri", "a<b>", "eq")]
+    v = run(rows, SHAPE.format(body="sh:path cim:Model.uri ; sh:datatype xsd:anyURI"), engine)
+    assert violating(v, "sh:datatype") == {("b3", "has space"), ("b4", "a%2"), ("b5", "a<b>")}
+
+
 def test_node_kind_iri_on_association_follows_schema(engine):
     """sh:IRI on an Association path never violates with an rdf_map: the exporters write
     every reference as an IRI (unsafe text percent-encoded), so all engines agree."""

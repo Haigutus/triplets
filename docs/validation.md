@@ -22,6 +22,12 @@ reported in the run's coverage metadata, `skipped_shapes` /
   below. `engine="reference"` always gives the pure pyshacl view.
 - `sh:nodeKind` BlankNode(+combo) cases are intentionally not implemented in
   the vectorized engines (triplets data has no blank nodes).
+- `sh:nodeKind` follows the export schema: an Association / Enumeration path is
+  IRI and an Attribute path Literal, whatever the text. For a KEY the schema does
+  not declare (or without `rdf_map`) the vectorized engines guess from the text
+  (`iri.REFERENCE_LIKE`: any-case UUID, `scheme://…`, `urn:…`, `Name.attr`, or an
+  ID in the data), while the exported graph pyshacl sees uses the stricter export
+  rule (absolute IRI or lowercase UUID → IRI) — the two can disagree on such keys.
 - The duckdb engine streams/spills by design, but a true larger-than-RAM
   validation has not been exercised yet.
 
@@ -170,6 +176,12 @@ engine's report (duplicates dropped on
 `[ID, KEY, VALUE, VIOLATION_TYPE, SOURCE_SHAPE, SEVERITY]`).
 Parity tests treat `triplets:lexicalForm` rows as documented extras: engines
 must never *lose* a violation pyshacl reports.
+
+`xsd:anyURI` values are literals (the schema entry type decides, not the
+datatype), so they get the same lexical check: an IRI reference (RFC 3987,
+relative and non-ASCII allowed) — no controls, space, DEL or ``<>"{}|^`\``, and
+`%` only as a `%XX` escape. `"has space"^^xsd:anyURI` is an `sh:datatype`
+violation on every engine; `xsd:string` stays unchecked.
 
 `rdf_map` still matters for the pyshacl path: without it every `VALUE` is an
 untyped string, so `sh:datatype xsd:float` trips on everything; with it the

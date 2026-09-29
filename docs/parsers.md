@@ -141,7 +141,7 @@ in `tests/test_iri.py`).
 | column | shape | rule (`triplets.iri`) |
 |---|---|---|
 | `ID` | bare UUID / bare name | `local_id`: strip exactly **one** of `urn:uuid:`, `#_`, `_` (longest first) |
-| `KEY` | `Class.attr` or `Type` | element tag local name |
+| `KEY` | `Class.attr` or `Type` | element tag local name (N-Quads / SPARQL: `local_key`, after the last `#` or `/` — `dcterms:issued` → `issued`) |
 | `VALUE` (Type) | `Breaker` | tag local name |
 | `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then `http(s)…#frag` → `frag` (`#` only, never `/`) |
 | `VALUE` (literal) | text verbatim | — |
@@ -153,6 +153,39 @@ flat maps (`namespaces`, `value_types`, `datatypes`) built from `rdf_map`; a nam
 schema does not declare takes the exporter's `undefined_namespace` (`http://triplets#`;
 CIM100 on the SPARQL / validation side). `shorten_resources=False` skips only the
 `#frag` step.
+
+The schema entry type decides the RDF form: an Attribute (`xsd:anyURI` included)
+is a literal written verbatim, checked by `sh:datatype`; an Association or
+Enumeration is a real IRI, with IRI-unsafe text percent-encoded
+(`a b` → `urn:uuid:a%20b`, `iri.encode_iri`). The N-Quads / SPARQL readers
+reverse those escapes (`iri.decode_iri`) and shorten a VALUE IRI that is also a
+subject of the same data like its `ID`, so the reference still joins.
+
+### Known limitations
+
+Deviations between the importers and exporters that are known and not planned:
+
+- **CIM XML does not percent-encode.** Both CIM XML engines write `rdf:about` /
+  `rdf:resource` text as is (`rdf:resource="urn:uuid:a b"`), while N-Quads and the
+  SPARQL stores write `<urn:uuid:a%20b>`. CIM IDs and references are not expected
+  to hold spaces or ``<>"{}|^`\``.
+- **The CIM XML parsers do not decode `%XX`** (all three engines):
+  `rdf:resource="#_a%20b"` reads as `a%20b`; `read_nquads` returns `a b`.
+- **`http(s)` IRIs as CIM XML IDs do not join.** `rdf:about="http://x#L1"` keeps the
+  whole IRI as `ID`, `rdf:resource="http://x#L1"` shortens to `L1` (the parser sees
+  one file at a time, not every subject). `read_nquads` and CONSTRUCT keep such
+  references whole. CIM IDs are `urn:uuid:` / `#_` / `_` forms.
+- **Blank nodes are not supported.** `_:b0` reads as the ID `b0` and exports again
+  as `<urn:uuid:b0>`, a named node.
+- **`%XX` in reference text reads back decoded.** A reference whose own text holds
+  `%20` exports unchanged and reads back with a space. The exported file
+  round-trips byte for byte; only the frame value changes.
+- **`read_nquads` drops datatypes and language tags** — values keep their lexical
+  form (everything in a triplet frame is a string).
+- **The undefined namespace depends on the direction.** `export_to_nquads` writes
+  undeclared names under `http://triplets#`; `sparql.query` / `validate` load the
+  same frame under CIM100. Pass `undefined_namespace=` to align them. See
+  [sparql.md](sparql.md) for what SELECT returns.
 
 ## Options
 

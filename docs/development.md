@@ -66,7 +66,7 @@ function for the column:
 | column / context | local | absolute |
 |---|---|---|
 | `ID`, `INSTANCE_ID`, focus node, graph | `local_id` | `absolute_id` |
-| `KEY` | `local_key` (`rdf:type` → `Type`, else `#frag` only) | `absolute_key` |
+| `KEY` | `local_key` (`rdf:type` → `Type`, else after the last `#` or `/`) | `absolute_key` |
 | `VALUE` (Type, reference, enum) | `local_value` (`local_id`, then `#frag`; never `/`) | `absolute_value` → `(kind, payload)` |
 | SHACL / RDFS vocabulary, `sh:in`, SARIF, `schema_ir` | `local_term` (`#` then `/`) | not instance data |
 

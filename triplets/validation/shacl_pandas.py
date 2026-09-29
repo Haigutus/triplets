@@ -58,6 +58,9 @@ _FLOAT = rf"(?:{_DECIMAL}(?:[eE][+-]?[0-9]+)?|[+-]?INF|NaN)"
 _DATE = r"-?[0-9]{4,}-[0-9]{2}-[0-9]{2}"
 _TIMEZONE = r"(?:Z|[+-][0-9]{2}:[0-9]{2})?"
 _DATETIME = rf"{_DATE}T[0-9]{{2}}:[0-9]{{2}}:[0-9]{{2}}(?:\.[0-9]+)?{_TIMEZONE}"
+# IRI reference (RFC 3987), relative included: no controls, space, DEL or <>"{}|^`\,
+# and "%" only as a %XX escape. Non-ASCII is allowed (IRI, not URI).
+_ANY_URI = r'(?:[^\x00-\x20\x7f<>"{}|^`\\%]|%[0-9A-Fa-f]{2})*'
 
 DATATYPES = {
     "integer": (_INTEGER, None),
@@ -73,7 +76,8 @@ DATATYPES = {
     "boolean": (r"true|false|1|0", r"1|0"),
     "date": (_DATE + _TIMEZONE, None),
     "dateTime": (_DATETIME, None),
-    # string / anyURI / unlisted types: every lexical form is valid — no check
+    "anyURI": (_ANY_URI, None),
+    # string / unlisted types: every lexical form is valid — no check
 }
 
 _NO_IDS = numpy.array([], dtype=object)

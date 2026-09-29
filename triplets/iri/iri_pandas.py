@@ -7,7 +7,7 @@ downcast is deprecated on object columns).
 import numpy
 import pandas
 
-from . import (HTTP_FRAGMENT_RE, ID_PREFIX_RE, IRI_ESCAPE_RE, IRI_UNSAFE_RE, RDF_TYPE, TERM_PREFIX_RE,
+from . import (HTTP_FRAGMENT_RE, HTTP_KEY_PREFIX_RE, ID_PREFIX_RE, IRI_ESCAPE_RE, IRI_UNSAFE_RE, RDF_TYPE, TERM_PREFIX_RE,
                TRIPLETS_NS, URI_PREFIXES, UUID_PREFIX, UUID_RE)
 from . import decode_iri as _decode_iri, encode_iri as _encode_iri
 
@@ -33,7 +33,7 @@ def local_value(series):
 
 
 def local_key(series):
-    return _fragment_after_hash(series).mask(_eq(series, RDF_TYPE), "Type")
+    return series.str.replace(HTTP_KEY_PREFIX_RE.pattern, "", regex=True).mask(_eq(series, RDF_TYPE), "Type")
 
 
 def local_term(series):

@@ -85,6 +85,17 @@ Start of the 0.3 line.
   URI-shaped `INSTANCE_ID` now survives the round trip. A VALUE IRI that is a
   subject of the same data shortens like its `ID` (`local_id`), so a reference
   to `<http://…#b>` still joins the object `http://…#b` instead of becoming `b`.
+  A KEY IRI shortens after the last `#` **or `/`** — an XML element local name
+  holds neither — so `dcterms:` header keys (552 Ed2, NC) read back as
+  `issued` / `identifier`, the same KEY the CIM XML parser gives (before: the
+  whole `http://purl.org/dc/terms/issued`). VALUEs still split on `#` only.
+- **`xsd:anyURI` values are lexically checked** by `sh:datatype` on every engine
+  (pyshacl through the lexical supplement): an RFC 3987 IRI reference, relative
+  and non-ASCII allowed; controls, space, DEL, ``<>"{}|^`\`` and a `%` not
+  followed by two hex digits violate. Before, anyURI was never checked.
+- Known import / export deviations that stay (CIM XML without percent-encoding,
+  `http(s)` IDs, blank nodes, …) are listed in `docs/parsers.md` → *Known
+  limitations*.
 - `violations_to_report_graph` / `export_to_shacl_report` accept `rdf_map`;
   `sh:resultPath` then keeps the profile namespace instead of CIM100.
 - SPARQL / validation `scope` builds graph IRIs with `absolute_id`: a URI-shaped

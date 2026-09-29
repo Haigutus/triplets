@@ -107,7 +107,7 @@ def test_rdf_type_becomes_type_key():
 
 def test_bnodes_and_full_iris_pass_through():
     result = read_nquads('_:b0 <http://example.com/p> <http://example.com/o> .')
-    assert result.iloc[0].tolist()[:3] == ["b0", "http://example.com/p", "http://example.com/o"]
+    assert result.iloc[0].tolist()[:3] == ["b0", "p", "http://example.com/o"]   # KEY: local name; VALUE: whole
 
 
 def test_literal_with_whitespace_and_bnode_shape_is_not_a_graph():
@@ -149,6 +149,17 @@ def test_export_engines_encode_alike(engine):
                              columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
     text = export_to_nquads(frame, rdf_map=REFERENCE_MAP, engine=engine, export_to_memory=True).getvalue()
     assert b"<urn:uuid:a%20b>" in text
+
+
+def test_slash_namespace_keys_roundtrip():
+    """dcterms header KEYs (552 Ed2, NC) export to their "/" namespace and read back as the
+    local name — the same KEY the CIM XML parser produces."""
+    from triplets.export_schema import schemas
+    frame = pandas.DataFrame([("m", "Type", "FullModel", "m"), ("m", "issued", "2024-01-01T00:00:00Z", "m"),
+                              ("m", "identifier", "m", "m")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    buffer = export_to_nquads(frame, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED2, export_to_memory=True)
+    assert b"<http://purl.org/dc/terms/issued>" in buffer.getvalue()
+    pandas.testing.assert_frame_equal(canon(read_nquads(buffer)), canon(frame))
 
 
 def test_reference_to_a_subject_iri_still_joins():
