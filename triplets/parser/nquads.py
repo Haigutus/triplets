@@ -65,6 +65,8 @@ def _split_terms(lines):
     import pyarrow
     import pyarrow.compute as pc
     _STRING = pandas.ArrowDtype(pyarrow.string())
+    if len(lines) == 0:                                   # comment-only / blank buffer
+        return pandas.DataFrame({column: pandas.Series([], dtype=_STRING) for column in ("ID", "KEY", "VALUE", "INSTANCE_ID")})
     ends = pc.ends_with(lines, ".")
     if not pc.all(ends).as_py():
         raise ValueError(f"not N-Quads: {lines.filter(pc.invert(ends))[0].as_py()[:200]!r}")
@@ -82,9 +84,16 @@ def _split_terms(lines):
         split = pc.split_pattern(pc.binary_join_element_wise(" ", rest, ""), " ", max_splits=1, reverse=True)
         head, tail = pc.list_element(split, 0), pc.list_element(split, 1)
     head = pc.utf8_trim_whitespace(head)
-    graph_shaped = pc.or_(pc.and_(pc.starts_with(tail, "<"), pc.ends_with(tail, ">")),
-                          pc.starts_with(tail, "_:"))
-    has_graph = pc.and_(pc.not_equal(head, ""), graph_shaped)
+    graph_shaped = pc.and_(pc.or_(pc.and_(pc.starts_with(tail, "<"), pc.ends_with(tail, ">")),
+                                  pc.starts_with(tail, "_:")),
+                           pc.invert(pc.match_substring(tail, '"')))
+    # the split is only a graph when what precedes it is a complete object term: a
+    # quoted literal must be closed (`"…"`, `"…"^^<dt>`, `"…"@lang`) — otherwise the
+    # "graph" is the tail of a literal containing whitespace ("hello _:world")
+    literal_closed = pc.or_(pc.or_(pc.ends_with(head, '"'), pc.ends_with(head, ">")),
+                            pc.match_substring_regex(head, r'"@[A-Za-z0-9-]+$'))
+    object_complete = pc.or_(pc.invert(pc.starts_with(head, '"')), literal_closed)
+    has_graph = pc.and_(pc.and_(pc.not_equal(head, ""), graph_shaped), object_complete)
     return pandas.DataFrame({
         "ID": pandas.Series(subject, dtype=_STRING),
         "KEY": pandas.Series(predicate, dtype=_STRING),
@@ -150,7 +159,7 @@ def _escape_char(match):
 def _read_text(source):
     if isinstance(source, bytes):
         return source.decode("utf-8")
-    if isinstance(source, str) and ("\n" in source or source.lstrip().startswith(("<", "_:", "#"))):
+    if isinstance(source, str) and (source == "" or "\n" in source or source.lstrip().startswith(("<", "_:", "#"))):
         return source  # serialized content, not a path
     if hasattr(source, "read"):
         content = source.read()

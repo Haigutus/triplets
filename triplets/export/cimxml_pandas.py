@@ -148,7 +148,7 @@ def generate_xml(instance_data,
     rdf_map = load_rdf_map(rdf_map)
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
 
-    # KEY → xsd datatype IRI as the N-Quads export annotates it (string → None, anyURI excluded)
+    # KEY → xsd datatype IRI as the N-Quads export annotates it (Attributes only; string → None)
     key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
 
     if instance_rdf_map is None:

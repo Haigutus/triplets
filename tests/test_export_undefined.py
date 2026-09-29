@@ -21,6 +21,8 @@ ROWS = [
     (LINE, "Custom.foo", "bar", "i"),                                     # undefined KEY
     (CUSTOM, "Type", "CustomThing", "i"),                                 # undefined class
     (LINE, "Equipment.EquipmentContainer", "33333333-3333-3333-3333-333333333333", "i"),
+    (LINE, "Type", "Breaker", "i"),                                       # second Type row only to carry the enum below
+    (LINE, "Switch.kind", "SwitchKind.nope", "i"),                        # undefined enum value under a defined enum key
 ]
 
 
@@ -47,7 +49,7 @@ def test_nquads_undefined_switch_and_namespace(engine):
     assert any(f"<{TRIPLETS_NS}CustomThing>" in line for line in kept)
     dropped = nquads(engine=engine, export_undefined=False)
     assert not any("Custom" in line for line in dropped)
-    assert len(kept) - len(dropped) == 2
+    assert len(kept) - len(dropped) == 3                                   # undefined key, class and enum value
     custom = nquads(engine=engine, undefined_namespace="http://acme#")
     assert any("<http://acme#Custom.foo>" in line for line in custom)
     assert any("<http://acme#CustomThing>" in line for line in custom)
@@ -70,8 +72,10 @@ def test_cimxml_undefined_switch_and_namespace(engine):
     assert "<triplets:Custom.foo>bar</triplets:Custom.foo>" in kept
     assert f'<triplets:CustomThing rdf:about="urn:uuid:{CUSTOM}"' in kept
     assert f'xmlns:triplets="{TRIPLETS_NS}"' in kept
+    assert "SwitchKind.nope" in kept
     dropped = cimxml(engine, export_undefined=False)
     assert "Custom" not in dropped and "xmlns:triplets" not in dropped
+    assert "Switch.kind" not in dropped                                  # no empty element left behind either
     custom = cimxml(engine, export_undefined=True, undefined_namespace="http://acme#")
     assert "<triplets:Custom.foo>" in custom and 'xmlns:triplets="http://acme#"' in custom
 

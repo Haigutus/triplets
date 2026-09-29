@@ -360,27 +360,27 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         if py_td_idx is not None:
             td_idx = <int>py_td_idx
 
-            attr_node = store.append_child_to(<int>py_store_idx, tag_defs_vec[td_idx].tag.c_str())
-
-            if tag_defs_vec[td_idx].is_ref:
-                if tag_defs_vec[td_idx].needs_enum_lookup:
-                    # Need to look up enum namespace from Python dict
-                    py_val = s_value.decode('utf-8')
-                    enum_def = instance_rdf_map.get(py_val)
-                    enum_ns = enum_def.get("namespace") if isinstance(enum_def, dict) else None
-                    if not enum_ns:                       # undefined enum value: same switch as undefined classes / keys
-                        if not export_undefined:
-                            continue
-                        enum_ns = undefined_namespace
-                    s_combined = enum_ns.encode('utf-8')
-                    s_combined.append(s_value)
-                else:
-                    s_combined = tag_defs_vec[td_idx].value_prefix
-                    s_combined.append(s_value)
-                attr_node.append_attribute(tag_defs_vec[td_idx].attr_name.c_str()).set_value(s_combined.c_str())
+            # the value (and whether the row is written at all) is decided BEFORE the
+            # element is appended — an undefined enum value must not leave an empty element
+            if tag_defs_vec[td_idx].is_ref and tag_defs_vec[td_idx].needs_enum_lookup:
+                py_val = s_value.decode('utf-8')
+                enum_def = instance_rdf_map.get(py_val)
+                enum_ns = enum_def.get("namespace") if isinstance(enum_def, dict) else None
+                if not enum_ns:                           # undefined enum value: same switch as undefined classes / keys
+                    if not export_undefined:
+                        continue
+                    enum_ns = undefined_namespace
+                s_combined = enum_ns.encode('utf-8')
+            elif tag_defs_vec[td_idx].is_ref:
+                s_combined = tag_defs_vec[td_idx].value_prefix
             else:
                 s_combined = tag_defs_vec[td_idx].text_prefix
-                s_combined.append(s_value)
+            s_combined.append(s_value)
+
+            attr_node = store.append_child_to(<int>py_store_idx, tag_defs_vec[td_idx].tag.c_str())
+            if tag_defs_vec[td_idx].is_ref:
+                attr_node.append_attribute(tag_defs_vec[td_idx].attr_name.c_str()).set_value(s_combined.c_str())
+            else:
                 attr_node.append_child(node_pcdata).set_value(s_combined.c_str())
         elif export_undefined:
             s_tag = _make_prefixed(undefined_namespace, s_key.decode('utf-8')).encode('utf-8')

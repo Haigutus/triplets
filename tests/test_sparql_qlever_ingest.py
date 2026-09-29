@@ -136,14 +136,27 @@ def test_characters_beyond_the_escape_set():
 
 
 def test_null_in_required_column_raises():
-    """Null VALUE rows are dropped (exporter parity); null anywhere else has
-    no defined export — fail loud with the row index."""
+    """Null VALUE rows are dropped (exporter parity); a null ID or KEY has no
+    defined export — fail loud with the row index."""
     data = pandas.DataFrame({
         "ID": [UUID_A, None], "KEY": ["a", "b"], "VALUE": ["1", "2"],
         "INSTANCE_ID": [INSTANCE_1, INSTANCE_1]})
     with tempfile.TemporaryDirectory() as directory:
-        with pytest.raises(RuntimeError, match="null ID/KEY/INSTANCE_ID at row 1"):
+        with pytest.raises(RuntimeError, match="null ID/KEY at row 1"):
             build_via_arrow(data, None, directory)
+
+
+def test_null_instance_id_is_the_default_graph():
+    """A null INSTANCE_ID is an N-Triples line for every engine: the arrow ingest
+    puts it in the default graph, like qlever's own N-Quads parser does."""
+    data = pandas.DataFrame({
+        "ID": [UUID_A, UUID_A], "KEY": ["a", "b"], "VALUE": ["1", "2"],
+        "INSTANCE_ID": [INSTANCE_1, None]})
+    with tempfile.TemporaryDirectory() as directory:
+        index = build_via_arrow(data, None, directory)
+        total = index.select_arrow("SELECT (COUNT(*) AS ?n) WHERE { ?s ?p ?o }").to_pandas()
+        named = index.select_arrow("SELECT (COUNT(*) AS ?n) WHERE { GRAPH ?g { ?s ?p ?o } }").to_pandas()
+    assert int(total["n"].iloc[0]) == 2 and int(named["n"].iloc[0]) == 1
 
 
 def test_flavors_reach_the_same_graph():

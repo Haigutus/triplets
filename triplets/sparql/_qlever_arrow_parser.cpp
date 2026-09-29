@@ -295,13 +295,13 @@ std::vector<TurtleTriple> ArrowTripleParser::convertRange(
   std::vector<TurtleTriple> result;
   result.reserve(range.end - range.begin);
   for (int64_t row = range.begin; row < range.end; ++row) {
-    // Null VALUE rows are dropped — same as the N-Quads exporters. Null in
-    // any other column has no defined export today (the exporters emit
-    // broken lines); fail loud instead of silently diverging.
+    // Null VALUE rows are dropped and a null INSTANCE_ID is an N-Triples line
+    // (the default graph) — same as the N-Quads exporters. A null ID or KEY
+    // has no defined export; fail loud instead of silently diverging.
     if (c.value.is_null(row)) continue;
-    if (c.id.is_null(row) || c.key.is_null(row) || c.instance.is_null(row)) {
+    if (c.id.is_null(row) || c.key.is_null(row)) {
       throw std::runtime_error(absl::StrCat(
-          "arrow ingest: null ID/KEY/INSTANCE_ID at row ", c.firstRow + row));
+          "arrow ingest: null ID/KEY at row ", c.firstRow + row));
     }
 
     TurtleTriple triple;
@@ -318,7 +318,9 @@ std::vector<TurtleTriple> ArrowTripleParser::convertRange(
     triple.predicate_ = info->predicate;
     triple.object_ = converter.makeObject(*info, c.value.value(row));
 
-    if (int64_t code = c.instance.dict_code(row); code >= 0) {
+    if (c.instance.is_null(row)) {
+      // TurtleTriple::graphIri_ defaults to the default graph
+    } else if (int64_t code = c.instance.dict_code(row); code >= 0) {
       const TripleComponent* graph = graphByCode[code];
       if (graph == nullptr)
         graph = graphByCode[code] =

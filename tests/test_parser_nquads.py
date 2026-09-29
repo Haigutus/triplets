@@ -110,6 +110,24 @@ def test_bnodes_and_full_iris_pass_through():
     assert result.iloc[0].tolist()[:3] == ["b0", "http://example.com/p", "http://example.com/o"]
 
 
+def test_literal_with_whitespace_and_bnode_shape_is_not_a_graph():
+    """The graph term is recognised only after a complete object: a literal that
+    contains a space and ends in something bnode- or IRI-shaped stays one literal."""
+    result = read_nquads('<urn:uuid:a> <http://x#p> "hello _:world" .\n'
+                         '<urn:uuid:a> <http://x#q> "see <http://x#y>" .\n'
+                         '<urn:uuid:a> <http://x#r> "hello _:world" <urn:uuid:g> .\n'
+                         '<urn:uuid:a> <http://x#s> "tagged"@en _:g2 .')
+    assert result["VALUE"].tolist() == ["hello _:world", "see <http://x#y>", "hello _:world", "tagged"]
+    assert result["INSTANCE_ID"].isna().tolist() == [True, True, False, False]
+    assert result["INSTANCE_ID"].tolist()[2:] == ["g", "g2"]
+
+
+def test_comment_only_buffer_is_an_empty_frame():
+    for content in ("", "\n", "# just a comment\n\n"):
+        result = read_nquads(content)
+        assert list(result.columns) == ["ID", "KEY", "VALUE", "INSTANCE_ID"] and len(result) == 0
+
+
 def test_blank_lines_and_comments_skipped():
     content = ('\n# a comment\n'
                '<urn:uuid:a> <urn:p> "n" <urn:uuid:g> .\n\n')

@@ -27,6 +27,13 @@ def rdfs_profile():
 
 # ── Pure utility functions (no data needed) ─────────────────────────────────
 
+def test_get_namespace_and_name_forms():
+    base = "http://iec.ch/TC57/CIM100"
+    assert rdfs_tools.get_namespace_and_name("http://iec.ch/TC57/CIM100#Breaker", base) == ("http://iec.ch/TC57/CIM100#", "Breaker")
+    assert rdfs_tools.get_namespace_and_name("#Breaker", base) == ("http://iec.ch/TC57/CIM100#", "Breaker")
+    assert rdfs_tools.get_namespace_and_name("Breaker", base) == ("http://iec.ch/TC57/CIM100#", "Breaker")   # bare: a fragment, never '/'
+    assert rdfs_tools.get_namespace_and_name("https://schema.org/name", base) == ("https://schema.org/", "name")
+
 class TestParseMultiplicity:
     def test_one_to_one(self):
         assert rdfs_tools.parse_multiplicity("M:1..1") == ("1", "1")
