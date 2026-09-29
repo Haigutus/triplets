@@ -107,6 +107,10 @@ function for the column:
 - Flavors: `iri_pandas` (Series in/out), `iri_polars` (Expr in/out, no UDFs),
   `iri_duckdb` (SQL text in/out) carry the same names.
   `__init__` imports only the standard library — the parser imports it per file.
+- **Types:** `Type` is the typed-node element name (one per CIM object), `rdf:type`
+  a reserved KEY for explicit `rdf:type` statements; the local name `type` is taken
+  by `dcterms:type` in every shipped schema. Design and current gaps:
+  [parsers.md — Types](parsers.md#types-type-vs-rdftype).
 - **Importers have two sources of truth**, each held to the rows above:
 
   | importer | rules from |
