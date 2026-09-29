@@ -98,8 +98,10 @@ def parse(
         ``triplets.iri.local_value``: the ID prefix stripped and http(s) IRIs cut to their
         ``#fragment`` (CIM instance data convention) — enumerations are stored as
         ``ControlAreaTypeKind.Interchange``; filters against the full CIM URI will not match.
-        False applies only ``local_id``: http(s) resource IRIs stay whole (e.g. RDFS schema
-        parsing); only the python engines support this.
+        False is the absolute form: IDs and resource references are resolved against the
+        document's ``xml:base`` (else its URI) at parse time, ``triplets.iri.resolve_iri``
+        (``rdf:ID="X"`` → ``base#X``; e.g. RDFS schema parsing); only the python engines
+        support this.
     string_type : str, default "auto"
         Arrow layout of the ID and VALUE string columns (arrow/polars output,
         and pandas via ArrowDtype): "utf8" (32-bit offsets), "large_utf8"

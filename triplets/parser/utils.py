@@ -12,7 +12,7 @@ from typing import List, Union, IO, Any
 
 logger = logging.getLogger(__name__)
 
-from ..iri import RDF_NS, local_id, local_value
+from ..iri import RDF_NS, local_id, local_value, resolve_iri
 
 RDF_ID = f"{{{RDF_NS}}}ID"
 RDF_ABOUT = f"{{{RDF_NS}}}about"
@@ -39,26 +39,42 @@ def _split_prefixed_name(name: str) -> str:
     return name
 
 
-def iter_rdf_rows(rdf_objects, local_resources=True):
+def iter_rdf_rows(rdf_objects, local_resources=True, base=None):
     """RDF/XML object elements (lxml) → ``(ID, KEY, VALUE)`` rows, the one python copy of the
-    XML → triplet rules (the cython engine mirrors them in C++).
+    XML → triplet rules (the cython engine mirrors the local form in C++).
 
-    ID: :func:`~triplets.iri.local_id` of ``rdf:ID`` > ``rdf:about`` > ``rdf:nodeID``
-    (``""`` when none). Type VALUE and KEY: the element local name. VALUE: element text, else
-    ``rdf:resource`` / ``rdf:nodeID`` through :func:`~triplets.iri.local_value`
-    (:func:`~triplets.iri.local_id` when ``local_resources=False`` — http(s) IRIs stay whole);
-    ``""`` when there is neither.
+    KEY and Type VALUE: the element local name. VALUE: element text, else the
+    ``rdf:resource`` / ``rdf:nodeID`` reference; ``""`` when there is neither. The ID
+    (``rdf:ID`` > ``rdf:about`` > ``rdf:nodeID``, ``""`` when none) and references are:
+
+    - ``local_resources=True`` — local: :func:`~triplets.iri.local_id` for the ID,
+      :func:`~triplets.iri.local_value` for references (the CIM instance convention).
+    - ``local_resources=False`` — absolute: resolved against *base* (the document's
+      ``xml:base``, else its URI — the value the NamespaceMap ``xml_base`` row records) with
+      :func:`~triplets.iri.resolve_iri`, so nothing downstream needs the base again.
+      ``rdf:ID="X"`` is ``base#X``. ``rdf:nodeID`` labels stay as written (blank nodes are
+      not supported).
     """
-    local_resource = local_value if local_resources else local_id
     for rdf_object in rdf_objects:
         attribs = rdf_object.attrib
-        obj_id = local_id(attribs.get(RDF_ID) or attribs.get(RDF_ABOUT) or attribs.get(RDF_NODEID) or "")
+        rdf_id, about, node_id = attribs.get(RDF_ID), attribs.get(RDF_ABOUT), attribs.get(RDF_NODEID)
+        if local_resources:
+            obj_id = local_id(rdf_id or about or node_id or "")
+        elif rdf_id or about:
+            obj_id = resolve_iri("#" + rdf_id, base) if rdf_id else resolve_iri(about, base)
+        else:
+            obj_id = node_id or ""
         yield obj_id, "Type", _split_prefixed_name(rdf_object.tag)
         for element in rdf_object.iterchildren():
             value = element.text
             if value is None and element.attrib:
-                value = local_resource(element.attrib.get(RDF_RESOURCE) or element.attrib.get(RDF_NODEID) or "")
+                reference, node_ref = element.attrib.get(RDF_RESOURCE), element.attrib.get(RDF_NODEID)
+                if local_resources:
+                    value = local_value(reference or node_ref or "")
+                else:
+                    value = resolve_iri(reference, base) if reference else node_ref or ""
             yield obj_id, _split_prefixed_name(element.tag), "" if value is None else value
+
 
 
 def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debug: bool = False):

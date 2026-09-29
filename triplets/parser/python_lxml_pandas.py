@@ -68,7 +68,7 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
 
     # RDF objects
     data_list.extend((obj_id, key, value, instance_id)
-                     for obj_id, key, value in iter_rdf_rows(root.iterchildren(), local_resources))
+                     for obj_id, key, value in iter_rdf_rows(root.iterchildren(), local_resources, root.base))
 
     df = pd.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 

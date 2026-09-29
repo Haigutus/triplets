@@ -94,9 +94,16 @@ Start of the 0.3 line.
   (pyshacl through the lexical supplement): an RFC 3987 IRI reference, relative
   and non-ASCII allowed; controls, space, DEL, ``<>"{}|^`\`` and a `%` not
   followed by two hex digits violate. Before, anyURI was never checked.
-- **`parse(shorten_resources=)` is renamed `local_resources=`** (same
-  default `True`, same meaning), in the `triplets.iri` local / absolute
-  vocabulary. No alias.
+- **`parse(shorten_resources=)` is renamed `local_resources=`**, in the
+  `triplets.iri` local / absolute vocabulary. No alias. `True` (default) is
+  unchanged. `False` is now the absolute form: IDs and references are resolved
+  against the document's `xml:base` (else its URI) at parse time
+  (`iri.resolve_iri`; `rdf:about="#X"` → `base#X`, `rdf:ID="X"` → `base#X`)
+  instead of `local_id` only, which left `#Name` relative and made `#_x` local.
+  The export schema generator runs on it; the regenerated bundles hold the same
+  entries, fields and values (checked), only CGMES 2.4 / 3.0 entry and
+  `parameters` order changes — now sorted by absolute IRI, before by how the
+  RDFS text happened to write each reference (`#X` or `http://…#X`).
 - **Importers share two rule sources.** The python XML engines and the legacy
   `rdf_parser.load_RDF_to_list` run one row loop (`parser.utils.iter_rdf_rows`);
   the RDF-term readers (`read_nquads`, CONSTRUCT on every engine, `sh:sparql`

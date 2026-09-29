@@ -40,6 +40,7 @@ import hashlib
 import json
 import os
 import re
+from urllib.parse import urljoin
 
 CIM_NS = "http://iec.ch/TC57/CIM100#"
 RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -142,6 +143,17 @@ def local_term(iri):
 def is_iri(text):
     """Absolute IRI already (``http://``, ``https://``, ``urn:``)."""
     return text is not None and str(text).startswith(URI_PREFIXES)
+
+
+def resolve_iri(reference, base):
+    """RDF/XML reference → absolute IRI against *base* (``xml:base``, else the document URI),
+    RFC 3986: an absolute IRI passes through, ``#frag`` / ``""`` → base without its fragment
+    + reference, else a relative-path join. No *base* → unchanged. None → None."""
+    if reference is None or not base or is_iri(reference):
+        return reference
+    if reference == "" or reference.startswith("#"):
+        return base.split("#", 1)[0] + reference
+    return urljoin(base, reference)
 
 
 def encode_iri(text):

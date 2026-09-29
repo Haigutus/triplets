@@ -151,8 +151,8 @@ The absolute form (N-Quads, SPARQL stores, SHACL reports) is the inverse,
 driven by the export schema: `absolute_id`, `absolute_key`, `absolute_value` with the
 flat maps (`namespaces`, `value_types`, `datatypes`) built from `rdf_map`; a name the
 schema does not declare takes the exporter's `undefined_namespace` (`http://triplets#`;
-CIM100 on the SPARQL / validation side). `local_resources=False` applies only
-`local_id` to resource values (no `#frag` step).
+CIM100 on the SPARQL / validation side). `local_resources=False` is the absolute
+form of IDs and resource values: resolved against `xml:base` at parse time.
 
 The schema entry type decides the RDF form: an Attribute (`xsd:anyURI` included)
 is a literal written verbatim, checked by `sh:datatype`; an Association or
@@ -176,7 +176,10 @@ Deviations between the importers and exporters that are known and not planned:
   one file at a time, not every subject). `read_nquads` and CONSTRUCT keep such
   references whole. CIM IDs are `urn:uuid:` / `#_` / `_` forms.
 - **Blank nodes are not supported.** `_:b0` reads as the ID `b0` and exports again
-  as `<urn:uuid:b0>`, a named node.
+  as `<urn:uuid:b0>`, a named node. With `local_resources=False`, `rdf:nodeID`
+  labels stay as written.
+- **`local_resources=False` without any base stays relative.** A file-like source
+  with no `xml:base` and no name has no document URI to resolve against.
 - **`%XX` in reference text reads back decoded.** A reference whose own text holds
   `%20` exports unchanged and reads back with a space. The exported file
   round-trips byte for byte; only the frame value changes.
@@ -195,7 +198,11 @@ Deviations between the importers and exporters that are known and not planned:
   (`iri.local_value`: ID prefix stripped, http(s) IRIs cut to their `#fragment`,
   the CIM instance-data convention). Enumerations are stored as
   `ControlAreaTypeKind.Interchange`; a filter on the full CIM URI will not match.
-  `False` applies only `local_id`, so http(s) resource IRIs stay whole (e.g. for RDFS schema parsing); **not supported
+  `False` is the absolute form: IDs and references are resolved against the
+  document's `xml:base` (else its URI — the value the NamespaceMap `xml_base` row
+  records) at parse time with `iri.resolve_iri`, so `rdf:about="#ACLineSegment"`
+  becomes `http://iec.ch/TC57/CIM100#ACLineSegment` and nothing downstream needs the
+  base again (e.g. RDFS schema parsing); **not supported
   by the `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
 - `categorical_columns` (default `("INSTANCE_ID", "KEY")`) — columns to
   dictionary-encode (Arrow) / categorize (pandas) for memory savings; `None`

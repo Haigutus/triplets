@@ -1336,11 +1336,25 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "Generic user of energy - a  point of consumption on the power system model.\nEnergyConsumer.pfixed, .qfixed, .pfixedPct and .qfixedPct have meaning only if there is no LoadResponseCharacteristic associated with EnergyConsumer or if LoadResponseCharacteristic.exponentModel is set to False.",
             "parameters": [
+                "EnergyConsumer.LoadDynamics",
                 "IdentifiedObject.description",
                 "IdentifiedObject.mRID",
-                "IdentifiedObject.name",
-                "EnergyConsumer.LoadDynamics"
+                "IdentifiedObject.name"
             ]
+        },
+        "EnergyConsumer.LoadDynamics": {
+            "description": "Load dynamics model used to describe dynamic behaviour of this energy consumer.",
+            "multiplicity": "0..1",
+            "namespace": "http://iec.ch/TC57/CIM100#",
+            "xsd:minOccours": "0",
+            "xsd:maxOccours": "1",
+            "attrib": {
+                "attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource",
+                "value_prefix": "#_"
+            },
+            "type": "Association",
+            "xsd:type": "xsd:anyURI",
+            "range": "http://iec.ch/TC57/CIM100#LoadDynamics"
         },
         "String": {
             "description": "A string consisting of a sequence of characters. The character encoding is UTF-8. The string length is unspecified and unlimited.",
@@ -1377,20 +1391,6 @@
             "type": "Attribute",
             "dataType": "String",
             "xsd:type": "xsd:string"
-        },
-        "EnergyConsumer.LoadDynamics": {
-            "description": "Load dynamics model used to describe dynamic behaviour of this energy consumer.",
-            "multiplicity": "0..1",
-            "namespace": "http://iec.ch/TC57/CIM100#",
-            "xsd:minOccours": "0",
-            "xsd:maxOccours": "1",
-            "attrib": {
-                "attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource",
-                "value_prefix": "#_"
-            },
-            "type": "Association",
-            "xsd:type": "xsd:anyURI",
-            "range": "http://iec.ch/TC57/CIM100#LoadDynamics"
         },
         "RemoteInputSignal": {
             "attrib": {
@@ -53943,29 +53943,13 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "A wire or combination of wires, with consistent electrical characteristics, building a single electrical system, used to carry alternating current between points in the power system.\nFor symmetrical, transposed three phase lines, it is sufficient to use attributes of the line segment, which describe impedances and admittances for the entire length of the segment.  Additionally impedances can be computed by using length and associated per length impedances.\nThe BaseVoltage at the two ends of ACLineSegments in a Line shall have the same BaseVoltage.nominalVoltage. However, boundary lines may have slightly different BaseVoltage.nominalVoltages and variation is allowed. Larger voltage difference in general requires use of an equivalent branch.",
             "parameters": [
-                "IdentifiedObject.mRID",
                 "ACLineSegment.b0ch",
                 "ACLineSegment.g0ch",
                 "ACLineSegment.r0",
                 "ACLineSegment.shortCircuitEndTemperature",
-                "ACLineSegment.x0"
+                "ACLineSegment.x0",
+                "IdentifiedObject.mRID"
             ]
-        },
-        "String": {
-            "description": "A string consisting of a sequence of characters. The character encoding is UTF-8. The string length is unspecified and unlimited.",
-            "type": "Primitive",
-            "xsd:type": "xsd:string",
-            "namespace": "http://iec.ch/TC57/CIM100#"
-        },
-        "IdentifiedObject.mRID": {
-            "description": "Master resource identifier issued by a model authority. The mRID is unique within an exchange context. Global uniqueness is easily achieved by using a UUID, as specified in RFC 4122, for the mRID. The use of UUID is strongly recommended.\nFor CIMXML data files in RDF syntax conforming to IEC 61970-552, the mRID is mapped to rdf:ID or rdf:about attributes that identify CIM object elements.",
-            "multiplicity": "1..1",
-            "namespace": "http://iec.ch/TC57/CIM100#",
-            "xsd:minOccours": "1",
-            "xsd:maxOccours": "1",
-            "type": "Attribute",
-            "dataType": "String",
-            "xsd:type": "xsd:string"
         },
         "Susceptance": {
             "description": "Imaginary part of admittance.",
@@ -54047,6 +54031,22 @@
             "dataType": "Reactance",
             "xsd:type": "xsd:float"
         },
+        "String": {
+            "description": "A string consisting of a sequence of characters. The character encoding is UTF-8. The string length is unspecified and unlimited.",
+            "type": "Primitive",
+            "xsd:type": "xsd:string",
+            "namespace": "http://iec.ch/TC57/CIM100#"
+        },
+        "IdentifiedObject.mRID": {
+            "description": "Master resource identifier issued by a model authority. The mRID is unique within an exchange context. Global uniqueness is easily achieved by using a UUID, as specified in RFC 4122, for the mRID. The use of UUID is strongly recommended.\nFor CIMXML data files in RDF syntax conforming to IEC 61970-552, the mRID is mapped to rdf:ID or rdf:about attributes that identify CIM object elements.",
+            "multiplicity": "1..1",
+            "namespace": "http://iec.ch/TC57/CIM100#",
+            "xsd:minOccours": "1",
+            "xsd:maxOccours": "1",
+            "type": "Attribute",
+            "dataType": "String",
+            "xsd:type": "xsd:string"
+        },
         "AsynchronousMachine": {
             "attrib": {
                 "attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about",
@@ -54067,14 +54067,14 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "A rotating machine whose shaft rotates asynchronously with the electrical field.  Also known as an induction machine with no external connection to the rotor windings, e.g. squirrel-cage induction machine.",
             "parameters": [
-                "IdentifiedObject.mRID",
                 "AsynchronousMachine.converterFedDrive",
                 "AsynchronousMachine.efficiency",
                 "AsynchronousMachine.iaIrRatio",
                 "AsynchronousMachine.polePairNumber",
                 "AsynchronousMachine.ratedMechanicalPower",
                 "AsynchronousMachine.reversible",
-                "AsynchronousMachine.rxLockedRotorRatio"
+                "AsynchronousMachine.rxLockedRotorRatio",
+                "IdentifiedObject.mRID"
             ]
         },
         "Boolean": {
@@ -54195,8 +54195,8 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "A conductor, or group of conductors, with negligible impedance, that serve to connect other conducting equipment within a single substation. \nVoltage measurements are typically obtained from voltage transformers that are connected to busbar sections. A bus bar section may have many physical terminals but for analysis is modelled with exactly one logical terminal.",
             "parameters": [
-                "IdentifiedObject.mRID",
-                "BusbarSection.ipMax"
+                "BusbarSection.ipMax",
+                "IdentifiedObject.mRID"
             ]
         },
         "CurrentFlow": {
@@ -54233,13 +54233,13 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "A generic equivalent for an energy supplier on a transmission or distribution voltage level.",
             "parameters": [
-                "IdentifiedObject.mRID",
                 "EnergySource.r",
                 "EnergySource.r0",
                 "EnergySource.rn",
                 "EnergySource.x",
                 "EnergySource.x0",
-                "EnergySource.xn"
+                "EnergySource.xn",
+                "IdentifiedObject.mRID"
             ]
         },
         "EnergySource.r": {
@@ -54320,7 +54320,6 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "The class represents equivalent branches. In cases where a transformer phase shift is modelled and the EquivalentBranch is spanning the same nodes, the impedance quantities for the EquivalentBranch shall consider the needed phase shift.",
             "parameters": [
-                "IdentifiedObject.mRID",
                 "EquivalentBranch.negativeR12",
                 "EquivalentBranch.negativeR21",
                 "EquivalentBranch.negativeX12",
@@ -54332,7 +54331,8 @@
                 "EquivalentBranch.zeroR12",
                 "EquivalentBranch.zeroR21",
                 "EquivalentBranch.zeroX12",
-                "EquivalentBranch.zeroX21"
+                "EquivalentBranch.zeroX21",
+                "IdentifiedObject.mRID"
             ]
         },
         "EquivalentBranch.negativeR12": {
@@ -54473,13 +54473,13 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "This class represents equivalent injections (generation or load).  Voltage regulation is allowed only at the point of connection.",
             "parameters": [
-                "IdentifiedObject.mRID",
                 "EquivalentInjection.r",
                 "EquivalentInjection.r0",
                 "EquivalentInjection.r2",
                 "EquivalentInjection.x",
                 "EquivalentInjection.x0",
-                "EquivalentInjection.x2"
+                "EquivalentInjection.x2",
+                "IdentifiedObject.mRID"
             ]
         },
         "EquivalentInjection.r": {
@@ -54561,7 +54561,6 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "This class represents the external network and it is used for IEC 60909 calculations.",
             "parameters": [
-                "IdentifiedObject.mRID",
                 "ExternalNetworkInjection.ikSecond",
                 "ExternalNetworkInjection.maxInitialSymShCCurrent",
                 "ExternalNetworkInjection.maxR0ToX0Ratio",
@@ -54571,7 +54570,8 @@
                 "ExternalNetworkInjection.minR0ToX0Ratio",
                 "ExternalNetworkInjection.minR1ToX1Ratio",
                 "ExternalNetworkInjection.minZ0ToZ1Ratio",
-                "ExternalNetworkInjection.voltageFactor"
+                "ExternalNetworkInjection.voltageFactor",
+                "IdentifiedObject.mRID"
             ]
         },
         "ExternalNetworkInjection.ikSecond": {
@@ -54699,8 +54699,8 @@
             "description": "A fixed impedance device used for grounding.",
             "parameters": [
                 "EarthFaultCompensator.r",
-                "IdentifiedObject.mRID",
-                "GroundingImpedance.x"
+                "GroundingImpedance.x",
+                "IdentifiedObject.mRID"
             ]
         },
         "EarthFaultCompensator.r": {
@@ -55183,45 +55183,15 @@
             "description": "A PowerTransformerEnd is associated with each Terminal of a PowerTransformer.\nThe impedance values r, r0, x, and x0 of a PowerTransformerEnd represents a star equivalent as follows.\n1) for a two Terminal PowerTransformer the high voltage (TransformerEnd.endNumber=1) PowerTransformerEnd has non zero values on r, r0, x, and x0 while the low voltage (TransformerEnd.endNumber=2) PowerTransformerEnd has zero values for r, r0, x, and x0.  Parameters are always provided, even if the PowerTransformerEnds have the same rated voltage.  In this case, the parameters are provided at the PowerTransformerEnd which has TransformerEnd.endNumber equal to 1.\n2) for a three Terminal PowerTransformer the three PowerTransformerEnds represent a star equivalent with each leg in the star represented by r, r0, x, and x0 values.\n3) For a three Terminal transformer each PowerTransformerEnd shall have g, g0, b and b0 values corresponding to the no load losses distributed on the three PowerTransformerEnds. The total no load loss shunt impedances may also be placed at one of the PowerTransformerEnds, preferably the end numbered 1, having the shunt values on end 1.  This is the preferred way.\n4) for a PowerTransformer with more than three Terminals the PowerTransformerEnd impedance values cannot be used. Instead use the TransformerMeshImpedance or split the transformer into multiple PowerTransformers.\nEach PowerTransformerEnd must be contained by a PowerTransformer. Because a PowerTransformerEnd (or any other object) can not be contained by more than one parent, a PowerTransformerEnd can not have an association to an EquipmentContainer (Substation, VoltageLevel, etc).",
             "parameters": [
                 "IdentifiedObject.mRID",
-                "TransformerEnd.grounded",
-                "TransformerEnd.rground",
-                "TransformerEnd.xground",
                 "PowerTransformerEnd.b0",
                 "PowerTransformerEnd.g0",
                 "PowerTransformerEnd.phaseAngleClock",
                 "PowerTransformerEnd.r0",
-                "PowerTransformerEnd.x0"
+                "PowerTransformerEnd.x0",
+                "TransformerEnd.grounded",
+                "TransformerEnd.rground",
+                "TransformerEnd.xground"
             ]
-        },
-        "TransformerEnd.grounded": {
-            "description": "(for Yn and Zn connections) True if the neutral is solidly grounded.",
-            "multiplicity": "1..1",
-            "namespace": "http://iec.ch/TC57/CIM100#",
-            "xsd:minOccours": "1",
-            "xsd:maxOccours": "1",
-            "type": "Attribute",
-            "dataType": "Boolean",
-            "xsd:type": "xsd:boolean"
-        },
-        "TransformerEnd.rground": {
-            "description": "(for Yn and Zn connections) Resistance part of neutral impedance where 'grounded' is true.",
-            "multiplicity": "0..1",
-            "namespace": "http://iec.ch/TC57/CIM100#",
-            "xsd:minOccours": "0",
-            "xsd:maxOccours": "1",
-            "type": "Attribute",
-            "dataType": "Resistance",
-            "xsd:type": "xsd:float"
-        },
-        "TransformerEnd.xground": {
-            "description": "(for Yn and Zn connections) Reactive part of neutral impedance where 'grounded' is true.",
-            "multiplicity": "0..1",
-            "namespace": "http://iec.ch/TC57/CIM100#",
-            "xsd:minOccours": "0",
-            "xsd:maxOccours": "1",
-            "type": "Attribute",
-            "dataType": "Reactance",
-            "xsd:type": "xsd:float"
         },
         "PowerTransformerEnd.b0": {
             "description": "Zero sequence magnetizing branch susceptance.",
@@ -55268,6 +55238,36 @@
             "multiplicity": "1..1",
             "namespace": "http://iec.ch/TC57/CIM100#",
             "xsd:minOccours": "1",
+            "xsd:maxOccours": "1",
+            "type": "Attribute",
+            "dataType": "Reactance",
+            "xsd:type": "xsd:float"
+        },
+        "TransformerEnd.grounded": {
+            "description": "(for Yn and Zn connections) True if the neutral is solidly grounded.",
+            "multiplicity": "1..1",
+            "namespace": "http://iec.ch/TC57/CIM100#",
+            "xsd:minOccours": "1",
+            "xsd:maxOccours": "1",
+            "type": "Attribute",
+            "dataType": "Boolean",
+            "xsd:type": "xsd:boolean"
+        },
+        "TransformerEnd.rground": {
+            "description": "(for Yn and Zn connections) Resistance part of neutral impedance where 'grounded' is true.",
+            "multiplicity": "0..1",
+            "namespace": "http://iec.ch/TC57/CIM100#",
+            "xsd:minOccours": "0",
+            "xsd:maxOccours": "1",
+            "type": "Attribute",
+            "dataType": "Resistance",
+            "xsd:type": "xsd:float"
+        },
+        "TransformerEnd.xground": {
+            "description": "(for Yn and Zn connections) Reactive part of neutral impedance where 'grounded' is true.",
+            "multiplicity": "0..1",
+            "namespace": "http://iec.ch/TC57/CIM100#",
+            "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Reactance",
@@ -57726,8 +57726,8 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "Limit on active power flow.",
             "parameters": [
-                "IdentifiedObject.mRID",
-                "ActivePowerLimit.value"
+                "ActivePowerLimit.value",
+                "IdentifiedObject.mRID"
             ]
         },
         "ActivePower": {
@@ -57761,8 +57761,8 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "Apparent power limit.",
             "parameters": [
-                "IdentifiedObject.mRID",
-                "ApparentPowerLimit.value"
+                "ApparentPowerLimit.value",
+                "IdentifiedObject.mRID"
             ]
         },
         "ApparentPower": {
@@ -57801,16 +57801,54 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "A rotating machine whose shaft rotates asynchronously with the electrical field.  Also known as an induction machine with no external connection to the rotor windings, e.g. squirrel-cage induction machine.",
             "parameters": [
+                "AsynchronousMachine.asynchronousMachineType",
                 "Equipment.inService",
                 "IdentifiedObject.mRID",
+                "RegulatingCondEq.controlEnabled",
                 "RotatingMachine.p",
-                "RotatingMachine.q",
-                "AsynchronousMachine.asynchronousMachineType",
-                "RegulatingCondEq.controlEnabled"
+                "RotatingMachine.q"
+            ]
+        },
+        "AsynchronousMachineKind.generator": {
+            "description": "The Asynchronous Machine is a generator.",
+            "namespace": "http://iec.ch/TC57/CIM100#",
+            "type": "EnumerationValue"
+        },
+        "AsynchronousMachineKind.motor": {
+            "description": "The Asynchronous Machine is a motor.",
+            "namespace": "http://iec.ch/TC57/CIM100#",
+            "type": "EnumerationValue"
+        },
+        "AsynchronousMachine.asynchronousMachineType": {
+            "description": "Indicates the type of Asynchronous Machine (motor or generator).",
+            "multiplicity": "1..1",
+            "namespace": "http://iec.ch/TC57/CIM100#",
+            "xsd:minOccours": "1",
+            "xsd:maxOccours": "1",
+            "attrib": {
+                "attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource",
+                "value_prefix": ""
+            },
+            "type": "Enumeration",
+            "xsd:type": "xsd:anyURI",
+            "range": "http://iec.ch/TC57/CIM100#AsynchronousMachineKind",
+            "values": [
+                "AsynchronousMachineKind.generator",
+                "AsynchronousMachineKind.motor"
             ]
         },
         "Equipment.inService": {
             "description": "Specifies the availability of the equipment. True means the equipment is available for topology processing, which determines if the equipment is energized or not. False means that the equipment is treated by network applications as if it is not in the model.",
+            "multiplicity": "1..1",
+            "namespace": "http://iec.ch/TC57/CIM100#",
+            "xsd:minOccours": "1",
+            "xsd:maxOccours": "1",
+            "type": "Attribute",
+            "dataType": "Boolean",
+            "xsd:type": "xsd:boolean"
+        },
+        "RegulatingCondEq.controlEnabled": {
+            "description": "Specifies the regulation status of the equipment.  True is regulating, false is not regulating.",
             "multiplicity": "1..1",
             "namespace": "http://iec.ch/TC57/CIM100#",
             "xsd:minOccours": "1",
@@ -57845,44 +57883,6 @@
             "dataType": "ReactivePower",
             "xsd:type": "xsd:float"
         },
-        "AsynchronousMachineKind.generator": {
-            "description": "The Asynchronous Machine is a generator.",
-            "namespace": "http://iec.ch/TC57/CIM100#",
-            "type": "EnumerationValue"
-        },
-        "AsynchronousMachineKind.motor": {
-            "description": "The Asynchronous Machine is a motor.",
-            "namespace": "http://iec.ch/TC57/CIM100#",
-            "type": "EnumerationValue"
-        },
-        "AsynchronousMachine.asynchronousMachineType": {
-            "description": "Indicates the type of Asynchronous Machine (motor or generator).",
-            "multiplicity": "1..1",
-            "namespace": "http://iec.ch/TC57/CIM100#",
-            "xsd:minOccours": "1",
-            "xsd:maxOccours": "1",
-            "attrib": {
-                "attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource",
-                "value_prefix": ""
-            },
-            "type": "Enumeration",
-            "xsd:type": "xsd:anyURI",
-            "range": "http://iec.ch/TC57/CIM100#AsynchronousMachineKind",
-            "values": [
-                "AsynchronousMachineKind.generator",
-                "AsynchronousMachineKind.motor"
-            ]
-        },
-        "RegulatingCondEq.controlEnabled": {
-            "description": "Specifies the regulation status of the equipment.  True is regulating, false is not regulating.",
-            "multiplicity": "1..1",
-            "namespace": "http://iec.ch/TC57/CIM100#",
-            "xsd:minOccours": "1",
-            "xsd:maxOccours": "1",
-            "type": "Attribute",
-            "dataType": "Boolean",
-            "xsd:type": "xsd:boolean"
-        },
         "BatteryUnit": {
             "attrib": {
                 "attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about",
@@ -57900,10 +57900,10 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "An electrochemical energy storage device.",
             "parameters": [
-                "Equipment.inService",
-                "IdentifiedObject.mRID",
                 "BatteryUnit.batteryState",
-                "BatteryUnit.storedE"
+                "BatteryUnit.storedE",
+                "Equipment.inService",
+                "IdentifiedObject.mRID"
             ]
         },
         "BatteryStateKind.discharging": {
@@ -58032,10 +58032,10 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "ConformLoad represent loads that follow a daily load change pattern where the pattern can be used to scale the load with a system load.",
             "parameters": [
-                "Equipment.inService",
-                "IdentifiedObject.mRID",
                 "EnergyConsumer.p",
-                "EnergyConsumer.q"
+                "EnergyConsumer.q",
+                "Equipment.inService",
+                "IdentifiedObject.mRID"
             ]
         },
         "EnergyConsumer.p": {
@@ -58073,9 +58073,9 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "A control area is a grouping of generating units and/or loads and a cutset of tie lines (as terminals) which may be used for a variety of purposes including automatic generation control, power flow solution area interchange control specification, and input to load forecasting. All generation and load within the area defined by the terminals on the border are considered in the area interchange control. Note that any number of overlapping control area specifications can be superimposed on the physical model. The following general principles apply to ControlArea:\n1.  The control area orientation for net interchange is positive for an import, negative for an export.\n2.  The control area net interchange is determined by summing flows in Terminals. The Terminals are identified by creating a set of TieFlow objects associated with a ControlArea object. Each TieFlow object identifies one Terminal.\n3.  In a single network model, a tie between two control areas must be modelled in both control area specifications, such that the two representations of the tie flow sum to zero.\n4.  The normal orientation of Terminal flow is positive for flow into the conducting equipment that owns the Terminal. (i.e. flow from a bus into a device is positive.) However, the orientation of each flow in the control area specification must align with the control area convention, i.e. import is positive. If the orientation of the Terminal flow referenced by a TieFlow is positive into the control area, then this is confirmed by setting TieFlow.positiveFlowIn flag TRUE. If not, the orientation must be reversed by setting the TieFlow.positiveFlowIn flag FALSE.",
             "parameters": [
-                "IdentifiedObject.mRID",
                 "ControlArea.netInterchange",
-                "ControlArea.pTolerance"
+                "ControlArea.pTolerance",
+                "IdentifiedObject.mRID"
             ]
         },
         "ControlArea.netInterchange": {
@@ -58120,13 +58120,13 @@
                 "ACDCConverter.q",
                 "ACDCConverter.targetPpcc",
                 "ACDCConverter.targetUdc",
-                "Equipment.inService",
-                "IdentifiedObject.mRID",
                 "CsConverter.operatingMode",
                 "CsConverter.pPccControl",
                 "CsConverter.targetAlpha",
                 "CsConverter.targetGamma",
-                "CsConverter.targetIdc"
+                "CsConverter.targetIdc",
+                "Equipment.inService",
+                "IdentifiedObject.mRID"
             ]
         },
         "ACDCConverter.p": {
@@ -58294,8 +58294,8 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "Operational limit on current. ",
             "parameters": [
-                "IdentifiedObject.mRID",
-                "CurrentLimit.value"
+                "CurrentLimit.value",
+                "IdentifiedObject.mRID"
             ]
         },
         "CurrentLimit.value": {
@@ -58396,10 +58396,10 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "Generic user of energy - a  point of consumption on the power system model.\nEnergyConsumer.pfixed, .qfixed, .pfixedPct and .qfixedPct have meaning only if there is no LoadResponseCharacteristic associated with EnergyConsumer or if LoadResponseCharacteristic.exponentModel is set to False.",
             "parameters": [
-                "Equipment.inService",
-                "IdentifiedObject.mRID",
                 "EnergyConsumer.p",
-                "EnergyConsumer.q"
+                "EnergyConsumer.q",
+                "Equipment.inService",
+                "IdentifiedObject.mRID"
             ]
         },
         "EnergySource": {
@@ -58420,12 +58420,12 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "A generic equivalent for an energy supplier on a transmission or distribution voltage level.",
             "parameters": [
-                "Equipment.inService",
-                "IdentifiedObject.mRID",
                 "EnergySource.activePower",
                 "EnergySource.reactivePower",
                 "EnergySource.voltageAngle",
-                "EnergySource.voltageMagnitude"
+                "EnergySource.voltageMagnitude",
+                "Equipment.inService",
+                "IdentifiedObject.mRID"
             ]
         },
         "EnergySource.activePower": {
@@ -58512,11 +58512,11 @@
             "description": "This class represents equivalent injections (generation or load).  Voltage regulation is allowed only at the point of connection.",
             "parameters": [
                 "Equipment.inService",
-                "IdentifiedObject.mRID",
                 "EquivalentInjection.p",
                 "EquivalentInjection.q",
                 "EquivalentInjection.regulationStatus",
-                "EquivalentInjection.regulationTarget"
+                "EquivalentInjection.regulationTarget",
+                "IdentifiedObject.mRID"
             ]
         },
         "EquivalentInjection.p": {
@@ -58579,10 +58579,10 @@
             "description": "This class represents the external network and it is used for IEC 60909 calculations.",
             "parameters": [
                 "Equipment.inService",
-                "IdentifiedObject.mRID",
                 "ExternalNetworkInjection.p",
                 "ExternalNetworkInjection.q",
                 "ExternalNetworkInjection.referencePriority",
+                "IdentifiedObject.mRID",
                 "RegulatingCondEq.controlEnabled"
             ]
         },
@@ -58663,8 +58663,8 @@
             "description": "A single or set of synchronous machines for converting mechanical power into alternating-current power. For example, individual machines within a set may be defined for scheduling purposes while a single control signal is derived for the set. In this case there would be a GeneratingUnit for each member of the set and an additional GeneratingUnit corresponding to the set.",
             "parameters": [
                 "Equipment.inService",
-                "IdentifiedObject.mRID",
-                "GeneratingUnit.normalPF"
+                "GeneratingUnit.normalPF",
+                "IdentifiedObject.mRID"
             ]
         },
         "Float": {
@@ -58725,8 +58725,8 @@
             "description": "A generating unit whose prime mover is a hydraulic turbine (e.g., Francis, Pelton, Kaplan).",
             "parameters": [
                 "Equipment.inService",
-                "IdentifiedObject.mRID",
-                "GeneratingUnit.normalPF"
+                "GeneratingUnit.normalPF",
+                "IdentifiedObject.mRID"
             ]
         },
         "Jumper": {
@@ -58775,8 +58775,8 @@
             "parameters": [
                 "Equipment.inService",
                 "IdentifiedObject.mRID",
-                "ShuntCompensator.sections",
-                "RegulatingCondEq.controlEnabled"
+                "RegulatingCondEq.controlEnabled",
+                "ShuntCompensator.sections"
             ]
         },
         "ShuntCompensator.sections": {
@@ -58833,10 +58833,10 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "NonConformLoad represents loads that do not follow a daily load change pattern and whose changes are not correlated with the daily load change pattern.",
             "parameters": [
-                "Equipment.inService",
-                "IdentifiedObject.mRID",
                 "EnergyConsumer.p",
-                "EnergyConsumer.q"
+                "EnergyConsumer.q",
+                "Equipment.inService",
+                "IdentifiedObject.mRID"
             ]
         },
         "NonlinearShuntCompensator": {
@@ -58861,8 +58861,8 @@
             "parameters": [
                 "Equipment.inService",
                 "IdentifiedObject.mRID",
-                "ShuntCompensator.sections",
-                "RegulatingCondEq.controlEnabled"
+                "RegulatingCondEq.controlEnabled",
+                "ShuntCompensator.sections"
             ]
         },
         "NuclearGeneratingUnit": {
@@ -58883,8 +58883,8 @@
             "description": "A nuclear generating unit.",
             "parameters": [
                 "Equipment.inService",
-                "IdentifiedObject.mRID",
-                "GeneratingUnit.normalPF"
+                "GeneratingUnit.normalPF",
+                "IdentifiedObject.mRID"
             ]
         },
         "PhaseTapChangerAsymmetrical": {
@@ -59309,8 +59309,8 @@
             "description": "A solar thermal generating unit, connected to the grid by means of a rotating machine.  This class does not represent photovoltaic (PV) generation.",
             "parameters": [
                 "Equipment.inService",
-                "IdentifiedObject.mRID",
-                "GeneratingUnit.normalPF"
+                "GeneratingUnit.normalPF",
+                "IdentifiedObject.mRID"
             ]
         },
         "StaticVarCompensator": {
@@ -59367,10 +59367,10 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "Station supply with load derived from the station output.",
             "parameters": [
-                "Equipment.inService",
-                "IdentifiedObject.mRID",
                 "EnergyConsumer.p",
-                "EnergyConsumer.q"
+                "EnergyConsumer.q",
+                "Equipment.inService",
+                "IdentifiedObject.mRID"
             ]
         },
         "Switch": {
@@ -59418,9 +59418,9 @@
             "parameters": [
                 "Equipment.inService",
                 "IdentifiedObject.mRID",
+                "RegulatingCondEq.controlEnabled",
                 "RotatingMachine.p",
                 "RotatingMachine.q",
-                "RegulatingCondEq.controlEnabled",
                 "SynchronousMachine.operatingMode",
                 "SynchronousMachine.referencePriority"
             ]
@@ -59532,8 +59532,8 @@
             "description": "A generating unit whose prime mover could be a steam turbine, combustion turbine, or diesel engine.",
             "parameters": [
                 "Equipment.inService",
-                "IdentifiedObject.mRID",
-                "GeneratingUnit.normalPF"
+                "GeneratingUnit.normalPF",
+                "IdentifiedObject.mRID"
             ]
         },
         "VoltageLimit": {
@@ -59809,8 +59809,8 @@
             "description": "A wind driven generating unit, connected to the grid by means of a rotating machine.  May be used to represent a single turbine or an aggregation.    ",
             "parameters": [
                 "Equipment.inService",
-                "IdentifiedObject.mRID",
-                "GeneratingUnit.normalPF"
+                "GeneratingUnit.normalPF",
+                "IdentifiedObject.mRID"
             ]
         },
         "RegulatingCondEq": {
@@ -60723,10 +60723,10 @@
             "namespace": "http://iec.ch/TC57/CIM100#",
             "description": "DC nodes are points where terminals of DC conducting equipment are connected together with zero impedance.",
             "parameters": [
+                "DCNode.DCTopologicalNode",
                 "IdentifiedObject.description",
                 "IdentifiedObject.mRID",
                 "IdentifiedObject.name",
-                "DCNode.DCTopologicalNode",
                 "IdentifiedObject.energyIdentCodeEic",
                 "IdentifiedObject.shortName"
             ]

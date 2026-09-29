@@ -74,7 +74,7 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         inst_b.append(instance_id)
 
     # RDF objects
-    for obj_id, key, value in iter_rdf_rows(root.iterchildren(), local_resources):
+    for obj_id, key, value in iter_rdf_rows(root.iterchildren(), local_resources, root.base):
         id_b.append(obj_id); key_b.append(key); val_b.append(value); inst_b.append(instance_id)
 
     # Finish builders to arrays (direct to Arrow)
