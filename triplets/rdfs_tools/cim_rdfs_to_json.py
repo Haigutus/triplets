@@ -5,7 +5,6 @@ import pandas
 from triplets.tools import get_namespace_map
 from triplets.rdfs_tools import rdfs_tools
 from triplets.rdfs_tools.rdfs_tools import load_all_to_dataframe
-from triplets.iri import is_iri, local_name
 import logging
 
 logger = logging.getLogger(__name__)
@@ -80,16 +79,6 @@ cim_serializations = {
     }
 }
 
-def _split_iri(reference):
-    """Absolute IRI → (namespace, local name). The RDFS is parsed in absolute form
-    (``local_resources=False`` resolves against ``xml:base``), so a relative reference here
-    is a parse bug, not something to guess a namespace for."""
-    if not is_iri(reference):
-        raise ValueError(f"expected an absolute IRI from the RDFS parse, got {reference!r}")
-    name = local_name(reference)
-    return reference[:len(reference) - len(name)], name
-
-
 def convert_profile(profile_data, serialization_version="552_ED2"):
 
     id_attribute = cim_serializations[serialization_version]["id_attribute"]
@@ -133,7 +122,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
         if association_used == 'No':
             return None
 
-        parameter_namespace, parameter_name = _split_iri(parameter)
+        parameter_namespace, parameter_name = rdfs_tools.get_namespace_and_name(parameter)
 
         parameter_def = {
             "description": parameter_dict.get("comment", ""),
@@ -164,7 +153,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 parameter_def["type"] = "Attribute"
 
                 # Get the attribute data type and add to export
-                data_type_namespace, data_type_name = _split_iri(data_type)
+                data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(data_type)
 
                 data_type_meta = profile_data.get_object_data(data_type).to_dict()
 
@@ -198,7 +187,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
                 for value in values:
 
-                    value_namespace, value_name = _split_iri(value)
+                    value_namespace, value_name = rdfs_tools.get_namespace_and_name(value)
                     value_meta = profile_data.get_object_data(value).to_dict()
 
                     value_def = {
@@ -217,7 +206,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
     for concrete_class in export_classes:
 
         # Define class namespace
-        class_namespace, class_name = _split_iri(concrete_class)
+        class_namespace, class_name = rdfs_tools.get_namespace_and_name(concrete_class)
 
         class_meta = profile_data.get_object_data(concrete_class).to_dict()
 

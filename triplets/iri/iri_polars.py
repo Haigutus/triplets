@@ -5,7 +5,7 @@ Categorical first, as the N-Quads exporter does).
 """
 import polars
 
-from . import (HTTP_FRAGMENT_RE, HTTP_NAME_PREFIX_RE, ID_PREFIX_RE, IRI_ESCAPES, RDF_TYPE, TERM_PREFIX_RE, TRIPLETS_NS,
+from . import (HTTP_FRAGMENT_RE, NAME_PREFIX_RE, ID_PREFIX_RE, IRI_ESCAPES, RDF_TYPE, TRIPLETS_NS,
                URI_PREFIX_RE, UUID_PREFIX, UUID_RE)
 
 
@@ -26,16 +26,12 @@ def local_value(column):
 
 
 def local_name(column):
-    return _col(column).str.replace(HTTP_NAME_PREFIX_RE.pattern, "")
+    return _col(column).str.replace(NAME_PREFIX_RE.pattern, "")
 
 
 def local_key(column):
     expr = _col(column)
     return polars.when(expr == RDF_TYPE).then(polars.lit("Type")).otherwise(local_name(expr))
-
-
-def local_term(column):
-    return _col(column).str.replace(TERM_PREFIX_RE.pattern, "")
 
 
 def is_iri(column):

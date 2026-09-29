@@ -17,7 +17,8 @@ Start of the 0.3 line.
 
 ### Changed
 - **`triplets.iri`** — one public package for the triplet ↔ IRI contract:
-  `local_id` / `local_key` / `local_value` / `local_term` (local names),
+  `local_id` / `local_key` / `local_value` / `local_name` (local names; `split_name`
+  returns namespace and local name, `local_name` is its second half),
   `absolute_id` / `absolute_name` / `absolute_key` / `absolute_value` (absolute IRIs, taking
   the flat maps `namespaces` / `value_types` / `datatypes` built from `rdf_map` — one
   comprehension each, no cache), the namespace constants, and
@@ -100,7 +101,9 @@ Start of the 0.3 line.
   against the document's `xml:base` (else its URI) at parse time
   (`iri.resolve_iri`; `rdf:about="#X"` → `base#X`, `rdf:ID="X"` → `base#X`)
   instead of `local_id` only, which left `#Name` relative and made `#_x` local.
-  The export schema generator runs on it; the regenerated bundles hold the same
+  The export schema generator runs on it and takes absolute IRIs only:
+  `rdfs_tools.get_namespace_and_name` is built on `iri.split_name` and, without
+  a `default_namespace`, raises on a relative reference instead of guessing; the regenerated bundles hold the same
   entries, fields and values (checked), only CGMES 2.4 / 3.0 entry and
   `parameters` order changes — now sorted by absolute IRI, before by how the
   RDFS text happened to write each reference (`#X` or `http://…#X`).

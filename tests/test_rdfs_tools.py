@@ -149,14 +149,16 @@ class TestCimRdfsToJson:
         assert isinstance(result, dict)
         assert len(result) > 0
 
-    def test_relative_reference_is_a_parse_bug(self):
-        """The generator takes absolute IRIs only — no xml:base fallback to guess with."""
-        from triplets.rdfs_tools import cim_rdfs_to_json
-        assert cim_rdfs_to_json._split_iri("http://iec.ch/TC57/CIM100#ACLineSegment") == \
+    def test_relative_reference_without_default_raises(self):
+        """The generator passes no default namespace: its parse is absolute, so a relative
+        reference is a parse bug, not something to guess a namespace for."""
+        assert rdfs_tools.get_namespace_and_name("http://iec.ch/TC57/CIM100#ACLineSegment") == \
             ("http://iec.ch/TC57/CIM100#", "ACLineSegment")
-        assert cim_rdfs_to_json._split_iri("http://purl.org/dc/terms/issued") == ("http://purl.org/dc/terms/", "issued")
+        assert rdfs_tools.get_namespace_and_name("http://purl.org/dc/terms/issued") == ("http://purl.org/dc/terms/", "issued")
+        assert rdfs_tools.get_namespace_and_name("#DiagramStyle", "http://iec.ch/TC57/CIM100") == \
+            ("http://iec.ch/TC57/CIM100#", "DiagramStyle")
         with pytest.raises(ValueError, match="absolute IRI"):
-            cim_rdfs_to_json._split_iri("#DiagramStyle")
+            rdfs_tools.get_namespace_and_name("#DiagramStyle")
 
 
 class TestOrphanedAttributes:

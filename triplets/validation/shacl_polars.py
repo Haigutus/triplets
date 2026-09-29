@@ -198,7 +198,7 @@ def _range(comparison, description):
 
 
 def _in(context, rule):
-    local = iri_polars.local_term("PATH_VALUE")
+    local = iri_polars.local_name("PATH_VALUE")
     allowed = [str(value) for value in rule.params]
     plan = context.path_rows(rule).filter(~local.is_in(allowed))
     return _emit(plan, rule, f"value is not one of {sorted(allowed)}")
@@ -462,7 +462,7 @@ def _batch_in(context, rules):
         "SOURCE_SHAPE": [rule.shape_id for rule in rules for _ in rule.params],
         "_LOCAL": [str(value) for rule in rules for value in rule.params],
     })
-    local = iri_polars.local_term("VALUE")
+    local = iri_polars.local_name("VALUE")
     plan = (_batch_path_rows(context, rules_frame)
             .with_columns(local.alias("_LOCAL"))
             .join(allowed, on=["KEY", "CLASS", "SOURCE_SHAPE", "_LOCAL"], how="anti"))

@@ -15,7 +15,7 @@ import pandas
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
                    XSD_NS, CIM_NS, absolute_id, absolute_key, decode_iri, is_iri, load_rdf_map, local_key, local_node,
                    local_object, namespaces,
-                   local_term)
+                   local_name)
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ def report_to_violations(report_graph):
         columns["VALUE"].append(_term_value(value, path == rdflib.RDF.type))
         columns["VIOLATION_TYPE"].append(_component(component))
         columns["MESSAGE"].append(message)
-        columns["SEVERITY"].append(local_term(severity) if severity is not None else "Violation")
+        columns["SEVERITY"].append(local_name(severity) if severity is not None else "Violation")
         columns["SOURCE_SHAPE"].append(str(shape) if shape is not None else None)
 
     return pandas.DataFrame(columns, columns=VIOLATION_COLUMNS)
@@ -108,7 +108,7 @@ def _component(term):
     if term is None:
         return "sh:unknown"
     value = str(term)
-    suffix = local_term(value)
+    suffix = local_name(value)
     if value.startswith(TRIPLETS_NS):
         return f"triplets:{suffix}"
     if value.startswith(RDFS_NS):

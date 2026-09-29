@@ -15,7 +15,7 @@ column / context                       local            absolute
 ``VALUE`` of ``Type`` (class)          ``local_name``   ``absolute_value``
 ``VALUE`` (reference, enum)            ``local_value``  ``absolute_value``
 RDF term read back (N-Quads, SPARQL)   ``local_node`` / ``local_object`` — the readers' entry points
-SHACL / RDFS vocabulary terms          ``local_term``   —
+SHACL / RDFS vocabulary terms          ``local_name``   —
 =====================================  ===============  ==================
 
 Local rules are schema-free (a parse has no schema). Absolute rules take the
@@ -62,8 +62,7 @@ URI_PREFIXES = ("http://", "https://", "urn:")
 ID_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, ID_PREFIXES)) + ")")
 URI_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, URI_PREFIXES)) + ")")
 HTTP_FRAGMENT_RE = re.compile(r"^http.*#")   # greedy: everything up to the LAST "#"
-HTTP_NAME_PREFIX_RE = re.compile(r"^http.*[#/]")   # greedy: up to the last "#" or "/"
-TERM_PREFIX_RE = re.compile(r"^.*[#/]")      # greedy: up to the last "#" or "/"
+NAME_PREFIX_RE = re.compile(r"^.*[#/]")      # greedy: the namespace, up to the last "#" or "/"
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 """Canonical lowercase mRID — what the exporters turn into ``urn:uuid:``."""
 REFERENCE_LIKE = re.compile(
@@ -106,9 +105,10 @@ def local_value(text):
     return text
 
 
-def local_name(iri):
-    """Element IRI (predicate, class) → XML local name: ``http(s)…`` → after the last ``#``
-    or ``/``, else unchanged.
+def split_name(iri):
+    """Name IRI → ``(namespace, local name)``, cut after the last ``#`` or ``/``; text with
+    neither → ``("", text)``. None → ``(None, None)``. The one name split: :func:`local_name`
+    is its second half, ``rdfs_tools.get_namespace_and_name`` uses both.
 
     The CIM XML parsers read KEY and ``Type`` VALUE from element tags, where XML already
     separates namespace and local name (lxml ``{ns}local``, pugixml ``prefix:local``) —
@@ -118,9 +118,16 @@ def local_name(iri):
     :func:`local_value`.
     """
     if iri is None:
-        return None
+        return None, None
     iri = str(iri)
-    return HTTP_NAME_PREFIX_RE.sub("", iri) if iri.startswith("http") else iri
+    match = NAME_PREFIX_RE.match(iri)
+    return (match.group(), iri[match.end():]) if match else ("", iri)
+
+
+def local_name(iri):
+    """Name IRI (predicate, class, SHACL / RDFS vocabulary term) → local name:
+    :func:`split_name`'s second half. None → None."""
+    return split_name(iri)[1]
 
 
 def local_key(iri):
@@ -128,16 +135,6 @@ def local_key(iri):
     if iri is None:
         return None
     return "Type" if str(iri) == RDF_TYPE else local_name(iri)
-
-
-def local_term(iri):
-    """Vocabulary term (SHACL, RDFS, SARIF) → local name: after the last ``#``, else last ``/``.
-
-    Not for instance VALUEs — those never split on ``/``.
-    """
-    if iri is None:
-        return None
-    return str(iri).lstrip("#").rsplit("#", 1)[-1].rsplit("/", 1)[-1]
 
 
 def is_iri(text):

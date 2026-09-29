@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._header import _profile_identity_index
-from ..iri import load_schema, local_term
+from ..iri import load_schema, local_name
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
 
 logger = logging.getLogger(__name__)
@@ -121,7 +121,7 @@ def _concrete_index(schema):
         for name, entry in entries.items():
             if isinstance(entry, dict) and entry.get("type") == "Class":
                 for ancestor in entry.get("inheritance", ()):
-                    concrete.setdefault(local_term(ancestor), set()).add(name)
+                    concrete.setdefault(local_name(ancestor), set()).add(name)
     return concrete
 
 
@@ -170,7 +170,7 @@ def _property_rows(meta, prop, entry, concrete, skipped):
     elif kind == "Enumeration" and entry.get("values"):
         rows.append({**meta, "component": "sh:in", "params": list(entry["values"])})
     elif kind == "Association":
-        targets = concrete.get(local_term(entry.get("range", "")), ())
+        targets = concrete.get(local_name(entry.get("range", "")), ())
         if targets:
             # ANY of the referenced object's types in the expanded range set
             # conforms (RDF types are cumulative); dangling references are

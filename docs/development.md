@@ -67,10 +67,11 @@ function for the column:
 |---|---|---|
 | `ID`, `INSTANCE_ID`, focus node, graph | `local_id` | `absolute_id` |
 | `KEY` | `local_key` (`rdf:type` → `Type`, else `local_name`) | `absolute_key` |
-| `VALUE` of `Type` (class) | `local_name` (after the last `#` or `/`: the XML local name) | `absolute_value` |
+| `VALUE` of `Type` (class) | `local_name` = `split_name(…)[1]` (after the last `#` or `/`: the XML local name) | `absolute_value` |
 | `VALUE` (reference, enum) | `local_value` (`local_id`, then `#frag`; never `/`) | `absolute_value` → `(kind, payload)` |
 | RDF term read back (subject / object) | `local_node` / `local_object` (decode, then the rows above) | — |
-| SHACL / RDFS vocabulary, `sh:in`, SARIF, `schema_ir` | `local_term` (`#` then `/`) | not instance data |
+| SHACL / RDFS vocabulary, `sh:in`, SARIF, `schema_ir` | `local_name` (the same name rule) | not instance data |
+| name → namespace **and** local name | `split_name` (`rdfs_tools.get_namespace_and_name` builds on it) | — |
 
 - The absolute side takes flat maps built from `rdf_map`, one function per
   map, each a single comprehension over `rdf_map_entries` (all profile

@@ -5,6 +5,6 @@ consumers appear, holding them to ``tests/test_iri.py`` like the other flavors.
 """
 
 
-def local_term(column):
-    """After the last ``#``, else after the last ``/`` — the scalar ``local_term`` rule as SQL."""
+def local_name(column):
+    """After the last ``#``, else after the last ``/`` — the scalar ``local_name`` rule as SQL."""
     return f"list_extract(string_split(list_extract(string_split({column}, '#'), -1), '/'), -1)"

@@ -120,11 +120,11 @@ LOCAL_CASES = [
     ("local_name", RDF_TYPE, "type"),                                  # no Type mapping: that is local_key
     ("local_name", "urn:example:Thing", "urn:example:Thing"),
     ("local_name", "Breaker", "Breaker"),
-    ("local_term", None, None),
-    ("local_term", "http://www.w3.org/ns/shacl#minCount", "minCount"),
-    ("local_term", "https://schema.org/domainIncludes", "domainIncludes"),
-    ("local_term", "#Equipment", "Equipment"),
-    ("local_term", "Breaker", "Breaker"),
+    ("local_name", None, None),
+    ("local_name", "http://www.w3.org/ns/shacl#minCount", "minCount"),
+    ("local_name", "https://schema.org/domainIncludes", "domainIncludes"),
+    ("local_name", "#Equipment", "Equipment"),
+    ("local_name", "Breaker", "Breaker"),
     ("is_iri", None, False),
     ("is_iri", "http://a", True),
     ("is_iri", "https://a", True),
@@ -147,6 +147,25 @@ LOCAL_CASES = [
     ("decode_iri", "a%3Cb%3E%5C", "a<b>\\"),
     ("decode_iri", "a%41%2F", "a%41%2F"),                                 # only the escapes encode_iri writes
 ]
+
+SPLIT_NAME_CASES = [
+    (None, (None, None)),
+    ("http://iec.ch/TC57/CIM100#Breaker", ("http://iec.ch/TC57/CIM100#", "Breaker")),
+    ("http://purl.org/dc/terms/issued", ("http://purl.org/dc/terms/", "issued")),
+    ("#Equipment", ("#", "Equipment")),
+    ("Breaker", ("", "Breaker")),
+    ("urn:example:Thing", ("", "urn:example:Thing")),
+]
+
+
+@pytest.mark.parametrize("text,expected", SPLIT_NAME_CASES)
+def test_split_name_is_the_one_name_split(text, expected):
+    """local_name is split_name's second half — one rule, never a second copy."""
+    assert iri.split_name(text) == expected
+    assert iri.local_name(text) == expected[1]
+    if text is not None:
+        assert "".join(expected) == text
+
 
 # (function, input, with map?, expected) — undefined names take TRIPLETS_NS, with or without a map
 NAME_CASES = [
