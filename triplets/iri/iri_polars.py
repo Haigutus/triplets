@@ -5,8 +5,8 @@ Categorical first, as the N-Quads exporter does).
 """
 import polars
 
-from . import (HTTP_FRAGMENT_RE, ID_PREFIX_RE, RDF_TYPE, TERM_PREFIX_RE, TRIPLETS_NS, URI_PREFIX_RE,
-               UUID_PREFIX, UUID_RE)
+from . import (HTTP_FRAGMENT_RE, ID_PREFIX_RE, IRI_ESCAPES, RDF_TYPE, TERM_PREFIX_RE, TRIPLETS_NS,
+               URI_PREFIX_RE, UUID_PREFIX, UUID_RE)
 
 
 def _col(column):
@@ -38,9 +38,17 @@ def is_iri(column):
     return _col(column).str.contains(URI_PREFIX_RE.pattern).fill_null(False)   # null → False, as the scalar; regex measured as fast as starts_with
 
 
+def encode_iri(column):
+    return _col(column).str.replace_many(list(IRI_ESCAPES), list(IRI_ESCAPES.values()))   # one Aho-Corasick pass
+
+
+def decode_iri(column):
+    return _col(column).str.replace_many(list(IRI_ESCAPES.values()), list(IRI_ESCAPES))
+
+
 def absolute_id(column):
     expr = _col(column)
-    return polars.when(is_iri(expr)).then(expr).otherwise(polars.lit(UUID_PREFIX) + expr)
+    return encode_iri(polars.when(is_iri(expr)).then(expr).otherwise(polars.lit(UUID_PREFIX) + expr))
 
 
 def _lookup(expr, mapping, default=None):
@@ -52,7 +60,8 @@ def _lookup(expr, mapping, default=None):
 
 def absolute_name(column, namespaces=None, undefined_namespace=TRIPLETS_NS):
     expr = _col(column)
-    return polars.when(is_iri(expr)).then(expr).otherwise(_lookup(expr, namespaces, undefined_namespace) + expr)
+    return encode_iri(polars.when(is_iri(expr)).then(expr)
+                      .otherwise(_lookup(expr, namespaces, undefined_namespace) + expr))
 
 
 def absolute_key(column, namespaces=None, undefined_namespace=TRIPLETS_NS):
@@ -72,8 +81,9 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     """→ ``(kind, payload)`` Exprs; same branch order as the scalar rule."""
     key, value = _col(key), _col(value)
     schema = _lookup(key, value_types)
-    is_type = key == "Type"
-    enum, reference, typed = schema == "enum", schema == "reference", schema == "literal"
+    present = value.is_not_null()                        # a null VALUE is no term: ("literal", null)
+    is_type = (key == "Type") & present
+    enum, reference, typed = (schema == "enum") & present, (schema == "reference") & present, (schema == "literal") & present
     undefined_ref = schema.is_null() & (is_iri(value) | value.str.contains(UUID_RE.pattern))
     datatype = _lookup(key, {name: datatype for name, datatype in (datatypes or {}).items() if datatype})
 

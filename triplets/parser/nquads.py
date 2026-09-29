@@ -112,21 +112,41 @@ def terms_to_triplets(frame):
     with a ``^^<datatype>`` / ``@lang`` suffix — dropped, the value keeps its
     lexical form; string escapes decoded), or bare turtle-shorthand
     numbers/booleans. IDs lose urn:uuid:, VALUE IRIs also any http(s)
-    #fragment namespace, rdf:type → 'Type' (triplets.iri rules).
+    #fragment namespace, rdf:type → 'Type' (triplets.iri rules). A VALUE IRI
+    that is a subject in the same frame shortens like an ID, so the reference
+    still joins it. IRI escapes the exporter wrote (``%20``) are decoded.
     """
-    frame["ID"] = iri_pandas.local_id(_term(frame["ID"]))
+    subjects = _term(frame["ID"])
+    frame["ID"] = iri_pandas.local_id(subjects)
     frame["KEY"] = iri_pandas.local_key(_term(frame["KEY"]))
     value = frame["VALUE"]
     quoted = value.str.startswith('"', na=False).astype(bool)
     # drop a ^^<datatype> / @lang suffix, then slice the quotes off — cheaper
     # than one back-reference regex over the whole literal
     unquoted = _unescape(value.str.replace(r'"(\^\^<[^>]*>|@[\w-]+)?$', '"', regex=True).str.slice(1, -1))
-    frame["VALUE"] = unquoted.where(quoted, iri_pandas.local_value(_term(value)))
+    objects = _term(value)
+    shortened = iri_pandas.local_value(objects)
+    frame["VALUE"] = unquoted.where(quoted, shortened.where(~_subject_references(objects, shortened, subjects),
+                                                            iri_pandas.local_id(objects)))
     graphs = iri_pandas.local_id(_term(frame["INSTANCE_ID"])) if "INSTANCE_ID" in frame.columns else None
     # no graph term anywhere (N-Triples, CONSTRUCT results) → plain None column,
     # the same shape every SPARQL engine returns for a constructed graph
     frame["INSTANCE_ID"] = graphs if graphs is not None and graphs.notna().any() else None
     return frame
+
+
+def _subject_references(objects, shortened, subjects):
+    """Rows whose object IRI lost a namespace yet is a subject of this frame. Only those
+    rows are looked up, in Arrow (pandas ``isin`` on arrow strings is ~50x slower)."""
+    import pyarrow
+    import pyarrow.compute as pc
+    candidates = (shortened != iri_pandas.local_id(objects)).fillna(False).astype(bool)
+    hit = pandas.Series(False, index=objects.index)
+    if candidates.any():
+        found = pc.is_in(pyarrow.array(objects[candidates], type=pyarrow.string()),
+                         value_set=pc.unique(pyarrow.array(subjects, type=pyarrow.string())))
+        hit[candidates] = found.to_numpy(zero_copy_only=False)
+    return hit
 
 
 def _term(column):
@@ -135,7 +155,7 @@ def _term(column):
     Slice + mask, not ``^<(.*)>$`` → ``\1``: the back-reference regex is ~7x
     slower on arrow-backed strings."""
     wrapped = (column.str.startswith("<", na=False) & column.str.endswith(">", na=False)).astype(bool)
-    return column.str.slice(1, -1).where(wrapped, column).str.removeprefix("_:")
+    return iri_pandas.decode_iri(column.str.slice(1, -1).where(wrapped, column).str.removeprefix("_:"))
 
 
 def _unescape(column):

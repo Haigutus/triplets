@@ -170,6 +170,20 @@ def test_node_kind_by_schema(engine):
     assert violating(v, "sh:nodeKind") == {("b1", "not-a-uuid"), ("b2", "11111111-1111-1111-1111-111111111111")}
 
 
+def test_node_kind_iri_on_association_follows_schema(engine):
+    """sh:IRI on an Association path never violates with an rdf_map: the exporters write
+    every reference as an IRI (unsafe text percent-encoded), so all engines agree."""
+    import rdflib
+    rdf_map = {"EQ": {"Equipment.EquipmentContainer": {"type": "Association", "xsd:type": "xsd:anyURI"}}}
+    rows = breaker("b1", ("Equipment.EquipmentContainer", "just some text"))
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + SHAPE.format(body="sh:path cim:Equipment.EquipmentContainer ; sh:nodeKind sh:IRI"),
+                format="turtle")
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    v = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine=engine)
+    assert violating(v, "sh:nodeKind") == set()
+
+
 def test_equals_and_disjoint(engine):
     rows = breaker("b1", ("IdentifiedObject.name", "A"), ("IdentifiedObject.aliasName", "A")) \
         + breaker("b2", ("IdentifiedObject.name", "A"), ("IdentifiedObject.aliasName", "B"))

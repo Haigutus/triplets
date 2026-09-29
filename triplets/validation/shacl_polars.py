@@ -234,7 +234,7 @@ def _node_kind(context, rule):
         logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)", rule.params, rule.shape_id)
         return None
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types, rule.params)
+    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types)
     if kind is not None:                     # schema decides for the whole path
         if (kind == "iri") == (rule.params == "IRI"):
             return None                      # every value conforms — no plan at all
@@ -428,7 +428,7 @@ def _batch_node_kind(context, rules):
             logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)",
                          rule.params, rule.shape_id)
             continue
-        kind = node_kind(rule.path, context.value_types, rule.params)
+        kind = node_kind(rule.path, context.value_types)
         if kind is not None:                 # schema decides for the whole path
             if (kind == "iri") == (rule.params == "IRI"):
                 continue                     # every value conforms — no plan at all

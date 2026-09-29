@@ -33,6 +33,25 @@ bool isUri(std::string_view value) {
          value.starts_with("urn:");
 }
 
+// Native mirror of triplets.iri.encode_iri: percent-encode what an IRIREF may
+// not hold (controls, space, <>"{}|^`\), so a schema reference stays an IRI.
+std::string encodeIri(std::string_view iri) {
+  constexpr std::string_view unsafe = "<>\"{}|^`\\";
+  constexpr char hex[] = "0123456789ABCDEF";
+  std::string out;
+  out.reserve(iri.size());
+  for (unsigned char ch : iri) {
+    if (ch <= 0x20 || unsafe.find(static_cast<char>(ch)) != std::string_view::npos) {
+      out += '%';
+      out += hex[ch >> 4];
+      out += hex[ch & 0xF];
+    } else {
+      out += static_cast<char>(ch);
+    }
+  }
+  return out;
+}
+
 // Lowercase-hex 8-4-4-4-12, same as triplets.iri.UUID_RE (parity: qlever ingest vs export_to_nquads).
 bool isUuid(std::string_view value) {
   if (value.size() != 36) return false;
@@ -90,7 +109,8 @@ class RangeConverter {
   }
 
   TripleComponent iriComponent(std::string_view iri) const {
-    auto component = TripleComponent::Iri::fromIrirefWithoutBrackets(iri);
+    auto component =
+        TripleComponent::Iri::fromIrirefWithoutBrackets(encodeIri(iri));
     // Same folding the text parser applies after building each IRI.
     if (auto id =
             encodedIriManager_.encode(component.toStringRepresentation()))

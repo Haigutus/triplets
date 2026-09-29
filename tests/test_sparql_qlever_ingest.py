@@ -61,6 +61,7 @@ def torture_frame():
         # O4b: association — schema-typed reference, no UUID look required
         (UUID_A, "Test.assoc", "_notuuid", INSTANCE_1),
         (UUID_A, "Test.assoc", UUID_B.upper(), INSTANCE_1),
+        (UUID_A, "Test.assoc", 'has space <and> "quotes"', INSTANCE_1),   # still an IRI: percent-encoded
         # O5: typed literals (incl. one that LOOKS like a UUID — schema beats heuristic)
         (UUID_A, "Test.float", "1.5", INSTANCE_1),
         (UUID_A, "Test.integer", "42", INSTANCE_1),

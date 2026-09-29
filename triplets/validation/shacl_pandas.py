@@ -327,7 +327,7 @@ def _node_kind(context, rule):
 
     rows = context.path_rows(rule)
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types, rule.params)
+    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types)
     if kind is not None:
         is_iri = pandas.Series(kind == "iri", index=rows.index)
     else:
@@ -414,9 +414,9 @@ def _sparql_violations(rule, result):
 
 
 def _shorten(terms, rule):
-    """SPARQL result terms → triplet form: IRIs shortened by *rule*, literals verbatim
+    """SPARQL result terms → triplet form: IRIs decoded and shortened by *rule*, literals verbatim
     (a literal ``_name`` or a blank node ``_:b0`` must not lose its ``_``)."""
-    return rule(terms).where(iri_pandas.is_iri(terms), terms)
+    return rule(iri_pandas.decode_iri(terms)).where(iri_pandas.is_iri(terms), terms)
 
 
 def _sparql(context, rule):

@@ -78,6 +78,10 @@ def test_cimxml_undefined_switch_and_namespace(engine):
     assert "Switch.kind" not in dropped                                  # no empty element left behind either
     custom = cimxml(engine, export_undefined=True, undefined_namespace="http://acme#")
     assert "<triplets:Custom.foo>" in custom and 'xmlns:triplets="http://acme#"' in custom
+    # a namespace the document already binds keeps its prefix: defined tags stay cim:
+    bound = cimxml(engine, export_undefined=True, undefined_namespace=CIM_NS)
+    assert "<cim:Custom.foo>bar</cim:Custom.foo>" in bound and "<cim:IdentifiedObject.name>" in bound
+    assert "xmlns:triplets" not in bound
 
 
 def test_cimxml_engines_agree_on_undefined_names():

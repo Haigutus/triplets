@@ -68,6 +68,12 @@ REFERENCE_LIKE = re.compile(
 """Loose "looks like a reference" heuristic for SHACL nodeKind when the schema
 says nothing about a key. Not the export rule — see :data:`UUID_RE`."""
 
+IRI_UNSAFE = "".join(map(chr, range(0x21))) + '<>"{}|^`\\'
+"""Characters an N-Triples / SPARQL IRIREF may not hold (controls, space, ``<>"{}|^`\\``)."""
+IRI_UNSAFE_RE = re.compile(r'[\x00-\x20<>"{}|^`\\]')
+IRI_ESCAPES = {char: f"%{ord(char):02X}" for char in IRI_UNSAFE}
+IRI_ESCAPE_RE = re.compile("|".join(IRI_ESCAPES.values()))
+
 
 # ── local (schema-free) ──────────────────────────────────────────────────────
 
@@ -123,6 +129,22 @@ def is_iri(text):
     return text is not None and str(text).startswith(URI_PREFIXES)
 
 
+def encode_iri(text):
+    """Percent-encode the characters an IRI may not hold, so a schema reference / enum
+    value stays an IRI whatever its text (``a b`` → ``a%20b``). None → None."""
+    if text is None or not IRI_UNSAFE_RE.search(text):
+        return text
+    return IRI_UNSAFE_RE.sub(lambda match: IRI_ESCAPES[match.group()], text)
+
+
+def decode_iri(text):
+    """Inverse of :func:`encode_iri` for IRI terms read back from RDF — only those escapes.
+    None → None."""
+    if text is None or "%" not in text:
+        return text
+    return IRI_ESCAPE_RE.sub(lambda match: chr(int(match.group()[1:], 16)), text)
+
+
 # ── flat maps from the export schema ──────────────────────────────────────────
 
 def load_rdf_map(rdf_map):
@@ -145,8 +167,8 @@ def load_schema(rdf_map):
 
 
 def rdf_map_entries(rdf_map):
-    """Every ``(name, entry)`` across profile sections, LAST profile first — a dict
-    comprehension over it keeps the first occurrence (a dict keeps the last write)."""
+    """Every ``(name, entry)`` across profile sections, reversed so a dict comprehension
+    over it keeps the FIRST occurrence in schema order (a dict keeps the last write)."""
     return [(name, entry) for profile in load_rdf_map(rdf_map).values() if isinstance(profile, dict)
             for name, entry in profile.items() if isinstance(entry, dict)][::-1]
 
@@ -186,16 +208,19 @@ def value_types(rdf_map):
 # ── absolute (schema-driven) ───────────────────────────────────────────────────
 
 def absolute_id(text):
-    """Bare ID / INSTANCE_ID → ``urn:uuid:…``; an absolute IRI passes through. None → None."""
-    return text if text is None or is_iri(text) else UUID_PREFIX + text
+    """Bare ID / INSTANCE_ID → ``urn:uuid:…``; an absolute IRI passes through; then
+    :func:`encode_iri`. None → None."""
+    if text is None:
+        return None
+    return encode_iri(text if is_iri(text) else UUID_PREFIX + text)
 
 
 def absolute_name(name, namespaces=None, undefined_namespace=TRIPLETS_NS):
     """Local schema name (class, enum value, key) → its namespace + name; an undeclared name takes
     *undefined_namespace*; IRIs / None pass through."""
-    if name is None or is_iri(name):
-        return name
-    return (namespaces or {}).get(name, undefined_namespace) + name
+    if name is None:
+        return None
+    return encode_iri(name if is_iri(name) else (namespaces or {}).get(name, undefined_namespace) + name)
 
 
 def absolute_key(key, namespaces=None, undefined_namespace=TRIPLETS_NS):
@@ -239,11 +264,8 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     return "literal", None
 
 
-def node_kind(key, value_types, expected):
-    """``sh:nodeKind`` by schema: ``"iri"`` / ``"literal"`` when the schema decides the
-    whole path, ``None`` → check the value form. A reference key decides only against
-    ``Literal`` (every value violates); against ``IRI`` the value must still look like one."""
-    kind = value_types.get(key)
-    if kind == "reference":
-        return "iri" if expected == "Literal" else None
-    return {"enum": "iri", "literal": "literal"}.get(kind)
+def node_kind(key, value_types):
+    """``sh:nodeKind`` by schema entry type, the same rule the exporters apply: Association /
+    Enumeration → ``"iri"``, Attribute → ``"literal"``; ``None`` (undefined KEY) → check the
+    value form."""
+    return {"reference": "iri", "enum": "iri", "literal": "literal"}.get(value_types.get(key))

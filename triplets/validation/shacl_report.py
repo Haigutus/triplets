@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import pandas
 
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
-                   XSD_NS, CIM_NS, absolute_id, absolute_key, is_iri, load_rdf_map, local_id, local_key, namespaces,
+                   XSD_NS, CIM_NS, absolute_id, absolute_key, decode_iri, is_iri, load_rdf_map, local_id, local_key, namespaces,
                    local_term)
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ def report_to_violations(report_graph):
         shape = report_graph.value(result, sh.sourceShape)
         message = _constraint_message(report_graph.objects(result, sh.resultMessage))
 
-        columns["ID"].append(local_id(report_graph.value(result, sh.focusNode)))
+        columns["ID"].append(local_id(decode_iri(report_graph.value(result, sh.focusNode))))
         columns["KEY"].append(local_key(path))
         columns["VALUE"].append(_term_value(value))
         columns["VIOLATION_TYPE"].append(_component(component))
@@ -99,7 +99,7 @@ def _term_value(term):
         return None
     if type(term).__name__ == "Literal":
         return str(term)
-    return local_id(term)
+    return local_id(decode_iri(term))
 
 
 def _component(term):

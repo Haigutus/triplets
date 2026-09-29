@@ -86,6 +86,9 @@ function for the column:
   `urn:uuid:`), an Enumeration value an enum IRI. The absolute-IRI / canonical-
   UUID heuristic applies only to a KEY the schema does not declare.
   `node_kind` gives the SHACL engines the same decision for `sh:nodeKind`.
+- An IRI stays an IRI: `absolute_id` / `absolute_name` percent-encode what an
+  IRIREF may not hold (`encode_iri`); the N-Quads / SPARQL readers reverse only
+  those escapes (`decode_iri`). Literals are never encoded.
 - **Undefined names** — a class not in the schema (abstract CIM classes such as
   `Equipment` included), a KEY not in it, an enum value not in it, and every
   name when there is no `rdf_map` — take `undefined_namespace`.
@@ -102,7 +105,7 @@ function for the column:
   `iri_duckdb` (SQL text in/out) carry the same names.
   `__init__` imports only the standard library — the parser imports it per file.
 - Native mirrors (cython parser `clean_id`/`clean_ref_value`, qlever C++
-  `isUri`/`isUuid`/`namespaceFor`) are commented as such and checked by the
+  `isUri`/`isUuid`/`namespaceFor`/`encodeIri`) are commented as such and checked by the
   parse / ingest parity tests. Vectorized patterns derive from the constants
   (`ID_PREFIX_RE`, `URI_PREFIXES` / `URI_PREFIX_RE`, `UUID_RE.pattern`), so a prefix change
   cannot miss a flavor.

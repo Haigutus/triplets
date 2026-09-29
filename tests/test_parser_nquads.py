@@ -122,6 +122,46 @@ def test_literal_with_whitespace_and_bnode_shape_is_not_a_graph():
     assert result["INSTANCE_ID"].tolist()[2:] == ["g", "g2"]
 
 
+REFERENCE_MAP = {"EQ": {"Equipment.EquipmentContainer": {"type": "Association", "namespace": CIM},
+                        "Switch.kind": {"type": "Enumeration", "namespace": CIM}}}
+
+
+def test_reference_with_iri_unsafe_text_stays_a_valid_iri():
+    """The schema says reference → an IRI whatever the text: unsafe characters are
+    percent-encoded (never a literal), every RDF parser loads it, read_nquads decodes."""
+    frame = pandas.DataFrame([("b 1", "Equipment.EquipmentContainer", 'just some <text> "x"', "g 1"),
+                              ("b 1", "Switch.kind", "Kind.a b", "g 1")],
+                             columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    buffer = export_to_nquads(frame, rdf_map=REFERENCE_MAP, export_to_memory=True)
+    text = buffer.getvalue().decode()
+    assert "<urn:uuid:just%20some%20%3Ctext%3E%20%22x%22>" in text and "<http://triplets#Kind.a%20b>" in text   # undeclared enum value
+    rdflib = pytest.importorskip("rdflib")
+    assert len(rdflib.Dataset().parse(data=text, format="nquads")) == 2
+    result = read_nquads(text)
+    pandas.testing.assert_frame_equal(canon(result), canon(frame))
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars"])
+def test_export_engines_encode_alike(engine):
+    if engine == "polars":
+        pytest.importorskip("polars")
+    frame = pandas.DataFrame([("b", "Equipment.EquipmentContainer", "a b", "g")],
+                             columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    text = export_to_nquads(frame, rdf_map=REFERENCE_MAP, engine=engine, export_to_memory=True).getvalue()
+    assert b"<urn:uuid:a%20b>" in text
+
+
+def test_reference_to_a_subject_iri_still_joins():
+    """A VALUE IRI that is a subject in the same data shortens like its ID, so the
+    reference keeps joining; enum / class IRIs still shorten to the fragment."""
+    result = read_nquads(f"""<http://ex.org/m#a> <http://ex.org/m#ref> <http://ex.org/m#b> <urn:uuid:g> .
+<http://ex.org/m#b> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://ex.org/m#Thing> <urn:uuid:g> .
+<http://ex.org/m#b> <{CIM}Switch.kind> <{CIM}SwitchKind.breaker> <urn:uuid:g> .
+""")
+    assert result["VALUE"].tolist() == ["http://ex.org/m#b", "Thing", "SwitchKind.breaker"]
+    assert set(result["VALUE"]) & set(result["ID"]) == {"http://ex.org/m#b"}
+
+
 def test_comment_only_buffer_is_an_empty_frame():
     for content in ("", "\n", "# just a comment\n\n"):
         result = read_nquads(content)

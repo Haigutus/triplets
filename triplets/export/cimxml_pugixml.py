@@ -110,7 +110,8 @@ def generate_xml(instance_data,
             logger.warning("File not created for {}".format(file_name))
             return
 
-    if export_undefined:
+    if export_undefined and undefined_namespace not in namespace_map.values():
+        # an undefined_namespace the map already binds (e.g. CIM100) keeps its own prefix
         namespace_map = {**namespace_map, "triplets": undefined_namespace}
 
     batch = _string_batch(instance_data)

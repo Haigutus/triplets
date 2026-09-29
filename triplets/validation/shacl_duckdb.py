@@ -189,7 +189,7 @@ def _node_kind(rule, table, context):
         return None
     rows, rows_params = _rows_sql(rule, table)
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types, rule.params)
+    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types)
     if kind is not None:                                 # schema decides for the whole path
         if (kind == "iri") == (rule.params == "IRI"):
             return None                                  # every value conforms — no query

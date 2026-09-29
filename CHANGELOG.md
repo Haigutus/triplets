@@ -46,8 +46,16 @@ Start of the 0.3 line.
   anything else becomes `urn:uuid:<value>` (before, a non-canonical reference
   silently became a string literal). The absolute-IRI / canonical-UUID
   heuristic now applies only to a KEY the schema does not declare. SHACL
-  `sh:nodeKind sh:Literal` on an Association path violates on every row;
-  `sh:IRI` still checks the value form.
+  `sh:nodeKind` follows the same rule both ways: an Association or
+  Enumeration path violates `sh:Literal` on every row and never `sh:IRI`.
+- **IRI-unsafe text in an IRI is percent-encoded**, so a schema reference or
+  enum value stays a real IRI whatever its text: `just some text` under an
+  Association → `<urn:uuid:just%20some%20text>` (controls, space and
+  ``<>"{}|^`\`` — `iri.encode_iri`, in every flavor and the qlever ingest).
+  Before, such a value wrote an invalid N-Quads line that rdflib and oxigraph
+  rejected and qlever accepted. `read_nquads`, CONSTRUCT and SHACL result
+  decoding reverse exactly those escapes (`iri.decode_iri`). Attribute text,
+  `xsd:anyURI` included, stays a verbatim literal.
 - **Undefined names** — a class the schema does not list (abstract CIM classes
   such as `Equipment` included; conformant data with concrete `Type` values is
   unchanged), a KEY or an enum value it does not list, and every name when no
@@ -59,7 +67,8 @@ Start of the 0.3 line.
   lossless interchange keeps every row) and `undefined_namespace`;
   `export_to_cimxml` gains `undefined_namespace` (its `export_undefined`
   default stays `False`; an unknown enum value now follows the same switch
-  instead of being written bare). Schema-less `export_to_nquads` therefore
+  instead of being written bare; an `undefined_namespace` the document already
+  binds, such as CIM100, keeps its own prefix instead of adding `triplets:`). Schema-less `export_to_nquads` therefore
   changes from CIM100 to `http://triplets#`. A schema-less query does not:
   `sparql.query`, `validate`, `validate_schema` and `export_to_shacl_report`
   keep every row and default `undefined_namespace` to CIM100, so `cim:`
@@ -73,7 +82,9 @@ Start of the 0.3 line.
   prefix loop (faster per call for the python parsers).
 - `read_nquads` / CONSTRUCT decoding shorten per column: `ID` / `INSTANCE_ID`
   via `local_id`, `KEY` via `local_key`, `VALUE` via `local_value` — a
-  URI-shaped `INSTANCE_ID` now survives the round trip.
+  URI-shaped `INSTANCE_ID` now survives the round trip. A VALUE IRI that is a
+  subject of the same data shortens like its `ID` (`local_id`), so a reference
+  to `<http://…#b>` still joins the object `http://…#b` instead of becoming `b`.
 - `violations_to_report_graph` / `export_to_shacl_report` accept `rdf_map`;
   `sh:resultPath` then keeps the profile namespace instead of CIM100.
 - SPARQL / validation `scope` builds graph IRIs with `absolute_id`: a URI-shaped

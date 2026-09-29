@@ -126,6 +126,16 @@ LOCAL_CASES = [
     ("absolute_id", "_x", "urn:uuid:_x"),
     ("absolute_id", "http://example.org/ns#g", "http://example.org/ns#g"),
     ("absolute_id", "urn:example:g", "urn:example:g"),
+    ("absolute_id", "just some text", "urn:uuid:just%20some%20text"),     # stays an IRI: encoded, never a literal
+    ("absolute_id", "http://x/a b", "http://x/a%20b"),
+    ("encode_iri", None, None),
+    ("encode_iri", "a b\t<c>\"{d}|^`\\", "a%20b%09%3Cc%3E%22%7Bd%7D%7C%5E%60%5C"),
+    ("encode_iri", "urn:uuid:" + UUID, "urn:uuid:" + UUID),
+    ("encode_iri", "http://x/a%20b#c", "http://x/a%20b#c"),               # existing escapes pass untouched
+    ("decode_iri", None, None),
+    ("decode_iri", "urn:uuid:just%20some%20text", "urn:uuid:just some text"),
+    ("decode_iri", "a%3Cb%3E%5C", "a<b>\\"),
+    ("decode_iri", "a%41%2F", "a%41%2F"),                                 # only the escapes encode_iri writes
 ]
 
 # (function, input, with map?, expected) — undefined names take TRIPLETS_NS, with or without a map
@@ -137,6 +147,7 @@ NAME_CASES = [
     ("absolute_name", "http://x#Y", True, "http://x#Y"),
     ("absolute_name", "urn:example:Y", True, "urn:example:Y"),
     ("absolute_name", None, True, None),
+    ("absolute_name", "Kind.a b", True, TRIPLETS_NS + "Kind.a%20b"),
     ("absolute_key", "Type", True, RDF_TYPE),
     ("absolute_key", "ACLineSegment.r", True, CIM16 + "ACLineSegment.r"),
     ("absolute_key", "ACLineSegment.r", False, TRIPLETS_NS + "ACLineSegment.r"),
@@ -166,6 +177,9 @@ VALUE_CASES = [
     ("Terminal.ConductingEquipment", "_abc", True, "iri", "urn:uuid:_abc"),
     ("Terminal.ConductingEquipment", "urn:uuid:" + UUID, True, "iri", "urn:uuid:" + UUID),
     ("Terminal.ConductingEquipment", "http://example.org/thing", True, "iri", "http://example.org/thing"),
+    ("Terminal.ConductingEquipment", "just some text", True, "iri", "urn:uuid:just%20some%20text"),
+    ("Diagram.orientation", "Nope.a b", True, "iri", TRIPLETS_NS + "Nope.a%20b"),
+    ("Model.modelingAuthoritySet", "http://tso.example/a b", True, "literal", XSD_NS + "anyURI"),   # anyURI text: a literal, verbatim
     ("ACLineSegment.r", "1.5", True, "literal", XSD_NS + "float"),
     ("IdentifiedObject.mRID", UUID, True, "literal", None),                           # attribute: UUID look is irrelevant
     ("IdentifiedObject.name", "https://cim4.eu/ns/nc#Thing", True, "literal", None),  # attribute: IRI look is irrelevant
@@ -182,6 +196,10 @@ VALUE_CASES = [
     ("Terminal.ConductingEquipment", UUID.upper(), False, "literal", None),
     ("ACLineSegment.r", "1.5", False, "literal", None),
     ("X.y", None, True, "literal", None),
+    ("Type", None, True, "literal", None),                                            # a null VALUE is no term
+    ("Diagram.orientation", None, True, "literal", None),
+    ("Terminal.ConductingEquipment", None, True, "literal", None),
+    ("ACLineSegment.r", None, True, "literal", None),
 ]
 
 # (key, value, defined?) with the map — the rows export_undefined=False keeps
@@ -197,16 +215,14 @@ DEFINED_CASES = [
     ("X.y", "1.5", False),
 ]
 
-# (key, maps?, sh:nodeKind, expected)
+# (key, node kind the schema fixes) — the exporters' rule; None = decide by value form
 NODE_KIND_CASES = [
-    ("Diagram.orientation", "IRI", "iri"),
-    ("Diagram.orientation", "Literal", "iri"),
-    ("Terminal.ConductingEquipment", "Literal", "iri"),       # every reference violates Literal
-    ("Terminal.ConductingEquipment", "IRI", None),            # against IRI the value form still decides
-    ("ACLineSegment.r", "IRI", "literal"),
-    ("IdentifiedObject.name", "Literal", "literal"),
-    ("Model.modelingAuthoritySet", "IRI", "literal"),
-    ("Unknown.key", "IRI", None),
+    ("Diagram.orientation", "iri"),
+    ("Terminal.ConductingEquipment", "iri"),       # whatever the text: exported as an IRI
+    ("ACLineSegment.r", "literal"),
+    ("IdentifiedObject.name", "literal"),
+    ("Model.modelingAuthoritySet", "literal"),     # xsd:anyURI attribute: a literal
+    ("Unknown.key", None),
 ]
 
 
@@ -326,9 +342,9 @@ def test_flavor_absolute_value_matches_scalar(flavor, with_maps):
     assert got == [(kind, p) for _, _, kind, p in rows]
 
 
-@pytest.mark.parametrize("key,expected_kind,result", NODE_KIND_CASES)
-def test_node_kind(key, expected_kind, result):
-    assert iri.node_kind(key, VALUE_TYPES, expected_kind) == result
+@pytest.mark.parametrize("key,result", NODE_KIND_CASES)
+def test_node_kind(key, result):
+    assert iri.node_kind(key, VALUE_TYPES) == result
 
 
 @pytest.mark.parametrize("key,value,expected", DEFINED_CASES)
