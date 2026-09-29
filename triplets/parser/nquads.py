@@ -113,52 +113,35 @@ def terms_to_triplets(frame):
     lexical form; string escapes decoded), or bare turtle-shorthand
     numbers/booleans. IDs lose urn:uuid:, VALUE IRIs also any http(s)
     #fragment namespace, rdf:type → 'Type', a Type VALUE (class) via local_name
-    (triplets.iri rules). A VALUE IRI
-    that is a subject in the same frame shortens like an ID, so the reference
-    still joins it. IRI escapes the exporter wrote (``%20``) are decoded.
+    (triplets.iri.local_node / local_object: a VALUE IRI that is a subject in
+    the same frame shortens like an ID, so the reference still joins it; IRI
+    escapes the exporter wrote, ``%20``, are decoded).
     """
     subjects = _term(frame["ID"])
-    frame["ID"] = iri_pandas.local_id(subjects)
-    frame["KEY"] = iri_pandas.local_key(_term(frame["KEY"]))
+    frame["ID"] = iri_pandas.local_node(subjects)
+    frame["KEY"] = iri_pandas.local_key(iri_pandas.decode_iri(_term(frame["KEY"])))
     is_type = (frame["KEY"] == "Type").fillna(False).astype(bool)
     value = frame["VALUE"]
     quoted = value.str.startswith('"', na=False).astype(bool)
     # drop a ^^<datatype> / @lang suffix, then slice the quotes off — cheaper
     # than one back-reference regex over the whole literal
     unquoted = _unescape(value.str.replace(r'"(\^\^<[^>]*>|@[\w-]+)?$', '"', regex=True).str.slice(1, -1))
-    objects = _term(value)
-    shortened = iri_pandas.local_value(objects)
-    shortened = shortened.where(~_subject_references(objects, shortened, subjects), iri_pandas.local_id(objects))
-    # a class is an element local name, like a KEY (the CIM XML parser reads it from the tag)
-    frame["VALUE"] = unquoted.where(quoted, shortened.where(~is_type, iri_pandas.local_name(objects)))
-    graphs = iri_pandas.local_id(_term(frame["INSTANCE_ID"])) if "INSTANCE_ID" in frame.columns else None
+    objects = iri_pandas.local_object(_term(value).where(~quoted), is_type, subjects)
+    frame["VALUE"] = unquoted.where(quoted, objects)
+    graphs = iri_pandas.local_node(_term(frame["INSTANCE_ID"])) if "INSTANCE_ID" in frame.columns else None
     # no graph term anywhere (N-Triples, CONSTRUCT results) → plain None column,
     # the same shape every SPARQL engine returns for a constructed graph
     frame["INSTANCE_ID"] = graphs if graphs is not None and graphs.notna().any() else None
     return frame
 
 
-def _subject_references(objects, shortened, subjects):
-    """Rows whose object IRI lost a namespace yet is a subject of this frame. Only those
-    rows are looked up, in Arrow (pandas ``isin`` on arrow strings is ~50x slower)."""
-    import pyarrow
-    import pyarrow.compute as pc
-    candidates = (shortened != iri_pandas.local_id(objects)).fillna(False).astype(bool)
-    hit = pandas.Series(False, index=objects.index)
-    if candidates.any():
-        found = pc.is_in(pyarrow.array(objects[candidates], type=pyarrow.string()),
-                         value_set=pc.unique(pyarrow.array(subjects, type=pyarrow.string())))
-        hit[candidates] = found.to_numpy(zero_copy_only=False)
-    return hit
-
-
 def _term(column):
-    """``<iri>`` / ``_:bnode`` → bare text; shortening is per column (triplets.iri).
+    """``<iri>`` / ``_:bnode`` → bare text as read; decoding and shortening are per column (triplets.iri).
 
     Slice + mask, not ``^<(.*)>$`` → ``\1``: the back-reference regex is ~7x
     slower on arrow-backed strings."""
     wrapped = (column.str.startswith("<", na=False) & column.str.endswith(">", na=False)).astype(bool)
-    return iri_pandas.decode_iri(column.str.slice(1, -1).where(wrapped, column).str.removeprefix("_:"))
+    return column.str.slice(1, -1).where(wrapped, column).str.removeprefix("_:")
 
 
 def _unescape(column):

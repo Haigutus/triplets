@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def load_all_to_dataframe(paths):
     """Parse RDFS losslessly: schema conversion needs full resource URIs, so resource
     shortening is disabled (only the python engines support that)."""
-    return parse(paths, engine="python_lxml_pandas", shorten_resources=False)
+    return parse(paths, engine="python_lxml_pandas", local_resources=False)
 
 pandas.set_option("display.max_rows", 20)
 pandas.set_option("display.max_columns", 8)

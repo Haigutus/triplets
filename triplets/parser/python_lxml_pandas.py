@@ -15,17 +15,13 @@ from typing import Union, IO
 import pandas as pd
 from lxml import etree
 
-from .utils import (
-    RDF_NS, RDF_ID, RDF_ABOUT, RDF_NODEID, RDF_RESOURCE,
-    _split_prefixed_name,
-)
-from ..iri import local_id, local_value
+from .utils import iter_rdf_rows
 
 logger = logging.getLogger(__name__)
 
 
 def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False,
-                          shorten_resources: bool = True) -> pd.DataFrame:
+                          local_resources: bool = True) -> pd.DataFrame:
     """Parse single RDF/XML file to pandas DataFrame using lxml + list-of-tuples.
 
     This is the old proven path: lxml parse → iterate → build Python list → pd.DataFrame.
@@ -71,32 +67,8 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         data_list.append((nsmap_id, str(k) if k is not None else "", str(v) if v is not None else "", instance_id))
 
     # RDF objects
-    for rdf_object in root.iterchildren():
-        attribs = rdf_object.attrib
-        obj_id = local_id(
-            attribs.get(RDF_ID)
-            or attribs.get(RDF_ABOUT)
-            or attribs.get(RDF_NODEID)
-            or ""
-        )
-
-        # Type row
-        type_value = _split_prefixed_name(rdf_object.tag)
-        data_list.append((obj_id, "Type", type_value, instance_id))
-
-        for element in rdf_object.iterchildren():
-            key = _split_prefixed_name(element.tag)
-            value = element.text
-            if value is None and element.attrib:
-                value = (local_value if shorten_resources else local_id)(
-                    element.attrib.get(RDF_RESOURCE)
-                    or element.attrib.get(RDF_NODEID)
-                    or ""
-                )
-            # Use empty string instead of None for parity with arrow engines
-            if value is None:
-                value = ""
-            data_list.append((obj_id, key, value, instance_id))
+    data_list.extend((obj_id, key, value, instance_id)
+                     for obj_id, key, value in iter_rdf_rows(root.iterchildren(), local_resources))
 
     df = pd.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 

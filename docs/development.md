@@ -69,6 +69,7 @@ function for the column:
 | `KEY` | `local_key` (`rdf:type` → `Type`, else `local_name`) | `absolute_key` |
 | `VALUE` of `Type` (class) | `local_name` (after the last `#` or `/`: the XML local name) | `absolute_value` |
 | `VALUE` (reference, enum) | `local_value` (`local_id`, then `#frag`; never `/`) | `absolute_value` → `(kind, payload)` |
+| RDF term read back (subject / object) | `local_node` / `local_object` (decode, then the rows above) | — |
 | SHACL / RDFS vocabulary, `sh:in`, SARIF, `schema_ir` | `local_term` (`#` then `/`) | not instance data |
 
 - The absolute side takes flat maps built from `rdf_map`, one function per
@@ -105,11 +106,22 @@ function for the column:
 - Flavors: `iri_pandas` (Series in/out), `iri_polars` (Expr in/out, no UDFs),
   `iri_duckdb` (SQL text in/out) carry the same names.
   `__init__` imports only the standard library — the parser imports it per file.
-- The CIM XML parsers read KEY and `Type` VALUE from element tags, where XML has
-  already split namespace and local name (lxml `{ns}local` →
-  `_split_prefixed_name`, pugixml `prefix:local` → `local_name`); there is no IRI
-  string to pass to `local_key`. `iri.local_name` is the same split for an IRI and
-  `test_parse_engines_keys_and_types_are_local_name` holds every parser to it.
+- **Importers have two sources of truth**, each held to the rows above:
+
+  | importer | rules from |
+  |---|---|
+  | CIM XML: `python_lxml_pandas`, `python_lxml_arrow`, `rdf_parser.load_RDF_to_list` | `parser.utils.iter_rdf_rows` — the one python row loop |
+  | CIM XML: `cython_pugixml_arrow` | C++ mirror of that loop (`clean_id`, `clean_ref_value`, `local_name`) |
+  | `read_nquads`, oxigraph / qlever CONSTRUCT (`terms_to_triplets`), rdflib CONSTRUCT, `sh:sparql` results, the pyshacl report | `iri.local_node` / `iri.local_object` / `iri.local_key` |
+  | SPARQL SELECT | none — absolute IRIs as stored |
+
+  The XML side splits element QNames natively (XML already separates namespace
+  and local name, so no IRI string exists for `local_key`) and finds the RDF
+  attributes by namespace (the cython engine resolves the prefix the root binds to
+  it). `test_parse_engines_follow_iri_rules` derives every object row from lxml's
+  resolved QNames with the `triplets.iri` functions and requires each parser to
+  produce exactly those rows, for any RDF prefix. The XML side has no `%XX`
+  decoding and no subject join (see *Known limitations* in parsers.md).
 - Native mirrors (cython parser `clean_id`/`clean_ref_value`, qlever C++
   `isUri`/`isUuid`/`namespaceFor`/`encodeIri`) are commented as such and checked by the
   parse / ingest parity tests. Vectorized patterns derive from the constants

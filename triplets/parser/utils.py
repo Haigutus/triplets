@@ -12,7 +12,7 @@ from typing import List, Union, IO, Any
 
 logger = logging.getLogger(__name__)
 
-from ..iri import RDF_NS
+from ..iri import RDF_NS, local_id, local_value
 
 RDF_ID = f"{{{RDF_NS}}}ID"
 RDF_ABOUT = f"{{{RDF_NS}}}about"
@@ -21,7 +21,12 @@ RDF_RESOURCE = f"{{{RDF_NS}}}resource"
 
 
 def _split_prefixed_name(name: str) -> str:
-    """Split 'prefix:localname' or {ns}local -> localname."""
+    """Split 'prefix:localname' or {ns}local -> localname.
+
+    Native QName mirror of :func:`triplets.iri.local_name`: XML already separates
+    namespace and local name, so no IRI string exists to shorten
+    (parity: tests/test_iri.py ``test_parse_engines_follow_iri_rules``).
+    """
     if not name:
         return ""
     if name.startswith("{"):
@@ -32,6 +37,28 @@ def _split_prefixed_name(name: str) -> str:
     if idx >= 0:
         return name[idx + 1:]
     return name
+
+
+def iter_rdf_rows(rdf_objects, local_resources=True):
+    """RDF/XML object elements (lxml) → ``(ID, KEY, VALUE)`` rows, the one python copy of the
+    XML → triplet rules (the cython engine mirrors them in C++).
+
+    ID: :func:`~triplets.iri.local_id` of ``rdf:ID`` > ``rdf:about`` > ``rdf:nodeID``
+    (``""`` when none). Type VALUE and KEY: the element local name. VALUE: element text, else
+    ``rdf:resource`` / ``rdf:nodeID`` through :func:`~triplets.iri.local_value`
+    (:func:`~triplets.iri.local_id` when ``local_resources=False`` — http(s) IRIs stay whole);
+    ``""`` when there is neither.
+    """
+    local_resource = local_value if local_resources else local_id
+    for rdf_object in rdf_objects:
+        attribs = rdf_object.attrib
+        obj_id = local_id(attribs.get(RDF_ID) or attribs.get(RDF_ABOUT) or attribs.get(RDF_NODEID) or "")
+        yield obj_id, "Type", _split_prefixed_name(rdf_object.tag)
+        for element in rdf_object.iterchildren():
+            value = element.text
+            if value is None and element.attrib:
+                value = local_resource(element.attrib.get(RDF_RESOURCE) or element.attrib.get(RDF_NODEID) or "")
+            yield obj_id, _split_prefixed_name(element.tag), "" if value is None else value
 
 
 def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debug: bool = False):

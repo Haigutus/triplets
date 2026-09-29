@@ -412,15 +412,16 @@ def _sparql_violations(rule, result):
     result = result[result["this"].notna()]   # a row without a focus node is no violation
     if len(result) == 0:                      # (rdflib serializes a spurious empty binding
         return _empty()                       #  for some aggregate queries)
-    focus = _shorten(result["this"].astype(str), iri_pandas.local_id)
-    values = _shorten(result["value"].astype(str), iri_pandas.local_value) if "value" in result.columns else None
+    focus = _shorten(result["this"].astype(str), iri_pandas.local_node)
+    values = _shorten(result["value"].astype(str), iri_pandas.local_object) if "value" in result.columns else None
     return _frame(rule, focus, values, "sparql constraint violated")
 
 
 def _shorten(terms, rule):
-    """SPARQL result terms → triplet form: IRIs decoded and shortened by *rule*, literals verbatim
-    (a literal ``_name`` or a blank node ``_:b0`` must not lose its ``_``)."""
-    return rule(iri_pandas.decode_iri(terms)).where(iri_pandas.is_iri(terms), terms)
+    """SPARQL result terms → triplet form: IRIs through the reader *rule* (``local_node`` /
+    ``local_object``), literals verbatim (a literal ``_name`` or a blank node ``_:b0`` must
+    not lose its ``_``)."""
+    return rule(terms).where(iri_pandas.is_iri(terms), terms)
 
 
 def _sparql(context, rule):

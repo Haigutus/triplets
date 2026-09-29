@@ -23,7 +23,8 @@ import uuid
 
 import logging
 
-from .iri import RDF_NS, local_id, local_value
+from .iri import local_id
+from .parser.utils import iter_rdf_rows
 
 logger = logging.getLogger(__name__)
 
@@ -168,11 +169,6 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
     if debug:
         start_time = datetime.datetime.now()
 
-    RDF_ID = f"{{{RDF_NS}}}ID"
-    RDF_ABOUT = f"{{{RDF_NS}}}about"
-    RDF_NODEID = f"{{{RDF_NS}}}nodeID"
-    RDF_RESOURCE = f"{{{RDF_NS}}}resource"
-
     # Generate list for RDF data and store the original filename under rdf:label in dcat:Distribution object
     ID = str(uuid.uuid4())
     ID_NSMAP = str(uuid.uuid4())
@@ -185,43 +181,7 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
     for key, value in namespace_map.items():
         data_list.append((ID_NSMAP, key, value, INSTANCE_ID))
 
-    # Reuse variables to avoid creating new ones in loops
-    KEY = ""
-    VALUE = ""
-    KEY_NS = ""
-    VALUE_NS = ""
-
-    for RDF_object in RDF_objects:
-        # Priority matches triplets.parser: rdf:ID > rdf:about > rdf:nodeID
-        ID = local_id(
-            RDF_object.attrib.get(RDF_ID)
-            or RDF_object.attrib.get(RDF_ABOUT)
-            or RDF_object.attrib.get(RDF_NODEID)
-        )
-        KEY = "Type"
-        KEY_NS = RDF_NS
-        # Use partition instead of split, with fallback for no "}"
-        parts = RDF_object.tag.partition("}")
-        VALUE_NS, VALUE = parts[0], parts[2]
-        data_list.append((ID, KEY, VALUE, INSTANCE_ID))
-
-        for element in RDF_object.iterchildren():
-            parts = element.tag.partition("}")
-            KEY_NS, KEY = parts[0], parts[2]
-            VALUE = element.text
-            VALUE_NS = ""
-
-            if VALUE is None and element.attrib:
-
-                # TODO - NB CIM ID specific, to be skipped for generic parsing
-                # Also accept rdf:nodeID references (parity with triplets.parser)
-                VALUE = local_value(
-                    element.attrib.get(RDF_RESOURCE)
-                    or element.attrib.get(RDF_NODEID)
-                    or ""
-                )
-
-            data_list.append((ID, KEY, VALUE, INSTANCE_ID))
+    data_list.extend((ID, KEY, VALUE, INSTANCE_ID) for ID, KEY, VALUE in iter_rdf_rows(RDF_objects))
 
     if debug:
         _print_duration("All values put to data list", start_time)

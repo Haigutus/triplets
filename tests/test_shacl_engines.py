@@ -532,3 +532,23 @@ def test_unsupported_property_paths_still_skip_with_warning(caplog):
         compiled = triplets.validation.compile(graph)
     assert len(compiled.ir) == 0
     assert sum("cannot express" in record.message for record in caplog.records) == 2
+
+
+def test_enum_violation_value_pyshacl_parity(engine):
+    """An enum value outside sh:in reports the same local VALUE on every engine: pyshacl sees
+    the enum IRI and the report reader shortens it with iri.local_object, like read_nquads."""
+    pytest.importorskip("pyshacl")
+    import rdflib
+    rdf_map = {"EQ": {"Switch.kind": {"type": "Enumeration", "xsd:type": "xsd:anyURI",
+                                      "namespace": "http://iec.ch/TC57/CIM100#"},
+                      "SwitchKind.breaker": {"type": "EnumerationValue", "namespace": "http://iec.ch/TC57/CIM100#"},
+                      "SwitchKind.other": {"type": "EnumerationValue", "namespace": "http://iec.ch/TC57/CIM100#"},
+                      "Breaker": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#"}}}
+    rows = breaker("b1", ("Switch.kind", "SwitchKind.breaker")) + breaker("b2", ("Switch.kind", "SwitchKind.other"))
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + SHAPE.format(body="sh:path cim:Switch.kind ; sh:in ( cim:SwitchKind.breaker )"),
+                format="turtle")
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    for name in (engine, "pyshacl"):
+        v = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine=name)
+        assert violating(v, "sh:in") == {("b2", "SwitchKind.other")}, name

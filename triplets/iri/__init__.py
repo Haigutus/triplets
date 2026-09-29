@@ -14,6 +14,7 @@ column / context                       local            absolute
 ``KEY``                                ``local_key``    ``absolute_key``
 ``VALUE`` of ``Type`` (class)          ``local_name``   ``absolute_value``
 ``VALUE`` (reference, enum)            ``local_value``  ``absolute_value``
+RDF term read back (N-Quads, SPARQL)   ``local_node`` / ``local_object`` — the readers' entry points
 SHACL / RDFS vocabulary terms          ``local_term``   —
 =====================================  ===============  ==================
 
@@ -93,7 +94,7 @@ def local_id(text):
 def local_value(text):
     """Reference VALUE: :func:`local_id`, then ``http(s)…#frag`` → ``frag``.
 
-    Only ``#`` splits — a ``/``-only IRI stays whole (``shorten_resources``
+    Only ``#`` splits — a ``/``-only IRI stays whole (``local_resources``
     contract). Enumerations come out as ``Kind.value``, classes as ``Breaker``.
     """
     if text is None:
@@ -157,6 +158,29 @@ def decode_iri(text):
     if text is None or "%" not in text:
         return text
     return IRI_ESCAPE_RE.sub(lambda match: chr(int(match.group()[1:], 16)), text)
+
+
+# ── RDF terms read back (N-Quads, CONSTRUCT, SHACL results) ───────────────────
+
+def local_node(iri):
+    """Subject / focus node / graph IRI read from RDF → triplet ID: :func:`decode_iri`, then
+    :func:`local_id`. None → None."""
+    return None if iri is None else local_id(decode_iri(str(iri)))
+
+
+def local_object(iri, is_type=False, subjects=()):
+    """Object IRI read from RDF → triplet VALUE. *subjects*: the subject IRIs of the same
+    data, compared as read (before decoding).
+
+    :func:`decode_iri`, then: a class (``is_type``, the object of ``rdf:type``) →
+    :func:`local_name`, like its KEY; an IRI that is also a subject → :func:`local_id`, so
+    the reference still joins its ID; else :func:`local_value`. None → None.
+    """
+    if iri is None:
+        return None
+    iri = str(iri)
+    rule = local_name if is_type else local_id if iri in subjects else local_value
+    return rule(decode_iri(iri))
 
 
 # ── flat maps from the export schema ──────────────────────────────────────────

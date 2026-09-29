@@ -75,7 +75,7 @@ def parse(
     engine: str = "auto",
     return_type: str = "pandas",
     categorical_columns: Optional[Sequence[str]] = ("INSTANCE_ID", "KEY"),
-    shorten_resources: bool = True,
+    local_resources: bool = True,
     string_type: str = "auto",
 ) -> Any:
     """Main entry: parse CIM RDF/XML (or zips) using chosen engine.
@@ -93,10 +93,12 @@ def parse(
         Output format: "pandas", "arrow", or "polars".
     categorical_columns : tuple or None, default ("INSTANCE_ID", "KEY")
         Columns to dictionary-encode for memory savings. Pass None to disable.
-    shorten_resources : bool, default True
-        Shorten http(s) resource values to their #fragment (CIM instance data convention).
-        Enumerations are stored as ``ControlAreaTypeKind.Interchange``; filters against
-        the full CIM URI will not match. Pass False for lossless URIs (e.g. RDFS schema
+    local_resources : bool, default True
+        Resource (``rdf:resource`` / ``rdf:nodeID``) values in local form,
+        ``triplets.iri.local_value``: the ID prefix stripped and http(s) IRIs cut to their
+        ``#fragment`` (CIM instance data convention) — enumerations are stored as
+        ``ControlAreaTypeKind.Interchange``; filters against the full CIM URI will not match.
+        False applies only ``local_id``: http(s) resource IRIs stay whole (e.g. RDFS schema
         parsing); only the python engines support this.
     string_type : str, default "auto"
         Arrow layout of the ID and VALUE string columns (arrow/polars output,
@@ -112,8 +114,8 @@ def parse(
     is_arrow_engine = engine_name in _ARROW_ENGINES
     string_type = _resolve_string_type(string_type, return_type)
 
-    if not shorten_resources and engine_name == "cython_pugixml_arrow":
-        raise ValueError("shorten_resources=False is not supported by the cython_pugixml_arrow engine, "
+    if not local_resources and engine_name == "cython_pugixml_arrow":
+        raise ValueError("local_resources=False is not supported by the cython_pugixml_arrow engine, "
                          "use engine='python_lxml_pandas' or 'python_lxml_arrow'")
 
     parse_one = getattr(engine_mod, "load_rdf_to_dataframe", None)
@@ -137,8 +139,8 @@ def parse(
 
     def _one(f: Any):
         one_kwargs = {"string_type": string_type} if native_string_type else {}
-        if not shorten_resources:
-            one_kwargs["shorten_resources"] = False
+        if not local_resources:
+            one_kwargs["local_resources"] = False
         return parse_one(f, debug=debug, **one_kwargs)
 
     if max_workers and len(xml_files) > 1:
@@ -161,7 +163,7 @@ def parse_batches(
     list_of_paths_to_zip_globalzip_xml: Union[str, List, Any],
     debug: bool = False,
     engine: str = "auto",
-    shorten_resources: bool = True,
+    local_resources: bool = True,
     max_workers: Optional[int] = None,
 ) -> Any:
     """Parse CIM RDF/XML lazily into a ``pyarrow.RecordBatchReader``.
@@ -188,13 +190,13 @@ def parse_batches(
     if engine_name not in _ARROW_ENGINES:
         raise ValueError(f"parse_batches requires an arrow parser engine, got {engine_name!r}. "
                          f"Install with: pip install triplets[arrow].")
-    if not shorten_resources and engine_name == "cython_pugixml_arrow":
-        raise ValueError("shorten_resources=False is not supported by the cython_pugixml_arrow engine, "
+    if not local_resources and engine_name == "cython_pugixml_arrow":
+        raise ValueError("local_resources=False is not supported by the cython_pugixml_arrow engine, "
                          "use engine='python_lxml_arrow'")
     parse_one = engine_mod.load_rdf_to_dataframe
 
     schema = pa.schema([(c, pa.string()) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
-    one_kwargs = {} if shorten_resources else {"shorten_resources": False}
+    one_kwargs = {} if local_resources else {"local_resources": False}
 
     def one(xml_file):
         batch = parse_one(xml_file, debug=debug, **one_kwargs)

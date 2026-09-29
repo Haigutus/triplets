@@ -70,6 +70,35 @@ def decode_iri(series):
 # encode_iri runs on the input, not the joined IRI: prefixes and namespaces are
 # IRI-safe, and the input keeps its arrow string dtype (the join is object).
 
+def local_node(series):
+    return local_id(decode_iri(series))
+
+
+def _in_subjects(series, subjects):
+    """Rows whose IRI is a subject — looked up in Arrow only where local_value would drop a
+    namespace (pandas ``isin`` on arrow strings is ~50x slower)."""
+    import pyarrow
+    import pyarrow.compute as pc
+    candidates = (local_value(series) != local_id(series)).fillna(False).astype(bool)
+    hit = pandas.Series(False, index=series.index)
+    if candidates.any():
+        found = pc.is_in(pyarrow.array(series[candidates], type=pyarrow.string()),
+                         value_set=pc.unique(pyarrow.array(subjects, type=pyarrow.string())))
+        hit[candidates] = found.to_numpy(zero_copy_only=False)
+    return hit
+
+
+def local_object(series, is_type=None, subjects=None):
+    """*is_type*: boolean mask of ``rdf:type`` rows; *subjects*: Series of subject IRIs as read."""
+    decoded = decode_iri(series)
+    value = local_value(decoded)
+    if subjects is not None:
+        value = value.mask(_in_subjects(series, subjects), local_id(decoded))
+    if is_type is not None:
+        value = value.mask(is_type, local_name(decoded))
+    return value
+
+
 def absolute_id(series):
     encoded = encode_iri(series)
     return encoded.where(is_iri(series), UUID_PREFIX + encoded)

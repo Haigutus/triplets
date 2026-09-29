@@ -94,6 +94,19 @@ Start of the 0.3 line.
   (pyshacl through the lexical supplement): an RFC 3987 IRI reference, relative
   and non-ASCII allowed; controls, space, DEL, ``<>"{}|^`\`` and a `%` not
   followed by two hex digits violate. Before, anyURI was never checked.
+- **`parse(shorten_resources=)` is renamed `local_resources=`** (same
+  default `True`, same meaning), in the `triplets.iri` local / absolute
+  vocabulary. No alias.
+- **Importers share two rule sources.** The python XML engines and the legacy
+  `rdf_parser.load_RDF_to_list` run one row loop (`parser.utils.iter_rdf_rows`);
+  the RDF-term readers (`read_nquads`, CONSTRUCT on every engine, `sh:sparql`
+  results, the pyshacl report) use `iri.local_node` / `iri.local_object`.
+  Visible changes: the pyshacl report VALUE is shortened like the other engines
+  (an enum outside `sh:in` reports `SwitchKind.x`, not its full IRI);
+  `load_RDF_to_list` gives the tag name for an element without a namespace
+  (was `""`), `""` for a missing ID (was `None`) and for an empty element (was
+  `None`); the cython parser finds `rdf:ID` / `rdf:about` / `rdf:resource` by
+  the prefix the document binds to the RDF namespace, not only `rdf:`.
 - Known import / export deviations that stay (CIM XML without percent-encoding,
   `http(s)` IDs, blank nodes, …) are listed in `docs/parsers.md` → *Known
   limitations*.

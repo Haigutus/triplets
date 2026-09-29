@@ -13,17 +13,13 @@ from typing import Union, IO, Any
 from lxml import etree
 import pyarrow as pa
 
-from .utils import (
-    RDF_NS, RDF_ID, RDF_ABOUT, RDF_NODEID, RDF_RESOURCE,
-    _split_prefixed_name,
-)
-from ..iri import local_id, local_value
+from .utils import iter_rdf_rows
 
 logger = logging.getLogger(__name__)
 
 
 def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False,
-                          shorten_resources: bool = True) -> pa.RecordBatch:
+                          local_resources: bool = True) -> pa.RecordBatch:
     """Parse single RDF/XML (path or fileobj) to pyarrow RecordBatch using lxml + lists.
 
     Streaming in the sense of column-wise collection then direct Arrow (no 4-tuple list).
@@ -78,33 +74,8 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         inst_b.append(instance_id)
 
     # RDF objects
-    for rdf_object in root.iterchildren():
-        attribs = rdf_object.attrib
-        obj_id = local_id(
-            attribs.get(RDF_ID)
-            or attribs.get(RDF_ABOUT)
-            or attribs.get(RDF_NODEID)
-            or ""
-        )
-
-        # Type
-        tag = rdf_object.tag
-        type_value = _split_prefixed_name(tag)
-        id_b.append(obj_id); key_b.append("Type"); val_b.append(type_value); inst_b.append(instance_id)
-
-        for element in rdf_object.iterchildren():
-            key = _split_prefixed_name(element.tag)
-            value = element.text
-            if value is None and element.attrib:
-                value = (local_value if shorten_resources else local_id)(
-                    element.attrib.get(RDF_RESOURCE)
-                    or element.attrib.get(RDF_NODEID)
-                    or ""
-                )
-            id_b.append(obj_id)
-            key_b.append(key)
-            val_b.append(value if value is not None else "")
-            inst_b.append(instance_id)
+    for obj_id, key, value in iter_rdf_rows(root.iterchildren(), local_resources):
+        id_b.append(obj_id); key_b.append(key); val_b.append(value); inst_b.append(instance_id)
 
     # Finish builders to arrays (direct to Arrow)
     batch = pa.RecordBatch.from_arrays(

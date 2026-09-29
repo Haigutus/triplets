@@ -151,8 +151,8 @@ The absolute form (N-Quads, SPARQL stores, SHACL reports) is the inverse,
 driven by the export schema: `absolute_id`, `absolute_key`, `absolute_value` with the
 flat maps (`namespaces`, `value_types`, `datatypes`) built from `rdf_map`; a name the
 schema does not declare takes the exporter's `undefined_namespace` (`http://triplets#`;
-CIM100 on the SPARQL / validation side). `shorten_resources=False` skips only the
-`#frag` step.
+CIM100 on the SPARQL / validation side). `local_resources=False` applies only
+`local_id` to resource values (no `#frag` step).
 
 The schema entry type decides the RDF form: an Attribute (`xsd:anyURI` included)
 is a literal written verbatim, checked by `sh:datatype`; an Association or
@@ -169,7 +169,7 @@ Deviations between the importers and exporters that are known and not planned:
   `rdf:resource` text as is (`rdf:resource="urn:uuid:a b"`), while N-Quads and the
   SPARQL stores write `<urn:uuid:a%20b>`. CIM IDs and references are not expected
   to hold spaces or ``<>"{}|^`\``.
-- **The CIM XML parsers do not decode `%XX`** (all three engines):
+- **The CIM XML parsers do not decode `%XX`** (every XML engine):
   `rdf:resource="#_a%20b"` reads as `a%20b`; `read_nquads` returns `a b`.
 - **`http(s)` IRIs as CIM XML IDs do not join.** `rdf:about="http://x#L1"` keeps the
   whole IRI as `ID`, `rdf:resource="http://x#L1"` shortens to `L1` (the parser sees
@@ -191,10 +191,11 @@ Deviations between the importers and exporters that are known and not planned:
 
 `parse()` / `read_RDF` accept (see `triplets/parser/__init__.py`):
 
-- `shorten_resources` (default `True`) — shorten http(s) resource values to
-  their `#fragment` (CIM instance-data convention). Enumerations are stored as
+- `local_resources` (default `True`) — resource values in local form
+  (`iri.local_value`: ID prefix stripped, http(s) IRIs cut to their `#fragment`,
+  the CIM instance-data convention). Enumerations are stored as
   `ControlAreaTypeKind.Interchange`; a filter on the full CIM URI will not match.
-  `False` keeps lossless full URIs (e.g. for RDFS schema parsing); **not supported
+  `False` applies only `local_id`, so http(s) resource IRIs stay whole (e.g. for RDFS schema parsing); **not supported
   by the `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
 - `categorical_columns` (default `("INSTANCE_ID", "KEY")`) — columns to
   dictionary-encode (Arrow) / categorize (pandas) for memory savings; `None`

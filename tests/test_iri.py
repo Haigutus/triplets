@@ -378,6 +378,45 @@ def test_flavor_defined_matches_scalar(flavor):
         assert got.tolist() == expected
 
 
+# ── RDF terms read back: the one rule pair every RDF reader uses ───────────────
+
+SUBJECTS = ["http://ex.org/m#b", "urn:uuid:" + UUID]
+# (iri, is_type, expected)
+OBJECT_CASES = [
+    (None, False, None),
+    ("urn:uuid:a%20b", False, "a b"),                                        # decoded
+    ("urn:uuid:" + UUID, False, UUID),
+    ("http://iec.ch/TC57/CIM100#SwitchKind.breaker", False, "SwitchKind.breaker"),
+    ("http://iec.ch/TC57/CIM100#Breaker", True, "Breaker"),                  # class: local_name
+    ("https://example.org/vocab/Dataset", True, "Dataset"),                  # "/" class
+    ("http://example.org/profile/EQ/3.0", False, "http://example.org/profile/EQ/3.0"),   # "/" reference: whole
+    ("http://ex.org/m#b", False, "http://ex.org/m#b"),                       # a subject: joins its ID
+    ("http://ex.org/m#c", False, "c"),
+]
+NODE_CASES = [(None, None), ("urn:uuid:x%20y", "x y"), ("#_x", "x"), ("http://ex.org/m#b", "http://ex.org/m#b")]
+
+
+@pytest.mark.parametrize("term,expected", NODE_CASES)
+def test_scalar_local_node(term, expected):
+    assert iri.local_node(term) == expected
+
+
+@pytest.mark.parametrize("term,is_type,expected", OBJECT_CASES)
+def test_scalar_local_object(term, is_type, expected):
+    assert iri.local_object(term, is_type, set(SUBJECTS)) == expected
+
+
+@pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow"])
+def test_flavor_readers_match_scalar(flavor):
+    dtype = object if flavor == "pandas-object" else pandas.ArrowDtype(pytest.importorskip("pyarrow").string())
+    terms = pandas.Series([t for t, _, _ in OBJECT_CASES], dtype=dtype)
+    is_type = pandas.Series([t for _, t, _ in OBJECT_CASES])
+    got = iri_pandas.local_object(terms, is_type, pandas.Series(SUBJECTS, dtype=dtype))
+    assert [_norm(v) for v in got.tolist()] == [e for _, _, e in OBJECT_CASES]
+    nodes = iri_pandas.local_node(pandas.Series([t for t, _ in NODE_CASES], dtype=dtype))
+    assert [_norm(v) for v in nodes.tolist()] == [e for _, e in NODE_CASES]
+
+
 # ── native mirror: the cython parser applies local_id / local_value in C++ ─────
 
 PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
@@ -390,6 +429,7 @@ PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
     <cim:Breaker.kind rdf:resource="http://iec.ch/TC57/CIM100#SwitchKind.breaker"/>
     <cim:Breaker.ref rdf:resource="https://cim4.eu/ns/nc#Kind.value"/>
     <cim:Breaker.uri rdf:resource="http://example.org/path/only"/>
+    <note>free text</note>
   </cim:Breaker>
   <nc:Thing rdf:ID="_abc">
     <nc:Thing.ref rdf:resource="urn:uuid:{uuid}"/>
@@ -402,41 +442,54 @@ PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
 """.format(uuid=UUID)
 
 
-@pytest.mark.parametrize("engine", ["python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow"])
-def test_parse_engines_apply_local_id_and_local_value(engine, tmp_path):
+PARSE_ENGINES = ["python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow", "rdf_parser.load_RDF_to_list"]
+# the same document with the RDF namespace bound to another prefix: engines resolve it by namespace
+PARSE_FIXTURES = {"rdf": PARSE_FIXTURE,
+                  "r": PARSE_FIXTURE.replace("xmlns:rdf=", "xmlns:r=").replace("rdf:", "r:")}
+
+
+def _parse(engine, text, tmp_path):
+    path = tmp_path / "iri_cases.xml"
+    path.write_text(text)
+    if engine == "rdf_parser.load_RDF_to_list":
+        from triplets import rdf_parser
+        return pandas.DataFrame(rdf_parser.load_RDF_to_list(str(path)), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
     try:
         triplets.parser.get_engine(engine)
     except Exception as error:      # extension not built in this environment
         pytest.skip(f"{engine} not available: {error}")
-    path = tmp_path / "iri_cases.xml"
-    path.write_text(PARSE_FIXTURE)
-    frame = triplets.parse(str(path), engine=engine, return_type="pandas")
-    rows = set(zip(frame["KEY"], frame["VALUE"]))
-    assert {iri.local_id("urn:uuid:_x"), iri.local_id("_abc")} <= set(frame["ID"])
-    assert {("Equipment.EquipmentContainer", iri.local_value("#_" + UUID)),
-            ("Thing.ref", iri.local_value("urn:uuid:" + UUID)),
-            ("Breaker.kind", iri.local_value("http://iec.ch/TC57/CIM100#SwitchKind.breaker")),
-            ("Breaker.ref", iri.local_value("https://cim4.eu/ns/nc#Kind.value")),
-            ("Breaker.uri", iri.local_value("http://example.org/path/only"))} <= rows
+    return triplets.parse(str(path), engine=engine, return_type="pandas")
 
 
-@pytest.mark.parametrize("engine", ["python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow"])
-def test_parse_engines_keys_and_types_are_local_name(engine, tmp_path):
-    """The parsers split element QNames natively (no IRI string exists); every KEY and
-    Type VALUE must equal local_key / local_name of the element's IRI — the rule
-    read_nquads applies — for "#" and "/" namespaces alike."""
+def _expected_rows(text):
+    """The object rows by the triplets.iri rules alone, from lxml's resolved QNames: ID via
+    local_id, Type VALUE via local_name, KEY via local_key, a resource via local_value."""
     from lxml import etree
-    try:
-        triplets.parser.get_engine(engine)
-    except Exception as error:      # extension not built in this environment
-        pytest.skip(f"{engine} not available: {error}")
-    path = tmp_path / "iri_cases.xml"
-    path.write_text(PARSE_FIXTURE)
-    frame = triplets.parse(str(path), engine=engine, return_type="pandas")
-    root = etree.fromstring(PARSE_FIXTURE.encode())
-    iri_of = lambda element: "".join(etree.QName(element).namespace or "") + etree.QName(element).localname  # noqa: E731
-    types = {iri.local_name(iri_of(element)) for element in root}
-    keys = {iri.local_key(iri_of(child)) for element in root for child in element}
-    assert types == {"Breaker", "Thing", "Dataset"} and {"issued", "conformsTo"} <= keys
-    assert types <= set(frame.loc[frame["KEY"] == "Type", "VALUE"])
-    assert keys <= set(frame["KEY"])
+    rdf = lambda name: f"{{{iri.RDF_NS}}}{name}"  # noqa: E731
+    element_iri = lambda element: (etree.QName(element).namespace or "") + etree.QName(element).localname  # noqa: E731
+    rows = set()
+    for rdf_object in etree.fromstring(text.encode()):
+        object_id = iri.local_id(rdf_object.get(rdf("ID")) or rdf_object.get(rdf("about")) or "")
+        rows.add((object_id, "Type", iri.local_name(element_iri(rdf_object))))
+        for child in rdf_object:
+            resource = child.get(rdf("resource"))
+            rows.add((object_id, iri.local_key(element_iri(child)),
+                      child.text if resource is None else iri.local_value(resource)))
+    return rows
+
+
+@pytest.mark.parametrize("prefix", PARSE_FIXTURES)
+@pytest.mark.parametrize("engine", PARSE_ENGINES)
+def test_parse_engines_follow_iri_rules(engine, prefix, tmp_path):
+    """Every XML parser splits element QNames natively (no IRI string exists) and reads the
+    RDF attributes by namespace; its object rows must equal the triplets.iri rules exactly —
+    the rules read_nquads applies — for "#" and "/" namespaces, a tag without a namespace,
+    and any RDF prefix."""
+    text = PARSE_FIXTURES[prefix]
+    frame = _parse(engine, text, tmp_path)
+    meta = set(frame.loc[(frame["KEY"] == "Type") & frame["VALUE"].isin(["Distribution", "NamespaceMap"]), "ID"])
+    rows = set(frame.loc[~frame["ID"].isin(meta), ["ID", "KEY", "VALUE"]].itertuples(index=False, name=None))
+    expected = _expected_rows(text)
+    assert {("_x", "Type", "Breaker"), ("_x", "note", "free text"), ("abc", "issued", "2024-01-01T00:00:00Z"),
+            ("_d", "Type", "Dataset"), ("_x", "Breaker.kind", "SwitchKind.breaker")} <= expected
+    assert rows == expected

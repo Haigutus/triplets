@@ -28,7 +28,7 @@ from libcpp.string_view cimport string_view
 from libcpp.memory cimport shared_ptr, make_shared
 from libcpp.vector cimport vector
 from libcpp cimport bool
-from libc.string cimport strrchr, strlen, memcmp
+from libc.string cimport strrchr, strlen, strcmp, memcmp
 from libc.stdint cimport int64_t
 
 # Arrow C++ types from pyarrow's Cython API
@@ -275,6 +275,7 @@ cdef extern from *:
     }
 
     // Extract local name from "prefix:localname" or "{ns}local".
+    // Native QName mirror of triplets.iri.local_name (parity: tests/test_iri.py).
     static inline const char* local_name(const char* name) {
         const char* colon = strrchr(name, ':');
         return colon ? colon + 1 : name;
@@ -434,6 +435,11 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
     cdef const char* aname
     cdef const char* aval
     cdef bint has_xml_base = False
+    # rdf:ID / rdf:about / ... are found by the prefix the document binds to the RDF
+    # namespace (pugixml does not resolve namespaces) — "rdf" unless the root says otherwise
+    cdef const char* RDF_NS_URI = b"http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    cdef string rdf_prefix = b"rdf"
+    cdef string rdf_id_attr, rdf_about_attr, rdf_nodeid_attr, rdf_resource_attr
     cdef xml_node rdf_object
     cdef xml_node element
     cdef const char* raw_id
@@ -475,6 +481,8 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
                 Append(id_b, nsmap_id)
                 aval = aname + XMLNS_COLON_LEN
                 Append(key_b, aval)
+                if strcmp(attr.value(), RDF_NS_URI) == 0:
+                    rdf_prefix = aval
                 aval = attr.value()
                 Append(val_b, aval)
             elif memcmp(aname, XMLNS, XMLNS_LEN) == 0 and aname[XMLNS_LEN] == 0:
@@ -495,6 +503,11 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
             Append(key_b, b"xml_base")
             Append(val_b, file_name_bytes)
 
+        rdf_id_attr = rdf_prefix + b":ID"
+        rdf_about_attr = rdf_prefix + b":about"
+        rdf_nodeid_attr = rdf_prefix + b":nodeID"
+        rdf_resource_attr = rdf_prefix + b":resource"
+
         # ── RDF objects (the hot loop — every row is processed here) ──────
         # We deliberately avoid:
         #   - appending the same INSTANCE_ID string millions of times
@@ -504,11 +517,11 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
         while not rdf_object.empty():
 
             # Choose best ID source (rdf:ID > rdf:about > rdf:nodeID)
-            raw_id_ptr = rdf_object.attribute(b"rdf:ID").value()
+            raw_id_ptr = rdf_object.attribute(rdf_id_attr.c_str()).value()
             if raw_id_ptr[0] == 0:
-                raw_id_ptr = rdf_object.attribute(b"rdf:about").value()
+                raw_id_ptr = rdf_object.attribute(rdf_about_attr.c_str()).value()
             if raw_id_ptr[0] == 0:
-                raw_id_ptr = rdf_object.attribute(b"rdf:nodeID").value()
+                raw_id_ptr = rdf_object.attribute(rdf_nodeid_attr.c_str()).value()
 
             if raw_id_ptr[0] != 0:
                 raw_len = strlen(raw_id_ptr)
@@ -539,9 +552,9 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
                 if text_len > 0:
                     Append(val_b, child_text, <int>text_len)
                 else:
-                    ref_val = element.attribute(b"rdf:resource").value()
+                    ref_val = element.attribute(rdf_resource_attr.c_str()).value()
                     if ref_val[0] == 0:
-                        ref_val = element.attribute(b"rdf:nodeID").value()
+                        ref_val = element.attribute(rdf_nodeid_attr.c_str()).value()
 
                     if ref_val[0] != 0:
                         ref_len = strlen(ref_val)
