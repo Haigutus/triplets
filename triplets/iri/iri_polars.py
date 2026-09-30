@@ -5,7 +5,7 @@ Categorical first, as the N-Quads exporter does).
 """
 import polars
 
-from . import (GUESS_NAME_RE, ID_PREFIX_RE, IRI_ESCAPES, RDF_TYPE, SPLIT_RE, TRIPLETS_NS, TYPE_KEY,
+from . import (GUESS_NAME_RE, ID_PREFIX_RE, IRI_ESCAPES, PREFIXED_RE, RDF_TYPE, SPLIT_RE, TRIPLETS_NS, TYPE_KEY,
                URI_PREFIX_RE, UUID_PREFIX, UUID_RE)
 
 
@@ -106,3 +106,64 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
                .when(typed).then(datatype)
                .otherwise(polars.lit(None, dtype=polars.Utf8)))
     return kind, payload
+
+
+# ── any iri_form → the form the exporters consume (see iri_pandas.to_schema_form) ──
+
+def distinct_names(frame):
+    """The distinct KEYs and ``Type`` VALUEs — what decides a frame's iri_form."""
+    keys = frame["KEY"].cast(polars.Utf8)
+    return keys.unique().drop_nulls().to_list() + \
+        frame.filter(keys == TYPE_KEY)["VALUE"].cast(polars.Utf8).unique().drop_nulls().to_list()
+
+
+def to_schema_form(frame, namespaces, value_types=None, prefixes=None):
+    """polars flavor of ``iri_pandas.to_schema_form``: the same steps, each a ``replace`` over
+    the distinct values that need work (no join: works on every polars 1.x)."""
+    from . import (DESCRIPTION_IRI, DESCRIPTION_TYPE, expand_iri, local_form, schema_name, unbound_prefixes,
+                   warn_namespace_mismatch)
+    if not prefixes and local_form(distinct_names(frame)):
+        return frame
+    frame = frame.with_columns(polars.col("ID", "KEY", "VALUE", "INSTANCE_ID").cast(polars.Utf8))
+    value_types = value_types or {}
+    map_ids = frame.filter((polars.col("KEY") == TYPE_KEY) & (polars.col("VALUE") == "NamespaceMap"))["ID"].to_list()
+    maps = {}
+    for row in frame.filter(polars.col("ID").is_in(map_ids) & ~polars.col("KEY").is_in([TYPE_KEY, "xml_base", ""])).iter_rows(named=True):
+        maps.setdefault(row["INSTANCE_ID"], {})[row["KEY"]] = row["VALUE"]
+
+    def expand(frame, column, rows):
+        candidates = rows & polars.col(column).str.contains(PREFIXED_RE.pattern).fill_null(False)
+        for instance in frame.filter(candidates)["INSTANCE_ID"].unique().to_list():
+            bound = {**maps.get(instance, {}), **(prefixes or {})}
+            here = candidates & (polars.col("INSTANCE_ID") == instance)
+            mapping = {value: expand_iri(value, bound) for value in frame.filter(here)[column].unique().to_list()}
+            frame = frame.with_columns(polars.when(here).then(polars.col(column).replace(mapping))
+                                       .otherwise(polars.col(column)).alias(column))
+        return frame
+
+    def localize(values):
+        return {value: schema_name(value, namespaces) or value for value in values if value is not None}
+
+    is_type = polars.col("KEY") == TYPE_KEY
+    frame = expand(frame, "KEY", polars.lit(True))
+    frame = expand(frame, "VALUE", is_type)
+    unbound = unbound_prefixes(distinct_names(frame))
+    if unbound:
+        raise ValueError(f"no namespace bound for prefix(es) {unbound}: the frame's NamespaceMap rows do not "
+                         f"declare them — pass prefixes={{...}} (e.g. for a stream whose map is in another batch)")
+    keys = localize(frame["KEY"].unique().to_list())
+    keys[TYPE_KEY] = TYPE_KEY
+    frame = frame.with_columns(polars.col("KEY").replace(keys))
+    warn_namespace_mismatch(list(keys.values()), namespaces)
+    kind = polars.col("KEY").replace_strict(value_types, default=None, return_dtype=polars.Utf8) if value_types \
+        else polars.lit(None, dtype=polars.Utf8)
+    frame = expand(frame, "ID", polars.lit(True))
+    frame = expand(frame, "VALUE", ~is_type & (kind != "literal").fill_null(True))
+    frame = frame.with_columns(
+        polars.col("ID").str.strip_prefix(UUID_PREFIX),
+        polars.when(kind == "reference").then(polars.col("VALUE").str.strip_prefix(UUID_PREFIX))
+        .otherwise(polars.col("VALUE")).alias("VALUE"))
+    names = is_type | (kind == "enum").fill_null(False)
+    distinct = localize(frame.filter(names)["VALUE"].unique().to_list())
+    distinct = {value: DESCRIPTION_TYPE if value == DESCRIPTION_IRI else local for value, local in distinct.items()}
+    return frame.with_columns(polars.when(names).then(polars.col("VALUE").replace(distinct)).otherwise(polars.col("VALUE")))

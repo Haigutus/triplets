@@ -63,7 +63,7 @@ def _maps(rdf_map):
 
 
 def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, export_undefined=True,
-                     undefined_namespace=TRIPLETS_NS):
+                     undefined_namespace=TRIPLETS_NS, prefixes=None):
     """Export triplet DataFrame to N-Quads file.
 
     Parameters
@@ -83,7 +83,9 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
     undefined_namespace : str, default "http://triplets#"
         Namespace those names are written in.
     """
-    quads = _quads(data, _maps(rdf_map), export_undefined, undefined_namespace)
+    maps = _maps(rdf_map)
+    data = iri_polars.to_schema_form(data, maps["namespaces"], maps["value_types"], prefixes)   # any iri_form
+    quads = _quads(data, maps, export_undefined, undefined_namespace)
 
     # write straight from Rust with a space separator — the CSV writer joins
     # the columns into "<s> <p> <o> <g> ." per row. No Python string
@@ -100,7 +102,8 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
     quads.write_csv(path, include_header=False, quote_style="never", separator=" ")
 
 
-def write_nquads_batches(reader, handle, rdf_map=None, export_undefined=True, undefined_namespace=TRIPLETS_NS):
+def write_nquads_batches(reader, handle, rdf_map=None, export_undefined=True, undefined_namespace=TRIPLETS_NS,
+                         prefixes=None):
     """Stream a ``pyarrow.RecordBatchReader`` into an open binary handle.
 
     One batch is formatted and written at a time, so memory stays bounded by
@@ -109,5 +112,6 @@ def write_nquads_batches(reader, handle, rdf_map=None, export_undefined=True, un
     """
     maps = _maps(rdf_map)
     for batch in reader:
-        _quads(pl.from_arrow(batch), maps, export_undefined, undefined_namespace).write_csv(
+        frame = iri_polars.to_schema_form(pl.from_arrow(batch), maps["namespaces"], maps["value_types"], prefixes)
+        _quads(frame, maps, export_undefined, undefined_namespace).write_csv(
             handle, include_header=False, quote_style="never", separator=" ")

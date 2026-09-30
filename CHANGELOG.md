@@ -16,6 +16,39 @@ Start of the 0.3 line.
   ([#99](https://github.com/entsoe/application-profiles-library/pull/99) / [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
 
 ### Changed
+- **`parse(iri_form="local" | "prefixed" | "absolute")` replaces
+  `local_resources=`** (no alias). The form covers every IRI in the frame: ID,
+  KEY, `Type` VALUE and resource VALUEs. `prefixed` writes `prefix:local` from
+  the document's namespace map (`parse(prefixes=…)` overrides it; the effective
+  map is recorded in the NamespaceMap rows), keeps CIM ID conventions local and
+  never prefixes URNs. `absolute` also makes KEYs and classes absolute — before,
+  `local_resources=False` left them local. The RDFS schema generator parses
+  absolute and localizes KEY / `Type` VALUE itself (bundles byte-identical).
+- **Every exporter reads every form:** N-Quads (pandas, polars, batches), the
+  qlever ingest and both CIM XML engines normalize with `to_schema_form`.
+  Prefixed names expand per instance; schema-declared names map back to local
+  names only when the namespace matches, so `rdf:type` / `dcterms:type` export
+  correctly from a prefixed or absolute frame; other names stay absolute (CIM
+  XML writes an undefined absolute name in its own namespace). `export_to_nquads`
+  / `export_to_cimxml` take `prefixes=`.
+- `iri`: `IRI_FORMS`, `PREFIXED_RE`, `compact_iri`, `expand_iri`, `schema_name`,
+  `DESCRIPTION_IRI`, `is_named`.
+- `validate` / `validate_schema` raise `ValueError` for a prefixed / absolute
+  frame (they compare local names and would silently match nothing); the check
+  covers KEYs and `Type` VALUEs.
+- Export of a prefixed / absolute frame: `urn:uuid:` nodes return to the local
+  convention and other absolute nodes are written as is (CIM XML: `rdf:about`, no
+  `value_prefix`); an unbound prefix raises instead of writing `triplets#cim:…`;
+  a stream expands each batch with its own NamespaceMap (else `prefixes=`);
+  dictionary-encoded columns (arrow parser) are cast first; qlever normalizes
+  non-local duckdb input like oxigraph / rdflib. `parse(prefixes=…)` /
+  non-local `iri_form` pick a python engine under `engine="auto"`.
+- CIM XML: a document with a default namespace exports well-formed XML on both
+  engines (the NamespaceMap `""` prefix is lxml's `None` and cython's `xmlns`,
+  and its empty KEY row is no element); polars input to the cython engine with
+  `export_undefined=True` works again. Exporting
+  data whose namespace differs from the schema's (CIM16 data, CIM100 schema)
+  from an exact form keeps the document's namespace and logs a warning.
 - **`triplets.iri`** — one public package for the triplet ↔ IRI contract:
   `local_id` / `local_key(iri, type_key)` / `local_value(iri, kind)` (local forms,
   all on one split, `split_iri` → namespace + local name; `TYPE_KEY`,

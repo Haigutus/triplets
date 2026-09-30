@@ -1,5 +1,5 @@
 from triplets.parser import parse
-from triplets.iri import is_absolute, iri_pandas, split_iri
+from triplets.iri import TYPE_KEY, is_absolute, iri_pandas, split_iri
 import pandas
 import os
 
@@ -9,9 +9,14 @@ logger = logging.getLogger(__name__)
 
 
 def load_all_to_dataframe(paths):
-    """Parse RDFS losslessly: schema conversion needs full resource URIs, so resource
-    shortening is disabled (only the python engines support that)."""
-    return parse(paths, engine="python_lxml_pandas", local_resources=False)
+    """Parse RDFS in the absolute form (IDs and references resolved against ``xml:base``) with
+    the KEY and ``Type`` VALUE columns localized: the schema generator matches RDFS vocabulary
+    by local name (``KEY == 'domain'``), an explicit ``rdf:type`` child as ``type``."""
+    data = parse(paths, engine="python_lxml_pandas", iri_form="absolute", categorical_columns=None)
+    data["KEY"] = iri_pandas.by_distinct(data["KEY"], lambda keys: iri_pandas.local_key(keys, type_key="type"))
+    is_type = (data["KEY"] == TYPE_KEY).to_numpy()
+    data.loc[is_type, "VALUE"] = iri_pandas.by_distinct(data.loc[is_type, "VALUE"], lambda names: iri_pandas.split_iri(names)[1])
+    return data
 
 pandas.set_option("display.max_rows", 20)
 pandas.set_option("display.max_columns", 8)
@@ -181,7 +186,7 @@ def get_namespace_and_name(uri, default_namespace=None):
     An absolute IRI (:func:`triplets.iri.is_absolute`) splits as is. A bare ``name`` or ``#name`` (local-form
     parses) takes ``default_namespace + "#"``. Any other relative form (``a/b``, ``./x``), and
     a bare / ``#`` name without *default_namespace*, raises: an absolute-form parse
-    (``local_resources=False``) never yields one, so there is no namespace to guess."""
+    (``iri_form="absolute"``) never yields one, so there is no namespace to guess."""
     namespace, name = split_iri(uri)
     if is_absolute(uri):
         return namespace, name

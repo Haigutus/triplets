@@ -61,6 +61,27 @@ def get_engine(name: str = "auto"):
     return _REGISTRY.get(name)
 
 
+_PYTHON_ENGINES = ("python_lxml_arrow", "python_lxml_pandas")
+
+
+def _engine_for(engine, iri_form, prefixes, arrow_only=False):
+    """The engine for this call: a non-local ``iri_form`` or ``prefixes`` need a python engine —
+    "auto" picks one, an explicit cython engine raises instead of failing inside it."""
+    if iri_form != "local" or prefixes:
+        if engine == "auto":
+            for name in _PYTHON_ENGINES[:1] if arrow_only else _PYTHON_ENGINES:
+                try:
+                    return get_engine(name)
+                except Exception:          # pyarrow missing: python_lxml_arrow not registered
+                    continue
+        engine_name, engine_mod = get_engine(engine)
+        if engine_name not in _PYTHON_ENGINES:
+            raise ValueError(f"iri_form={iri_form!r} / prefixes= need a python parser engine "
+                             f"({', '.join(_PYTHON_ENGINES)}), got {engine_name!r}")
+        return engine_name, engine_mod
+    return get_engine(engine)
+
+
 # Re-exports (rdf_parser.py compat layer, public parser surface)
 from .utils import find_all_xml, iter_all_xml  # noqa: F401
 from ..iri import TRIPLETS_NS, local_id  # noqa: F401 — local_id re-exported
@@ -75,9 +96,10 @@ def parse(
     engine: str = "auto",
     return_type: str = "pandas",
     categorical_columns: Optional[Sequence[str]] = ("INSTANCE_ID", "KEY"),
-    local_resources: bool = True,
+    iri_form: str = "local",
     string_type: str = "auto",
     default_base: str = TRIPLETS_NS,
+    prefixes: Optional[dict] = None,
 ) -> Any:
     """Main entry: parse CIM RDF/XML (or zips) using chosen engine.
 
@@ -94,15 +116,24 @@ def parse(
         Output format: "pandas", "arrow", or "polars".
     categorical_columns : tuple or None, default ("INSTANCE_ID", "KEY")
         Columns to dictionary-encode for memory savings. Pass None to disable.
-    local_resources : bool, default True
-        Resource (``rdf:resource`` / ``rdf:nodeID``) values in local form,
-        ``triplets.iri.local_value``: the ID prefix stripped and http(s) IRIs cut to their
-        ``#fragment`` (CIM instance data convention) — enumerations are stored as
-        ``ControlAreaTypeKind.Interchange``; filters against the full CIM URI will not match.
-        False is the absolute form: IDs and resource references are resolved against the
-        document's declared absolute ``xml:base`` at parse time, ``triplets.iri.resolve_iri``
-        (``rdf:ID="X"`` → ``base#X``; e.g. RDFS schema parsing); only the python engines
-        support this.
+    iri_form : str, default "local"
+        How every IRI in the frame is written — ID, KEY, ``Type`` VALUE and resource VALUEs
+        (literals never change; ``triplets.iri.IRI_FORMS``):
+
+        - ``"local"`` — local names, the CIM convention: IDs ``triplets.iri.local_id``,
+          references ``local_value`` (enumerations are stored as
+          ``ControlAreaTypeKind.Interchange``; filters against the full CIM URI will not
+          match), KEY / Type VALUE the element local name. Every engine.
+        - ``"prefixed"`` — ``prefix:local`` from the document's namespace map (overridable
+          with *prefixes*) where it binds the namespace, else the absolute IRI; IDs and
+          references in a CIM ID convention (``urn:uuid:``, ``#_``, ``_``) stay local. Readable
+          without local-name collisions (``rdf:type`` vs ``dct:type``). Python engines only.
+        - ``"absolute"`` — absolute IRIs, the exact form: IDs and references resolved against
+          the declared absolute ``xml:base`` (``rdf:ID="X"`` → ``base#X``), KEY / Type VALUE
+          the element namespace + local name. Python engines only.
+
+        The export functions accept every form; validation, SPARQL scope and the table tools
+        expect the local form.
     string_type : str, default "auto"
         Arrow layout of the ID and VALUE string columns (arrow/polars output,
         and pandas via ArrowDtype): "utf8" (32-bit offsets), "large_utf8"
@@ -112,17 +143,17 @@ def parse(
         columns are unaffected (consumers use the indices). Ignored by the
         pandas engine (python_lxml_pandas).
     default_base : str, default "http://triplets#"
-        Base for ``local_resources=False`` when the document declares no absolute ``xml:base``
-        (the file location is never used as a base).
+        Base for ``iri_form="absolute"`` / ``"prefixed"`` when the document declares no
+        absolute ``xml:base`` (the file location is never used as a base).
+    prefixes : dict, optional
+        prefix → namespace, overriding the document's own map for ``iri_form="prefixed"``;
+        recorded in the NamespaceMap rows either way.
     """
     debug = debug or logger.isEnabledFor(logging.DEBUG)
-    engine_name, engine_mod = get_engine(engine)
+    engine_name, engine_mod = _engine_for(engine, iri_form, prefixes)
     is_arrow_engine = engine_name in _ARROW_ENGINES
     string_type = _resolve_string_type(string_type, return_type)
 
-    if not local_resources and engine_name == "cython_pugixml_arrow":
-        raise ValueError("local_resources=False is not supported by the cython_pugixml_arrow engine, "
-                         "use engine='python_lxml_pandas' or 'python_lxml_arrow'")
 
     parse_one = getattr(engine_mod, "load_rdf_to_dataframe", None)
     if parse_one is None:
@@ -145,8 +176,8 @@ def parse(
 
     def _one(f: Any):
         one_kwargs = {"string_type": string_type} if native_string_type else {}
-        if not local_resources:
-            one_kwargs.update(local_resources=False, default_base=default_base)
+        if iri_form != "local" or prefixes:
+            one_kwargs.update(iri_form=iri_form, default_base=default_base, prefixes=prefixes)
         return parse_one(f, debug=debug, **one_kwargs)
 
     if max_workers and len(xml_files) > 1:
@@ -169,9 +200,10 @@ def parse_batches(
     list_of_paths_to_zip_globalzip_xml: Union[str, List, Any],
     debug: bool = False,
     engine: str = "auto",
-    local_resources: bool = True,
+    iri_form: str = "local",
     max_workers: Optional[int] = None,
     default_base: str = TRIPLETS_NS,
+    prefixes: Optional[dict] = None,
 ) -> Any:
     """Parse CIM RDF/XML lazily into a ``pyarrow.RecordBatchReader``.
 
@@ -193,17 +225,15 @@ def parse_batches(
     import pyarrow as pa
 
     debug = debug or logger.isEnabledFor(logging.DEBUG)
-    engine_name, engine_mod = get_engine(engine)
+    engine_name, engine_mod = _engine_for(engine, iri_form, prefixes, arrow_only=True)
     if engine_name not in _ARROW_ENGINES:
         raise ValueError(f"parse_batches requires an arrow parser engine, got {engine_name!r}. "
                          f"Install with: pip install triplets[arrow].")
-    if not local_resources and engine_name == "cython_pugixml_arrow":
-        raise ValueError("local_resources=False is not supported by the cython_pugixml_arrow engine, "
-                         "use engine='python_lxml_arrow'")
     parse_one = engine_mod.load_rdf_to_dataframe
 
     schema = pa.schema([(c, pa.string()) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
-    one_kwargs = {} if local_resources else {"local_resources": False, "default_base": default_base}
+    one_kwargs = {} if iri_form == "local" and not prefixes else \
+        {"iri_form": iri_form, "default_base": default_base, "prefixes": prefixes}
 
     def one(xml_file):
         batch = parse_one(xml_file, debug=debug, **one_kwargs)

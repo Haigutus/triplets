@@ -63,6 +63,14 @@ TYPE_KEY = "Type"
 DESCRIPTION_TYPE = "Description"
 """``Type`` VALUE of an ``rdf:Description`` element: no typed-node shorthand, so not a class —
 exported as ``rdf:Description`` in CIM XML and as no ``rdf:type`` in N-Quads."""
+DESCRIPTION_IRI = "http://www.w3.org/1999/02/22-rdf-syntax-ns#Description"
+"""The same, in the absolute form."""
+
+IRI_FORMS = ("local", "prefixed", "absolute")
+"""How ``parse(iri_form=…)`` writes every IRI in a frame (ID, KEY, ``Type`` VALUE, resource
+VALUEs; literals never change): ``local`` names (the CIM convention, easiest to work with),
+``prefixed`` ``prefix:local`` from the document's namespace map (readable, no collisions:
+``rdf:type`` vs ``dct:type``), or ``absolute`` IRIs (exact)."""
 
 UUID_PREFIX = "urn:uuid:"
 ID_PREFIXES = ("urn:uuid:", "#_", "_")           # longest first; exactly one is stripped
@@ -74,6 +82,8 @@ ID_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, ID_PREFIXES)) + ")")
 URI_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, URI_PREFIXES)) + ")")
 SPLIT_RE = re.compile(r"^(?:.*[#/]|urn:.*:)")  # the namespace: up to the last "#" or "/", else a URN's last ":"
 GUESS_NAME_RE = re.compile(r"^http.*#(?:.*/)?")   # local_value guess: split_iri's namespace, only for http IRIs with a "#"
+PREFIXED_RE = re.compile(r"^([A-Za-z_][\w.-]*):(?:[^/]|$)")   # no lookahead: RE2 (Arrow) has none
+"""``prefix:local`` — a candidate only; :func:`is_iri` text (``urn:``, ``http:``) is never prefixed."""
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 """Canonical lowercase mRID — what the exporters turn into ``urn:uuid:``."""
 REFERENCE_LIKE = re.compile(
@@ -154,6 +164,81 @@ def local_value(iri, kind=None):
 def is_iri(text):
     """Absolute IRI already (``http://``, ``https://``, ``urn:``)."""
     return text is not None and str(text).startswith(URI_PREFIXES)
+
+
+def compact_iri(iri, prefix_of):
+    """Absolute ``http(s)`` IRI → ``prefix:local`` when *prefix_of* (namespace → prefix) binds
+    its :func:`split_iri` namespace; anything else (URNs, unbound namespaces) unchanged."""
+    if iri is None or not str(iri).startswith(("http://", "https://")):
+        return iri
+    namespace, name = split_iri(iri)
+    prefix = prefix_of.get(namespace)
+    return f"{prefix}:{name}" if prefix else iri
+
+
+def expand_iri(text, prefixes):
+    """``prefix:local`` → namespace + local when *prefixes* (prefix → namespace) binds the
+    prefix; local names, absolute IRIs (``urn:`` included) and unbound prefixes unchanged."""
+    if text is None or not prefixes or is_iri(text):
+        return text
+    text = str(text)
+    match = PREFIXED_RE.match(text)
+    namespace = prefixes.get(match.group(1)) if match else None
+    return namespace + text[len(match.group(1)) + 1:] if namespace else text
+
+
+def schema_name(text, namespaces, prefixes=None):
+    """The schema's local name for *text* in any form, or None: a local name the schema
+    declares as is; else ``prefix:local`` / an absolute IRI whose namespace equals the schema
+    entry's namespace for that local name (so ``rdf:type`` never matches ``dcterms:type``)."""
+    if text is None:
+        return None
+    text = str(text)
+    if text in namespaces:
+        return text
+    expanded = expand_iri(text, prefixes)
+    if not str(expanded).startswith(("http://", "https://")):
+        return None
+    namespace, name = split_iri(expanded)
+    return name if namespaces.get(name) == namespace else None
+
+
+def is_named(text):
+    """A prefixed name (``cim:X``) or an ``http(s)`` IRI — what a KEY is in the prefixed /
+    absolute forms and never in the local one (a local KEY is ``Class.attr``)."""
+    text = str(text)
+    return text.startswith(("http://", "https://")) or (
+        PREFIXED_RE.match(text) is not None and not text.startswith("urn:"))
+
+
+W3C_VOCABULARIES = frozenset({RDF_NS, RDFS_NS, XSD_NS, SH_NS, "http://www.w3.org/2002/07/owl#"})
+
+
+def local_form(names):
+    """True when *names* (the distinct KEYs and ``Type`` VALUEs of a frame) are all in the
+    local form — no prefixed name, no http(s) IRI. The one test for "is this frame local?"."""
+    return not any(name is not None and is_named(name) for name in names)
+
+
+def unbound_prefixes(names):
+    """The prefixes of the names still ``prefix:local`` after expansion (no map bound them)."""
+    return sorted({PREFIXED_RE.match(str(name)).group(1) for name in names
+                   if name is not None and is_named(name) and not str(name).startswith(("http://", "https://"))})
+
+
+def warn_namespace_mismatch(names, namespaces):
+    """Log the names still absolute after localization whose local name the schema declares
+    under another namespace (e.g. CIM16 data against a CIM100 schema): the local form would
+    have written the schema's namespace, the exact forms keep the document's — and CIM XML
+    drops them as undefined unless ``export_undefined=True``."""
+    import logging
+    mismatched = sorted({name for name in names if str(name).startswith(("http://", "https://"))
+                         and split_iri(name)[1] in namespaces
+                         and split_iri(name)[0] not in W3C_VOCABULARIES})   # rdf:type vs dct:type is a collision, not a version
+    if mismatched:
+        logging.getLogger("triplets.iri").warning(
+            "%d name(s) the schema declares arrive in another namespace and stay absolute "
+            "(the local form would write the schema's namespace), e.g. %s", len(mismatched), mismatched[:3])
 
 
 def is_absolute(text):
