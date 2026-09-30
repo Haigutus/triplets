@@ -449,7 +449,7 @@ def test_flavor_defined_matches_scalar(flavor):
         assert got.tolist() == expected
 
 
-# ── RDF/XML reference resolution (local_resources=False) ─────────────────────
+# ── RDF/XML reference resolution (iri_form="absolute") ─────────────────────
 
 BASE = "http://iec.ch/TC57/CIM100"
 RESOLVE_CASES = [
@@ -550,13 +550,14 @@ def test_parse_engines_follow_iri_rules(engine, prefix, tmp_path):
 
 @pytest.mark.parametrize("engine", ["python_lxml_pandas", "python_lxml_arrow"])
 def test_parse_absolute_resources_resolve_against_xml_base(engine, tmp_path):
-    """local_resources=False is the absolute form: ID and references resolved against
-    xml:base at parse time (rdf:ID="X" → base#X), so nothing downstream needs the base."""
+    """iri_form="absolute": ID and references resolved against xml:base at parse time
+    (rdf:ID="X" → base#X), KEYs the element's namespace + local name — nothing downstream
+    needs the base or the document's prefixes."""
     from lxml import etree
     text = PARSE_FIXTURE.replace('<rdf:RDF ', '<rdf:RDF xml:base="http://example.org/base" ', 1)
     path = tmp_path / "iri_cases.xml"
     path.write_text(text)
-    frame = triplets.parse(str(path), engine=engine, return_type="pandas", local_resources=False)
+    frame = triplets.parse(str(path), engine=engine, return_type="pandas", iri_form="absolute")
     rdf = lambda name: f"{{{iri.RDF_NS}}}{name}"  # noqa: E731
     base = "http://example.org/base"
     expected = set()
@@ -565,13 +566,13 @@ def test_parse_absolute_resources_resolve_against_xml_base(engine, tmp_path):
         object_id = iri.resolve_iri("#" + rdf_id if rdf_id else rdf_object.get(rdf("about")), base)
         for child in rdf_object:
             resource = child.get(rdf("resource"))
-            expected.add((object_id, iri.local_key(etree.QName(child).namespace + etree.QName(child).localname
-                                                   if etree.QName(child).namespace else etree.QName(child).localname),
-                          child.text if resource is None else iri.resolve_iri(resource, base)))
+            key = (etree.QName(child).namespace or "") + etree.QName(child).localname   # absolute KEY
+            expected.add((object_id, key, child.text if resource is None else iri.resolve_iri(resource, base)))
     rows = set(frame[["ID", "KEY", "VALUE"]].itertuples(index=False, name=None))
     assert expected <= rows
-    assert {("http://example.org/base#_abc", "Thing.ref", "urn:uuid:" + UUID),
-            ("urn:uuid:_x", "Equipment.EquipmentContainer", "http://example.org/base#_" + UUID)} <= expected
+    assert {("http://example.org/base#_abc", "https://cim4.eu/ns/nc#Thing.ref", "urn:uuid:" + UUID),
+            ("urn:uuid:_x", "http://iec.ch/TC57/CIM100#Equipment.EquipmentContainer",
+             "http://example.org/base#_" + UUID)} <= expected
     assert not any(value.startswith("#") for value in frame["VALUE"]) and not any(i.startswith("#") for i in frame["ID"])
 
 
@@ -581,12 +582,12 @@ def test_parse_absolute_without_xml_base_uses_default_base(engine, tmp_path):
     (http://triplets# unless the caller passes one) is."""
     path = tmp_path / "iri_cases.xml"
     path.write_text(PARSE_FIXTURE)
-    frame = triplets.parse(str(path), engine=engine, return_type="pandas", local_resources=False)
+    frame = triplets.parse(str(path), engine=engine, return_type="pandas", iri_form="absolute")
     assert "http://triplets#_abc" in set(frame["ID"])
     meta = set(frame.loc[(frame["KEY"] == "Type") & frame["VALUE"].isin(["Distribution", "NamespaceMap"]), "ID"])
     objects = frame[~frame["ID"].isin(meta)]
     assert not any(str(tmp_path) in text for text in objects["ID"].tolist() + objects["VALUE"].tolist())
-    custom = triplets.parse(str(path), engine=engine, return_type="pandas", local_resources=False,
+    custom = triplets.parse(str(path), engine=engine, return_type="pandas", iri_form="absolute",
                             default_base="http://example.org/base")
     assert "http://example.org/base#_abc" in set(custom["ID"])
 

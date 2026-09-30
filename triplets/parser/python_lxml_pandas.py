@@ -10,19 +10,20 @@ Restored from the original rdf_parser.py load_RDF_to_list logic with fixes:
 import os
 import uuid
 import logging
-from typing import Union, IO
+from typing import IO, Optional, Union
 
 import pandas as pd
 from lxml import etree
 
-from .utils import document_base, iter_rdf_rows
+from .utils import document_base, iter_rdf_rows, prefix_map
 from ..iri import TRIPLETS_NS, TYPE_KEY
 
 logger = logging.getLogger(__name__)
 
 
 def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False,
-                          local_resources: bool = True, default_base: str = TRIPLETS_NS) -> pd.DataFrame:
+                          iri_form: str = "local", default_base: str = TRIPLETS_NS,
+                          prefixes: Optional[dict] = None) -> pd.DataFrame:
     """Parse single RDF/XML file to pandas DataFrame using lxml + list-of-tuples.
 
     This is the old proven path: lxml parse → iterate → build Python list → pd.DataFrame.
@@ -45,7 +46,10 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         logger.error("lxml parse failed for %s: %s", path_or_fileobject, e)
         raise
 
-    namespace_map = dict(root.nsmap or {})
+    # the document's own prefixes, overridden by the caller's — recorded in the NamespaceMap rows
+    # so a prefixed frame carries the map that expands it
+    namespace_map = {**dict(root.nsmap or {}), **(prefixes or {})}
+    prefix_of = {namespace: prefix for prefix, namespace in prefix_map(root, prefixes).items()}
     declared_base = document_base(root, None)   # a declared absolute xml:base only — never the file location
     if declared_base:
         namespace_map["xml_base"] = declared_base
@@ -66,7 +70,7 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         data_list.append((nsmap_id, str(k) if k is not None else "", str(v) if v is not None else ""))
 
     # RDF objects — (ID, KEY, VALUE) rows; one INSTANCE_ID for the whole file
-    data_list.extend(iter_rdf_rows(root.iterchildren(), local_resources, document_base(root, default_base)))
+    data_list.extend(iter_rdf_rows(root.iterchildren(), iri_form, document_base(root, default_base), prefix_of))
 
     df = pd.DataFrame(data_list, columns=["ID", "KEY", "VALUE"])
     df["INSTANCE_ID"] = instance_id

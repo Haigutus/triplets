@@ -8,19 +8,20 @@ and dictionary-encoding (categorical columns). Requires pyarrow.
 import os
 import uuid
 import logging
-from typing import Union, IO, Any
+from typing import IO, Optional, Union, Any
 
 from lxml import etree
 import pyarrow as pa
 
-from .utils import document_base, iter_rdf_rows
+from .utils import document_base, iter_rdf_rows, prefix_map
 from ..iri import TRIPLETS_NS, TYPE_KEY
 
 logger = logging.getLogger(__name__)
 
 
 def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False,
-                          local_resources: bool = True, default_base: str = TRIPLETS_NS) -> pa.RecordBatch:
+                          iri_form: str = "local", default_base: str = TRIPLETS_NS,
+                          prefixes: Optional[dict] = None) -> pa.RecordBatch:
     """Parse single RDF/XML (path or fileobj) to pyarrow RecordBatch using lxml + lists.
 
     Streaming in the sense of column-wise collection then direct Arrow (no 4-tuple list).
@@ -43,7 +44,10 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         logger.error("lxml parse failed for %s: %s", path_or_fileobject, e)
         raise
 
-    namespace_map = dict(root.nsmap or {})
+    # the document's own prefixes, overridden by the caller's — recorded in the NamespaceMap rows
+    # so a prefixed frame carries the map that expands it
+    namespace_map = {**dict(root.nsmap or {}), **(prefixes or {})}
+    prefix_of = {namespace: prefix for prefix, namespace in prefix_map(root, prefixes).items()}
     declared_base = document_base(root, None)   # a declared absolute xml:base only — never the file location
     if declared_base:
         namespace_map["xml_base"] = declared_base
@@ -73,7 +77,7 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         inst_b.append(instance_id)
 
     # RDF objects
-    for obj_id, key, value in iter_rdf_rows(root.iterchildren(), local_resources, document_base(root, default_base)):
+    for obj_id, key, value in iter_rdf_rows(root.iterchildren(), iri_form, document_base(root, default_base), prefix_of):
         id_b.append(obj_id); key_b.append(key); val_b.append(value); inst_b.append(instance_id)
 
     # Finish builders to arrays (direct to Arrow)
