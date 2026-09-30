@@ -23,7 +23,7 @@ import uuid
 
 import logging
 
-from .iri import local_id
+from .iri import TYPE_KEY, local_id
 from .parser.utils import iter_rdf_rows
 
 logger = logging.getLogger(__name__)
@@ -173,9 +173,9 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
     ID = str(uuid.uuid4())
     ID_NSMAP = str(uuid.uuid4())
     data_list = [
-        (ID, "Type", "Distribution", INSTANCE_ID),
+        (ID, TYPE_KEY, "Distribution", INSTANCE_ID),
         (ID, "label", file_name, INSTANCE_ID),
-        (ID_NSMAP, "Type", "NamespaceMap", INSTANCE_ID),
+        (ID_NSMAP, TYPE_KEY, "NamespaceMap", INSTANCE_ID),
     ]
 
     for key, value in namespace_map.items():

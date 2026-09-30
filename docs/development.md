@@ -66,12 +66,20 @@ function for the column:
 | column / context | local | absolute |
 |---|---|---|
 | `ID`, `INSTANCE_ID`, focus node, graph | `local_id` | `absolute_id` |
-| `KEY` | `local_key` (`rdf:type` → `Type`, else `local_name`) | `absolute_key` |
-| `VALUE` of `Type` (class) | `local_name` = `split_name(…)[1]` (after the last `#` or `/`: the XML local name) | `absolute_value` |
-| `VALUE` (reference, enum) | `local_value` (`local_id`, then `#frag`; never `/`) | `absolute_value` → `(kind, payload)` |
-| RDF term read back (subject / object) | `local_node` / `local_object` (decode, then the rows above) | — |
-| SHACL / RDFS vocabulary, `sh:in`, SARIF, `schema_ir` | `local_name` (the same name rule) | not instance data |
-| name → namespace **and** local name | `split_name` (`rdfs_tools.get_namespace_and_name` builds on it) | — |
+| `KEY` | `local_key(iri, type_key="Type")` (`rdf:type` → *type_key*, else the split's local name) | `absolute_key` |
+| `VALUE` | `local_value(iri, kind)`: `class` / `enum` → name, `reference` → `local_id`, `None` → guess | `absolute_value` → `(kind, payload)` |
+| namespace + local name of any IRI (vocabulary labels, RDFS tools) | `split_iri` | — |
+
+One split, `split_iri` (last `#` or `/`, else a URN's last `:`; lossless), and two
+policies on top: a **name** (KEY, class, enum value) always drops its namespace —
+the schema restores it; a **node** (ID, reference) drops only what a convention
+restores (`local_id`: `urn:uuid:`, `#_`, `_`) and otherwise stays whole. Without
+a schema `local_value` guesses: an `http(s)` IRI with `#` is a name, anything else
+a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
+`iri.value_types`. SHACL terms use the rule of the column they land on: paths →
+`local_key`, `sh:class` / targets → `local_value(…, "class")`, `sh:in` /
+`sh:hasValue` → `local_value`; labels (severity, `xsd:` names, components) →
+`split_iri(…)[1]`.
 
 - The absolute side takes flat maps built from `rdf_map`, one function per
   map, each a single comprehension over `rdf_map_entries` (all profile
@@ -107,17 +115,18 @@ function for the column:
 - Flavors: `iri_pandas` (Series in/out), `iri_polars` (Expr in/out, no UDFs),
   `iri_duckdb` (SQL text in/out) carry the same names.
   `__init__` imports only the standard library — the parser imports it per file.
-- **Types:** `Type` is the typed-node element name (one per CIM object), `rdf:type`
-  a reserved KEY for explicit `rdf:type` statements; the local name `type` is taken
-  by `dcterms:type` in every shipped schema. Design and current gaps:
+- **Types:** `Type` (`iri.TYPE_KEY`) is the typed-node element name, one per CIM
+  object; `Description` (`iri.DESCRIPTION_TYPE`) means `rdf:Description`, not a
+  class. An explicit `rdf:type` child is the ordinary KEY `type`, which collides
+  with `dcterms:type` on export (known limitation):
   [parsers.md — Types](parsers.md#types-type-vs-rdftype).
 - **Importers have two sources of truth**, each held to the rows above:
 
   | importer | rules from |
   |---|---|
   | CIM XML: `python_lxml_pandas`, `python_lxml_arrow`, `rdf_parser.load_RDF_to_list` | `parser.utils.iter_rdf_rows` — the one python row loop |
-  | CIM XML: `cython_pugixml_arrow` | C++ mirror of that loop (`clean_id`, `clean_ref_value`, `local_name`) |
-  | `read_nquads`, oxigraph / qlever CONSTRUCT (`terms_to_triplets`), rdflib CONSTRUCT, `sh:sparql` results, the pyshacl report | `iri.local_node` / `iri.local_object` / `iri.local_key` |
+  | CIM XML: `cython_pugixml_arrow` | C++ mirror of that loop (`clean_id`, `clean_ref_value`, tag `local_name`) |
+  | `read_nquads`, oxigraph / qlever CONSTRUCT (`terms_to_triplets`), rdflib CONSTRUCT, `sh:sparql` results, the pyshacl report | `iri.decode_iri` once, then `local_id` / `local_key` / `local_value` |
   | SPARQL SELECT | none — absolute IRIs as stored |
 
   The XML side splits element QNames natively (XML already separates namespace

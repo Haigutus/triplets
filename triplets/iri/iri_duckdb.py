@@ -5,6 +5,16 @@ consumers appear, holding them to ``tests/test_iri.py`` like the other flavors.
 """
 
 
-def local_name(column):
-    """After the last ``#``, else after the last ``/`` — the scalar ``local_name`` rule as SQL."""
-    return f"list_extract(string_split(list_extract(string_split({column}, '#'), -1), '/'), -1)"
+from . import GUESS_NAME_RE, ID_PREFIX_RE, SPLIT_RE
+
+
+def _local(column):
+    return f"regexp_replace({column}, '{SPLIT_RE.pattern}', '')"
+
+
+def local_value(column, kind=None):
+    """The scalar ``local_value`` rule as SQL; *kind*: None (guess) or one of ``VALUE_KINDS``."""
+    if kind in ("class", "enum"):
+        return _local(column)
+    node = f"regexp_replace({column}, '{ID_PREFIX_RE.pattern}', '')"
+    return node if kind == "reference" else f"regexp_replace({node}, '{GUESS_NAME_RE.pattern}', '')"

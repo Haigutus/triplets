@@ -335,6 +335,11 @@ std::vector<TurtleTriple> ArrowTripleParser::convertRange(
     } else {
       info = &converter.keyInfo(c.key.value(row));
     }
+    // Type "Description" is an rdf:Description element — no typed-node
+    // shorthand, not a class: no rdf:type (mirror of triplets.iri.DESCRIPTION_TYPE).
+    if (info->rule == RangeConverter::ObjectRule::Type &&
+        c.value.value(row) == "Description")
+      continue;
     triple.predicate_ = info->predicate;
     triple.object_ = converter.makeObject(*info, c.value.value(row));
 

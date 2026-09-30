@@ -25,7 +25,7 @@ import pandas
 from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .shacl_report import VIOLATION_COLUMNS
-from ..iri import REFERENCE_LIKE, iri_duckdb, node_kind, value_types
+from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, value_types
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ _BATCH_SIZE = 100  # constraints per UNION ALL statement
 
 def _class_sql(table):
     """Instances of a class (bound with one class-name parameter)."""
-    return f"SELECT ID FROM {table} WHERE KEY = 'Type' AND VALUE = ?"
+    return f"SELECT ID FROM {table} WHERE KEY = '{TYPE_KEY}' AND VALUE = ?"
 
 
 def _focus_sql(rule, table):
@@ -58,7 +58,7 @@ def _rows_sql(rule, table):
                f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table)})")
     if getattr(rule, "via_type", False):
         sql = (f"SELECT r.FOCUS AS FOCUS, t.VALUE AS PV FROM ({sql}) r "
-               f"JOIN {table} t ON t.ID = r.PV AND t.KEY = 'Type'")
+               f"JOIN {table} t ON t.ID = r.PV AND t.KEY = '{TYPE_KEY}'")
     return sql, [rule.path, rule.target_class]
 
 
@@ -151,7 +151,7 @@ def _range(operator, description):
 def _in(rule, table, context):
     rows, rows_params = _rows_sql(rule, table)
     allowed = [str(value) for value in rule.params]
-    local = iri_duckdb.local_name("PV")
+    local = iri_duckdb.local_value("PV")
     return _wrap(rule, f"value is not one of {sorted(allowed)}",
                  rows, rows_params, f"NOT list_contains(?, {local})", [allowed])
 
@@ -176,9 +176,9 @@ def _schema_range(rule, table, context):
     (issue #100); targets without a Type row are silent."""
     rows, rows_params = _rows_sql(rule, table)
     placeholders = ", ".join("?" for _ in rule.params)
-    condition = (f"EXISTS (SELECT 1 FROM {table} x WHERE x.ID = PV AND x.KEY = 'Type') "
+    condition = (f"EXISTS (SELECT 1 FROM {table} x WHERE x.ID = PV AND x.KEY = '{TYPE_KEY}') "
                  f"AND PV NOT IN (SELECT ID FROM {table} x "
-                 f"WHERE x.KEY = 'Type' AND x.VALUE IN ({placeholders}))")
+                 f"WHERE x.KEY = '{TYPE_KEY}' AND x.VALUE IN ({placeholders}))")
     return _wrap(rule, f"reference target is not one of {rule.params}",
                  rows, rows_params, condition, list(rule.params))
 
@@ -245,7 +245,7 @@ def _pair_compare(operator, description):
 
 
 def _closed(rule, table, context):
-    allowed = list(set(rule.params) | {"Type"})
+    allowed = list(set(rule.params) | {TYPE_KEY})
     sql = (f"SELECT ID, KEY, VALUE, ? AS VIOLATION_TYPE, ? AS MESSAGE, ? AS SEVERITY, ? AS SOURCE_SHAPE "
            f"FROM {table} WHERE ID IN ({_focus_sql(rule, table)}) AND NOT list_contains(?, KEY)")
     params = [rule.component, rule.message or "property is not allowed on a closed shape",

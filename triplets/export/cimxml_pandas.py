@@ -12,7 +12,7 @@ from lxml.builder import ElementMaker
 from lxml.etree import QName
 
 from .. import iri
-from ..iri import RDF_NS, TRIPLETS_NS, UUID_PREFIX
+from ..iri import DESCRIPTION_TYPE, RDF_NS, TRIPLETS_NS, TYPE_KEY, UUID_PREFIX
 from .cimxml_utils import load_rdf_map, resolve_instance_config
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ def _get_qname(namespace, tag=None):
 def generate_xml(instance_data,
                  rdf_map=None,
                  namespace_map=None,
-                 class_KEY="Type",
+                 class_KEY=TYPE_KEY,
                  export_undefined=False,
                  comment=None,
                  debug=False,
@@ -156,6 +156,8 @@ def generate_xml(instance_data,
         if not export_undefined:
             logger.warning("File not created for {}".format(file_name))
             return
+        instance_rdf_map = {}           # every name is undefined: written under undefined_namespace
+    namespace_map = namespace_map or {}
 
     if export_undefined and undefined_namespace not in namespace_map.values():
         # an undefined_namespace the map already binds (e.g. CIM100) keeps its own prefix
@@ -198,7 +200,8 @@ def generate_xml(instance_data,
             logger.debug("Definition missing for class: {} with {}: ".format(class_name, ID))
 
             if export_undefined:
-                class_namespace = undefined_namespace
+                # rdf:Description is "no shorthand type", not a class: written back as rdf:Description
+                class_namespace = RDF_NS if class_name == DESCRIPTION_TYPE else undefined_namespace
                 id_name = f"{{{RDF_NS}}}about"
                 id_value_prefix = UUID_PREFIX   # undefined-class fallback; defined classes use the schema value_prefix
             else:

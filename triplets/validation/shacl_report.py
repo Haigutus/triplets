@@ -13,9 +13,8 @@ from datetime import datetime, timezone
 import pandas
 
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
-                   XSD_NS, CIM_NS, absolute_id, absolute_key, decode_iri, is_iri, load_rdf_map, local_key, local_node,
-                   local_object, namespaces,
-                   local_name)
+                   XSD_NS, CIM_NS, absolute_id, absolute_key, decode_iri, is_iri, load_rdf_map, local_id, local_key, local_value,
+                   namespaces, split_iri)
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +71,12 @@ def report_to_violations(report_graph):
         shape = report_graph.value(result, sh.sourceShape)
         message = _constraint_message(report_graph.objects(result, sh.resultMessage))
 
-        columns["ID"].append(local_node(report_graph.value(result, sh.focusNode)))
+        columns["ID"].append(local_id(decode_iri(report_graph.value(result, sh.focusNode))))
         columns["KEY"].append(local_key(decode_iri(path)))
         columns["VALUE"].append(_term_value(value, path == rdflib.RDF.type))
         columns["VIOLATION_TYPE"].append(_component(component))
         columns["MESSAGE"].append(message)
-        columns["SEVERITY"].append(local_name(severity) if severity is not None else "Violation")
+        columns["SEVERITY"].append(split_iri(severity)[1] if severity is not None else "Violation")
         columns["SOURCE_SHAPE"].append(str(shape) if shape is not None else None)
 
     return pandas.DataFrame(columns, columns=VIOLATION_COLUMNS)
@@ -96,19 +95,19 @@ def _constraint_message(messages):
 
 
 def _term_value(term, is_type=False):
-    """sh:value → triplet VALUE: literals verbatim, IRIs by the reader rule ``local_object``."""
+    """sh:value → triplet VALUE: literals verbatim, IRIs decoded then ``local_value`` (a class on a type path)."""
     if term is None:
         return None
     if type(term).__name__ == "Literal":
         return str(term)
-    return local_object(term, is_type)
+    return local_value(decode_iri(term), "class" if is_type else None)
 
 
 def _component(term):
     if term is None:
         return "sh:unknown"
     value = str(term)
-    suffix = local_name(value)
+    suffix = split_iri(value)[1]
     if value.startswith(TRIPLETS_NS):
         return f"triplets:{suffix}"
     if value.startswith(RDFS_NS):

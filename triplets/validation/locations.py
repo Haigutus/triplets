@@ -28,7 +28,7 @@ substrings in every serialization (N-Quads, Turtle, JSON-LD).
 import re
 import logging
 
-from ..iri import ID_PREFIXES
+from ..iri import ID_PREFIXES, TYPE_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ def _key_lines(text, definition_start, window_end, definition_line, keys):
     """(line, snippet) of each violated property element inside the object's window."""
     lines = {}
     for key in keys:
-        if not key or key == "Type":         # the type is the definition element itself
+        if not key or key == TYPE_KEY:         # the type is the definition element itself
             continue
         pattern = rb"<[\w.-]+:" + re.escape(str(key).encode()) + rb"[\s>/]"
         match = re.search(pattern, text[definition_start:window_end])

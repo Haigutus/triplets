@@ -28,7 +28,7 @@ from concurrent.futures import ProcessPoolExecutor
 import pandas
 
 from .excel_pandas import export_to_excel as _export_to_excel
-from ..iri import TRIPLETS_NS
+from ..iri import TRIPLETS_NS, TYPE_KEY
 from .cimxml_pandas import generate_xml, _get_qname
 from .networkx_pandas import export_to_networkx as _export_to_networkx
 
@@ -202,7 +202,7 @@ class ExportType(StrEnum):
 def export_to_cimxml(data,
                      rdf_map=None,
                      namespace_map=None,
-                     class_KEY="Type",
+                     class_KEY=TYPE_KEY,
                      export_undefined=False,
                      export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
                      global_zip_filename="Export.zip",

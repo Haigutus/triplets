@@ -28,7 +28,7 @@ import polars
 
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from ..iri import REFERENCE_LIKE, iri_polars, node_kind, value_types
+from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ class _Context:
         self.base = frame.lazy()
         self.rdf_map = rdf_map
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
-        type_rows = frame.filter(polars.col("KEY") == "Type").select("VALUE", "ID")
+        type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID")
         # (ID, CLASS) pairs — the class-membership side of the batched joins
         self.membership = type_rows.rename({"VALUE": "CLASS"}).lazy()
         self._class_ids = {key[0]: part["ID"] for key, part
@@ -198,7 +198,7 @@ def _range(comparison, description):
 
 
 def _in(context, rule):
-    local = iri_polars.local_name("PATH_VALUE")
+    local = iri_polars.local_value("PATH_VALUE")
     allowed = [str(value) for value in rule.params]
     plan = context.path_rows(rule).filter(~local.is_in(allowed))
     return _emit(plan, rule, f"value is not one of {sorted(allowed)}")
@@ -284,7 +284,7 @@ def _pair_compare(operator, description):
 
 
 def _closed(context, rule):
-    allowed = list(set(rule.params) | {"Type"})
+    allowed = list(set(rule.params) | {TYPE_KEY})
     plan = (context.base
             .filter(polars.col("ID").is_in(context.focus_ids_in(rule))
                     & ~polars.col("KEY").is_in(allowed))
@@ -462,7 +462,7 @@ def _batch_in(context, rules):
         "SOURCE_SHAPE": [rule.shape_id for rule in rules for _ in rule.params],
         "_LOCAL": [str(value) for rule in rules for value in rule.params],
     })
-    local = iri_polars.local_name("VALUE")
+    local = iri_polars.local_value("VALUE")
     plan = (_batch_path_rows(context, rules_frame)
             .with_columns(local.alias("_LOCAL"))
             .join(allowed, on=["KEY", "CLASS", "SOURCE_SHAPE", "_LOCAL"], how="anti"))

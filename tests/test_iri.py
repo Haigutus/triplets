@@ -108,23 +108,11 @@ LOCAL_CASES = [
     ("local_key", None, None),
     ("local_key", RDF_TYPE, "Type"),
     ("local_key", "http://iec.ch/TC57/CIM100#ACLineSegment.r", "ACLineSegment.r"),
-    ("local_key", "urn:example:pred", "urn:example:pred"),
+    ("local_key", "urn:example:pred", "pred"),                       # URN: after its last ":"
     ("local_key", "http://purl.org/dc/terms/issued", "issued"),       # "/" namespace: the XML element local name
     ("local_key", "https://schema.org/name", "name"),
     ("local_key", "http://a/b#c", "c"),
     ("local_key", "_ACLineSegment.r", "_ACLineSegment.r"),   # a KEY is not an ID
-    ("local_name", None, None),
-    ("local_name", "http://iec.ch/TC57/CIM100#Breaker", "Breaker"),
-    ("local_name", "http://purl.org/dc/terms/issued", "issued"),
-    ("local_name", "https://example.org/vocab/Thing", "Thing"),
-    ("local_name", RDF_TYPE, "type"),                                  # no Type mapping: that is local_key
-    ("local_name", "urn:example:Thing", "urn:example:Thing"),
-    ("local_name", "Breaker", "Breaker"),
-    ("local_name", None, None),
-    ("local_name", "http://www.w3.org/ns/shacl#minCount", "minCount"),
-    ("local_name", "https://schema.org/domainIncludes", "domainIncludes"),
-    ("local_name", "#Equipment", "Equipment"),
-    ("local_name", "Breaker", "Breaker"),
     ("is_iri", None, False),
     ("is_iri", "http://a", True),
     ("is_iri", "https://a", True),
@@ -148,23 +136,87 @@ LOCAL_CASES = [
     ("decode_iri", "a%41%2F", "a%41%2F"),                                 # only the escapes encode_iri writes
 ]
 
-SPLIT_NAME_CASES = [
+SPLIT_CASES = [
     (None, (None, None)),
     ("http://iec.ch/TC57/CIM100#Breaker", ("http://iec.ch/TC57/CIM100#", "Breaker")),
     ("http://purl.org/dc/terms/issued", ("http://purl.org/dc/terms/", "issued")),
+    ("https://example.org/vocab/Thing", ("https://example.org/vocab/", "Thing")),
+    ("http://a#b#c", ("http://a#b#", "c")),
+    ("http://a/b#c", ("http://a/b#", "c")),
     ("#Equipment", ("#", "Equipment")),
+    ("urn:uuid:" + UUID, ("urn:uuid:", UUID)),
+    ("urn:example:Thing", ("urn:example:", "Thing")),
     ("Breaker", ("", "Breaker")),
-    ("urn:example:Thing", ("", "urn:example:Thing")),
 ]
 
 
-@pytest.mark.parametrize("text,expected", SPLIT_NAME_CASES)
-def test_split_name_is_the_one_name_split(text, expected):
-    """local_name is split_name's second half — one rule, never a second copy."""
-    assert iri.split_name(text) == expected
-    assert iri.local_name(text) == expected[1]
+@pytest.mark.parametrize("text,expected", SPLIT_CASES)
+def test_scalar_split_iri(text, expected):
+    """The one split: lossless, namespace ends at its delimiter."""
+    assert iri.split_iri(text) == expected
     if text is not None:
         assert "".join(expected) == text
+
+
+@pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow", "polars"])
+def test_flavor_split_iri_matches_scalar(flavor):
+    texts = [t for t, _ in SPLIT_CASES if t is not None]
+    expected = [e for t, e in SPLIT_CASES if t is not None]
+    if flavor == "polars":
+        polars = pytest.importorskip("polars")
+        from triplets.iri import iri_polars
+        namespace, local = iri_polars.split_iri("x")
+        out = polars.DataFrame({"x": texts}).select(namespace.alias("n"), local.alias("l"))
+        got = list(zip(out["n"].to_list(), out["l"].to_list()))
+    else:
+        dtype = object if flavor == "pandas-object" else pandas.ArrowDtype(pytest.importorskip("pyarrow").string())
+        namespace, local = iri_pandas.split_iri(pandas.Series(texts, dtype=dtype))
+        got = list(zip(namespace.tolist(), local.tolist()))
+    assert got == expected
+
+
+def test_local_key_type_key():
+    """rdf:type → the caller's type_key ("Type" is the CIM typed-node KEY)."""
+    assert iri.local_key(RDF_TYPE) == iri.TYPE_KEY == "Type"
+    assert iri.local_key(RDF_TYPE, type_key="type") == "type"
+
+
+# (iri, kind, expected) — kind decides name vs node; None guesses without a schema
+VALUE_KIND_CASES = [
+    (None, None, None),
+    ("http://iec.ch/TC57/CIM100#Breaker", "class", "Breaker"),
+    ("https://example.org/vocab/Dataset", "class", "Dataset"),                 # "/" class: a name
+    ("http://iec.ch/TC57/CIM100#SwitchKind.breaker", "enum", "SwitchKind.breaker"),
+    ("http://ex.org/m#b", "reference", "http://ex.org/m#b"),                   # node: namespace not restorable
+    ("urn:uuid:" + UUID, "reference", UUID),
+    ("#_" + UUID, "reference", UUID),
+    ("http://ex.org/m#b", None, "b"),                                          # guess: http + "#" → a name
+    ("http://example.org/profile/EQ/3.0", None, "http://example.org/profile/EQ/3.0"),   # guess: "/" only → whole
+    ("urn:example:thing", None, "urn:example:thing"),
+    ("urn:uuid:" + UUID, None, UUID),
+]
+
+
+@pytest.mark.parametrize("text,kind,expected", VALUE_KIND_CASES)
+def test_scalar_local_value_kind(text, kind, expected):
+    assert iri.local_value(text, kind) == expected
+
+
+@pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow", "polars"])
+def test_flavor_local_value_kind_matches_scalar(flavor):
+    """Per-row kinds (the read_nquads(rdf_map=) path) — same answers as the scalar rule."""
+    texts = [t for t, _, _ in VALUE_KIND_CASES]
+    kinds = [k for _, k, _ in VALUE_KIND_CASES]
+    expected = [e for _, _, e in VALUE_KIND_CASES]
+    if flavor == "polars":
+        polars = pytest.importorskip("polars")
+        from triplets.iri import iri_polars
+        frame = polars.DataFrame({"x": texts, "k": kinds}, schema={"x": polars.Utf8, "k": polars.Utf8})
+        got = frame.select(iri_polars.local_value("x", polars.col("k")).alias("y"))["y"].to_list()
+    else:
+        dtype = object if flavor == "pandas-object" else pandas.ArrowDtype(pytest.importorskip("pyarrow").string())
+        got = [_norm(v) for v in iri_pandas.local_value(pandas.Series(texts, dtype=dtype), pandas.Series(kinds, dtype=object)).tolist()]
+    assert got == expected
 
 
 # (function, input, with map?, expected) — undefined names take TRIPLETS_NS, with or without a map
@@ -417,45 +469,6 @@ def test_resolve_iri(reference, base, expected):
     assert iri.resolve_iri(reference, base) == expected
 
 
-# ── RDF terms read back: the one rule pair every RDF reader uses ───────────────
-
-SUBJECTS = ["http://ex.org/m#b", "urn:uuid:" + UUID]
-# (iri, is_type, expected)
-OBJECT_CASES = [
-    (None, False, None),
-    ("urn:uuid:a%20b", False, "a b"),                                        # decoded
-    ("urn:uuid:" + UUID, False, UUID),
-    ("http://iec.ch/TC57/CIM100#SwitchKind.breaker", False, "SwitchKind.breaker"),
-    ("http://iec.ch/TC57/CIM100#Breaker", True, "Breaker"),                  # class: local_name
-    ("https://example.org/vocab/Dataset", True, "Dataset"),                  # "/" class
-    ("http://example.org/profile/EQ/3.0", False, "http://example.org/profile/EQ/3.0"),   # "/" reference: whole
-    ("http://ex.org/m#b", False, "http://ex.org/m#b"),                       # a subject: joins its ID
-    ("http://ex.org/m#c", False, "c"),
-]
-NODE_CASES = [(None, None), ("urn:uuid:x%20y", "x y"), ("#_x", "x"), ("http://ex.org/m#b", "http://ex.org/m#b")]
-
-
-@pytest.mark.parametrize("term,expected", NODE_CASES)
-def test_scalar_local_node(term, expected):
-    assert iri.local_node(term) == expected
-
-
-@pytest.mark.parametrize("term,is_type,expected", OBJECT_CASES)
-def test_scalar_local_object(term, is_type, expected):
-    assert iri.local_object(term, is_type, set(SUBJECTS)) == expected
-
-
-@pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow"])
-def test_flavor_readers_match_scalar(flavor):
-    dtype = object if flavor == "pandas-object" else pandas.ArrowDtype(pytest.importorskip("pyarrow").string())
-    terms = pandas.Series([t for t, _, _ in OBJECT_CASES], dtype=dtype)
-    is_type = pandas.Series([t for _, t, _ in OBJECT_CASES])
-    got = iri_pandas.local_object(terms, is_type, pandas.Series(SUBJECTS, dtype=dtype))
-    assert [_norm(v) for v in got.tolist()] == [e for _, _, e in OBJECT_CASES]
-    nodes = iri_pandas.local_node(pandas.Series([t for t, _ in NODE_CASES], dtype=dtype))
-    assert [_norm(v) for v in nodes.tolist()] == [e for _, e in NODE_CASES]
-
-
 # ── native mirror: the cython parser applies local_id / local_value in C++ ─────
 
 PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
@@ -502,14 +515,15 @@ def _parse(engine, text, tmp_path):
 
 def _expected_rows(text):
     """The object rows by the triplets.iri rules alone, from lxml's resolved QNames: ID via
-    local_id, Type VALUE via local_name, KEY via local_key, a resource via local_value."""
+    local_id, KEY via local_key, Type VALUE via local_value(kind="class"), a resource via
+    local_value (the schema-free guess)."""
     from lxml import etree
     rdf = lambda name: f"{{{iri.RDF_NS}}}{name}"  # noqa: E731
     element_iri = lambda element: (etree.QName(element).namespace or "") + etree.QName(element).localname  # noqa: E731
     rows = set()
     for rdf_object in etree.fromstring(text.encode()):
         object_id = iri.local_id(rdf_object.get(rdf("ID")) or rdf_object.get(rdf("about")) or "")
-        rows.add((object_id, "Type", iri.local_name(element_iri(rdf_object))))
+        rows.add((object_id, iri.TYPE_KEY, iri.local_value(element_iri(rdf_object), "class")))
         for child in rdf_object:
             resource = child.get(rdf("resource"))
             rows.add((object_id, iri.local_key(element_iri(child)),

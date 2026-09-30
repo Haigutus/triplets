@@ -17,8 +17,9 @@ Start of the 0.3 line.
 
 ### Changed
 - **`triplets.iri`** — one public package for the triplet ↔ IRI contract:
-  `local_id` / `local_key` / `local_value` / `local_name` (local names; `split_name`
-  returns namespace and local name, `local_name` is its second half),
+  `local_id` / `local_key(iri, type_key)` / `local_value(iri, kind)` (local forms,
+  all on one split, `split_iri` → namespace + local name; `TYPE_KEY`,
+  `DESCRIPTION_TYPE`),
   `absolute_id` / `absolute_name` / `absolute_key` / `absolute_value` (absolute IRIs, taking
   the flat maps `namespaces` / `value_types` / `datatypes` built from `rdf_map` — one
   comprehension each, no cache), the namespace constants, and
@@ -86,8 +87,8 @@ Start of the 0.3 line.
   URI-shaped `INSTANCE_ID` now survives the round trip. A VALUE IRI that is a
   subject of the same data shortens like its `ID` (`local_id`), so a reference
   to `<http://…#b>` still joins the object `http://…#b` instead of becoming `b`.
-  KEY and `Type` VALUE IRIs shorten with `iri.local_name` — after the last `#`
-  **or `/`**, as an XML element local name holds neither — so `dcterms:` header
+  KEY and `Type` VALUE IRIs shorten to the `iri.split_iri` local name — after the last `#`
+  **or `/`** (a URN after its last `:`), as an XML element local name holds neither — so `dcterms:` header
   keys (552 Ed2, NC) read back as `issued` / `identifier`, the same KEY the CIM
   XML parser gives (before: the whole `http://purl.org/dc/terms/issued`), and a
   class in a `/` namespace as its name. References still split on `#` only.
@@ -102,7 +103,7 @@ Start of the 0.3 line.
   (`iri.resolve_iri`; `rdf:about="#X"` → `base#X`, `rdf:ID="X"` → `base#X`)
   instead of `local_id` only, which left `#Name` relative and made `#_x` local.
   The export schema generator runs on it and takes absolute IRIs only:
-  `rdfs_tools.get_namespace_and_name` is built on `iri.split_name` and, without
+  `rdfs_tools.get_namespace_and_name` is built on `iri.split_iri` and, without
   a `default_namespace`, raises on a relative reference instead of guessing; the regenerated bundles hold the same
   entries, fields and values (checked), only CGMES 2.4 / 3.0 entry and
   `parameters` order changes — now sorted by absolute IRI, before by how the
@@ -110,13 +111,24 @@ Start of the 0.3 line.
 - **Importers share two rule sources.** The python XML engines and the legacy
   `rdf_parser.load_RDF_to_list` run one row loop (`parser.utils.iter_rdf_rows`);
   the RDF-term readers (`read_nquads`, CONSTRUCT on every engine, `sh:sparql`
-  results, the pyshacl report) use `iri.local_node` / `iri.local_object`.
+  results, the pyshacl report) decode once, then use `local_id` / `local_key` /
+  `local_value`. `read_nquads` takes `rdf_map=` (reference vs enum VALUE exact from
+  the schema instead of guessed) and `type_key=` (the KEY for `rdf:type`, default
+  `"Type"`). SHACL terms compile with the rule of the column they land on:
+  `sh:path rdf:type` targets the `Type` KEY (was a KEY `type` that never matched),
+  and an `sh:in` / `sh:hasValue` member with a `/`-only IRI stays whole like the
+  data VALUE (was cut to its last segment).
   Visible changes: the pyshacl report VALUE is shortened like the other engines
   (an enum outside `sh:in` reports `SwitchKind.x`, not its full IRI);
   `load_RDF_to_list` gives the tag name for an element without a namespace
   (was `""`), `""` for a missing ID (was `None`) and for an empty element (was
   `None`); the cython parser finds `rdf:ID` / `rdf:about` / `rdf:resource` by
   the prefix the document binds to the RDF namespace, not only `rdf:`.
+- **`Type` = `Description` is `rdf:Description`, not a class:** N-Quads and the
+  qlever ingest state no `rdf:type` for it (was `http://triplets#Description`),
+  and both CIM XML engines write an `rdf:Description` element (was
+  `triplets:Description`). `export_to_cimxml(export_undefined=True)` on an
+  instance without a model header no longer raises on the missing namespace map.
 - Known import / export deviations that stay (CIM XML without percent-encoding,
   `http(s)` IDs, blank nodes, …) are listed in `docs/parsers.md` → *Known
   limitations*.

@@ -39,7 +39,7 @@ import pandas
 from .._engine_detect import flavor
 from .._header import PROFILE_KEYS as _HEADER_KEYS
 from .._registry import EngineRegistry
-from ..iri import CIM_NS, load_rdf_map
+from ..iri import CIM_NS, TYPE_KEY, load_rdf_map
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
 from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
@@ -345,14 +345,14 @@ def _type_map(data, table_name="triplets"):
     kind = flavor(data)
     if kind == "duckdb":
         return dict(data.execute(
-            f"SELECT ID, VALUE FROM {table_name} WHERE KEY = 'Type'").fetchall())
+            f"SELECT ID, VALUE FROM {table_name} WHERE KEY = '{TYPE_KEY}'").fetchall())
     if kind == "pyarrow":
         data = data.to_pandas(types_mapper=pandas.ArrowDtype)
         kind = "pandas"
     if kind == "polars":
-        rows = data.filter(data["KEY"] == "Type")
+        rows = data.filter(data["KEY"] == TYPE_KEY)
         return dict(zip(rows["ID"].to_list(), rows["VALUE"].to_list()))
-    rows = data.loc[data["KEY"] == "Type"]
+    rows = data.loc[data["KEY"] == TYPE_KEY]
     return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
 
 

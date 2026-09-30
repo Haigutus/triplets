@@ -117,3 +117,38 @@ def test_validate_undefined_namespace_reaches_sparql_constraints():
     graph.parse(data=shape, format="turtle")
     violations = triplets.validation.validate(frame(), graph, engine="pandas", undefined_namespace="http://acme#")
     assert set(violations.loc[violations["VIOLATION_TYPE"] == "sh:sparql", "VALUE"]) == {"bar"}
+
+
+def test_description_is_no_type():
+    """Type "Description" is an rdf:Description element — no typed-node shorthand, not a class:
+    N-Quads states no rdf:type for it; both CIM XML engines write rdf:Description back."""
+    rows = ROWS + [("d1", "Type", "Description", "i"), ("d1", "Custom.note", "n", "i")]
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    lines = data.export_to_nquads(rdf_map=SCHEMA, export_to_memory=True).read().decode().splitlines()
+    assert not any(line.startswith("<urn:uuid:d1> ") and "rdf-syntax-ns#type" in line for line in lines)
+    assert any(line.startswith("<urn:uuid:d1> ") for line in lines)                    # its properties stay
+    for engine in ("python_lxml", "cython_pugixml"):
+        try:
+            triplets.export.get_cimxml_engine(engine)
+        except Exception as error:
+            pytest.skip(f"{engine} not available: {error}")
+        out = data.export_to_cimxml(rdf_map=SCHEMA, engine=engine, export_to_memory=True, export_undefined=True)[0]
+        out.seek(0)
+        archive = zipfile.ZipFile(out)
+        xml = archive.read(archive.namelist()[0]).decode()
+        assert '<rdf:Description rdf:about="urn:uuid:d1"' in xml, engine
+        assert "triplets:Description" not in xml, engine
+
+
+@pytest.mark.parametrize("engine", ["python_lxml", "cython_pugixml"])
+def test_cimxml_undefined_without_header_does_not_crash(engine):
+    """An instance with no model header has no profile map: export_undefined writes every
+    name as undefined instead of raising on the missing namespace map."""
+    try:
+        triplets.export.get_cimxml_engine(engine)
+    except Exception as error:
+        pytest.skip(f"{engine} not available: {error}")
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i"), ("b1", "IdentifiedObject.name", "B1", "i")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    out = data.export_to_cimxml(rdf_map=SCHEMA, engine=engine, export_to_memory=True, export_undefined=True)
+    assert out

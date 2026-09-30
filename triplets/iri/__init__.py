@@ -7,16 +7,21 @@ both directions.
 
 Which function for which column
 -------------------------------
-=====================================  ===============  ==================
-column / context                       local            absolute
-=====================================  ===============  ==================
-``ID``, ``INSTANCE_ID``, focus, graph  ``local_id``     ``absolute_id``
-``KEY``                                ``local_key``    ``absolute_key``
-``VALUE`` of ``Type`` (class)          ``local_name``   ``absolute_value``
-``VALUE`` (reference, enum)            ``local_value``  ``absolute_value``
-RDF term read back (N-Quads, SPARQL)   ``local_node`` / ``local_object`` — the readers' entry points
-SHACL / RDFS vocabulary terms          ``local_name``   —
-=====================================  ===============  ==================
+=====================================  ==============================  ==================
+column / context                       local                           absolute
+=====================================  ==============================  ==================
+``ID``, ``INSTANCE_ID``, focus, graph  ``local_id``                    ``absolute_id``
+``KEY``                                ``local_key``                   ``absolute_key``
+``VALUE``                              ``local_value(iri, kind)``      ``absolute_value``
+namespace + local name of any IRI      ``split_iri``                   —
+=====================================  ==============================  ==================
+
+One split, :func:`split_iri`, underlies every name. Two policies sit on top: a
+*name* (KEY, class, enum value) always drops its namespace — the schema restores it;
+a *node* (ID, reference) drops only what a convention restores (:func:`local_id`:
+``urn:uuid:``, ``#_``, ``_``) and otherwise stays whole. The local form is for people
+working on imported data; where local names collide (``type`` is both
+``rdf:type`` and ``dcterms:type``), only the absolute form is exact.
 
 Local rules are schema-free (a parse has no schema). Absolute rules take the
 flat maps built from the export schema — :func:`namespaces`, :func:`value_types`,
@@ -53,6 +58,12 @@ DCTERMS_NS = "http://purl.org/dc/terms/"
 SCHEMA_ORG_NS = "https://schema.org/"
 TRIPLETS_NS = "http://triplets#"
 
+TYPE_KEY = "Type"
+"""KEY of the typed-node element name — the one type CIM XML writes as the object element."""
+DESCRIPTION_TYPE = "Description"
+"""``Type`` VALUE of an ``rdf:Description`` element: no typed-node shorthand, so not a class —
+exported as ``rdf:Description`` in CIM XML and as no ``rdf:type`` in N-Quads."""
+
 UUID_PREFIX = "urn:uuid:"
 ID_PREFIXES = ("urn:uuid:", "#_", "_")           # longest first; exactly one is stripped
 URI_PREFIXES = ("http://", "https://", "urn:")
@@ -61,8 +72,8 @@ URI_PREFIXES = ("http://", "https://", "urn:")
 # never in flags, so pandas / polars / duckdb / C++ see the same regex.
 ID_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, ID_PREFIXES)) + ")")
 URI_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, URI_PREFIXES)) + ")")
-HTTP_FRAGMENT_RE = re.compile(r"^http.*#")   # greedy: everything up to the LAST "#"
-NAME_PREFIX_RE = re.compile(r"^.*[#/]")      # greedy: the namespace, up to the last "#" or "/"
+SPLIT_RE = re.compile(r"^(?:.*[#/]|urn:.*:)")  # the namespace: up to the last "#" or "/", else a URN's last ":"
+GUESS_NAME_RE = re.compile(r"^http.*#(?:.*/)?")   # local_value guess: split_iri's namespace, only for http IRIs with a "#"
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 """Canonical lowercase mRID — what the exporters turn into ``urn:uuid:``."""
 REFERENCE_LIKE = re.compile(
@@ -91,50 +102,53 @@ def local_id(text):
     return text
 
 
-def local_value(text):
-    """Reference VALUE: :func:`local_id`, then ``http(s)…#frag`` → ``frag``.
+def split_iri(iri):
+    """IRI → ``(namespace, local name)``, lossless (``namespace + local == iri``): cut after
+    the last ``#`` or ``/``, else after a ``urn:``'s last ``:``; neither → ``("", iri)``.
+    None → ``(None, None)``. The one split every name rule uses (flavors: :data:`SPLIT_RE`).
 
-    Only ``#`` splits — a ``/``-only IRI stays whole (``local_resources``
-    contract). Enumerations come out as ``Kind.value``, classes as ``Breaker``.
-    """
-    if text is None:
-        return None
-    text = local_id(text)
-    if text.startswith("http") and "#" in text:
-        return text.rsplit("#", 1)[-1]
-    return text
-
-
-def split_name(iri):
-    """Name IRI → ``(namespace, local name)``, cut after the last ``#`` or ``/``; text with
-    neither → ``("", text)``. None → ``(None, None)``. The one name split: :func:`local_name`
-    is its second half, ``rdfs_tools.get_namespace_and_name`` uses both.
-
-    The CIM XML parsers read KEY and ``Type`` VALUE from element tags, where XML already
-    separates namespace and local name (lxml ``{ns}local``, pugixml ``prefix:local``) —
-    they split the QName natively, no IRI string exists. This is the same split for an
-    IRI string: an XML local name holds neither ``#`` nor ``/``, so ``dcterms:issued``
-    → ``issued`` exactly as the parser gives it. References never split on ``/``: see
-    :func:`local_value`.
+    The CIM XML parsers get KEY and ``Type`` VALUE from element tags, where XML has already
+    split the QName (lxml ``{ns}local``, pugixml ``prefix:local``); this is the same split
+    for an IRI string — an XML local name holds neither ``#`` nor ``/``.
     """
     if iri is None:
         return None, None
     iri = str(iri)
-    match = NAME_PREFIX_RE.match(iri)
-    return (match.group(), iri[match.end():]) if match else ("", iri)
+    cut = max(iri.rfind("#"), iri.rfind("/"))
+    if cut < 0 and iri.startswith("urn:"):
+        cut = iri.rfind(":")
+    return iri[:cut + 1], iri[cut + 1:]
 
 
-def local_name(iri):
-    """Name IRI (predicate, class, SHACL / RDFS vocabulary term) → local name:
-    :func:`split_name`'s second half. None → None."""
-    return split_name(iri)[1]
-
-
-def local_key(iri):
-    """Predicate → KEY: ``rdf:type`` → ``Type``, else :func:`local_name`."""
+def local_key(iri, type_key=TYPE_KEY):
+    """Predicate → KEY: ``rdf:type`` → *type_key*, else the :func:`split_iri` local name."""
     if iri is None:
         return None
-    return "Type" if str(iri) == RDF_TYPE else local_name(iri)
+    return type_key if str(iri) == RDF_TYPE else split_iri(iri)[1]
+
+
+VALUE_KINDS = ("class", "enum", "reference")
+"""``local_value`` kinds: ``class`` (a ``Type`` VALUE) and ``enum`` are names,
+``reference`` a node; ``None`` guesses without a schema."""
+
+
+def local_value(iri, kind=None):
+    """VALUE IRI → local VALUE by *kind*:
+
+    - ``"class"`` / ``"enum"`` → a name: the :func:`split_iri` local name.
+    - ``"reference"`` → a node: :func:`local_id` (other namespaces stay whole).
+    - ``None`` — no schema, guess: :func:`local_id`, then an ``http(s)`` IRI with a ``#`` is
+      taken as a name (enum / class: ``Kind.value``, its :func:`split_iri` local name);
+      anything else stays whole (``/``-only IRIs are external references). None → None.
+    """
+    if iri is None:
+        return None
+    if kind in ("class", "enum"):
+        return split_iri(iri)[1]
+    iri = local_id(iri)
+    if kind is None and iri.startswith("http") and "#" in iri:
+        return split_iri(iri)[1]
+    return iri
 
 
 def is_iri(text):
@@ -167,29 +181,6 @@ def decode_iri(text):
     if text is None or "%" not in text:
         return text
     return IRI_ESCAPE_RE.sub(lambda match: chr(int(match.group()[1:], 16)), text)
-
-
-# ── RDF terms read back (N-Quads, CONSTRUCT, SHACL results) ───────────────────
-
-def local_node(iri):
-    """Subject / focus node / graph IRI read from RDF → triplet ID: :func:`decode_iri`, then
-    :func:`local_id`. None → None."""
-    return None if iri is None else local_id(decode_iri(str(iri)))
-
-
-def local_object(iri, is_type=False, subjects=()):
-    """Object IRI read from RDF → triplet VALUE. *subjects*: the subject IRIs of the same
-    data, compared as read (before decoding).
-
-    :func:`decode_iri`, then: a class (``is_type``, the object of ``rdf:type``) →
-    :func:`local_name`, like its KEY; an IRI that is also a subject → :func:`local_id`, so
-    the reference still joins its ID; else :func:`local_value`. None → None.
-    """
-    if iri is None:
-        return None
-    iri = str(iri)
-    rule = local_name if is_type else local_id if iri in subjects else local_value
-    return rule(decode_iri(iri))
 
 
 # ── flat maps from the export schema ──────────────────────────────────────────
@@ -272,14 +263,14 @@ def absolute_name(name, namespaces=None, undefined_namespace=TRIPLETS_NS):
 
 def absolute_key(key, namespaces=None, undefined_namespace=TRIPLETS_NS):
     """KEY → predicate IRI: ``Type`` → ``rdf:type``, else :func:`absolute_name`."""
-    return RDF_TYPE if key == "Type" else absolute_name(key, namespaces, undefined_namespace)
+    return RDF_TYPE if key == TYPE_KEY else absolute_name(key, namespaces, undefined_namespace)
 
 
 def defined(key, value, namespaces=None, value_types=None):
     """Does the schema account for this row? ``Type`` → the class is declared; else the KEY is
     declared and, for an enum KEY, so is the value. Without a schema nothing is defined."""
     namespaces, value_types = namespaces or {}, value_types or {}
-    if key == "Type":
+    if key == TYPE_KEY:
         return value in namespaces
     return key in value_types and (value_types[key] != "enum" or is_iri(value) or value in namespaces)
 
@@ -297,7 +288,7 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     """
     if value is None:                    # no term — same answer as the flavors' null rows
         return "literal", None
-    if key == "Type":
+    if key == TYPE_KEY:
         return "iri", absolute_name(value, namespaces, undefined_namespace)
     kind = (value_types or {}).get(key)
     if kind == "enum":

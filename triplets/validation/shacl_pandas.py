@@ -44,7 +44,7 @@ import numpy
 import pandas
 
 from ..export.nquads_utils import make_subject
-from ..iri import CIM_NS, REFERENCE_LIKE, iri_pandas, local_name, node_kind, value_types
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, split_iri, value_types
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -125,7 +125,7 @@ class _Context:
         """IDs of all instances of *target_class*."""
         if self._class_ids is None:
             self._class_ids = {value: frame["ID"].unique() for value, frame
-                               in self.key_rows("Type").groupby("VALUE", observed=True, sort=False)}
+                               in self.key_rows(TYPE_KEY).groupby("VALUE", observed=True, sort=False)}
         return self._class_ids.get(target_class, _NO_IDS)
 
     @property
@@ -168,7 +168,7 @@ class _Context:
             frame = pandas.DataFrame({"FOCUS": rows["ID"].to_numpy(),
                                       "PATH_VALUE": rows["VALUE"].to_numpy()})
         if getattr(rule, "via_type", False):
-            types = self.key_rows("Type")[["ID", "VALUE"]].astype(str)
+            types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype(str)
             frame = (frame.merge(types, left_on="PATH_VALUE", right_on="ID")
                      [["FOCUS", "VALUE"]].rename(columns={"VALUE": "PATH_VALUE"}))
         return frame
@@ -286,7 +286,7 @@ def _range(comparison, description):
 def _in(context, rule):
     rows = context.path_rows(rule)
     allowed = {str(value) for value in rule.params}
-    local = iri_pandas.local_name(rows["PATH_VALUE"].astype(str))
+    local = iri_pandas.local_value(rows["PATH_VALUE"].astype(str))
     bad = ~local.isin(allowed)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not one of {sorted(allowed)}")
@@ -312,7 +312,7 @@ def _schema_range(context, rule):
     is in the allowed set (RDF types are cumulative, issue #100); references
     whose target has no Type row are silent (cross-profile datasets)."""
     rows = context.path_rows(rule)
-    typed = context.key_rows("Type")["ID"].astype(str).unique()
+    typed = context.key_rows(TYPE_KEY)["ID"].astype(str).unique()
     allowed = pandas.Index([]).append([pandas.Index(context.class_ids(cls))
                                        for cls in rule.params])
     bad = rows["PATH_VALUE"].isin(typed) & ~rows["PATH_VALUE"].isin(allowed)
@@ -384,7 +384,7 @@ def _closed(context, rule):
     paths + ignoredProperties). 'Type' (rdf:type) is always allowed: every
     triplets object carries it by construction.
     """
-    allowed = set(rule.params) | {"Type"}
+    allowed = set(rule.params) | {TYPE_KEY}
     ids = context.focus(rule)
     rows = context.data[context.data["ID"].isin(ids) & ~context.data["KEY"].isin(allowed)]
     frame = _frame(rule, rows["ID"], rows["VALUE"], "property is not allowed on a closed shape")
@@ -412,16 +412,16 @@ def _sparql_violations(rule, result):
     result = result[result["this"].notna()]   # a row without a focus node is no violation
     if len(result) == 0:                      # (rdflib serializes a spurious empty binding
         return _empty()                       #  for some aggregate queries)
-    focus = _shorten(result["this"].astype(str), iri_pandas.local_node)
-    values = _shorten(result["value"].astype(str), iri_pandas.local_object) if "value" in result.columns else None
+    focus = _shorten(result["this"].astype(str), iri_pandas.local_id)
+    values = _shorten(result["value"].astype(str), iri_pandas.local_value) if "value" in result.columns else None
     return _frame(rule, focus, values, "sparql constraint violated")
 
 
 def _shorten(terms, rule):
-    """SPARQL result terms → triplet form: IRIs through the reader *rule* (``local_node`` /
-    ``local_object``), literals verbatim (a literal ``_name`` or a blank node ``_:b0`` must
+    """SPARQL result terms → triplet form: IRIs decoded, then the column *rule* (``local_id``
+    for the focus, ``local_value`` for the value), literals verbatim (a literal ``_name`` or a blank node ``_:b0`` must
     not lose its ``_``)."""
-    return rule(terms).where(iri_pandas.is_iri(terms), terms)
+    return rule(iri_pandas.decode_iri(terms)).where(iri_pandas.is_iri(terms), terms)
 
 
 def _sparql(context, rule):
@@ -481,7 +481,7 @@ def _not_evaluated(rule, error):
     its target/path (anonymous property shapes only have a blank-node id),
     say plainly that nothing was checked — a shapes bug, not a data finding."""
     where = f"{rule.target_class}/{rule.path}" if rule.path else rule.target_class
-    return (f"sh:sparql constraint of shape {local_name(str(rule.shape_id))} ({where}) was "
+    return (f"sh:sparql constraint of shape {split_iri(str(rule.shape_id))[1]} ({where}) was "
             f"NOT evaluated — the query is defective on every engine "
             f"(rdflib: {str(error).splitlines()[0]}). "
             f"A shapes bug, not a data finding; this constraint went unchecked.")

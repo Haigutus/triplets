@@ -12,7 +12,7 @@ from typing import List, Union, IO, Any
 
 logger = logging.getLogger(__name__)
 
-from ..iri import RDF_NS, local_id, local_value, resolve_iri
+from ..iri import RDF_NS, TYPE_KEY, local_id, local_value, resolve_iri
 
 RDF_ID = f"{{{RDF_NS}}}ID"
 RDF_ABOUT = f"{{{RDF_NS}}}about"
@@ -23,7 +23,7 @@ RDF_RESOURCE = f"{{{RDF_NS}}}resource"
 def _split_prefixed_name(name: str) -> str:
     """Split 'prefix:localname' or {ns}local -> localname.
 
-    Native QName mirror of :func:`triplets.iri.local_name`: XML already separates
+    Native QName mirror of :func:`triplets.iri.split_iri`: XML already separates
     namespace and local name, so no IRI string exists to shorten
     (parity: tests/test_iri.py ``test_parse_engines_follow_iri_rules``).
     """
@@ -55,26 +55,32 @@ def iter_rdf_rows(rdf_objects, local_resources=True, base=None):
       ``rdf:ID="X"`` is ``base#X``. ``rdf:nodeID`` labels stay as written (blank nodes are
       not supported).
     """
+    if local_resources:                  # the hot path: first attribute that exists wins, as before
+        for rdf_object in rdf_objects:
+            attribs = rdf_object.attrib
+            obj_id = local_id(attribs.get(RDF_ID) or attribs.get(RDF_ABOUT) or attribs.get(RDF_NODEID) or "")
+            yield obj_id, TYPE_KEY, _split_prefixed_name(rdf_object.tag)
+            for element in rdf_object.iterchildren():
+                value = element.text
+                if value is None:
+                    value = local_value(element.get(RDF_RESOURCE) or element.get(RDF_NODEID) or "") \
+                        if element.attrib else ""
+                yield obj_id, _split_prefixed_name(element.tag), value
+        return
     for rdf_object in rdf_objects:
         attribs = rdf_object.attrib
-        rdf_id, about, node_id = attribs.get(RDF_ID), attribs.get(RDF_ABOUT), attribs.get(RDF_NODEID)
-        if local_resources:
-            obj_id = local_id(rdf_id or about or node_id or "")
-        elif rdf_id or about:
+        rdf_id, about = attribs.get(RDF_ID), attribs.get(RDF_ABOUT)
+        if rdf_id or about:
             obj_id = resolve_iri("#" + rdf_id, base) if rdf_id else resolve_iri(about, base)
         else:
-            obj_id = node_id or ""
-        yield obj_id, "Type", _split_prefixed_name(rdf_object.tag)
+            obj_id = attribs.get(RDF_NODEID) or ""
+        yield obj_id, TYPE_KEY, _split_prefixed_name(rdf_object.tag)
         for element in rdf_object.iterchildren():
             value = element.text
-            if value is None and element.attrib:
-                reference, node_ref = element.attrib.get(RDF_RESOURCE), element.attrib.get(RDF_NODEID)
-                if local_resources:
-                    value = local_value(reference or node_ref or "")
-                else:
-                    value = resolve_iri(reference, base) if reference else node_ref or ""
-            yield obj_id, _split_prefixed_name(element.tag), "" if value is None else value
-
+            if value is None:
+                reference = element.get(RDF_RESOURCE)
+                value = resolve_iri(reference, base) if reference else element.get(RDF_NODEID) or ""
+            yield obj_id, _split_prefixed_name(element.tag), value
 
 
 def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debug: bool = False):

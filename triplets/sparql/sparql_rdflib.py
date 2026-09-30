@@ -23,7 +23,7 @@ import pandas
 
 from .._engine_detect import flavor, to_return_type
 from .._rdflib_loader import load_dataset, scoped_graph
-from ..iri import CIM_NS, RDF_TYPE, decode_iri, local_key, local_node, local_object
+from ..iri import CIM_NS, RDF_TYPE, decode_iri, local_id, local_key, local_value
 
 if find_spec("rdflib") is None:  # registry contract: an unavailable engine fails at import
     raise ImportError("rdflib is not installed")
@@ -61,10 +61,10 @@ def _select_to_dataframe(result):
 def _graph_to_triplets(graph):
     """CONSTRUCT/DESCRIBE result graph → triplet DataFrame (ID/KEY/VALUE).
 
-    Inverse of the N-Quads export conventions, with the same triplets.iri rules
-    as read_nquads: local_node on subjects, local_key on predicates (rdf:type →
-    'Type'), local_object on IRI objects (class, subject reference, else
-    local_value; IRI escapes decoded), literals verbatim.
+    Inverse of the N-Quads export conventions, with read_nquads' rules: IRIs
+    decoded once, then local_id on subjects, local_key on predicates (rdf:type →
+    'Type'), local_value on IRI objects (kind ``class`` on type rows; a guessed
+    value that is a subject shortens like its ID), literals verbatim.
     INSTANCE_ID is None (a constructed graph has no source instance).
 
     Measured: serialize(format="nt") + read_nquads loses to this loop (~9%
@@ -74,17 +74,17 @@ def _graph_to_triplets(graph):
     subjects = {str(subject) for subject in graph.subjects()}
     rows = []
     for subject, predicate, obj in graph:
-
+        if type(obj).__name__ == "Literal":
+            value = str(obj)
+        elif str(predicate) == RDF_TYPE:
+            value = local_value(decode_iri(str(obj)), "class")
+        else:
+            value = (local_id if str(obj) in subjects else local_value)(decode_iri(str(obj)))
         # Tuples are faster than dicts to convert to dataframe
-        rows.append(
-            (
-                local_node(subject),                    # ID
-                local_key(decode_iri(str(predicate))),  # KEY
-                str(obj) if type(obj).__name__ == "Literal"
-                else local_object(obj, str(predicate) == RDF_TYPE, subjects),   # VALUE
-                None,                                   # INSTANCE_ID — constructed graph has no source instance
-            )
-        )
+        rows.append((local_id(decode_iri(str(subject))),        # ID
+                     local_key(decode_iri(str(predicate))),     # KEY
+                     value,                                     # VALUE
+                     None))                                     # INSTANCE_ID — constructed graph has no source instance
 
     # return_type conversion happens in _finalize
     return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])

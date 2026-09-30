@@ -15,6 +15,7 @@ import logging
 import pandas
 
 from ..export.nquads_utils import flatten_schema
+from ..iri import TYPE_KEY
 from .shacl_ir import CompiledShapes, compile_shapes
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,7 @@ def _add_instance_context(violations, data):
         pandas.Series(labels["VALUE"].values, index=labels["INSTANCE_ID"].astype(str))
         .groupby(level=0).first())
 
-    for column, key in (("OBJECT_TYPE", "Type"), ("OBJECT_NAME", "IdentifiedObject.name")):
+    for column, key in (("OBJECT_TYPE", TYPE_KEY), ("OBJECT_NAME", "IdentifiedObject.name")):
         rows = data[data["KEY"] == key]
         rows = rows[~rows["ID"].astype(str).duplicated()]
         violations[column] = violations["ID"].map(

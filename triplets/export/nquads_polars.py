@@ -5,7 +5,7 @@ from io import BytesIO
 
 import polars as pl
 
-from ..iri import TRIPLETS_NS, datatypes, iri_polars, load_rdf_map, namespaces, value_types
+from ..iri import DESCRIPTION_TYPE, TRIPLETS_NS, TYPE_KEY, datatypes, iri_polars, load_rdf_map, namespaces, value_types
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,8 @@ def _quads(data, maps, export_undefined=True, undefined_namespace=TRIPLETS_NS):
     return (data.lazy()
             .with_columns(pl.col("ID", "KEY", "VALUE", "INSTANCE_ID").cast(pl.Utf8))
             .filter(pl.col("VALUE").is_not_null())
+            # Type "Description" is an rdf:Description element — not a class, so no rdf:type
+            .filter(~((pl.col("KEY") == TYPE_KEY) & (pl.col("VALUE") == DESCRIPTION_TYPE)))
             .filter(pl.lit(True) if export_undefined
                     else iri_polars.defined("KEY", "VALUE", maps["namespaces"], maps["value_types"]))
             .with_columns(kind.alias("_kind"), payload.alias("_payload"))

@@ -82,7 +82,7 @@ A bundle is a dict of profile sections keyed by profile keyword
 absolute IRIs: the generator resolves a relative `rdf:resource="#Name"` against the
 profile's `xml:base`, so a cross-namespace parent (an NC class extending
 `https://cim.ucaiug.io/ns#IdentifiedObject`) is stated, never guessed from the
-child's namespace. Consumers that only need the local name use `iri.local_name`.
+child's namespace. Consumers that only need the local name use `iri.split_iri(…)[1]`.
 
 Two class flavors matter for export:
 

@@ -217,6 +217,10 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         p = uri_to_prefix.get(ns)
         return f"{p}:{local_name}" if p else local_name
 
+    # rdf:about / rdf:Description by the prefix the map binds to the RDF namespace
+    rdf_prefix = uri_to_prefix.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#") or "rdf"
+    cdef string rdf_about_attr = f"{rdf_prefix}:about".encode('utf-8')
+
     def _parse_attrib(full_attrib):
         if full_attrib.startswith("{"):
             ns_end = full_attrib.index("}")
@@ -322,11 +326,14 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             s_combined.append(s_id)
             obj_node.append_attribute(class_defs_vec[cd_idx].id_attr.c_str()).set_value(s_combined.c_str())
         elif export_undefined:
-            s_tag = _make_prefixed(undefined_namespace, s_value.decode('utf-8')).encode('utf-8')
+            # rdf:Description is "no shorthand type", not a class: written back as rdf:Description
+            py_class = s_value.decode('utf-8')      # "Description": mirror of triplets.iri.DESCRIPTION_TYPE
+            s_tag = (f"{rdf_prefix}:Description" if py_class == "Description"
+                     else _make_prefixed(undefined_namespace, py_class)).encode('utf-8')
             obj_node = rdf_root.append_child(s_tag.c_str())
             s_combined.assign(b"urn:uuid:")
             s_combined.append(s_id)
-            obj_node.append_attribute(b"rdf:about").set_value(s_combined.c_str())
+            obj_node.append_attribute(rdf_about_attr.c_str()).set_value(s_combined.c_str())
         else:
             continue
 

@@ -14,6 +14,7 @@ from lxml import etree
 import pyarrow as pa
 
 from .utils import iter_rdf_rows
+from ..iri import TYPE_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +64,9 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
     # Meta: Distribution + NamespaceMap (matches legacy)
     dist_id = str(uuid.uuid4())
     nsmap_id = str(uuid.uuid4())
-    id_b.append(dist_id); key_b.append("Type"); val_b.append("Distribution"); inst_b.append(instance_id)
+    id_b.append(dist_id); key_b.append(TYPE_KEY); val_b.append("Distribution"); inst_b.append(instance_id)
     id_b.append(dist_id); key_b.append("label"); val_b.append(str(file_name)); inst_b.append(instance_id)
-    id_b.append(nsmap_id); key_b.append("Type"); val_b.append("NamespaceMap"); inst_b.append(instance_id)
+    id_b.append(nsmap_id); key_b.append(TYPE_KEY); val_b.append("NamespaceMap"); inst_b.append(instance_id)
 
     for k, v in namespace_map.items():
         id_b.append(nsmap_id)

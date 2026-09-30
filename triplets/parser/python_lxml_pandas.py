@@ -16,6 +16,7 @@ import pandas as pd
 from lxml import etree
 
 from .utils import iter_rdf_rows
+from ..iri import TYPE_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -58,19 +59,19 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
     dist_id = str(uuid.uuid4())
     nsmap_id = str(uuid.uuid4())
     data_list = [
-        (dist_id, "Type", "Distribution", instance_id),
-        (dist_id, "label", str(file_name), instance_id),
-        (nsmap_id, "Type", "NamespaceMap", instance_id),
+        (dist_id, TYPE_KEY, "Distribution"),
+        (dist_id, "label", str(file_name)),
+        (nsmap_id, TYPE_KEY, "NamespaceMap"),
     ]
 
     for k, v in namespace_map.items():
-        data_list.append((nsmap_id, str(k) if k is not None else "", str(v) if v is not None else "", instance_id))
+        data_list.append((nsmap_id, str(k) if k is not None else "", str(v) if v is not None else ""))
 
-    # RDF objects
-    data_list.extend((obj_id, key, value, instance_id)
-                     for obj_id, key, value in iter_rdf_rows(root.iterchildren(), local_resources, root.base))
+    # RDF objects — (ID, KEY, VALUE) rows; one INSTANCE_ID for the whole file
+    data_list.extend(iter_rdf_rows(root.iterchildren(), local_resources, root.base))
 
-    df = pd.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    df = pd.DataFrame(data_list, columns=["ID", "KEY", "VALUE"])
+    df["INSTANCE_ID"] = instance_id
 
     if debug:
         logger.debug("python_lxml_pandas produced %d rows for %s", len(df), file_name)

@@ -26,6 +26,7 @@ PREFIX = """
 @prefix sh:  <http://www.w3.org/ns/shacl#> .
 @prefix cim: <http://iec.ch/TC57/CIM100#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 """
 
 
@@ -552,3 +553,20 @@ def test_enum_violation_value_pyshacl_parity(engine):
     for name in (engine, "pyshacl"):
         v = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine=name)
         assert violating(v, "sh:in") == {("b2", "SwitchKind.other")}, name
+
+
+def test_rdf_type_path_compiles_to_the_type_key(engine):
+    """sh:path rdf:type lands on the Type KEY (local_key), not a KEY "type"."""
+    rows = breaker("b1") + [("x1", "IdentifiedObject.name", "untyped", "eq")]
+    v = run(rows, SHAPE.format(body="sh:path rdf:type ; sh:maxCount 1"), engine)
+    assert violating(v, "sh:maxCount") == set()
+    v = run(rows + [("b1", "Type", "Switch", "eq")], SHAPE.format(body="sh:path rdf:type ; sh:maxCount 1"), engine)
+    assert {row[0] for row in violating(v, "sh:maxCount")} == {"b1"}
+
+
+def test_in_member_with_slash_iri_matches_the_whole_value(engine):
+    """sh:in members follow the VALUE rule: a "/"-only IRI stays whole, as the data VALUE does."""
+    kind = "http://example.org/kinds/a"
+    rows = breaker("b1", ("Switch.kind", kind)) + breaker("b2", ("Switch.kind", "http://example.org/kinds/b"))
+    v = run(rows, SHAPE.format(body=f"sh:path cim:Switch.kind ; sh:in ( <{kind}> )"), engine)
+    assert violating(v, "sh:in") == {("b2", "http://example.org/kinds/b")}

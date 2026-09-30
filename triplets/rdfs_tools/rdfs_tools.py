@@ -1,5 +1,5 @@
 from triplets.parser import parse
-from triplets.iri import iri_pandas, split_name
+from triplets.iri import iri_pandas, split_iri
 import pandas
 import os
 
@@ -35,7 +35,7 @@ def get_profile_metadata(data):
     profile_domain = base_uml["ID"].to_list()[0].split(".")[0]
     profile_metadata = data[data.ID.str.contains(profile_domain)].query("KEY == 'isFixed'").copy(deep=True)
 
-    profile_metadata["ID"] = iri_pandas.local_name(profile_metadata.ID).str.split(".", expand=True)[1]
+    profile_metadata["ID"] = iri_pandas.split_iri(profile_metadata.ID)[1].str.split(".", expand=True)[1]
 
     return profile_metadata.set_index("ID")["VALUE"]
 
@@ -176,12 +176,12 @@ def multiplicity_to_XSD_format(data_table_view):
 
 
 def get_namespace_and_name(uri, default_namespace=None):
-    """``ns#name`` / ``ns/name`` → (``ns#`` / ``ns/``, name) by :func:`triplets.iri.split_name`.
+    """``ns#name`` / ``ns/name`` → (``ns#`` / ``ns/``, name) by :func:`triplets.iri.split_iri`.
 
     A bare ``name`` or relative ``#name`` (local-form parses) takes ``default_namespace + "#"``.
     Without *default_namespace* such a reference raises: an absolute-form parse
     (``local_resources=False``) never yields one, so there is no namespace to guess."""
-    namespace, name = split_name(uri)
+    namespace, name = split_iri(uri)
     if namespace in ("", "#"):
         if default_namespace is None:
             raise ValueError(f"expected an absolute IRI, got {uri!r} (no default_namespace)")
@@ -267,7 +267,7 @@ fullmodel_conf = { "FullModel": {
 
 def get_used_relations(data):
     relations = data.query("KEY == 'AssociationUsed' and VALUE == 'Yes'").rename(columns={"ID": "RELATION_NAME"})
-    return iri_pandas.local_name(relations.RELATION_NAME)
+    return iri_pandas.split_iri(relations.RELATION_NAME)[1]
 
 def dangling_references(data, relation_names):
     references = data.merge(relation_names, left_on="KEY", right_on="RELATION_NAME")

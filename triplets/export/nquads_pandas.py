@@ -2,7 +2,7 @@
 
 from io import BytesIO
 
-from ..iri import TRIPLETS_NS, datatypes, iri_pandas, load_rdf_map, namespaces, value_types
+from ..iri import DESCRIPTION_TYPE, TRIPLETS_NS, TYPE_KEY, datatypes, iri_pandas, load_rdf_map, namespaces, value_types
 
 
 def _escape(series):
@@ -38,6 +38,8 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
     maps = dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map))
 
     data = data[data["VALUE"].notna()]  # no object to state (parity with the polars engine)
+    # Type "Description" is an rdf:Description element — not a class, so no rdf:type
+    data = data[~((data["KEY"] == TYPE_KEY) & (data["VALUE"] == DESCRIPTION_TYPE)).fillna(False).astype(bool)]
     if not export_undefined:
         data = data[iri_pandas.defined(data["KEY"].astype(str), data["VALUE"].astype(str),
                                        maps["namespaces"], maps["value_types"])]
@@ -54,9 +56,10 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
     objects[typed] = objects[typed] + "^^<" + payload[typed] + ">"
     objects[is_iri] = "<" + payload[is_iri] + ">"
 
-    graphs = ("<" + iri_pandas.absolute_id(instances) + ">").where(instances.notna(), ".")
+    graphs = ("<" + iri_pandas.by_distinct(instances, iri_pandas.absolute_id) + ">").where(instances.notna(), ".")
     content = _lines("<" + iri_pandas.absolute_id(ids) + ">",
-                     "<" + iri_pandas.absolute_key(keys, maps["namespaces"], undefined_namespace) + ">",
+                     "<" + iri_pandas.by_distinct(keys, lambda distinct: iri_pandas.absolute_key(
+                         distinct, maps["namespaces"], undefined_namespace)) + ">",
                      objects,
                      graphs)
 

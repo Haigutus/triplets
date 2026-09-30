@@ -213,3 +213,20 @@ def test_return_types():
 
 def test_top_level_export():
     assert triplets.read_nquads is read_nquads
+
+
+def test_rdf_map_decides_reference_vs_enum_exactly():
+    """With a schema the KEY's entry decides: an Association keeps an http#… reference whole
+    (no guess, no subject needed), an Enumeration takes the name."""
+    text = (f"<urn:uuid:b1> <{CIM}Equipment.EquipmentContainer> <http://ex.org/m#vl1> <urn:uuid:g> .\n"
+            f"<urn:uuid:b1> <{CIM}Switch.kind> <{CIM}SwitchKind.breaker> <urn:uuid:g> .\n")
+    guessed = read_nquads(text)
+    assert guessed["VALUE"].tolist() == ["vl1", "SwitchKind.breaker"]          # no subject http://ex.org/m#vl1: guess
+    exact = read_nquads(text, rdf_map=REFERENCE_MAP)
+    assert exact["VALUE"].tolist() == ["http://ex.org/m#vl1", "SwitchKind.breaker"]
+
+
+def test_type_key_reads_rdf_type_as_an_ordinary_statement():
+    text = "<urn:uuid:d> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ."
+    assert read_nquads(text)[["KEY", "VALUE"]].values.tolist() == [["Type", "Ontology"]]
+    assert read_nquads(text, type_key="type")[["KEY", "VALUE"]].values.tolist() == [["type", "Ontology"]]

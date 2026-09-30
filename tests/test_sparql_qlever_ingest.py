@@ -49,6 +49,7 @@ def torture_frame():
         ("http://example.com/thing", "Type", "http://example.com/Class", INSTANCE_2),
         (UUID_B, "Type", f"{CIM_NS}Terminal", INSTANCE_1),                  # http class as-is
         ("urn:example:id1", "Type", "urn:example:Class", INSTANCE_1),       # urn passthrough
+        ("urn:example:d1", "Type", "Description", INSTANCE_1),             # rdf:Description: no rdf:type
         # P2: full-URI KEY (http and urn pass through, like iri.absolute_key)
         (UUID_A, "http://example.com/ns#pred", "plain", INSTANCE_1),
         (UUID_A, "urn:example:pred", "plain", INSTANCE_1),
@@ -121,7 +122,7 @@ def test_arrow_ingest_matches_nquads_ingest(rdf_map):
         via_nquads = quad_dump(build_via_nquads(data, rdf_map, directory))
         via_arrow = quad_dump(build_via_arrow(data, rdf_map, directory))
     pandas.testing.assert_frame_equal(via_arrow, via_nquads)
-    assert len(via_arrow) == len(data) - 1        # the null-VALUE row is dropped
+    assert len(via_arrow) == len(data) - 2        # the null-VALUE row and Type Description are dropped
 
 
 def test_characters_beyond_the_escape_set():
@@ -196,7 +197,8 @@ def test_chunked_batches():
         _build_index(chunked, None, basename)
         count = _qlever.QleverIndex(basename).select_arrow(
             "SELECT (COUNT(?s) AS ?n) WHERE { ?s ?p ?o }").to_pandas()
-    assert int(count["n"].iloc[0]) == len(data)
+    descriptions = ((data["KEY"] == "Type") & (data["VALUE"] == "Description")).sum()   # no rdf:type for them
+    assert int(count["n"].iloc[0]) == len(data) - descriptions
 
 
 def test_export_to_arrow():

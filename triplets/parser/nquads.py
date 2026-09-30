@@ -20,7 +20,7 @@ from pathlib import Path
 import pandas
 
 from .._engine_detect import to_return_type
-from ..iri import iri_pandas
+from ..iri import TYPE_KEY, iri_pandas, load_rdf_map, value_types
 
 
 # N-Triples string escapes: \uXXXX / \UXXXXXXXX and single-char (\n \t \" \\ ...)
@@ -28,7 +28,7 @@ _ESCAPE = re.compile(r'\\u([0-9A-Fa-f]{4})|\\U([0-9A-Fa-f]{8})|\\(.)')
 _CONTROL_ESCAPES = {"n": "\n", "r": "\r", "t": "\t", "b": "\b", "f": "\f"}
 
 
-def read_nquads(source, return_type="pandas"):
+def read_nquads(source, return_type="pandas", rdf_map=None, type_key=TYPE_KEY):
     """Parse N-Quads (or N-Triples) into a triplet DataFrame.
 
     Parameters
@@ -38,6 +38,13 @@ def read_nquads(source, return_type="pandas"):
         open file object (text or binary).
     return_type : str, default "pandas"
         "pandas", "polars", or "arrow".
+    rdf_map : dict or str, optional
+        Export schema. With it every VALUE IRI is shortened by its KEY's schema entry
+        (Association → node rule, Enumeration → name rule) instead of the schema-free guess.
+    type_key : str, default "Type"
+        KEY for ``rdf:type`` triples. N-Quads has no typed-node shorthand, so every type is
+        an ``rdf:type`` triple: ``"Type"`` for CIM data (one type per object), another key
+        (e.g. ``"type"``) to read every type as an ordinary statement.
 
     Returns
     -------
@@ -50,7 +57,8 @@ def read_nquads(source, return_type="pandas"):
     import pyarrow.compute as pc
     lines = pc.utf8_trim_whitespace(pyarrow.array(_read_text(source).splitlines(), type=pyarrow.string()))
     lines = lines.filter(pc.and_(pc.not_equal(lines, ""), pc.invert(pc.starts_with(lines, "#"))))
-    return to_return_type(terms_to_triplets(_split_terms(lines)), return_type)
+    kinds = value_types(load_rdf_map(rdf_map)) if rdf_map is not None else None
+    return to_return_type(terms_to_triplets(_split_terms(lines), kinds, type_key), return_type)
 
 
 def _split_terms(lines):
@@ -103,7 +111,7 @@ def _split_terms(lines):
     })
 
 
-def terms_to_triplets(frame):
+def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
     """N-Triples-form term columns → triplet values, converted in place.
 
     frame carries columns [ID, KEY, VALUE] and optionally INSTANCE_ID (the
@@ -111,28 +119,50 @@ def terms_to_triplets(frame):
     instance). Term shapes: ``<iri>``, ``_:bnode``, ``"literal"`` (optionally
     with a ``^^<datatype>`` / ``@lang`` suffix — dropped, the value keeps its
     lexical form; string escapes decoded), or bare turtle-shorthand
-    numbers/booleans. IDs lose urn:uuid:, VALUE IRIs also any http(s)
-    #fragment namespace, rdf:type → 'Type', a Type VALUE (class) via local_name
-    (triplets.iri.local_node / local_object: a VALUE IRI that is a subject in
-    the same frame shortens like an ID, so the reference still joins it; IRI
-    escapes the exporter wrote, ``%20``, are decoded).
+    numbers/booleans. IRI escapes the exporter wrote (``%20``) are decoded once,
+    then the triplets.iri column rules apply: ``local_id`` for ID / INSTANCE_ID,
+    ``local_key`` for KEY (``rdf:type`` → *type_key*), ``local_value`` for VALUE —
+    kind ``class`` on type rows, else by *kinds* (``iri.value_types`` of a schema).
+    Without a schema a guessed VALUE that is a subject of the same frame shortens
+    like its ID, so the reference still joins it.
     """
-    subjects = _term(frame["ID"])
-    frame["ID"] = iri_pandas.local_node(subjects)
-    frame["KEY"] = iri_pandas.local_key(iri_pandas.decode_iri(_term(frame["KEY"])))
-    is_type = (frame["KEY"] == "Type").fillna(False).astype(bool)
+    subjects = iri_pandas.decode_iri(_term(frame["ID"]))
+    frame["ID"] = iri_pandas.local_id(subjects)
+    frame["KEY"] = iri_pandas.by_distinct(frame["KEY"], lambda keys: iri_pandas.local_key(
+        iri_pandas.decode_iri(_term(keys)), type_key))
     value = frame["VALUE"]
     quoted = value.str.startswith('"', na=False).astype(bool)
     # drop a ^^<datatype> / @lang suffix, then slice the quotes off — cheaper
     # than one back-reference regex over the whole literal
     unquoted = _unescape(value.str.replace(r'"(\^\^<[^>]*>|@[\w-]+)?$', '"', regex=True).str.slice(1, -1))
-    objects = iri_pandas.local_object(_term(value).where(~quoted), is_type, subjects)
-    frame["VALUE"] = unquoted.where(quoted, objects)
-    graphs = iri_pandas.local_node(_term(frame["INSTANCE_ID"])) if "INSTANCE_ID" in frame.columns else None
+    objects = iri_pandas.decode_iri(_term(value).where(~quoted))
+    kind = frame["KEY"].map({key: kind for key, kind in (kinds or {}).items() if kind != "literal"})
+    kind = kind.astype(object).where(frame["KEY"] != type_key, "class")
+    local = iri_pandas.local_value(objects, kind)
+    if kinds is None:       # the guess cannot tell an enum from a reference to an http#… object
+        local = local.mask(_subject_references(objects, subjects, kind), iri_pandas.local_id(objects))
+    frame["VALUE"] = unquoted.where(quoted, local)
+    graphs = iri_pandas.by_distinct(frame["INSTANCE_ID"], lambda graphs: iri_pandas.local_id(
+        iri_pandas.decode_iri(_term(graphs)))) if "INSTANCE_ID" in frame.columns else None
     # no graph term anywhere (N-Triples, CONSTRUCT results) → plain None column,
     # the same shape every SPARQL engine returns for a constructed graph
     frame["INSTANCE_ID"] = graphs if graphs is not None and graphs.notna().any() else None
     return frame
+
+
+def _subject_references(objects, subjects, kind):
+    """Guessed rows the guess took as a name (http + "#") yet are a subject of this frame —
+    looked up in Arrow only on those rows (pandas ``isin`` on arrow strings is ~50x slower)."""
+    import pyarrow
+    import pyarrow.compute as pc
+    candidates = (kind.isna() & objects.str.startswith("http", na=False)
+                  & objects.str.contains("#", regex=False, na=False)).astype(bool)
+    hit = pandas.Series(False, index=objects.index)
+    if candidates.any():
+        found = pc.is_in(pyarrow.array(objects[candidates], type=pyarrow.string()),
+                         value_set=pc.unique(pyarrow.array(subjects, type=pyarrow.string())))
+        hit[candidates] = found.to_numpy(zero_copy_only=False)
+    return hit
 
 
 def _term(column):

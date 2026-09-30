@@ -141,8 +141,8 @@ in `tests/test_iri.py`).
 | column | shape | rule (`triplets.iri`) |
 |---|---|---|
 | `ID` | bare UUID / bare name | `local_id`: strip exactly **one** of `urn:uuid:`, `#_`, `_` (longest first) |
-| `KEY` | `Class.attr` or `Type` | element tag local name (N-Quads / SPARQL: `local_key` → `local_name`, after the last `#` or `/` — `dcterms:issued` → `issued`) |
-| `VALUE` (Type) | `Breaker` | tag local name (N-Quads / SPARQL: `local_name`) |
+| `KEY` | `Class.attr` or `Type` | element tag local name (N-Quads / SPARQL: `local_key`, the `split_iri` local name — `dcterms:issued` → `issued`) |
+| `VALUE` (Type) | `Breaker` | tag local name (N-Quads / SPARQL: `local_value(…, "class")`) |
 | `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then `http(s)…#frag` → `frag` (`#` only, never `/`) |
 | `VALUE` (literal) | text verbatim | — |
 | `INSTANCE_ID` | bare UUID | fresh `uuid4()` per parsed file |
@@ -163,8 +163,8 @@ subject of the same data like its `ID`, so the reference still joins.
 
 ### Types: `Type` vs `rdf:type`
 
-RDF/XML can state a type two ways, and the triplet form keeps them apart,
-because only one of them can be written back as the element name:
+RDF/XML can state a type two ways. Only one of them can be written back as the
+element name, so the triplet form keeps them apart:
 
 ```xml
 <cim:Breaker rdf:about="urn:uuid:b1">                         <!-- typed-node shorthand -->
@@ -175,41 +175,34 @@ because only one of them can be written back as the element name:
 </rdf:Description>
 ```
 
-| KEY | meaning | local VALUE | CIM XML export | N-Quads / SPARQL |
-|---|---|---|---|---|
-| `Type` (`iri.TYPE_KEY`) | the element name: the one type written as the typed-node shorthand. CIM data has exactly one per object; every CIM tool assumes it (`type_key="Type"` default) | class local name (`Breaker`) | the object element (`<cim:Breaker …>`) | `rdf:type <class IRI>` |
-| `rdf:type` | an explicit `rdf:type` statement — any number per object | class, by the VALUE rule | an `<rdf:type rdf:resource="…"/>` child | `rdf:type <class IRI>` |
-| `type` and other local names | an ordinary property; in every shipped schema `type` is `dcterms:type` (header) | by its schema entry | a property element | its own predicate |
+| KEY | meaning | CIM XML export | N-Quads / SPARQL |
+|---|---|---|---|
+| `Type` (`iri.TYPE_KEY`) | the element name: the one type written as the typed-node shorthand. CIM data has exactly one per object and every CIM tool assumes it (`type_key="Type"`) | the object element (`<cim:Breaker …>`) | `rdf:type <class IRI>` |
+| `Type` = `Description` (`iri.DESCRIPTION_TYPE`) | an `rdf:Description` element: no shorthand, not a class | `<rdf:Description …>` | no `rdf:type` |
+| `type` | an explicit `rdf:type` child — the local name, like any other property | see *Known limitations* | see *Known limitations* |
 
-- **Why not `type` for an explicit `rdf:type`:** a KEY is a local name, and every
-  shipped schema already declares `type` as `dcterms:type`. The local form would
-  lose which one it was, and the export would write the wrong predicate.
-  `rdf:type` is a reserved KEY, like `Type`.
-- **`rdf:Description`** is not a type. It means "no shorthand". Its `Type` row
-  holds `Description`, the element name. The export writes `rdf:Description`
-  back and states no `rdf:type` for it.
-- **Reading RDF back** (`read_nquads`, CONSTRUCT). N-Quads has no shorthand:
-  every type is an `rdf:type` triple, so the reader cannot tell the element
-  type from an extra one. `type_key` chooses the KEY: `"Type"` (default, CIM
-  data: one type per object) or `"rdf:type"` (generic RDF: every type is an
-  explicit statement). Functions that select by type take the same `type_key`
+- **Reading RDF back** (`read_nquads(type_key=…)`, CONSTRUCT). N-Quads has no
+  shorthand: every type is an `rdf:type` triple, so the reader cannot tell the
+  element type from an extra one. `type_key` picks the KEY: `"Type"` (default,
+  CIM data, one type per object) or e.g. `"type"` (every type as an ordinary
+  statement). The tools that select by type take the same `type_key`
   (`type_tableview`, `filter_triplets_by_type`, `filter_triplets_by_value`;
   `export_to_cimxml` calls it `class_KEY`).
-
-**Status — design, not implemented yet.** Today:
-
-- The XML parsers give `type` for an explicit `rdf:type` child, not `rdf:type`,
-  and the RDFS tools query `KEY == 'type'` for it.
-- `export_to_nquads` writes such a `type` row as a literal under
-  `undefined_namespace` (`<http://triplets#type> "Switch"`), or as `dcterms:type`
-  when a schema is given, instead of `rdf:type <class IRI>`.
-- `Type = Description` exports as the bogus class `http://triplets#Description`.
-- The CIM XML exporters have no path for explicit `rdf:type` children.
-- `read_nquads` always maps `rdf:type` to `Type` (no `type_key` yet).
+- **The local form is for people working on imported data.** A local name drops
+  its namespace, so two predicates with one local name become one KEY. Exact,
+  collision-free handling is the absolute form (`local_resources=False` on the
+  XML side today; an absolute import everywhere later).
 
 ### Known limitations
 
 Deviations between the importers and exporters that are known and not planned:
+
+- **Local names can collide: `type` is both `rdf:type` and `dcterms:type`.** An
+  explicit `rdf:type` child parses to the KEY `type` (its local name), and every
+  shipped schema declares `type` as `dcterms:type` (header). On export such a row is
+  written as `dcterms:type` with a schema, or as `<http://triplets#type>` without one
+  — not as `rdf:type` — and the CIM XML exporters write no `<rdf:type>` children.
+  Only the export is affected; the absolute form is the exact one.
 
 - **CIM XML does not percent-encode.** Both CIM XML engines write `rdf:about` /
   `rdf:resource` text as is (`rdf:resource="urn:uuid:a b"`), while N-Quads and the
