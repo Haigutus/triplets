@@ -14,7 +14,7 @@ import pandas
 import pyarrow
 
 from .cimxml_cython_pugixml import generate_xml_from_arrow
-from .cimxml_utils import load_rdf_map, resolve_instance_config
+from .cimxml_utils import load_rdf_map, resolve_instance_config, with_name_namespaces
 from ..iri import TRIPLETS_NS, TYPE_KEY
 from .._engine_detect import to_arrow
 
@@ -115,6 +115,8 @@ def generate_xml(instance_data,
     if export_undefined and undefined_namespace not in namespace_map.values():
         # an undefined_namespace the map already binds (e.g. CIM100) keeps its own prefix
         namespace_map = {**namespace_map, "triplets": undefined_namespace}
+    if export_undefined:            # absolute undefined names (iri_form="absolute") keep their namespace
+        namespace_map = with_name_namespaces(namespace_map, instance_data, class_KEY)
 
     batch = _string_batch(instance_data)
 

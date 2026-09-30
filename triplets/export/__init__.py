@@ -28,7 +28,7 @@ from concurrent.futures import ProcessPoolExecutor
 import pandas
 
 from .excel_pandas import export_to_excel as _export_to_excel
-from ..iri import TRIPLETS_NS, TYPE_KEY
+from ..iri import TRIPLETS_NS, TYPE_KEY, iri_pandas, load_rdf_map, namespaces as iri_namespaces, value_types as iri_value_types
 from .cimxml_pandas import generate_xml, _get_qname
 from .networkx_pandas import export_to_networkx as _export_to_networkx
 
@@ -214,7 +214,8 @@ def export_to_cimxml(data,
                      max_workers=None,
                      engine="auto",
                      datatypes=False,
-                     undefined_namespace=TRIPLETS_NS):
+                     undefined_namespace=TRIPLETS_NS,
+                     prefixes=None):
     """Export a full triplet dataset to CIM RDF XML files or ZIP archives.
 
     Processes all instances (grouped by ``INSTANCE_ID``) and exports them according to the
@@ -307,6 +308,15 @@ def export_to_cimxml(data,
         # consumes polars frames directly (arrow large_utf8 via the shared accessor)
         logger.debug("format=cimxml: polars input → pandas (python_lxml engine)")
         data = data.to_pandas(use_pyarrow_extension_array=True)
+
+    # any iri_form → local schema names (prefixed names expanded per instance, names the
+    # schema declares localized when the namespace matches); a local frame passes as is
+    schema = load_rdf_map(rdf_map) if rdf_map is not None else {}
+    if _flavor(data) == "polars":
+        from ..iri import iri_polars       # polars is optional: imported only for polars input
+        data = iri_polars.to_schema_form(data, iri_namespaces(schema), iri_value_types(schema), prefixes)
+    else:
+        data = iri_pandas.to_schema_form(data, iri_namespaces(schema), iri_value_types(schema), prefixes)
 
     instances = _split_instances(data)
 

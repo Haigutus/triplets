@@ -147,7 +147,8 @@ def _index_for(data, rdf_map, data_unchanged=False, undefined_namespace=CIM_NS):
         index_dir.parent.mkdir(parents=True, exist_ok=True)
         build_dir = Path(tempfile.mkdtemp(prefix=f"{key}.build-", dir=index_dir.parent))
         try:
-            _build_index(data.export_to_arrow(), rdf_map, str(build_dir / "index"), undefined_namespace)
+            _build_index(_schema_form(data, rdf_map).export_to_arrow(), rdf_map, str(build_dir / "index"),
+                         undefined_namespace)
         except Exception as error:
             # Cache the failure: the build is deterministic for this content
             # hash, so every retry would pay the full build just to fail again.
@@ -166,6 +167,21 @@ def _index_for(data, rdf_map, data_unchanged=False, undefined_namespace=CIM_NS):
 
     _INDEXES[key] = _qlever.QleverIndex(str(index_dir / "index"))
     return _INDEXES[key]
+
+
+def _schema_form(data, rdf_map):
+    """Any iri_form → local schema names + absolute IRIs before the Arrow ingest, so the C++
+    term mapping (keyed on local schema names, absolute IRIs passed through) needs no prefix
+    logic — the same normalization the N-Quads exporters run (duckdb input: local form only)."""
+    rdf_map = load_rdf_map(rdf_map)
+    kind = flavor(data)
+    if kind == "pandas":
+        from ..iri import iri_pandas
+        return iri_pandas.to_schema_form(data, namespaces(rdf_map), value_types(rdf_map))
+    if kind == "polars":
+        from ..iri import iri_polars
+        return iri_polars.to_schema_form(data, namespaces(rdf_map), value_types(rdf_map))
+    return data
 
 
 def _build_index(table, rdf_map, basename, undefined_namespace=CIM_NS):

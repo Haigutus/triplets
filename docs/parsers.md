@@ -151,8 +151,33 @@ The absolute form (N-Quads, SPARQL stores, SHACL reports) is the inverse,
 driven by the export schema: `absolute_id`, `absolute_key`, `absolute_value` with the
 flat maps (`namespaces`, `value_types`, `datatypes`) built from `rdf_map`; a name the
 schema does not declare takes the exporter's `undefined_namespace` (`http://triplets#`;
-CIM100 on the SPARQL / validation side). `local_resources=False` is the absolute
-form of IDs and resource values: resolved against `xml:base` at parse time.
+CIM100 on the SPARQL / validation side).
+
+### IRI forms: `parse(iri_form=…)`
+
+Every IRI in the frame — ID, KEY, `Type` VALUE, resource VALUEs — takes one form;
+literals never change (`iri.IRI_FORMS`):
+
+| `iri_form` | ID | KEY / `Type` VALUE | reference / enum VALUE | engines |
+|---|---|---|---|---|
+| `"local"` (default) | `local_id` (`urn:uuid:` / `#_` / `_` stripped) | element local name | `local_value` (`Kind.value`) | all |
+| `"prefixed"` | CIM ID conventions local, other IRIs `prefix:local` | `prefix:local` (`cim:ACLineSegment.r`, `rdf:type`, `dct:type`) | `prefix:local`; CIM ID conventions local | python |
+| `"absolute"` | resolved against `xml:base` (`rdf:ID="X"` → `base#X`) | namespace + local name | absolute IRI | python |
+
+- **Prefixes** come from the document's own `xmlns:` declarations, overridable with
+  `parse(prefixes={…})`; the effective map is recorded in the NamespaceMap rows, so a
+  prefixed frame carries what expands it. A namespace with no prefix (the default
+  namespace) stays absolute. URNs are never prefixed.
+- **The base** is the declared absolute `xml:base`, else `default_base`
+  (`http://triplets#`) — never the file location.
+- **Every exporter reads every form** (`iri_pandas` / `iri_polars.to_schema_form`):
+  prefixed names expand with their own instance's NamespaceMap (`cim:` can mean CIM16
+  in one file and CIM100 in another), names the schema declares map back to its local
+  names only when the namespace matches (`rdf:type` never becomes `dcterms:type`), and
+  everything else is written absolute. `local` and `prefixed` export the same graph;
+  `absolute` differs only in node IRIs (`base#_x` vs `urn:uuid:x`).
+- **Validation, SPARQL `scope`, CONSTRUCT decoding and the table tools expect the local
+  form** — they compare against local names (`rule.path`, `type_tableview("ACLineSegment")`).
 
 The schema entry type decides the RDF form: an Attribute (`xsd:anyURI` included)
 is a literal written verbatim, checked by `sh:datatype`; an Association or
@@ -190,14 +215,13 @@ element name, so the triplet form keeps them apart:
   `export_to_cimxml` calls it `class_KEY`).
 - **The local form is for people working on imported data.** A local name drops
   its namespace, so two predicates with one local name become one KEY. Exact,
-  collision-free handling is the absolute form (`local_resources=False` on the
-  XML side today; an absolute import everywhere later).
+  collision-free handling is `iri_form="prefixed"` or `"absolute"` (see *IRI forms*).
 
 ### Known limitations
 
 Deviations between the importers and exporters that are known and not planned:
 
-- **Local names can collide: `type` is both `rdf:type` and `dcterms:type`.** An
+- **Local names can collide (local form only): `type` is both `rdf:type` and `dcterms:type`.** An
   explicit `rdf:type` child parses to the KEY `type` (its local name), and every
   shipped schema declares `type` as `dcterms:type` (header). On export such a row is
   written as `dcterms:type` with a schema, or as `<http://triplets#type>` without one
@@ -215,7 +239,7 @@ Deviations between the importers and exporters that are known and not planned:
   one file at a time, not every subject). `read_nquads` and CONSTRUCT keep such
   references whole. CIM IDs are `urn:uuid:` / `#_` / `_` forms.
 - **Blank nodes are not supported.** `_:b0` reads as the ID `b0` and exports again
-  as `<urn:uuid:b0>`, a named node. With `local_resources=False`, `rdf:nodeID`
+  as `<urn:uuid:b0>`, a named node. In the prefixed and absolute forms `rdf:nodeID`
   labels stay as written.
 - **`%XX` in reference text reads back decoded.** A reference whose own text holds
   `%20` exports unchanged and reads back with a space. The exported file
@@ -231,18 +255,9 @@ Deviations between the importers and exporters that are known and not planned:
 
 `parse()` / `read_RDF` accept (see `triplets/parser/__init__.py`):
 
-- `local_resources` (default `True`) — resource values in local form
-  (`iri.local_value`: ID prefix stripped, http(s) IRIs cut to their `#fragment`,
-  the CIM instance-data convention). Enumerations are stored as
-  `ControlAreaTypeKind.Interchange`; a filter on the full CIM URI will not match.
-  `False` is the absolute form: IDs and references are resolved at parse time with
-  `iri.resolve_iri` against the document's declared absolute `xml:base`, so
-  `rdf:about="#ACLineSegment"` becomes `http://iec.ch/TC57/CIM100#ACLineSegment` and
-  nothing downstream needs the base again (e.g. RDFS schema parsing). Without one,
-  against `default_base` (`http://triplets#` unless passed) — never the file location,
-  which is no identity and differs per machine. The NamespaceMap `xml_base` row holds
-  a declared absolute base only (it is absent otherwise, on every engine); **not supported
-  by the `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
+- `iri_form` (default `"local"`) — the form of every IRI in the frame; see *IRI forms*.
+  `"prefixed"` / `"absolute"` are **not supported by the `cython_pugixml_arrow` engine —
+  it raises `ValueError`**, use a python engine. `prefixes` / `default_base` go with them.
 - `categorical_columns` (default `("INSTANCE_ID", "KEY")`) — columns to
   dictionary-encode (Arrow) / categorize (pandas) for memory savings; `None`
   disables.

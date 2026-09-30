@@ -23,6 +23,8 @@ from pyarrow.includes.libarrow cimport (
 )
 from pyarrow.lib cimport pyarrow_unwrap_array, pyarrow_unwrap_batch
 
+from triplets.export.cimxml_utils import undefined_name
+
 # pugixml C++ declarations
 cdef extern from "pugixml.hpp" namespace "pugi":
     const unsigned int format_indent
@@ -329,7 +331,7 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             # rdf:Description is "no shorthand type", not a class: written back as rdf:Description
             py_class = s_value.decode('utf-8')      # "Description": mirror of triplets.iri.DESCRIPTION_TYPE
             s_tag = (f"{rdf_prefix}:Description" if py_class == "Description"
-                     else _make_prefixed(undefined_namespace, py_class)).encode('utf-8')
+                     else _make_prefixed(*undefined_name(py_class, undefined_namespace))).encode('utf-8')
             obj_node = rdf_root.append_child(s_tag.c_str())
             s_combined.assign(b"urn:uuid:")
             s_combined.append(s_id)
@@ -390,7 +392,7 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             else:
                 attr_node.append_child(node_pcdata).set_value(s_combined.c_str())
         elif export_undefined:
-            s_tag = _make_prefixed(undefined_namespace, s_key.decode('utf-8')).encode('utf-8')
+            s_tag = _make_prefixed(*undefined_name(s_key.decode('utf-8'), undefined_namespace)).encode('utf-8')
             attr_node = store.append_child_to(<int>py_store_idx, s_tag.c_str())
             attr_node.append_child(node_pcdata).set_value(s_value.c_str())
 

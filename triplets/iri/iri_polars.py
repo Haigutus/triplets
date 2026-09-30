@@ -122,7 +122,7 @@ def to_schema_form(frame, namespaces, value_types=None, prefixes=None):
     if not prefixes and not any(_looks_named(key) for key in frame["KEY"].unique().drop_nulls().to_list()):
         return frame
     value_types = value_types or {}
-    map_ids = frame.filter((polars.col("KEY") == TYPE_KEY) & (polars.col("VALUE") == "NamespaceMap"))["ID"]
+    map_ids = frame.filter((polars.col("KEY") == TYPE_KEY) & (polars.col("VALUE") == "NamespaceMap"))["ID"].to_list()
     maps = {}
     for row in frame.filter(polars.col("ID").is_in(map_ids) & ~polars.col("KEY").is_in([TYPE_KEY, "xml_base", ""])).iter_rows(named=True):
         maps.setdefault(row["INSTANCE_ID"], {})[row["KEY"]] = row["VALUE"]

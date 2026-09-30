@@ -13,7 +13,7 @@ from lxml.etree import QName
 
 from .. import iri
 from ..iri import DESCRIPTION_TYPE, RDF_NS, TRIPLETS_NS, TYPE_KEY, UUID_PREFIX
-from .cimxml_utils import load_rdf_map, resolve_instance_config
+from .cimxml_utils import load_rdf_map, resolve_instance_config, undefined_name, with_name_namespaces
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +162,8 @@ def generate_xml(instance_data,
     if export_undefined and undefined_namespace not in namespace_map.values():
         # an undefined_namespace the map already binds (e.g. CIM100) keeps its own prefix
         namespace_map = {**namespace_map, "triplets": undefined_namespace}
+    if export_undefined:            # absolute undefined names (iri_form="absolute") keep their namespace
+        namespace_map = with_name_namespaces(namespace_map, instance_data, class_KEY)
 
     # Create element builder
     E = ElementMaker(nsmap=namespace_map)
@@ -201,7 +203,8 @@ def generate_xml(instance_data,
 
             if export_undefined:
                 # rdf:Description is "no shorthand type", not a class: written back as rdf:Description
-                class_namespace = RDF_NS if class_name == DESCRIPTION_TYPE else undefined_namespace
+                class_namespace, class_name = (RDF_NS, class_name) if class_name == DESCRIPTION_TYPE \
+                    else undefined_name(class_name, undefined_namespace)
                 id_name = f"{{{RDF_NS}}}about"
                 id_value_prefix = UUID_PREFIX   # undefined-class fallback; defined classes use the schema value_prefix
             else:
@@ -270,7 +273,7 @@ def generate_xml(instance_data,
                 logger.debug("Definition missing for tag: " + KEY)
 
                 if export_undefined:
-                    tag = E(_get_qname(undefined_namespace, KEY))
+                    tag = E(_get_qname(*undefined_name(KEY, undefined_namespace)))
                     tag.text = str(VALUE)
                     # key_datatypes spans all schema profiles, so annotation works
                     # even when instance profile resolution fell through
