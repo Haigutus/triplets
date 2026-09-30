@@ -34,7 +34,19 @@ Start of the 0.3 line.
 - `iri`: `IRI_FORMS`, `PREFIXED_RE`, `compact_iri`, `expand_iri`, `schema_name`,
   `DESCRIPTION_IRI`, `is_named`.
 - `validate` / `validate_schema` raise `ValueError` for a prefixed / absolute
-  frame (they compare local names and would silently match nothing). Exporting
+  frame (they compare local names and would silently match nothing); the check
+  covers KEYs and `Type` VALUEs.
+- Export of a prefixed / absolute frame: `urn:uuid:` nodes return to the local
+  convention and other absolute nodes are written as is (CIM XML: `rdf:about`, no
+  `value_prefix`); an unbound prefix raises instead of writing `triplets#cim:…`;
+  a stream expands each batch with its own NamespaceMap (else `prefixes=`);
+  dictionary-encoded columns (arrow parser) are cast first; qlever normalizes
+  non-local duckdb input like oxigraph / rdflib. `parse(prefixes=…)` /
+  non-local `iri_form` pick a python engine under `engine="auto"`.
+- CIM XML: a document with a default namespace exports well-formed XML on both
+  engines (the NamespaceMap `""` prefix is lxml's `None` and cython's `xmlns`,
+  and its empty KEY row is no element); polars input to the cython engine with
+  `export_undefined=True` works again. Exporting
   data whose namespace differs from the schema's (CIM16 data, CIM100 schema)
   from an exact form keeps the document's namespace and logs a warning.
 - **`triplets.iri`** — one public package for the triplet ↔ IRI contract:

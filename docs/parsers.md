@@ -176,13 +176,32 @@ literals never change (`iri.IRI_FORMS`):
   names only when the namespace matches (`rdf:type` never becomes `dcterms:type`), and
   everything else is written absolute. `local` and `prefixed` export the same graph;
   `absolute` differs only in node IRIs (`base#_x` vs `urn:uuid:x`).
+- **Which frames count as local:** no prefixed name and no http(s) IRI among the distinct
+  KEYs *and* `Type` VALUEs (`iri.local_form`) — a type-only object counts.
+- **Prefixes must be bound:** a KEY or class prefix no NamespaceMap row (and no
+  `prefixes=`) binds raises `ValueError` rather than writing `triplets#cim:…`. A streamed
+  export (`RecordBatchReader`) expands each batch with its own NamespaceMap rows only —
+  output never depends on batch order — so a stream whose map is in another batch needs
+  `prefixes=`; the error can leave a file target partly written. `parse_batches` gives one
+  batch per file, map included.
+- **Nodes on export:** `urn:uuid:x` IDs (and Association references) go back to `x`, the
+  convention every writer restores; any other absolute node is written as is — CIM XML
+  writes an absolute ID as `rdf:about` (never `rdf:ID`) and an absolute reference or enum
+  value without `value_prefix`. 552 ED1 documents without `xml:base` therefore export their
+  relative IDs as `http://triplets#_x` from the absolute form: use `local` / `prefixed` to
+  keep ED1 conventions.
+- **Without a schema** no KEY is known to be an Attribute, so literal text that starts with
+  a bound prefix (`dct:…`) would be expanded; pass the `rdf_map`.
+- **Engines:** `engine="auto"` picks a python parser for `iri_form != "local"` or
+  `prefixes=`; an explicit cython engine raises `ValueError`.
 - **Data in another namespace than the schema's** (CIM16 data, a CIM100 schema): the local
   form writes the schema's namespace; the exact forms keep the document's and log a
   warning — CIM XML then drops those names as undefined unless `export_undefined=True`.
 - **Validation, SPARQL `scope`, CONSTRUCT decoding and the table tools expect the local
   form** — they compare against local names (`rule.path`, `type_tableview("ACLineSegment")`).
-  `validate` / `validate_schema` refuse a prefixed / absolute frame (`ValueError`) rather
-  than silently matching nothing.
+  `validate` / `validate_schema` refuse a prefixed / absolute frame (`ValueError`, checked on
+  KEYs and `Type` VALUEs, every flavor) rather than silently matching nothing. SPARQL loads
+  every form on every engine (qlever normalizes duckdb input that is not local).
 
 The schema entry type decides the RDF form: an Attribute (`xsd:anyURI` included)
 is a literal written verbatim, checked by `sh:datatype`; an Association or

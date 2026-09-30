@@ -61,6 +61,27 @@ def get_engine(name: str = "auto"):
     return _REGISTRY.get(name)
 
 
+_PYTHON_ENGINES = ("python_lxml_arrow", "python_lxml_pandas")
+
+
+def _engine_for(engine, iri_form, prefixes, arrow_only=False):
+    """The engine for this call: a non-local ``iri_form`` or ``prefixes`` need a python engine —
+    "auto" picks one, an explicit cython engine raises instead of failing inside it."""
+    if iri_form != "local" or prefixes:
+        if engine == "auto":
+            for name in _PYTHON_ENGINES[:1] if arrow_only else _PYTHON_ENGINES:
+                try:
+                    return get_engine(name)
+                except Exception:          # pyarrow missing: python_lxml_arrow not registered
+                    continue
+        engine_name, engine_mod = get_engine(engine)
+        if engine_name not in _PYTHON_ENGINES:
+            raise ValueError(f"iri_form={iri_form!r} / prefixes= need a python parser engine "
+                             f"({', '.join(_PYTHON_ENGINES)}), got {engine_name!r}")
+        return engine_name, engine_mod
+    return get_engine(engine)
+
+
 # Re-exports (rdf_parser.py compat layer, public parser surface)
 from .utils import find_all_xml, iter_all_xml  # noqa: F401
 from ..iri import TRIPLETS_NS, local_id  # noqa: F401 — local_id re-exported
@@ -129,13 +150,10 @@ def parse(
         recorded in the NamespaceMap rows either way.
     """
     debug = debug or logger.isEnabledFor(logging.DEBUG)
-    engine_name, engine_mod = get_engine(engine)
+    engine_name, engine_mod = _engine_for(engine, iri_form, prefixes)
     is_arrow_engine = engine_name in _ARROW_ENGINES
     string_type = _resolve_string_type(string_type, return_type)
 
-    if iri_form != "local" and engine_name == "cython_pugixml_arrow":
-        raise ValueError(f"iri_form={iri_form!r} is not supported by the cython_pugixml_arrow engine, "
-                         "use engine='python_lxml_pandas' or 'python_lxml_arrow'")
 
     parse_one = getattr(engine_mod, "load_rdf_to_dataframe", None)
     if parse_one is None:
@@ -207,13 +225,10 @@ def parse_batches(
     import pyarrow as pa
 
     debug = debug or logger.isEnabledFor(logging.DEBUG)
-    engine_name, engine_mod = get_engine(engine)
+    engine_name, engine_mod = _engine_for(engine, iri_form, prefixes, arrow_only=True)
     if engine_name not in _ARROW_ENGINES:
         raise ValueError(f"parse_batches requires an arrow parser engine, got {engine_name!r}. "
                          f"Install with: pip install triplets[arrow].")
-    if iri_form != "local" and engine_name == "cython_pugixml_arrow":
-        raise ValueError(f"iri_form={iri_form!r} is not supported by the cython_pugixml_arrow engine, "
-                         "use engine='python_lxml_arrow'")
     parse_one = engine_mod.load_rdf_to_dataframe
 
     schema = pa.schema([(c, pa.string()) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
