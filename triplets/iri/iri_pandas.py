@@ -7,7 +7,7 @@ downcast is deprecated on object columns).
 import numpy
 import pandas
 
-from . import (GUESS_NAME_RE, ID_PREFIX_RE, IRI_ESCAPE_RE, IRI_UNSAFE_RE, RDF_TYPE, SPLIT_RE, TRIPLETS_NS,
+from . import (GUESS_NAME_RE, ID_PREFIX_RE, IRI_ESCAPE_RE, IRI_UNSAFE_RE, PREFIXED_RE, RDF_TYPE, SPLIT_RE, TRIPLETS_NS,
                TYPE_KEY, URI_PREFIXES, UUID_PREFIX, UUID_RE)
 from . import decode_iri as _decode_iri, encode_iri as _encode_iri
 
@@ -141,3 +141,67 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
         distinct, namespaces, undefined_namespace)))
     kind = numpy.where(references | names, "iri", "literal")
     return pandas.Series(kind, index=key.index, dtype=value.dtype), payload
+
+
+# ── any iri_form → the form the exporters consume ────────────────────────────
+
+def _namespace_maps(frame):
+    """{INSTANCE_ID: {prefix: namespace}} from the NamespaceMap rows the parser records."""
+    types = frame[frame["KEY"] == TYPE_KEY]
+    map_ids = set(types.loc[types["VALUE"] == "NamespaceMap", "ID"].astype(str))
+    rows = frame[frame["ID"].astype(str).isin(map_ids)]
+    rows = rows[(rows["KEY"] != TYPE_KEY) & (rows["KEY"] != "xml_base") & (rows["KEY"].astype(str) != "")]
+    maps = {}
+    for instance, prefix, namespace in zip(rows["INSTANCE_ID"].astype(str), rows["KEY"].astype(str), rows["VALUE"].astype(str)):
+        maps.setdefault(instance, {})[prefix] = namespace
+    return maps
+
+
+def _looks_named(text):
+    """A prefixed name or an http(s) IRI — the forms a local frame never has in KEY."""
+    return text.startswith(("http://", "https://")) or (PREFIXED_RE.match(text) is not None and not text.startswith("urn:"))
+
+
+def to_schema_form(frame, namespaces, value_types=None, prefixes=None):
+    """A frame in any ``iri_form`` → the form the exporters consume: prefixed names expanded
+    with their own instance's NamespaceMap (then *prefixes*), names the schema declares
+    (KEY, class, enum value) back to its local names — only when the namespace matches
+    (``rdf:type`` never becomes ``dcterms:type``) — everything else absolute, and
+    ``rdf:Description`` as ``Description``. A local frame (no prefixed / IRI KEY) is
+    returned as is, after one pass over its distinct KEYs. Literal VALUEs (the schema's
+    Attribute keys) are never expanded."""
+    from . import DESCRIPTION_IRI, DESCRIPTION_TYPE, expand_iri, schema_name
+    if not prefixes and not any(_looks_named(key) for key in pandas.unique(frame["KEY"].astype(str))):
+        return frame
+    import pyarrow
+    value_types = value_types or {}
+    maps = _namespace_maps(frame)
+    frame = frame.copy()
+    for column in ("ID", "KEY", "VALUE"):          # categorical columns take no new values
+        if not isinstance(frame[column].dtype, pandas.ArrowDtype):
+            frame[column] = frame[column].astype(pandas.ArrowDtype(pyarrow.string()))
+    instances = frame["INSTANCE_ID"].astype(str).to_numpy()
+
+    def expand(column, rows):
+        """Expand the prefixed values of *column* on *rows*, per instance map (distinct values)."""
+        for instance in pandas.unique(instances[rows]):
+            bound = {**maps.get(instance, {}), **(prefixes or {})}
+            here = rows & (instances == instance)
+            if bound and here.any():
+                frame.loc[here, column] = by_distinct(frame.loc[here, column], lambda values: values.map(
+                    lambda text: expand_iri(text, bound)))
+
+    def prefixed(column):
+        return frame[column].str.match(PREFIXED_RE.pattern, na=False).astype(bool).to_numpy()
+
+    expand("KEY", prefixed("KEY"))
+    frame["KEY"] = by_distinct(frame["KEY"], lambda keys: keys.map(
+        lambda key: key if key == TYPE_KEY else (schema_name(key, namespaces) or key)))
+    kinds = frame["KEY"].map(value_types)
+    expand("ID", prefixed("ID"))
+    expand("VALUE", prefixed("VALUE") & ~kinds.eq("literal").fillna(False).to_numpy())
+    names = ((frame["KEY"] == TYPE_KEY) | kinds.eq("enum")).fillna(False).astype(bool).to_numpy()
+    if names.any():
+        frame.loc[names, "VALUE"] = by_distinct(frame.loc[names, "VALUE"], lambda values: values.map(
+            lambda value: DESCRIPTION_TYPE if value == DESCRIPTION_IRI else (schema_name(value, namespaces) or value)))
+    return frame

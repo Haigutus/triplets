@@ -82,7 +82,7 @@ ID_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, ID_PREFIXES)) + ")")
 URI_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, URI_PREFIXES)) + ")")
 SPLIT_RE = re.compile(r"^(?:.*[#/]|urn:.*:)")  # the namespace: up to the last "#" or "/", else a URN's last ":"
 GUESS_NAME_RE = re.compile(r"^http.*#(?:.*/)?")   # local_value guess: split_iri's namespace, only for http IRIs with a "#"
-PREFIXED_RE = re.compile(r"^([A-Za-z_][\w.-]*):(?!//)")
+PREFIXED_RE = re.compile(r"^([A-Za-z_][\w.-]*):(?:[^/]|$)")   # no lookahead: RE2 (Arrow) has none
 """``prefix:local`` — a candidate only; :func:`is_iri` text (``urn:``, ``http:``) is never prefixed."""
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 """Canonical lowercase mRID — what the exporters turn into ``urn:uuid:``."""
@@ -181,9 +181,10 @@ def expand_iri(text, prefixes):
     prefix; local names, absolute IRIs (``urn:`` included) and unbound prefixes unchanged."""
     if text is None or not prefixes or is_iri(text):
         return text
-    match = PREFIXED_RE.match(str(text))
+    text = str(text)
+    match = PREFIXED_RE.match(text)
     namespace = prefixes.get(match.group(1)) if match else None
-    return namespace + str(text)[match.end():] if namespace else text
+    return namespace + text[len(match.group(1)) + 1:] if namespace else text
 
 
 def schema_name(text, namespaces, prefixes=None):

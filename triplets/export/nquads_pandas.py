@@ -13,7 +13,7 @@ def _escape(series):
 
 
 def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, export_undefined=True,
-                     undefined_namespace=TRIPLETS_NS):
+                     undefined_namespace=TRIPLETS_NS, prefixes=None):
     """Export triplet DataFrame to N-Quads file.
 
     Parameters
@@ -33,10 +33,14 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
         value — every row without a schema); False drops them.
     undefined_namespace : str, default "http://triplets#"
         Namespace those names are written in.
+    prefixes : dict, optional
+        prefix → namespace for a ``parse(iri_form="prefixed")`` frame, overriding the maps
+        its NamespaceMap rows carry. Any ``iri_form`` is accepted (``iri_pandas.to_schema_form``).
     """
     rdf_map = load_rdf_map(rdf_map)
     maps = dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map))
 
+    data = iri_pandas.to_schema_form(data, maps["namespaces"], maps["value_types"], prefixes)   # any iri_form
     data = data[data["VALUE"].notna()]  # no object to state (parity with the polars engine)
     # Type "Description" is an rdf:Description element — not a class, so no rdf:type
     data = data[~((data["KEY"] == TYPE_KEY) & (data["VALUE"] == DESCRIPTION_TYPE)).fillna(False).astype(bool)]

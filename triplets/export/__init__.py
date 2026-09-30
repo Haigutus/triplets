@@ -118,7 +118,7 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
 
 
 def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_memory=False,
-                     export_undefined=True, undefined_namespace=TRIPLETS_NS):
+                     export_undefined=True, undefined_namespace=TRIPLETS_NS, prefixes=None):
     """Export triplet DataFrame to N-Quads file.
 
     Parameters
@@ -159,20 +159,21 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
         if export_to_memory:
             buffer = BytesIO()
             engine_module.write_nquads_batches(data, buffer, rdf_map=rdf_map, export_undefined=export_undefined,
-                                               undefined_namespace=undefined_namespace)
+                                               undefined_namespace=undefined_namespace, prefixes=prefixes)
             buffer.name = "export.nq"
             buffer.seek(0)
             return buffer
         with open(path, "wb") as handle:
             engine_module.write_nquads_batches(data, handle, rdf_map=rdf_map, export_undefined=export_undefined,
-                                               undefined_namespace=undefined_namespace)
+                                               undefined_namespace=undefined_namespace, prefixes=prefixes)
         return None
 
     if engine_name != _flavor(data):
         from .._engine_detect import to_polars
         data = to_polars(data) if engine_name == "polars" else _to_pandas(data)
     return engine_module.export_to_nquads(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory,
-                                          export_undefined=export_undefined, undefined_namespace=undefined_namespace)
+                                          export_undefined=export_undefined, undefined_namespace=undefined_namespace,
+                                          prefixes=prefixes)
 
 
 def get_cimxml_engine(name="auto"):

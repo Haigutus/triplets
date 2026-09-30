@@ -5,7 +5,7 @@ Categorical first, as the N-Quads exporter does).
 """
 import polars
 
-from . import (GUESS_NAME_RE, ID_PREFIX_RE, IRI_ESCAPES, RDF_TYPE, SPLIT_RE, TRIPLETS_NS, TYPE_KEY,
+from . import (GUESS_NAME_RE, ID_PREFIX_RE, IRI_ESCAPES, PREFIXED_RE, RDF_TYPE, SPLIT_RE, TRIPLETS_NS, TYPE_KEY,
                URI_PREFIX_RE, UUID_PREFIX, UUID_RE)
 
 
@@ -106,3 +106,49 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
                .when(typed).then(datatype)
                .otherwise(polars.lit(None, dtype=polars.Utf8)))
     return kind, payload
+
+
+# ── any iri_form → the form the exporters consume (see iri_pandas.to_schema_form) ──
+
+def _looks_named(text):
+    return text.startswith(("http://", "https://")) or (PREFIXED_RE.match(text) is not None and not text.startswith("urn:"))
+
+
+def to_schema_form(frame, namespaces, value_types=None, prefixes=None):
+    """polars flavor of ``iri_pandas.to_schema_form``: the same steps, each a join on the
+    distinct (INSTANCE_ID, value) pairs that need work — a local frame returns as is."""
+    from . import DESCRIPTION_IRI, DESCRIPTION_TYPE, expand_iri, schema_name
+    frame = frame.with_columns(polars.col("ID", "KEY", "VALUE", "INSTANCE_ID").cast(polars.Utf8))
+    if not prefixes and not any(_looks_named(key) for key in frame["KEY"].unique().drop_nulls().to_list()):
+        return frame
+    value_types = value_types or {}
+    map_ids = frame.filter((polars.col("KEY") == TYPE_KEY) & (polars.col("VALUE") == "NamespaceMap"))["ID"]
+    maps = {}
+    for row in frame.filter(polars.col("ID").is_in(map_ids) & ~polars.col("KEY").is_in([TYPE_KEY, "xml_base", ""])).iter_rows(named=True):
+        maps.setdefault(row["INSTANCE_ID"], {})[row["KEY"]] = row["VALUE"]
+
+    def expand(frame, column, rows):
+        pairs = frame.filter(rows & polars.col(column).str.contains(PREFIXED_RE.pattern)).select("INSTANCE_ID", column).unique()
+        if pairs.height == 0:
+            return frame
+        expanded = [expand_iri(value, {**maps.get(instance, {}), **(prefixes or {})})
+                    for instance, value in pairs.iter_rows()]
+        pairs = pairs.with_columns(polars.Series("_expanded", expanded, dtype=polars.Utf8))
+        return (frame.join(pairs, on=["INSTANCE_ID", column], how="left", nulls_equal=True, maintain_order="left")
+                .with_columns(polars.coalesce("_expanded", column).alias(column)).drop("_expanded"))
+
+    def localize(values):
+        return {value: schema_name(value, namespaces) or value for value in values if value is not None}
+
+    frame = expand(frame, "KEY", polars.lit(True))
+    keys = localize(frame["KEY"].unique().to_list())
+    keys[TYPE_KEY] = TYPE_KEY
+    frame = frame.with_columns(polars.col("KEY").replace(keys))
+    kind = polars.col("KEY").replace_strict(value_types, default=None, return_dtype=polars.Utf8) if value_types \
+        else polars.lit(None, dtype=polars.Utf8)
+    frame = expand(frame, "ID", polars.lit(True))
+    frame = expand(frame, "VALUE", (kind != "literal").fill_null(True))
+    names = (polars.col("KEY") == TYPE_KEY) | (kind == "enum").fill_null(False)
+    distinct = localize(frame.filter(names)["VALUE"].unique().to_list())
+    distinct = {value: DESCRIPTION_TYPE if value == DESCRIPTION_IRI else local for value, local in distinct.items()}
+    return frame.with_columns(polars.when(names).then(polars.col("VALUE").replace(distinct)).otherwise(polars.col("VALUE")))
