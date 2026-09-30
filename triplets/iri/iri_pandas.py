@@ -157,11 +157,6 @@ def _namespace_maps(frame):
     return maps
 
 
-def _looks_named(text):
-    """A prefixed name or an http(s) IRI — the forms a local frame never has in KEY."""
-    return text.startswith(("http://", "https://")) or (PREFIXED_RE.match(text) is not None and not text.startswith("urn:"))
-
-
 def to_schema_form(frame, namespaces, value_types=None, prefixes=None):
     """A frame in any ``iri_form`` → the form the exporters consume: prefixed names expanded
     with their own instance's NamespaceMap (then *prefixes*), names the schema declares
@@ -170,8 +165,8 @@ def to_schema_form(frame, namespaces, value_types=None, prefixes=None):
     ``rdf:Description`` as ``Description``. A local frame (no prefixed / IRI KEY) is
     returned as is, after one pass over its distinct KEYs. Literal VALUEs (the schema's
     Attribute keys) are never expanded."""
-    from . import DESCRIPTION_IRI, DESCRIPTION_TYPE, expand_iri, schema_name
-    if not prefixes and not any(_looks_named(key) for key in pandas.unique(frame["KEY"].astype(str))):
+    from . import DESCRIPTION_IRI, DESCRIPTION_TYPE, expand_iri, is_named, schema_name, warn_namespace_mismatch
+    if not prefixes and not any(is_named(key) for key in frame["KEY"].dropna().unique()):
         return frame
     import pyarrow
     value_types = value_types or {}
@@ -197,6 +192,7 @@ def to_schema_form(frame, namespaces, value_types=None, prefixes=None):
     expand("KEY", prefixed("KEY"))
     frame["KEY"] = by_distinct(frame["KEY"], lambda keys: keys.map(
         lambda key: key if key == TYPE_KEY else (schema_name(key, namespaces) or key)))
+    warn_namespace_mismatch(frame["KEY"].dropna().unique(), namespaces)
     kinds = frame["KEY"].map(value_types)
     expand("ID", prefixed("ID"))
     expand("VALUE", prefixed("VALUE") & ~kinds.eq("literal").fillna(False).to_numpy())

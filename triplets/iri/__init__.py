@@ -203,6 +203,28 @@ def schema_name(text, namespaces, prefixes=None):
     return name if namespaces.get(name) == namespace else None
 
 
+def is_named(text):
+    """A prefixed name (``cim:X``) or an ``http(s)`` IRI — what a KEY is in the prefixed /
+    absolute forms and never in the local one (a local KEY is ``Class.attr``)."""
+    text = str(text)
+    return text.startswith(("http://", "https://")) or (
+        PREFIXED_RE.match(text) is not None and not text.startswith("urn:"))
+
+
+def warn_namespace_mismatch(names, namespaces):
+    """Log the names still absolute after localization whose local name the schema declares
+    under another namespace (e.g. CIM16 data against a CIM100 schema): the local form would
+    have written the schema's namespace, the exact forms keep the document's — and CIM XML
+    drops them as undefined unless ``export_undefined=True``."""
+    import logging
+    mismatched = sorted({name for name in names if str(name).startswith(("http://", "https://"))
+                         and split_iri(name)[1] in namespaces})
+    if mismatched:
+        logging.getLogger("triplets.iri").warning(
+            "%d name(s) the schema declares arrive in another namespace and stay absolute "
+            "(the local form would write the schema's namespace), e.g. %s", len(mismatched), mismatched[:3])
+
+
 def is_absolute(text):
     """Absolute for resolution and the RDFS tools: :func:`is_iri`, or any ``scheme://`` IRI
     (``file://`` too). A prefixed name (``cim:Foo``) or ``M:1..1`` is not."""

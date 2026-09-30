@@ -176,8 +176,13 @@ literals never change (`iri.IRI_FORMS`):
   names only when the namespace matches (`rdf:type` never becomes `dcterms:type`), and
   everything else is written absolute. `local` and `prefixed` export the same graph;
   `absolute` differs only in node IRIs (`base#_x` vs `urn:uuid:x`).
+- **Data in another namespace than the schema's** (CIM16 data, a CIM100 schema): the local
+  form writes the schema's namespace; the exact forms keep the document's and log a
+  warning — CIM XML then drops those names as undefined unless `export_undefined=True`.
 - **Validation, SPARQL `scope`, CONSTRUCT decoding and the table tools expect the local
   form** — they compare against local names (`rule.path`, `type_tableview("ACLineSegment")`).
+  `validate` / `validate_schema` refuse a prefixed / absolute frame (`ValueError`) rather
+  than silently matching nothing.
 
 The schema entry type decides the RDF form: an Attribute (`xsd:anyURI` included)
 is a literal written verbatim, checked by `sh:datatype`; an Association or

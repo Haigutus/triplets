@@ -110,16 +110,12 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
 
 # ── any iri_form → the form the exporters consume (see iri_pandas.to_schema_form) ──
 
-def _looks_named(text):
-    return text.startswith(("http://", "https://")) or (PREFIXED_RE.match(text) is not None and not text.startswith("urn:"))
-
-
 def to_schema_form(frame, namespaces, value_types=None, prefixes=None):
     """polars flavor of ``iri_pandas.to_schema_form``: the same steps, each a join on the
     distinct (INSTANCE_ID, value) pairs that need work — a local frame returns as is."""
-    from . import DESCRIPTION_IRI, DESCRIPTION_TYPE, expand_iri, schema_name
+    from . import DESCRIPTION_IRI, DESCRIPTION_TYPE, expand_iri, is_named, schema_name, warn_namespace_mismatch
     frame = frame.with_columns(polars.col("ID", "KEY", "VALUE", "INSTANCE_ID").cast(polars.Utf8))
-    if not prefixes and not any(_looks_named(key) for key in frame["KEY"].unique().drop_nulls().to_list()):
+    if not prefixes and not any(is_named(key) for key in frame["KEY"].unique().drop_nulls().to_list()):
         return frame
     value_types = value_types or {}
     map_ids = frame.filter((polars.col("KEY") == TYPE_KEY) & (polars.col("VALUE") == "NamespaceMap"))["ID"].to_list()
@@ -144,6 +140,7 @@ def to_schema_form(frame, namespaces, value_types=None, prefixes=None):
     keys = localize(frame["KEY"].unique().to_list())
     keys[TYPE_KEY] = TYPE_KEY
     frame = frame.with_columns(polars.col("KEY").replace(keys))
+    warn_namespace_mismatch(list(keys.values()), namespaces)
     kind = polars.col("KEY").replace_strict(value_types, default=None, return_dtype=polars.Utf8) if value_types \
         else polars.lit(None, dtype=polars.Utf8)
     frame = expand(frame, "ID", polars.lit(True))

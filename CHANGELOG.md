@@ -32,7 +32,11 @@ Start of the 0.3 line.
   XML writes an undefined absolute name in its own namespace). `export_to_nquads`
   / `export_to_cimxml` take `prefixes=`.
 - `iri`: `IRI_FORMS`, `PREFIXED_RE`, `compact_iri`, `expand_iri`, `schema_name`,
-  `DESCRIPTION_IRI`.
+  `DESCRIPTION_IRI`, `is_named`.
+- `validate` / `validate_schema` raise `ValueError` for a prefixed / absolute
+  frame (they compare local names and would silently match nothing). Exporting
+  data whose namespace differs from the schema's (CIM16 data, CIM100 schema)
+  from an exact form keeps the document's namespace and logs a warning.
 - **`triplets.iri`** — one public package for the triplet ↔ IRI contract:
   `local_id` / `local_key(iri, type_key)` / `local_value(iri, kind)` (local forms,
   all on one split, `split_iri` → namespace + local name; `TYPE_KEY`,

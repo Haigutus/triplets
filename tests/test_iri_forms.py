@@ -234,3 +234,42 @@ def test_sparql_query_reads_a_prefixed_frame(tmp_path):
             pytest.skip(f"{engine} not available: {error}")
         got = triplets.sparql.query(frame, query, rdf_map=SCHEMA, engine=engine)["name"].tolist()
         assert got == triplets.sparql.query(local, query, rdf_map=SCHEMA, engine=engine)["name"].tolist() == ["B1"]
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb"])
+def test_validation_refuses_a_non_local_frame(tmp_path, engine):
+    """Vectorized validation compares local names: a prefixed frame would silently match
+    nothing, so it is refused on every engine (pyshacl too — one contract)."""
+    import rdflib
+    frame, _ = _full(tmp_path, "prefixed")
+    if engine == "polars":
+        polars = pytest.importorskip("polars")
+        frame = polars.from_pandas(frame.astype(str))
+    if engine == "duckdb":
+        duckdb = pytest.importorskip("duckdb")
+        connection = duckdb.connect()
+        connection.register("_frame", frame.astype(str))
+        connection.execute("CREATE TABLE triplets AS SELECT * FROM _frame")
+        frame = connection
+    shapes = rdflib.Graph().parse(data="""@prefix sh: <http://www.w3.org/ns/shacl#> . @prefix cim: <http://iec.ch/TC57/CIM100#> .
+        cim:S a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 2 ] .""",
+                                  format="turtle")
+    with pytest.raises(ValueError, match="local IRI form"):
+        triplets.validation.validate(frame, shapes, engine=engine)
+    with pytest.raises(ValueError, match="local IRI form"):
+        triplets.validation.validate_schema(frame, SCHEMA, engine=engine)
+
+
+def test_namespace_mismatch_warns_and_stays_absolute(tmp_path, caplog):
+    """CIM16 data against a CIM100 schema: the local form writes the schema's namespace, the
+    exact forms keep the document's — and say so."""
+    path = tmp_path / "cim16.xml"
+    path.write_text(SAME.format(cim=CIM16, uuid=UUID))
+    local = triplets.parse(str(path), engine="python_lxml_pandas")
+    prefixed = triplets.parse(str(path), engine="python_lxml_pandas", iri_form="prefixed")
+    local_lines = _quads(local, "pandas")
+    with caplog.at_level("WARNING", logger="triplets.iri"):
+        prefixed_lines = _quads(prefixed, "pandas")
+    assert any(f"<{CIM100}IdentifiedObject.name>" in line for line in local_lines)
+    assert any(f"<{CIM16}IdentifiedObject.name>" in line for line in prefixed_lines)
+    assert "arrive in another namespace" in caplog.text
