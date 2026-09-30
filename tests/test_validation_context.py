@@ -144,3 +144,16 @@ def test_schema_context_is_looked_up_by_profile():
     assert by_header["SCHEMA_DESCRIPTION"].tolist() == ["as", "sis"]
     merged = enrich(violations, rdf_map=rdf_map)                      # no profile: first-wins fallback
     assert merged["SCHEMA_MULTIPLICITY"].tolist() == ["0..1", "0..1"]
+
+
+def test_schema_context_tries_every_declared_profile():
+    """An instance declaring two profiles: a KEY only the second defines still comes from
+    that profile, not the merged view."""
+    rdf_map = {"EQ": {"ProfileMetadata": {"keyword": "EQ"}, "A.x": {"type": "Attribute", "multiplicity": "0..1"}},
+               "SC": {"ProfileMetadata": {"keyword": "SC"}, "A.y": {"type": "Attribute", "multiplicity": "1..1"}},
+               "OTHER": {"ProfileMetadata": {"keyword": "OTHER"}, "A.y": {"type": "Attribute", "multiplicity": "0..n"}}}
+    violations = pandas.DataFrame({"ID": ["a1"], "KEY": ["A.y"], "VALUE": [None], "VIOLATION_TYPE": ["sh:minCount"],
+                                   "MESSAGE": [""], "SEVERITY": ["Violation"], "SOURCE_SHAPE": [None]})
+    data = pandas.DataFrame([("h", "keyword", "EQ", "i"), ("h", "keyword", "SC", "i"), ("a1", "Type", "A", "i")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    assert enrich(violations, data=data, rdf_map=rdf_map)["SCHEMA_MULTIPLICITY"].tolist() == ["1..1"]

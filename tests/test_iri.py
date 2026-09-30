@@ -589,3 +589,17 @@ def test_parse_absolute_without_xml_base_uses_default_base(engine, tmp_path):
     custom = triplets.parse(str(path), engine=engine, return_type="pandas", local_resources=False,
                             default_base="http://example.org/base")
     assert "http://example.org/base#_abc" in set(custom["ID"])
+
+
+@pytest.mark.parametrize("engine", PARSE_ENGINES)
+def test_xml_base_row_holds_only_a_declared_absolute_base(engine, tmp_path):
+    """The NamespaceMap xml_base row is metadata the schema generator copies (ProfileXMLBase):
+    a declared absolute xml:base only — never the file location, on every engine."""
+    def base_rows(text):
+        frame = _parse(engine, text, tmp_path)
+        return frame.loc[frame["KEY"] == "xml_base", "VALUE"].tolist()
+    assert base_rows(PARSE_FIXTURE) == []
+    declared = PARSE_FIXTURE.replace("<rdf:RDF ", '<rdf:RDF xml:base="http://example.org/base" ', 1)
+    assert base_rows(declared) == ["http://example.org/base"]
+    relative = PARSE_FIXTURE.replace("<rdf:RDF ", '<rdf:RDF xml:base="relative/dir" ', 1)
+    assert base_rows(relative) == []

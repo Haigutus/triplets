@@ -28,7 +28,7 @@ from libcpp.string_view cimport string_view
 from libcpp.memory cimport shared_ptr, make_shared
 from libcpp.vector cimport vector
 from libcpp cimport bool
-from libc.string cimport strrchr, strlen, strcmp, memcmp
+from libc.string cimport strrchr, strlen, strcmp, strncmp, strstr, memcmp
 from libc.stdint cimport int64_t
 
 # Arrow C++ types from pyarrow's Cython API
@@ -434,7 +434,6 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
     cdef xml_attribute attr
     cdef const char* aname
     cdef const char* aval
-    cdef bint has_xml_base = False
     # rdf:ID / rdf:about / ... are found by the prefix the document binds to the RDF
     # namespace (pugixml does not resolve namespaces) — "rdf" unless the root says otherwise
     cdef const char* RDF_NS_URI = b"http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -491,17 +490,14 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
                 aval = attr.value()
                 Append(val_b, aval)
             elif memcmp(aname, XML_BASE, XML_BASE_LEN) == 0:
-                Append(id_b, nsmap_id)
-                Append(key_b, b"xml_base")
+                # a declared absolute xml:base only — never the file location
+                # (mirror of triplets.iri.is_absolute: http(s):// / urn: / any "://")
                 aval = attr.value()
-                Append(val_b, aval)
-                has_xml_base = True
+                if strstr(aval, b"://") != NULL or strncmp(aval, b"urn:", 4) == 0:
+                    Append(id_b, nsmap_id)
+                    Append(key_b, b"xml_base")
+                    Append(val_b, aval)
             attr = attr.next_attribute()
-
-        if not has_xml_base:
-            Append(id_b, nsmap_id)
-            Append(key_b, b"xml_base")
-            Append(val_b, file_name_bytes)
 
         rdf_id_attr = rdf_prefix + b":ID"
         rdf_about_attr = rdf_prefix + b":about"

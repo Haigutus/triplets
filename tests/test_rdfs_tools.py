@@ -229,3 +229,10 @@ def test_shipped_bundles_first_wins_is_order_independent():
                     if seen.setdefault(name, key) != key:
                         conflicts.add(name)
         assert conflicts <= {"DateTime", "URI"}, (path.name, sorted(conflicts)[:10])
+
+
+def test_get_namespace_and_name_prefixed_name_is_not_absolute():
+    """A prefixed name (cim:Foo) or a multiplicity (M:1..1) is no IRI — without a default it raises."""
+    for text in ("cim:Foo", "M:1..1"):
+        with pytest.raises(ValueError, match="absolute IRI"):
+            rdfs_tools.get_namespace_and_name(text)

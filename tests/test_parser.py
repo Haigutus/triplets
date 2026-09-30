@@ -224,7 +224,7 @@ def test_duckdb_read_rdf():
     import triplets
     data = duckdb.connect()
     rows = data.read_rdf([MINIMAL])
-    assert rows == 17
+    assert rows == 16         # no xml_base row: the file declares none (the file location is never recorded)
     assert "Substation" in data.types_dict()
 
 

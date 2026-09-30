@@ -1,5 +1,5 @@
 from triplets.parser import parse
-from triplets.iri import URI_SCHEME_RE, iri_pandas, split_iri
+from triplets.iri import is_absolute, iri_pandas, split_iri
 import pandas
 import os
 
@@ -178,12 +178,12 @@ def multiplicity_to_XSD_format(data_table_view):
 def get_namespace_and_name(uri, default_namespace=None):
     """``ns#name`` / ``ns/name`` → (``ns#`` / ``ns/``, name) by :func:`triplets.iri.split_iri`.
 
-    An absolute IRI (any URI scheme) splits as is. A bare ``name`` or ``#name`` (local-form
+    An absolute IRI (:func:`triplets.iri.is_absolute`) splits as is. A bare ``name`` or ``#name`` (local-form
     parses) takes ``default_namespace + "#"``. Any other relative form (``a/b``, ``./x``), and
     a bare / ``#`` name without *default_namespace*, raises: an absolute-form parse
     (``local_resources=False``) never yields one, so there is no namespace to guess."""
     namespace, name = split_iri(uri)
-    if URI_SCHEME_RE.match(uri):
+    if is_absolute(uri):
         return namespace, name
     if namespace in ("", "#") and default_namespace is not None:
         return f"{default_namespace}#", name

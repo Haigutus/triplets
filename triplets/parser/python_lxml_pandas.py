@@ -46,11 +46,9 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         raise
 
     namespace_map = dict(root.nsmap or {})
-    try:
-        if getattr(root, "base", None):
-            namespace_map["xml_base"] = root.base
-    except Exception:
-        pass
+    declared_base = document_base(root, None)   # a declared absolute xml:base only — never the file location
+    if declared_base:
+        namespace_map["xml_base"] = declared_base
 
     instance_id = str(uuid.uuid4())
     file_name = path_or_fileobject if isinstance(path_or_fileobject, str) else getattr(path_or_fileobject, "name", "")

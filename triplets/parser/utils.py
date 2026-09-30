@@ -12,7 +12,7 @@ from typing import List, Union, IO, Any
 
 logger = logging.getLogger(__name__)
 
-from ..iri import RDF_NS, TRIPLETS_NS, TYPE_KEY, URI_SCHEME_RE, local_id, local_value, resolve_iri
+from ..iri import RDF_NS, TRIPLETS_NS, TYPE_KEY, is_absolute, local_id, local_value, resolve_iri
 
 RDF_ID = f"{{{RDF_NS}}}ID"
 RDF_ABOUT = f"{{{RDF_NS}}}about"
@@ -22,11 +22,11 @@ XML_BASE = "{http://www.w3.org/XML/1998/namespace}base"
 
 
 def document_base(root, default_base=TRIPLETS_NS):
-    """Base for the absolute form: the root's declared ``xml:base`` when it is an absolute URI,
-    else *default_base*. The document's own location (file path, zip entry) is never used —
+    """Base for the absolute form: the root's declared ``xml:base`` when it is absolute
+    (:func:`~triplets.iri.is_absolute`), else *default_base* (None: no base). The document's own location (file path, zip entry) is never used —
     it is not an identity and would differ per machine."""
     declared = root.get(XML_BASE)
-    return declared if declared and URI_SCHEME_RE.match(declared) else default_base
+    return declared if is_absolute(declared) else default_base
 
 
 def _split_prefixed_name(name: str) -> str:

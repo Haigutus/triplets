@@ -74,9 +74,6 @@ ID_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, ID_PREFIXES)) + ")")
 URI_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, URI_PREFIXES)) + ")")
 SPLIT_RE = re.compile(r"^(?:.*[#/]|urn:.*:)")  # the namespace: up to the last "#" or "/", else a URN's last ":"
 GUESS_NAME_RE = re.compile(r"^http.*#(?:.*/)?")   # local_value guess: split_iri's namespace, only for http IRIs with a "#"
-URI_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
-"""Any URI scheme (RFC 3986) — "absolute" for resolution and the RDFS tools; ``is_iri`` knows
-only the instance-data schemes (http, https, urn)."""
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 """Canonical lowercase mRID — what the exporters turn into ``urn:uuid:``."""
 REFERENCE_LIKE = re.compile(
@@ -157,6 +154,12 @@ def local_value(iri, kind=None):
 def is_iri(text):
     """Absolute IRI already (``http://``, ``https://``, ``urn:``)."""
     return text is not None and str(text).startswith(URI_PREFIXES)
+
+
+def is_absolute(text):
+    """Absolute for resolution and the RDFS tools: :func:`is_iri`, or any ``scheme://`` IRI
+    (``file://`` too). A prefixed name (``cim:Foo``) or ``M:1..1`` is not."""
+    return is_iri(text) or (text is not None and "://" in str(text))
 
 
 def resolve_iri(reference, base):

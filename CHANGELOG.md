@@ -100,7 +100,10 @@ Start of the 0.3 line.
   `triplets.iri` local / absolute vocabulary. No alias. `True` (default) is
   unchanged. `False` is now the absolute form: IDs and references are resolved
   against the document's declared absolute `xml:base` at parse time — without one
-  against `parse(default_base=…)` (`http://triplets#`), never the file location —
+  against `parse(default_base=…)` (`http://triplets#`), never the file location
+  (the NamespaceMap `xml_base` row, which the schema generator copies to
+  `ProfileXMLBase`, now holds only a declared absolute base on every engine —
+  the cython engine wrote the file name, the python ones the file path) —
   (`iri.resolve_iri`; `rdf:about="#X"` → `base#X`, `rdf:ID="X"` → `base#X`)
   instead of `local_id` only, which left `#Name` relative and made `#_x` local.
   The export schema generator runs on it and takes absolute IRIs only:

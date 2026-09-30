@@ -217,9 +217,6 @@ Deviations between the importers and exporters that are known and not planned:
 - **Blank nodes are not supported.** `_:b0` reads as the ID `b0` and exports again
   as `<urn:uuid:b0>`, a named node. With `local_resources=False`, `rdf:nodeID`
   labels stay as written.
-- **The NamespaceMap `xml_base` row still records the document location** when no
-  `xml:base` is declared (a file path or the file name). It is metadata only: the
-  absolute form never resolves against it (see `default_base`).
 - **`%XX` in reference text reads back decoded.** A reference whose own text holds
   `%20` exports unchanged and reads back with a space. The exported file
   round-trips byte for byte; only the frame value changes.
@@ -243,7 +240,8 @@ Deviations between the importers and exporters that are known and not planned:
   `rdf:about="#ACLineSegment"` becomes `http://iec.ch/TC57/CIM100#ACLineSegment` and
   nothing downstream needs the base again (e.g. RDFS schema parsing). Without one,
   against `default_base` (`http://triplets#` unless passed) — never the file location,
-  which is no identity and differs per machine; **not supported
+  which is no identity and differs per machine. The NamespaceMap `xml_base` row holds
+  a declared absolute base only (it is absent otherwise, on every engine); **not supported
   by the `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
 - `categorical_columns` (default `("INSTANCE_ID", "KEY")`) — columns to
   dictionary-encode (Arrow) / categorize (pandas) for memory savings; `None`

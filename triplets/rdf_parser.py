@@ -113,7 +113,10 @@ def load_RDF_objects_from_XML(path_or_fileobject, debug=False):
 
     # Get namespace map
     namesapce_map = parsed_xml.nsmap
-    namesapce_map["xml_base"] = parsed_xml.base
+    from .parser.utils import document_base
+    declared_base = document_base(parsed_xml, None)   # a declared absolute xml:base only — never the file location
+    if declared_base:
+        namesapce_map["xml_base"] = declared_base
 
     # Get unique ID for loaded instance
     instance_id = str(uuid.uuid4())
