@@ -99,15 +99,33 @@ Start of the 0.3 line.
 - **`parse(shorten_resources=)` is renamed `local_resources=`**, in the
   `triplets.iri` local / absolute vocabulary. No alias. `True` (default) is
   unchanged. `False` is now the absolute form: IDs and references are resolved
-  against the document's `xml:base` (else its URI) at parse time
+  against the document's declared absolute `xml:base` at parse time — without one
+  against `parse(default_base=…)` (`http://triplets#`), never the file location —
   (`iri.resolve_iri`; `rdf:about="#X"` → `base#X`, `rdf:ID="X"` → `base#X`)
   instead of `local_id` only, which left `#Name` relative and made `#_x` local.
   The export schema generator runs on it and takes absolute IRIs only:
-  `rdfs_tools.get_namespace_and_name` is built on `iri.split_iri` and, without
-  a `default_namespace`, raises on a relative reference instead of guessing; the regenerated bundles hold the same
-  entries, fields and values (checked), only CGMES 2.4 / 3.0 entry and
-  `parameters` order changes — now sorted by absolute IRI, before by how the
-  RDFS text happened to write each reference (`#X` or `http://…#X`).
+  `rdfs_tools.get_namespace_and_name` is built on `iri.split_iri`: an absolute
+  IRI (any URI scheme) splits as is, only a bare or `#name` takes the
+  `default_namespace`, and every other relative form (or no default) raises
+  instead of guessing. The regenerated bundles hold the same entries, fields and
+  values (checked), only CGMES 2.4 / 3.0 entry and `parameters` order changes —
+  now sorted by absolute IRI, before by how the RDFS text happened to write each
+  reference (`#X` or `http://…#X`).
+- **Schema generation is filesystem-independent:** `rdfs_tools.list_of_files`
+  returns sorted paths. NC 2.5 on `main` had been generated in `os.listdir`
+  order (`SSI, RA, SIS, …`); it is now in file-name order like every other
+  bundle. Each profile section and the `iri` flat maps (namespaces, entry types,
+  value types, datatypes) are unchanged — a test now pins that no name has a
+  conflicting namespace / entry type across sections (primitives `DateTime` /
+  `URI` excepted), so first-wins merging is order-independent where the
+  exporters rely on it. What depended on order was the merged human context.
+- **Violation enrichment reads the schema per profile:** `SCHEMA_DESCRIPTION` /
+  `SCHEMA_MULTIPLICITY` come from the violation's own profile (the `PROFILE`
+  column, else the profile the instance header resolves to — the CIM XML
+  exporter's rule, now one shared `_header.profile_section`), the first-wins
+  merged view only as fallback. Before, a multiplicity that differs between
+  profiles (NC 2.5 `BaseTimeSeries.timeSeriesKind`: SIS `0..1`, AS `1..1`)
+  showed whichever profile came first.
 - **Importers share two rule sources.** The python XML engines and the legacy
   `rdf_parser.load_RDF_to_list` run one row loop (`parser.utils.iter_rdf_rows`);
   the RDF-term readers (`read_nquads`, CONSTRUCT on every engine, `sh:sparql`

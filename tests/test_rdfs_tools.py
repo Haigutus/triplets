@@ -192,3 +192,40 @@ class TestOrphanedAttributes:
         assert profile["title"].get("dataType") == "String"     # with its datatype preserved
         assert "title" not in profile["Dataset"]["parameters"]  # but no class references it
         assert any("no class binding" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize("uri", ["foo/Bar", "./Name"])
+def test_get_namespace_and_name_rejects_other_relative_forms(uri):
+    """Only a bare or #name takes the default; any other relative form raises, default or not."""
+    for default in (None, "http://iec.ch/TC57/CIM100"):
+        with pytest.raises(ValueError, match="absolute IRI"):
+            rdfs_tools.get_namespace_and_name(uri, default)
+
+
+def test_get_namespace_and_name_any_scheme_is_absolute():
+    assert rdfs_tools.get_namespace_and_name("urn:uuid:abc") == ("urn:uuid:", "abc")
+    assert rdfs_tools.get_namespace_and_name("urn:uuid:abc", "http://x") == ("urn:uuid:", "abc")   # never rewritten
+
+
+def test_list_of_files_is_sorted(tmp_path):
+    for name in ("b.rdf", "a.rdf", "c.rdf"):
+        (tmp_path / name).write_text("")
+    assert [Path(f).name for f in rdfs_tools.list_of_files(str(tmp_path), ".rdf")] == ["a.rdf", "b.rdf", "c.rdf"]
+
+
+def test_shipped_bundles_first_wins_is_order_independent():
+    """The flat maps merge profile sections first-wins; that is safe only while no name has a
+    conflicting namespace or entry type across sections (primitives DateTime / URI excepted)."""
+    import json
+    import triplets.export_schema
+    for path in sorted(Path(triplets.export_schema.__file__).parent.glob("*.json")):
+        seen, conflicts = {}, set()
+        for section in json.loads(path.read_text()).values():
+            if not isinstance(section, dict):
+                continue
+            for name, entry in section.items():
+                if isinstance(entry, dict) and (entry.get("namespace") or entry.get("type")):
+                    key = (entry.get("namespace"), entry.get("type"))
+                    if seen.setdefault(name, key) != key:
+                        conflicts.add(name)
+        assert conflicts <= {"DateTime", "URI"}, (path.name, sorted(conflicts)[:10])

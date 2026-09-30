@@ -70,3 +70,18 @@ def _profile_identity_index(rdf_map):
     for identifier in ambiguous:
         del index[identifier]
     return index
+
+
+def profile_section(hints, rdf_map, identity_index=None):
+    """The schema section an instance's header hints resolve to (priority order), or None:
+    an exact schema identity first, the legacy 2.4.15 profile-URL substrings as fallback.
+    One rule for the CIM XML exporter and the validation enrichment."""
+    identity_index = _profile_identity_index(rdf_map) if identity_index is None else identity_index
+    for hint in hints:
+        if hint in identity_index:
+            return identity_index[hint]
+    for hint in hints:
+        for url_part, section in PROFILE_URL_MAP.items():
+            if url_part in hint and section in rdf_map:
+                return section
+    return None

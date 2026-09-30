@@ -120,3 +120,27 @@ def test_enrich_keeps_messages_verbatim(violations):
     generic = violations.copy()
     generic["MESSAGE"] = "Missing required property (attribute)."
     assert list(enrich(generic)["MESSAGE"]) == ["Missing required property (attribute)."]
+
+
+def test_schema_context_is_looked_up_by_profile():
+    """A KEY whose multiplicity differs between profiles reports the violation's own profile:
+    the PROFILE column when present, else the profile its instance header resolves to."""
+    rdf_map = {
+        "SIS": {"ProfileMetadata": {"keyword": "SIS"},
+                "BaseTimeSeries.timeSeriesKind": {"type": "Enumeration", "multiplicity": "0..1", "description": "sis"}},
+        "AS": {"ProfileMetadata": {"keyword": "AS"},
+               "BaseTimeSeries.timeSeriesKind": {"type": "Enumeration", "multiplicity": "1..1", "description": "as"}},
+    }
+    violations = pandas.DataFrame({"ID": ["t1", "t2"], "KEY": ["BaseTimeSeries.timeSeriesKind"] * 2,
+                                   "VALUE": [None, None], "VIOLATION_TYPE": ["sh:minCount"] * 2,
+                                   "MESSAGE": [""] * 2, "SEVERITY": ["Violation"] * 2, "SOURCE_SHAPE": [None] * 2})
+    by_column = enrich(violations.assign(PROFILE=["AS", "SIS"]), rdf_map=rdf_map)
+    assert by_column["SCHEMA_MULTIPLICITY"].tolist() == ["1..1", "0..1"]
+    data = pandas.DataFrame([("h1", "keyword", "AS", "i1"), ("t1", "Type", "BaseTimeSeries", "i1"),
+                             ("h2", "keyword", "SIS", "i2"), ("t2", "Type", "BaseTimeSeries", "i2")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    by_header = enrich(violations, data=data, rdf_map=rdf_map)
+    assert by_header["SCHEMA_MULTIPLICITY"].tolist() == ["1..1", "0..1"]
+    assert by_header["SCHEMA_DESCRIPTION"].tolist() == ["as", "sis"]
+    merged = enrich(violations, rdf_map=rdf_map)                      # no profile: first-wins fallback
+    assert merged["SCHEMA_MULTIPLICITY"].tolist() == ["0..1", "0..1"]

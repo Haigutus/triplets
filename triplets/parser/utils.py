@@ -12,12 +12,21 @@ from typing import List, Union, IO, Any
 
 logger = logging.getLogger(__name__)
 
-from ..iri import RDF_NS, TYPE_KEY, local_id, local_value, resolve_iri
+from ..iri import RDF_NS, TRIPLETS_NS, TYPE_KEY, URI_SCHEME_RE, local_id, local_value, resolve_iri
 
 RDF_ID = f"{{{RDF_NS}}}ID"
 RDF_ABOUT = f"{{{RDF_NS}}}about"
 RDF_NODEID = f"{{{RDF_NS}}}nodeID"
 RDF_RESOURCE = f"{{{RDF_NS}}}resource"
+XML_BASE = "{http://www.w3.org/XML/1998/namespace}base"
+
+
+def document_base(root, default_base=TRIPLETS_NS):
+    """Base for the absolute form: the root's declared ``xml:base`` when it is an absolute URI,
+    else *default_base*. The document's own location (file path, zip entry) is never used —
+    it is not an identity and would differ per machine."""
+    declared = root.get(XML_BASE)
+    return declared if declared and URI_SCHEME_RE.match(declared) else default_base
 
 
 def _split_prefixed_name(name: str) -> str:
@@ -49,8 +58,8 @@ def iter_rdf_rows(rdf_objects, local_resources=True, base=None):
 
     - ``local_resources=True`` — local: :func:`~triplets.iri.local_id` for the ID,
       :func:`~triplets.iri.local_value` for references (the CIM instance convention).
-    - ``local_resources=False`` — absolute: resolved against *base* (the document's
-      ``xml:base``, else its URI — the value the NamespaceMap ``xml_base`` row records) with
+    - ``local_resources=False`` — absolute: resolved against *base* (:func:`document_base`:
+      the declared absolute ``xml:base``, else ``default_base``) with
       :func:`~triplets.iri.resolve_iri`, so nothing downstream needs the base again.
       ``rdf:ID="X"`` is ``base#X``. ``rdf:nodeID`` labels stay as written (blank nodes are
       not supported).

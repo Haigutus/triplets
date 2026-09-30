@@ -15,7 +15,8 @@ import logging
 import pandas
 
 from ..export.nquads_utils import flatten_schema
-from ..iri import TYPE_KEY
+from .._header import profile_section
+from ..iri import TYPE_KEY, load_rdf_map
 from .shacl_ir import CompiledShapes, compile_shapes
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,11 @@ def enrich(violations, data=None, shapes=None, rdf_map=None):
         so a re-parsed graph cannot be matched to the violations.
     rdf_map : dict or str, optional
         Export schema — fills SCHEMA_DESCRIPTION / SCHEMA_MULTIPLICITY for
-        the violation's KEY and CLASS_DESCRIPTION for the object's type.
+        the violation's KEY and CLASS_DESCRIPTION for the object's type, from
+        the violation's own profile: the PROFILE column (``validate_schema``),
+        else the profile its instance header resolves to (needs *data*). A
+        violation with no resolvable profile, or a KEY its profile lacks, falls
+        back to the first-wins merged view.
     """
     enriched = violations.copy()
     for column in ENRICHMENT_COLUMNS:
@@ -59,8 +64,20 @@ def enrich(violations, data=None, shapes=None, rdf_map=None):
         compiled = shapes if isinstance(shapes, CompiledShapes) else compile_shapes(shapes)
         _add_shape_context(enriched, compiled.ir)
     if rdf_map is not None:
-        _add_schema_context(enriched, *flatten_schema(rdf_map))
+        rdf_map = load_rdf_map(rdf_map)
+        if "PROFILE" in enriched.columns:
+            profiles = enriched["PROFILE"]
+        else:
+            profiles = enriched["INSTANCE_ID"].map(_instance_profiles(data, rdf_map)) if data is not None else None
+        _add_schema_context(enriched, rdf_map, profiles)
     return enriched
+
+
+def _instance_profiles(data, rdf_map):
+    """{INSTANCE_ID: schema section} by the header hints — the CIM XML exporter's rule."""
+    from . import _instance_hints
+    return {instance: profile_section(hints, rdf_map)
+            for instance, hints in _instance_hints(_to_pandas(data)).items()}
 
 
 def _add_instance_context(violations, data):
@@ -93,12 +110,28 @@ def _add_shape_context(violations, ir):
     violations["SHAPE_DESCRIPTION"] = violations["SOURCE_SHAPE"].map(meta["description"])
 
 
-def _add_schema_context(violations, key_info, class_info):
-    violations["SCHEMA_DESCRIPTION"] = violations["KEY"].map(
-        {key: info.get("description") for key, info in key_info.items()})
-    violations["SCHEMA_MULTIPLICITY"] = violations["KEY"].map(
-        {key: info.get("multiplicity") for key, info in key_info.items()})
+def _add_schema_context(violations, rdf_map, profiles=None):
+    """Per-profile lookup first (profiles differ in multiplicity and description), the
+    first-wins merged view (``flatten_schema``) where a row has no profile or its profile
+    lacks the name."""
+    key_info, class_info = flatten_schema(rdf_map)
+    merged = {"SCHEMA_DESCRIPTION": {key: info.get("description") for key, info in key_info.items()},
+              "SCHEMA_MULTIPLICITY": {key: info.get("multiplicity") for key, info in key_info.items()}}
+    for column, field in (("SCHEMA_DESCRIPTION", "description"), ("SCHEMA_MULTIPLICITY", "multiplicity")):
+        fallback = violations["KEY"].map(merged[column])
+        if profiles is None:
+            violations[column] = fallback
+            continue
+        own = [_entry_field(rdf_map, profile, key, field) for profile, key in zip(profiles, violations["KEY"])]
+        violations[column] = pandas.Series(own, index=violations.index, dtype=object).where(
+            lambda series: series.notna(), fallback)
     violations["CLASS_DESCRIPTION"] = violations["OBJECT_TYPE"].map(class_info)
+
+
+def _entry_field(rdf_map, profile, name, field):
+    section = rdf_map.get(profile) if isinstance(profile, str) else None
+    entry = section.get(name) if isinstance(section, dict) else None
+    return entry.get(field) if isinstance(entry, dict) else None
 
 
 def _to_pandas(data):

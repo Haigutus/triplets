@@ -63,7 +63,7 @@ def get_engine(name: str = "auto"):
 
 # Re-exports (rdf_parser.py compat layer, public parser surface)
 from .utils import find_all_xml, iter_all_xml  # noqa: F401
-from ..iri import local_id  # noqa: F401
+from ..iri import TRIPLETS_NS, local_id  # noqa: F401 — local_id re-exported
 
 from .nquads import read_nquads  # noqa: F401
 
@@ -77,6 +77,7 @@ def parse(
     categorical_columns: Optional[Sequence[str]] = ("INSTANCE_ID", "KEY"),
     local_resources: bool = True,
     string_type: str = "auto",
+    default_base: str = TRIPLETS_NS,
 ) -> Any:
     """Main entry: parse CIM RDF/XML (or zips) using chosen engine.
 
@@ -99,7 +100,7 @@ def parse(
         ``#fragment`` (CIM instance data convention) — enumerations are stored as
         ``ControlAreaTypeKind.Interchange``; filters against the full CIM URI will not match.
         False is the absolute form: IDs and resource references are resolved against the
-        document's ``xml:base`` (else its URI) at parse time, ``triplets.iri.resolve_iri``
+        document's declared absolute ``xml:base`` at parse time, ``triplets.iri.resolve_iri``
         (``rdf:ID="X"`` → ``base#X``; e.g. RDFS schema parsing); only the python engines
         support this.
     string_type : str, default "auto"
@@ -110,6 +111,9 @@ def parse(
         zero-copy: string_view for polars, utf8 otherwise. Dictionary-encoded
         columns are unaffected (consumers use the indices). Ignored by the
         pandas engine (python_lxml_pandas).
+    default_base : str, default "http://triplets#"
+        Base for ``local_resources=False`` when the document declares no absolute ``xml:base``
+        (the file location is never used as a base).
     """
     debug = debug or logger.isEnabledFor(logging.DEBUG)
     engine_name, engine_mod = get_engine(engine)
@@ -142,7 +146,7 @@ def parse(
     def _one(f: Any):
         one_kwargs = {"string_type": string_type} if native_string_type else {}
         if not local_resources:
-            one_kwargs["local_resources"] = False
+            one_kwargs.update(local_resources=False, default_base=default_base)
         return parse_one(f, debug=debug, **one_kwargs)
 
     if max_workers and len(xml_files) > 1:
@@ -167,6 +171,7 @@ def parse_batches(
     engine: str = "auto",
     local_resources: bool = True,
     max_workers: Optional[int] = None,
+    default_base: str = TRIPLETS_NS,
 ) -> Any:
     """Parse CIM RDF/XML lazily into a ``pyarrow.RecordBatchReader``.
 
@@ -198,7 +203,7 @@ def parse_batches(
     parse_one = engine_mod.load_rdf_to_dataframe
 
     schema = pa.schema([(c, pa.string()) for c in ("ID", "KEY", "VALUE", "INSTANCE_ID")])
-    one_kwargs = {} if local_resources else {"local_resources": False}
+    one_kwargs = {} if local_resources else {"local_resources": False, "default_base": default_base}
 
     def one(xml_file):
         batch = parse_one(xml_file, debug=debug, **one_kwargs)

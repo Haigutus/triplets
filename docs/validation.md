@@ -474,7 +474,7 @@ null, so the output schema is stable:
 | `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows) |
 | `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` |
 | `SHAPE_NAME`, `SHAPE_DESCRIPTION` | shapes | `sh:name` / `sh:description` (a property shape inherits the parent NodeShape's) |
-| `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition |
+| `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition in the violation's own profile (the `PROFILE` column, else the instance header's profile); the first-wins merged view only when neither resolves |
 | `CLASS_DESCRIPTION` | rdf_map | the object's class description |
 
 Pass the *same* shapes object the validation ran with — anonymous property

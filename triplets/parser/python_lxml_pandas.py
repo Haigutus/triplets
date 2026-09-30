@@ -15,14 +15,14 @@ from typing import Union, IO
 import pandas as pd
 from lxml import etree
 
-from .utils import iter_rdf_rows
-from ..iri import TYPE_KEY
+from .utils import document_base, iter_rdf_rows
+from ..iri import TRIPLETS_NS, TYPE_KEY
 
 logger = logging.getLogger(__name__)
 
 
 def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False,
-                          local_resources: bool = True) -> pd.DataFrame:
+                          local_resources: bool = True, default_base: str = TRIPLETS_NS) -> pd.DataFrame:
     """Parse single RDF/XML file to pandas DataFrame using lxml + list-of-tuples.
 
     This is the old proven path: lxml parse → iterate → build Python list → pd.DataFrame.
@@ -68,7 +68,7 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         data_list.append((nsmap_id, str(k) if k is not None else "", str(v) if v is not None else ""))
 
     # RDF objects — (ID, KEY, VALUE) rows; one INSTANCE_ID for the whole file
-    data_list.extend(iter_rdf_rows(root.iterchildren(), local_resources, root.base))
+    data_list.extend(iter_rdf_rows(root.iterchildren(), local_resources, document_base(root, default_base)))
 
     df = pd.DataFrame(data_list, columns=["ID", "KEY", "VALUE"])
     df["INSTANCE_ID"] = instance_id

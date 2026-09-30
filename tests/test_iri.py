@@ -573,3 +573,19 @@ def test_parse_absolute_resources_resolve_against_xml_base(engine, tmp_path):
     assert {("http://example.org/base#_abc", "Thing.ref", "urn:uuid:" + UUID),
             ("urn:uuid:_x", "Equipment.EquipmentContainer", "http://example.org/base#_" + UUID)} <= expected
     assert not any(value.startswith("#") for value in frame["VALUE"]) and not any(i.startswith("#") for i in frame["ID"])
+
+
+@pytest.mark.parametrize("engine", ["python_lxml_pandas", "python_lxml_arrow"])
+def test_parse_absolute_without_xml_base_uses_default_base(engine, tmp_path):
+    """No declared absolute xml:base: the file location is never a base — default_base
+    (http://triplets# unless the caller passes one) is."""
+    path = tmp_path / "iri_cases.xml"
+    path.write_text(PARSE_FIXTURE)
+    frame = triplets.parse(str(path), engine=engine, return_type="pandas", local_resources=False)
+    assert "http://triplets#_abc" in set(frame["ID"])
+    meta = set(frame.loc[(frame["KEY"] == "Type") & frame["VALUE"].isin(["Distribution", "NamespaceMap"]), "ID"])
+    objects = frame[~frame["ID"].isin(meta)]
+    assert not any(str(tmp_path) in text for text in objects["ID"].tolist() + objects["VALUE"].tolist())
+    custom = triplets.parse(str(path), engine=engine, return_type="pandas", local_resources=False,
+                            default_base="http://example.org/base")
+    assert "http://example.org/base#_abc" in set(custom["ID"])

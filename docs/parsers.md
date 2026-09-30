@@ -217,8 +217,9 @@ Deviations between the importers and exporters that are known and not planned:
 - **Blank nodes are not supported.** `_:b0` reads as the ID `b0` and exports again
   as `<urn:uuid:b0>`, a named node. With `local_resources=False`, `rdf:nodeID`
   labels stay as written.
-- **`local_resources=False` without any base stays relative.** A file-like source
-  with no `xml:base` and no name has no document URI to resolve against.
+- **The NamespaceMap `xml_base` row still records the document location** when no
+  `xml:base` is declared (a file path or the file name). It is metadata only: the
+  absolute form never resolves against it (see `default_base`).
 - **`%XX` in reference text reads back decoded.** A reference whose own text holds
   `%20` exports unchanged and reads back with a space. The exported file
   round-trips byte for byte; only the frame value changes.
@@ -237,11 +238,12 @@ Deviations between the importers and exporters that are known and not planned:
   (`iri.local_value`: ID prefix stripped, http(s) IRIs cut to their `#fragment`,
   the CIM instance-data convention). Enumerations are stored as
   `ControlAreaTypeKind.Interchange`; a filter on the full CIM URI will not match.
-  `False` is the absolute form: IDs and references are resolved against the
-  document's `xml:base` (else its URI — the value the NamespaceMap `xml_base` row
-  records) at parse time with `iri.resolve_iri`, so `rdf:about="#ACLineSegment"`
-  becomes `http://iec.ch/TC57/CIM100#ACLineSegment` and nothing downstream needs the
-  base again (e.g. RDFS schema parsing); **not supported
+  `False` is the absolute form: IDs and references are resolved at parse time with
+  `iri.resolve_iri` against the document's declared absolute `xml:base`, so
+  `rdf:about="#ACLineSegment"` becomes `http://iec.ch/TC57/CIM100#ACLineSegment` and
+  nothing downstream needs the base again (e.g. RDFS schema parsing). Without one,
+  against `default_base` (`http://triplets#` unless passed) — never the file location,
+  which is no identity and differs per machine; **not supported
   by the `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
 - `categorical_columns` (default `("INSTANCE_ID", "KEY")`) — columns to
   dictionary-encode (Arrow) / categorize (pandas) for memory savings; `None`

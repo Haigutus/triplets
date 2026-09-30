@@ -1,5 +1,5 @@
 from triplets.parser import parse
-from triplets.iri import iri_pandas, split_iri
+from triplets.iri import URI_SCHEME_RE, iri_pandas, split_iri
 import pandas
 import os
 
@@ -65,7 +65,7 @@ def list_of_files(root_path, file_extension, deep=False):
             if os.path.isfile(full_path) and filename.lower().endswith(ext):
                 matches.append(full_path)
 
-    return matches
+    return sorted(matches)   # os.walk / os.listdir order is filesystem-dependent; bundles merge first-wins
 
 
 
@@ -178,15 +178,17 @@ def multiplicity_to_XSD_format(data_table_view):
 def get_namespace_and_name(uri, default_namespace=None):
     """``ns#name`` / ``ns/name`` → (``ns#`` / ``ns/``, name) by :func:`triplets.iri.split_iri`.
 
-    A bare ``name`` or relative ``#name`` (local-form parses) takes ``default_namespace + "#"``.
-    Without *default_namespace* such a reference raises: an absolute-form parse
+    An absolute IRI (any URI scheme) splits as is. A bare ``name`` or ``#name`` (local-form
+    parses) takes ``default_namespace + "#"``. Any other relative form (``a/b``, ``./x``), and
+    a bare / ``#`` name without *default_namespace*, raises: an absolute-form parse
     (``local_resources=False``) never yields one, so there is no namespace to guess."""
     namespace, name = split_iri(uri)
-    if namespace in ("", "#"):
-        if default_namespace is None:
-            raise ValueError(f"expected an absolute IRI, got {uri!r} (no default_namespace)")
-        namespace = f"{default_namespace}#"
-    return namespace, name
+    if URI_SCHEME_RE.match(uri):
+        return namespace, name
+    if namespace in ("", "#") and default_namespace is not None:
+        return f"{default_namespace}#", name
+    raise ValueError(f"expected an absolute IRI, got {uri!r}"
+                     + ("" if default_namespace is None else " (only a bare or #name takes the default)"))
 
 
 

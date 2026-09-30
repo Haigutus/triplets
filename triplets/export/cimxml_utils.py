@@ -8,7 +8,7 @@ import logging
 from triplets.tools import get_namespace_map
 from triplets._engine_detect import flavor
 from triplets._header import (  # noqa: F401 — load_rdf_map re-exported for the cimxml engines
-    PROFILE_KEYS, PROFILE_URL_MAP, load_rdf_map, _profile_identity_index)
+    PROFILE_KEYS, PROFILE_URL_MAP, load_rdf_map, _profile_identity_index, profile_section)
 
 logger = logging.getLogger(__name__)
 
@@ -60,22 +60,8 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
     # Filename is kept under label
     file_name = _first_value(instance_data, "label") or f"{uuid.uuid4()}.xml"
 
-    identity_index = _profile_identity_index(rdf_map)
-    instance_section = None
     hints = _instance_profile_hints(instance_data)
-    for hint in hints:
-        if hint in identity_index:
-            instance_section = identity_index[hint]
-            break
-    if instance_section is None:
-        # legacy 2.4.15 profile URLs carry no exact schema identity — substring map
-        for hint in hints:
-            for url_part, section in PROFILE_URL_MAP.items():
-                if url_part in hint:
-                    instance_section = section
-                    break
-            if instance_section:
-                break
+    instance_section = profile_section(hints, rdf_map)
     if instance_section is None and hints:
         logger.warning("No schema profile matched instance header hints %s — using schema root", hints[:4])
 

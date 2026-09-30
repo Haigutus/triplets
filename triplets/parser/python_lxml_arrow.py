@@ -13,14 +13,14 @@ from typing import Union, IO, Any
 from lxml import etree
 import pyarrow as pa
 
-from .utils import iter_rdf_rows
-from ..iri import TYPE_KEY
+from .utils import document_base, iter_rdf_rows
+from ..iri import TRIPLETS_NS, TYPE_KEY
 
 logger = logging.getLogger(__name__)
 
 
 def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False,
-                          local_resources: bool = True) -> pa.RecordBatch:
+                          local_resources: bool = True, default_base: str = TRIPLETS_NS) -> pa.RecordBatch:
     """Parse single RDF/XML (path or fileobj) to pyarrow RecordBatch using lxml + lists.
 
     Streaming in the sense of column-wise collection then direct Arrow (no 4-tuple list).
@@ -75,7 +75,7 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         inst_b.append(instance_id)
 
     # RDF objects
-    for obj_id, key, value in iter_rdf_rows(root.iterchildren(), local_resources, root.base):
+    for obj_id, key, value in iter_rdf_rows(root.iterchildren(), local_resources, document_base(root, default_base)):
         id_b.append(obj_id); key_b.append(key); val_b.append(value); inst_b.append(instance_id)
 
     # Finish builders to arrays (direct to Arrow)
