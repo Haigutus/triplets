@@ -15,11 +15,172 @@ Start of the 0.3 line.
   DatasetMetadata header attributes bind again via `schema:domainIncludes`
   ([#99](https://github.com/entsoe/application-profiles-library/pull/99) / [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
 
+### Changed
+- **`triplets.iri`** — one public package for the triplet ↔ IRI contract:
+  `local_id` / `local_key(iri, type_key)` / `local_value(iri, kind)` (local forms,
+  all on one split, `split_iri` → namespace + local name; `TYPE_KEY`,
+  `DESCRIPTION_TYPE`),
+  `absolute_id` / `absolute_name` / `absolute_key` / `absolute_value` (absolute IRIs, taking
+  the flat maps `namespaces` / `value_types` / `datatypes` built from `rdf_map` — one
+  comprehension each, no cache), the namespace constants, and
+  `iri_pandas` / `iri_polars` / `iri_duckdb` flavors with the same names. The parsers, N-Quads
+  export/read-back, the qlever ingest bridge, SPARQL result decoding, SHACL
+  reports, SARIF and the validation engines all use it; the six private
+  local-name helpers and the duplicated `"urn:uuid:"` / namespace literals are
+  gone. `tests/test_iri.py` is the case table every flavor is held to.
+- `triplets.parser.clean_ID` → `triplets.parser.local_id` (also
+  `triplets.iri.local_id`). `rdf_parser.clean_ID` stays as a deprecation
+  wrapper. ID prefixes (`urn:uuid:`, `#_`, `_`) are stripped **once**, longest
+  first — the python engines stripped cumulatively (`urn:uuid:_x` → `x`) while
+  the cython engine stripped one (`_x`); every engine now agrees.
+- `export.nquads_utils.build_key_metadata` → `iri.namespaces` / `iri.value_types` /
+  `iri.datatypes`; `make_object` takes them as keyword maps. The pandas N-Quads
+  exporter is vectorized (no per-row `apply`).
+- **The schema entry type decides the serialisation form** (N-Quads, qlever
+  ingest, SHACL `sh:nodeKind`), never `xsd:type` and never the shape of the
+  text. An Attribute value is a literal even when it reads `https://…` or
+  looks like a UUID — `Model.modelingAuthoritySet` is now
+  `"http://…"^^<xsd:anyURI>` and a string attribute holding an IRI stays a
+  string (before, both became IRI nodes and `read_nquads` shortened them). A
+  SPARQL query matching such a value as `<http://…>` must match the literal
+  instead. CIM XML `datatypes=True` annotates anyURI attributes. An
+  Association value is `absolute_id(value)`: an absolute IRI passes through,
+  anything else becomes `urn:uuid:<value>` (before, a non-canonical reference
+  silently became a string literal). The absolute-IRI / canonical-UUID
+  heuristic now applies only to a KEY the schema does not declare. SHACL
+  `sh:nodeKind` follows the same rule both ways: an Association or
+  Enumeration path violates `sh:Literal` on every row and never `sh:IRI`.
+- **IRI-unsafe text in an IRI is percent-encoded**, so a schema reference or
+  enum value stays a real IRI whatever its text: `just some text` under an
+  Association → `<urn:uuid:just%20some%20text>` (controls, space and
+  ``<>"{}|^`\`` — `iri.encode_iri`, in every flavor and the qlever ingest).
+  Before, such a value wrote an invalid N-Quads line that rdflib and oxigraph
+  rejected and qlever accepted. `read_nquads`, CONSTRUCT and SHACL result
+  decoding reverse exactly those escapes (`iri.decode_iri`). Attribute text,
+  `xsd:anyURI` included, stays a verbatim literal.
+- **Undefined names** — a class the schema does not list (abstract CIM classes
+  such as `Equipment` included; conformant data with concrete `Type` values is
+  unchanged), a KEY or an enum value it does not list, and every name when no
+  `rdf_map` is given — are written under `undefined_namespace`, default
+  `http://triplets#`, in N-Quads and both CIM XML engines. Before: CIM100 in
+  N-Quads / qlever / the SHACL report, `http://triplets#` in the pandas CIM XML
+  engine, unprefixed elements in the cython one, a bare value for an unknown
+  enum value. `export_to_nquads` gains `export_undefined` (default `True`:
+  lossless interchange keeps every row) and `undefined_namespace`;
+  `export_to_cimxml` gains `undefined_namespace` (its `export_undefined`
+  default stays `False`; an unknown enum value now follows the same switch
+  instead of being written bare; an `undefined_namespace` the document already
+  binds, such as CIM100, keeps its own prefix instead of adding `triplets:`). Schema-less `export_to_nquads` therefore
+  changes from CIM100 to `http://triplets#`. A schema-less query does not:
+  `sparql.query`, `validate`, `validate_schema` and `export_to_shacl_report`
+  keep every row and default `undefined_namespace` to CIM100, so `cim:`
+  queries keep working; all of them take the parameter.
+- **Performance** (RealGrid, 1.15M rows): `read_nquads` 12.2 s → 2.9 s (line
+  splitting and graph detection in Arrow compute, slice-based term unwrap;
+  columns come back arrow-backed), pandas `export_to_nquads` 3.9 s → 2.2 s
+  (mask-chain classification, lines joined in Arrow), polars export unchanged
+  at 0.6 s. Regex replaces stay in the flavors — measured 2-8x faster than
+  split/list ops in pandas and 1.5-2x in polars; the scalar `local_id` uses a
+  prefix loop (faster per call for the python parsers).
+- `read_nquads` / CONSTRUCT decoding shorten per column: `ID` / `INSTANCE_ID`
+  via `local_id`, `KEY` via `local_key`, `VALUE` via `local_value` — a
+  URI-shaped `INSTANCE_ID` now survives the round trip. A VALUE IRI that is a
+  subject of the same data shortens like its `ID` (`local_id`), so a reference
+  to `<http://…#b>` still joins the object `http://…#b` instead of becoming `b`.
+  KEY and `Type` VALUE IRIs shorten to the `iri.split_iri` local name — after the last `#`
+  **or `/`** (a URN after its last `:`), as an XML element local name holds neither — so `dcterms:` header
+  keys (552 Ed2, NC) read back as `issued` / `identifier`, the same KEY the CIM
+  XML parser gives (before: the whole `http://purl.org/dc/terms/issued`), and a
+  class in a `/` namespace as its name. References still split on `#` only.
+- **`xsd:anyURI` values are lexically checked** by `sh:datatype` on every engine
+  (pyshacl through the lexical supplement): an RFC 3987 IRI reference, relative
+  and non-ASCII allowed; controls, space, DEL, ``<>"{}|^`\`` and a `%` not
+  followed by two hex digits violate. Before, anyURI was never checked.
+- **`parse(shorten_resources=)` is renamed `local_resources=`**, in the
+  `triplets.iri` local / absolute vocabulary. No alias. `True` (default) is
+  unchanged. `False` is now the absolute form: IDs and references are resolved
+  against the document's declared absolute `xml:base` at parse time — without one
+  against `parse(default_base=…)` (`http://triplets#`), never the file location
+  (the NamespaceMap `xml_base` row, which the schema generator copies to
+  `ProfileXMLBase`, now holds only a declared absolute base on every engine —
+  the cython engine wrote the file name, the python ones the file path) —
+  (`iri.resolve_iri`; `rdf:about="#X"` → `base#X`, `rdf:ID="X"` → `base#X`)
+  instead of `local_id` only, which left `#Name` relative and made `#_x` local.
+  The export schema generator runs on it and takes absolute IRIs only:
+  `rdfs_tools.get_namespace_and_name` is built on `iri.split_iri`: an absolute
+  IRI (any URI scheme) splits as is, only a bare or `#name` takes the
+  `default_namespace`, and every other relative form (or no default) raises
+  instead of guessing. The regenerated bundles hold the same entries, fields and
+  values (checked), only CGMES 2.4 / 3.0 entry and `parameters` order changes —
+  now sorted by absolute IRI, before by how the RDFS text happened to write each
+  reference (`#X` or `http://…#X`).
+- **Schema generation is filesystem-independent:** `rdfs_tools.list_of_files`
+  returns sorted paths. NC 2.5 on `main` had been generated in `os.listdir`
+  order (`SSI, RA, SIS, …`); it is now in file-name order like every other
+  bundle. Each profile section and the `iri` flat maps (namespaces, entry types,
+  value types, datatypes) are unchanged — a test now pins that no name has a
+  conflicting namespace / entry type across sections (primitives `DateTime` /
+  `URI` excepted), so first-wins merging is order-independent where the
+  exporters rely on it. What depended on order was the merged human context.
+- **Violation enrichment reads the schema per profile:** `SCHEMA_DESCRIPTION` /
+  `SCHEMA_MULTIPLICITY` come from the violation's own profile (the `PROFILE`
+  column, else the profile the instance header resolves to — the CIM XML
+  exporter's rule, now one shared `_header.profile_section`), the first-wins
+  merged view only as fallback. Before, a multiplicity that differs between
+  profiles (NC 2.5 `BaseTimeSeries.timeSeriesKind`: SIS `0..1`, AS `1..1`)
+  showed whichever profile came first.
+- **Importers share two rule sources.** The python XML engines and the legacy
+  `rdf_parser.load_RDF_to_list` run one row loop (`parser.utils.iter_rdf_rows`);
+  the RDF-term readers (`read_nquads`, CONSTRUCT on every engine, `sh:sparql`
+  results, the pyshacl report) decode once, then use `local_id` / `local_key` /
+  `local_value`. `read_nquads` takes `rdf_map=` (reference vs enum VALUE exact from
+  the schema instead of guessed) and `type_key=` (the KEY for `rdf:type`, default
+  `"Type"`). SHACL terms compile with the rule of the column they land on:
+  `sh:path rdf:type` targets the `Type` KEY (was a KEY `type` that never matched),
+  and an `sh:in` / `sh:hasValue` member with a `/`-only IRI stays whole like the
+  data VALUE (was cut to its last segment).
+  Visible changes: the pyshacl report VALUE is shortened like the other engines
+  (an enum outside `sh:in` reports `SwitchKind.x`, not its full IRI);
+  `load_RDF_to_list` gives the tag name for an element without a namespace
+  (was `""`), `""` for a missing ID (was `None`) and for an empty element (was
+  `None`); the cython parser finds `rdf:ID` / `rdf:about` / `rdf:resource` by
+  the prefix the document binds to the RDF namespace, not only `rdf:`.
+- **`Type` = `Description` is `rdf:Description`, not a class:** N-Quads and the
+  qlever ingest state no `rdf:type` for it (was `http://triplets#Description`),
+  and both CIM XML engines write an `rdf:Description` element (was
+  `triplets:Description`). `export_to_cimxml(export_undefined=True)` on an
+  instance without a model header no longer raises on the missing namespace map.
+- Known import / export deviations that stay (CIM XML without percent-encoding,
+  `http(s)` IDs, blank nodes, …) are listed in `docs/parsers.md` → *Known
+  limitations*.
+- `violations_to_report_graph` / `export_to_shacl_report` accept `rdf_map`;
+  `sh:resultPath` then keeps the profile namespace instead of CIM100.
+- SPARQL / validation `scope` builds graph IRIs with `absolute_id`: a URI-shaped
+  `INSTANCE_ID` scopes correctly (was silently empty), and an `https:` one is
+  no longer prefixed with `urn:uuid:` by the N-Quads graph term.
+
 ### Fixed
+- **Export schemas record inheritance and ranges as absolute IRIs.** The
+  generator resolves a relative ``rdf:resource="#Name"`` against the profile's
+  ``xml:base`` (RDF/XML semantics) instead of copying it, so a parent or range
+  in another namespace is stated (`https://cim.ucaiug.io/ns#IdentifiedObject`
+  for an NC class) rather than reconstructed by each consumer from the child's
+  namespace. Enumeration ranges were mangled by a ``replace("#", "")``
+  (`https://cim4.eu/ns/ncBalancingReserveKind`, 107 entries in NC 2.5); all
+  bundles regenerated — only `inheritance` and `range` values change.
 - **Exclude pandas 2.3.3**: `pivot()` on ArrowDtype dictionary columns still
   crashes with `'Series' object has no attribute '_pa_array'` (same bug as
   2.2.x, which is already excluded). Constraint is now
   `pandas>=2.0,!=2.2.*,!=2.3.3`. Fixed upstream in pandas 3.0.
+- N-Quads / SPARQL ingest expand class and enum IRIs from the schema namespace
+  when `rdf_map` is passed (`Class.namespace` / `EnumerationValue.namespace`);
+  CIM100 is only the no-schema fallback. The inverse (`read_nquads`, CONSTRUCT,
+  SHACL report) shortens any http(s) `#fragment`, not just CIM100, so CGMES 2.4
+  CIM16 round-trips to the same short names as 3.0 (#116).
+- Source builds in a conda/pixi environment: the cython extensions link
+  `libarrow_python` behind `--no-as-needed`, so the module imports instead of
+  failing with undefined `arrow::` symbols (conda toolchains default to
+  `--as-needed`; pip-wheel builds never hit this).
 
 ## [0.2.0] - 2026-08-26
 
@@ -532,6 +693,9 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   engine for plain `str` dtypes.
 - Triplet values are always strings (or null).
 - `export_to_cimxml` exports schema-defined content only by default.
+- Parse shortens http(s) `#fragment` resource values to the local name
+  (`ControlAreaTypeKind.Interchange`, not the full CIM URI). This landed in
+  0.0.13; filters that compare against the full URI no longer match.
 
 ### Deprecated
 - All `rdf_parser.py` functions now emit `DeprecationWarning` and delegate to the new

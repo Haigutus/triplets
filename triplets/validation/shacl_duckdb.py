@@ -25,7 +25,8 @@ import pandas
 from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .shacl_report import VIOLATION_COLUMNS
-from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
+from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, value_types
+from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ _BATCH_SIZE = 100  # constraints per UNION ALL statement
 
 def _class_sql(table):
     """Instances of a class (bound with one class-name parameter)."""
-    return f"SELECT ID FROM {table} WHERE KEY = 'Type' AND VALUE = ?"
+    return f"SELECT ID FROM {table} WHERE KEY = '{TYPE_KEY}' AND VALUE = ?"
 
 
 def _focus_sql(rule, table):
@@ -57,7 +58,7 @@ def _rows_sql(rule, table):
                f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table)})")
     if getattr(rule, "via_type", False):
         sql = (f"SELECT r.FOCUS AS FOCUS, t.VALUE AS PV FROM ({sql}) r "
-               f"JOIN {table} t ON t.ID = r.PV AND t.KEY = 'Type'")
+               f"JOIN {table} t ON t.ID = r.PV AND t.KEY = '{TYPE_KEY}'")
     return sql, [rule.path, rule.target_class]
 
 
@@ -150,7 +151,7 @@ def _range(operator, description):
 def _in(rule, table, context):
     rows, rows_params = _rows_sql(rule, table)
     allowed = [str(value) for value in rule.params]
-    local = "list_extract(string_split(list_extract(string_split(PV, '#'), -1), '/'), -1)"
+    local = iri_duckdb.local_value("PV")
     return _wrap(rule, f"value is not one of {sorted(allowed)}",
                  rows, rows_params, f"NOT list_contains(?, {local})", [allowed])
 
@@ -175,9 +176,9 @@ def _schema_range(rule, table, context):
     (issue #100); targets without a Type row are silent."""
     rows, rows_params = _rows_sql(rule, table)
     placeholders = ", ".join("?" for _ in rule.params)
-    condition = (f"EXISTS (SELECT 1 FROM {table} x WHERE x.ID = PV AND x.KEY = 'Type') "
+    condition = (f"EXISTS (SELECT 1 FROM {table} x WHERE x.ID = PV AND x.KEY = '{TYPE_KEY}') "
                  f"AND PV NOT IN (SELECT ID FROM {table} x "
-                 f"WHERE x.KEY = 'Type' AND x.VALUE IN ({placeholders}))")
+                 f"WHERE x.KEY = '{TYPE_KEY}' AND x.VALUE IN ({placeholders}))")
     return _wrap(rule, f"reference target is not one of {rule.params}",
                  rows, rows_params, condition, list(rule.params))
 
@@ -188,7 +189,7 @@ def _node_kind(rule, table, context):
         return None
     rows, rows_params = _rows_sql(rule, table)
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else context.key_kind(rule.path)
+    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types)
     if kind is not None:                                 # schema decides for the whole path
         if (kind == "iri") == (rule.params == "IRI"):
             return None                                  # every value conforms — no query
@@ -196,7 +197,7 @@ def _node_kind(rule, table, context):
     else:                                                # value-form heuristic
         is_iri = f"(regexp_full_match(PV, ?) OR PV IN (SELECT DISTINCT ID FROM {table}))"
         condition = f"NOT {is_iri}" if rule.params == "IRI" else is_iri
-        condition_params = [_REFERENCE_LIKE.pattern]
+        condition_params = [REFERENCE_LIKE.pattern]
     return _wrap(rule, f"value is not of node kind sh:{rule.params}",
                  rows, rows_params, condition, condition_params)
 
@@ -244,7 +245,7 @@ def _pair_compare(operator, description):
 
 
 def _closed(rule, table, context):
-    allowed = list(set(rule.params) | {"Type"})
+    allowed = list(set(rule.params) | {TYPE_KEY})
     sql = (f"SELECT ID, KEY, VALUE, ? AS VIOLATION_TYPE, ? AS MESSAGE, ? AS SEVERITY, ? AS SOURCE_SHAPE "
            f"FROM {table} WHERE ID IN ({_focus_sql(rule, table)}) AND NOT list_contains(?, KEY)")
     params = [rule.component, rule.message or "property is not allowed on a closed shape",
@@ -277,11 +278,12 @@ SQL_BUILDERS = {
 }
 
 
-class _Context(SchemaKind):
+class _Context:
     """Schema-driven term-kind decisions (shared with the other vectorized engines)."""
 
     def __init__(self, rdf_map):
         self.rdf_map = rdf_map
+        self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
 
 
 def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
@@ -335,7 +337,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         frame = connection.execute(f"SELECT * FROM {table}").df()
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
-                                           max_workers=max_workers)
+                                           max_workers=max_workers, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     return violations
 

@@ -72,6 +72,14 @@ def test_source_bytes_str_filelike_and_path(tmp_path):
         assert result.iloc[0].tolist() == ["a", "IdentifiedObject.name", "n", "g"]
 
 
+def test_cim16_fragment_shortens_like_cim100():
+    """Any schema namespace #fragment shortens, not only CIM100."""
+    cim16 = "http://iec.ch/TC57/2013/CIM-schema-cim16#"
+    quad = f'<urn:uuid:a> <{cim16}ControlArea.type> <{cim16}ControlAreaTypeKind.Interchange> <urn:uuid:g> .\n'
+    result = read_nquads(quad)
+    assert result.iloc[0].tolist() == ["a", "ControlArea.type", "ControlAreaTypeKind.Interchange", "g"]
+
+
 def test_ntriples_without_graph_gets_null_instance_id():
     result = read_nquads(f'<urn:uuid:a> <{CIM}IdentifiedObject.name> "n" .')
     assert result["INSTANCE_ID"].isna().all()
@@ -99,7 +107,87 @@ def test_rdf_type_becomes_type_key():
 
 def test_bnodes_and_full_iris_pass_through():
     result = read_nquads('_:b0 <http://example.com/p> <http://example.com/o> .')
-    assert result.iloc[0].tolist()[:3] == ["b0", "http://example.com/p", "http://example.com/o"]
+    assert result.iloc[0].tolist()[:3] == ["b0", "p", "http://example.com/o"]   # KEY: local name; VALUE: whole
+
+
+def test_literal_with_whitespace_and_bnode_shape_is_not_a_graph():
+    """The graph term is recognised only after a complete object: a literal that
+    contains a space and ends in something bnode- or IRI-shaped stays one literal."""
+    result = read_nquads('<urn:uuid:a> <http://x#p> "hello _:world" .\n'
+                         '<urn:uuid:a> <http://x#q> "see <http://x#y>" .\n'
+                         '<urn:uuid:a> <http://x#r> "hello _:world" <urn:uuid:g> .\n'
+                         '<urn:uuid:a> <http://x#s> "tagged"@en _:g2 .')
+    assert result["VALUE"].tolist() == ["hello _:world", "see <http://x#y>", "hello _:world", "tagged"]
+    assert result["INSTANCE_ID"].isna().tolist() == [True, True, False, False]
+    assert result["INSTANCE_ID"].tolist()[2:] == ["g", "g2"]
+
+
+REFERENCE_MAP = {"EQ": {"Equipment.EquipmentContainer": {"type": "Association", "namespace": CIM},
+                        "Switch.kind": {"type": "Enumeration", "namespace": CIM}}}
+
+
+def test_reference_with_iri_unsafe_text_stays_a_valid_iri():
+    """The schema says reference → an IRI whatever the text: unsafe characters are
+    percent-encoded (never a literal), every RDF parser loads it, read_nquads decodes."""
+    frame = pandas.DataFrame([("b 1", "Equipment.EquipmentContainer", 'just some <text> "x"', "g 1"),
+                              ("b 1", "Switch.kind", "Kind.a b", "g 1")],
+                             columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    buffer = export_to_nquads(frame, rdf_map=REFERENCE_MAP, export_to_memory=True)
+    text = buffer.getvalue().decode()
+    assert "<urn:uuid:just%20some%20%3Ctext%3E%20%22x%22>" in text and "<http://triplets#Kind.a%20b>" in text   # undeclared enum value
+    rdflib = pytest.importorskip("rdflib")
+    assert len(rdflib.Dataset().parse(data=text, format="nquads")) == 2
+    result = read_nquads(text)
+    pandas.testing.assert_frame_equal(canon(result), canon(frame))
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars"])
+def test_export_engines_encode_alike(engine):
+    if engine == "polars":
+        pytest.importorskip("polars")
+    frame = pandas.DataFrame([("b", "Equipment.EquipmentContainer", "a b", "g")],
+                             columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    text = export_to_nquads(frame, rdf_map=REFERENCE_MAP, engine=engine, export_to_memory=True).getvalue()
+    assert b"<urn:uuid:a%20b>" in text
+
+
+def test_slash_namespace_keys_roundtrip():
+    """dcterms header KEYs (552 Ed2, NC) export to their "/" namespace and read back as the
+    local name — the same KEY the CIM XML parser produces."""
+    from triplets.export_schema import schemas
+    frame = pandas.DataFrame([("m", "Type", "FullModel", "m"), ("m", "issued", "2024-01-01T00:00:00Z", "m"),
+                              ("m", "identifier", "m", "m")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    buffer = export_to_nquads(frame, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED2, export_to_memory=True)
+    assert b"<http://purl.org/dc/terms/issued>" in buffer.getvalue()
+    pandas.testing.assert_frame_equal(canon(read_nquads(buffer)), canon(frame))
+
+
+def test_type_value_is_a_local_name():
+    """A class from a "/" namespace reads back as its local name (like a KEY), while a
+    "/" reference stays whole."""
+    result = read_nquads("<urn:uuid:d> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> "
+                         "<https://example.org/vocab/Dataset> <urn:uuid:g> .\n"
+                         "<urn:uuid:d> <http://purl.org/dc/terms/conformsTo> "
+                         "<http://example.org/profile/EQ/3.0> <urn:uuid:g> .")
+    assert result[["KEY", "VALUE"]].values.tolist() == [["Type", "Dataset"],
+                                                        ["conformsTo", "http://example.org/profile/EQ/3.0"]]
+
+
+def test_reference_to_a_subject_iri_still_joins():
+    """A VALUE IRI that is a subject in the same data shortens like its ID, so the
+    reference keeps joining; enum / class IRIs still shorten to the fragment."""
+    result = read_nquads(f"""<http://ex.org/m#a> <http://ex.org/m#ref> <http://ex.org/m#b> <urn:uuid:g> .
+<http://ex.org/m#b> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://ex.org/m#Thing> <urn:uuid:g> .
+<http://ex.org/m#b> <{CIM}Switch.kind> <{CIM}SwitchKind.breaker> <urn:uuid:g> .
+""")
+    assert result["VALUE"].tolist() == ["http://ex.org/m#b", "Thing", "SwitchKind.breaker"]
+    assert set(result["VALUE"]) & set(result["ID"]) == {"http://ex.org/m#b"}
+
+
+def test_comment_only_buffer_is_an_empty_frame():
+    for content in ("", "\n", "# just a comment\n\n"):
+        result = read_nquads(content)
+        assert list(result.columns) == ["ID", "KEY", "VALUE", "INSTANCE_ID"] and len(result) == 0
 
 
 def test_blank_lines_and_comments_skipped():
@@ -125,3 +213,20 @@ def test_return_types():
 
 def test_top_level_export():
     assert triplets.read_nquads is read_nquads
+
+
+def test_rdf_map_decides_reference_vs_enum_exactly():
+    """With a schema the KEY's entry decides: an Association keeps an http#… reference whole
+    (no guess, no subject needed), an Enumeration takes the name."""
+    text = (f"<urn:uuid:b1> <{CIM}Equipment.EquipmentContainer> <http://ex.org/m#vl1> <urn:uuid:g> .\n"
+            f"<urn:uuid:b1> <{CIM}Switch.kind> <{CIM}SwitchKind.breaker> <urn:uuid:g> .\n")
+    guessed = read_nquads(text)
+    assert guessed["VALUE"].tolist() == ["vl1", "SwitchKind.breaker"]          # no subject http://ex.org/m#vl1: guess
+    exact = read_nquads(text, rdf_map=REFERENCE_MAP)
+    assert exact["VALUE"].tolist() == ["http://ex.org/m#vl1", "SwitchKind.breaker"]
+
+
+def test_type_key_reads_rdf_type_as_an_ordinary_statement():
+    text = "<urn:uuid:d> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ."
+    assert read_nquads(text)[["KEY", "VALUE"]].values.tolist() == [["Type", "Ontology"]]
+    assert read_nquads(text, type_key="type")[["KEY", "VALUE"]].values.tolist() == [["type", "Ontology"]]

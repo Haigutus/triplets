@@ -22,6 +22,12 @@ reported in the run's coverage metadata, `skipped_shapes` /
   below. `engine="reference"` always gives the pure pyshacl view.
 - `sh:nodeKind` BlankNode(+combo) cases are intentionally not implemented in
   the vectorized engines (triplets data has no blank nodes).
+- `sh:nodeKind` follows the export schema: an Association / Enumeration path is
+  IRI and an Attribute path Literal, whatever the text. For a KEY the schema does
+  not declare (or without `rdf_map`) the vectorized engines guess from the text
+  (`iri.REFERENCE_LIKE`: any-case UUID, `scheme://…`, `urn:…`, `Name.attr`, or an
+  ID in the data), while the exported graph pyshacl sees uses the stricter export
+  rule (absolute IRI or lowercase UUID → IRI) — the two can disagree on such keys.
 - The duckdb engine streams/spills by design, but a true larger-than-RAM
   validation has not been exercised yet.
 
@@ -171,6 +177,12 @@ engine's report (duplicates dropped on
 Parity tests treat `triplets:lexicalForm` rows as documented extras: engines
 must never *lose* a violation pyshacl reports.
 
+`xsd:anyURI` values are literals (the schema entry type decides, not the
+datatype), so they get the same lexical check: an IRI reference (RFC 3987,
+relative and non-ASCII allowed) — no controls, space, DEL or ``<>"{}|^`\``, and
+`%` only as a `%XX` escape. `"has space"^^xsd:anyURI` is an `sh:datatype`
+violation on every engine; `xsd:string` stays unchecked.
+
 `rdf_map` still matters for the pyshacl path: without it every `VALUE` is an
 untyped string, so `sh:datatype xsd:float` trips on everything; with it the
 N-Quads export attaches real `xsd` types and only genuinely broken values fail.
@@ -182,7 +194,7 @@ conforms** — identical across all engines:
 
 | Column | Meaning |
 |--------|---------|
-| `ID` | focus node (instance UUID, `urn:uuid:` stripped) |
+| `ID` | focus node (instance UUID, `urn:uuid:` stripped — `triplets.iri.local_id`) |
 | `KEY` | property path (CIM short name, e.g. `IdentifiedObject.name`) |
 | `VALUE` | offending value |
 | `VIOLATION_TYPE` | constraint component (`sh:minCount`, `sh:datatype`, `triplets:lexicalForm`, `triplets:invalidSparql`, ...) |
@@ -462,7 +474,7 @@ null, so the output schema is stable:
 | `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows) |
 | `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` |
 | `SHAPE_NAME`, `SHAPE_DESCRIPTION` | shapes | `sh:name` / `sh:description` (a property shape inherits the parent NodeShape's) |
-| `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition |
+| `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition in the violation's own profile (the `PROFILE` column, else the instance header's profile); the first-wins merged view only when neither resolves |
 | `CLASS_DESCRIPTION` | rdf_map | the object's class description |
 
 Pass the *same* shapes object the validation ran with — anonymous property

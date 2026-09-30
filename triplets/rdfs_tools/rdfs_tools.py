@@ -1,4 +1,5 @@
 from triplets.parser import parse
+from triplets.iri import is_absolute, iri_pandas, split_iri
 import pandas
 import os
 
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 def load_all_to_dataframe(paths):
     """Parse RDFS losslessly: schema conversion needs full resource URIs, so resource
     shortening is disabled (only the python engines support that)."""
-    return parse(paths, engine="python_lxml_pandas", shorten_resources=False)
+    return parse(paths, engine="python_lxml_pandas", local_resources=False)
 
 pandas.set_option("display.max_rows", 20)
 pandas.set_option("display.max_columns", 8)
@@ -34,7 +35,7 @@ def get_profile_metadata(data):
     profile_domain = base_uml["ID"].to_list()[0].split(".")[0]
     profile_metadata = data[data.ID.str.contains(profile_domain)].query("KEY == 'isFixed'").copy(deep=True)
 
-    profile_metadata["ID"] = profile_metadata.ID.str.split("#", expand=True)[1].str.split(".", expand=True)[1]
+    profile_metadata["ID"] = iri_pandas.split_iri(profile_metadata.ID)[1].str.split(".", expand=True)[1]
 
     return profile_metadata.set_index("ID")["VALUE"]
 
@@ -64,7 +65,7 @@ def list_of_files(root_path, file_extension, deep=False):
             if os.path.isfile(full_path) and filename.lower().endswith(ext):
                 matches.append(full_path)
 
-    return matches
+    return sorted(matches)   # os.walk / os.listdir order is filesystem-dependent; bundles merge first-wins
 
 
 
@@ -174,19 +175,20 @@ def multiplicity_to_XSD_format(data_table_view):
     return data_table_view
 
 
-def get_namespace_and_name(uri, default_namespace):
+def get_namespace_and_name(uri, default_namespace=None):
+    """``ns#name`` / ``ns/name`` → (``ns#`` / ``ns/``, name) by :func:`triplets.iri.split_iri`.
 
-    separator = "#" if "#" in uri else "/"
-
-    namespace, name = uri.rsplit(separator, maxsplit=1)
-
-    if namespace == "":
-        namespace = default_namespace
-
-    namespace = f"{namespace}{separator}"
-
-
-    return namespace, name
+    An absolute IRI (:func:`triplets.iri.is_absolute`) splits as is. A bare ``name`` or ``#name`` (local-form
+    parses) takes ``default_namespace + "#"``. Any other relative form (``a/b``, ``./x``), and
+    a bare / ``#`` name without *default_namespace*, raises: an absolute-form parse
+    (``local_resources=False``) never yields one, so there is no namespace to guess."""
+    namespace, name = split_iri(uri)
+    if is_absolute(uri):
+        return namespace, name
+    if namespace in ("", "#") and default_namespace is not None:
+        return f"{default_namespace}#", name
+    raise ValueError(f"expected an absolute IRI, got {uri!r}"
+                     + ("" if default_namespace is None else " (only a bare or #name takes the default)"))
 
 
 
@@ -267,7 +269,7 @@ fullmodel_conf = { "FullModel": {
 
 def get_used_relations(data):
     relations = data.query("KEY == 'AssociationUsed' and VALUE == 'Yes'").rename(columns={"ID": "RELATION_NAME"})
-    return relations.RELATION_NAME.str.split("#").str[-1]
+    return iri_pandas.split_iri(relations.RELATION_NAME)[1]
 
 def dangling_references(data, relation_names):
     references = data.merge(relation_names, left_on="KEY", right_on="RELATION_NAME")

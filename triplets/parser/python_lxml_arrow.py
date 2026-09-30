@@ -13,16 +13,14 @@ from typing import Union, IO, Any
 from lxml import etree
 import pyarrow as pa
 
-from .utils import (
-    RDF_NS, RDF_ID, RDF_ABOUT, RDF_NODEID, RDF_RESOURCE,
-    clean_ID, _split_prefixed_name,
-)
+from .utils import document_base, iter_rdf_rows
+from ..iri import TRIPLETS_NS, TYPE_KEY
 
 logger = logging.getLogger(__name__)
 
 
 def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False,
-                          shorten_resources: bool = True) -> pa.RecordBatch:
+                          local_resources: bool = True, default_base: str = TRIPLETS_NS) -> pa.RecordBatch:
     """Parse single RDF/XML (path or fileobj) to pyarrow RecordBatch using lxml + lists.
 
     Streaming in the sense of column-wise collection then direct Arrow (no 4-tuple list).
@@ -46,11 +44,9 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         raise
 
     namespace_map = dict(root.nsmap or {})
-    try:
-        if getattr(root, "base", None):
-            namespace_map["xml_base"] = root.base
-    except Exception:
-        pass
+    declared_base = document_base(root, None)   # a declared absolute xml:base only — never the file location
+    if declared_base:
+        namespace_map["xml_base"] = declared_base
 
     instance_id = str(uuid.uuid4())
     file_name = path_or_fileobject if isinstance(path_or_fileobject, str) else getattr(path_or_fileobject, "name", "")
@@ -66,9 +62,9 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
     # Meta: Distribution + NamespaceMap (matches legacy)
     dist_id = str(uuid.uuid4())
     nsmap_id = str(uuid.uuid4())
-    id_b.append(dist_id); key_b.append("Type"); val_b.append("Distribution"); inst_b.append(instance_id)
+    id_b.append(dist_id); key_b.append(TYPE_KEY); val_b.append("Distribution"); inst_b.append(instance_id)
     id_b.append(dist_id); key_b.append("label"); val_b.append(str(file_name)); inst_b.append(instance_id)
-    id_b.append(nsmap_id); key_b.append("Type"); val_b.append("NamespaceMap"); inst_b.append(instance_id)
+    id_b.append(nsmap_id); key_b.append(TYPE_KEY); val_b.append("NamespaceMap"); inst_b.append(instance_id)
 
     for k, v in namespace_map.items():
         id_b.append(nsmap_id)
@@ -77,35 +73,8 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         inst_b.append(instance_id)
 
     # RDF objects
-    for rdf_object in root.iterchildren():
-        attribs = rdf_object.attrib
-        obj_id = clean_ID(
-            attribs.get(RDF_ID)
-            or attribs.get(RDF_ABOUT)
-            or attribs.get(RDF_NODEID)
-            or ""
-        )
-
-        # Type
-        tag = rdf_object.tag
-        type_value = _split_prefixed_name(tag)
-        id_b.append(obj_id); key_b.append("Type"); val_b.append(type_value); inst_b.append(instance_id)
-
-        for element in rdf_object.iterchildren():
-            key = _split_prefixed_name(element.tag)
-            value = element.text
-            if value is None and element.attrib:
-                value = clean_ID(
-                    element.attrib.get(RDF_RESOURCE)
-                    or element.attrib.get(RDF_NODEID)
-                    or ""
-                )
-                if shorten_resources and value and value.startswith("http"):
-                    value = value.split("#")[-1] if "#" in value else value
-            id_b.append(obj_id)
-            key_b.append(key)
-            val_b.append(value if value is not None else "")
-            inst_b.append(instance_id)
+    for obj_id, key, value in iter_rdf_rows(root.iterchildren(), local_resources, document_base(root, default_base)):
+        id_b.append(obj_id); key_b.append(key); val_b.append(value); inst_b.append(instance_id)
 
     # Finish builders to arrays (direct to Arrow)
     batch = pa.RecordBatch.from_arrays(

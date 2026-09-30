@@ -122,7 +122,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
         if association_used == 'No':
             return None
 
-        parameter_namespace, parameter_name = rdfs_tools.get_namespace_and_name(parameter, default_namespace=xml_base)
+        parameter_namespace, parameter_name = rdfs_tools.get_namespace_and_name(parameter)
 
         parameter_def = {
             "description": parameter_dict.get("comment", ""),
@@ -153,12 +153,9 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 parameter_def["type"] = "Attribute"
 
                 # Get the attribute data type and add to export
-                data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(data_type, default_namespace=xml_base)
+                data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(data_type)
 
                 data_type_meta = profile_data.get_object_data(data_type).to_dict()
-
-                if data_type_namespace == "":
-                    data_type_namespace = xml_base
 
                 data_type_def = {
                     "description": data_type_meta.get("comment", ""),
@@ -182,7 +179,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 }
                 parameter_def["type"] = "Enumeration"
                 parameter_def["xsd:type"] = "xsd:anyURI"
-                parameter_def["range"] = parameter_dict["range"].replace("#", "")
+                parameter_def["range"] = parameter_dict["range"]
                 parameter_def["values"] = []
 
                 # Add allowed values
@@ -190,11 +187,8 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
                 for value in values:
 
-                    value_namespace, value_name = rdfs_tools.get_namespace_and_name(value, default_namespace=xml_base)
+                    value_namespace, value_name = rdfs_tools.get_namespace_and_name(value)
                     value_meta = profile_data.get_object_data(value).to_dict()
-
-                    if value_namespace == "":
-                        value_namespace = xml_base
 
                     value_def = {
                         "description": value_meta.get("comment", ""),
@@ -212,7 +206,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
     for concrete_class in export_classes:
 
         # Define class namespace
-        class_namespace, class_name = rdfs_tools.get_namespace_and_name(concrete_class, default_namespace=xml_base)
+        class_namespace, class_name = rdfs_tools.get_namespace_and_name(concrete_class)
 
         class_meta = profile_data.get_object_data(concrete_class).to_dict()
 
@@ -237,7 +231,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 "value_prefix": class_ID_prefix
             },
             "type": "Class",
-            "inheritance": class_inheritance,
+            "inheritance": list(class_inheritance),
             "stereotyped": not class_is_local,
             "namespace": class_namespace,
             "description": class_meta.get("comment", ""),

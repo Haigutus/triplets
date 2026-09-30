@@ -28,6 +28,7 @@ from concurrent.futures import ProcessPoolExecutor
 import pandas
 
 from .excel_pandas import export_to_excel as _export_to_excel
+from ..iri import TRIPLETS_NS, TYPE_KEY
 from .cimxml_pandas import generate_xml, _get_qname
 from .networkx_pandas import export_to_networkx as _export_to_networkx
 
@@ -116,7 +117,8 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
     return _fn(data, path=path, multivalue=multivalue, export_to_memory=export_to_memory, single_file=single_file, base_filename=base_filename)
 
 
-def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_memory=False):
+def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_memory=False,
+                     export_undefined=True, undefined_namespace=TRIPLETS_NS):
     """Export triplet DataFrame to N-Quads file.
 
     Parameters
@@ -134,6 +136,13 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
     export_to_memory : bool, default False
         If True, return an in-memory BytesIO (with .name) instead of
         writing to disk — same convention as export_to_csv / export_to_cimxml.
+    export_undefined : bool, default True
+        Keep rows the schema does not account for: an unknown class, KEY or
+        enum value — every row when no rdf_map is given. False drops them
+        (the CIM XML default). N-Quads is lossless interchange, so it keeps them.
+    undefined_namespace : str, default "http://triplets#"
+        Namespace those names are written in. ``sparql.query`` / ``validate``
+        load with CIM100 here so schema-less data answers ``cim:`` queries.
     """
     _check_columns(data)
     if not export_to_memory:
@@ -149,18 +158,21 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
                              "the polars engine. Install with: pip install triplets[polars].")
         if export_to_memory:
             buffer = BytesIO()
-            engine_module.write_nquads_batches(data, buffer, rdf_map=rdf_map)
+            engine_module.write_nquads_batches(data, buffer, rdf_map=rdf_map, export_undefined=export_undefined,
+                                               undefined_namespace=undefined_namespace)
             buffer.name = "export.nq"
             buffer.seek(0)
             return buffer
         with open(path, "wb") as handle:
-            engine_module.write_nquads_batches(data, handle, rdf_map=rdf_map)
+            engine_module.write_nquads_batches(data, handle, rdf_map=rdf_map, export_undefined=export_undefined,
+                                               undefined_namespace=undefined_namespace)
         return None
 
     if engine_name != _flavor(data):
         from .._engine_detect import to_polars
         data = to_polars(data) if engine_name == "polars" else _to_pandas(data)
-    return engine_module.export_to_nquads(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory)
+    return engine_module.export_to_nquads(data, path, rdf_map=rdf_map, export_to_memory=export_to_memory,
+                                          export_undefined=export_undefined, undefined_namespace=undefined_namespace)
 
 
 def get_cimxml_engine(name="auto"):
@@ -190,7 +202,7 @@ class ExportType(StrEnum):
 def export_to_cimxml(data,
                      rdf_map=None,
                      namespace_map=None,
-                     class_KEY="Type",
+                     class_KEY=TYPE_KEY,
                      export_undefined=False,
                      export_type=ExportType.XML_PER_INSTANCE_ZIP_PER_XML,
                      global_zip_filename="Export.zip",
@@ -200,7 +212,8 @@ def export_to_cimxml(data,
                      comment=None,
                      max_workers=None,
                      engine="auto",
-                     datatypes=False):
+                     datatypes=False,
+                     undefined_namespace=TRIPLETS_NS):
     """Export a full triplet dataset to CIM RDF XML files or ZIP archives.
 
     Processes all instances (grouped by ``INSTANCE_ID``) and exports them according to the
@@ -217,10 +230,13 @@ def export_to_cimxml(data,
     class_KEY : str, default "Type"
         Key identifying object types in triplet data.
     export_undefined : bool, default False
-        If True, also export classes/attributes without a schema definition
-        (internal structures like Distribution/NamespaceMap) under the
-        http://triplets# namespace. Normal exports carry only schema-defined
-        content. (The cython engine emits undefined elements un-namespaced.)
+        If True, also export classes, attributes and enum values without a
+        schema definition (internal structures like Distribution/NamespaceMap)
+        under ``undefined_namespace``. Normal exports carry only schema-defined
+        content. Both engines agree.
+    undefined_namespace : str, default "http://triplets#"
+        Namespace for the undefined names ``export_undefined`` writes; the
+        ``triplets`` xmlns prefix is kept for a custom URI.
     export_type : ExportType or str, default ExportType.XML_PER_INSTANCE_ZIP_PER_XML
         Export format:
         - ``XML_PER_INSTANCE``: One XML file per instance.
@@ -304,13 +320,15 @@ def export_to_cimxml(data,
         with ProcessPoolExecutor(max_workers=max_workers, mp_context=mp_context) as executor:
             futures = [executor.submit(generate, instance, rdf_map, namespace_map,
                                        class_KEY=class_KEY, export_undefined=export_undefined,
-                                       comment=comment, debug=debug, datatypes=datatypes)
+                                       comment=comment, debug=debug, datatypes=datatypes,
+                                       undefined_namespace=undefined_namespace)
                        for instance in instances]
             xml_documents = [future.result() for future in futures]
     else:
         xml_documents = [generate(instance, rdf_map, namespace_map,
                                   class_KEY=class_KEY, export_undefined=export_undefined,
-                                  comment=comment, debug=debug, datatypes=datatypes)
+                                  comment=comment, debug=debug, datatypes=datatypes,
+                                  undefined_namespace=undefined_namespace)
                          for instance in instances]
 
     # generate returns None for instances skipped due to missing mapping

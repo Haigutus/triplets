@@ -15,17 +15,23 @@ SKIP_REASON = "RDFS profile data not available"
 
 @pytest.fixture(scope="module")
 def rdfs_profile():
-    """Load first RDFS profile file."""
+    """Load first RDFS profile file the way the schema generator does (absolute form)."""
     if not RDFS_DIR.exists():
         pytest.skip(SKIP_REASON)
-    files = rdfs_tools.list_of_files(str(RDFS_DIR), ".rdf")
+    files = sorted(rdfs_tools.list_of_files(str(RDFS_DIR), ".rdf"))   # os.walk order differs per machine
     if not files:
         pytest.skip(SKIP_REASON)
-    from triplets.rdf_parser import load_all_to_dataframe
-    return load_all_to_dataframe([files[0]])
+    return rdfs_tools.load_all_to_dataframe([files[0]])
 
 
 # ── Pure utility functions (no data needed) ─────────────────────────────────
+
+def test_get_namespace_and_name_forms():
+    base = "http://iec.ch/TC57/CIM100"
+    assert rdfs_tools.get_namespace_and_name("http://iec.ch/TC57/CIM100#Breaker", base) == ("http://iec.ch/TC57/CIM100#", "Breaker")
+    assert rdfs_tools.get_namespace_and_name("#Breaker", base) == ("http://iec.ch/TC57/CIM100#", "Breaker")
+    assert rdfs_tools.get_namespace_and_name("Breaker", base) == ("http://iec.ch/TC57/CIM100#", "Breaker")   # bare: a fragment, never '/'
+    assert rdfs_tools.get_namespace_and_name("https://schema.org/name", base) == ("https://schema.org/", "name")
 
 class TestParseMultiplicity:
     def test_one_to_one(self):
@@ -143,6 +149,17 @@ class TestCimRdfsToJson:
         assert isinstance(result, dict)
         assert len(result) > 0
 
+    def test_relative_reference_without_default_raises(self):
+        """The generator passes no default namespace: its parse is absolute, so a relative
+        reference is a parse bug, not something to guess a namespace for."""
+        assert rdfs_tools.get_namespace_and_name("http://iec.ch/TC57/CIM100#ACLineSegment") == \
+            ("http://iec.ch/TC57/CIM100#", "ACLineSegment")
+        assert rdfs_tools.get_namespace_and_name("http://purl.org/dc/terms/issued") == ("http://purl.org/dc/terms/", "issued")
+        assert rdfs_tools.get_namespace_and_name("#DiagramStyle", "http://iec.ch/TC57/CIM100") == \
+            ("http://iec.ch/TC57/CIM100#", "DiagramStyle")
+        with pytest.raises(ValueError, match="absolute IRI"):
+            rdfs_tools.get_namespace_and_name("#DiagramStyle")
+
 
 class TestOrphanedAttributes:
     """An attribute with no class binding (no rdfs:domain / schema:domainIncludes)
@@ -175,3 +192,47 @@ class TestOrphanedAttributes:
         assert profile["title"].get("dataType") == "String"     # with its datatype preserved
         assert "title" not in profile["Dataset"]["parameters"]  # but no class references it
         assert any("no class binding" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize("uri", ["foo/Bar", "./Name"])
+def test_get_namespace_and_name_rejects_other_relative_forms(uri):
+    """Only a bare or #name takes the default; any other relative form raises, default or not."""
+    for default in (None, "http://iec.ch/TC57/CIM100"):
+        with pytest.raises(ValueError, match="absolute IRI"):
+            rdfs_tools.get_namespace_and_name(uri, default)
+
+
+def test_get_namespace_and_name_any_scheme_is_absolute():
+    assert rdfs_tools.get_namespace_and_name("urn:uuid:abc") == ("urn:uuid:", "abc")
+    assert rdfs_tools.get_namespace_and_name("urn:uuid:abc", "http://x") == ("urn:uuid:", "abc")   # never rewritten
+
+
+def test_list_of_files_is_sorted(tmp_path):
+    for name in ("b.rdf", "a.rdf", "c.rdf"):
+        (tmp_path / name).write_text("")
+    assert [Path(f).name for f in rdfs_tools.list_of_files(str(tmp_path), ".rdf")] == ["a.rdf", "b.rdf", "c.rdf"]
+
+
+def test_shipped_bundles_first_wins_is_order_independent():
+    """The flat maps merge profile sections first-wins; that is safe only while no name has a
+    conflicting namespace or entry type across sections (primitives DateTime / URI excepted)."""
+    import json
+    import triplets.export_schema
+    for path in sorted(Path(triplets.export_schema.__file__).parent.glob("*.json")):
+        seen, conflicts = {}, set()
+        for section in json.loads(path.read_text()).values():
+            if not isinstance(section, dict):
+                continue
+            for name, entry in section.items():
+                if isinstance(entry, dict) and (entry.get("namespace") or entry.get("type")):
+                    key = (entry.get("namespace"), entry.get("type"))
+                    if seen.setdefault(name, key) != key:
+                        conflicts.add(name)
+        assert conflicts <= {"DateTime", "URI"}, (path.name, sorted(conflicts)[:10])
+
+
+def test_get_namespace_and_name_prefixed_name_is_not_absolute():
+    """A prefixed name (cim:Foo) or a multiplicity (M:1..1) is no IRI — without a default it raises."""
+    for text in ("cim:Foo", "M:1..1"):
+        with pytest.raises(ValueError, match="absolute IRI"):
+            rdfs_tools.get_namespace_and_name(text)

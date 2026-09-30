@@ -12,26 +12,30 @@ from typing import List, Union, IO, Any
 
 logger = logging.getLogger(__name__)
 
-RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+from ..iri import RDF_NS, TRIPLETS_NS, TYPE_KEY, is_absolute, local_id, local_value, resolve_iri
+
 RDF_ID = f"{{{RDF_NS}}}ID"
 RDF_ABOUT = f"{{{RDF_NS}}}about"
 RDF_NODEID = f"{{{RDF_NS}}}nodeID"
 RDF_RESOURCE = f"{{{RDF_NS}}}resource"
+XML_BASE = "{http://www.w3.org/XML/1998/namespace}base"
 
 
-def clean_ID(ID: Any) -> str:
-    """Removes ID prefixes used in CIM - urn:uuid:, #_, _ ."""
-    if not ID:
-        return ""
-    ID = str(ID)
-    for prefix in ("urn:uuid:", "#_", "_"):
-        if ID.startswith(prefix):
-            ID = ID[len(prefix):]
-    return ID
+def document_base(root, default_base=TRIPLETS_NS):
+    """Base for the absolute form: the root's declared ``xml:base`` when it is absolute
+    (:func:`~triplets.iri.is_absolute`), else *default_base* (None: no base). The document's own location (file path, zip entry) is never used —
+    it is not an identity and would differ per machine."""
+    declared = root.get(XML_BASE)
+    return declared if is_absolute(declared) else default_base
 
 
 def _split_prefixed_name(name: str) -> str:
-    """Split 'prefix:localname' or {ns}local -> localname."""
+    """Split 'prefix:localname' or {ns}local -> localname.
+
+    Native QName mirror of :func:`triplets.iri.split_iri`: XML already separates
+    namespace and local name, so no IRI string exists to shorten
+    (parity: tests/test_iri.py ``test_parse_engines_follow_iri_rules``).
+    """
     if not name:
         return ""
     if name.startswith("{"):
@@ -42,6 +46,50 @@ def _split_prefixed_name(name: str) -> str:
     if idx >= 0:
         return name[idx + 1:]
     return name
+
+
+def iter_rdf_rows(rdf_objects, local_resources=True, base=None):
+    """RDF/XML object elements (lxml) → ``(ID, KEY, VALUE)`` rows, the one python copy of the
+    XML → triplet rules (the cython engine mirrors the local form in C++).
+
+    KEY and Type VALUE: the element local name. VALUE: element text, else the
+    ``rdf:resource`` / ``rdf:nodeID`` reference; ``""`` when there is neither. The ID
+    (``rdf:ID`` > ``rdf:about`` > ``rdf:nodeID``, ``""`` when none) and references are:
+
+    - ``local_resources=True`` — local: :func:`~triplets.iri.local_id` for the ID,
+      :func:`~triplets.iri.local_value` for references (the CIM instance convention).
+    - ``local_resources=False`` — absolute: resolved against *base* (:func:`document_base`:
+      the declared absolute ``xml:base``, else ``default_base``) with
+      :func:`~triplets.iri.resolve_iri`, so nothing downstream needs the base again.
+      ``rdf:ID="X"`` is ``base#X``. ``rdf:nodeID`` labels stay as written (blank nodes are
+      not supported).
+    """
+    if local_resources:                  # the hot path: first attribute that exists wins, as before
+        for rdf_object in rdf_objects:
+            attribs = rdf_object.attrib
+            obj_id = local_id(attribs.get(RDF_ID) or attribs.get(RDF_ABOUT) or attribs.get(RDF_NODEID) or "")
+            yield obj_id, TYPE_KEY, _split_prefixed_name(rdf_object.tag)
+            for element in rdf_object.iterchildren():
+                value = element.text
+                if value is None:
+                    value = local_value(element.get(RDF_RESOURCE) or element.get(RDF_NODEID) or "") \
+                        if element.attrib else ""
+                yield obj_id, _split_prefixed_name(element.tag), value
+        return
+    for rdf_object in rdf_objects:
+        attribs = rdf_object.attrib
+        rdf_id, about = attribs.get(RDF_ID), attribs.get(RDF_ABOUT)
+        if rdf_id or about:
+            obj_id = resolve_iri("#" + rdf_id, base) if rdf_id else resolve_iri(about, base)
+        else:
+            obj_id = attribs.get(RDF_NODEID) or ""
+        yield obj_id, TYPE_KEY, _split_prefixed_name(rdf_object.tag)
+        for element in rdf_object.iterchildren():
+            value = element.text
+            if value is None:
+                reference = element.get(RDF_RESOURCE)
+                value = resolve_iri(reference, base) if reference else element.get(RDF_NODEID) or ""
+            yield obj_id, _split_prefixed_name(element.tag), value
 
 
 def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debug: bool = False):

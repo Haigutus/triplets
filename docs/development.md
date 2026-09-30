@@ -57,6 +57,97 @@ constraints still apply regardless of overrides (cimxml `datatypes=True`
 requires python_lxml; validation keeps duckdb out of auto because it is the
 explicit larger-than-memory choice).
 
+## IRI contract (`triplets.iri`)
+
+Short triplet names ↔ absolute IRIs is defined once, in `triplets/iri/`. Never
+split on `#`, strip `urn:uuid:` or prepend `CIM100#` at a call site — pick the
+function for the column:
+
+| column / context | local | absolute |
+|---|---|---|
+| `ID`, `INSTANCE_ID`, focus node, graph | `local_id` | `absolute_id` |
+| `KEY` | `local_key(iri, type_key="Type")` (`rdf:type` → *type_key*, else the split's local name) | `absolute_key` |
+| `VALUE` | `local_value(iri, kind)`: `class` / `enum` → name, `reference` → `local_id`, `None` → guess | `absolute_value` → `(kind, payload)` |
+| namespace + local name of any IRI (vocabulary labels, RDFS tools) | `split_iri` | — |
+
+One split, `split_iri` (last `#` or `/`, else a URN's last `:`; lossless), and two
+policies on top: a **name** (KEY, class, enum value) always drops its namespace —
+the schema restores it; a **node** (ID, reference) drops only what a convention
+restores (`local_id`: `urn:uuid:`, `#_`, `_`) and otherwise stays whole. Without
+a schema `local_value` guesses: an `http(s)` IRI with `#` is a name, anything else
+a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
+`iri.value_types`. SHACL terms use the rule of the column they land on: paths →
+`local_key`, `sh:class` / targets → `local_value(…, "class")`, `sh:in` /
+`sh:hasValue` → `local_value`; labels (severity, `xsd:` names, components) →
+`split_iri(…)[1]`.
+
+- The absolute side takes flat maps built from `rdf_map`, one function per
+  map, each a single comprehension over `rdf_map_entries` (all profile
+  sections, first occurrence wins): `namespaces` (name → namespace IRI),
+  `key_types` (name → schema entry type), `value_types` (KEY → `literal` /
+  `reference` / `enum`, by entry type only), `datatypes` (Attribute KEY → xsd
+  IRI, `None` = string; anyURI included). No cache — each is ~2 ms on a 2.8 MB
+  schema, a content key cost 6x that. Public entry points (`validate`,
+  `validate_schema`, `export_to_*`, the qlever ingest) call `load_rdf_map`
+  once; below them only dicts flow, so a path is parsed once per call.
+- **The schema entry type decides the serialisation form, never `xsd:type`**
+  and never the shape of the text: an Attribute value is a literal even when
+  it reads `https://…` or looks like a UUID (`xsd:type` only annotates it), an
+  Association value is `absolute_id(value)` (absolute passes through, else
+  `urn:uuid:`), an Enumeration value an enum IRI. The absolute-IRI / canonical-
+  UUID heuristic applies only to a KEY the schema does not declare.
+  `node_kind` gives the SHACL engines the same decision for `sh:nodeKind`.
+- An IRI stays an IRI: `absolute_id` / `absolute_name` percent-encode what an
+  IRIREF may not hold (`encode_iri`); the N-Quads / SPARQL readers reverse only
+  those escapes (`decode_iri`). Literals are never encoded.
+- **Undefined names** — a class not in the schema (abstract CIM classes such as
+  `Equipment` included), a KEY not in it, an enum value not in it, and every
+  name when there is no `rdf_map` — take `undefined_namespace`.
+  `absolute_name` has no schema branch: the map answers or the parameter does.
+  `iri.defined(key, value, namespaces, value_types)` names the row-level test.
+  Every exporter has the same two knobs: `export_undefined` (write such rows
+  or drop them — N-Quads keeps them by default, CIM XML drops them) and
+  `undefined_namespace` (default `http://triplets#`). `sparql.query`,
+  `validate`, `validate_schema` and `export_to_shacl_report` always load every
+  row and default the namespace to CIM100 so schema-less data answers `cim:`
+  queries; the same frame therefore exports `triplets#Equipment` and is
+  queried as `CIM100#Equipment` unless the parameter is passed.
+- Flavors: `iri_pandas` (Series in/out), `iri_polars` (Expr in/out, no UDFs),
+  `iri_duckdb` (SQL text in/out) carry the same names.
+  `__init__` imports only the standard library — the parser imports it per file.
+- **Types:** `Type` (`iri.TYPE_KEY`) is the typed-node element name, one per CIM
+  object; `Description` (`iri.DESCRIPTION_TYPE`) means `rdf:Description`, not a
+  class. An explicit `rdf:type` child is the ordinary KEY `type`, which collides
+  with `dcterms:type` on export (known limitation):
+  [parsers.md — Types](parsers.md#types-type-vs-rdftype).
+- **Importers have two sources of truth**, each held to the rows above:
+
+  | importer | rules from |
+  |---|---|
+  | CIM XML: `python_lxml_pandas`, `python_lxml_arrow`, `rdf_parser.load_RDF_to_list` | `parser.utils.iter_rdf_rows` — the one python row loop |
+  | CIM XML: `cython_pugixml_arrow` | C++ mirror of that loop (`clean_id`, `clean_ref_value`, tag `local_name`) |
+  | `read_nquads`, oxigraph / qlever CONSTRUCT (`terms_to_triplets`), rdflib CONSTRUCT, `sh:sparql` results, the pyshacl report | `iri.decode_iri` once, then `local_id` / `local_key` / `local_value` |
+  | SPARQL SELECT | none — absolute IRIs as stored |
+
+  The XML side splits element QNames natively (XML already separates namespace
+  and local name, so no IRI string exists for `local_key`) and finds the RDF
+  attributes by namespace (the cython engine resolves the prefix the root binds to
+  it). `test_parse_engines_follow_iri_rules` derives every object row from lxml's
+  resolved QNames with the `triplets.iri` functions and requires each parser to
+  produce exactly those rows, for any RDF prefix. The XML side has no `%XX`
+  decoding and no subject join (see *Known limitations* in parsers.md).
+- Native mirrors (cython parser `clean_id`/`clean_ref_value`, qlever C++
+  `isUri`/`isUuid`/`namespaceFor`/`encodeIri`) are commented as such and checked by the
+  parse / ingest parity tests. Vectorized patterns derive from the constants
+  (`ID_PREFIX_RE`, `URI_PREFIXES` / `URI_PREFIX_RE`, `UUID_RE.pattern`), so a prefix change
+  cannot miss a flavor.
+- `UUID_RE` (strict lowercase, export rule) and `REFERENCE_LIKE` (loose
+  nodeKind heuristic) are different contracts on purpose.
+- CIM XML export is *not* on `absolute_id`: `rdf:about` / `rdf:resource` prefixes
+  are the per-class schema `value_prefix`, and enum namespaces come from the
+  resolved instance profile map (both CIM XML engines agree); only the
+  `rdf:datatype` annotation uses `iri.datatypes`.
+
 ## Flavor conversion
 
 Triplet data arrives as pandas, polars, pyarrow, or a DuckDB connection. Convert
