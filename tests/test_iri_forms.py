@@ -273,3 +273,144 @@ def test_namespace_mismatch_warns_and_stays_absolute(tmp_path, caplog):
     assert any(f"<{CIM100}IdentifiedObject.name>" in line for line in local_lines)
     assert any(f"<{CIM16}IdentifiedObject.name>" in line for line in prefixed_lines)
     assert "arrive in another namespace" in caplog.text
+
+
+# ── review follow-ups: one regression test per finding ─────────────────────────
+
+def _cimxml_lines(frame, engine, **kwargs):
+    out = triplets.export.export_to_cimxml(frame, rdf_map=SCHEMA, engine=engine, export_to_memory=True, **kwargs)[0]
+    out.seek(0)
+    archive = zipfile.ZipFile(out)
+    text = archive.read(archive.namelist()[0])
+    from lxml import etree
+    etree.fromstring(text)                                            # well-formed, always
+    return sorted(line.strip() for line in text.decode().splitlines() if "urn:uuid:" in line or "cim:" in line)
+
+
+def _cimxml_engine(engine):
+    try:
+        triplets.export.get_cimxml_engine(engine)
+    except Exception as error:
+        pytest.skip(f"{engine} not available: {error}")
+
+
+@pytest.mark.parametrize("engine", ["python_lxml", "cython_pugixml"])
+def test_cimxml_absolute_frame_writes_nodes_once(tmp_path, engine):
+    """urn:uuid: nodes go back to the local convention (no urn:uuid:urn:uuid:); another absolute
+    node is written as is — rdf:about for an ID, no value_prefix for a reference."""
+    _cimxml_engine(engine)
+    local = _cimxml_lines(_full(tmp_path, "local")[0], engine)
+    absolute = _cimxml_lines(_full(tmp_path, "absolute")[0], engine)
+    assert not any("urn:uuid:urn:uuid:" in line or "urn:uuid:http" in line for line in absolute)
+    assert [line.replace('"http://triplets#_vl1"', '"urn:uuid:vl1"') for line in absolute] == local
+
+
+def test_cimxml_absolute_engines_agree(tmp_path):
+    for engine in ("python_lxml", "cython_pugixml"):
+        _cimxml_engine(engine)
+    frame = _full(tmp_path, "absolute")[0]
+    lxml, cython = (_cimxml_lines(frame, engine) for engine in ("python_lxml", "cython_pugixml"))
+    assert [line.replace(" />", "/>") for line in cython] == lxml
+
+
+def test_qlever_duckdb_input_is_normalized(tmp_path):
+    duckdb = pytest.importorskip("duckdb")
+    frame, _ = _full(tmp_path, "prefixed")
+    connection = duckdb.connect()
+    connection.register("_frame", frame.astype(str))
+    connection.execute("CREATE TABLE triplets AS SELECT * FROM _frame")
+    query = f"SELECT ?name WHERE {{ ?s <{CIM100}IdentifiedObject.name> ?name }}"
+    answers = {}
+    for engine in ("qlever", "oxigraph", "rdflib"):
+        try:
+            triplets.sparql.get_engine(engine)
+        except Exception:
+            continue
+        answers[engine] = triplets.sparql.query(connection, query, rdf_map=SCHEMA, engine=engine)["name"].tolist()
+    assert answers and set(map(tuple, answers.values())) == {("B1",)}, answers
+
+
+TYPE_ONLY = """<?xml version="1.0"?><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="{cim}">
+<cim:Breaker rdf:about="urn:uuid:b1"/></rdf:RDF>"""
+
+
+def test_type_only_object_is_not_taken_for_local(tmp_path):
+    """The local-form test covers Type VALUEs too: a frame whose only prefixed name is a class."""
+    import rdflib
+    frame, _ = _full(tmp_path, "prefixed", TYPE_ONLY)
+    lines = _quads(frame, "pandas")
+    assert any(f"<urn:uuid:b1> <{iri.RDF_TYPE}> <{CIM100}Breaker>" in line for line in lines)
+    assert not any("triplets#cim:" in line for line in lines)
+    shapes = rdflib.Graph().parse(data="""@prefix sh: <http://www.w3.org/ns/shacl#> . @prefix cim: <http://iec.ch/TC57/CIM100#> .
+        cim:S a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .""",
+                                  format="turtle")
+    with pytest.raises(ValueError, match="local IRI form"):
+        triplets.validation.validate(frame, shapes, engine="pandas")
+
+
+def test_stream_without_its_namespace_map_raises(tmp_path):
+    """A batch never borrows another batch's NamespaceMap (output would depend on batch order):
+    an unbound prefix raises and names prefixes=; with prefixes= the stream exports right."""
+    duckdb = pytest.importorskip("duckdb")
+    pytest.importorskip("polars")
+    frame, _ = _full(tmp_path, "prefixed")
+    connection = duckdb.connect()
+    connection.register("_frame", frame.astype(str))
+    data_only = "SELECT * FROM _frame WHERE ID NOT IN (SELECT ID FROM _frame WHERE VALUE = 'NamespaceMap')"
+    with pytest.raises(ValueError, match="prefixes="):
+        triplets.export.export_to_nquads(connection.execute(data_only).to_arrow_reader(), rdf_map=SCHEMA,
+                                         engine="polars", export_to_memory=True)
+    text = triplets.export.export_to_nquads(connection.execute(data_only).to_arrow_reader(), rdf_map=SCHEMA,
+                                            engine="polars", export_to_memory=True,
+                                            prefixes={"cim": CIM100, "dcat": DCAT}).getvalue().decode()
+    assert f"<{CIM100}IdentifiedObject.name>" in text and "triplets#cim:" not in text
+
+
+def test_arrow_parser_prefixed_frame_exports(tmp_path):
+    """The arrow parser's dictionary-encoded KEY column is cast before normalizing."""
+    path = tmp_path / "arrow.xml"
+    path.write_text(SAME.format(cim=CIM100, uuid=UUID))
+    frame = triplets.parse(str(path), engine="python_lxml_arrow", iri_form="prefixed")
+    assert "dictionary" in str(frame["KEY"].dtype)
+    lines = _quads(frame, "pandas")
+    assert any(f"<{CIM100}IdentifiedObject.name>" in line for line in lines)
+
+
+@pytest.mark.parametrize("form", ["local", "absolute"])
+def test_polars_frame_to_cython_cimxml_with_undefined(tmp_path, form):
+    polars = pytest.importorskip("polars")
+    _cimxml_engine("cython_pugixml")
+    frame = polars.from_pandas(_full(tmp_path, form, FIXTURE)[0].astype(str))
+    assert triplets.export.export_to_cimxml(frame, rdf_map=SCHEMA, engine="cython_pugixml",
+                                            export_to_memory=True, export_undefined=True)
+
+
+def test_parse_prefixes_picks_a_python_engine(tmp_path):
+    path = tmp_path / "p.xml"
+    path.write_text(SAME.format(cim=CIM100, uuid=UUID))
+    frame = triplets.parse(str(path), prefixes={"c": CIM100})                   # engine="auto"
+    assert "c" in set(frame["KEY"].astype(str))                                # recorded in the NamespaceMap rows
+    assert next(iter(triplets.parser.parse_batches(str(path), prefixes={"c": CIM100}))).num_rows
+    try:
+        triplets.parser.get_engine("cython_pugixml_arrow")
+    except Exception:
+        return
+    with pytest.raises(ValueError, match="python parser engine"):
+        triplets.parse(str(path), engine="cython_pugixml_arrow", iri_form="prefixed")
+
+
+@pytest.mark.parametrize("engine", ["python_lxml", "cython_pugixml"])
+@pytest.mark.parametrize("form", ["local", "prefixed"])
+def test_cimxml_default_namespace_document(tmp_path, engine, form):
+    """A document with a default namespace (xmlns="…") exports well-formed XML on both engines."""
+    _cimxml_engine(engine)
+    assert 'xmlns="http://default.org/ns#"' in FIXTURE
+    frame, _ = _full(tmp_path, form, FIXTURE)
+    _cimxml_lines(frame, engine, export_undefined=True)
+
+
+def test_rdf_type_does_not_warn_as_namespace_mismatch(tmp_path, caplog):
+    frame, _ = _full(tmp_path, "prefixed", FIXTURE)
+    with caplog.at_level("WARNING", logger="triplets.iri"):
+        _quads(frame, "pandas")
+    assert "arrive in another namespace" not in caplog.text

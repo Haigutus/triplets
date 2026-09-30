@@ -157,25 +157,39 @@ def _namespace_maps(frame):
     return maps
 
 
+def distinct_names(frame):
+    """The distinct KEYs and ``Type`` VALUEs — what decides a frame's iri_form."""
+    keys = frame["KEY"]
+    return list(keys.dropna().unique()) + list(frame.loc[(keys == TYPE_KEY).fillna(False).to_numpy(), "VALUE"].dropna().unique())
+
+
 def to_schema_form(frame, namespaces, value_types=None, prefixes=None):
-    """A frame in any ``iri_form`` → the form the exporters consume: prefixed names expanded
-    with their own instance's NamespaceMap (then *prefixes*), names the schema declares
-    (KEY, class, enum value) back to its local names — only when the namespace matches
-    (``rdf:type`` never becomes ``dcterms:type``) — everything else absolute, and
-    ``rdf:Description`` as ``Description``. A local frame (no prefixed / IRI KEY) is
-    returned as is, after one pass over its distinct KEYs. Literal VALUEs (the schema's
-    Attribute keys) are never expanded."""
-    from . import DESCRIPTION_IRI, DESCRIPTION_TYPE, expand_iri, is_named, schema_name, warn_namespace_mismatch
-    if not prefixes and not any(is_named(key) for key in frame["KEY"].dropna().unique()):
+    """A frame in any ``iri_form`` → the form the exporters consume:
+
+    - prefixed names expanded with their own instance's NamespaceMap, then *prefixes*; a
+      KEY / class prefix still unbound raises ``ValueError`` (never ``triplets#cim:…``);
+    - names the schema declares (KEY, class, enum value) back to its local names — only when
+      the namespace matches, so ``rdf:type`` never becomes ``dcterms:type``; other names stay
+      absolute; ``rdf:Description`` as ``Description``;
+    - ``urn:uuid:x`` nodes back to ``x`` (IDs, and references of a schema Association) — the
+      convention every writer restores; other absolute nodes stay absolute.
+
+    A local frame (``iri.local_form`` over its distinct KEYs and ``Type`` VALUEs) is returned
+    as is. Literal VALUEs of the schema's Attribute keys are never expanded (without a schema,
+    literal text that starts with a bound prefix would be)."""
+    from . import (DESCRIPTION_IRI, DESCRIPTION_TYPE, expand_iri, local_form, schema_name, unbound_prefixes,
+                   warn_namespace_mismatch)
+    if not prefixes and local_form(distinct_names(frame)):
         return frame
     import pyarrow
     value_types = value_types or {}
     maps = _namespace_maps(frame)
     frame = frame.copy()
-    for column in ("ID", "KEY", "VALUE"):          # categorical columns take no new values
-        if not isinstance(frame[column].dtype, pandas.ArrowDtype):
-            frame[column] = frame[column].astype(pandas.ArrowDtype(pyarrow.string()))
-    instances = frame["INSTANCE_ID"].astype(str).to_numpy()
+    string = pandas.ArrowDtype(pyarrow.string())
+    for column in ("ID", "KEY", "VALUE", "INSTANCE_ID"):   # categorical / dictionary columns take no new values
+        if frame[column].dtype != string:
+            frame[column] = frame[column].astype(str).where(frame[column].notna(), None).astype(string)
+    instances = frame["INSTANCE_ID"].to_numpy()
 
     def expand(column, rows):
         """Expand the prefixed values of *column* on *rows*, per instance map (distinct values)."""
@@ -189,14 +203,24 @@ def to_schema_form(frame, namespaces, value_types=None, prefixes=None):
     def prefixed(column):
         return frame[column].str.match(PREFIXED_RE.pattern, na=False).astype(bool).to_numpy()
 
+    is_type = (frame["KEY"] == TYPE_KEY).fillna(False).to_numpy()
     expand("KEY", prefixed("KEY"))
+    expand("VALUE", prefixed("VALUE") & is_type)
+    unbound = unbound_prefixes(distinct_names(frame))
+    if unbound:
+        raise ValueError(f"no namespace bound for prefix(es) {unbound}: the frame's NamespaceMap rows do not "
+                         f"declare them — pass prefixes={{...}} (e.g. for a stream whose map is in another batch)")
     frame["KEY"] = by_distinct(frame["KEY"], lambda keys: keys.map(
         lambda key: key if key == TYPE_KEY else (schema_name(key, namespaces) or key)))
     warn_namespace_mismatch(frame["KEY"].dropna().unique(), namespaces)
     kinds = frame["KEY"].map(value_types)
     expand("ID", prefixed("ID"))
-    expand("VALUE", prefixed("VALUE") & ~kinds.eq("literal").fillna(False).to_numpy())
-    names = ((frame["KEY"] == TYPE_KEY) | kinds.eq("enum")).fillna(False).astype(bool).to_numpy()
+    expand("VALUE", prefixed("VALUE") & ~is_type & ~kinds.eq("literal").fillna(False).to_numpy())
+    frame["ID"] = frame["ID"].str.removeprefix(UUID_PREFIX)
+    references = kinds.eq("reference").fillna(False).to_numpy()
+    if references.any():
+        frame.loc[references, "VALUE"] = frame.loc[references, "VALUE"].str.removeprefix(UUID_PREFIX)
+    names = (is_type | kinds.eq("enum").fillna(False).to_numpy())
     if names.any():
         frame.loc[names, "VALUE"] = by_distinct(frame.loc[names, "VALUE"], lambda values: values.map(
             lambda value: DESCRIPTION_TYPE if value == DESCRIPTION_IRI else (schema_name(value, namespaces) or value)))

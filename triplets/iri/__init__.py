@@ -211,6 +211,21 @@ def is_named(text):
         PREFIXED_RE.match(text) is not None and not text.startswith("urn:"))
 
 
+W3C_VOCABULARIES = frozenset({RDF_NS, RDFS_NS, XSD_NS, SH_NS, "http://www.w3.org/2002/07/owl#"})
+
+
+def local_form(names):
+    """True when *names* (the distinct KEYs and ``Type`` VALUEs of a frame) are all in the
+    local form — no prefixed name, no http(s) IRI. The one test for "is this frame local?"."""
+    return not any(name is not None and is_named(name) for name in names)
+
+
+def unbound_prefixes(names):
+    """The prefixes of the names still ``prefix:local`` after expansion (no map bound them)."""
+    return sorted({PREFIXED_RE.match(str(name)).group(1) for name in names
+                   if name is not None and is_named(name) and not str(name).startswith(("http://", "https://"))})
+
+
 def warn_namespace_mismatch(names, namespaces):
     """Log the names still absolute after localization whose local name the schema declares
     under another namespace (e.g. CIM16 data against a CIM100 schema): the local form would
@@ -218,7 +233,8 @@ def warn_namespace_mismatch(names, namespaces):
     drops them as undefined unless ``export_undefined=True``."""
     import logging
     mismatched = sorted({name for name in names if str(name).startswith(("http://", "https://"))
-                         and split_iri(name)[1] in namespaces})
+                         and split_iri(name)[1] in namespaces
+                         and split_iri(name)[0] not in W3C_VOCABULARIES})   # rdf:type vs dct:type is a collision, not a version
     if mismatched:
         logging.getLogger("triplets.iri").warning(
             "%d name(s) the schema declares arrive in another namespace and stay absolute "

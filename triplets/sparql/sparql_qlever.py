@@ -172,9 +172,21 @@ def _index_for(data, rdf_map, data_unchanged=False, undefined_namespace=CIM_NS):
 def _schema_form(data, rdf_map):
     """Any iri_form → local schema names + absolute IRIs before the Arrow ingest, so the C++
     term mapping (keyed on local schema names, absolute IRIs passed through) needs no prefix
-    logic — the same normalization the N-Quads exporters run (duckdb input: local form only)."""
+    logic — the same normalization the N-Quads exporters run. duckdb input stays on the
+    zero-copy path when it is in the local form; otherwise it is materialized like the
+    oxigraph / rdflib loaders do (``as_frame``), so every engine answers the same."""
     rdf_map = load_rdf_map(rdf_map)
     kind = flavor(data)
+    if kind == "duckdb":
+        from .._engine_detect import as_frame
+        from ..iri import local_form
+        from ..tools.duckdb_engine import _resolve_table
+        table = _resolve_table(data)
+        names = [row[0] for row in data.execute(
+            f"SELECT DISTINCT KEY FROM {table} UNION SELECT DISTINCT VALUE FROM {table} WHERE KEY = 'Type'").fetchall()]
+        if local_form(names):
+            return data
+        data, kind = as_frame(data), "pandas"
     if kind == "pandas":
         from ..iri import iri_pandas
         return iri_pandas.to_schema_form(data, namespaces(rdf_map), value_types(rdf_map))

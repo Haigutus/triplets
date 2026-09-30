@@ -39,7 +39,7 @@ import pandas
 from .._engine_detect import flavor
 from .._header import PROFILE_KEYS as _HEADER_KEYS
 from .._registry import EngineRegistry
-from ..iri import CIM_NS, TYPE_KEY, is_named, load_rdf_map
+from ..iri import CIM_NS, TYPE_KEY, is_named, load_rdf_map, local_form
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
 from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
@@ -87,22 +87,25 @@ def get_engine(name: str = "auto"):
 
 
 def _require_local_form(data, **kwargs):
-    """Validation compares shapes and schema against local names (``rule.path``); a
-    ``parse(iri_form="prefixed" / "absolute")`` frame would silently match nothing on the
-    vectorized engines. Checked on the distinct KEYs only."""
+    """Validation compares shapes and schema against local names (``rule.path``, target
+    classes); a ``parse(iri_form="prefixed" / "absolute")`` frame would silently match nothing
+    on the vectorized engines. Checked on the distinct KEYs and ``Type`` VALUEs only."""
     kind = flavor(data)
     if kind == "duckdb":
-        keys = [row[0] for row in data.execute(f"SELECT DISTINCT KEY FROM {_table_ref(data, **kwargs)}").fetchall()]
+        table = _table_ref(data, **kwargs)
+        names = [row[0] for row in data.execute(
+            f"SELECT DISTINCT KEY FROM {table} UNION SELECT DISTINCT VALUE FROM {table} WHERE KEY = ?",
+            [TYPE_KEY]).fetchall()]
     elif kind == "polars":
-        keys = data["KEY"].unique().drop_nulls().to_list()
-    elif kind == "pyarrow":
-        keys = data.column("KEY").unique().to_pylist()
+        from ..iri.iri_polars import distinct_names
+        names = distinct_names(data)
     else:
-        keys = data["KEY"].dropna().unique()
-    named = [key for key in keys if key is not None and is_named(key)]
-    if named:
+        from ..iri.iri_pandas import distinct_names
+        names = distinct_names(data.to_pandas(types_mapper=pandas.ArrowDtype) if kind == "pyarrow" else data)
+    if not local_form(names):
+        named = sorted(str(name) for name in names if name is not None and is_named(name))
         raise ValueError(f"validation expects the local IRI form (parse(iri_form='local')); this frame has "
-                         f"prefixed / absolute KEYs such as {sorted(map(str, named))[:3]}")
+                         f"prefixed / absolute names such as {named[:3]}")
 
 
 def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True,
