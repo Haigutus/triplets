@@ -165,7 +165,9 @@ def generate_xml(instance_data,
     if export_undefined:            # absolute undefined names (iri_form="absolute") keep their namespace
         namespace_map = with_name_namespaces(namespace_map, instance_data, class_KEY)
 
-    # Create element builder
+    # Create element builder — the NamespaceMap rows keep the default namespace under "",
+    # which lxml spells None
+    namespace_map = {prefix or None: namespace for prefix, namespace in namespace_map.items()}
     E = ElementMaker(nsmap=namespace_map)
 
     # Create xml root element
@@ -214,8 +216,12 @@ def generate_xml(instance_data,
         # Create class element
         # logger.debug(class_namespace, class_name) # DEBUG
         rdf_object = E(_get_qname(class_namespace, class_name))
-        # Add ID attribute
-        rdf_object.attrib[_get_qname(id_name)] = f"{id_value_prefix}{ID}"
+        # Add ID attribute — an absolute ID (iri_form="absolute", not urn:uuid:) is written as is,
+        # as rdf:about: rdf:ID holds only a fragment, and no value_prefix belongs in front of it
+        if iri.is_iri(ID):
+            rdf_object.attrib[_get_qname(f"{{{RDF_NS}}}about")] = ID
+        else:
+            rdf_object.attrib[_get_qname(id_name)] = f"{id_value_prefix}{ID}"
         # Add object to RDF
         RDF.append(rdf_object)
         # Add object with it's ID to dict (later we use it to add attributes to that class)
@@ -237,7 +243,7 @@ def generate_xml(instance_data,
 
         _object = objects.get(ID, None)
 
-        if _object is not None:
+        if _object is not None and KEY:                  # an empty KEY (the NamespaceMap's default namespace) is no element
 
         #if not pandas.isna(VALUE):
 
@@ -252,7 +258,9 @@ def generate_xml(instance_data,
 
                     value_prefix = attrib.get("value_prefix", "")
 
-                    if not value_prefix:                     # enumeration: namespace from the resolved profile (same as the cython exporter)
+                    if iri.is_iri(VALUE):                    # an absolute reference / enum value is written as is
+                        value_prefix = ""
+                    elif not value_prefix:                   # enumeration: namespace from the resolved profile (same as the cython exporter)
                         value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace")
                         if not value_prefix:                 # undefined enum value: same switch as undefined classes / keys
                             if not export_undefined:

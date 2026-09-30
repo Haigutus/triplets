@@ -25,6 +25,14 @@ from pyarrow.lib cimport pyarrow_unwrap_array, pyarrow_unwrap_batch
 
 from triplets.export.cimxml_utils import undefined_name
 
+
+cdef inline bint _is_iri(string& text):
+    """Mirror of triplets.iri.is_iri (http://, https://, urn:) — an absolute node the
+    writer takes as is: no value_prefix, rdf:about (iri_form="absolute")."""
+    return ((text.size() >= 7 and memcmp(text.data(), b"http://", 7) == 0)
+            or (text.size() >= 8 and memcmp(text.data(), b"https://", 8) == 0)
+            or (text.size() >= 4 and memcmp(text.data(), b"urn:", 4) == 0))
+
 # pugixml C++ declarations
 cdef extern from "pugixml.hpp" namespace "pugi":
     const unsigned int format_indent
@@ -286,7 +294,7 @@ def generate_xml_from_arrow(arrow_table_or_batch,
 
     rdf_root = doc.append_child(b"rdf:RDF")
     for prefix, uri in namespace_map.items():
-        ns_attr_name = f"xmlns:{prefix}".encode('utf-8')
+        ns_attr_name = (f"xmlns:{prefix}" if prefix else "xmlns").encode('utf-8')   # "" is the default namespace
         uri_bytes = uri.encode('utf-8')
         rdf_root.append_attribute(<const char*>ns_attr_name).set_value(<const char*>uri_bytes)
 
@@ -323,18 +331,23 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         if py_cd_idx is not None:
             cd_idx = <int>py_cd_idx
             obj_node = rdf_root.append_child(class_defs_vec[cd_idx].tag.c_str())
-            # Build id value: prefix + id
-            s_combined = class_defs_vec[cd_idx].id_prefix
-            s_combined.append(s_id)
-            obj_node.append_attribute(class_defs_vec[cd_idx].id_attr.c_str()).set_value(s_combined.c_str())
+            if _is_iri(s_id):          # absolute ID: as is, as rdf:about (rdf:ID holds a fragment only)
+                obj_node.append_attribute(rdf_about_attr.c_str()).set_value(s_id.c_str())
+            else:                      # prefix + id
+                s_combined = class_defs_vec[cd_idx].id_prefix
+                s_combined.append(s_id)
+                obj_node.append_attribute(class_defs_vec[cd_idx].id_attr.c_str()).set_value(s_combined.c_str())
         elif export_undefined:
             # rdf:Description is "no shorthand type", not a class: written back as rdf:Description
             py_class = s_value.decode('utf-8')      # "Description": mirror of triplets.iri.DESCRIPTION_TYPE
             s_tag = (f"{rdf_prefix}:Description" if py_class == "Description"
                      else _make_prefixed(*undefined_name(py_class, undefined_namespace))).encode('utf-8')
             obj_node = rdf_root.append_child(s_tag.c_str())
-            s_combined.assign(b"urn:uuid:")
-            s_combined.append(s_id)
+            if _is_iri(s_id):
+                s_combined = s_id
+            else:
+                s_combined.assign(b"urn:uuid:")
+                s_combined.append(s_id)
             obj_node.append_attribute(rdf_about_attr.c_str()).set_value(s_combined.c_str())
         else:
             continue
@@ -348,6 +361,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         if key_col.is_null(i) or id_col.is_null(i) or val_col.is_null(i):
             continue
         sv_key = key_col.value(i)
+        if sv_key.size() == 0:        # an empty KEY (the NamespaceMap's default namespace) is no element
+            continue
         if sv_key.size() == class_key_len and memcmp(sv_key.data(), class_key_ptr, class_key_len) == 0:
             continue
 
@@ -371,7 +386,9 @@ def generate_xml_from_arrow(arrow_table_or_batch,
 
             # the value (and whether the row is written at all) is decided BEFORE the
             # element is appended — an undefined enum value must not leave an empty element
-            if tag_defs_vec[td_idx].is_ref and tag_defs_vec[td_idx].needs_enum_lookup:
+            if tag_defs_vec[td_idx].is_ref and _is_iri(s_value):
+                s_combined.clear()                        # absolute reference / enum value: as is
+            elif tag_defs_vec[td_idx].is_ref and tag_defs_vec[td_idx].needs_enum_lookup:
                 py_val = s_value.decode('utf-8')
                 enum_def = instance_rdf_map.get(py_val)
                 enum_ns = enum_def.get("namespace") if isinstance(enum_def, dict) else None

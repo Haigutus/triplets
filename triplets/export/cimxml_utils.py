@@ -88,8 +88,14 @@ def with_name_namespaces(namespace_map, instance_data, class_KEY):
     """*namespace_map* plus a generated prefix (``ns1``, …) for every namespace an absolute
     KEY / class name in *instance_data* uses that the map does not bind — both engines then
     write it as a prefixed element."""
-    names = set(instance_data["KEY"].astype(str)) | set(
-        instance_data.loc[instance_data["KEY"] == class_KEY, "VALUE"].astype(str))
+    if flavor(instance_data) == "polars":          # the cython engine takes polars frames directly
+        import polars
+        keys = instance_data["KEY"].cast(polars.Utf8)
+        names = set(keys.unique().drop_nulls().to_list()) | set(
+            instance_data.filter(keys == class_KEY)["VALUE"].cast(polars.Utf8).unique().drop_nulls().to_list())
+    else:
+        names = set(instance_data["KEY"].dropna().astype(str)) | set(
+            instance_data.loc[instance_data["KEY"] == class_KEY, "VALUE"].dropna().astype(str))
     missing = sorted({split_iri(name)[0] for name in names if name.startswith(("http://", "https://"))}
                      - set(namespace_map.values()))
     extra, counter = {}, 1
