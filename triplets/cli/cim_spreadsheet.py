@@ -40,11 +40,11 @@ After installation, the tool can be invoked in three ways:
 
 2. **As a Python module**::
 
-    python -m triplets.tools.cim_spreadsheet_cli -i input_file -o output_file
+    python -m triplets.cli.cim_spreadsheet -i input_file -o output_file
 
 3. **Programmatically** in Python code::
 
-    from triplets.tools.cim_spreadsheet_cli import cim_to_spreadsheet, spreadsheet_to_cim
+    from triplets.cli.cim_spreadsheet import cim_to_spreadsheet, spreadsheet_to_cim
 
     # Convert CIM to Excel
     cim_to_spreadsheet('model.xml', 'output.xlsx')
@@ -100,6 +100,17 @@ Features
 - Raw triplets import from dedicated Excel sheet or CSV file
 - Handles zipped input/output files automatically
 
+Notes
+-----
+- Values are read back as text, so they return as written, except numbers: the
+  spreadsheet export writes them as numbers, so a number can come back in another
+  written form with the same value (``500`` -> ``500.0``, ``8e-5`` -> ``8e-05``).
+- Excel limits sheet names to 31 characters. Longer class names (e.g.
+  ``SynchronousMachineTimeConstantReactance``) are written as is: openpyxl warns
+  and Excel may refuse or rename the sheet. Use CSV for such models.
+- CIM XML file names come from the instance ``label``, the path the model was
+  parsed from. An absolute path is used as is, so the export writes to that path.
+
 See Also
 --------
 cim-diff : Tool for comparing CIM XML files
@@ -115,7 +126,9 @@ import pandas
 from io import BytesIO, StringIO
 from uuid import uuid4
 
-from .. import rdf_parser
+from ..export import export_to_cimxml
+from ..parser import parse
+from ..tools import tableviews_to_triplets
 from ..export_schema import schemas
 
 def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, multivalue=True):
@@ -166,7 +179,7 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
     if zip_output is None:
         zip_output = (format == "csv")
 
-    data = rdf_parser.load_all_to_dataframe(cim_path)
+    data = parse(cim_path)
 
     base_name = os.path.basename(output_path).replace('.zip', '').replace('.xlsx', '').replace('.csv', '')
     if not base_name:
@@ -256,7 +269,7 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
     Returns
     -------
     result
-        Export result from rdf_parser.export_to_cimxml()
+        Export result from triplets.export.export_to_cimxml()
 
     Raises
     ------
@@ -306,12 +319,12 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
                     excel_bytes = BytesIO(zf.read(excel_filename))
 
                     # Read sheets as tableviews
-                    excel_obj = pandas.ExcelFile(excel_bytes)
-                    _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets, triplets_sheet)
+                    with pandas.ExcelFile(excel_bytes) as excel_obj:
+                        _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets, triplets_sheet)
             else:
                 # Read directly from file (including .xlsx files)
-                excel_obj = pandas.ExcelFile(input_path)
-                _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets, triplets_sheet)
+                with pandas.ExcelFile(input_path) as excel_obj:
+                    _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets, triplets_sheet)
         except ImportError as e:
             raise ImportError(
                 "openpyxl is required for Excel import. "
@@ -328,14 +341,14 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
                     if filename.endswith('.csv'):
                         sheet_name = os.path.basename(filename)[:-4]
                         csv_content = zf.read(filename).decode('utf-8')
-                        csv_dataframes[sheet_name] = pandas.read_csv(StringIO(csv_content), index_col=0)
+                        csv_dataframes[sheet_name] = pandas.read_csv(StringIO(csv_content), index_col=0, dtype=str)
         elif os.path.isdir(input_path):
             # Read from directory
             for filename in os.listdir(input_path):
                 if filename.endswith('.csv'):
                     sheet_name = filename[:-4]
                     csv_path = os.path.join(input_path, filename)
-                    csv_dataframes[sheet_name] = pandas.read_csv(csv_path, index_col=0)
+                    csv_dataframes[sheet_name] = pandas.read_csv(csv_path, index_col=0, dtype=str)
         else:
             raise ValueError(f"CSV format requires a directory or ZIP file, got: {input_path}")
 
@@ -352,7 +365,7 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
 
         tableviews.update(csv_dataframes)
 
-    data = rdf_parser.tableviews_to_triplets(tableviews, multivalue=multivalue)
+    data = tableviews_to_triplets(tableviews, multivalue=multivalue)
 
     if raw_triplets:
         data = pandas.concat([data] + raw_triplets, ignore_index=True)
@@ -377,7 +390,7 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
     os.makedirs(output_path, exist_ok=True)
 
     # Export to CIM XML
-    return rdf_parser.export_to_cimxml(
+    return export_to_cimxml(
         data,
         rdf_map=rdf_map,
         export_undefined=False,
@@ -439,10 +452,10 @@ def _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets=None, triplet
             logging.warning(f"Sheet '{s}' not found in Excel file, skipping")
 
     if valid_sheets:
-        tableviews.update(pandas.read_excel(excel_obj, sheet_name=valid_sheets, index_col=0))
+        tableviews.update(pandas.read_excel(excel_obj, sheet_name=valid_sheets, index_col=0, dtype=str))
 
     if triplets_sheet and triplets_sheet in excel_obj.sheet_names:
-        triplet_df = pandas.read_excel(excel_obj, sheet_name=triplets_sheet)
+        triplet_df = pandas.read_excel(excel_obj, sheet_name=triplets_sheet, dtype=str)
         _extract_raw_triplets(triplet_df, triplets_sheet, raw_triplets)
 
 

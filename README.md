@@ -247,9 +247,14 @@ triplets.clear_caches()   # or clear everything manually
 ## CLI tools
 
 ```shell
-cim-spreadsheet -i model.xml -o output.xlsx
+cim-spreadsheet -i model.xml -o output.xlsx                  # one sheet per class
+cim-spreadsheet -i output.xlsx -o out/ --rdf-map schema.json  # back to CIM XML
 cim-diff original.xml modified.xml
 ```
+
+Spreadsheet values come back as written, except numbers, which can change their
+written form but not their value (`500` -> `500.0`). Excel sheet names are limited to
+31 characters; use CSV (`-f csv`) for models with longer class names.
 
 ## Performance (RealGrid, 1.14M rows)
 
