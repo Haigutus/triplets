@@ -43,7 +43,7 @@ _PROPERTY_TYPES = ("Attribute", "Association", "Enumeration")
 
 # engine dispatch key → presented violation type (vocabulary-accurate)
 PRESENTED = {"sh:minCount": "xsd:minOccurs", "sh:maxCount": "xsd:maxOccurs",
-             "sh:datatype": "xsd:type", "sh:in": "rdfs:range",
+             "sh:datatype": "xsd:type", "sh:in": "rdfs:range", "sh:not": "rdfs:range",
              "triplets:range": "rdfs:range", "sh:closed": "schema:domainIncludes"}
 
 
@@ -190,6 +190,24 @@ def _section_rows(section, entries, concrete, closed, skipped):
                 rows.extend(_property_rows(meta, prop, prop_entry, concrete, skipped))
         if closed and parameters:
             rows.append({**meta, "component": "sh:closed", "params": [*parameters, TYPE_KEY]})
+    classes = {name for name, entry in entries.items()
+               if isinstance(entry, dict) and entry.get("type") == "Class"}
+    abstracts = sorted({local_value(ancestor, "class") for name in classes
+                        for ancestor in entries[name].get("inheritance", ())
+                        if local_value(ancestor, "class") not in classes})
+    if abstracts:
+        # deny-list: Type in a known abstract (not a Class entry). Unknown
+        # types and extra concrete types on a multi-profile instance are silent
+        # — combined EQ+SSH files would otherwise fail SSH's allow-list.
+        type_meta = {
+            "shape_id": f"urn:triplets:schema#{section}:Type", "target_class": TYPE_KEY,
+            "target_kind": "subjectsOf", "path": TYPE_KEY, "inverse": False, "via_type": False,
+            "component": "sh:not", "params": None, "severity": "Violation",
+            "message": None, "name": None, "description": None,
+        }
+        nested = {**type_meta, "shape_id": f"{type_meta['shape_id']}.in",
+                  "component": "sh:in", "params": abstracts}
+        rows.append({**type_meta, "params": [nested]})
     return rows
 
 

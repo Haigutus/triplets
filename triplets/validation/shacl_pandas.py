@@ -159,9 +159,31 @@ class _Context:
         focus_ids = getattr(rule, "focus_ids", None)
         if focus_ids is not None:
             return focus_ids
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
+        kind = getattr(rule, "target_kind", "class")
+        if kind == "subjectsOf":
             return self.key_rows(rule.target_class)["ID"].unique()
+        if kind == "objectsOf":
+            return self.key_rows(rule.target_class)["VALUE"].astype(str).unique()
+        if kind == "node":
+            return numpy.array([rule.target_class], dtype=object)
+        if kind == "sparql":
+            return self._sparql_focus(rule.target_class)
         return self.class_ids(rule.target_class)
+
+    def _sparql_focus(self, query_text):
+        """Focus IDs from a SPARQLTarget SELECT (the ?this column)."""
+        from .. import sparql
+        try:
+            result = sparql.query(self.data, query_text, rdf_map=self.rdf_map,
+                                  data_unchanged=self.data_hashed, return_type="pandas")
+            self.data_hashed = True
+        except Exception:  # noqa: BLE001 — defective target query
+            logger.warning("sh:target SPARQL SELECT failed — shape has no focus nodes")
+            return _NO_IDS
+        if result is None or len(result) == 0:
+            return _NO_IDS
+        column = "this" if "this" in result.columns else result.columns[0]
+        return _shorten(result[column].astype(str), iri_pandas.local_id).unique()
 
     def path_rows(self, rule):
         """The rule's path as (FOCUS, PATH_VALUE) pairs, restricted to the rule's focus.
@@ -592,6 +614,17 @@ def _or(context, rule):
     return _frame(rule, focus, None, "no sh:or alternative is satisfied")
 
 
+def _xone(context, rule):
+    """sh:xone — a focus node violates unless exactly one alternative is satisfied."""
+    focus_ids = getattr(rule, "focus_ids", None)
+    ids = list(context.focus(rule) if focus_ids is None else focus_ids)
+    violating_sets = [set(_run_nested(context, alternative, focus_ids)["ID"])
+                      for alternative in rule.params]
+    bad = [focus for focus in ids
+           if sum(focus not in violated for violated in violating_sets) != 1]
+    return _frame(rule, bad, None, "exactly one sh:xone alternative must be satisfied")
+
+
 def _node(context, rule):
     """sh:node — every value at the path must conform to the referenced shape.
 
@@ -645,6 +678,7 @@ CONSTRAINT_VALIDATORS = {
     "sh:and": _and,
     "sh:or": _or,
     "sh:not": _not,
+    "sh:xone": _xone,
 }
 
 

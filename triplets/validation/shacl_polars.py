@@ -94,23 +94,32 @@ class _Context:
     def all_ids(self):
         return self._all_ids
 
-    def _subjects_of(self, key):
-        if key not in self._subjects:
-            ids = self._frame.filter(polars.col("KEY") == key)["ID"].unique()
-            self._subjects[key] = (ids, ids.implode())
-        return self._subjects[key]
+    def _ids_of(self, key, column):
+        cache_key = f"{column}:{key}"
+        if cache_key not in self._subjects:
+            ids = self._frame.filter(polars.col("KEY") == key)[column].unique()
+            self._subjects[cache_key] = (ids, ids.implode())
+        return self._subjects[cache_key]
+
+    def _focus(self, rule):
+        """(flat IDs, imploded IDs) for the rule's target kind."""
+        kind = getattr(rule, "target_kind", "class")
+        if kind == "subjectsOf":
+            return self._ids_of(rule.target_class, "ID")
+        if kind == "objectsOf":
+            return self._ids_of(rule.target_class, "VALUE")
+        if kind == "node":
+            ids = polars.Series("ID", [rule.target_class], dtype=polars.Utf8)
+            return ids, ids.implode()
+        return self.class_ids(rule.target_class), self.class_ids_in(rule.target_class)
 
     def focus_ids(self, rule):
         """Flat focus ID Series (plan data, e.g. focus_frame)."""
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
-            return self._subjects_of(rule.target_class)[0]
-        return self.class_ids(rule.target_class)
+        return self._focus(rule)[0]
 
     def focus_ids_in(self, rule):
         """Imploded focus IDs for is_in membership tests."""
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
-            return self._subjects_of(rule.target_class)[1]
-        return self.class_ids_in(rule.target_class)
+        return self._focus(rule)[1]
 
     def path_rows(self, rule):
         """The rule's path as a lazy (FOCUS, PATH_VALUE) plan, restricted to the rule's focus."""

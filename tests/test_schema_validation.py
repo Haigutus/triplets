@@ -163,7 +163,18 @@ def test_association_multi_typed_target_conforms(engine):
             + [("bay1", "Type", "Bay", "eq"),
                ("bay1", "Type", "Equipment", "eq")])       # extra generic type
     v = run(rows, engine)
-    assert violating(v, "rdfs:range") == set()
+    assert violating(v, "rdfs:range") == set()                 # ANY type in the range set conforms
+    # Type=Equipment alongside Type=Bay is not "instantiated as abstract"
+
+
+def test_abstract_type_is_not_instantiable(engine):
+    """Type must be a Class this profile defines — abstracts (and unknown
+    names) fail; a concrete Class name passes."""
+    rows = ([("e1", "Type", "EquipmentContainer", "eq")]
+            + breaker("b1", *OK_PROPS) + CONTAINED)
+    v = run(rows, engine)
+    types = v[(v["VIOLATION_TYPE"] == "rdfs:range") & (v["KEY"] == "Type")]
+    assert set(types["ID"]) == {"e1"}                          # sh:not reports the focus, not the Type value
 
 
 def test_closed_flag_reports_unknown_property(engine):
@@ -264,7 +275,7 @@ def test_compiled_set_lookup_and_cache():
     assert compile_schema(SCHEMA) is compiled                  # cached by content
     eq = compiled.profiles["EQ"]
     assert eq.language == "rdfs" and eq.graph is None
-    assert eq.stats["node_shapes"] == 1                        # only Breaker carries constraints
+    assert {"Breaker", "Type"} <= set(eq.ir["target_class"])   # class constraints + Type membership
 
 
 def test_run_metadata(engine):

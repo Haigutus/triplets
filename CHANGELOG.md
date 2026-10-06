@@ -19,6 +19,11 @@ Start of the 0.3 line.
   `inheritance` lists: `class_ids("Equipment")` is the union of descendant
   IDs, built once per run. The IR is not fanned out. Without `rdf_map`,
   match stays exact `Type`.
+- Vectorized engines walk `sh:targetNode`, `sh:targetObjectsOf` and SPARQL
+  `sh:target` (with `sh:select`, through the pandas fallback), and run `sh:xone`
+  (pandas fallback). `sh:rule` SPARQLRule CONSTRUCT runs as a data pre-pass
+  before validation. `sh:deactivated` drops the shape at compile.
+- Schema validation flags objects whose only `Type` is a known abstract class.
 - **NCP 2.5-dev export schemas** (`ENTSOE_NC_2.5-dev_552_ED1/ED2.json`) generated
   from [application-profiles-library](https://github.com/entsoe/application-profiles-library)
   `main` (`NCP/RDFS`). Named `-dev` until the pin is an `ncp-v2-5-0` release branch.

@@ -198,6 +198,8 @@ cim:VoltageLevelShape a sh:NodeShape ;
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
                                              lexical=False)
     for engine in ("pandas", "polars", "duckdb"):
+        if engine != "pandas":
+            pytest.importorskip(engine)
         ours = triplets.validation.validate(data, str(shape), engine=engine)
         assert set(ours.loc[ours["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, f"{engine} engine disagrees"
     assert set(reference.loc[reference["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, "pyshacl disagrees"

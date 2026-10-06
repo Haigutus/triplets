@@ -46,10 +46,14 @@ def _class_sql(table, context):
 
 
 def _focus_sql(rule, table, context):
-    """The rule's focus nodes (bound with one target_class parameter): a class's
-    instances, or the subjects carrying the target property (sh:targetSubjectsOf)."""
-    if getattr(rule, "target_kind", "class") == "subjectsOf":
+    """The rule's focus nodes (bound with one target_class parameter)."""
+    kind = getattr(rule, "target_kind", "class")
+    if kind == "subjectsOf":
         return f"SELECT DISTINCT ID FROM {table} WHERE KEY = ?"
+    if kind == "objectsOf":
+        return f"SELECT DISTINCT VALUE AS ID FROM {table} WHERE KEY = ?"
+    if kind == "node":
+        return "SELECT ? AS ID"
     return _class_sql(table, context)
 
 
