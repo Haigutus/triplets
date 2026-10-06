@@ -174,6 +174,9 @@ Start of the 0.3 line.
   `INSTANCE_ID` scopes correctly (was silently empty), and an `https:` one is
   no longer prefixed with `urn:uuid:` by the N-Quads graph term.
 
+### Removed
+- Unused `cim_rdfs_to_json_deprecated`.
+
 ### Fixed
 - **Export schemas record inheritance and ranges as absolute IRIs.** The
   generator resolves a relative ``rdf:resource="#Name"`` against the profile's
