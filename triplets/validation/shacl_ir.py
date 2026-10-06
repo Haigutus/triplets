@@ -175,35 +175,19 @@ def _content_hash(shapes):
     return digest.hexdigest()
 
 
-# Nested/query components every vectorized engine delegates to the pandas
-# implementations — part of the shared IR contract, defined here so no engine
-# needs to import another engine for a constant.
-FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:not", "sh:node", "sh:sparql", "sh:xone"}
-
-
-def split_rules(ir, implemented, fallback_components, engine):
-    """IR rows → (vectorized, fallback, skipped components) against an
-    engine's registries.
+def split_rules(ir, implemented, engine):
+    """IR rows → (rules the engine implements, skipped components).
 
     Engines cache the result in ``CompiledShapes.plans[engine]`` so the split
     runs once per compiled shapes, not once per validate call; validate()
     reads the skipped components into the report metadata.
-
-    A row whose *component* is lazy still falls back when its *target* is not
-    (SPARQLTarget) — polars never sees a SELECT it cannot plan.
     """
     rules = list(ir.itertuples())
-    vectorized, fallback = [], []
-    for rule in rules:
-        if getattr(rule, "target_kind", "class") == "sparql" or rule.component in fallback_components:
-            fallback.append(rule)
-        elif rule.component in implemented:
-            vectorized.append(rule)
-    skipped = {rule.component for rule in rules} - set(implemented) - set(fallback_components)
+    skipped = {rule.component for rule in rules} - set(implemented)
     if skipped:
         logger.debug("%s engine skips components: %s (pyshacl covers them)",
                      engine, ", ".join(sorted(skipped)))
-    return vectorized, fallback, sorted(skipped)
+    return [rule for rule in rules if rule.component in implemented], sorted(skipped)
 
 
 # ── shapes graph → constraint table ──────────────────────────────────────────

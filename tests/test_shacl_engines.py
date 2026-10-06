@@ -689,6 +689,21 @@ def test_target_objects_of(engine):
     assert violating(v, "sh:minCount") == {("bay1", None)}
 
 
+def test_sparql_target_reports_each_violation_once(engine):
+    """A SPARQL-targeted shape next to a class-targeted one with the same
+    component: each focus node is reported once (the engines used to hand the
+    SPARQL target to pandas, which re-ran every sh:minCount)."""
+    shape = """cim:Breakers a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+    cim:Disconnectors a sh:NodeShape ;
+        sh:target [ a sh:SPARQLTarget ;
+            sh:select "SELECT ?this WHERE { ?this a <http://iec.ch/TC57/CIM100#Disconnector> }" ] ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = breaker("b1") + [("d1", "Type", "Disconnector", "eq")]
+    v = run(rows, shape, engine)
+    assert sorted(v.loc[v["VIOLATION_TYPE"] == "sh:minCount", "ID"]) == ["b1", "d1"]
+
+
 def test_xone_exactly_one_alternative(engine):
     shape = """cim:Xor a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:xone (
             [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]

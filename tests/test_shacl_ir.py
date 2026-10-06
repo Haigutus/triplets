@@ -233,26 +233,23 @@ cim:Xor a sh:NodeShape ; sh:targetClass cim:Breaker ;
 
 def test_component_registries_agree():
     """The stringly-typed component keys live in several registries — they must
-    describe the same universe: pandas is complete; polars/duckdb + the shared
-    fallback set cover everything; pyshacl's report vocabulary maps onto it."""
+    describe the same universe: every engine implements every component natively
+    (no hand-off between engines); pyshacl's report vocabulary maps onto it."""
     from triplets.validation import shacl_ir, shacl_pandas, shacl_report
 
     known = set(shacl_ir.KNOWN_COMPONENTS)
     assert set(shacl_pandas.CONSTRAINT_VALIDATORS) == known
-    assert shacl_ir.FALLBACK_COMPONENTS <= known
     # pyshacl's report vocabulary covers the SHACL components; triplets:range
     # is schema-validation-only (never emitted by pyshacl)
     assert set(shacl_report._COMPONENT_MAP.values()) == known - {"triplets:range"}
 
     if importlib.util.find_spec("polars"):
         from triplets.validation import shacl_polars
-        assert set(shacl_polars.PLAN_BUILDERS) | shacl_ir.FALLBACK_COMPONENTS == known
+        assert set(shacl_polars.PLAN_BUILDERS) == known
         assert set(shacl_polars.BATCH_BUILDERS) <= set(shacl_polars.PLAN_BUILDERS)
-        assert "sh:xone" in shacl_ir.FALLBACK_COMPONENTS
-        assert "sh:xone" not in shacl_polars.PLAN_BUILDERS
     if importlib.util.find_spec("duckdb"):
         from triplets.validation import shacl_duckdb
-        assert set(shacl_duckdb.SQL_BUILDERS) | shacl_ir.FALLBACK_COMPONENTS == known
+        assert set(shacl_duckdb.SQL_BUILDERS) == known
 
 
 def test_logical_operator_cycle_dropped(caplog):

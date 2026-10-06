@@ -10,9 +10,11 @@ per-constraint collects, no streaming.
 
 Semantics are identical to the pandas engine (same IR, same canonical
 violations schema, same lexical-form datatype deviation — see shacl_pandas).
-The rare nested/query components (sh:or, sh:and, sh:not, sh:node, sh:sparql —
-a handful of rows even in the real profiles) are delegated to the pandas
-implementations, so coverage is complete while the hot path stays lazy.
+The logical components (sh:and, sh:or, sh:not, sh:xone) join their nested
+rows' plans into their own, so they stay inside the one collect_all. sh:node
+(nested rows judge the referenced value nodes, a focus override) and sh:sparql
+evaluate eagerly and hand back a LazyFrame; sh:sparql and SPARQL targets run
+through shacl_sparql.
 
 Per-rule plan builders are cached in ``CompiledShapes.plans["polars"]`` — the
 IR is split and normalized once per compiled shapes, then only re-bound to
@@ -23,12 +25,15 @@ use plain character-class patterns; exotic patterns belong to pyshacl.
 """
 import logging
 
+from types import SimpleNamespace
+
 import pandas
 import polars
 
+from . import shacl_sparql
 from .shacl_report import VIOLATION_COLUMNS
-from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_polars, load_rdf_map, node_kind, value_types
+from .shacl_ir import split_rules
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, load_rdf_map, node_kind, value_types
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -39,9 +44,11 @@ _COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 class _Context:
     """Lazy base + eagerly materialized shared indices (built once per validate)."""
 
-    def __init__(self, frame, rdf_map=None):
+    def __init__(self, frame, rdf_map=None, undefined_namespace=CIM_NS):
         self.base = frame.lazy()
         self.rdf_map = rdf_map
+        self.sparql = shacl_sparql.SparqlState(frame, rdf_map, undefined_namespace)
+        self._sparql_targets = {}
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID")
         # (ID, CLASS) pairs: the objects' own Type rows (what a ( assoc rdf:type )
@@ -102,8 +109,17 @@ class _Context:
         return self._subjects[cache_key]
 
     def _focus(self, rule):
-        """(flat IDs, imploded IDs) for the rule's target kind."""
+        """(flat IDs, imploded IDs): an explicit ``focus_ids`` override (nested rows —
+        sh:node passes the referenced value nodes), else the rule's target kind."""
+        focus_ids = getattr(rule, "focus_ids", None)
+        if focus_ids is not None:
+            return focus_ids, focus_ids.implode()
         kind = getattr(rule, "target_kind", "class")
+        if kind == "sparql":
+            if rule.target_class not in self._sparql_targets:
+                ids = _ids(shacl_sparql.target_ids(self.sparql, rule.target_class))
+                self._sparql_targets[rule.target_class] = (ids, ids.implode())
+            return self._sparql_targets[rule.target_class]
         if kind == "subjectsOf":
             return self._ids_of(rule.target_class, "ID")
         if kind == "objectsOf":
@@ -145,6 +161,11 @@ class _Context:
 
 _NO_IDS = polars.Series("ID", [], dtype=polars.Utf8)
 _NO_IDS_IMPLODED = _NO_IDS.implode()
+_SCHEMA = {column: polars.Utf8 for column in VIOLATION_COLUMNS}
+
+
+def _ids(values):
+    return polars.Series("ID", list(values), dtype=polars.Utf8)
 
 
 def _emit(plan, rule, message, violation_type=None, severity=None, value=True):
@@ -335,7 +356,96 @@ def _closed(context, rule):
     return plan
 
 
-# component → lazy plan builder (FALLBACK_COMPONENTS run via shacl_pandas)
+# ── nested / query components ────────────────────────────────────────────────
+# Logical operators stay lazy: their nested rows' plans join into the parent's
+# plan, so collect_all shares the per-path scans with every other constraint.
+# sh:node needs the referenced value nodes as the nested focus, and sh:sparql
+# a query result — both evaluate eagerly and hand back a LazyFrame.
+
+def _lazy(frame):
+    """pandas or polars violations → LazyFrame in the Utf8 violations schema."""
+    if isinstance(frame, pandas.DataFrame):
+        frame = polars.DataFrame({column: frame[column].tolist() for column in VIOLATION_COLUMNS},
+                                 schema=_SCHEMA)
+    return frame.lazy()
+
+
+def _nested_plan(context, row_dicts, focus_ids=None):
+    """Nested IR rows → one LazyFrame of their violations, every row judging *focus_ids* when given."""
+    plans = [polars.LazyFrame(schema=_SCHEMA)]
+    for row in row_dicts:
+        rule = SimpleNamespace(focus_ids=focus_ids, **row)
+        builder = PLAN_BUILDERS.get(rule.component)
+        if builder is None:
+            logger.warning("nested %s in %s not implemented — not evaluated", rule.component, rule.shape_id)
+        elif (plan := builder(context, rule)) is not None:
+            plans.append(plan)
+    return polars.concat(plans, how="vertical_relaxed")
+
+
+def _violating(context, rule, row_dicts):
+    """The IDs the nested rows report, as a one-column (FOCUS) LazyFrame."""
+    plan = _nested_plan(context, row_dicts, getattr(rule, "focus_ids", None))
+    return plan.select(polars.col("ID").alias("FOCUS")).drop_nulls().unique()
+
+
+def _and(context, rule):
+    """sh:and — every nested shape must hold; each nested violation is reported."""
+    focus_ids = getattr(rule, "focus_ids", None)
+    found = polars.concat([_nested_plan(context, rows, focus_ids) for rows in rule.params],
+                          how="vertical_relaxed")
+    return found.with_columns(polars.lit("sh:and").alias("VIOLATION_TYPE"))
+
+
+def _or(context, rule):
+    """sh:or — a focus node violates only when EVERY alternative is violated."""
+    plan = context.focus_frame(rule)
+    for rows in rule.params:
+        plan = plan.join(_violating(context, rule, rows), on="FOCUS", how="semi")
+    return _emit(plan, rule, "no sh:or alternative is satisfied", value=False)
+
+
+def _xone(context, rule):
+    """sh:xone — a focus node violates unless exactly one alternative is satisfied."""
+    plan = context.focus_frame(rule)
+    flags = []
+    for index, rows in enumerate(rule.params):
+        flag = f"_violated_{index}"
+        violated = _violating(context, rule, rows).with_columns(polars.lit(1).alias(flag))
+        plan = plan.join(violated, on="FOCUS", how="left")
+        flags.append(polars.col(flag).is_null().cast(polars.Int32))
+    plan = plan.filter(polars.sum_horizontal(flags) != 1)
+    return _emit(plan, rule, "exactly one sh:xone alternative must be satisfied", value=False)
+
+
+def _not(context, rule):
+    """sh:not — a focus node violates when it SATISFIES the negated shape."""
+    plan = context.focus_frame(rule).join(_violating(context, rule, rule.params), on="FOCUS", how="anti")
+    return _emit(plan, rule, "node conforms to the negated shape", value=False)
+
+
+def _node(context, rule):
+    """sh:node — every value at the path must conform to the referenced shape.
+
+    The referenced shape was expanded into nested IR rows at compile time; here
+    they run with the referenced value nodes as focus. A value node that
+    produces any nested violation makes the referring focus node violate sh:node.
+    """
+    rows = context.path_rows(rule).collect()
+    referenced = rows["PATH_VALUE"].unique()
+    if not len(referenced):
+        return None
+    non_conforming = _nested_plan(context, rule.params["rows"], referenced.rename("ID")).collect()["ID"]
+    bad = rows.filter(polars.col("PATH_VALUE").is_in(non_conforming.unique().implode()))
+    return _emit(bad.lazy(), rule, f"value does not conform to shape {rule.params['shape']}")
+
+
+def _sparql(context, rule):
+    return _lazy(shacl_sparql.run(context.sparql, rule, context.focus_ids(rule).to_list()))
+
+
+
+# component → lazy plan builder
 PLAN_BUILDERS = {
     "sh:minCount": _min_count,
     "sh:maxCount": _max_count,
@@ -357,6 +467,12 @@ PLAN_BUILDERS = {
     "sh:lessThan": _pair_compare(lambda a, b: a < b, "less than"),
     "sh:lessThanOrEquals": _pair_compare(lambda a, b: a <= b, "less than or equal to"),
     "sh:closed": _closed,
+    "sh:and": _and,
+    "sh:or": _or,
+    "sh:not": _not,
+    "sh:xone": _xone,
+    "sh:node": _node,
+    "sh:sparql": _sparql,
 }
 
 
@@ -513,29 +629,31 @@ BATCH_BUILDERS = {
 }
 
 
-def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None, **kwargs):
+def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
+             undefined_namespace=CIM_NS, **kwargs):
     """Validate triplet data against the compiled constraint table (lazy polars).
 
-    Parameters mirror shacl_pandas.validate. Vectorized components run as one
-    ``polars.collect_all`` over per-constraint LazyFrame plans; the nested and
-    query components (FALLBACK_COMPONENTS) are delegated to the pandas engine
-    so results are identical across both.
+    Parameters mirror shacl_pandas.validate. Every component runs as a
+    LazyFrame plan in one ``polars.collect_all``; ``max_workers`` runs the
+    sh:sparql constraint queries in parallel processes (rdflib engine only).
     """
     frame = _to_polars(data)
     if scope is not None:
         frame = frame.filter(polars.col("INSTANCE_ID").is_in([str(s) for s in scope]))
 
     if "polars" not in compiled.plans:   # setdefault would re-split on every call
-        compiled.plans["polars"] = split_rules(compiled.ir, PLAN_BUILDERS, FALLBACK_COMPONENTS, "polars")
-    vectorized, fallback, _ = compiled.plans["polars"]
+        compiled.plans["polars"] = split_rules(compiled.ir, PLAN_BUILDERS, "polars")
+    rules, _ = compiled.plans["polars"]
     if components is not None:
-        vectorized = [rule for rule in vectorized if rule.component in components]
-        fallback = [rule for rule in fallback if rule.component in components]
+        rules = [rule for rule in rules if rule.component in components]
 
-    context = _Context(frame, rdf_map)
+    context = _Context(frame, rdf_map, undefined_namespace)
+    parallel = [rule for rule in rules if max_workers and rule.component == "sh:sparql"]
     batched, plans = {}, []
-    for rule in vectorized:
-        # batching joins on class membership — subjectsOf targets and two-hop
+    for rule in rules:
+        if parallel and rule.component == "sh:sparql":
+            continue
+        # batching joins on class membership — other targets and two-hop
         # (via_type) paths take the per-rule path
         if (rule.component in BATCH_BUILDERS and not rule.inverse
                 and not getattr(rule, "via_type", False)
@@ -543,27 +661,19 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
             batched.setdefault(rule.component, []).append(rule)
         elif (plan := PLAN_BUILDERS[rule.component](context, rule)) is not None:
             plans.append(plan)
-    for component, rules in batched.items():
-        plans.extend(BATCH_BUILDERS[component](context, rules))
-    results = polars.collect_all(plans)
-    frames = [result for result in results if result.height]
+    for component, batch in batched.items():
+        plans.extend(BATCH_BUILDERS[component](context, batch))
+    frames = [result.to_pandas() for result in polars.collect_all(plans) if result.height]
+    if parallel:
+        tasks = [(rule, context.focus_ids(rule).to_list()) for rule in parallel]
+        frames += [found for found in shacl_sparql.run_parallel(context.sparql, tasks, max_workers) if len(found)]
 
-    if frames:
-        violations = polars.concat(frames).to_pandas()
-        # canonical schema convention: object columns, nulls as None (like the other engines)
-        violations = violations.astype(object).where(violations.notna(), None)
-    else:
-        violations = pandas.DataFrame(columns=VIOLATION_COLUMNS)
-
-    if fallback:
-        # pass the already-converted-and-scoped frame — the pandas engine
-        # would otherwise redo both from the original input
-        from . import shacl_pandas
-        supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
-                                           components={rule.component for rule in fallback},
-                                           max_workers=max_workers, **kwargs)
-        violations = pandas.concat([violations, supplement], ignore_index=True)
-    return violations
+    if not frames:
+        return pandas.DataFrame(columns=VIOLATION_COLUMNS)
+    violations = pandas.concat(frames, ignore_index=True)
+    # canonical schema convention: object columns, nulls as None (like the other engines)
+    violations = violations.astype(object).where(violations.notna(), None)
+    return shacl_sparql.dedupe_invalid(violations)
 
 
 def _to_polars(data):

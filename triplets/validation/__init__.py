@@ -444,7 +444,7 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, u
         | set(unresolved))
     skipped_components = sorted({
         component for section in used for component in
-        compiled_set.profiles[section].plans.get(engine_name, ((), (), ()))[2]})
+        compiled_set.profiles[section].plans.get(engine_name, ((), ()))[1]})
     finished = datetime.now(timezone.utc)
     violations.attrs["validation"] = {
         "started_at": _iso(started),
@@ -527,7 +527,7 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
     else:
         skipped_shapes = compiled.stats.get("skipped_shapes", [])
         skipped_components = sorted({*compiled.stats.get("unknown_components", ()),
-                                     *compiled.plans.get(engine_name, ((), (), ()))[2]})
+                                     *compiled.plans.get(engine_name, ((), ()))[1]})
     return {
         "started_at": _iso(started),
         "generated_at": _iso(finished),
