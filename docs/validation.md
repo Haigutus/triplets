@@ -159,7 +159,7 @@ validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) →
 - **pyshacl** consumes `compiled.graph` (data goes through `_rdflib_loader`).
 - **pandas/polars/duckdb** consume `compiled.ir` — they never touch rdflib and
   read the raw string `VALUE`s directly (`rdf_map` matters only for their
-  sh:sparql delegation, where it types the queried graph).
+  sh:sparql constraints, where it types the queried graph).
 - **sh:sparql IR rows**: pyshacl evaluates them natively (`advanced=True`).
   The vectorized engines run them through `shacl_sparql` → `triplets.sparql` (auto order:
   qlever when built, else oxigraph when installed, else rdflib): the data is
