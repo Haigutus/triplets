@@ -117,6 +117,10 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     undefined_namespace : str, default CIM100
         Namespace for names the schema does not declare (every name without
         an rdf_map) in the graph the sh:sparql constraints and pyshacl see.
+    max_workers : int, optional
+        Run the sh:sparql constraint queries in parallel: threads on oxigraph
+        (one shared store), fork processes on rdflib, sequential on qlever.
+        None (default) = sequential. Not used by the pyshacl engine.
 
     The returned frame carries the validation-run metadata in
     ``violations.attrs["validation"]`` (start/end timestamps and duration,

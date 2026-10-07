@@ -520,8 +520,9 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         Restrict to a subset (e.g. ``("sh:datatype",)`` for the lexical
         supplement run next to pyshacl). None = everything implemented.
     max_workers : int, optional
-        Run the sh:sparql constraint queries in parallel processes (fork).
-        None = sequential.
+        Run the sh:sparql constraint queries in parallel: threads on oxigraph
+        (one shared store), fork processes on rdflib, sequential on qlever.
+        None (default) = sequential. Not used by the pyshacl engine.
     """
     data = _to_pandas(data)
     if scope is not None:
