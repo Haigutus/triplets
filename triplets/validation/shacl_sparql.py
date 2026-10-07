@@ -3,15 +3,15 @@
 Queries run through triplets.sparql (auto engine — qlever when built, else
 oxigraph, else rdflib) on the engine's own data: the engine loads it once
 (content-hash cached), each constraint runs as one SELECT with the focus nodes
-bound via VALUES, and ``max_workers`` runs the constraint queries in parallel
-processes on the rdflib path only (fork — copy-on-write shares the dataset;
-threads don't help GIL-bound rdflib; the embedded engines are ms-scale
-sequentially). Results are violations frames in the canonical schema.
+bound via VALUES, and ``max_workers`` runs the constraint queries in parallel:
+threads on oxigraph (it releases the GIL per query), fork processes on rdflib
+(copy-on-write shares the dataset; threads don't help GIL-bound rdflib),
+sequential on qlever. Results are violations frames in the canonical schema.
 """
 import logging
 import multiprocessing
 
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 
 import pandas
@@ -194,6 +194,18 @@ def dedupe_invalid(frame):
     return pandas.concat([frame[~invalid], frame[invalid].drop_duplicates()], ignore_index=True)
 
 
+def _run_threaded(state, tasks, max_workers):
+    """oxigraph: the first query runs alone — it builds the store and hashes the
+    data once — then the rest share that store from a thread pool."""
+    tasks = [(rule, focus) for rule, focus in tasks if len(focus)]
+    if not tasks:
+        return []
+    first = run(state, *tasks[0])
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        rest = list(pool.map(lambda task: run(state, *task), tasks[1:]))
+    return [first, *rest]
+
+
 # fork inherits this by copy-on-write — the dataset is never pickled per task
 _FORK_DATASET = None
 
@@ -204,19 +216,20 @@ def _worker(text):
 
 
 def run_parallel(state, tasks, max_workers):
-    """Run ``[(rule, focus_ids)]`` sh:sparql constraint queries in parallel processes.
+    """Run ``[(rule, focus_ids)]`` sh:sparql constraint queries in parallel.
 
-    rdflib query evaluation is GIL-bound pure Python, so threads don't help;
-    fork gives copy-on-write sharing of the loaded dataset (Linux). One task
-    per constraint query. Only applies to the rdflib engine — the embedded
-    engines (qlever: C++ state must not be forked; oxigraph: Rust store) are
-    orders of magnitude faster and run the queries sequentially. Both release
-    the GIL during queries, so threading them is a recorded future
-    optimization (TODO.md).
+    oxigraph releases the GIL while a query runs, so its queries share the one
+    store across threads. rdflib query evaluation is GIL-bound pure Python, so
+    threads don't help there; fork gives copy-on-write sharing of the loaded
+    dataset (Linux), one task per constraint query. qlever runs sequentially
+    (its C++ state must not be forked; threading it is not measured yet).
     """
     from .. import sparql
-    if sparql.get_engine("auto")[0] != "rdflib":
-        logger.debug("sparql auto engine is not rdflib — max_workers ignored (sequential)")
+    engine_name = sparql.get_engine("auto")[0]
+    if engine_name == "oxigraph":
+        return _run_threaded(state, tasks, max_workers)
+    if engine_name != "rdflib":
+        logger.debug("sparql auto engine is %s — max_workers ignored (sequential)", engine_name)
         return [run(state, rule, focus) for rule, focus in tasks]
 
     global _FORK_DATASET

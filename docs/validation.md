@@ -55,7 +55,7 @@ touching the public API:
 | Engine | File | Requires | Role |
 |--------|------|----------|------|
 | `pyshacl` | `validation/shacl_pyshacl.py` | pyshacl + rdflib (`pip install triplets[validation]`) | **reference** — spec-complete, rdflib-based. `store="oxigraph"` loads the data graph through the oxigraph SPARQL engine's cached store (identical results; opt in only when the store is already loaded for SPARQL) |
-| `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; **complete registry** — `sh:sparql` delegated to `triplets.sparql` (`max_workers` parallelizes those queries), `sh:node` expanded at compile time and run against the referenced value nodes, `sh:nodeKind` decided by the rdf_map schema (value form when schema is silent). Explicit `engine="pandas"` |
+| `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; **complete registry** — `sh:sparql` runs through `triplets.sparql` (`max_workers` parallelizes those queries), `sh:node` expanded at compile time and run against the referenced value nodes, `sh:nodeKind` decided by the rdf_map schema (value form when schema is silent). Explicit `engine="pandas"` |
 | `polars` | `validation/shacl_polars.py` | polars | compiled-IR executor for performance: one LazyFrame plan per constraint, single `polars.collect_all` (parallel, common subplans eliminated). Same semantics as pandas; nested components run eagerly with a focus override and come back as LazyFrames. The fast in-memory default |
 | `duckdb` | `validation/shacl_duckdb.py` | duckdb | compiled-IR executor for **larger-than-memory** data: one SQL query per constraint against the connection's triplets table (streams/spills via DuckDB's executor). Defaults come from the connection (`duckdb.connect(table=..., schema=...)`); call kwargs `table`/`schema`/`table_name` override. Accepts a connection or registers any frame. Constraints batch 100-per-`UNION ALL` statement — explicit choice (`engine="duckdb"`, not in auto) when the data does not fit in memory |
 
@@ -165,10 +165,13 @@ validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) →
   qlever when built, else oxigraph when installed, else rdflib): the data is
   loaded into one dataset, each constraint runs as a single SELECT with the
   focus nodes bound via `VALUES ?this {...}` and `$PATH` substituted from
-  the IR, and `max_workers=N` runs the constraint queries in parallel
-  processes on the rdflib path only (fork gives copy-on-write sharing of the
-  dataset; threads don't help rdflib — it is GIL-bound pure Python; qlever
-  and oxigraph are ms-scale sequentially).
+  the IR, and `max_workers=N` runs the constraint queries in parallel:
+  threads on oxigraph (it releases the GIL per query; the first query runs
+  alone to build the store), fork processes on rdflib (copy-on-write sharing
+  of the dataset; threads don't help GIL-bound rdflib), sequential on qlever.
+  CGMES 3.0 EQ shapes on Svedala EQ (95 sh:sparql queries, oxigraph),
+  `max_workers=8`: polars 8.7 s → 2.4 s, pandas 13.2 s → 8.3 s, duckdb
+  19.9 s → 12.4 s.
   For sh:sparql-heavy profiles build the qlever extension or
   `pip install triplets[oxigraph]`; the rdflib fallback runs in minutes.
   **No query fixing**: constraint queries run exactly as authored. A

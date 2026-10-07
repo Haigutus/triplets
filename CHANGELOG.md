@@ -31,6 +31,9 @@ Start of the 0.3 line.
   returns `(rules, skipped)`. polars and duckdb `validate` take
   `undefined_namespace` like pandas.
 - Schema validation flags objects whose only `Type` is a known abstract class.
+- SHACL `max_workers` runs oxigraph `sh:sparql` constraint queries in a thread
+  pool over the one store (was sequential; the fork pool stays rdflib-only).
+  CGMES 3.0 EQ shapes on Svedala EQ at 8 workers: polars 8.7 s → 2.4 s.
 - **NCP 2.5-dev export schemas** (`ENTSOE_NC_2.5-dev_552_ED1/ED2.json`) generated
   from [application-profiles-library](https://github.com/entsoe/application-profiles-library)
   `main` (`NCP/RDFS`). Named `-dev` until the pin is an `ncp-v2-5-0` release branch.
