@@ -9,8 +9,11 @@ reported in the run's coverage metadata, `skipped_shapes` /
 - **pyshacl + `rdf_map`:** `rdfs:subClassOf` from the export schema is
   mixed in as pyshacl `ont_graph` (instance data is not mutated). Class IRIs
   use each Class entry's own namespace; abstract parents with no Class
-  entry stay on CIM100. Vectorized engines still match exact `Type` unless
-  a later layer expands focus.
+  entry stay on CIM100.
+- **Vectorized engines + `rdf_map`:** a Type index is expanded once
+  (ancestor → union of descendant IDs). `sh:targetClass Equipment` hits
+  `Breaker` without cloning IR rows. Without `rdf_map`, match is exact
+  `Type`.
 - **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
   Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /
   `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —

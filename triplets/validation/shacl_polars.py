@@ -28,7 +28,7 @@ import polars
 
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
+from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_polars, load_rdf_map, node_kind, value_types
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -44,10 +44,17 @@ class _Context:
         self.rdf_map = rdf_map
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID")
-        # (ID, CLASS) pairs — the class-membership side of the batched joins
-        self.membership = type_rows.rename({"VALUE": "CLASS"}).lazy()
+        # (ID, CLASS) pairs: the objects' own Type rows (what a ( assoc rdf:type )
+        # path yields), and the class-membership side of the batched joins —
+        # with rdf_map the latter also lists every ancestor class
+        self.types = type_rows.rename({"VALUE": "CLASS"}).lazy()
+        self.membership = self.types
         self._class_ids = {key[0]: part["ID"] for key, part
                            in type_rows.partition_by("VALUE", as_dict=True).items()}
+        if rdf_map is not None:
+            self._class_ids, membership = self._with_ancestors(rdf_map)
+            if membership is not None:
+                self.membership = membership.lazy()
         # is_in wants the membership collection as one list value (imploded);
         # precompute per class so thousands of rule plans share them.
         self._class_ids_imploded = {key: ids.implode()
@@ -55,6 +62,25 @@ class _Context:
         self._all_ids = frame["ID"].unique().implode()
         self._frame = frame
         self._subjects = {}   # KEY → (ids, imploded) for sh:targetSubjectsOf focus
+
+    def _with_ancestors(self, rdf_map):
+        """Precompute ancestor → concat(descendant IDs) and extra membership rows."""
+        from .schema_ir import expand_type_index
+        schema = load_rdf_map(rdf_map)
+        expanded = expand_type_index(self._class_ids, schema)
+        class_ids = {}
+        frames = []
+        for name, parts in expanded.items():
+            if isinstance(parts, list):
+                class_ids[name] = polars.concat(parts).unique()
+            else:
+                class_ids[name] = parts
+            if len(class_ids[name]):
+                frames.append(polars.DataFrame({
+                    "CLASS": [name] * len(class_ids[name]), "ID": class_ids[name],
+                }))
+        membership = polars.concat(frames) if frames else None
+        return class_ids, membership
 
     def class_ids(self, target_class):
         """Flat ID Series (plan *data*, e.g. focus_frame)."""
@@ -99,7 +125,7 @@ class _Context:
         if getattr(rule, "via_type", False):
             # ( assoc rdf:type ) sequence path: PATH_VALUE = referenced object's
             # type; a target without a Type row yields no value node (inner join)
-            plan = (plan.join(self.membership, left_on="PATH_VALUE", right_on="ID")
+            plan = (plan.join(self.types, left_on="PATH_VALUE", right_on="ID")
                     .select("FOCUS", polars.col("CLASS").alias("PATH_VALUE")))
         return plan
 
@@ -222,7 +248,7 @@ def _schema_range(context, rule):
     (issue #100); targets without a Type row are silent."""
     allowed = polars.concat([polars.Series(context.class_ids(cls)) for cls in rule.params],
                             rechunk=True).implode()
-    typed = context.membership.select(polars.col("ID")).unique().collect()["ID"].implode()
+    typed = context.types.select(polars.col("ID")).unique().collect()["ID"].implode()
     plan = (context.path_rows(rule)
             .filter(polars.col("PATH_VALUE").is_in(typed)
                     & ~polars.col("PATH_VALUE").is_in(allowed)))
