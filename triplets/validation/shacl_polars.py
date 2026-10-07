@@ -44,8 +44,11 @@ class _Context:
         self.rdf_map = rdf_map
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID")
-        # (ID, CLASS) pairs — the class-membership side of the batched joins
-        self.membership = type_rows.rename({"VALUE": "CLASS"}).lazy()
+        # (ID, CLASS) pairs: the objects' own Type rows (what a ( assoc rdf:type )
+        # path yields), and the class-membership side of the batched joins —
+        # with rdf_map the latter also lists every ancestor class
+        self.types = type_rows.rename({"VALUE": "CLASS"}).lazy()
+        self.membership = self.types
         self._class_ids = {key[0]: part["ID"] for key, part
                            in type_rows.partition_by("VALUE", as_dict=True).items()}
         if rdf_map is not None:
@@ -122,7 +125,7 @@ class _Context:
         if getattr(rule, "via_type", False):
             # ( assoc rdf:type ) sequence path: PATH_VALUE = referenced object's
             # type; a target without a Type row yields no value node (inner join)
-            plan = (plan.join(self.membership, left_on="PATH_VALUE", right_on="ID")
+            plan = (plan.join(self.types, left_on="PATH_VALUE", right_on="ID")
                     .select("FOCUS", polars.col("CLASS").alias("PATH_VALUE")))
         return plan
 
@@ -245,7 +248,7 @@ def _schema_range(context, rule):
     (issue #100); targets without a Type row are silent."""
     allowed = polars.concat([polars.Series(context.class_ids(cls)) for cls in rule.params],
                             rechunk=True).implode()
-    typed = context.membership.select(polars.col("ID")).unique().collect()["ID"].implode()
+    typed = context.types.select(polars.col("ID")).unique().collect()["ID"].implode()
     plan = (context.path_rows(rule)
             .filter(polars.col("PATH_VALUE").is_in(typed)
                     & ~polars.col("PATH_VALUE").is_in(allowed)))

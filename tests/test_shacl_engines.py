@@ -621,6 +621,23 @@ def test_abstract_target_keeps_direct_equipment_type_rows(engine):
     assert violating(bound, "sh:minCount") == {("b1", None), ("e1", None)}
 
 
+def test_sequence_path_via_type_reads_instance_types_with_schema(engine):
+    """( assoc rdf:type ) yields the referenced object's own Type values — the
+    schema's ancestors (EquipmentContainer) are not extra value nodes, so they
+    neither fail sh:in nor add to sh:maxCount."""
+    shape = VALUE_TYPE_SHAPE.replace("sh:nodeKind sh:IRI ;", "sh:maxCount 1 ;")
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "bay1"))
+            + breaker("b2", ("Equipment.EquipmentContainer", "sub1"))
+            + [("bay1", "Type", "Bay", "eq"), ("sub1", "Type", "Substation", "eq")])
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    assert violating(v, "sh:in") == {("b2", "Substation")}
+    assert violating(v, "sh:maxCount") == set()
+
+
 def test_sh_class_accepts_subclasses_via_index(engine):
     shape = """cim:BayShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
         sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:class cim:EquipmentContainer ] ."""
