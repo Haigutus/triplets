@@ -65,7 +65,7 @@ cim:BreakerShape a sh:NodeShape ;
 
 CGMES_SHACL_DIR = Path(os.environ.get(
     "TRIPLETS_CGMES_SHACL",
-    "/home/kvilgo/GIT/application-profiles-library/CGMES/CurrentRelease/SHACL"))
+    Path(__file__).resolve().parents[1] / "test_data/entsoe-profiles/CGMES/SHACL"))
 # the ENTSO-E profiles split constraints: Simple carries datatype/nodeKind,
 # Complex carries sparql/range/cardinality — real validation uses both
 CGMES_EQ_SHACL_FILES = [
@@ -143,7 +143,7 @@ def test_compile_cache_hits_by_content(shape_file, tmp_path):
 
 
 @pytest.mark.skipif(not all(f.exists() for f in CGMES_EQ_SHACL_FILES),
-                    reason="external CGMES SHACL shapes not available")
+                    reason="CGMES SHACL shapes not available (git submodule update --init test_data/entsoe-profiles)")
 def test_ir_real_cgmes_eq_shapes():
     """The real CGMES Equipment SHACL profiles compile to a non-trivial IR."""
     ir = compile_shapes([str(f) for f in CGMES_EQ_SHACL_FILES]).ir

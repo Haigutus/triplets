@@ -6,6 +6,8 @@ schema, modulo the one documented deviation: the lexical-form datatype check
 they must never lose a violation pyshacl reports). Grows a column per engine
 as pandas (full) / polars / duckdb land.
 """
+import os
+
 import pytest
 
 pytest.importorskip("rdflib")
@@ -221,7 +223,9 @@ cim:ACLineSegmentShape a sh:NodeShape ;
     sh:property [ sh:path cim:ACLineSegment.r ; sh:datatype xsd:float ] .
 """
 
-CGMES_SHACL_DIR = Path("/home/kvilgo/GIT/application-profiles-library/CGMES/CurrentRelease/SHACL")
+CGMES_SHACL_DIR = Path(os.environ.get(
+    "TRIPLETS_CGMES_SHACL",
+    Path(__file__).resolve().parents[1] / "test_data/entsoe-profiles/CGMES/SHACL"))
 CGMES_EQ_SHACL_FILES = [CGMES_SHACL_DIR / "61970-600-2_Equipment-AP-Con-Simple-SHACL.ttl",
                         CGMES_SHACL_DIR / "61970-301_Equipment-AP-Con-Complex-SHACL.ttl"]
 
@@ -273,7 +277,7 @@ def test_benchmark_pyshacl_oxigraph_store(benchmark, svedala_eq, timing_shape):
 @pytest.mark.performance
 @pytest.mark.benchmark(group="shacl-compile")
 @pytest.mark.skipif(not all(f.exists() for f in CGMES_EQ_SHACL_FILES),
-                    reason="external CGMES SHACL shapes not available")
+                    reason="CGMES SHACL shapes not available (git submodule update --init test_data/entsoe-profiles)")
 def test_benchmark_compile(benchmark):
     """Shapes → IR on the real Equipment profiles (cache cleared — measures the parse)."""
     from triplets.validation.shacl_ir import _COMPILE_CACHE
@@ -285,7 +289,7 @@ def test_benchmark_compile(benchmark):
 @pytest.mark.performance
 @pytest.mark.benchmark(group="shacl-real-profile")
 @pytest.mark.skipif(not all(f.exists() for f in CGMES_EQ_SHACL_FILES),
-                    reason="external CGMES SHACL shapes not available")
+                    reason="CGMES SHACL shapes not available (git submodule update --init test_data/entsoe-profiles)")
 @pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb"])
 def test_benchmark_real_profile_vectorized(benchmark, svedala_eq, engine):
     """Vectorized engines, real Simple+Complex Equipment profiles, sh:sparql

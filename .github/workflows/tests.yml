@@ -22,8 +22,8 @@ jobs:
           submodules: false
           lfs: true          # test_data zips (RealGrid) are LFS objects
 
-      - name: Fetch test data (only the data submodule — not vendor/qlever)
-        run: git submodule update --init test_data/relicapgrid
+      - name: Fetch test data (only the data submodules — not vendor/qlever)
+        run: git submodule update --init test_data/relicapgrid test_data/entsoe-profiles
 
       - uses: actions/setup-python@v5
         with:

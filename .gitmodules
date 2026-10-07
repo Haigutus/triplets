@@ -15,3 +15,6 @@
 	# the local qlever build/test writes index files into the checkout; don't
 	# let that working-tree dirt show as a change in the superproject
 	ignore = dirty
+[submodule "test_data/entsoe-profiles"]
+	path = test_data/entsoe-profiles
+	url = https://github.com/entsoe/application-profiles-library
