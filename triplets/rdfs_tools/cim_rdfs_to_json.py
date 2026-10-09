@@ -174,18 +174,15 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
                 data_type_meta = profile_data.get_object_data(data_type).to_dict()
 
-                xsd = types.get(data_type_name)
-                data_type_def = {
+                xsd = {"xsd:type": types[data_type_name]} if data_type_name in types else {}
+                profile[data_type_name] = {
                     "description": data_type_meta.get("comment", ""),
                     "type": data_type_meta.get("stereotype", ""),
+                    **xsd,
                     "namespace": data_type_namespace,
                 }
-                if xsd:
-                    data_type_def["xsd:type"] = xsd
-                    parameter_def["xsd:type"] = xsd
-
-                profile[data_type_name] = data_type_def
                 parameter_def["dataType"] = data_type_name
+                parameter_def.update(xsd)
 
             elif xsd := _as_xsd(range_uri):
                 parameter_def["type"] = "Attribute"
