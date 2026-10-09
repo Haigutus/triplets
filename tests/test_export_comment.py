@@ -1,5 +1,4 @@
-"""``comment=`` is written by every CIM XML engine, before the root element
-(https://github.com/Haigutus/triplets/issues/131)."""
+"""``comment=`` is written by every CIM XML engine, before the root element."""
 import io
 
 import pandas
