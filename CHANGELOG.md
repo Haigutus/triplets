@@ -160,6 +160,9 @@ Start of the 0.3 line.
   no longer prefixed with `urn:uuid:` by the N-Quads graph term.
 
 ### Fixed
+- **`comment=` is written by the `python_lxml` CIM XML exporter** too: it
+  serialized the root element only, so the comment before it was dropped
+  ([#131](https://github.com/Haigutus/triplets/issues/131)).
 - **Export schemas record inheritance and ranges as absolute IRIs.** The
   generator resolves a relative ``rdf:resource="#Name"`` against the profile's
   ``xml:base`` (RDF/XML semantics) instead of copying it, so a parent or range
