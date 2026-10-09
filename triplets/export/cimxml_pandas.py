@@ -295,7 +295,8 @@ def generate_xml(instance_data,
         _, start_time = _print_duration("Attributes added", start_time)
 
     # Convert to XML
-    xml = etree.tostring(RDF, pretty_print=True, xml_declaration=True, encoding='UTF-8')
+    # the tree, not the element: a comment before the root is a sibling of RDF
+    xml = etree.tostring(RDF.getroottree(), pretty_print=True, xml_declaration=True, encoding="UTF-8")
     # TODO - clean namespaces
 
     logger.info("Exporting RDF to {}".format(file_name))

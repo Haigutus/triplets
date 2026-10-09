@@ -64,7 +64,7 @@ def iter_rdf_rows(rdf_objects, local_resources=True, base=None):
       ``rdf:ID="X"`` is ``base#X``. ``rdf:nodeID`` labels stay as written (blank nodes are
       not supported).
     """
-    if local_resources:                  # the hot path: first attribute that exists wins, as before
+    if local_resources:                  # the hot path: first attribute that exists wins
         for rdf_object in rdf_objects:
             attribs = rdf_object.attrib
             obj_id = local_id(attribs.get(RDF_ID) or attribs.get(RDF_ABOUT) or attribs.get(RDF_NODEID) or "")

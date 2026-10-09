@@ -74,7 +74,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
 
 def _lines(subjects, predicates, objects, graphs):
     """Term columns → ``s p o g .\n`` lines as UTF-8 bytes, joined in Arrow
-    (one C++ pass; ~4x faster than str concat + ``"\n".join``). A row with no
+    (one C++ pass). A row with no
     graph carries ``.`` in *graphs* and comes out as an N-Triples line."""
     import pyarrow
     import pyarrow.compute

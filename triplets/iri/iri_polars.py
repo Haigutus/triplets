@@ -47,7 +47,7 @@ def local_value(column, kind=None):
 
 
 def is_iri(column):
-    return _col(column).str.contains(URI_PREFIX_RE.pattern).fill_null(False)   # null → False, as the scalar; regex measured as fast as starts_with
+    return _col(column).str.contains(URI_PREFIX_RE.pattern).fill_null(False)   # null → False, as the scalar
 
 
 def encode_iri(column):
