@@ -23,9 +23,8 @@ RDFS_ROOT = REPO_ROOT / "rdfs"
 UPSTREAM = "https://github.com/entsoe/application-profiles-library.git"
 SOURCES = {
     "ENTSOE_NC_2.4.1": {"repo": UPSTREAM, "ref": "ncp-v2-4-1", "path": "NCP/RDFS"},
-    # Draft on main (no ncp-v2-5-0 branch yet). DatasetMetadata class linkage restored
-    # via schema:domainIncludes in application-profiles-library#99 (fixes #92).
-    "ENTSOE_NC_2.5-dev": {"repo": UPSTREAM, "ref": "main", "path": "NCP/RDFS"},
+    # DatasetMetadata class linkage via schema:domainIncludes (application-profiles-library#99, fixes #92)
+    "ENTSOE_NC_2.5.0": {"repo": UPSTREAM, "ref": "ncp-v2-5-0", "path": "NCP/RDFS"},
 }
 
 
