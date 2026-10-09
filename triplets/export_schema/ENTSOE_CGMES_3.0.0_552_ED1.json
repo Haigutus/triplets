@@ -635,7 +635,6 @@
         "Statement": {
             "description": "It represent a set of Definition and/or Description elements.",
             "type": "rdf",
-            "xsd:type": "",
             "namespace": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         },
         "DifferenceModel.forwardDifferences": {
@@ -645,8 +644,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.preconditions": {
             "description": "A property of the difference model whose value is the collection of precondition statements.",
@@ -655,8 +653,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.reverseDifferences": {
             "description": "A property of the difference model whose value is the collection of reverse difference statements.",
@@ -665,8 +662,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "Model.DependentOn": {
             "description": "A reference to the model documents that the model described by this document depends on. In general there can be 0 or many Model.DependentOn depending on the profile and the content of the instance file.\nFor instance:\n\u2013 A load flow solution depends on the topology model it was computed from\n\u2013 A topology model computed by a topology processor depends on the network model it was computed from.\nThe referenced models are identified by the FullModel rdf:about attribute for full model documents and by DifferenceModel rdf:about attribute for difference model documents.\nThe references are maintained by the producer of the CIMXML document and the references are valid for the model with version and identifier for which the document was created.",
@@ -997,7 +993,6 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -1007,8 +1002,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -1083,13 +1077,11 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -1099,8 +1091,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Duration",
-            "xsd:type": ""
+            "dataType": "Duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -9163,7 +9154,6 @@
         "Area": {
             "description": "Area.",
             "type": "CIMDatatype",
-            "xsd:type": "",
             "namespace": "http://iec.ch/TC57/CIM100#"
         },
         "GovHydroFrancis.av0": {
@@ -9173,8 +9163,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Area",
-            "xsd:type": ""
+            "dataType": "Area"
         },
         "GovHydroFrancis.av1": {
             "description": "Area of the compensation tank (<i>A</i><i><sub>V1</sub></i>). Unit = m<sup>2</sup>. Typical value = 700.",
@@ -9183,8 +9172,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Area",
-            "xsd:type": ""
+            "dataType": "Area"
         },
         "GovHydroFrancis.bp": {
             "description": "Droop (<i>Bp</i>).  Typical value = 0,05.",
@@ -9329,7 +9317,6 @@
         "VolumeFlowRate": {
             "description": "Volume per time.",
             "type": "CIMDatatype",
-            "xsd:type": "",
             "namespace": "http://iec.ch/TC57/CIM100#"
         },
         "GovHydroFrancis.qn": {
@@ -9339,8 +9326,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "VolumeFlowRate",
-            "xsd:type": ""
+            "dataType": "VolumeFlowRate"
         },
         "GovHydroFrancis.ta": {
             "description": "Derivative gain (<i>Ta</i>) (&gt;= 0).  Typical value = 3.",
@@ -9521,8 +9507,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Area",
-            "xsd:type": ""
+            "dataType": "Area"
         },
         "GovHydroPelton.av1": {
             "description": "Area of the compensation tank (<i>A</i><i><sub>V1</sub></i>). Unit = m<sup>2</sup>. Typical value = 700.",
@@ -9531,8 +9516,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Area",
-            "xsd:type": ""
+            "dataType": "Area"
         },
         "GovHydroPelton.bp": {
             "description": "Droop (<i>bp</i>).  Typical value = 0,05.",
@@ -9631,8 +9615,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "VolumeFlowRate",
-            "xsd:type": ""
+            "dataType": "VolumeFlowRate"
         },
         "GovHydroPelton.simplifiedPelton": {
             "description": "Simplified Pelton model simulation (<i>Sflag</i>).\ntrue = enable of simplified Pelton model simulation\nfalse = enable of complete Pelton model simulation (non-linear gain).\nTypical value = true.",
@@ -37727,7 +37710,6 @@
         "Statement": {
             "description": "It represent a set of Definition and/or Description elements.",
             "type": "rdf",
-            "xsd:type": "",
             "namespace": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         },
         "DifferenceModel.forwardDifferences": {
@@ -37737,8 +37719,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.preconditions": {
             "description": "A property of the difference model whose value is the collection of precondition statements.",
@@ -37747,8 +37728,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.reverseDifferences": {
             "description": "A property of the difference model whose value is the collection of reverse difference statements.",
@@ -37757,8 +37737,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "Model.DependentOn": {
             "description": "A reference to the model documents that the model described by this document depends on. In general there can be 0 or many Model.DependentOn depending on the profile and the content of the instance file.\nFor instance:\n\u2013 A load flow solution depends on the topology model it was computed from\n\u2013 A topology model computed by a topology processor depends on the network model it was computed from.\nThe referenced models are identified by the FullModel rdf:about attribute for full model documents and by DifferenceModel rdf:about attribute for difference model documents.\nThe references are maintained by the producer of the CIMXML document and the references are valid for the model with version and identifier for which the document was created.",
@@ -38089,7 +38068,6 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -38099,8 +38077,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -38175,13 +38152,11 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -38191,8 +38166,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Duration",
-            "xsd:type": ""
+            "dataType": "Duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -39072,7 +39046,6 @@
         "RealEnergy": {
             "description": "Real electrical energy.",
             "type": "CIMDatatype",
-            "xsd:type": "",
             "namespace": "http://iec.ch/TC57/CIM100#"
         },
         "BatteryUnit.ratedE": {
@@ -39082,8 +39055,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "RealEnergy",
-            "xsd:type": ""
+            "dataType": "RealEnergy"
         },
         "PowerElectronicsUnit.maxP": {
             "description": "Maximum active power limit. This is the maximum (nameplate) limit for the unit.",
@@ -43035,7 +43007,7 @@
         "Money": {
             "description": "Amount of money.",
             "type": "CIMDatatype",
-            "xsd:type": "xsd:float",
+            "xsd:type": "xsd:decimal",
             "namespace": "http://iec.ch/TC57/CIM100#"
         },
         "GeneratingUnit.startupCost": {
@@ -43046,7 +43018,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Money",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "GeneratingUnit.startupTime": {
             "description": "Time it takes to get the unit on-line, from the time that the prime mover mechanical power is applied.",
@@ -43076,7 +43048,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Money",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "GeographicalRegion": {
             "attrib": {
@@ -47601,7 +47573,6 @@
         "Statement": {
             "description": "It represent a set of Definition and/or Description elements.",
             "type": "rdf",
-            "xsd:type": "",
             "namespace": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         },
         "DifferenceModel.forwardDifferences": {
@@ -47611,8 +47582,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.preconditions": {
             "description": "A property of the difference model whose value is the collection of precondition statements.",
@@ -47621,8 +47591,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.reverseDifferences": {
             "description": "A property of the difference model whose value is the collection of reverse difference statements.",
@@ -47631,8 +47600,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "Model.DependentOn": {
             "description": "A reference to the model documents that the model described by this document depends on. In general there can be 0 or many Model.DependentOn depending on the profile and the content of the instance file.\nFor instance:\n\u2013 A load flow solution depends on the topology model it was computed from\n\u2013 A topology model computed by a topology processor depends on the network model it was computed from.\nThe referenced models are identified by the FullModel rdf:about attribute for full model documents and by DifferenceModel rdf:about attribute for difference model documents.\nThe references are maintained by the producer of the CIMXML document and the references are valid for the model with version and identifier for which the document was created.",
@@ -47957,7 +47925,6 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -47967,8 +47934,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -48043,13 +48009,11 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -48059,8 +48023,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Duration",
-            "xsd:type": ""
+            "dataType": "Duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -48969,7 +48932,6 @@
         "Statement": {
             "description": "It represent a set of Definition and/or Description elements.",
             "type": "rdf",
-            "xsd:type": "",
             "namespace": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         },
         "DifferenceModel.forwardDifferences": {
@@ -48979,8 +48941,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.preconditions": {
             "description": "A property of the difference model whose value is the collection of precondition statements.",
@@ -48989,8 +48950,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.reverseDifferences": {
             "description": "A property of the difference model whose value is the collection of reverse difference statements.",
@@ -48999,8 +48959,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "Model.DependentOn": {
             "description": "A reference to the model documents that the model described by this document depends on. In general there can be 0 or many Model.DependentOn depending on the profile and the content of the instance file.\nFor instance:\n\u2013 A load flow solution depends on the topology model it was computed from\n\u2013 A topology model computed by a topology processor depends on the network model it was computed from.\nThe referenced models are identified by the FullModel rdf:about attribute for full model documents and by DifferenceModel rdf:about attribute for difference model documents.\nThe references are maintained by the producer of the CIMXML document and the references are valid for the model with version and identifier for which the document was created.",
@@ -49331,7 +49290,6 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -49341,8 +49299,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -49417,13 +49374,11 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -49433,8 +49388,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Duration",
-            "xsd:type": ""
+            "dataType": "Duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -49735,7 +49689,6 @@
         "StreetAddress": {
             "description": "General purpose street and postal address information.",
             "type": "Compound",
-            "xsd:type": "",
             "namespace": "http://iec.ch/TC57/CIM100#"
         },
         "Location.mainAddress": {
@@ -49745,8 +49698,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "StreetAddress",
-            "xsd:type": ""
+            "dataType": "StreetAddress"
         },
         "CoordinateSystem": {
             "attrib": {
@@ -49942,7 +49894,6 @@
         "Statement": {
             "description": "It represent a set of Definition and/or Description elements.",
             "type": "rdf",
-            "xsd:type": "",
             "namespace": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         },
         "DifferenceModel.forwardDifferences": {
@@ -49952,8 +49903,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.preconditions": {
             "description": "A property of the difference model whose value is the collection of precondition statements.",
@@ -49962,8 +49912,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.reverseDifferences": {
             "description": "A property of the difference model whose value is the collection of reverse difference statements.",
@@ -49972,8 +49921,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "Model.DependentOn": {
             "description": "A reference to the model documents that the model described by this document depends on. In general there can be 0 or many Model.DependentOn depending on the profile and the content of the instance file.\nFor instance:\n\u2013 A load flow solution depends on the topology model it was computed from\n\u2013 A topology model computed by a topology processor depends on the network model it was computed from.\nThe referenced models are identified by the FullModel rdf:about attribute for full model documents and by DifferenceModel rdf:about attribute for difference model documents.\nThe references are maintained by the producer of the CIMXML document and the references are valid for the model with version and identifier for which the document was created.",
@@ -50304,7 +50252,6 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -50314,8 +50261,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -50390,13 +50336,11 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -50406,8 +50350,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Duration",
-            "xsd:type": ""
+            "dataType": "Duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -53252,7 +53195,6 @@
         "Statement": {
             "description": "It represent a set of Definition and/or Description elements.",
             "type": "rdf",
-            "xsd:type": "",
             "namespace": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         },
         "DifferenceModel.forwardDifferences": {
@@ -53262,8 +53204,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.preconditions": {
             "description": "A property of the difference model whose value is the collection of precondition statements.",
@@ -53272,8 +53213,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.reverseDifferences": {
             "description": "A property of the difference model whose value is the collection of reverse difference statements.",
@@ -53282,8 +53222,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "Model.DependentOn": {
             "description": "A reference to the model documents that the model described by this document depends on. In general there can be 0 or many Model.DependentOn depending on the profile and the content of the instance file.\nFor instance:\n\u2013 A load flow solution depends on the topology model it was computed from\n\u2013 A topology model computed by a topology processor depends on the network model it was computed from.\nThe referenced models are identified by the FullModel rdf:about attribute for full model documents and by DifferenceModel rdf:about attribute for difference model documents.\nThe references are maintained by the producer of the CIMXML document and the references are valid for the model with version and identifier for which the document was created.",
@@ -53608,7 +53547,6 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -53618,8 +53556,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -53694,13 +53631,11 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -53710,8 +53645,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Duration",
-            "xsd:type": ""
+            "dataType": "Duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -55637,7 +55571,6 @@
         "Statement": {
             "description": "It represent a set of Definition and/or Description elements.",
             "type": "rdf",
-            "xsd:type": "",
             "namespace": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         },
         "DifferenceModel.forwardDifferences": {
@@ -55647,8 +55580,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.preconditions": {
             "description": "A property of the difference model whose value is the collection of precondition statements.",
@@ -55657,8 +55589,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.reverseDifferences": {
             "description": "A property of the difference model whose value is the collection of reverse difference statements.",
@@ -55667,8 +55598,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "Model.DependentOn": {
             "description": "A reference to the model documents that the model described by this document depends on. In general there can be 0 or many Model.DependentOn depending on the profile and the content of the instance file.\nFor instance:\n\u2013 A load flow solution depends on the topology model it was computed from\n\u2013 A topology model computed by a topology processor depends on the network model it was computed from.\nThe referenced models are identified by the FullModel rdf:about attribute for full model documents and by DifferenceModel rdf:about attribute for difference model documents.\nThe references are maintained by the producer of the CIMXML document and the references are valid for the model with version and identifier for which the document was created.",
@@ -55999,7 +55929,6 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -56009,8 +55938,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -56085,13 +56013,11 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -56101,8 +56027,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Duration",
-            "xsd:type": ""
+            "dataType": "Duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -56982,7 +56907,6 @@
         "Statement": {
             "description": "It represent a set of Definition and/or Description elements.",
             "type": "rdf",
-            "xsd:type": "",
             "namespace": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         },
         "DifferenceModel.forwardDifferences": {
@@ -56992,8 +56916,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.preconditions": {
             "description": "A property of the difference model whose value is the collection of precondition statements.",
@@ -57002,8 +56925,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.reverseDifferences": {
             "description": "A property of the difference model whose value is the collection of reverse difference statements.",
@@ -57012,8 +56934,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "Model.DependentOn": {
             "description": "A reference to the model documents that the model described by this document depends on. In general there can be 0 or many Model.DependentOn depending on the profile and the content of the instance file.\nFor instance:\n\u2013 A load flow solution depends on the topology model it was computed from\n\u2013 A topology model computed by a topology processor depends on the network model it was computed from.\nThe referenced models are identified by the FullModel rdf:about attribute for full model documents and by DifferenceModel rdf:about attribute for difference model documents.\nThe references are maintained by the producer of the CIMXML document and the references are valid for the model with version and identifier for which the document was created.",
@@ -57344,7 +57265,6 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -57354,8 +57274,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -57430,13 +57349,11 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -57446,8 +57363,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Duration",
-            "xsd:type": ""
+            "dataType": "Duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -57964,7 +57880,6 @@
         "RealEnergy": {
             "description": "Real electrical energy.",
             "type": "CIMDatatype",
-            "xsd:type": "",
             "namespace": "http://iec.ch/TC57/CIM100#"
         },
         "BatteryUnit.storedE": {
@@ -57974,8 +57889,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "RealEnergy",
-            "xsd:type": ""
+            "dataType": "RealEnergy"
         },
         "Breaker": {
             "attrib": {
@@ -59909,7 +59823,6 @@
         "Statement": {
             "description": "It represent a set of Definition and/or Description elements.",
             "type": "rdf",
-            "xsd:type": "",
             "namespace": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         },
         "DifferenceModel.forwardDifferences": {
@@ -59919,8 +59832,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.preconditions": {
             "description": "A property of the difference model whose value is the collection of precondition statements.",
@@ -59929,8 +59841,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.reverseDifferences": {
             "description": "A property of the difference model whose value is the collection of reverse difference statements.",
@@ -59939,8 +59850,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "Model.DependentOn": {
             "description": "A reference to the model documents that the model described by this document depends on. In general there can be 0 or many Model.DependentOn depending on the profile and the content of the instance file.\nFor instance:\n\u2013 A load flow solution depends on the topology model it was computed from\n\u2013 A topology model computed by a topology processor depends on the network model it was computed from.\nThe referenced models are identified by the FullModel rdf:about attribute for full model documents and by DifferenceModel rdf:about attribute for difference model documents.\nThe references are maintained by the producer of the CIMXML document and the references are valid for the model with version and identifier for which the document was created.",
@@ -60271,7 +60181,6 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -60281,8 +60190,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -60357,13 +60265,11 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -60373,8 +60279,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Duration",
-            "xsd:type": ""
+            "dataType": "Duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -60982,7 +60887,6 @@
         "Statement": {
             "description": "It represent a set of Definition and/or Description elements.",
             "type": "rdf",
-            "xsd:type": "",
             "namespace": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         },
         "DifferenceModel.forwardDifferences": {
@@ -60992,8 +60896,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.preconditions": {
             "description": "A property of the difference model whose value is the collection of precondition statements.",
@@ -61002,8 +60905,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "DifferenceModel.reverseDifferences": {
             "description": "A property of the difference model whose value is the collection of reverse difference statements.",
@@ -61012,8 +60914,7 @@
             "xsd:minOccours": "1",
             "xsd:maxOccours": "n",
             "type": "Attribute",
-            "dataType": "Statement",
-            "xsd:type": ""
+            "dataType": "Statement"
         },
         "Model.DependentOn": {
             "description": "A reference to the model documents that the model described by this document depends on. In general there can be 0 or many Model.DependentOn depending on the profile and the content of the instance file.\nFor instance:\n\u2013 A load flow solution depends on the topology model it was computed from\n\u2013 A topology model computed by a topology processor depends on the network model it was computed from.\nThe referenced models are identified by the FullModel rdf:about attribute for full model documents and by DifferenceModel rdf:about attribute for difference model documents.\nThe references are maintained by the producer of the CIMXML document and the references are valid for the model with version and identifier for which the document was created.",
@@ -61344,7 +61245,6 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -61354,8 +61254,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -61430,13 +61329,11 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "dataType": "DateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -61446,8 +61343,7 @@
             "xsd:minOccours": "0",
             "xsd:maxOccours": "1",
             "type": "Attribute",
-            "dataType": "Duration",
-            "xsd:type": ""
+            "dataType": "Duration"
         },
         "version": {
             "description": "The version number of a resource.",
