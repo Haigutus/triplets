@@ -1,4 +1,4 @@
-"""cim-spreadsheet round trip: CIM XML -> xlsx / CSV -> CIM XML gives the same triples (issue #125)."""
+"""cim-spreadsheet round trip: CIM XML -> xlsx / CSV -> CIM XML gives the same triples."""
 import shutil
 import sys
 from pathlib import Path
