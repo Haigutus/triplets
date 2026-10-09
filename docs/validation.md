@@ -12,17 +12,16 @@ reported in the run's coverage metadata, `skipped_shapes` /
   entry stay on CIM100.
 - **Vectorized engines + `rdf_map`:** a Type index is expanded once
   (ancestor → union of descendant IDs). `sh:targetClass Equipment` hits
-  `Breaker` without cloning IR rows. Without `rdf_map`, match is exact
+  `Breaker`. Without `rdf_map`, match is exact
   `Type`.
 - **Vectorized engines walk `sh:targetClass`, `sh:targetSubjectsOf`,
   `sh:targetObjectsOf`, `sh:targetNode`, and SPARQL `sh:target`.** A custom
-  `sh:target` without `sh:select` is still invisible — `compile()` logs a
-  warning; use `engine="pyshacl"` for those.
+  `sh:target` without `sh:select` is not evaluated by them — `compile()` logs
+  a warning; use `engine="pyshacl"` for those.
 - **`sh:xone`** compiles into the IR like `sh:or`. **`sh:rule` SPARQLRule** is
   a CONSTRUCT pre-pass on the data before any engine runs (pyshacl does this
   itself via `advanced=True`).
-- **Every engine runs every component natively** — no engine hands rows to
-  another. Nested components (`sh:or`/`and`/`not`/`xone`/`node`) run their
+- **Every engine runs every component natively.** Nested components (`sh:or`/`and`/`not`/`xone`/`node`) run their
   nested rows with a focus override: the parent's focus nodes, or for
   `sh:node` the referenced value nodes. polars evaluates them eagerly and
   returns a LazyFrame; duckdb composes their SQL and binds ID lists through
@@ -169,9 +168,6 @@ validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) →
   threads on oxigraph (it releases the GIL per query; the first query runs
   alone to build the store), fork processes on rdflib (copy-on-write sharing
   of the dataset; threads don't help GIL-bound rdflib), sequential on qlever.
-  CGMES 3.0 EQ shapes on Svedala EQ (95 sh:sparql queries, oxigraph),
-  `max_workers=8`: polars 8.7 s → 2.4 s, pandas 13.2 s → 8.3 s, duckdb
-  19.9 s → 12.4 s.
   For sh:sparql-heavy profiles build the qlever extension or
   `pip install triplets[oxigraph]`; the rdflib fallback runs in minutes.
   **No query fixing**: constraint queries run exactly as authored. A

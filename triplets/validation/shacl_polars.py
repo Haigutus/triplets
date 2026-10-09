@@ -635,7 +635,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
 
     Parameters mirror shacl_pandas.validate. Every component runs as a
     LazyFrame plan in one ``polars.collect_all``; ``max_workers`` runs the
-    sh:sparql constraint queries in parallel processes (rdflib engine only).
+    sh:sparql constraint queries in parallel (threads on oxigraph, processes on rdflib).
     """
     frame = _to_polars(data)
     if scope is not None:

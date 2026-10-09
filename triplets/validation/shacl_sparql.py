@@ -222,7 +222,7 @@ def run_parallel(state, tasks, max_workers):
     store across threads. rdflib query evaluation is GIL-bound pure Python, so
     threads don't help there; fork gives copy-on-write sharing of the loaded
     dataset (Linux), one task per constraint query. qlever runs sequentially
-    (its C++ state must not be forked; threading it is not measured yet).
+    (its C++ state must not be forked).
     """
     from .. import sparql
     engine_name = sparql.get_engine("auto")[0]

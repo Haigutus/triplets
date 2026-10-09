@@ -157,9 +157,8 @@ converts arrow/duckdb to pandas before loading. Custom engines register via
 don't help — batch workloads (the sh:sparql constraints the SHACL engines send
 here) use `ProcessPoolExecutor` fork on the rdflib path. pyoxigraph releases
 the GIL during queries, so the SHACL engines run oxigraph constraint queries
-in a thread pool over the one store (`max_workers`). The qlever binding also
-releases the GIL, but the SHACL engines still run it sequentially (not
-measured yet).
+in a thread pool over the one store (`max_workers`). The SHACL engines run
+qlever queries sequentially.
 
 ## Shared Loading (`_rdflib_loader.py`)
 

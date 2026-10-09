@@ -28,7 +28,7 @@ def content_key(data, rdf_map, salt, data_unchanged=False):
 
     With ``data_unchanged`` the finished key is reused too: a validation run
     queries the same data and schema hundreds of times, and re-reading /
-    re-serializing the schema per query cost ~10 ms each on the CGMES bundles.
+    re-serializing the schema costs ~10 ms per query on the CGMES bundles.
     """
     schema_id = (salt, os.fspath(rdf_map) if isinstance(rdf_map, (str, os.PathLike)) else id(rdf_map))
     entry = _HASHES.get(id(data))
