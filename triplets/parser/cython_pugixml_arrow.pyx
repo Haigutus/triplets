@@ -275,7 +275,7 @@ cdef extern from *:
     }
 
     // Extract local name from "prefix:localname" or "{ns}local".
-    // Native QName mirror of triplets.iri.local_name (parity: tests/test_iri.py).
+    // QName local name: the native counterpart of the triplets.iri.split_iri local name (parity: tests/test_iri.py).
     static inline const char* local_name(const char* name) {
         const char* colon = strrchr(name, ':');
         return colon ? colon + 1 : name;

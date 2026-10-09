@@ -191,7 +191,7 @@ element name, so the triplet form keeps them apart:
 - **The local form is for people working on imported data.** A local name drops
   its namespace, so two predicates with one local name become one KEY. Exact,
   collision-free handling is the absolute form (`local_resources=False` on the
-  XML side today; an absolute import everywhere later).
+  XML side).
 
 ### Known limitations
 
