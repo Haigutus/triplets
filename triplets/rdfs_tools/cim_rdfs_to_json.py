@@ -385,10 +385,9 @@ BUNDLES = {
                                 header="ENTSOE_NC_2.4.1/DatasetMetadata-AP-Voc-RDFS2020.rdf",
                                 exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},
                                 index=index_by_keyword),
-    # Draft on main (no ncp-v2-5-0 branch yet). DatasetMetadata class linkage restored
-    # via schema:domainIncludes in application-profiles-library#99 (fixes #92).
-    "ENTSOE_NC_2.5-dev":   dict(rdfs_dir="ENTSOE_NC_2.5-dev",
-                                header="ENTSOE_NC_2.5-dev/DatasetMetadata-AP-Voc-RDFS2020.rdf",
+    # DatasetMetadata class linkage via schema:domainIncludes (application-profiles-library#99, fixes #92)
+    "ENTSOE_NC_2.5.0":     dict(rdfs_dir="ENTSOE_NC_2.5.0",
+                                header="ENTSOE_NC_2.5.0/DatasetMetadata-AP-Voc-RDFS2020.rdf",
                                 exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},
                                 index=index_by_keyword),
 }
