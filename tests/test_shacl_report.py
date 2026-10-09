@@ -429,7 +429,7 @@ GRID_SCHEMA = {"EQ": {
 
 def test_report_paths_follow_the_schema_namespace():
     """A profile outside CIM100 (EMTIOP, grid18v15): rdf_map= gives each sh:resultPath
-    its schema namespace (issue #133); a name the schema lacks takes undefined_namespace;
+    its schema namespace; a name the schema lacks takes undefined_namespace;
     the report reads back to the same frame."""
     import rdflib
     sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
