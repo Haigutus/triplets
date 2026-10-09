@@ -67,8 +67,7 @@ def _split_terms(lines):
     Subject and predicate are whitespace-free, so the first two splits are
     safe; the object may contain spaces inside a quoted literal, so the graph
     is recognised from the right: a trailing whitespace-free ``<iri>`` /
-    ``_:bnode`` term preceded by something. All Arrow compute — ~10x the
-    speed of a lazy-quantifier regex extract over the same lines.
+    ``_:bnode`` term preceded by something. All Arrow compute.
     """
     import pyarrow
     import pyarrow.compute as pc
@@ -123,8 +122,8 @@ def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
     then the triplets.iri column rules apply: ``local_id`` for ID / INSTANCE_ID,
     ``local_key`` for KEY (``rdf:type`` → *type_key*), ``local_value`` for VALUE —
     kind ``class`` on type rows, else by *kinds* (``iri.value_types`` of a schema).
-    Without a schema a guessed VALUE that is a subject of the same frame shortens
-    like its ID, so the reference still joins it.
+    A guessed VALUE (no schema, or a KEY the schema does not declare) that is a
+    subject of the same frame shortens like its ID, so the reference still joins it.
     """
     subjects = iri_pandas.decode_iri(_term(frame["ID"]))
     frame["ID"] = iri_pandas.local_id(subjects)
@@ -139,8 +138,8 @@ def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
     kind = frame["KEY"].map({key: kind for key, kind in (kinds or {}).items() if kind != "literal"})
     kind = kind.astype(object).where(frame["KEY"] != type_key, "class")
     local = iri_pandas.local_value(objects, kind)
-    if kinds is None:       # the guess cannot tell an enum from a reference to an http#… object
-        local = local.mask(_subject_references(objects, subjects, kind), iri_pandas.local_id(objects))
+    # the guess cannot tell an enum from a reference to an http#… object
+    local = local.mask(_subject_references(objects, subjects, kind), iri_pandas.local_id(objects))
     frame["VALUE"] = unquoted.where(quoted, local)
     graphs = iri_pandas.by_distinct(frame["INSTANCE_ID"], lambda graphs: iri_pandas.local_id(
         iri_pandas.decode_iri(_term(graphs)))) if "INSTANCE_ID" in frame.columns else None
@@ -152,7 +151,7 @@ def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
 
 def _subject_references(objects, subjects, kind):
     """Guessed rows the guess took as a name (http + "#") yet are a subject of this frame —
-    looked up in Arrow only on those rows (pandas ``isin`` on arrow strings is ~50x slower)."""
+    looked up in Arrow only on those rows (pandas ``isin`` on arrow strings is slow)."""
     import pyarrow
     import pyarrow.compute as pc
     candidates = (kind.isna() & objects.str.startswith("http", na=False)
@@ -168,8 +167,8 @@ def _subject_references(objects, subjects, kind):
 def _term(column):
     """``<iri>`` / ``_:bnode`` → bare text as read; decoding and shortening are per column (triplets.iri).
 
-    Slice + mask, not ``^<(.*)>$`` → ``\1``: the back-reference regex is ~7x
-    slower on arrow-backed strings."""
+    Slice + mask, not ``^<(.*)>$`` → ``\1``: the back-reference regex is slow on
+    arrow-backed strings."""
     wrapped = (column.str.startswith("<", na=False) & column.str.endswith(">", na=False)).astype(bool)
     return column.str.slice(1, -1).where(wrapped, column).str.removeprefix("_:")
 

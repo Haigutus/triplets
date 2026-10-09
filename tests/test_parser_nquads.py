@@ -230,3 +230,12 @@ def test_type_key_reads_rdf_type_as_an_ordinary_statement():
     text = "<urn:uuid:d> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> ."
     assert read_nquads(text)[["KEY", "VALUE"]].values.tolist() == [["Type", "Ontology"]]
     assert read_nquads(text, type_key="type")[["KEY", "VALUE"]].values.tolist() == [["type", "Ontology"]]
+
+
+def test_rdf_map_undeclared_key_still_joins_its_subject():
+    """A KEY the schema does not declare is guessed; an http#… object that is a subject
+    of the same frame keeps its ID form, so the reference joins."""
+    text = ("<http://ex.org/m#vl1> <http://ex.org/m#name> \"VL\" <urn:uuid:g> .\n"
+            "<urn:uuid:b1> <http://ex.org/m#Equipment.container> <http://ex.org/m#vl1> <urn:uuid:g> .\n")
+    frame = read_nquads(text, rdf_map=REFERENCE_MAP)
+    assert set(frame["ID"]) >= set(frame.loc[frame["KEY"] == "Equipment.container", "VALUE"])
