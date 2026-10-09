@@ -186,13 +186,14 @@ Wheels are built only for the active runner targets:
 | Platform | Runner | Architecture |
 |----------|--------|-------------|
 | Linux (manylinux) | `ubuntu-latest` | x86_64 |
+| Linux (manylinux) | `ubuntu-24.04-arm` | aarch64 |
 | macOS (Apple Silicon) | `macos-14` | arm64 |
 | Windows | `windows-latest` | AMD64 |
 
 CPython 3.11–3.14 (`requires-python >=3.11`). Each wheel includes the compiled
-`cython_pugixml_arrow` extension (usable when pyarrow is also installed). Linux
-aarch64 (QEMU) and macOS x86_64 (Intel, macos-13) targets are present but
-commented out in the workflow; Intel-Mac users can install from the sdist.
+`cython_pugixml_arrow` extension (usable when pyarrow is also installed). macOS
+x86_64 (Intel, macos-13) is commented out in the workflow; Intel-Mac users can
+install from the sdist.
 
 ## Publishing a Release
 

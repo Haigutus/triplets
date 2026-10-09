@@ -9,6 +9,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Start of the 0.3 line.
 
 ### Added
+- **Linux aarch64 wheels** (manylinux), built on GitHub's native arm64 runner;
+  also what Docker runs on Apple Silicon
+  ([#130](https://github.com/Haigutus/triplets/issues/130)).
 - **NCP 2.5-dev export schemas** (`ENTSOE_NC_2.5-dev_552_ED1/ED2.json`) generated
   from [application-profiles-library](https://github.com/entsoe/application-profiles-library)
   `main` (`NCP/RDFS`). Named `-dev` until the pin is an `ncp-v2-5-0` release branch.
