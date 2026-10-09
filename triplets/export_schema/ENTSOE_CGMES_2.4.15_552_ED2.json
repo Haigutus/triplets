@@ -963,7 +963,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -974,7 +974,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -1050,12 +1050,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -1066,7 +1066,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -8879,7 +8879,7 @@
         "Area": {
             "description": "Area.",
             "type": "CIMDatatype",
-            "xsd:type": "",
+            "xsd:type": "xsd:float",
             "namespace": "http://iec.ch/TC57/2013/CIM-schema-cim16#"
         },
         "GovHydroFrancis.av0": {
@@ -8890,7 +8890,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Area",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "GovHydroFrancis.av1": {
             "description": "Area of the compensation tank (A",
@@ -8900,7 +8900,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Area",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "GovHydroFrancis.bp": {
             "description": "Droop (Bp).  Typical Value = 0.05.",
@@ -9045,7 +9045,7 @@
         "VolumeFlowRate": {
             "description": "Volume per time.",
             "type": "CIMDatatype",
-            "xsd:type": "",
+            "xsd:type": "xsd:float",
             "namespace": "http://iec.ch/TC57/2013/CIM-schema-cim16#"
         },
         "GovHydroFrancis.qn": {
@@ -9056,7 +9056,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "VolumeFlowRate",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "GovHydroFrancis.ta": {
             "description": "Derivative gain (Ta).  Typical Value = 3.",
@@ -9238,7 +9238,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Area",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "GovHydroPelton.av1": {
             "description": "Area of the compensation tank (A",
@@ -9248,7 +9248,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Area",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "GovHydroPelton.bp": {
             "description": "Droop (bp).  Typical Value = 0.05.",
@@ -9348,7 +9348,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "VolumeFlowRate",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "GovHydroPelton.simplifiedPelton": {
             "description": "Simplified Pelton model simulation (Sflag).\ntrue = enable of simplified Pelton model simulation\nfalse = enable of complete Pelton model simulation (non linear gain).\nTypical Value = false.",
@@ -36437,7 +36437,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -36448,7 +36448,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -36524,12 +36524,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -36540,7 +36540,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -37577,7 +37577,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -37588,7 +37588,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -37664,12 +37664,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -37680,7 +37680,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -41507,7 +41507,7 @@
         "Money": {
             "description": "Amount of money.",
             "type": "CIMDatatype",
-            "xsd:type": "xsd:float",
+            "xsd:type": "xsd:decimal",
             "namespace": "http://iec.ch/TC57/2013/CIM-schema-cim16#"
         },
         "GeneratingUnit.startupCost": {
@@ -41518,7 +41518,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Money",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "GeneratingUnit.totalEfficiency": {
             "description": "The efficiency of the unit in converting the fuel into electrical energy.",
@@ -41538,7 +41538,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Money",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "GrossToNetActivePowerCurve": {
             "attrib": {
@@ -46867,7 +46867,7 @@
         "MonthDay": {
             "description": "MonthDay format as \"--mm-dd\", which conforms with XSD data type gMonthDay.",
             "type": "Primitive",
-            "xsd:type": "xsd:integer",
+            "xsd:type": "xsd:gMonthDay",
             "namespace": "http://iec.ch/TC57/2013/CIM-schema-cim16#"
         },
         "Season.endDate": {
@@ -46878,7 +46878,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "MonthDay",
-            "xsd:type": "xsd:integer"
+            "xsd:type": "xsd:gMonthDay"
         },
         "Season.startDate": {
             "description": "Date season starts.",
@@ -46888,7 +46888,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "MonthDay",
-            "xsd:type": "xsd:integer"
+            "xsd:type": "xsd:gMonthDay"
         },
         "StationSupply": {
             "attrib": {
@@ -48017,7 +48017,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -48028,7 +48028,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -48104,12 +48104,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -48120,7 +48120,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -48765,7 +48765,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -48776,7 +48776,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -48852,12 +48852,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -48868,7 +48868,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -49629,7 +49629,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -49640,7 +49640,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -49716,12 +49716,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -49732,7 +49732,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -50922,7 +50922,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -50933,7 +50933,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -51009,12 +51009,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -51025,7 +51025,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -53297,7 +53297,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -53308,7 +53308,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -53384,12 +53384,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -53400,7 +53400,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -54256,7 +54256,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -54267,7 +54267,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -54343,12 +54343,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -54359,7 +54359,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "version": {
             "description": "The version number of a resource.",
@@ -55318,7 +55318,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -55329,7 +55329,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -55405,12 +55405,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -55421,7 +55421,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "version": {
             "description": "The version number of a resource.",

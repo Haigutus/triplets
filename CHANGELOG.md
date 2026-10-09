@@ -158,6 +158,16 @@ Start of the 0.3 line.
 - SPARQL / validation `scope` builds graph IRIs with `absolute_id`: a URI-shaped
   `INSTANCE_ID` scopes correctly (was silently empty), and an `https:` one is
   no longer prefixed with `urn:uuid:` by the N-Quads graph term.
+- **Export-schema `xsd:type` comes from the RDFS.** `cim_rdfs_to_json`
+  follows each CIMDatatype `.value` to an XSD `rdfs:range` (IEC 61970-501 Ed2)
+  or to a Primitive (`Area.value` → `Float`); `cgmes_data_types_map` now lists
+  only Primitives. All bundles regenerated and checked against the published
+  SHACL `sh:datatype`; changed types:
+  - `Decimal`, `Money` → `xsd:decimal` (was `xsd:float`)
+  - `MonthDay` → `xsd:gMonthDay` (was `xsd:integer`)
+  - `Area`, `RealEnergy`, `VolumeFlowRate`, `Speed`, `Irradiance`, `Impedance`,
+    `Pressure`, `Hours`, … → `xsd:float`; `Duration`, `Time`, `DateTimeStamp`,
+    `UUID`, `Version`, `StringIRI`, `StringFixedLanguage` typed (were `""`)
 
 ### Fixed
 - **`comment=` is written by the `python_lxml` CIM XML exporter** too: it
