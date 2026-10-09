@@ -86,8 +86,8 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   sections, first occurrence wins): `namespaces` (name → namespace IRI),
   `key_types` (name → schema entry type), `value_types` (KEY → `literal` /
   `reference` / `enum`, by entry type only), `datatypes` (Attribute KEY → xsd
-  IRI, `None` = string; anyURI included). No cache — each is ~2 ms on a 2.8 MB
-  schema, a content key cost 6x that. Public entry points (`validate`,
+  IRI, `None` = string; anyURI included). No cache: each is ~2 ms on a 2.8 MB
+  schema. Public entry points (`validate`,
   `validate_schema`, `export_to_*`, the qlever ingest) call `load_rdf_map`
   once; below them only dicts flow, so a path is parsed once per call.
 - **The schema entry type decides the serialisation form, never `xsd:type`**

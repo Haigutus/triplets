@@ -481,6 +481,7 @@ PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
     <cim:Breaker.kind rdf:resource="http://iec.ch/TC57/CIM100#SwitchKind.breaker"/>
     <cim:Breaker.ref rdf:resource="https://cim4.eu/ns/nc#Kind.value"/>
     <cim:Breaker.uri rdf:resource="http://example.org/path/only"/>
+    <cim:Breaker.frag rdf:resource="http://example.org/m#c/d"/>
     <note>free text</note>
   </cim:Breaker>
   <nc:Thing rdf:ID="_abc">

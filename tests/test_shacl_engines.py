@@ -537,7 +537,7 @@ def test_unsupported_property_paths_still_skip_with_warning(caplog):
 
 def test_enum_violation_value_pyshacl_parity(engine):
     """An enum value outside sh:in reports the same local VALUE on every engine: pyshacl sees
-    the enum IRI and the report reader shortens it with iri.local_object, like read_nquads."""
+    the enum IRI and the report reader shortens it with iri.local_value, like read_nquads."""
     pytest.importorskip("pyshacl")
     import rdflib
     rdf_map = {"EQ": {"Switch.kind": {"type": "Enumeration", "xsd:type": "xsd:anyURI",

@@ -39,9 +39,9 @@ def local_key(series, type_key=TYPE_KEY):
 
 
 def by_distinct(series, rule):
-    """*rule* applied once per distinct value — dictionary-encode, apply, take. For
-    low-cardinality columns (KEY, INSTANCE_ID, class / enum names) ~8x faster than
-    row-wise on 1.15M rows. Returns arrow-backed strings; nulls stay null."""
+    """*rule* applied once per distinct value — dictionary-encode, apply, take — for
+    low-cardinality columns (KEY, INSTANCE_ID, class / enum names). Returns
+    arrow-backed strings; nulls stay null."""
     import pyarrow
     import pyarrow.compute as pc
     array = pyarrow.array(series, type=pyarrow.string(), from_pandas=True)
@@ -67,13 +67,13 @@ def local_value(series, kind=None):
 
 
 def is_iri(series):
-    return series.str.startswith(URI_PREFIXES, na=False).astype(bool)   # ~3x faster than a regex match on arrow strings
+    return series.str.startswith(URI_PREFIXES, na=False).astype(bool)   # faster than a regex on arrow strings
 
 
 def _rows_matching(series, pattern, scalar, marker=None):
     """Apply the scalar rule only to rows matching *pattern* — rare, and a callable
     replacement does not run on arrow-backed strings. *marker*: a literal every match holds,
-    checked first (a substring test is several times cheaper than the regex)."""
+    checked first (a substring test is cheaper than the regex)."""
     if marker is not None and not series.str.contains(marker, regex=False, na=False).any():
         return series
     hit = series.str.contains(pattern, regex=True, na=False).astype(bool)

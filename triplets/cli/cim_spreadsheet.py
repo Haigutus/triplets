@@ -104,7 +104,9 @@ Notes
 -----
 - Values are read back as text, so they return as written, except numbers: the
   spreadsheet export writes them as numbers, so a number can come back in another
-  written form with the same value (``500`` -> ``500.0``, ``8e-5`` -> ``8e-05``).
+  written form (``500`` -> ``500.0``, ``8e-5`` -> ``8e-05``). Excel keeps 15
+  significant digits, so longer numbers are rounded (``1.0712249999999999`` ->
+  ``1.071225``); CSV keeps them.
 - Excel limits sheet names to 31 characters. Longer class names (e.g.
   ``SynchronousMachineTimeConstantReactance``) are written as is: openpyxl warns
   and Excel may refuse or rename the sheet. Use CSV for such models.
@@ -114,7 +116,9 @@ Notes
 See Also
 --------
 cim-diff : Tool for comparing CIM XML files
-triplets.rdf_parser : Core module for RDF/CIM data manipulation
+triplets.parse : CIM XML to triplets
+triplets.tools.tableviews_to_triplets : Spreadsheet tables to triplets
+triplets.export.export_to_cimxml : Triplets to CIM XML
 """
 
 import sys
@@ -137,7 +141,7 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
     Convert CIM XML to spreadsheet format (Excel or CSV).
 
     Handles all orchestration including file I/O, format detection, zipping,
-    and conversion through the core rdf_parser functions.
+    and conversion through ``triplets.parse``.
 
     Parameters
     ----------
@@ -241,8 +245,8 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
     Convert spreadsheet format (Excel or CSV) to CIM XML.
 
     Handles all orchestration including file I/O, format detection, unzipping,
-    sheet selection, raw triplets import, and conversion through core rdf_parser
-    functions.
+    sheet selection, raw triplets import, and conversion through
+    ``triplets.tools.tableviews_to_triplets`` and ``export_to_cimxml``.
 
     Parameters
     ----------

@@ -253,8 +253,8 @@ cim-diff original.xml modified.xml
 ```
 
 Spreadsheet values come back as written, except numbers, which can change their
-written form but not their value (`500` -> `500.0`). Excel sheet names are limited to
-31 characters; use CSV (`-f csv`) for models with longer class names.
+written form (`500` -> `500.0`). Excel keeps 15 significant digits and sheet names of
+up to 31 characters; use CSV (`-f csv`) to keep longer numbers and class names.
 
 ## Performance (RealGrid, 1.14M rows)
 
