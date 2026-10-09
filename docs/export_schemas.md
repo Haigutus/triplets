@@ -78,6 +78,12 @@ A bundle is a dict of profile sections keyed by profile keyword
 }
 ```
 
+`inheritance` (the class itself first, then its ancestors) and every `range` are
+absolute IRIs: the generator resolves a relative `rdf:resource="#Name"` against the
+profile's `xml:base`, so a cross-namespace parent (an NC class extending
+`https://cim.ucaiug.io/ns#IdentifiedObject`) is stated, never guessed from the
+child's namespace. Consumers that only need the local name use `iri.split_iri(…)[1]`.
+
 Two class flavors matter for export:
 
 - **concrete** classes (stereotype `concrete`) are instantiated with the
@@ -135,7 +141,7 @@ python -m triplets.rdfs_tools.cim_rdfs_to_json [bundle ...]
     |   '-> header identity (get_metadata) kept for ProfileMetadata["header"]
     |
     |-> parse all profile RDFS in rdfs_dir (minus exclude)
-    |   parse(..., engine="python_lxml_pandas", shorten_resources=False)
+    |   parse(..., engine="python_lxml_pandas", local_resources=False)
     |   # lossless: ranges/inheritance/stereotypes are cross-namespace URIs
     |
     '-> per serialization edition (552_ED1, 552_ED2):

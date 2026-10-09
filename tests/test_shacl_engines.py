@@ -26,6 +26,7 @@ PREFIX = """
 @prefix sh:  <http://www.w3.org/ns/shacl#> .
 @prefix cim: <http://iec.ch/TC57/CIM100#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 """
 
 
@@ -153,6 +154,48 @@ def test_node_kind_heuristic(engine):
     assert violating(v, "sh:nodeKind") == {("b2", "just some text")}
 
 
+def test_node_kind_by_schema(engine):
+    """With an rdf_map the schema decides: an Association path violates sh:Literal on
+    every row (whatever the value looks like) and an Enumeration path violates sh:IRI never."""
+    import rdflib
+    rdf_map = {"EQ": {"Equipment.EquipmentContainer": {"type": "Association", "xsd:type": "xsd:anyURI"},
+                      "Switch.kind": {"type": "Enumeration", "xsd:type": "xsd:anyURI"}}}
+    rows = breaker("b1", ("Equipment.EquipmentContainer", "not-a-uuid"), ("Switch.kind", "SwitchKind.breaker")) \
+        + breaker("b2", ("Equipment.EquipmentContainer", "11111111-1111-1111-1111-111111111111"), ("Switch.kind", "x"))
+    shape = SHAPE.format(body="sh:path cim:Equipment.EquipmentContainer ; sh:nodeKind sh:Literal") \
+        .replace(" .", " ; sh:property [ sh:path cim:Switch.kind ; sh:nodeKind sh:IRI ] .", 1)
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    v = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine=engine)
+    assert violating(v, "sh:nodeKind") == {("b1", "not-a-uuid"), ("b2", "11111111-1111-1111-1111-111111111111")}
+
+
+def test_datatype_any_uri_lexical(engine):
+    """xsd:anyURI attributes are literals, so the lexical form is checked: an IRI reference
+    (relative and non-ASCII allowed), no space / <>"{}|^`\\ / controls, "%" only as %XX."""
+    rows = [(f"b{index}", "Type", "Breaker", "eq") for index in range(6)] + [
+        ("b0", "Model.uri", "http://tso.example/a", "eq"), ("b1", "Model.uri", "urn:uuid:x", "eq"),
+        ("b2", "Model.uri", "http://ä.example/%20", "eq"), ("b3", "Model.uri", "has space", "eq"),
+        ("b4", "Model.uri", "a%2", "eq"), ("b5", "Model.uri", "a<b>", "eq")]
+    v = run(rows, SHAPE.format(body="sh:path cim:Model.uri ; sh:datatype xsd:anyURI"), engine)
+    assert violating(v, "sh:datatype") == {("b3", "has space"), ("b4", "a%2"), ("b5", "a<b>")}
+
+
+def test_node_kind_iri_on_association_follows_schema(engine):
+    """sh:IRI on an Association path never violates with an rdf_map: the exporters write
+    every reference as an IRI (unsafe text percent-encoded), so all engines agree."""
+    import rdflib
+    rdf_map = {"EQ": {"Equipment.EquipmentContainer": {"type": "Association", "xsd:type": "xsd:anyURI"}}}
+    rows = breaker("b1", ("Equipment.EquipmentContainer", "just some text"))
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + SHAPE.format(body="sh:path cim:Equipment.EquipmentContainer ; sh:nodeKind sh:IRI"),
+                format="turtle")
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    v = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine=engine)
+    assert violating(v, "sh:nodeKind") == set()
+
+
 def test_equals_and_disjoint(engine):
     rows = breaker("b1", ("IdentifiedObject.name", "A"), ("IdentifiedObject.aliasName", "A")) \
         + breaker("b2", ("IdentifiedObject.name", "A"), ("IdentifiedObject.aliasName", "B"))
@@ -242,6 +285,19 @@ def test_sparql_path_placeholder(engine):
     rows = breaker("b1", ("Switch.state", "bad")) + breaker("b2", ("Switch.state", "open"))
     v = run(rows, shape, engine)
     assert violating(v, "sh:sparql") == {("b1", "bad")}
+
+
+def test_sparql_literal_values_keep_leading_underscore(engine):
+    """?value literals come back verbatim — only IRIs are shortened (a literal
+    ``_name`` must not lose its ``_`` to the ID prefix rule)."""
+    shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [
+            sh:path cim:IdentifiedObject.name ;
+            sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (STRSTARTS(str(?value), "_")) }' ] ;
+        ] ."""
+    rows = breaker("b1", ("IdentifiedObject.name", "_name")) + breaker("b2", ("IdentifiedObject.name", "name"))
+    v = run(rows, shape, engine)
+    assert violating(v, "sh:sparql") == {("b1", "_name")}
 
 
 def test_sparql_max_workers_matches_sequential(engine):
@@ -477,3 +533,40 @@ def test_unsupported_property_paths_still_skip_with_warning(caplog):
         compiled = triplets.validation.compile(graph)
     assert len(compiled.ir) == 0
     assert sum("cannot express" in record.message for record in caplog.records) == 2
+
+
+def test_enum_violation_value_pyshacl_parity(engine):
+    """An enum value outside sh:in reports the same local VALUE on every engine: pyshacl sees
+    the enum IRI and the report reader shortens it with iri.local_value, like read_nquads."""
+    pytest.importorskip("pyshacl")
+    import rdflib
+    rdf_map = {"EQ": {"Switch.kind": {"type": "Enumeration", "xsd:type": "xsd:anyURI",
+                                      "namespace": "http://iec.ch/TC57/CIM100#"},
+                      "SwitchKind.breaker": {"type": "EnumerationValue", "namespace": "http://iec.ch/TC57/CIM100#"},
+                      "SwitchKind.other": {"type": "EnumerationValue", "namespace": "http://iec.ch/TC57/CIM100#"},
+                      "Breaker": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#"}}}
+    rows = breaker("b1", ("Switch.kind", "SwitchKind.breaker")) + breaker("b2", ("Switch.kind", "SwitchKind.other"))
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + SHAPE.format(body="sh:path cim:Switch.kind ; sh:in ( cim:SwitchKind.breaker )"),
+                format="turtle")
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    for name in (engine, "pyshacl"):
+        v = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine=name)
+        assert violating(v, "sh:in") == {("b2", "SwitchKind.other")}, name
+
+
+def test_rdf_type_path_compiles_to_the_type_key(engine):
+    """sh:path rdf:type lands on the Type KEY (local_key), not a KEY "type"."""
+    rows = breaker("b1") + [("x1", "IdentifiedObject.name", "untyped", "eq")]
+    v = run(rows, SHAPE.format(body="sh:path rdf:type ; sh:maxCount 1"), engine)
+    assert violating(v, "sh:maxCount") == set()
+    v = run(rows + [("b1", "Type", "Switch", "eq")], SHAPE.format(body="sh:path rdf:type ; sh:maxCount 1"), engine)
+    assert {row[0] for row in violating(v, "sh:maxCount")} == {"b1"}
+
+
+def test_in_member_with_slash_iri_matches_the_whole_value(engine):
+    """sh:in members follow the VALUE rule: a "/"-only IRI stays whole, as the data VALUE does."""
+    kind = "http://example.org/kinds/a"
+    rows = breaker("b1", ("Switch.kind", kind)) + breaker("b2", ("Switch.kind", "http://example.org/kinds/b"))
+    v = run(rows, SHAPE.format(body=f"sh:path cim:Switch.kind ; sh:in ( <{kind}> )"), engine)
+    assert violating(v, "sh:in") == {("b2", "http://example.org/kinds/b")}

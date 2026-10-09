@@ -43,8 +43,8 @@ from types import SimpleNamespace
 import numpy
 import pandas
 
-from ..export.nquads_utils import CIM_NS, make_subject
-from .shacl_ir import _local
+from ..export.nquads_utils import make_subject
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, split_iri, value_types
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,9 @@ _FLOAT = rf"(?:{_DECIMAL}(?:[eE][+-]?[0-9]+)?|[+-]?INF|NaN)"
 _DATE = r"-?[0-9]{4,}-[0-9]{2}-[0-9]{2}"
 _TIMEZONE = r"(?:Z|[+-][0-9]{2}:[0-9]{2})?"
 _DATETIME = rf"{_DATE}T[0-9]{{2}}:[0-9]{{2}}:[0-9]{{2}}(?:\.[0-9]+)?{_TIMEZONE}"
+# IRI reference (RFC 3987), relative included: no controls, space, DEL or <>"{}|^`\,
+# and "%" only as a %XX escape. Non-ASCII is allowed (IRI, not URI).
+_ANY_URI = r'(?:[^\x00-\x20\x7f<>"{}|^`\\%]|%[0-9A-Fa-f]{2})*'
 
 DATATYPES = {
     "integer": (_INTEGER, None),
@@ -73,52 +76,25 @@ DATATYPES = {
     "boolean": (r"true|false|1|0", r"1|0"),
     "date": (_DATE + _TIMEZONE, None),
     "dateTime": (_DATETIME, None),
-    # string / anyURI / unlisted types: every lexical form is valid — no check
+    "anyURI": (_ANY_URI, None),
+    # string / unlisted types: every lexical form is valid — no check
 }
-
-_UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-_REFERENCE_LIKE = re.compile(rf"(?:{_UUID}|\w+://\S+|urn:\S+|[A-Za-z]\w*\.\w+)$")
 
 _NO_IDS = numpy.array([], dtype=object)
 
 
-class SchemaKind:
-    """Schema-driven term-kind decision, shared by the vectorized engines' contexts.
-
-    Mirrors the N-Quads exporter's classification (build_key_metadata): a key
-    with a schema datatype (incl. xsd:string) holds literals; an enumeration
-    key holds IRIs; anyURI/unknown keys return None (decide by value form).
-    Without rdf_map everything is None.
-    """
-
-    rdf_map = None
-    _key_metadata = None
-
-    def key_kind(self, key):
-        """"literal" / "iri" / None — what the export schema says values at *key* are."""
-        if self.rdf_map is None:
-            return None
-        if self._key_metadata is None:
-            from ..export.nquads_utils import build_key_metadata
-            self._key_metadata = build_key_metadata(self.rdf_map)
-        enum_keys, _namespaces, key_datatypes = self._key_metadata
-        if key in enum_keys:
-            return "iri"
-        if key in key_datatypes:
-            return "literal"
-        return None
-
-
-class _Context(SchemaKind):
+class _Context:
     """Shared per-validation state: data and memoized lookups.
 
     Hundreds of IR rules hit the same per-class indices — build them once here
     instead of once per rule (the polars/duckdb compilers follow the same shape).
     """
 
-    def __init__(self, data, rdf_map=None):
+    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS):
         self.data = data
         self.rdf_map = rdf_map
+        self.undefined_namespace = undefined_namespace
+        self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self._by_key = None
         self._class_ids = None
         self._all_ids = None
@@ -135,7 +111,7 @@ class _Context(SchemaKind):
         """rdflib dataset for the sh:sparql constraints — loaded once, reused per query."""
         if self._dataset is None:
             from .._rdflib_loader import load_dataset
-            self._dataset = load_dataset(self.data, rdf_map=self.rdf_map)
+            self._dataset = load_dataset(self.data, rdf_map=self.rdf_map, undefined_namespace=self.undefined_namespace)
         return self._dataset
 
     def key_rows(self, key):
@@ -149,7 +125,7 @@ class _Context(SchemaKind):
         """IDs of all instances of *target_class*."""
         if self._class_ids is None:
             self._class_ids = {value: frame["ID"].unique() for value, frame
-                               in self.key_rows("Type").groupby("VALUE", observed=True, sort=False)}
+                               in self.key_rows(TYPE_KEY).groupby("VALUE", observed=True, sort=False)}
         return self._class_ids.get(target_class, _NO_IDS)
 
     @property
@@ -192,7 +168,7 @@ class _Context(SchemaKind):
             frame = pandas.DataFrame({"FOCUS": rows["ID"].to_numpy(),
                                       "PATH_VALUE": rows["VALUE"].to_numpy()})
         if getattr(rule, "via_type", False):
-            types = self.key_rows("Type")[["ID", "VALUE"]].astype(str)
+            types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype(str)
             frame = (frame.merge(types, left_on="PATH_VALUE", right_on="ID")
                      [["FOCUS", "VALUE"]].rename(columns={"VALUE": "PATH_VALUE"}))
         return frame
@@ -310,7 +286,7 @@ def _range(comparison, description):
 def _in(context, rule):
     rows = context.path_rows(rule)
     allowed = {str(value) for value in rule.params}
-    local = rows["PATH_VALUE"].astype(str).str.split("#").str[-1].str.split("/").str[-1]
+    local = iri_pandas.local_value(rows["PATH_VALUE"].astype(str))
     bad = ~local.isin(allowed)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not one of {sorted(allowed)}")
@@ -336,7 +312,7 @@ def _schema_range(context, rule):
     is in the allowed set (RDF types are cumulative, issue #100); references
     whose target has no Type row are silent (cross-profile datasets)."""
     rows = context.path_rows(rule)
-    typed = context.key_rows("Type")["ID"].astype(str).unique()
+    typed = context.key_rows(TYPE_KEY)["ID"].astype(str).unique()
     allowed = pandas.Index([]).append([pandas.Index(context.class_ids(cls))
                                        for cls in rule.params])
     bad = rows["PATH_VALUE"].isin(typed) & ~rows["PATH_VALUE"].isin(allowed)
@@ -355,12 +331,12 @@ def _node_kind(context, rule):
 
     rows = context.path_rows(rule)
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else context.key_kind(rule.path)
+    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types)
     if kind is not None:
         is_iri = pandas.Series(kind == "iri", index=rows.index)
     else:
         values = rows["PATH_VALUE"].astype(str)
-        is_iri = values.str.fullmatch(_REFERENCE_LIKE) | values.isin(context.all_ids)
+        is_iri = values.str.fullmatch(REFERENCE_LIKE) | values.isin(context.all_ids)
     bad = ~is_iri if rule.params == "IRI" else is_iri
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not of node kind sh:{rule.params}")
@@ -408,7 +384,7 @@ def _closed(context, rule):
     paths + ignoredProperties). 'Type' (rdf:type) is always allowed: every
     triplets object carries it by construction.
     """
-    allowed = set(rule.params) | {"Type"}
+    allowed = set(rule.params) | {TYPE_KEY}
     ids = context.focus(rule)
     rows = context.data[context.data["ID"].isin(ids) & ~context.data["KEY"].isin(allowed)]
     frame = _frame(rule, rows["ID"], rows["VALUE"], "property is not allowed on a closed shape")
@@ -436,10 +412,16 @@ def _sparql_violations(rule, result):
     result = result[result["this"].notna()]   # a row without a focus node is no violation
     if len(result) == 0:                      # (rdflib serializes a spurious empty binding
         return _empty()                       #  for some aggregate queries)
-    focus = result["this"].astype(str).str.removeprefix("urn:uuid:")
-    values = (result["value"].astype(str).str.removeprefix("urn:uuid:").str.removeprefix(CIM_NS)
-              if "value" in result.columns else None)
+    focus = _shorten(result["this"].astype(str), iri_pandas.local_id)
+    values = _shorten(result["value"].astype(str), iri_pandas.local_value) if "value" in result.columns else None
     return _frame(rule, focus, values, "sparql constraint violated")
+
+
+def _shorten(terms, rule):
+    """SPARQL result terms → triplet form: IRIs decoded, then the column *rule* (``local_id``
+    for the focus, ``local_value`` for the value), literals verbatim (a literal ``_name`` or a blank node ``_:b0`` must
+    not lose its ``_``)."""
+    return rule(iri_pandas.decode_iri(terms)).where(iri_pandas.is_iri(terms), terms)
 
 
 def _sparql(context, rule):
@@ -468,7 +450,7 @@ def _sparql(context, rule):
 
     try:
         result = sparql.query(context.data, query_text, rdf_map=context.rdf_map,
-                              data_unchanged=context.data_hashed)
+                              data_unchanged=context.data_hashed, undefined_namespace=context.undefined_namespace)
         context.data_hashed = True
         return _sparql_violations(rule, result)
     except Exception as error:                            # noqa: BLE001 — engine strictness
@@ -499,7 +481,7 @@ def _not_evaluated(rule, error):
     its target/path (anonymous property shapes only have a blank-node id),
     say plainly that nothing was checked — a shapes bug, not a data finding."""
     where = f"{rule.target_class}/{rule.path}" if rule.path else rule.target_class
-    return (f"sh:sparql constraint of shape {_local(str(rule.shape_id))} ({where}) was "
+    return (f"sh:sparql constraint of shape {split_iri(str(rule.shape_id))[1]} ({where}) was "
             f"NOT evaluated — the query is defective on every engine "
             f"(rdflib: {str(error).splitlines()[0]}). "
             f"A shapes bug, not a data finding; this constraint went unchecked.")
@@ -649,7 +631,8 @@ CONSTRAINT_VALIDATORS = {
 }
 
 
-def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None, **kwargs):
+def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
+             undefined_namespace=CIM_NS, **kwargs):
     """Validate triplet data against the compiled constraint table.
 
     Parameters
@@ -680,7 +663,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     if skipped:
         logger.debug("pandas engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
 
-    context = _Context(data, rdf_map)
+    context = _Context(data, rdf_map, undefined_namespace)
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
 

@@ -28,7 +28,7 @@ from libcpp.string_view cimport string_view
 from libcpp.memory cimport shared_ptr, make_shared
 from libcpp.vector cimport vector
 from libcpp cimport bool
-from libc.string cimport strrchr, strlen, memcmp
+from libc.string cimport strrchr, strlen, strcmp, strncmp, strstr, memcmp
 from libc.stdint cimport int64_t
 
 # Arrow C++ types from pyarrow's Cython API
@@ -243,7 +243,8 @@ cdef extern from *:
     #include <string>
     #include <string_view>
 
-    // Clean CIM ID prefixes: "urn:uuid:", "#_", "_"
+    // Clean CIM ID prefixes: "urn:uuid:", "#_", "_" — exactly one, longest first.
+    // Native mirror of triplets.iri.local_id (parity: tests/test_iri.py).
     // Pure string_view — zero-copy slice into the original pugixml buffer.
     static inline std::string_view clean_id(std::string_view sv) {
         using namespace std::string_view_literals;
@@ -257,7 +258,8 @@ cdef extern from *:
     }
 
     // Clean a reference value (for rdf:resource etc).
-    // Strips CIM ID prefixes, then extracts fragment after '#' for http URIs.
+    // Strips CIM ID prefixes; an http IRI with '#' keeps its local name (after the last '#' or '/').
+    // Native mirror of triplets.iri.local_value (parity: tests/test_iri.py).
     // Returns a (possibly shortened) view into the original buffer.
     static inline std::string_view clean_ref_value(std::string_view sv) {
         using namespace std::string_view_literals;
@@ -267,12 +269,14 @@ cdef extern from *:
             size_t pos = v.rfind('#');
             if (pos != std::string_view::npos) {
                 v = v.substr(pos + 1);
+                size_t slash = v.rfind('/');
+                if (slash != std::string_view::npos) v = v.substr(slash + 1);
             }
         }
         return v;
     }
 
-    // Extract local name from "prefix:localname" or "{ns}local".
+    // QName local name ("prefix:local" → "local"): the native counterpart of the triplets.iri.split_iri local name (parity: tests/test_iri.py).
     static inline const char* local_name(const char* name) {
         const char* colon = strrchr(name, ':');
         return colon ? colon + 1 : name;
@@ -431,7 +435,11 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
     cdef xml_attribute attr
     cdef const char* aname
     cdef const char* aval
-    cdef bint has_xml_base = False
+    # rdf:ID / rdf:about / ... are found by the prefix the document binds to the RDF
+    # namespace (pugixml does not resolve namespaces) — "rdf" unless the root says otherwise
+    cdef const char* RDF_NS_URI = b"http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    cdef string rdf_prefix = b"rdf"
+    cdef string rdf_id_attr, rdf_about_attr, rdf_nodeid_attr, rdf_resource_attr
     cdef xml_node rdf_object
     cdef xml_node element
     cdef const char* raw_id
@@ -473,6 +481,8 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
                 Append(id_b, nsmap_id)
                 aval = aname + XMLNS_COLON_LEN
                 Append(key_b, aval)
+                if strcmp(attr.value(), RDF_NS_URI) == 0:
+                    rdf_prefix = aval
                 aval = attr.value()
                 Append(val_b, aval)
             elif memcmp(aname, XMLNS, XMLNS_LEN) == 0 and aname[XMLNS_LEN] == 0:
@@ -481,17 +491,19 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
                 aval = attr.value()
                 Append(val_b, aval)
             elif memcmp(aname, XML_BASE, XML_BASE_LEN) == 0:
-                Append(id_b, nsmap_id)
-                Append(key_b, b"xml_base")
+                # a declared absolute xml:base only — never the file location
+                # (mirror of triplets.iri.is_absolute: http(s):// / urn: / any "://")
                 aval = attr.value()
-                Append(val_b, aval)
-                has_xml_base = True
+                if strstr(aval, b"://") != NULL or strncmp(aval, b"urn:", 4) == 0:
+                    Append(id_b, nsmap_id)
+                    Append(key_b, b"xml_base")
+                    Append(val_b, aval)
             attr = attr.next_attribute()
 
-        if not has_xml_base:
-            Append(id_b, nsmap_id)
-            Append(key_b, b"xml_base")
-            Append(val_b, file_name_bytes)
+        rdf_id_attr = rdf_prefix + b":ID"
+        rdf_about_attr = rdf_prefix + b":about"
+        rdf_nodeid_attr = rdf_prefix + b":nodeID"
+        rdf_resource_attr = rdf_prefix + b":resource"
 
         # ── RDF objects (the hot loop — every row is processed here) ──────
         # We deliberately avoid:
@@ -502,11 +514,11 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
         while not rdf_object.empty():
 
             # Choose best ID source (rdf:ID > rdf:about > rdf:nodeID)
-            raw_id_ptr = rdf_object.attribute(b"rdf:ID").value()
+            raw_id_ptr = rdf_object.attribute(rdf_id_attr.c_str()).value()
             if raw_id_ptr[0] == 0:
-                raw_id_ptr = rdf_object.attribute(b"rdf:about").value()
+                raw_id_ptr = rdf_object.attribute(rdf_about_attr.c_str()).value()
             if raw_id_ptr[0] == 0:
-                raw_id_ptr = rdf_object.attribute(b"rdf:nodeID").value()
+                raw_id_ptr = rdf_object.attribute(rdf_nodeid_attr.c_str()).value()
 
             if raw_id_ptr[0] != 0:
                 raw_len = strlen(raw_id_ptr)
@@ -537,9 +549,9 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
                 if text_len > 0:
                     Append(val_b, child_text, <int>text_len)
                 else:
-                    ref_val = element.attribute(b"rdf:resource").value()
+                    ref_val = element.attribute(rdf_resource_attr.c_str()).value()
                     if ref_val[0] == 0:
-                        ref_val = element.attribute(b"rdf:nodeID").value()
+                        ref_val = element.attribute(rdf_nodeid_attr.c_str()).value()
 
                     if ref_val[0] != 0:
                         ref_len = strlen(ref_val)

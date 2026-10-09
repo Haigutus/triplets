@@ -35,6 +35,14 @@ if os.path.exists(os.path.join(PUGIXML_SRC, "pugixml.cpp")):
             extra_link_args = ["-Wl,-rpath," + d for d in pa_lib_dirs]
             runtime_library_dirs = pa_lib_dirs
             libraries = ["arrow_python"]
+            if sys.platform.startswith("linux"):
+                # GNU ld only. conda toolchains default to --as-needed, which drops
+                # libarrow_python from NEEDED (the module references only libarrow
+                # symbols, resolved through libarrow_python's own dependencies) and
+                # the import then fails with undefined arrow:: symbols. Link it from
+                # extra_link_args (after the objects) behind --no-as-needed instead.
+                extra_link_args = ["-Wl,--no-as-needed", "-larrow_python"] + extra_link_args
+                libraries = []
 
         # Parser: cython_pugixml_arrow (Arrow → pugixml → triplet DataFrame)
         parser_ext = Extension(

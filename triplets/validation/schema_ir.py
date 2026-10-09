@@ -27,16 +27,14 @@ referenced object conforms when ANY of its types is in the range set;
 dangling references are silent. No rdflib on this path: ``graph`` is None
 and the pyshacl engine refuses schema-compiled shapes.
 """
-import hashlib
-import json
 import logging
-import os
 
 from dataclasses import dataclass, field
 
 import pandas
 
 from .._header import _profile_identity_index
+from ..iri import TYPE_KEY, load_schema, local_value
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
 
 logger = logging.getLogger(__name__)
@@ -82,7 +80,7 @@ def compile_schema(rdf_map, closed=False) -> CompiledSchema:
     are not reported. closed=True adds one schema:domainIncludes check per
     class and profile.
     """
-    schema, digest, source = _load(rdf_map)
+    schema, digest, source = load_schema(rdf_map)
     key = f"schema|closed={closed}|{digest}"
     if key in _COMPILE_CACHE:
         logger.debug("schema compile cache hit: %s", key[:30])
@@ -113,18 +111,6 @@ def compile_schema(rdf_map, closed=False) -> CompiledSchema:
     return compiled
 
 
-def _load(rdf_map):
-    """dict or path → (schema dict, content digest, source name)."""
-    if isinstance(rdf_map, dict):
-        digest = hashlib.sha256(
-            json.dumps(rdf_map, sort_keys=True, default=str).encode()).hexdigest()
-        return rdf_map, digest, "rdf_map"
-    with open(rdf_map, "rb") as file:
-        content = file.read()
-    return (json.loads(content), hashlib.sha256(content).hexdigest(),
-            os.path.basename(str(rdf_map)))
-
-
 def _concrete_index(schema):
     """ancestor local name → concrete classes inheriting it, across ALL
     sections — inheritance is model knowledge, not a profile constraint."""
@@ -135,7 +121,7 @@ def _concrete_index(schema):
         for name, entry in entries.items():
             if isinstance(entry, dict) and entry.get("type") == "Class":
                 for ancestor in entry.get("inheritance", ()):
-                    concrete.setdefault(_local(ancestor), set()).add(name)
+                    concrete.setdefault(local_value(ancestor, "class"), set()).add(name)
     return concrete
 
 
@@ -158,7 +144,7 @@ def _section_rows(section, entries, concrete, closed, skipped):
                 parameters.append(prop)
                 rows.extend(_property_rows(meta, prop, prop_entry, concrete, skipped))
         if closed and parameters:
-            rows.append({**meta, "component": "sh:closed", "params": [*parameters, "Type"]})
+            rows.append({**meta, "component": "sh:closed", "params": [*parameters, TYPE_KEY]})
     return rows
 
 
@@ -184,7 +170,7 @@ def _property_rows(meta, prop, entry, concrete, skipped):
     elif kind == "Enumeration" and entry.get("values"):
         rows.append({**meta, "component": "sh:in", "params": list(entry["values"])})
     elif kind == "Association":
-        targets = concrete.get(_local(entry.get("range", "")), ())
+        targets = concrete.get(local_value(entry.get("range", ""), "class"), ())
         if targets:
             # ANY of the referenced object's types in the expanded range set
             # conforms (RDF types are cumulative); dangling references are
@@ -197,5 +183,3 @@ def _property_rows(meta, prop, entry, concrete, skipped):
     return rows
 
 
-def _local(term):
-    return str(term).lstrip("#").rsplit("#", 1)[-1].rsplit("/", 1)[-1]

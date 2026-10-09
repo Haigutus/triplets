@@ -1,16 +1,19 @@
-"""N-Quads export using pandas — schema-aware value classification."""
+"""N-Quads export using pandas — vectorized over the ``triplets.iri`` pandas flavor."""
 
 from io import BytesIO
 
-import pandas
-
-from .nquads_utils import (
-    make_subject, make_predicate, make_object, make_graph,
-    build_key_metadata,
-)
+from ..iri import DESCRIPTION_TYPE, TRIPLETS_NS, TYPE_KEY, datatypes, iri_pandas, load_rdf_map, namespaces, value_types
 
 
-def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
+def _escape(series):
+    return (series.str.replace("\\", "\\\\", regex=False)
+            .str.replace('"', '\\"', regex=False)
+            .str.replace("\n", "\\n", regex=False)
+            .str.replace("\r", "\\r", regex=False))
+
+
+def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, export_undefined=True,
+                     undefined_namespace=TRIPLETS_NS):
     """Export triplet DataFrame to N-Quads file.
 
     Parameters
@@ -25,31 +28,62 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False):
         enumerations won't get namespace and literals stay untyped.
     export_to_memory : bool, default False
         If True, return an in-memory BytesIO (with .name) instead of writing to disk.
+    export_undefined : bool, default True
+        Keep rows the schema does not account for (unknown class, KEY or enum
+        value — every row without a schema); False drops them.
+    undefined_namespace : str, default "http://triplets#"
+        Namespace those names are written in.
     """
-    enum_keys, key_namespaces, key_datatypes = build_key_metadata(rdf_map) if rdf_map else (set(), {}, {})
+    rdf_map = load_rdf_map(rdf_map)
+    maps = dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map))
 
     data = data[data["VALUE"].notna()]  # no object to state (parity with the polars engine)
+    # Type "Description" is an rdf:Description element — not a class, so no rdf:type
+    data = data[~((data["KEY"] == TYPE_KEY) & (data["VALUE"] == DESCRIPTION_TYPE)).fillna(False).astype(bool)]
+    if not export_undefined:
+        data = data[iri_pandas.defined(data["KEY"].astype(str), data["VALUE"].astype(str),
+                                       maps["namespaces"], maps["value_types"])]
 
-    id_col = data["ID"].astype(str)
-    key_col = data["KEY"].astype(str)
-    val_col = data["VALUE"].astype(str)
-    inst_col = data["INSTANCE_ID"].astype(str)
+    ids = data["ID"].astype(str)
+    keys = data["KEY"].astype(str)
+    values = data["VALUE"].astype(str)
+    instances = data["INSTANCE_ID"].astype(str).where(data["INSTANCE_ID"].notna(), None)
 
-    subjects = id_col.apply(make_subject)
-    predicates = key_col.apply(lambda k: make_predicate(k, key_namespaces))
-    objects = pandas.Series(
-        [make_object(k, v, enum_keys, key_datatypes) for k, v in zip(key_col, val_col)],
-        index=data.index,
-    )
-    graphs = inst_col.apply(make_graph)
+    kind, payload = iri_pandas.absolute_value(keys, values, undefined_namespace=undefined_namespace, **maps)
+    is_iri = (kind == "iri").to_numpy()
+    typed = payload.notna().to_numpy() & ~is_iri
+    objects = '"' + _escape(values) + '"'                     # plain literal by default
+    objects[typed] = objects[typed] + "^^<" + payload[typed] + ">"
+    objects[is_iri] = "<" + payload[is_iri] + ">"
 
-    quads = subjects + " " + predicates + " " + objects + " " + graphs + " ."
-    content = "\n".join(quads.values) + "\n"
+    graphs = ("<" + iri_pandas.by_distinct(instances, iri_pandas.absolute_id) + ">").where(instances.notna(), ".")
+    content = _lines("<" + iri_pandas.absolute_id(ids) + ">",
+                     "<" + iri_pandas.by_distinct(keys, lambda distinct: iri_pandas.absolute_key(
+                         distinct, maps["namespaces"], undefined_namespace)) + ">",
+                     objects,
+                     graphs)
 
     if export_to_memory:
-        buffer = BytesIO(content.encode("utf-8"))
+        buffer = BytesIO(content)
         buffer.name = "export.nq"
         return buffer
 
-    with open(path, "w") as f:
+    with open(path, "wb") as f:
         f.write(content)
+
+
+def _lines(subjects, predicates, objects, graphs):
+    """Term columns → ``s p o g .\n`` lines as UTF-8 bytes, joined in Arrow
+    (one C++ pass). A row with no
+    graph carries ``.`` in *graphs* and comes out as an N-Triples line."""
+    import pyarrow
+    import pyarrow.compute
+    arrays = [pyarrow.array(column, type=pyarrow.string()) for column in (subjects, predicates, objects, graphs)]
+    arrays = [array.combine_chunks() if isinstance(array, pyarrow.ChunkedArray) else array
+              for array in arrays]
+    quads = pyarrow.compute.binary_join_element_wise(*arrays, " ")
+    quads = pyarrow.compute.if_else(pyarrow.compute.ends_with(quads, " ."), quads,
+                                    pyarrow.compute.binary_join_element_wise(quads, ".", " "))
+    offsets = pyarrow.array([0, len(quads)], type=pyarrow.int32())
+    joined = pyarrow.compute.binary_join(pyarrow.ListArray.from_arrays(offsets, quads), "\n")
+    return joined[0].as_buffer().to_pybytes() + b"\n"

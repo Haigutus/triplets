@@ -23,19 +23,19 @@ import pandas
 
 from .._engine_detect import flavor, to_return_type
 from .._rdflib_loader import load_dataset, scoped_graph
-from ..export.nquads_utils import CIM_NS, RDF_TYPE
+from ..iri import CIM_NS, RDF_TYPE, decode_iri, local_id, local_key, local_value
 
 if find_spec("rdflib") is None:  # registry contract: an unavailable engine fails at import
     raise ImportError("rdflib is not installed")
 
 logger = logging.getLogger(__name__)
 
-_UUID_PREFIX = "urn:uuid:"
 
 
-def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data_unchanged=False):
+def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data_unchanged=False,
+          undefined_namespace=CIM_NS):
     """Execute query_string over data; shape the result by query type."""
-    dataset = load_dataset(data, rdf_map=rdf_map, data_unchanged=data_unchanged)
+    dataset = load_dataset(data, rdf_map=rdf_map, data_unchanged=data_unchanged, undefined_namespace=undefined_namespace)
     graph = scoped_graph(dataset, scope)
     result = graph.query(query_string)
     if return_type == "auto":
@@ -61,49 +61,31 @@ def _select_to_dataframe(result):
 def _graph_to_triplets(graph):
     """CONSTRUCT/DESCRIBE result graph → triplet DataFrame (ID/KEY/VALUE).
 
-    Inverse of the N-Quads export conventions: strips urn:uuid: from subjects,
-    CIM namespace from predicates, maps rdf:type → 'Type'. INSTANCE_ID is empty
-    (a constructed graph has no source instance).
+    Inverse of the N-Quads export conventions, with read_nquads' rules: IRIs
+    decoded once, then local_id on subjects, local_key on predicates (rdf:type →
+    'Type'), local_value on IRI objects (kind ``class`` on type rows; a guessed
+    value that is a subject shortens like its ID), literals verbatim.
+    INSTANCE_ID is None (a constructed graph has no source instance).
 
     Measured: serialize(format="nt") + read_nquads loses to this loop (~9%
     slower per 84k triples — rdflib's NT serializer overhead exceeds the
     vectorized decode gain), so the direct iteration stays.
     """
+    subjects = {str(subject) for subject in graph.subjects()}
     rows = []
     for subject, predicate, obj in graph:
-
+        if type(obj).__name__ == "Literal":
+            value = str(obj)
+        elif str(predicate) == RDF_TYPE:
+            value = local_value(decode_iri(str(obj)), "class")
+        else:
+            value = (local_id if str(obj) in subjects else local_value)(decode_iri(str(obj)))
         # Tuples are faster than dicts to convert to dataframe
-        rows.append(
-            (
-                _strip_uuid(str(subject)),              # ID
-                _shorten_predicate(str(predicate)),     # KEY
-                _shorten_object(obj),                   # VALUE
-                None,                                   # INSTANCE_ID — constructed graph has no source instance
-            )
-        )
+        rows.append((local_id(decode_iri(str(subject))),        # ID
+                     local_key(decode_iri(str(predicate))),     # KEY
+                     value,                                     # VALUE
+                     None))                                     # INSTANCE_ID — constructed graph has no source instance
 
     # return_type conversion happens in _finalize
     return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
-
-def _strip_uuid(value):
-    return value[len(_UUID_PREFIX):] if value.startswith(_UUID_PREFIX) else value
-
-
-def _shorten_predicate(predicate):
-    if predicate == RDF_TYPE:
-        return "Type"
-    if predicate.startswith(CIM_NS):
-        return predicate[len(CIM_NS):]
-    return predicate
-
-
-def _shorten_object(obj):
-    if type(obj).__name__ == "Literal":
-        return str(obj)
-    value = str(obj)
-    if value.startswith(_UUID_PREFIX):
-        return value[len(_UUID_PREFIX):]
-    if value.startswith(CIM_NS):
-        return value[len(CIM_NS):]
-    return value

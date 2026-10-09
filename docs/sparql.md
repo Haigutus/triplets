@@ -15,6 +15,9 @@ The module is new — APIs may still shift. Know these before relying on it:
   a multi-instance `scope` yields one solution per instance for shared
   triples (`DISTINCT` dedupes); the CSV SELECT decode nulls empty-string
   literals; its parser accepts some queries qlever rejects (bare `HAVING`).
+- **SELECT returns IRIs as stored** — absolute and percent-encoded
+  (`urn:uuid:a%20b`); CONSTRUCT decodes and shortens them to triplet form. Other
+  import / export deviations: [parsers.md — Known limitations](parsers.md#known-limitations).
 - Engine state caches (indexes, stores, datasets) are unbounded by design —
   long-lived processes over many distinct datasets grow memory/disk. Manage
   the lifecycle explicitly: `triplets.clear_caches()` drops all in-memory
@@ -213,7 +216,7 @@ The result is shaped by the SPARQL query form:
 |------------|---------|-----------|
 | `SELECT` | DataFrame (see `return_type`) | one column per projected variable (`?name` -> column `name`); IRIs as full strings. **All values are lexical strings in every engine** (triplets are all-string; consumers cast), unbound → null (the rdflib/oxigraph CSV decodes also null empty-string literals — the W3C CSV-results tradeoff; qlever distinguishes) |
 | `ASK` | `bool` | `True` / `False` |
-| `CONSTRUCT` / `DESCRIBE` | triplet DataFrame | `[ID, KEY, VALUE, INSTANCE_ID]`; `urn:uuid:` stripped from `ID`, CIM namespace shortened on `KEY`, `rdf:type` -> `Type`, `INSTANCE_ID` is `None` (constructed graph has no source instance) |
+| `CONSTRUCT` / `DESCRIBE` | triplet DataFrame | `[ID, KEY, VALUE, INSTANCE_ID]`; shortened per column by `triplets.iri` (`local_id` on `ID`, `local_key` on `KEY` — `rdf:type` -> `Type`, `local_value` on `VALUE`: any http(s) `#fragment` namespace dropped), `INSTANCE_ID` is `None` (constructed graph has no source instance) |
 
 `SELECT` keeps full IRIs (raw bindings); `CONSTRUCT`/`DESCRIBE` apply the triplets
 naming conventions so the output drops straight back into the pipeline.

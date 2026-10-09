@@ -11,11 +11,12 @@ from lxml import etree
 from lxml.builder import ElementMaker
 from lxml.etree import QName
 
-from .cimxml_utils import TRIPLETS_NS, load_rdf_map, resolve_instance_config
+from .. import iri
+from ..iri import DESCRIPTION_TYPE, RDF_NS, TRIPLETS_NS, TYPE_KEY, UUID_PREFIX
+from .cimxml_utils import load_rdf_map, resolve_instance_config
 
 logger = logging.getLogger(__name__)
 
-RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
 
 def _print_duration(text, start_time):
@@ -69,11 +70,12 @@ def _get_qname(namespace, tag=None):
 def generate_xml(instance_data,
                  rdf_map=None,
                  namespace_map=None,
-                 class_KEY="Type",
+                 class_KEY=TYPE_KEY,
                  export_undefined=False,
                  comment=None,
                  debug=False,
-                 datatypes=False):
+                 datatypes=False,
+                 undefined_namespace=TRIPLETS_NS):
     """
         Generate an RDF XML file from a triplet dataset instance.
 
@@ -146,26 +148,26 @@ def generate_xml(instance_data,
     rdf_map = load_rdf_map(rdf_map)
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
 
-    key_datatypes = {}
-    if datatypes:
-        # same KEY → xsd URI mapping the N-Quads export uses (string → None, anyURI excluded)
-        from .nquads_utils import build_key_metadata
-        _, _, key_datatypes = build_key_metadata(rdf_map)
+    # KEY → xsd datatype IRI as the N-Quads export annotates it (Attributes only; string → None)
+    key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))
         if not export_undefined:
             logger.warning("File not created for {}".format(file_name))
             return
+        instance_rdf_map = {}           # every name is undefined: written under undefined_namespace
+    namespace_map = namespace_map or {}
 
-    if export_undefined:
-        namespace_map = {**namespace_map, "triplets": TRIPLETS_NS}
+    if export_undefined and undefined_namespace not in namespace_map.values():
+        # an undefined_namespace the map already binds (e.g. CIM100) keeps its own prefix
+        namespace_map = {**namespace_map, "triplets": undefined_namespace}
 
     # Create element builder
     E = ElementMaker(nsmap=namespace_map)
 
     # Create xml root element
-    RDF = E(QName(namespace_map.get("rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"), "RDF"))
+    RDF = E(QName(namespace_map.get("rdf", RDF_NS), "RDF"))
 
     # Add comment
     if comment:
@@ -198,9 +200,10 @@ def generate_xml(instance_data,
             logger.debug("Definition missing for class: {} with {}: ".format(class_name, ID))
 
             if export_undefined:
-                class_namespace = TRIPLETS_NS
-                id_name = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about"
-                id_value_prefix = "urn:uuid:"
+                # rdf:Description is "no shorthand type", not a class: written back as rdf:Description
+                class_namespace = RDF_NS if class_name == DESCRIPTION_TYPE else undefined_namespace
+                id_name = f"{{{RDF_NS}}}about"
+                id_value_prefix = UUID_PREFIX   # undefined-class fallback; defined classes use the schema value_prefix
             else:
                 logger.debug(f"{class_name} not Exported")
                 continue
@@ -246,9 +249,13 @@ def generate_xml(instance_data,
 
                     value_prefix = attrib.get("value_prefix", "")
 
-                    # Get namespace for enumerations
-                    if not value_prefix:
-                        value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace", "")
+                    if not value_prefix:                     # enumeration: namespace from the resolved profile (same as the cython exporter)
+                        value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace")
+                        if not value_prefix:                 # undefined enum value: same switch as undefined classes / keys
+                            if not export_undefined:
+                                logger.debug("Definition missing for enum value: " + str(VALUE))
+                                continue
+                            value_prefix = undefined_namespace
 
                     tag.attrib[_get_qname(attrib["attribute"])] = f"{value_prefix}{VALUE}"
                 else:
@@ -263,7 +270,7 @@ def generate_xml(instance_data,
                 logger.debug("Definition missing for tag: " + KEY)
 
                 if export_undefined:
-                    tag = E(_get_qname(TRIPLETS_NS, KEY))
+                    tag = E(_get_qname(undefined_namespace, KEY))
                     tag.text = str(VALUE)
                     # key_datatypes spans all schema profiles, so annotation works
                     # even when instance profile resolution fell through

@@ -102,7 +102,7 @@ pd.read_RDF([paths])
 ```
 triplets/parser/
 |-- __init__.py              # parse() dispatcher, get_engine(), find_all_xml re-export
-|-- utils.py                 # find_all_xml, clean_ID, _split_prefixed_name, RDF constants
+|-- utils.py                 # find_all_xml, _split_prefixed_name, RDF constants (ID/VALUE shortening: triplets.iri)
 |-- python_lxml_pandas.py    # lxml -> list of tuples -> pd.DataFrame (default)
 |-- python_lxml_arrow.py     # lxml -> Arrow StringBuilders -> pa.RecordBatch
 '-- cython_pugixml_arrow.pyx # pugixml C++ -> Arrow C++ builders -> pa.RecordBatch
@@ -131,14 +131,118 @@ table = triplets.parser.parse(path, return_type="arrow")
 data = triplets.parser.parse(path, return_type="polars")
 ```
 
+## The ID / KEY / VALUE contract
+
+Every engine produces the same *short* form; `triplets.iri` is the one
+definition of the rules (scalar functions, `iri_pandas` / `iri_polars`
+flavors, the cython engine mirrors them in C++ — all held to the case table
+in `tests/test_iri.py`).
+
+| column | shape | rule (`triplets.iri`) |
+|---|---|---|
+| `ID` | bare UUID / bare name | `local_id`: strip exactly **one** of `urn:uuid:`, `#_`, `_` (longest first) |
+| `KEY` | `Class.attr` or `Type` | element tag local name (N-Quads / SPARQL: `local_key`, the `split_iri` local name — `dcterms:issued` → `issued`) |
+| `VALUE` (Type) | `Breaker` | tag local name (N-Quads / SPARQL: `local_value(…, "class")`) |
+| `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then an `http(s)` IRI with `#` → its `split_iri` local name (`…#c/d` → `d`); without `#` it stays whole |
+| `VALUE` (literal) | text verbatim | — |
+| `INSTANCE_ID` | bare UUID | fresh `uuid4()` per parsed file |
+
+The absolute form (N-Quads, SPARQL stores, SHACL reports) is the inverse,
+driven by the export schema: `absolute_id`, `absolute_key`, `absolute_value` with the
+flat maps (`namespaces`, `value_types`, `datatypes`) built from `rdf_map`; a name the
+schema does not declare takes the exporter's `undefined_namespace` (`http://triplets#`;
+CIM100 on the SPARQL / validation side). `local_resources=False` is the absolute
+form of IDs and resource values: resolved against `xml:base` at parse time.
+
+The schema entry type decides the RDF form: an Attribute (`xsd:anyURI` included)
+is a literal written verbatim, checked by `sh:datatype`; an Association or
+Enumeration is a real IRI, with IRI-unsafe text percent-encoded
+(`a b` → `urn:uuid:a%20b`, `iri.encode_iri`). The N-Quads / SPARQL readers
+reverse those escapes (`iri.decode_iri`) and shorten a VALUE IRI that is also a
+subject of the same data like its `ID`, so the reference still joins.
+
+### Types: `Type` vs `rdf:type`
+
+RDF/XML can state a type two ways. Only one of them can be written back as the
+element name, so the triplet form keeps them apart:
+
+```xml
+<cim:Breaker rdf:about="urn:uuid:b1">                         <!-- typed-node shorthand -->
+  <rdf:type rdf:resource="http://iec.ch/TC57/CIM100#Switch"/>  <!-- explicit statement -->
+</cim:Breaker>
+<rdf:Description rdf:about="urn:uuid:d1">                     <!-- no shorthand type -->
+  <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Ontology"/>
+</rdf:Description>
+```
+
+| KEY | meaning | CIM XML export | N-Quads / SPARQL |
+|---|---|---|---|
+| `Type` (`iri.TYPE_KEY`) | the element name: the one type written as the typed-node shorthand. CIM data has exactly one per object and every CIM tool assumes it (`type_key="Type"`) | the object element (`<cim:Breaker …>`) | `rdf:type <class IRI>` |
+| `Type` = `Description` (`iri.DESCRIPTION_TYPE`) | an `rdf:Description` element: no shorthand, not a class | `<rdf:Description …>` | no `rdf:type` |
+| `type` | an explicit `rdf:type` child — the local name, like any other property | see *Known limitations* | see *Known limitations* |
+
+- **Reading RDF back** (`read_nquads(type_key=…)`, CONSTRUCT). N-Quads has no
+  shorthand: every type is an `rdf:type` triple, so the reader cannot tell the
+  element type from an extra one. `type_key` picks the KEY: `"Type"` (default,
+  CIM data, one type per object) or e.g. `"type"` (every type as an ordinary
+  statement). The tools that select by type take the same `type_key`
+  (`type_tableview`, `filter_triplets_by_type`, `filter_triplets_by_value`;
+  `export_to_cimxml` calls it `class_KEY`).
+- **The local form is for people working on imported data.** A local name drops
+  its namespace, so two predicates with one local name become one KEY. Exact,
+  collision-free handling is the absolute form (`local_resources=False` on the
+  XML side).
+
+### Known limitations
+
+Deviations between the importers and exporters that are known and not planned:
+
+- **Local names can collide: `type` is both `rdf:type` and `dcterms:type`.** An
+  explicit `rdf:type` child parses to the KEY `type` (its local name), and every
+  shipped schema declares `type` as `dcterms:type` (header). On export such a row is
+  written as `dcterms:type` with a schema, or as `<http://triplets#type>` without one
+  — not as `rdf:type` — and the CIM XML exporters write no `<rdf:type>` children.
+  Only the export is affected; the absolute form is the exact one.
+
+- **CIM XML does not percent-encode.** Both CIM XML engines write `rdf:about` /
+  `rdf:resource` text as is (`rdf:resource="urn:uuid:a b"`), while N-Quads and the
+  SPARQL stores write `<urn:uuid:a%20b>`. CIM IDs and references are not expected
+  to hold spaces or ``<>"{}|^`\``.
+- **The CIM XML parsers do not decode `%XX`** (every XML engine):
+  `rdf:resource="#_a%20b"` reads as `a%20b`; `read_nquads` returns `a b`.
+- **`http(s)` IRIs as CIM XML IDs do not join.** `rdf:about="http://x#L1"` keeps the
+  whole IRI as `ID`, `rdf:resource="http://x#L1"` shortens to `L1` (the parser sees
+  one file at a time, not every subject). `read_nquads` and CONSTRUCT keep such
+  references whole. CIM IDs are `urn:uuid:` / `#_` / `_` forms.
+- **Blank nodes are not supported.** `_:b0` reads as the ID `b0` and exports again
+  as `<urn:uuid:b0>`, a named node. With `local_resources=False`, `rdf:nodeID`
+  labels stay as written.
+- **`%XX` in reference text reads back decoded.** A reference whose own text holds
+  `%20` exports unchanged and reads back with a space. The exported file
+  round-trips byte for byte; only the frame value changes.
+- **`read_nquads` drops datatypes and language tags** — values keep their lexical
+  form (everything in a triplet frame is a string).
+- **The undefined namespace depends on the direction.** `export_to_nquads` writes
+  undeclared names under `http://triplets#`; `sparql.query` / `validate` load the
+  same frame under CIM100. Pass `undefined_namespace=` to align them. See
+  [sparql.md](sparql.md) for what SELECT returns.
+
 ## Options
 
 `parse()` / `read_RDF` accept (see `triplets/parser/__init__.py`):
 
-- `shorten_resources` (default `True`) — shorten http(s) resource values to
-  their `#fragment` (CIM instance-data convention). `False` keeps lossless
-  full URIs (e.g. for RDFS schema parsing); **not supported by the
-  `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
+- `local_resources` (default `True`) — resource values in local form
+  (`iri.local_value`: ID prefix stripped, http(s) IRIs with `#` cut to their local name,
+  the CIM instance-data convention). Enumerations are stored as
+  `ControlAreaTypeKind.Interchange`; a filter on the full CIM URI will not match.
+  `False` is the absolute form: IDs and references are resolved at parse time with
+  `iri.resolve_iri` against the document's declared absolute `xml:base`, so
+  `rdf:about="#ACLineSegment"` becomes `http://iec.ch/TC57/CIM100#ACLineSegment` and
+  nothing downstream needs the base again (e.g. RDFS schema parsing). Without one,
+  against `default_base` (`http://triplets#` unless passed) — never the file location,
+  which is no identity and differs per machine. The NamespaceMap `xml_base` row holds
+  a declared absolute base only (it is absent otherwise, on every engine); **not supported
+  by the `cython_pugixml_arrow` engine — it raises `ValueError`**, use a python engine.
 - `categorical_columns` (default `("INSTANCE_ID", "KEY")`) — columns to
   dictionary-encode (Arrow) / categorize (pandas) for memory savings; `None`
   disables.

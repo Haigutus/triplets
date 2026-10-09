@@ -8,6 +8,7 @@ import logging
 
 from importlib.util import find_spec
 
+from ..iri import CIM_NS
 from .._rdflib_loader import load_dataset, scoped_graph
 from .shacl_report import report_to_violations
 
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def validate(data, compiled, rdf_map=None, scope=None, inference="none",
-             advanced=True, abort_on_first=False, store="memory", **kwargs):
+             advanced=True, abort_on_first=False, store="memory", undefined_namespace=CIM_NS, **kwargs):
     """Validate triplet data against compiled shapes; return a violations DataFrame.
 
     Parameters
@@ -54,7 +55,8 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
 
     from pyshacl import validate as pyshacl_validate
 
-    data_graph = scoped_graph(load_dataset(data, rdf_map=rdf_map, store=store), scope)
+    data_graph = scoped_graph(load_dataset(data, rdf_map=rdf_map, store=store,
+                                           undefined_namespace=undefined_namespace), scope)
 
     conforms, report_graph, _report_text = pyshacl_validate(
         data_graph, shacl_graph=compiled.graph,
