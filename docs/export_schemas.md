@@ -148,8 +148,8 @@ python -m triplets.rdfs_tools.cim_rdfs_to_json [bundle ...]
     '-> per serialization edition (552_ED1, 552_ED2):
         |-> convert(): one section per RDFS profile (classes, attributes,
         |   associations, enumerations, datatypes + ProfileMetadata)
-        |   # xsd:type: map from CIMDatatype .value rdfs:range, then
-        |   #   cgmes_data_types_map overlay; omit the key if still unknown
+        |   # xsd:type: CIMDatatype .value rdfs:range, else
+        |   #   cgmes_data_types_map; omit the key if neither has it
         |   # attribute→class binding (rdfs_tools.get_class_parameters):
         |   # CIM-owned terms bind via rdfs:domain; reused external terms
         |   # (dcterms:/prov:/dcat:) via the non-inferential

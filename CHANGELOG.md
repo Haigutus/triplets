@@ -163,8 +163,9 @@ Start of the 0.3 line.
   ranges found on CIMDatatype `.value` (IEC 61970-501 Ed2). RDFS2020
   Primitives have no XSD, so the table still fills those. `Money` is
   `xsd:decimal` (was `xsd:float`; matches 501 Ed2 `Money.value`). Unknown
-  types omit the `xsd:type` key instead of writing `""`. Bundles regenerate
-  on the next `cim_rdfs_to_json` run.
+  types omit the `xsd:type` key instead of writing `""`. All bundles
+  regenerated: only those empty keys and `Money`, `GeneratingUnit.startupCost`
+  and `GeneratingUnit.variableCost` (now `xsd:decimal`) change.
 
 ### Fixed
 - **`comment=` is written by the `python_lxml` CIM XML exporter** too: it
