@@ -36,7 +36,7 @@ After installation, the tool can be invoked in three ways:
 
 2. **As a Python module**::
 
-    python -m triplets.tools.cim_diff_cli original.xml modified.xml
+    python -m triplets.cli.cim_diff original.xml modified.xml
 
 3. **Programmatically** in Python code::
 

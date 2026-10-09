@@ -110,8 +110,11 @@ Notes
 - Excel limits sheet names to 31 characters. Longer class names (e.g.
   ``SynchronousMachineTimeConstantReactance``) are written as is: openpyxl warns
   and Excel may refuse or rename the sheet. Use CSV for such models.
-- CIM XML file names come from the instance ``label``, the path the model was
-  parsed from. An absolute path is used as is, so the export writes to that path.
+- The spreadsheet leaves out ``NamespaceMap`` and ``Distribution`` by default, so
+  to-cim names each CIM XML ``<uuid>.xml`` and declares the schema profile's
+  namespaces. With ``--no-default-exclusions`` the file name is the instance
+  ``label``, the path the model was parsed from (an absolute path is used as is),
+  and the namespaces are the source's.
 
 See Also
 --------

@@ -39,8 +39,7 @@ def reference():
 
 @pytest.fixture
 def source(tmp_path, monkeypatch):
-    """The EQ copied into the test directory, by relative name: the export names its file
-    after the parsed path, so the CIM XML goes to out/<name>."""
+    """The EQ copied into the test directory, so the to-cim output stays in tmp_path."""
     monkeypatch.chdir(tmp_path)
     return shutil.copy(EQ, Path(EQ).name)
 
@@ -79,9 +78,20 @@ def test_parser_metadata_left_out_by_default(source, monkeypatch):
     assert sheets("fewer.xlsx") == sheets("default.xlsx") - {"ACLineSegment"}
 
 
-def test_cim_diff_runs_with_the_same_option(source, monkeypatch, capsys):
-    """cim-diff runs with the shared exclusion option."""
+SSH = str(Path(next(path for path in SVEDALA_FILES if "_SSH_" in path)).resolve())
+
+
+@pytest.mark.parametrize("options, shown, hidden", [
+    ([], ["  ACLineSegment"], ["  NamespaceMap"]),
+    (["-ex", "ACLineSegment"], [], ["  ACLineSegment", "  NamespaceMap"]),
+    (["--no-default-exclusions"], ["  ACLineSegment", "  NamespaceMap"], []),
+])
+def test_cim_diff_exclusions(monkeypatch, capsys, options, shown, hidden):
+    """cim-diff runs and takes the shared exclusion options (EQ vs SSH)."""
     from triplets.cli import cim_diff
-    monkeypatch.setattr(sys, "argv", ["cim-diff", source, source, "-ex", "ACLineSegment"])
+    monkeypatch.setattr(sys, "argv", ["cim-diff", EQ, SSH, *options])
     cim_diff.main()
-    assert "Traceback" not in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert out.startswith("--- ")
+    assert all(text in out for text in shown)
+    assert not any(text in out for text in hidden)
