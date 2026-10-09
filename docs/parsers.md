@@ -143,7 +143,7 @@ in `tests/test_iri.py`).
 | `ID` | bare UUID / bare name | `local_id`: strip exactly **one** of `urn:uuid:`, `#_`, `_` (longest first) |
 | `KEY` | `Class.attr` or `Type` | element tag local name (N-Quads / SPARQL: `local_key`, the `split_iri` local name — `dcterms:issued` → `issued`) |
 | `VALUE` (Type) | `Breaker` | tag local name (N-Quads / SPARQL: `local_value(…, "class")`) |
-| `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then `http(s)…#frag` → `frag` (`#` only, never `/`) |
+| `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then an `http(s)` IRI with `#` → its `split_iri` local name (`…#c/d` → `d`); without `#` it stays whole |
 | `VALUE` (literal) | text verbatim | — |
 | `INSTANCE_ID` | bare UUID | fresh `uuid4()` per parsed file |
 
@@ -232,7 +232,7 @@ Deviations between the importers and exporters that are known and not planned:
 `parse()` / `read_RDF` accept (see `triplets/parser/__init__.py`):
 
 - `local_resources` (default `True`) — resource values in local form
-  (`iri.local_value`: ID prefix stripped, http(s) IRIs cut to their `#fragment`,
+  (`iri.local_value`: ID prefix stripped, http(s) IRIs with `#` cut to their local name,
   the CIM instance-data convention). Enumerations are stored as
   `ControlAreaTypeKind.Interchange`; a filter on the full CIM URI will not match.
   `False` is the absolute form: IDs and references are resolved at parse time with

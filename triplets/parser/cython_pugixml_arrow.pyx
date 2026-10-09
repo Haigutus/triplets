@@ -258,7 +258,7 @@ cdef extern from *:
     }
 
     // Clean a reference value (for rdf:resource etc).
-    // Strips CIM ID prefixes, then extracts fragment after '#' for http URIs.
+    // Strips CIM ID prefixes; an http IRI with '#' keeps its local name (after the last '#' or '/').
     // Native mirror of triplets.iri.local_value (parity: tests/test_iri.py).
     // Returns a (possibly shortened) view into the original buffer.
     static inline std::string_view clean_ref_value(std::string_view sv) {
@@ -269,13 +269,14 @@ cdef extern from *:
             size_t pos = v.rfind('#');
             if (pos != std::string_view::npos) {
                 v = v.substr(pos + 1);
+                size_t slash = v.rfind('/');
+                if (slash != std::string_view::npos) v = v.substr(slash + 1);
             }
         }
         return v;
     }
 
-    // Extract local name from "prefix:localname" or "{ns}local".
-    // QName local name: the native counterpart of the triplets.iri.split_iri local name (parity: tests/test_iri.py).
+    // QName local name ("prefix:local" → "local"): the native counterpart of the triplets.iri.split_iri local name (parity: tests/test_iri.py).
     static inline const char* local_name(const char* name) {
         const char* colon = strrchr(name, ':');
         return colon ? colon + 1 : name;

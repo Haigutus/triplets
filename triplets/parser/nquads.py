@@ -122,8 +122,8 @@ def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
     then the triplets.iri column rules apply: ``local_id`` for ID / INSTANCE_ID,
     ``local_key`` for KEY (``rdf:type`` → *type_key*), ``local_value`` for VALUE —
     kind ``class`` on type rows, else by *kinds* (``iri.value_types`` of a schema).
-    Without a schema a guessed VALUE that is a subject of the same frame shortens
-    like its ID, so the reference still joins it.
+    A guessed VALUE (no schema, or a KEY the schema does not declare) that is a
+    subject of the same frame shortens like its ID, so the reference still joins it.
     """
     subjects = iri_pandas.decode_iri(_term(frame["ID"]))
     frame["ID"] = iri_pandas.local_id(subjects)
@@ -138,8 +138,8 @@ def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
     kind = frame["KEY"].map({key: kind for key, kind in (kinds or {}).items() if kind != "literal"})
     kind = kind.astype(object).where(frame["KEY"] != type_key, "class")
     local = iri_pandas.local_value(objects, kind)
-    if kinds is None:       # the guess cannot tell an enum from a reference to an http#… object
-        local = local.mask(_subject_references(objects, subjects, kind), iri_pandas.local_id(objects))
+    # the guess cannot tell an enum from a reference to an http#… object
+    local = local.mask(_subject_references(objects, subjects, kind), iri_pandas.local_id(objects))
     frame["VALUE"] = unquoted.where(quoted, local)
     graphs = iri_pandas.by_distinct(frame["INSTANCE_ID"], lambda graphs: iri_pandas.local_id(
         iri_pandas.decode_iri(_term(graphs)))) if "INSTANCE_ID" in frame.columns else None
