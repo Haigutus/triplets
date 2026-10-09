@@ -103,12 +103,11 @@ The GitHub Actions workflow (`.github/workflows/build-wheels.yml`) builds wheels
 | Platform | Runner | Repair tool | Arrow lib handling |
 |----------|--------|-------------|-------------------|
 | Linux x86_64 | ubuntu-latest (Docker) | auditwheel | `--exclude 'libarrow*.so*'` |
+| Linux aarch64 | ubuntu-24.04-arm (Docker) | auditwheel | `--exclude 'libarrow*.so*'` |
 | macOS arm64 | macos-14 | skipped | macosx_* tags accepted by PyPI |
 | Windows AMD64 | windows-latest | delvewheel | `--no-dll arrow*.dll` |
 
-Only these three are active in `build-wheels.yml`. Linux aarch64 (ubuntu QEMU)
-and macOS x86_64 (macos-13) are commented out in the matrix — aarch64 because the
-QEMU-emulated build dominates release time; re-enable when arm64 runners are available.
+macOS x86_64 (macos-13) is commented out in the matrix.
 
 CPython 3.11–3.14. Arrow shared libraries are NOT bundled — they're provided by pyarrow at runtime.
 
