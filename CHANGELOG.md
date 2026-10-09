@@ -171,6 +171,10 @@ Start of the 0.3 line.
   namespace. Enumeration ranges were mangled by a ``replace("#", "")``
   (`https://cim4.eu/ns/ncBalancingReserveKind`, 107 entries in NC 2.5); all
   bundles regenerated — only `inheritance` and `range` values change.
+- **`cim-spreadsheet` back to CIM XML** ([#125](https://github.com/Haigutus/triplets/issues/125)):
+  the to-cim direction failed for Excel and CSV (`rdf_parser.tableviews_to_triplets`
+  does not exist); it now uses `triplets.tools.tableviews_to_triplets`. Spreadsheets
+  are read as text, so `false` no longer comes back as `False`.
 - **Exclude pandas 2.3.3**: `pivot()` on ArrowDtype dictionary columns still
   crashes with `'Series' object has no attribute '_pa_array'` (same bug as
   2.2.x, which is already excluded). Constraint is now
