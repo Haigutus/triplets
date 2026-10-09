@@ -691,8 +691,7 @@ def test_target_objects_of(engine):
 
 def test_sparql_target_reports_each_violation_once(engine):
     """A SPARQL-targeted shape next to a class-targeted one with the same
-    component: each focus node is reported once (the engines used to hand the
-    SPARQL target to pandas, which re-ran every sh:minCount)."""
+    component: each focus node is reported once."""
     shape = """cim:Breakers a sh:NodeShape ; sh:targetClass cim:Breaker ;
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
     cim:Disconnectors a sh:NodeShape ;

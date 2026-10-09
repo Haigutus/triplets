@@ -82,9 +82,7 @@ def _shape_stats(graph, ir):
 
     SH = rdflib.Namespace(SH_NS)
     skipped = set()
-    # SPARQLTarget without sh:select (or a non-SPARQL custom target) is still
-    # invisible; targetNode / targetObjectsOf / xone / SPARQLTarget-with-select
-    # now compile into the IR
+    # a SPARQLTarget without sh:select, or a non-SPARQL custom target, is not compiled
     for subject, target in graph.subject_objects(SH.target):
         if graph.value(target, SH.select) is None:
             skipped.add(f"{subject}: sh:target not walked (no sh:select)")
