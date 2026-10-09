@@ -1020,7 +1020,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -1031,7 +1031,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "DateTime": {
             "description": "Date and time as \"yyyy-mm-ddThh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"yyyy-mm-ddThh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"yyyy-mm-ddThh:mm:ss.sss-hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
@@ -1184,7 +1184,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -1195,7 +1195,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -1271,12 +1271,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -1287,12 +1287,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -1303,7 +1303,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -1313,7 +1313,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -2106,7 +2106,7 @@
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "AvailabilitySchedule.daytimeRestitutionDuration": {
@@ -2117,7 +2117,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "AvailabilitySchedule.eveningRestitutionDuration": {
             "description": "The time required to take the out-of-service equipment back into service after office hours. This includes the start-up time for generating units.",
@@ -2127,7 +2127,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "AvailabilitySchedule.maxRestitutionDuration": {
             "description": "The maximum time required to take the out-of-service equipment back into service. This includes the start-up time for generating units.",
@@ -2137,7 +2137,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Integer": {
             "description": "An integer number. The range is unspecified and not limited.",
@@ -2163,7 +2163,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "EventSchedule": {
             "attrib": {
@@ -2409,7 +2409,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -2420,7 +2420,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "issued": {
             "description": "Date of formal issuance of the resource.\nRecommended practice is to describe the date, date/time, or period of time as recommended for the property Date, of which this is a subproperty.\n[CIM context:\nReference to the date that the complete data set was made valid/available.].",
@@ -2567,7 +2567,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -2578,7 +2578,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -2654,7 +2654,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "temporalResolution": {
             "description": "Minimum time period resolvable in a dataset.\n[CIM context: \nDescribes the Market Time Unit (MTU), e.g. hourly, 15 min., etc.]",
@@ -2664,12 +2664,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -2680,7 +2680,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -2690,7 +2690,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -3330,7 +3330,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -3341,7 +3341,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "DateTime": {
             "description": "Date and time as \"yyyy-mm-ddThh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"yyyy-mm-ddThh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"yyyy-mm-ddThh:mm:ss.sss-hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
@@ -3494,7 +3494,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -3505,7 +3505,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -3581,12 +3581,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -3597,12 +3597,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -3613,7 +3613,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -3623,7 +3623,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -4908,7 +4908,7 @@
         "RealEnergy": {
             "description": "Real electrical energy.",
             "type": "CIMDatatype",
-            "xsd:type": "",
+            "xsd:type": "xsd:float",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "BatteryUnit.ratedE": {
@@ -4919,7 +4919,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "Equipment.AggregatedEquipment": {
             "description": "An aggregated representation of the detailed equipment.",
@@ -7781,7 +7781,7 @@
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "EnergyBlockOrder.powerDuration": {
@@ -7792,7 +7792,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "EnergyConsumer": {
             "attrib": {
@@ -7985,7 +7985,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "EnergyType": {
             "attrib": {
@@ -8191,7 +8191,7 @@
         "ActivePowerChangeRate": {
             "description": "Rate of change of active power per time.",
             "type": "CIMDatatype",
-            "xsd:type": "",
+            "xsd:type": "xsd:float",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "GeneratingUnit.lowerRampRate": {
@@ -8202,7 +8202,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "ActivePowerChangeRate",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "GeneratingUnit.maxEconomicP": {
             "description": "Maximum high economic active power limit, that should not exceed the maximum operating active power limit.",
@@ -8242,7 +8242,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "ActivePowerChangeRate",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "EquivalentGeneratingUnit.EquivalentPowerPlant": {
             "description": "Equivalent power plant that has this equivalent generating unit.",
@@ -8280,7 +8280,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Currency.AED": {
             "description": "United Arab Emirates dirham.",
@@ -9292,7 +9292,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "GeneratingUnit.normalMustRunP": {
             "description": "Normal minimum active power injection that is needed to meet must-run requirement. This value can be higher or equal to minimum operational limit. Load sign convention is used, i.e. positive sign means flow out from a node.",
@@ -9323,7 +9323,7 @@
         "Decimal": {
             "description": "Decimal is the base-10 notational system for representing real numbers.",
             "type": "Primitive",
-            "xsd:type": "xsd:float",
+            "xsd:type": "xsd:decimal",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "GeneratingUnit.normalShutdownCost": {
@@ -9334,7 +9334,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "GeneratingUnit.normalStartupCost": {
             "description": "The normal initial startup cost incurred for each start of the GeneratingUnit.",
@@ -9344,7 +9344,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "GeneratingUnit.normalWarmStartupCost": {
             "description": "The normal warm startup cost incurred for each start of the GeneratingUnit.",
@@ -9354,7 +9354,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "GeneratingUnit.rampLockTime": {
             "description": "Time between end or start of ramping. If a unit has just stopped the ramping, it will need to wait this time until a new ramping can start.",
@@ -9364,7 +9364,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "GeneratingUnit.runningLeadTime": {
             "description": "Time it takes to change the schedule when the unit is operating due to technical configuration of a supporting system, e.g. gas pipeline. ",
@@ -9374,7 +9374,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "GeneratingUnit.shutdownTime": {
             "description": "Time it takes to shutdown the unit.",
@@ -9384,7 +9384,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "GeneratingUnit.startupRampRate": {
             "description": "The startup ramp rate of the generating unit which describes the speed of change of active power from zero to the minimum active power.\nWhen the ramp is not provided, the optimisation process shall consider the change as an instant change of active power from zero to minimum active power.",
@@ -9394,7 +9394,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "ActivePowerChangeRate",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "GeneratingUnit.warmStartupTime": {
             "description": "Time it takes to startup the unit when it is warm.",
@@ -9404,7 +9404,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "EquivalentInjection": {
             "attrib": {
@@ -9867,7 +9867,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "FunctionOutputVariable": {
             "attrib": {
@@ -9979,7 +9979,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "LogicalOperatorsKind.equals": {
             "description": "Equals (like) comparison operation.",
@@ -10752,7 +10752,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "ActivePowerChangeRate",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "LoadFrequencyControlArea.frequencyRestorationReserveThreshold": {
             "description": "Authorized threshold for both FRR dispatching and ramp to zero.",
@@ -12468,7 +12468,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "ReactiveCapabilityCurve": {
             "attrib": {
@@ -12523,7 +12523,7 @@
         "Pressure": {
             "description": "Pressure in pascals.",
             "type": "CIMDatatype",
-            "xsd:type": "",
+            "xsd:type": "xsd:float",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "ReactiveCapabilityCurve.hydrogenPressure": {
@@ -12534,7 +12534,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Pressure",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "ReactiveCapabilityCurve.EquivalentInjection2": {
             "description": "The equivalent injection using this reactive capability curve.",
@@ -12696,7 +12696,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "RotatingMachineController": {
             "attrib": {
@@ -13507,7 +13507,7 @@
         "Impedance": {
             "description": "Ratio of voltage to current.",
             "type": "CIMDatatype",
-            "xsd:type": "",
+            "xsd:type": "xsd:float",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "TCSCCompensationPoint.compensationZ": {
@@ -13518,7 +13518,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Impedance",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "TCSCCompensationPoint.mRID": {
             "description": "Master resource identifier issued by a model authority. The mRID is unique within an exchange context. Global uniqueness is easily achieved by using a UUID, as specified in RFC 4122, for the mRID. The use of UUID is strongly recommended.\nFor CIMXML data files in RDF syntax conforming to IEC 61970-552, the mRID is mapped to rdf:ID or rdf:about attributes that identify CIM object elements.",
@@ -13642,7 +13642,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Impedance",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "ThyristorControlledSeriesCompensator.flexibleInductiveZ": {
             "description": "Flexible impedance that can be controlled by the compensator when operating in the inductive range.  Shall always be negative.",
@@ -13652,7 +13652,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Impedance",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "ThyristorControlledSeriesCompensator.minI": {
             "description": "Minimum current below which the device bypassed.",
@@ -14136,7 +14136,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -14147,7 +14147,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "DateTime": {
             "description": "Date and time as \"yyyy-mm-ddThh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"yyyy-mm-ddThh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"yyyy-mm-ddThh:mm:ss.sss-hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
@@ -14300,7 +14300,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -14311,7 +14311,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -14387,7 +14387,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "temporalResolution": {
             "description": "Minimum time period resolvable in a dataset.\n[CIM context: \nDescribes the Market Time Unit (MTU), e.g. hourly, 15 min., etc.]",
@@ -14397,12 +14397,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -14413,7 +14413,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -14423,7 +14423,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -15085,7 +15085,7 @@
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "Fault.duration": {
@@ -15096,7 +15096,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "FaultKind.functional": {
             "description": "The components main function failed to occur.",
@@ -15200,7 +15200,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Integer": {
             "description": "An integer number. The range is unspecified and not limited.",
@@ -15482,12 +15482,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "RealEnergy": {
             "description": "Real electrical energy.",
             "type": "CIMDatatype",
-            "xsd:type": "",
+            "xsd:type": "xsd:float",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "Interruption.energyNotDelivered": {
@@ -15498,7 +15498,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "Interruption.energyNotSupplied": {
             "description": "The estimated energy which would have been supplied to end-users if no interruption and no transmission restrictions had occurred.",
@@ -15508,7 +15508,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "ActivePower": {
             "description": "Product of RMS value of the voltage and the RMS value of the in-phase component of the current.",
@@ -15757,7 +15757,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "UnplannedOutage.startDateTime": {
             "description": "The date and time at which the unplanned outage occurred.",
@@ -16040,7 +16040,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -16051,7 +16051,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "issued": {
             "description": "Date of formal issuance of the resource.\nRecommended practice is to describe the date, date/time, or period of time as recommended for the property Date, of which this is a subproperty.\n[CIM context:\nReference to the date that the complete data set was made valid/available.].",
@@ -16198,7 +16198,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -16209,7 +16209,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -16285,7 +16285,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "temporalResolution": {
             "description": "Minimum time period resolvable in a dataset.\n[CIM context: \nDescribes the Market Time Unit (MTU), e.g. hourly, 15 min., etc.]",
@@ -16295,12 +16295,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -16311,7 +16311,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -16321,7 +16321,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -17148,7 +17148,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -17159,7 +17159,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "DateTime": {
             "description": "Date and time as \"yyyy-mm-ddThh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"yyyy-mm-ddThh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"yyyy-mm-ddThh:mm:ss.sss-hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
@@ -17312,7 +17312,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -17323,7 +17323,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -17399,12 +17399,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -17415,12 +17415,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -17431,7 +17431,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -17441,7 +17441,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -18059,7 +18059,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -18070,7 +18070,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "DateTime": {
             "description": "Date and time as \"yyyy-mm-ddThh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"yyyy-mm-ddThh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"yyyy-mm-ddThh:mm:ss.sss-hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
@@ -18223,7 +18223,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -18234,7 +18234,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -18310,12 +18310,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -18326,12 +18326,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -18342,7 +18342,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -18352,7 +18352,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -19046,7 +19046,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -19057,7 +19057,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "DateTime": {
             "description": "Date and time as \"yyyy-mm-ddThh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"yyyy-mm-ddThh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"yyyy-mm-ddThh:mm:ss.sss-hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
@@ -19210,7 +19210,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -19221,7 +19221,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -19297,12 +19297,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -19313,12 +19313,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -19329,7 +19329,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -19339,7 +19339,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -21215,7 +21215,7 @@
         "Decimal": {
             "description": "Decimal is the base-10 notational system for representing real numbers.",
             "type": "Primitive",
-            "xsd:type": "xsd:float",
+            "xsd:type": "xsd:decimal",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "PowerTimePoint.activatedPrice": {
@@ -21226,7 +21226,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "PowerTimePoint.activatedQ": {
             "description": "Reactive power activated as part of redispatch. Negative number means that the value is scheduling down. Positive number means that the value is scheduling up.",
@@ -21276,7 +21276,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "PowerTimePoint.q": {
             "description": "Reactive power injection. Load sign convention is used, i.e. positive sign means flow out from a node.",
@@ -21407,7 +21407,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -21418,7 +21418,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "issued": {
             "description": "Date of formal issuance of the resource.\nRecommended practice is to describe the date, date/time, or period of time as recommended for the property Date, of which this is a subproperty.\n[CIM context:\nReference to the date that the complete data set was made valid/available.].",
@@ -21565,7 +21565,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -21576,7 +21576,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -21652,12 +21652,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -21668,12 +21668,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -21684,7 +21684,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -21694,7 +21694,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -21972,7 +21972,7 @@
         "StringIRI": {
             "description": "An IRI (Internationalized Resource Identifier) within an RDF graph is a Unicode string that conforms to the syntax defined in RFC 3987.\nThe primitive is serialized as literal without language support.\nIRIs in the RDF abstract syntax must be absolute, and may contain a fragment identifier.\nIRI equality: Two IRIs are equal if and only if they are equivalent under Simple String Comparison according to section 5.1 of [RFC3987]. Further normalization must not be performed when comparing IRIs for equality.\nIRIs are a generalization of URIs [RFC3986] that permits a wider range of Unicode characters. Every absolute URI and URL is an IRI, but not every IRI is an URI. When IRIs are used in operations that are only defined for URIs, they must first be converted according to the mapping defined in section 3.1 of [RFC3987]. A notable example is retrieval over the HTTP protocol. The mapping involves UTF-8 encoding of non-ASCII characters, %-encoding of octets not allowed in URIs, and Punycode-encoding of domain names.",
             "type": "profcim",
-            "xsd:type": "",
+            "xsd:type": "xsd:anyURI",
             "namespace": "https://cim.ucaiug.io/ns/prof-cim#"
         },
         "Resource.conformsTo": {
@@ -21983,7 +21983,7 @@
             "xsd:maxOccours": "n",
             "type": "Attribute",
             "dataType": "StringIRI",
-            "xsd:type": ""
+            "xsd:type": "xsd:anyURI"
         },
         "Resource.creator": {
             "description": "An entity responsible for making the resource.\nRecommended practice is to identify the creator with a URI. If this is not possible or feasible, a literal value that identifies the creator may be provided.",
@@ -22013,7 +22013,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "StringIRI",
-            "xsd:type": ""
+            "xsd:type": "xsd:anyURI"
         },
         "DateTime": {
             "description": "Date and time as \"yyyy-mm-ddThh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"yyyy-mm-ddThh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"yyyy-mm-ddThh:mm:ss.sss-hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
@@ -22136,7 +22136,7 @@
         "StringFixedLanguage": {
             "description": "A string consisting of a sequence of characters. The character encoding is UTF-8. The string length is unspecified and unlimited.\nThe primitive is serialized as literal without language support.",
             "type": "profcim",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns/prof-cim#"
         },
         "Resource.keyword": {
@@ -22147,7 +22147,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "StringFixedLanguage",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "Resource.version": {
             "description": "The version indicator (name or identifier) of a resource.",
@@ -22401,7 +22401,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "StringIRI",
-            "xsd:type": ""
+            "xsd:type": "xsd:anyURI"
         },
         "PowerSystemProjectGroup.title": {
             "description": "A name given to the resource.",
@@ -22532,7 +22532,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -22543,7 +22543,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "issued": {
             "description": "Date of formal issuance of the resource.\nRecommended practice is to describe the date, date/time, or period of time as recommended for the property Date, of which this is a subproperty.\n[CIM context:\nReference to the date that the complete data set was made valid/available.].",
@@ -22690,7 +22690,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -22701,7 +22701,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -22777,12 +22777,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -22793,12 +22793,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -22809,7 +22809,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -22819,7 +22819,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -23186,7 +23186,7 @@
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "GridStateAlteration.minimumActivation": {
@@ -23197,7 +23197,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Boolean": {
             "description": "A type with the value space \"true\" and \"false\".",
@@ -23223,7 +23223,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "AvailabilityRemedialAction": {
             "attrib": {
@@ -23380,7 +23380,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "BatteryUnitAction": {
             "attrib": {
@@ -24477,7 +24477,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "GateInputPin.isValuePreFault": {
             "description": "Indicates if the gate input pin value is referring to the value prior to a fault (e.g. simulated by a contingency or due to a SIPS activation in a N-x-y case). If it is true, it means that the value is referring to pre-fault. If it is false or not populated, then it is post-fault.",
@@ -26086,7 +26086,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -26097,7 +26097,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "DateTime": {
             "description": "Date and time as \"yyyy-mm-ddThh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"yyyy-mm-ddThh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"yyyy-mm-ddThh:mm:ss.sss-hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
@@ -26250,7 +26250,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -26261,7 +26261,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -26337,7 +26337,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "temporalResolution": {
             "description": "Minimum time period resolvable in a dataset.\n[CIM context: \nDescribes the Market Time Unit (MTU), e.g. hourly, 15 min., etc.]",
@@ -26347,12 +26347,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -26363,7 +26363,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -26373,7 +26373,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -27756,7 +27756,7 @@
         "Decimal": {
             "description": "Decimal is the base-10 notational system for representing real numbers.",
             "type": "Primitive",
-            "xsd:type": "xsd:float",
+            "xsd:type": "xsd:decimal",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "PowerScheduleAction.energyPrice": {
@@ -27767,7 +27767,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "EventSchedule": {
             "attrib": {
@@ -28298,7 +28298,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "PowerTimePoint.atTime": {
             "description": "The time the data is valid for.",
@@ -28328,7 +28328,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "ReactivePower": {
             "description": "Product of RMS value of the voltage and the RMS value of the quadrature component of the current.",
@@ -28401,7 +28401,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "ProposingRemedialActionScheduleShare.mRID": {
             "description": "Master resource identifier issued by a model authority. The mRID is unique within an exchange context. Global uniqueness is easily achieved by using a UUID, as specified in RFC 4122, for the mRID. The use of UUID is strongly recommended.\nFor CIMXML data files in RDF syntax conforming to IEC 61970-552, the mRID is mapped to rdf:ID or rdf:about attributes that identify CIM object elements.",
@@ -28540,7 +28540,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "RemedialActionCost.opportunityCost": {
             "description": "Opportunity cost is the total cost of potential earning that is missed due to performing the remedial action.",
@@ -28550,7 +28550,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "RemedialActionCost.otherCost": {
             "description": "Other cost is the total cost that cannot be directly allocated to any of the other items.",
@@ -28560,7 +28560,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "RemedialActionCost.processingFee": {
             "description": "Processing fee is the total cost for processing the remedial action.",
@@ -28570,7 +28570,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "RemedialActionCost.savedFuelCost": {
             "description": "Saved fuel cost is the total saving due to not consuming the expected fuel as part of the remedial action.",
@@ -28580,7 +28580,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "RemedialActionCost.shutdownCost": {
             "description": "Shutdown cost is the total cost for shutting down a unit as part of the remedial action.",
@@ -28590,7 +28590,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "RemedialActionCost.startupCost": {
             "description": "Start-up cost is the total cost for activating the remedial action, e.g. if a generator needs to be started before it can perform the remedial action.",
@@ -28600,7 +28600,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "RemedialActionSchedule": {
             "attrib": {
@@ -29403,7 +29403,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -29414,7 +29414,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "issued": {
             "description": "Date of formal issuance of the resource.\nRecommended practice is to describe the date, date/time, or period of time as recommended for the property Date, of which this is a subproperty.\n[CIM context:\nReference to the date that the complete data set was made valid/available.].",
@@ -29561,7 +29561,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -29572,7 +29572,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -29648,12 +29648,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -29664,12 +29664,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -29680,7 +29680,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -29690,7 +29690,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -30420,7 +30420,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -30431,7 +30431,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "issued": {
             "description": "Date of formal issuance of the resource.\nRecommended practice is to describe the date, date/time, or period of time as recommended for the property Date, of which this is a subproperty.\n[CIM context:\nReference to the date that the complete data set was made valid/available.].",
@@ -30578,7 +30578,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -30589,7 +30589,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -30665,12 +30665,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -30681,12 +30681,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -30697,7 +30697,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -30707,7 +30707,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -31368,7 +31368,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -31379,7 +31379,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "DateTime": {
             "description": "Date and time as \"yyyy-mm-ddThh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"yyyy-mm-ddThh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"yyyy-mm-ddThh:mm:ss.sss-hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
@@ -31532,7 +31532,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -31543,7 +31543,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -31619,12 +31619,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -31635,12 +31635,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -31651,7 +31651,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -31661,7 +31661,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -32937,7 +32937,7 @@
         "RealEnergy": {
             "description": "Real electrical energy.",
             "type": "CIMDatatype",
-            "xsd:type": "",
+            "xsd:type": "xsd:float",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "FuelStorageTimePoint.energyStorage": {
@@ -32948,7 +32948,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "GenericAvailableSchedule": {
             "attrib": {
@@ -33563,7 +33563,7 @@
         "Time": {
             "description": "Time as \"hh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"hh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"hh:mm:ss.sss\u00b1hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:time",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "HourPeriod.endTime": {
@@ -33574,7 +33574,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Time",
-            "xsd:type": ""
+            "xsd:type": "xsd:time"
         },
         "HourPeriod.mRID": {
             "description": "Master resource identifier issued by a model authority. The mRID is unique within an exchange context. Global uniqueness is easily achieved by using a UUID, as specified in RFC 4122, for the mRID. The use of UUID is strongly recommended.\nFor CIMXML data files in RDF syntax conforming to IEC 61970-552, the mRID is mapped to rdf:ID or rdf:about attributes that identify CIM object elements.",
@@ -33594,7 +33594,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Time",
-            "xsd:type": ""
+            "xsd:type": "xsd:time"
         },
         "InfeedLimitSchedule": {
             "attrib": {
@@ -33808,7 +33808,7 @@
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "PowerBidDependency.finishToFinishLag": {
@@ -33819,7 +33819,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "ReferenceValueKind.exact": {
             "description": "Exact value applies.",
@@ -33863,7 +33863,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "PowerBidDependency.finishToStartLagKind": {
             "description": "It indicates the finishToStartLag kind between the deactivation of the dependee (parent) bids and the activation of dependent (child) bids. It is required if PowerBidDependency.finishToStartLag is used. ",
@@ -33936,7 +33936,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "PowerBidDependency.overlapKind": {
             "description": "It indicates the overlap kind for the duration the parent (dependee) and child (dependent) bids are active at the same time. It is required when PowerBidDependency.overlap is used. ",
@@ -33965,7 +33965,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "PowerBidDependency.startToStartLagKind": {
             "description": "Indicates the startToStartLag kind between the activation of the dependee (parent) bid and the activation of dependent (child) bid. It is required if PowerBidDependency.startToStartLag is used. ",
@@ -34058,7 +34058,7 @@
         "Decimal": {
             "description": "Decimal is the base-10 notational system for representing real numbers.",
             "type": "Primitive",
-            "xsd:type": "xsd:float",
+            "xsd:type": "xsd:decimal",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "PowerBidSchedule.activationCost": {
@@ -34069,7 +34069,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "Currency.AED": {
             "description": "United Arab Emirates dirham.",
@@ -35121,7 +35121,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "PowerBidSchedule.maxRampDownP": {
             "description": "Maximum decrease of the active power change from one time point to the next.",
@@ -35151,7 +35151,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "PowerBidSchedule.minimumOffTime": {
             "description": "Minimum time interval between activation of the bid involving startup and shutdown. This value overrides any value on the unit.",
@@ -35161,7 +35161,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "PowerBidSchedule.minimumUptime": {
             "description": "Minimum duration the action needs to be remain active after startup. ",
@@ -35171,7 +35171,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Integer": {
             "description": "An integer number. The range is unspecified and not limited.",
@@ -35197,7 +35197,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "PowerBidSchedule.totalMaximumEnergy": {
             "description": "Maximum total energy that can be activated by the bid.",
@@ -35207,7 +35207,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "PowerBidSchedule.totalMinimumEnergy": {
             "description": "Minimum total energy that has to be activated by the bid.",
@@ -35217,7 +35217,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "PowerBidScheduleTimePoint": {
             "attrib": {
@@ -35265,7 +35265,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "PowerBidScheduleTimePoint.atTime": {
             "description": "The time the data is valid for.",
@@ -35305,7 +35305,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "PowerBidScheduleTimePoint.reservePrice": {
             "description": "Price for reserving the step increment active power.",
@@ -35315,7 +35315,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "PowerBidScheduleTimePoint.shutdownCost": {
             "description": "Total shutdown cost incurred for all the units involved in the bid given in the time point. This overrides any cost on the specific unit.",
@@ -35325,7 +35325,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "PowerBidScheduleTimePoint.stepIncrementP": {
             "description": "The minimum increment that can be applied for an increase in an activation request.",
@@ -35985,7 +35985,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "Season": {
             "attrib": {
@@ -36011,7 +36011,7 @@
         "MonthDay": {
             "description": "MonthDay format as \"--mm-dd\", which conforms with XSD data type gMonthDay.",
             "type": "Primitive",
-            "xsd:type": "xsd:integer",
+            "xsd:type": "xsd:gMonthDay",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "Season.endDate": {
@@ -36022,7 +36022,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "MonthDay",
-            "xsd:type": "xsd:integer"
+            "xsd:type": "xsd:gMonthDay"
         },
         "Season.startDate": {
             "description": "Date season starts.",
@@ -36032,7 +36032,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "MonthDay",
-            "xsd:type": "xsd:integer"
+            "xsd:type": "xsd:gMonthDay"
         },
         "SequenceTimePoint": {
             "attrib": {
@@ -36457,7 +36457,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "UnitCostTimePoint.startupCost": {
             "description": "The initial startup cost incurred for each start of the GeneratingUnit.",
@@ -36467,7 +36467,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "UnitCostTimePoint.warmStartupCost": {
             "description": "The warm startup cost incurred for each start of the GeneratingUnit.",
@@ -36477,7 +36477,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "VoltageAngleSchedule": {
             "attrib": {
@@ -36695,7 +36695,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -36706,7 +36706,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "issued": {
             "description": "Date of formal issuance of the resource.\nRecommended practice is to describe the date, date/time, or period of time as recommended for the property Date, of which this is a subproperty.\n[CIM context:\nReference to the date that the complete data set was made valid/available.].",
@@ -36853,7 +36853,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -36864,7 +36864,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -36940,7 +36940,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "temporalResolution": {
             "description": "Minimum time period resolvable in a dataset.\n[CIM context: \nDescribes the Market Time Unit (MTU), e.g. hourly, 15 min., etc.]",
@@ -36950,12 +36950,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -36966,7 +36966,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -36976,7 +36976,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -38019,7 +38019,7 @@
         "RealEnergy": {
             "description": "Real electrical energy.",
             "type": "CIMDatatype",
-            "xsd:type": "",
+            "xsd:type": "xsd:float",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "BatteryUnitTimePoint.storedE": {
@@ -38030,7 +38030,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "ControlAreaRegularSchedule": {
             "attrib": {
@@ -39339,7 +39339,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "FuelStorageSchedule": {
             "attrib": {
@@ -39431,7 +39431,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "GeneratingUnitSchedule": {
             "attrib": {
@@ -39662,7 +39662,7 @@
         "Time": {
             "description": "Time as \"hh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"hh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"hh:mm:ss.sss\u00b1hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:time",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "HourPeriod.endTime": {
@@ -39673,7 +39673,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Time",
-            "xsd:type": ""
+            "xsd:type": "xsd:time"
         },
         "HourPeriod.mRID": {
             "description": "Master resource identifier issued by a model authority. The mRID is unique within an exchange context. Global uniqueness is easily achieved by using a UUID, as specified in RFC 4122, for the mRID. The use of UUID is strongly recommended.\nFor CIMXML data files in RDF syntax conforming to IEC 61970-552, the mRID is mapped to rdf:ID or rdf:about attributes that identify CIM object elements.",
@@ -39693,7 +39693,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Time",
-            "xsd:type": ""
+            "xsd:type": "xsd:time"
         },
         "InServiceRegularSchedule": {
             "attrib": {
@@ -40159,7 +40159,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "ReservoirSchedule": {
             "attrib": {
@@ -40251,7 +40251,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "Season": {
             "attrib": {
@@ -40277,7 +40277,7 @@
         "MonthDay": {
             "description": "MonthDay format as \"--mm-dd\", which conforms with XSD data type gMonthDay.",
             "type": "Primitive",
-            "xsd:type": "xsd:integer",
+            "xsd:type": "xsd:gMonthDay",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "Season.endDate": {
@@ -40288,7 +40288,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "MonthDay",
-            "xsd:type": "xsd:integer"
+            "xsd:type": "xsd:gMonthDay"
         },
         "Season.startDate": {
             "description": "Date season starts.",
@@ -40298,7 +40298,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "MonthDay",
-            "xsd:type": "xsd:integer"
+            "xsd:type": "xsd:gMonthDay"
         },
         "ShuntCompensatorSchedule": {
             "attrib": {
@@ -41787,7 +41787,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -41798,7 +41798,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "issued": {
             "description": "Date of formal issuance of the resource.\nRecommended practice is to describe the date, date/time, or period of time as recommended for the property Date, of which this is a subproperty.\n[CIM context:\nReference to the date that the complete data set was made valid/available.].",
@@ -41945,7 +41945,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -41956,7 +41956,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -42032,12 +42032,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -42048,12 +42048,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -42064,7 +42064,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -42074,7 +42074,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
@@ -45548,7 +45548,7 @@
         "Decimal": {
             "description": "Decimal is the base-10 notational system for representing real numbers.",
             "type": "Primitive",
-            "xsd:type": "xsd:float",
+            "xsd:type": "xsd:decimal",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "GeneratingUnit.shutdownCost": {
@@ -45559,7 +45559,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "GeneratingUnit.warmStartupCost": {
             "description": "The warm startup cost incurred for each start of the GeneratingUnit.",
@@ -45569,7 +45569,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Decimal",
-            "xsd:type": "xsd:float"
+            "xsd:type": "xsd:decimal"
         },
         "EquivalentInjection": {
             "attrib": {
@@ -45835,7 +45835,7 @@
         "RealEnergy": {
             "description": "Real electrical energy.",
             "type": "CIMDatatype",
-            "xsd:type": "",
+            "xsd:type": "xsd:float",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "FuelStorage.energyStorage": {
@@ -45846,7 +45846,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "Fuse": {
             "attrib": {
@@ -46078,7 +46078,7 @@
         "Impedance": {
             "description": "Ratio of voltage to current.",
             "type": "CIMDatatype",
-            "xsd:type": "",
+            "xsd:type": "xsd:float",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "ImpedanceControlFunction.targetValue": {
@@ -46089,7 +46089,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Impedance",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "InServiceAction": {
             "attrib": {
@@ -47179,7 +47179,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "RealEnergy",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "RotatingMachineAction": {
             "attrib": {
@@ -47886,7 +47886,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Impedance",
-            "xsd:type": ""
+            "xsd:type": "xsd:float"
         },
         "ThyristorControlledSeriesCompensator.currentSection": {
             "description": "The current section on which the TCSC is operating.",
@@ -48219,7 +48219,7 @@
         "UUID": {
             "description": "Datatype representing a unique identifier in the form of a universally unique identifier (UUID). The value must conform to the UUID format as defined in RFC 4122, allowing for globally unique identification of entities.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "identifier": {
@@ -48230,7 +48230,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "UUID",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "DateTime": {
             "description": "Date and time as \"yyyy-mm-ddThh:mm:ss.sss\", which conforms with ISO 8601. UTC time zone is specified as \"yyyy-mm-ddThh:mm:ss.sssZ\". A local timezone relative UTC is specified as \"yyyy-mm-ddThh:mm:ss.sss-hh:mm\". The second component (shown here as \"ss.sss\") could have any number of digits in its fractional part to allow any kind of precision beyond seconds.",
@@ -48383,7 +48383,7 @@
         "DateTimeStamp": {
             "description": "Position of an instant, expressed using xsd:dateTimeStamp, in which the time-zone field is mandatory.",
             "type": "eumd",
-            "xsd:type": "",
+            "xsd:type": "xsd:dateTimeStamp",
             "namespace": "https://cim4.eu/ns/Metadata-European#"
         },
         "endDate": {
@@ -48394,7 +48394,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "inSeries": {
             "description": "A dataset series of which the dataset is part.",
@@ -48470,12 +48470,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "Duration": {
             "description": "Duration as \"PnYnMnDTnHnMnS\" which conforms to ISO 8601, where nY expresses a number of years, nM a number of months, nD a number of days. The letter T separates the date expression from the time expression and, after it, nH identifies a number of hours, nM a number of minutes and nS a number of seconds. The number of seconds could be expressed as a decimal number, but all other numbers are integers.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:duration",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "temporalResolution": {
@@ -48486,12 +48486,12 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Duration",
-            "xsd:type": ""
+            "xsd:type": "xsd:duration"
         },
         "Version": {
             "description": "Datatype representing a version identifier that follows Semantic Versioning (SemVer 2.0.0) principles: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. The version consists of a sequence of numbers and optional alphanumeric identifiers that indicate changes in a system, model, or software over time.",
             "type": "Primitive",
-            "xsd:type": "",
+            "xsd:type": "xsd:string",
             "namespace": "https://cim.ucaiug.io/ns#"
         },
         "version": {
@@ -48502,7 +48502,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "Version",
-            "xsd:type": ""
+            "xsd:type": "xsd:string"
         },
         "generatedAtTime": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nThe date and time when the model was serialized in the document where the header is located. The format is an extended format according to the ISO 8601-2005. European exchanges shall refer to UTC.].",
@@ -48512,7 +48512,7 @@
             "xsd:maxOccours": "1",
             "type": "Attribute",
             "dataType": "DateTimeStamp",
-            "xsd:type": ""
+            "xsd:type": "xsd:dateTimeStamp"
         },
         "wasGeneratedBy": {
             "description": "Generation is the completion of production of a new entity by an activity. This entity did not exist before generation and becomes available for usage after this generation.\n[CIM context:\nReference to an activity or the exact business nature (process, configuration) which produced or uses the model.].",
