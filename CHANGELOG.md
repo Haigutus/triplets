@@ -191,6 +191,11 @@ Start of the 0.3 line.
 - Unused `cim_rdfs_to_json_deprecated`.
 
 ### Fixed
+- **SHACL report paths follow the schema namespace**: with `rdf_map=`,
+  `export_to_shacl_report` writes each `sh:resultPath` in its profile's
+  namespace (e.g. `grid18v15#`), not always CIM100. Focus nodes stay
+  `urn:uuid:`, the same IRIs as the N-Quads and SPARQL views
+  ([#133](https://github.com/Haigutus/triplets/issues/133)).
 - **Export schemas record inheritance and ranges as absolute IRIs.** The
   generator resolves a relative ``rdf:resource="#Name"`` against the profile's
   ``xml:base`` (RDF/XML semantics) instead of copying it, so a parent or range
