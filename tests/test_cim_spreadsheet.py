@@ -67,7 +67,7 @@ def sheets(path):
 
 
 def test_parser_metadata_left_out_by_default(source, monkeypatch):
-    """Same option and defaults as cim-diff (issue #132): NamespaceMap and Distribution
+    """Same option and defaults as cim-diff: NamespaceMap and Distribution
     (which holds the source path) are not written unless asked for."""
     cim_spreadsheet.cim_to_spreadsheet(source, "default.xlsx")
     assert not sheets("default.xlsx") & {"NamespaceMap", "Distribution"}
@@ -80,7 +80,7 @@ def test_parser_metadata_left_out_by_default(source, monkeypatch):
 
 
 def test_cim_diff_runs_with_the_same_option(source, monkeypatch, capsys):
-    """cim-diff called rdf_parser.print_triplets_diff, which does not exist."""
+    """cim-diff runs with the shared exclusion option."""
     from triplets.cli import cim_diff
     monkeypatch.setattr(sys, "argv", ["cim-diff", source, source, "-ex", "ACLineSegment"])
     cim_diff.main()
