@@ -9,10 +9,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Start of the 0.3 line.
 
 ### Added
-- **NCP 2.5-dev export schemas** (`ENTSOE_NC_2.5-dev_552_ED1/ED2.json`) generated
-  from [application-profiles-library](https://github.com/entsoe/application-profiles-library)
-  `main` (`NCP/RDFS`). Named `-dev` until the pin is an `ncp-v2-5-0` release branch.
-  DatasetMetadata header attributes bind again via `schema:domainIncludes`
+- **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
+  `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
+  [application-profiles-library](https://github.com/entsoe/application-profiles-library)
+  release branch `ncp-v2-5-0` (`NCP/RDFS`, tag `ncp-2.5.0`). DatasetMetadata header attributes bind again via `schema:domainIncludes`
   ([#99](https://github.com/entsoe/application-profiles-library/pull/99) / [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
 
 ### Changed
@@ -167,6 +167,9 @@ Start of the 0.3 line.
   on the next `cim_rdfs_to_json` run.
 
 ### Fixed
+- **`comment=` is written by the `python_lxml` CIM XML exporter** too: it
+  serialized the root element only, so the comment before it was dropped
+  ([#131](https://github.com/Haigutus/triplets/issues/131)).
 - **Export schemas record inheritance and ranges as absolute IRIs.** The
   generator resolves a relative ``rdf:resource="#Name"`` against the profile's
   ``xml:base`` (RDF/XML semantics) instead of copying it, so a parent or range
@@ -175,6 +178,10 @@ Start of the 0.3 line.
   namespace. Enumeration ranges were mangled by a ``replace("#", "")``
   (`https://cim4.eu/ns/ncBalancingReserveKind`, 107 entries in NC 2.5); all
   bundles regenerated — only `inheritance` and `range` values change.
+- **`cim-spreadsheet` back to CIM XML** ([#125](https://github.com/Haigutus/triplets/issues/125)):
+  the to-cim direction failed for Excel and CSV (`rdf_parser.tableviews_to_triplets`
+  does not exist); it now uses `triplets.tools.tableviews_to_triplets`. Spreadsheets
+  are read as text, so `false` no longer comes back as `False`.
 - **Exclude pandas 2.3.3**: `pivot()` on ArrowDtype dictionary columns still
   crashes with `'Series' object has no attribute '_pa_array'` (same bug as
   2.2.x, which is already excluded). Constraint is now
