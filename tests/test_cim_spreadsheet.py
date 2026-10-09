@@ -59,3 +59,29 @@ def test_command_line_to_cim(source, reference, monkeypatch):
                                       "--rdf-map", RDF_MAP, "--no-zip"])
     cim_spreadsheet.main()
     assert triples([str(path) for path in Path("out").glob("*.xml")]) == reference
+
+
+def sheets(path):
+    import openpyxl
+    return set(openpyxl.load_workbook(path, read_only=True).sheetnames)
+
+
+def test_parser_metadata_left_out_by_default(source, monkeypatch):
+    """Same option and defaults as cim-diff (issue #132): NamespaceMap and Distribution
+    (which holds the source path) are not written unless asked for."""
+    cim_spreadsheet.cim_to_spreadsheet(source, "default.xlsx")
+    assert not sheets("default.xlsx") & {"NamespaceMap", "Distribution"}
+    monkeypatch.setattr(sys, "argv", ["cim-spreadsheet", "-i", source, "-o", "all.xlsx", "--no-default-exclusions"])
+    cim_spreadsheet.main()
+    assert {"NamespaceMap", "Distribution"} <= sheets("all.xlsx")
+    monkeypatch.setattr(sys, "argv", ["cim-spreadsheet", "-i", source, "-o", "fewer.xlsx", "-ex", "ACLineSegment"])
+    cim_spreadsheet.main()
+    assert sheets("fewer.xlsx") == sheets("default.xlsx") - {"ACLineSegment"}
+
+
+def test_cim_diff_runs_with_the_same_option(source, monkeypatch, capsys):
+    """cim-diff called rdf_parser.print_triplets_diff, which does not exist."""
+    from triplets.cli import cim_diff
+    monkeypatch.setattr(sys, "argv", ["cim-diff", source, source, "-ex", "ACLineSegment"])
+    cim_diff.main()
+    assert "Traceback" not in capsys.readouterr().out

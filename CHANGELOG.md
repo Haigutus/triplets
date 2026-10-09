@@ -160,6 +160,12 @@ Start of the 0.3 line.
   no longer prefixed with `urn:uuid:` by the N-Quads graph term.
 
 ### Fixed
+- **`cim-spreadsheet` leaves out the parser metadata** (`NamespaceMap`,
+  `Distribution`, which holds the source path) like `cim-diff`, with the same
+  `--exclude_objects` / `--no-default-exclusions` options from one shared
+  definition in `triplets.cli` ([#132](https://github.com/Haigutus/triplets/issues/132)).
+- **`cim-diff` runs again**: it called `rdf_parser.print_triplets_diff`, which
+  does not exist; it now uses `parse` and `tools.print_triplets_diff`.
 - **Export schemas record inheritance and ranges as absolute IRIs.** The
   generator resolves a relative ``rdf:resource="#Name"`` against the profile's
   ``xml:base`` (RDF/XML semantics) instead of copying it, so a parent or range

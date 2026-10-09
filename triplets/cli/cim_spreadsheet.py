@@ -129,9 +129,10 @@ from uuid import uuid4
 from ..export import export_to_cimxml
 from ..parser import parse
 from ..tools import tableviews_to_triplets
-from ..export_schema import schemas
+from . import DEFAULT_EXCLUSIONS, add_exclusion_arguments, exclusions
 
-def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, multivalue=True):
+def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, multivalue=True,
+                       exclude_objects=DEFAULT_EXCLUSIONS):
     """
     Convert CIM XML to spreadsheet format (Excel or CSV).
 
@@ -153,6 +154,9 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
     multivalue : bool, default True
         If True, aggregate duplicate (ID, KEY) pairs into lists in the output.
         Use False to keep duplicate pairs as separate rows.
+    exclude_objects : sequence of str, default DEFAULT_EXCLUSIONS
+        Class names left out, as in ``cim-diff`` (by default the parser metadata:
+        NamespaceMap, Distribution).
 
     Raises
     ------
@@ -180,6 +184,9 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
         zip_output = (format == "csv")
 
     data = parse(cim_path)
+    if exclude_objects:
+        excluded = data.loc[(data["KEY"] == "Type") & data["VALUE"].isin(exclude_objects), "ID"]
+        data = data[~data["ID"].isin(excluded)]
 
     base_name = os.path.basename(output_path).replace('.zip', '').replace('.xlsx', '').replace('.csv', '')
     if not base_name:
@@ -590,6 +597,7 @@ def main():
     parser.add_argument("--zip", "-z", action="store_true", dest="zip_output", help="Zip output")
     parser.add_argument("--no-zip", action="store_false", dest="zip_output", help="Do not zip output")
     parser.set_defaults(zip_output=None)
+    add_exclusion_arguments(parser, "the spreadsheet (for to-spreadsheet conversion)")
 
     # Spreadsheet to CIM specific arguments
     parser.add_argument("--rdf-map", "-r", help="Path to RDF map JSON (for to-cim conversion)")
@@ -618,7 +626,8 @@ def main():
                 args.output,
                 format=args.format,
                 zip_output=args.zip_output,
-                multivalue=args.multivalue
+                multivalue=args.multivalue,
+                exclude_objects=exclusions(args)
             )
             print(f"Converted {args.input} → {args.output}")
 
