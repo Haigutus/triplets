@@ -114,7 +114,9 @@ Notes
 See Also
 --------
 cim-diff : Tool for comparing CIM XML files
-triplets.rdf_parser : Core module for RDF/CIM data manipulation
+triplets.parse : CIM XML to triplets
+triplets.tools.tableviews_to_triplets : Spreadsheet tables to triplets
+triplets.export.export_to_cimxml : Triplets to CIM XML
 """
 
 import sys
@@ -136,7 +138,7 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
     Convert CIM XML to spreadsheet format (Excel or CSV).
 
     Handles all orchestration including file I/O, format detection, zipping,
-    and conversion through the core rdf_parser functions.
+    and conversion through ``triplets.parse``.
 
     Parameters
     ----------
@@ -234,8 +236,8 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
     Convert spreadsheet format (Excel or CSV) to CIM XML.
 
     Handles all orchestration including file I/O, format detection, unzipping,
-    sheet selection, raw triplets import, and conversion through core rdf_parser
-    functions.
+    sheet selection, raw triplets import, and conversion through
+    ``triplets.tools.tableviews_to_triplets`` and ``export_to_cimxml``.
 
     Parameters
     ----------
