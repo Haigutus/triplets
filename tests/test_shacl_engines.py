@@ -570,3 +570,29 @@ def test_in_member_with_slash_iri_matches_the_whole_value(engine):
     rows = breaker("b1", ("Switch.kind", kind)) + breaker("b2", ("Switch.kind", "http://example.org/kinds/b"))
     v = run(rows, SHAPE.format(body=f"sh:path cim:Switch.kind ; sh:in ( <{kind}> )"), engine)
     assert violating(v, "sh:in") == {("b2", "http://example.org/kinds/b")}
+
+
+TOY_SCHEMA = {"EQ": {
+    "Breaker": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                "inheritance": ["#Breaker", "#Switch", "#Equipment"]},
+    "Disconnector": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                     "inheritance": ["#Disconnector", "#Switch", "#Equipment"]},
+}}
+
+
+def test_pyshacl_ont_graph_abstract_target():
+    """pyshacl + rdf_map: sh:targetClass Equipment hits concrete subclasses via
+    ont_graph rdfs:subClassOf — instance Type stays Breaker."""
+    pytest.importorskip("pyshacl")
+    shape = """cim:EqShape a sh:NodeShape ; sh:targetClass cim:Equipment ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = breaker("b1") + [("d1", "Type", "Disconnector", "eq"),
+                            ("x1", "Type", "Substation", "eq")]
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    bare = triplets.validation.validate(data, graph, engine="pyshacl")
+    assert violating(bare, "sh:minCount") == set()
+    bound = triplets.validation.validate(data, graph, engine="pyshacl", rdf_map=TOY_SCHEMA)
+    assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
