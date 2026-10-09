@@ -63,8 +63,12 @@ python setup_cython_parser.py build_ext --inplace
 - `tests/data/minimal_cim.xml` — 5 RDF objects, covers Substation, VoltageLevel, BaseVoltage, ConnectivityNode (with `rdf:nodeID`)
 - `tests/data/sarif-schema-2.1.0.json` — official SARIF 2.1.0 schema for the exporter conformance test
 
-**Submodule** (`git submodule update --init test_data/relicapgrid`):
+**Submodules** (`git submodule update --init test_data/relicapgrid test_data/entsoe-profiles`):
 - `test_data/relicapgrid/` — NC, CGMES, and Svedala IGM files for import and tools tests
+- `test_data/entsoe-profiles/` — [application-profiles-library](https://github.com/entsoe/application-profiles-library);
+  the real CGMES SHACL shapes (`CGMES/SHACL`) for the SHACL compile test and the
+  real-profile engine benchmark (`-m performance`). `TRIPLETS_CGMES_SHACL` points
+  the tests at another shapes directory.
 
 **Git LFS** (`git lfs pull`):
 - `test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip`

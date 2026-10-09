@@ -154,12 +154,11 @@ converts arrow/duckdb to pandas before loading. Custom engines register via
 `triplets.sparql.register_engine(name, module)`.
 
 **Parallelism.** rdflib query evaluation is GIL-bound pure Python, so threads
-don't help — batch workloads (the sh:sparql constraints the SHACL engines
-delegate here) use `ProcessPoolExecutor` fork on the rdflib path. The qlever
-binding and pyoxigraph both release the GIL during queries, so plain threads
-parallelize; the SHACL engines skip the fork pool automatically whenever the
-auto engine is not rdflib (both are orders of magnitude faster sequentially
-anyway).
+don't help — batch workloads (the sh:sparql constraints the SHACL engines send
+here) use `ProcessPoolExecutor` fork on the rdflib path. pyoxigraph releases
+the GIL during queries, so the SHACL engines run oxigraph constraint queries
+in a thread pool over the one store (`max_workers`). The SHACL engines run
+qlever queries sequentially.
 
 ## Shared Loading (`_rdflib_loader.py`)
 

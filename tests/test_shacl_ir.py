@@ -65,7 +65,7 @@ cim:BreakerShape a sh:NodeShape ;
 
 CGMES_SHACL_DIR = Path(os.environ.get(
     "TRIPLETS_CGMES_SHACL",
-    "/home/kvilgo/GIT/application-profiles-library/CGMES/CurrentRelease/SHACL"))
+    Path(__file__).resolve().parents[1] / "test_data/entsoe-profiles/CGMES/SHACL"))
 # the ENTSO-E profiles split constraints: Simple carries datatype/nodeKind,
 # Complex carries sparql/range/cardinality — real validation uses both
 CGMES_EQ_SHACL_FILES = [
@@ -143,7 +143,7 @@ def test_compile_cache_hits_by_content(shape_file, tmp_path):
 
 
 @pytest.mark.skipif(not all(f.exists() for f in CGMES_EQ_SHACL_FILES),
-                    reason="external CGMES SHACL shapes not available")
+                    reason="CGMES SHACL shapes not available (git submodule update --init test_data/entsoe-profiles)")
 def test_ir_real_cgmes_eq_shapes():
     """The real CGMES Equipment SHACL profiles compile to a non-trivial IR."""
     ir = compile_shapes([str(f) for f in CGMES_EQ_SHACL_FILES]).ir
@@ -153,11 +153,8 @@ def test_ir_real_cgmes_eq_shapes():
     assert not unknown, f"unexpected components in real shapes: {unknown}"
 
 
-def test_invisible_targets_warn_at_compile(caplog, tmp_path):
-    """Shapes reached only through targets the IR does not walk must warn —
-    the vectorized engines would otherwise silently under-validate."""
-    import logging
-    path = tmp_path / "invisible.ttl"
+def test_target_node_compiles_into_ir(tmp_path):
+    path = tmp_path / "node.ttl"
     path.write_text("""
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix cim: <http://iec.ch/TC57/CIM100#> .
@@ -166,33 +163,93 @@ cim:PickedNodeShape a sh:NodeShape ;
     sh:targetNode <urn:uuid:11111111-2222-3333-4444-555555555555> ;
     sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
 """)
+    ir = compile_shapes(str(path)).ir
+    assert list(ir["target_kind"]) == ["node"]
+    assert list(ir["target_class"]) == ["11111111-2222-3333-4444-555555555555"]
+    assert list(ir["component"]) == ["sh:minCount"]
+
+
+def test_deactivated_shape_emits_no_rows(tmp_path):
+    path = tmp_path / "off.ttl"
+    path.write_text("""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:Off a sh:NodeShape ; sh:deactivated true ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+""")
+    compiled = compile_shapes(str(path))
+    assert compiled.ir.empty
+
+
+def test_sparql_rule_collected_not_as_ir_row(tmp_path):
+    path = tmp_path / "rule.ttl"
+    path.write_text("""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:Inferred a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:rule [ a sh:SPARQLRule ;
+        sh:construct "CONSTRUCT { $this cim:IdentifiedObject.name \\"x\\" } WHERE { $this a cim:Breaker }" ] .
+""")
+    compiled = compile_shapes(str(path))
+    assert compiled.ir.empty
+    assert len(compiled.rules) == 1
+    assert "CONSTRUCT" in compiled.rules[0]["construct"]
+
+
+def test_custom_target_without_select_warns(caplog, tmp_path):
+    """Custom sh:target without sh:select stays invisible — warn so the
+    vectorized engines do not silently under-validate."""
+    import logging
+    path = tmp_path / "invisible.ttl"
+    path.write_text("""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix ex: <http://example.org/> .
+
+cim:Custom a sh:NodeShape ;
+    sh:target ex:NotSparql ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+""")
     with caplog.at_level(logging.WARNING, logger="triplets.validation.shacl_ir"):
         compiled = compile_shapes(str(path))
-    assert len(compiled.ir) == 0                           # invisible to the IR
-    assert any("sh:targetNode" in record.getMessage()
+    assert len(compiled.ir) == 0
+    assert any("sh:target" in record.getMessage()
                for record in caplog.records if record.levelname == "WARNING")
+
+
+def test_xone_compiles_like_or(tmp_path):
+    path = tmp_path / "xone.ttl"
+    path.write_text("""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:Xor a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:xone ( [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]
+              [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) .
+""")
+    ir = compile_shapes(str(path)).ir
+    assert list(ir["component"]) == ["sh:xone"]
+    assert len(ir.iloc[0]["params"]) == 2
 
 
 def test_component_registries_agree():
     """The stringly-typed component keys live in several registries — they must
-    describe the same universe: pandas is complete; polars/duckdb + the shared
-    fallback set cover everything; pyshacl's report vocabulary maps onto it."""
+    describe the same universe: every engine implements every component natively
+    (no hand-off between engines); pyshacl's report vocabulary maps onto it."""
     from triplets.validation import shacl_ir, shacl_pandas, shacl_report
 
     known = set(shacl_ir.KNOWN_COMPONENTS)
     assert set(shacl_pandas.CONSTRAINT_VALIDATORS) == known
-    assert shacl_ir.FALLBACK_COMPONENTS <= known
     # pyshacl's report vocabulary covers the SHACL components; triplets:range
     # is schema-validation-only (never emitted by pyshacl)
     assert set(shacl_report._COMPONENT_MAP.values()) == known - {"triplets:range"}
 
     if importlib.util.find_spec("polars"):
         from triplets.validation import shacl_polars
-        assert set(shacl_polars.PLAN_BUILDERS) | shacl_ir.FALLBACK_COMPONENTS == known
+        assert set(shacl_polars.PLAN_BUILDERS) == known
         assert set(shacl_polars.BATCH_BUILDERS) <= set(shacl_polars.PLAN_BUILDERS)
     if importlib.util.find_spec("duckdb"):
         from triplets.validation import shacl_duckdb
-        assert set(shacl_duckdb.SQL_BUILDERS) | shacl_ir.FALLBACK_COMPONENTS == known
+        assert set(shacl_duckdb.SQL_BUILDERS) == known
 
 
 def test_logical_operator_cycle_dropped(caplog):
@@ -211,7 +268,7 @@ def test_logical_operator_cycle_dropped(caplog):
     graph = rdflib.Graph().parse(shapes, format="turtle")
     from triplets.validation.shacl_ir import parse_ir
     with caplog.at_level("WARNING"):
-        ir = parse_ir(graph)
+        ir, _ = parse_ir(graph)
     assert any("cycle" in record.message for record in caplog.records)
     assert (ir["component"] == "sh:or").any()          # the outer constraint survives
 

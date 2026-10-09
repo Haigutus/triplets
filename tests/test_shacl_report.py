@@ -205,7 +205,7 @@ SKIPPED_TTL = """
 @prefix sh:  <http://www.w3.org/ns/shacl#> .
 @prefix cim: <http://iec.ch/TC57/CIM100#> .
 @prefix ex:  <http://example.org/#> .
-ex:NodeTargeted a sh:NodeShape ; sh:targetNode ex:n1 ;
+ex:CustomTarget a sh:NodeShape ; sh:target ex:NotSparql ;
     sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
 ex:DeepPath a sh:NodeShape ; sh:targetClass cim:Breaker ;
     sh:property [ sh:path ( cim:a cim:b cim:c ) ; sh:minCount 1 ] .
@@ -309,7 +309,7 @@ def test_metadata_reports_skipped_coverage(tmp_path):
     violations = triplets.validation.validate(DATA, shapes, engine="pandas")
     meta = violations.attrs["validation"]
     assert meta["node_shapes"] == 2
-    assert any("sh:targetNode" in entry for entry in meta["skipped_shapes"])
+    assert any("sh:target" in entry for entry in meta["skipped_shapes"])
     assert any("unsupported sh:path" in entry for entry in meta["skipped_shapes"])
 
 
@@ -327,7 +327,7 @@ def test_run_stats_reach_sarif_and_csv(tmp_path):
     properties = build_sarif(violations)["runs"][0]["properties"]
     assert properties["engine"] == "pandas"
     assert properties["node_shapes"] == 2 and properties["duration_seconds"] >= 0
-    assert any("sh:targetNode" in entry for entry in properties["skipped_shapes"])
+    assert any("sh:target" in entry for entry in properties["skipped_shapes"])
     assert properties["skipped_components"] == []       # empty list survives
 
     violations_to_csv(violations, tmp_path / "report.csv")
@@ -416,3 +416,30 @@ def test_excel_export_writes_metadata_sheet(tmp_path):
     assert set(sheets) == {"violations", "metadata"}
     meta = sheets["metadata"]
     assert ("references", "shapes.ttl") in set(zip(meta["KEY"], meta["VALUE"]))
+
+
+GRID = "http://www.ucaiug.org/grid18v15#"
+GRID_SCHEMA = {"EQ": {
+    "ProfileMetadata": {"keyword": "EQ"},
+    "IdentifiedObject.name": {"type": "Attribute", "namespace": GRID},
+    "Conductor.length": {"type": "Attribute", "namespace": GRID},
+    "ACLineSegment.r": {"type": "Attribute", "namespace": GRID},
+}}
+
+
+def test_report_paths_follow_the_schema_namespace():
+    """A profile outside CIM100 (EMTIOP, grid18v15): rdf_map= gives each sh:resultPath
+    its schema namespace; a name the schema lacks takes undefined_namespace;
+    the report reads back to the same frame."""
+    import rdflib
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    graph = violations_to_report_graph(VIOLATIONS, rdf_map=GRID_SCHEMA)
+    assert {str(path) for path in graph.objects(None, sh.resultPath)} == {
+        f"{GRID}Conductor.length", f"{GRID}IdentifiedObject.name", f"{GRID}ACLineSegment.r"}
+    focus = {str(node) for node in graph.objects(None, sh.focusNode)}
+    assert focus == {f"urn:uuid:{ID}" for ID in VIOLATIONS["ID"]}   # same IRIs as the N-Quads / SPARQL views
+    pandas.testing.assert_frame_equal(_canon(report_to_violations(graph)), _canon(VIOLATIONS))
+
+    unknown = VIOLATIONS.assign(KEY="Custom.foo")
+    graph = violations_to_report_graph(unknown, rdf_map=GRID_SCHEMA, undefined_namespace="http://acme#")
+    assert {str(path) for path in graph.objects(None, sh.resultPath)} == {"http://acme#Custom.foo"}

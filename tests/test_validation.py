@@ -30,10 +30,10 @@ cim:ACLineSegmentShape a sh:NodeShape ;
                   sh:message "Conductor.length must be xsd:float" ] .
 """
 
-# Real CGMES SHACL shapes — external, skip-guarded (not vendored into the repo).
+# Real CGMES SHACL shapes — test_data/entsoe-profiles submodule (TRIPLETS_CGMES_SHACL overrides), skip-guarded.
 CGMES_SHACL_DIR = Path(os.environ.get(
     "TRIPLETS_CGMES_SHACL",
-    "/home/kvilgo/GIT/application-profiles-library/CGMES/CurrentRelease/SHACL"))
+    Path(__file__).resolve().parents[1] / "test_data/entsoe-profiles/CGMES/SHACL"))
 CGMES_EQ_SHACL = CGMES_SHACL_DIR / "61970-301_Equipment-AP-Con-Complex-SHACL.ttl"
 
 
@@ -136,7 +136,7 @@ def test_lexical_polars_input(lexical_data, shape_file):
 @pytest.mark.skipif(not os.environ.get("TRIPLETS_SLOW_TESTS"),
                     reason="pyshacl on the full complex CGMES SHACL takes >10 min — set TRIPLETS_SLOW_TESTS=1")
 @pytest.mark.skipif(not CGMES_EQ_SHACL.exists(),
-                    reason="external CGMES SHACL shapes not available")
+                    reason="CGMES SHACL shapes not available (git submodule update --init test_data/entsoe-profiles)")
 def test_real_cgmes_eq_shapes(svedala_eq):
     """Validate Svedala EQ against the real CGMES Equipment SHACL profile."""
     from triplets.export_schema import schemas

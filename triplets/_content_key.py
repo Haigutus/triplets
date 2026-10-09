@@ -20,18 +20,29 @@ import json
 import hashlib
 import weakref
 
-_HASHES = {}   # id(obj) → (weakref.ref with evict callback, content_hash digest)
+_HASHES = {}   # id(obj) → (weakref.ref with evict callback, content_hash digest, {(salt, schema): key})
 
 
 def content_key(data, rdf_map, salt, data_unchanged=False):
-    """Digest identifying exactly what an engine loads from (data, rdf_map)."""
+    """Digest identifying exactly what an engine loads from (data, rdf_map).
+
+    With ``data_unchanged`` the finished key is reused too: a validation run
+    queries the same data and schema hundreds of times, and re-reading /
+    re-serializing the schema costs ~10 ms per query on the CGMES bundles.
+    """
+    schema_id = (salt, os.fspath(rdf_map) if isinstance(rdf_map, (str, os.PathLike)) else id(rdf_map))
+    entry = _HASHES.get(id(data))
+    if data_unchanged and entry is not None and entry[0]() is data and schema_id in entry[2]:
+        return entry[2][schema_id]
     content = _content_hash(data, data_unchanged)
     if isinstance(rdf_map, (str, os.PathLike)):
         with open(rdf_map, "rb") as file:
             schema = file.read()
     else:
         schema = json.dumps(rdf_map, sort_keys=True, default=str).encode() if rdf_map else b""
-    return hashlib.sha256(salt + content.encode() + schema).hexdigest()[:24]
+    key = hashlib.sha256(salt + content.encode() + schema).hexdigest()[:24]
+    _HASHES[id(data)][2][schema_id] = key
+    return key
 
 
 def _content_hash(data, data_unchanged):
@@ -40,5 +51,5 @@ def _content_hash(data, data_unchanged):
         return entry[1]
     digest = data.content_hash(ignore_types=(), columns=("ID", "KEY", "VALUE", "INSTANCE_ID"))
     oid = id(data)
-    _HASHES[oid] = (weakref.ref(data, lambda _: _HASHES.pop(oid, None)), digest)
+    _HASHES[oid] = (weakref.ref(data, lambda _: _HASHES.pop(oid, None)), digest, {})
     return digest

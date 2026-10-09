@@ -19,6 +19,24 @@ Start of the 0.3 line.
   `inheritance` lists: `class_ids("Equipment")` is the union of descendant
   IDs, built once per run. The IR is not fanned out. Without `rdf_map`,
   match stays exact `Type`.
+- Vectorized engines walk `sh:targetNode`, `sh:targetObjectsOf` and SPARQL
+  `sh:target` (with `sh:select`), and run `sh:xone`. `sh:rule` SPARQLRule
+  CONSTRUCT runs as a data pre-pass before validation. `sh:deactivated` drops
+  the shape at compile.
+- **polars and duckdb run every SHACL component natively**: `sh:or` / `and` /
+  `not` / `xone` / `node` / `sparql` no longer hand rows to the pandas engine.
+  Nested rows run with a focus override (polars eagerly, duckdb as composed SQL
+  with `UNNEST(?)` ID lists); `sh:sparql` and SPARQL targets share one module,
+  `validation/shacl_sparql`. `FALLBACK_COMPONENTS` is gone and `split_rules`
+  returns `(rules, skipped)`. polars and duckdb `validate` take
+  `undefined_namespace` like pandas.
+- Schema validation flags objects whose only `Type` is a known abstract class.
+- `test_data/entsoe-profiles` submodule ([application-profiles-library](https://github.com/entsoe/application-profiles-library)
+  `main`): the real CGMES SHACL shapes the SHACL tests and the real-profile
+  benchmark read (was a hard-coded local path). Fetched in the tests CI.
+- SHACL `max_workers` runs oxigraph `sh:sparql` constraint queries in a thread
+  pool over the one store (was sequential; the fork pool stays rdflib-only).
+  CGMES 3.0 EQ shapes on Svedala EQ at 8 workers: polars 8.7 s → 2.4 s.
 - **NCP 2.5-dev export schemas** (`ENTSOE_NC_2.5-dev_552_ED1/ED2.json`) generated
   from [application-profiles-library](https://github.com/entsoe/application-profiles-library)
   `main` (`NCP/RDFS`). Named `-dev` until the pin is an `ncp-v2-5-0` release branch.
@@ -169,7 +187,15 @@ Start of the 0.3 line.
   `INSTANCE_ID` scopes correctly (was silently empty), and an `https:` one is
   no longer prefixed with `urn:uuid:` by the N-Quads graph term.
 
+### Removed
+- Unused `cim_rdfs_to_json_deprecated`.
+
 ### Fixed
+- **SHACL report paths follow the schema namespace**: with `rdf_map=`,
+  `export_to_shacl_report` writes each `sh:resultPath` in its profile's
+  namespace (e.g. `grid18v15#`), not always CIM100. Focus nodes stay
+  `urn:uuid:`, the same IRIs as the N-Quads and SPARQL views
+  ([#133](https://github.com/Haigutus/triplets/issues/133)).
 - **Export schemas record inheritance and ranges as absolute IRIs.** The
   generator resolves a relative ``rdf:resource="#Name"`` against the profile's
   ``xml:base`` (RDF/XML semantics) instead of copying it, so a parent or range

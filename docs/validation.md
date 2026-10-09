@@ -12,13 +12,20 @@ reported in the run's coverage metadata, `skipped_shapes` /
   entry stay on CIM100.
 - **Vectorized engines + `rdf_map`:** a Type index is expanded once
   (ancestor → union of descendant IDs). `sh:targetClass Equipment` hits
-  `Breaker` without cloning IR rows. Without `rdf_map`, match is exact
+  `Breaker`. Without `rdf_map`, match is exact
   `Type`.
-- **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
-  Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /
-  `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —
-  `compile()` logs a warning naming them; use `engine="pyshacl"` for full
-  spec coverage.
+- **Vectorized engines walk `sh:targetClass`, `sh:targetSubjectsOf`,
+  `sh:targetObjectsOf`, `sh:targetNode`, and SPARQL `sh:target`.** A custom
+  `sh:target` without `sh:select` is not evaluated by them — `compile()` logs
+  a warning; use `engine="pyshacl"` for those.
+- **`sh:xone`** compiles into the IR like `sh:or`. **`sh:rule` SPARQLRule** is
+  a CONSTRUCT pre-pass on the data before any engine runs (pyshacl does this
+  itself via `advanced=True`).
+- **Every engine runs every component natively.** Nested components (`sh:or`/`and`/`not`/`xone`/`node`) run their
+  nested rows with a focus override: the parent's focus nodes, or for
+  `sh:node` the referenced value nodes. polars evaluates them eagerly and
+  returns a LazyFrame; duckdb composes their SQL and binds ID lists through
+  `UNNEST(?)`. `sh:sparql` and SPARQL targets go through `shacl_sparql`.
 - **Property paths**: direct, `sh:inversePath`, and the two-step sequence
   `sh:path ( assoc rdf:type )` (the ENTSO-E "valueType" pattern — the
   constraint applies to the referenced object's type; a dangling reference
@@ -47,8 +54,8 @@ touching the public API:
 | Engine | File | Requires | Role |
 |--------|------|----------|------|
 | `pyshacl` | `validation/shacl_pyshacl.py` | pyshacl + rdflib (`pip install triplets[validation]`) | **reference** — spec-complete, rdflib-based. `store="oxigraph"` loads the data graph through the oxigraph SPARQL engine's cached store (identical results; opt in only when the store is already loaded for SPARQL) |
-| `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; **complete registry** — `sh:sparql` delegated to `triplets.sparql` (`max_workers` parallelizes those queries), `sh:node` expanded at compile time and run against the referenced value nodes, `sh:nodeKind` decided by the rdf_map schema (value form when schema is silent). Explicit `engine="pandas"` |
-| `polars` | `validation/shacl_polars.py` | polars | compiled-IR executor for performance: one LazyFrame plan per constraint, single `polars.collect_all` (parallel, common subplans eliminated). Same semantics as pandas; nested/query components delegate to the pandas implementations. The fast in-memory default |
+| `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; **complete registry** — `sh:sparql` runs through `triplets.sparql` (`max_workers` parallelizes those queries), `sh:node` expanded at compile time and run against the referenced value nodes, `sh:nodeKind` decided by the rdf_map schema (value form when schema is silent). Explicit `engine="pandas"` |
+| `polars` | `validation/shacl_polars.py` | polars | compiled-IR executor for performance: one LazyFrame plan per constraint, single `polars.collect_all` (parallel, common subplans eliminated). Same semantics as pandas; nested components run eagerly with a focus override and come back as LazyFrames. The fast in-memory default |
 | `duckdb` | `validation/shacl_duckdb.py` | duckdb | compiled-IR executor for **larger-than-memory** data: one SQL query per constraint against the connection's triplets table (streams/spills via DuckDB's executor). Defaults come from the connection (`duckdb.connect(table=..., schema=...)`); call kwargs `table`/`schema`/`table_name` override. Accepts a connection or registers any frame. Constraints batch 100-per-`UNION ALL` statement — explicit choice (`engine="duckdb"`, not in auto) when the data does not fit in memory |
 
 Auto order: `polars → pandas → pyshacl` (first importable).
@@ -76,7 +83,7 @@ registries that consume it are internal.
 |-------|------|---------|
 | `shape_id` | str | full shape IRI (blank-node id for anonymous property shapes) — becomes `SOURCE_SHAPE` in reports and the join key for `enrich` |
 | `target_class` | str | local name: the class for `target_kind="class"`, the property KEY for `"subjectsOf"` |
-| `target_kind` | `"class"` / `"subjectsOf"` | which target declaration produced the row |
+| `target_kind` | `"class"` / `"subjectsOf"` / `"objectsOf"` / `"node"` / `"sparql"` | which target declaration produced the row |
 | `path` | str \| None | the property as one triplet KEY (local name); None for node-level constraints (`sh:closed`, node-level `sh:sparql`) |
 | `inverse` | bool | `sh:inversePath` — engines swap the FOCUS/VALUE direction |
 | `via_type` | bool | the `( assoc rdf:type )` sequence path: the value nodes are the referenced objects' *types* |
@@ -95,7 +102,7 @@ registries that consume it are internal.
 | `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern`, `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str |
 | `sh:in` | list[str] (IRIs shortened to local names) |
 | `sh:closed` | list[str] — the **fully resolved** allowed KEY list: `sh:ignoredProperties` + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included) |
-| `sh:or` / `sh:and` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
+| `sh:or` / `sh:and` / `sh:xone` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
 | `sh:not` | list[dict] — nested IR row dicts |
 | `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time |
 | `sh:sparql` | `{"select": SELECT text with `$this`/`$PATH` placeholders, "prefixes": resolved `PREFIX` header, "path": full IRI of the owning `sh:path` or None}` |
@@ -115,17 +122,17 @@ the same shapes never recompiles anything.
 
 ### Component coverage per engine
 
-The shared contract lives in `shacl_ir`: `KNOWN_COMPONENTS` (all 24 keys) and
-`FALLBACK_COMPONENTS` (`sh:or/and/not/node/sparql` — the nested/query components
-every vectorized engine delegates to the pandas implementations via
-`split_rules`). A test (`test_shacl_ir.py::test_component_registries_agree`)
-pins the registries together:
+The shared contract lives in `shacl_ir`: `KNOWN_COMPONENTS`. Every engine
+implements all of it natively. A test
+(`test_shacl_ir.py::test_component_registries_agree`) pins the registries
+together: `CONSTRAINT_VALIDATORS`, `PLAN_BUILDERS` and `SQL_BUILDERS` each
+equal `KNOWN_COMPONENTS`.
 
 | engine | registry | coverage |
 |--------|----------|----------|
-| pandas | `CONSTRAINT_VALIDATORS` | all 24 (the fallback target) |
-| polars | `PLAN_BUILDERS` (+ `BATCH_BUILDERS` fast path) | 19 vectorized + 5 delegated |
-| duckdb | `SQL_BUILDERS` | 19 vectorized + 5 delegated |
+| pandas | `CONSTRAINT_VALIDATORS` | all known |
+| polars | `PLAN_BUILDERS` (+ `BATCH_BUILDERS` fast path) | all known |
+| duckdb | `SQL_BUILDERS` | all known |
 | pyshacl | consumes `compiled.graph`, not the IR | full spec; report vocabulary mapped back via `shacl_report._COMPONENT_MAP` |
 
 The compile cache participates in the shared engine-state lifecycle:
@@ -151,16 +158,16 @@ validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) →
 - **pyshacl** consumes `compiled.graph` (data goes through `_rdflib_loader`).
 - **pandas/polars/duckdb** consume `compiled.ir` — they never touch rdflib and
   read the raw string `VALUE`s directly (`rdf_map` matters only for their
-  sh:sparql delegation, where it types the queried graph).
+  sh:sparql constraints, where it types the queried graph).
 - **sh:sparql IR rows**: pyshacl evaluates them natively (`advanced=True`).
-  The vectorized engines delegate them to `triplets.sparql` (auto order:
+  The vectorized engines run them through `shacl_sparql` → `triplets.sparql` (auto order:
   qlever when built, else oxigraph when installed, else rdflib): the data is
   loaded into one dataset, each constraint runs as a single SELECT with the
   focus nodes bound via `VALUES ?this {...}` and `$PATH` substituted from
-  the IR, and `max_workers=N` runs the constraint queries in parallel
-  processes on the rdflib path only (fork gives copy-on-write sharing of the
-  dataset; threads don't help rdflib — it is GIL-bound pure Python; qlever
-  and oxigraph are ms-scale sequentially).
+  the IR, and `max_workers=N` runs the constraint queries in parallel:
+  threads on oxigraph (it releases the GIL per query; the first query runs
+  alone to build the store), fork processes on rdflib (copy-on-write sharing
+  of the dataset; threads don't help GIL-bound rdflib), sequential on qlever.
   For sh:sparql-heavy profiles build the qlever extension or
   `pip install triplets[oxigraph]`; the rdflib fallback runs in minutes.
   **No query fixing**: constraint queries run exactly as authored. A
@@ -234,8 +241,8 @@ all formats tell the same story:
 | `source` | data file names (from the data's Distribution label meta rows) |
 | `references` | shape file names (recorded at compile) |
 | `node_shapes` / `constraints` | shape count / compiled IR constraint rows |
-| `skipped_shapes` | feature-level gaps THIS run did not evaluate: unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — empty for `engine="pyshacl"` (spec-complete) and empty when coverage is full |
-| `skipped_components` | constraint components the engine neither vectorizes nor delegates |
+| `skipped_shapes` | feature-level gaps THIS run did not evaluate: custom `sh:target` without `sh:select`, and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — empty for `engine="pyshacl"` (spec-complete) and empty when coverage is full |
+| `skipped_components` | constraint components the engine does not implement |
 
 The coverage keys turn the compile/engine warnings into data: a report that
 says "0 violations" also says whether every shape actually ran. Empty coverage
@@ -349,9 +356,14 @@ Per profile the checks are: cardinality from the resolved `xsd:minOccours`/
 declares it 0..1/not serialized, CGMES 3.0/NCP 1..1), datatype lexical checks
 from `xsd:type`, enumeration membership from `values`, association targets
 from `range` expanded to concrete subclasses via `inheritance` (the expansion
-index spans all sections — inheritance is model knowledge). A referenced
+index spans all sections — inheritance is model knowledge). The same invert
+is the subclass graph behind the SHACL Type index — abstract classes are **not** schema
+Class entries (that would make them instantiable targets). A referenced
 object conforms when ANY of its types is in the range set; dangling
 references are silent (cross-instance references resolve outside the scope).
+An object whose *only* `Type` values are known abstracts (ancestors that are
+not Class entries) fails as `rdfs:range` on `Type`. Extra ancestor types on a
+concrete object, and unknown type names, are silent.
 `closed=True` adds an unknown-property check per class and profile
 (`schema:domainIncludes`). The same vectorized engines run everything (plans
 cached per compiled profile); the pyshacl engine refuses schema-compiled IR.

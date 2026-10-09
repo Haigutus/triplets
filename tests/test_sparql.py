@@ -128,6 +128,21 @@ def test_data_unchanged_skips_rehash(svedala):
         type(data).content_hash = original
 
 
+def test_data_unchanged_reuses_schema_key(svedala, monkeypatch):
+    """With the flag, the finished key is reused as well: the schema is not
+    re-serialized per query (a validation run sends hundreds)."""
+    from triplets import _content_key
+    q = PREFIXES + "ASK { ?s rdf:type cim:Substation }"
+    data = svedala.copy()
+    rdf_map = {"EQ": {"Substation": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#"}}}
+    assert triplets.sparql.query(data, q, rdf_map=rdf_map) is True
+    monkeypatch.setattr(_content_key.json, "dumps",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("schema serialized")))
+    assert triplets.sparql.query(data, q, rdf_map=rdf_map, data_unchanged=True) is True
+    with pytest.raises(AssertionError, match="schema serialized"):
+        triplets.sparql.query(data, q, rdf_map=rdf_map)       # no flag → full key again
+
+
 def test_data_unchanged_computes_when_unknown(svedala):
     """The flag only skips work when this object was hashed before; an
     unknown object is hashed (and remembered) as usual."""

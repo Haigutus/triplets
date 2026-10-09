@@ -8,24 +8,29 @@ any other flavor (pandas/polars/arrow) is registered into an in-memory
 connection, which makes the engine uniformly testable.
 
 Semantics are identical to the pandas/polars engines (same IR, same canonical
-violations schema, same lexical-form datatype deviation). The nested and
-query components (sh:or, sh:and, sh:not, sh:node, sh:sparql) delegate to the
-pandas implementations — they materialize the (scoped) table, which is fine:
-those are a handful of rows even in the real profiles, and sh:sparql needs an
-rdflib graph anyway.
+violations schema, same lexical-form datatype deviation). The logical
+components (sh:and, sh:or, sh:not, sh:xone) compose their nested rows' SQL;
+nested rows judge the parent's focus, or an explicit ID list bound through
+``UNNEST(?)`` (sh:node: the referenced value nodes, resolved with one query).
+sh:sparql and SPARQL targets run through shacl_sparql on one materialized copy
+of the (scoped) table — an rdflib/SPARQL store needs the data anyway.
 
 Explicitly selected (``engine="duckdb"``), not in the auto order: polars owns
 the in-memory fast path; this engine is the deliberate choice when the data
 does not fit.
 """
+import functools
 import logging
+
+from types import SimpleNamespace
 
 import pandas
 
 from .._engine_detect import flavor
-from .shacl_ir import split_rules, FALLBACK_COMPONENTS
+from . import shacl_sparql
+from .shacl_ir import split_rules
 from .shacl_report import VIOLATION_COLUMNS
-from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_duckdb, load_rdf_map, node_kind, value_types
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, load_rdf_map, node_kind, value_types
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -45,11 +50,27 @@ def _class_sql(table, context):
     return f"SELECT ID FROM {table} WHERE KEY = '{TYPE_KEY}' AND VALUE = ?"
 
 
+def _focus_param(rule, context):
+    """The one parameter _focus_sql binds: an ID list (nested override or SPARQL
+    target), else the target class / KEY / node."""
+    if getattr(rule, "focus_ids", None) is not None:
+        return list(rule.focus_ids)
+    if getattr(rule, "target_kind", "class") == "sparql":
+        return context.sparql_targets(rule.target_class)
+    return rule.target_class
+
+
 def _focus_sql(rule, table, context):
-    """The rule's focus nodes (bound with one target_class parameter): a class's
-    instances, or the subjects carrying the target property (sh:targetSubjectsOf)."""
-    if getattr(rule, "target_kind", "class") == "subjectsOf":
+    """The rule's focus nodes (bound with the one _focus_param parameter)."""
+    kind = getattr(rule, "target_kind", "class")
+    if getattr(rule, "focus_ids", None) is not None or kind == "sparql":
+        return "SELECT UNNEST(CAST(? AS VARCHAR[])) AS ID"
+    if kind == "subjectsOf":
         return f"SELECT DISTINCT ID FROM {table} WHERE KEY = ?"
+    if kind == "objectsOf":
+        return f"SELECT DISTINCT VALUE AS ID FROM {table} WHERE KEY = ?"
+    if kind == "node":
+        return "SELECT ? AS ID"
     return _class_sql(table, context)
 
 
@@ -66,7 +87,7 @@ def _rows_sql(rule, table, context):
     if getattr(rule, "via_type", False):
         sql = (f"SELECT r.FOCUS AS FOCUS, t.VALUE AS PV FROM ({sql}) r "
                f"JOIN {table} t ON t.ID = r.PV AND t.KEY = '{TYPE_KEY}'")
-    return sql, [rule.path, rule.target_class]
+    return sql, [rule.path, _focus_param(rule, context)]
 
 
 def _wrap(rule, message, from_sql, from_params, where_sql, where_params, value_expr="PV"):
@@ -92,7 +113,7 @@ def _min_count(rule, table, context):
                 f"LEFT JOIN (SELECT FOCUS, COUNT(*) AS n FROM ({rows}) GROUP BY FOCUS) c "
                 f"ON f.ID = c.FOCUS WHERE COALESCE(c.n, 0) < ?")
     return _wrap(rule, f"{rule.path} occurs fewer than {rule.params} time(s)",
-                 from_sql, [rule.target_class, *rows_params, rule.params], "TRUE", [],
+                 from_sql, [_focus_param(rule, context), *rows_params, rule.params], "TRUE", [],
                  value_expr=_NULL_VALUE)
 
 
@@ -168,7 +189,7 @@ def _has_value(rule, table, context):
     from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table, context)}) f "
                 f"WHERE f.ID NOT IN (SELECT FOCUS FROM ({rows}) WHERE PV = ?)")
     return _wrap(rule, f"{rule.path} does not have required value '{rule.params}'",
-                 from_sql, [rule.target_class, *rows_params, str(rule.params)], "TRUE", [],
+                 from_sql, [_focus_param(rule, context), *rows_params, str(rule.params)], "TRUE", [],
                  value_expr=_NULL_VALUE)
 
 
@@ -214,7 +235,7 @@ def _pair_sql(rule, table, context, other_path):
     left, left_params = _rows_sql(rule, table, context)
     right = (f"SELECT ID AS FOCUS, VALUE AS OTHER FROM {table} "
              f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table, context)})")
-    return left, left_params, right, [other_path, rule.target_class]
+    return left, left_params, right, [other_path, _focus_param(rule, context)]
 
 
 def _equals(rule, table, context):
@@ -256,11 +277,112 @@ def _closed(rule, table, context):
     sql = (f"SELECT ID, KEY, VALUE, ? AS VIOLATION_TYPE, ? AS MESSAGE, ? AS SEVERITY, ? AS SOURCE_SHAPE "
            f"FROM {table} WHERE ID IN ({_focus_sql(rule, table, context)}) AND NOT list_contains(?, KEY)")
     params = [rule.component, rule.message or "property is not allowed on a closed shape",
-              rule.severity, rule.shape_id, rule.target_class, allowed]
+              rule.severity, rule.shape_id, _focus_param(rule, context), allowed]
     return sql, params
 
 
-# component → SQL builder (FALLBACK_COMPONENTS run via shacl_pandas)
+# ── nested / query components ────────────────────────────────────────────────
+# Logical operators compose their nested rows' SQL. Nested rows judge the
+# parent's focus, or an ID list bound through UNNEST(?) (sh:node: the
+# referenced value nodes, resolved with one query).
+
+_EMPTY_SQL = ("SELECT " + ", ".join(f"CAST(NULL AS VARCHAR) AS {column}" for column in VIOLATION_COLUMNS)
+              + " WHERE FALSE")
+
+
+def _nested_sql(row_dicts, table, context, focus_ids=None):
+    """Nested IR rows → one UNION ALL statement of their violations."""
+    statements = []
+    for row in row_dicts:
+        rule = SimpleNamespace(focus_ids=focus_ids, **row)
+        builder = SQL_BUILDERS.get(rule.component)
+        if builder is None:
+            logger.warning("nested %s in %s not implemented — not evaluated", rule.component, rule.shape_id)
+        elif (statement := builder(rule, table, context)) is not None:
+            statements.append(statement)
+    if not statements:
+        return _EMPTY_SQL, []
+    return (" UNION ALL ".join(f"({sql})" for sql, _ in statements),
+            [parameter for _, parameters in statements for parameter in parameters])
+
+
+def _violating_ids(row_dicts, table, context, focus_ids=None):
+    """SQL selecting the IDs the nested rows report (never NULL — NOT IN stays two-valued)."""
+    sql, params = _nested_sql(row_dicts, table, context, focus_ids)
+    return f"SELECT ID FROM ({sql}) WHERE ID IS NOT NULL", params
+
+
+def _focus_violations(rule, table, context, alternatives, condition, message):
+    """Focus nodes for which *condition* holds; ``{}`` in it is each alternative's violating IDs."""
+    focus_ids = getattr(rule, "focus_ids", None)
+    parts = [_violating_ids(rows, table, context, focus_ids) for rows in alternatives]
+    where = condition([f"FOCUS IN ({sql})" for sql, _ in parts])
+    from_sql = f"SELECT ID AS FOCUS FROM ({_focus_sql(rule, table, context)})"
+    return _wrap(rule, message, from_sql, [_focus_param(rule, context)],
+                 where, [parameter for _, params in parts for parameter in params],
+                 value_expr=_NULL_VALUE)
+
+
+def _and(rule, table, context):
+    """sh:and — every nested shape must hold; each nested violation is reported."""
+    focus_ids = getattr(rule, "focus_ids", None)
+    parts = [_nested_sql(rows, table, context, focus_ids) for rows in rule.params]
+    union = " UNION ALL ".join(f"({sql})" for sql, _ in parts)
+    columns = ", ".join("'sh:and' AS VIOLATION_TYPE" if column == "VIOLATION_TYPE" else column
+                        for column in VIOLATION_COLUMNS)
+    return f"SELECT {columns} FROM ({union})", [parameter for _, params in parts for parameter in params]
+
+
+def _or(rule, table, context):
+    """sh:or — a focus node violates only when EVERY alternative is violated."""
+    return _focus_violations(rule, table, context, rule.params, " AND ".join,
+                             "no sh:or alternative is satisfied")
+
+
+def _xone(rule, table, context):
+    """sh:xone — a focus node violates unless exactly one alternative is satisfied."""
+    def exactly_one_fails(conditions):
+        satisfied = " + ".join(f"CASE WHEN {condition} THEN 0 ELSE 1 END" for condition in conditions)
+        return f"({satisfied}) <> 1"
+    return _focus_violations(rule, table, context, rule.params, exactly_one_fails,
+                             "exactly one sh:xone alternative must be satisfied")
+
+
+def _not(rule, table, context):
+    """sh:not — a focus node violates when it SATISFIES the negated shape."""
+    return _focus_violations(rule, table, context, [rule.params],
+                             lambda conditions: f"NOT {conditions[0]}",
+                             "node conforms to the negated shape")
+
+
+def _node(rule, table, context):
+    """sh:node — every value at the path must conform to the referenced shape.
+
+    The referenced shape was expanded into nested IR rows at compile time; here
+    they run with the referenced value nodes as focus. A value node that
+    produces any nested violation makes the referring focus node violate sh:node.
+    """
+    rows, rows_params = _rows_sql(rule, table, context)
+    referenced = [value for (value,) in context.connection.execute(
+        f"SELECT DISTINCT PV FROM ({rows}) WHERE PV IS NOT NULL", rows_params).fetchall()]
+    if not referenced:
+        return None
+    non_conforming, params = _violating_ids(rule.params["rows"], table, context, referenced)
+    return _wrap(rule, f"value does not conform to shape {rule.params['shape']}",
+                 rows, rows_params, f"PV IN ({non_conforming})", params)
+
+
+def _focus_list(rule, table, context):
+    return [value for (value,) in context.connection.execute(
+        _focus_sql(rule, table, context), [_focus_param(rule, context)]).fetchall()]
+
+
+def _sparql(rule, table, context):
+    return context.frame_sql(shacl_sparql.run(context.sparql, rule, _focus_list(rule, table, context)))
+
+
+
+# component → SQL builder
 SQL_BUILDERS = {
     "sh:minCount": _min_count,
     "sh:maxCount": _max_count,
@@ -282,16 +404,52 @@ SQL_BUILDERS = {
     "sh:lessThan": _pair_compare("<", "less than"),
     "sh:lessThanOrEquals": _pair_compare("<=", "less than or equal to"),
     "sh:closed": _closed,
+    "sh:and": _and,
+    "sh:or": _or,
+    "sh:not": _not,
+    "sh:xone": _xone,
+    "sh:node": _node,
+    "sh:sparql": _sparql,
 }
 
 
 class _Context:
-    """Schema-driven term-kind decisions (shared with the other vectorized engines)."""
+    """Per-validation state: the connection, schema-driven term-kind decisions,
+    SPARQL state and the temporary relations registered for this run."""
 
-    def __init__(self, rdf_map, types_table=None):
+    def __init__(self, connection, table, rdf_map, undefined_namespace=CIM_NS, types_table=None):
+        self.connection = connection
+        self.table = table
         self.rdf_map = rdf_map
+        self.undefined_namespace = undefined_namespace
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self.types_table = types_table
+        self.registered = []
+        self._targets = {}
+
+    @functools.cached_property
+    def sparql(self):
+        """SPARQL state over one materialized copy of the (scoped) table — built on
+        first use. A frame the SPARQL layer takes as is: it hashes the content once
+        per object, and an Arrow table would be converted (and re-hashed) per query."""
+        data = self.connection.execute(f"SELECT * FROM {self.table}").df()
+        return shacl_sparql.SparqlState(data, self.rdf_map, self.undefined_namespace)
+
+    def sparql_targets(self, query_text):
+        """Focus IDs of a SPARQLTarget SELECT, resolved once per run."""
+        if query_text not in self._targets:
+            self._targets[query_text] = shacl_sparql.target_ids(self.sparql, query_text)
+        return self._targets[query_text]
+
+    def frame_sql(self, frame):
+        """A violations frame computed outside SQL → a statement over a registered relation."""
+        if not len(frame):
+            return None
+        name = f"_shacl_found_{len(self.registered)}"
+        self.connection.register(name, frame)
+        self.registered.append(name)
+        columns = ", ".join(f"CAST({column} AS VARCHAR) AS {column}" for column in VIOLATION_COLUMNS)
+        return f"SELECT {columns} FROM {name}", []
 
 
 def _register_type_index(connection, table, rdf_map):
@@ -320,7 +478,7 @@ def _register_type_index(connection, table, rdf_map):
 
 
 def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
-             table=None, schema=None, table_name=None, **kwargs):
+             table=None, schema=None, table_name=None, undefined_namespace=CIM_NS, **kwargs):
     """Validate triplet data against the compiled constraint table (DuckDB SQL).
 
     Parameters mirror shacl_pandas.validate, plus:
@@ -337,42 +495,42 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         table = '"_shacl_scoped"'
 
     if "duckdb" not in compiled.plans:   # setdefault would re-split on every call
-        compiled.plans["duckdb"] = split_rules(compiled.ir, SQL_BUILDERS, FALLBACK_COMPONENTS, "duckdb")
-    vectorized, fallback, _ = compiled.plans["duckdb"]
+        compiled.plans["duckdb"] = split_rules(compiled.ir, SQL_BUILDERS, "duckdb")
+    rules, _ = compiled.plans["duckdb"]
     if components is not None:
-        vectorized = [rule for rule in vectorized if rule.component in components]
-        fallback = [rule for rule in fallback if rule.component in components]
+        rules = [rule for rule in rules if rule.component in components]
 
-    context = _Context(rdf_map, types_table=_register_type_index(connection, table, rdf_map))
-    built = [statement for rule in vectorized
+    context = _Context(connection, table, rdf_map, undefined_namespace,
+                       types_table=_register_type_index(connection, table, rdf_map))
+    parallel = [rule for rule in rules if max_workers and rule.component == "sh:sparql"]
+    built = [statement for rule in rules if not (parallel and rule.component == "sh:sparql")
              if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]
 
     # every builder emits the same 7-column shape, so constraints batch into
     # UNION ALL statements — round-trip/planner overhead per rule was the
     # dominant in-memory cost (~4,700 statements on the real profiles)
     frames = []
-    for start in range(0, len(built), _BATCH_SIZE):
-        batch = built[start:start + _BATCH_SIZE]
-        sql = " UNION ALL ".join(f"({statement})" for statement, _ in batch)
-        params = [parameter for _, parameters in batch for parameter in parameters]
-        result = connection.execute(sql, params).df()
-        if len(result):
-            frames.append(result)
+    try:
+        for start in range(0, len(built), _BATCH_SIZE):
+            batch = built[start:start + _BATCH_SIZE]
+            sql = " UNION ALL ".join(f"({statement})" for statement, _ in batch)
+            params = [parameter for _, parameters in batch for parameter in parameters]
+            result = connection.execute(sql, params).df()
+            if len(result):
+                frames.append(result)
+        if parallel:
+            tasks = [(rule, _focus_list(rule, table, context)) for rule in parallel]
+            frames += [found for found in shacl_sparql.run_parallel(context.sparql, tasks, max_workers)
+                       if len(found)]
+    finally:
+        for name in context.registered:
+            connection.unregister(name)
 
-    violations = (pandas.concat(frames, ignore_index=True) if frames
-                  else pandas.DataFrame(columns=VIOLATION_COLUMNS))
+    if not frames:
+        return pandas.DataFrame(columns=VIOLATION_COLUMNS)
+    violations = pandas.concat(frames, ignore_index=True)
     violations = violations.astype(object).where(violations.notna(), None)
-
-    if fallback:
-        # nested/query components materialize the (already scoped) table — a
-        # handful of rows even in real profiles, and sh:sparql needs rdflib anyway
-        from . import shacl_pandas
-        frame = connection.execute(f"SELECT * FROM {table}").df()
-        supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
-                                           components={rule.component for rule in fallback},
-                                           max_workers=max_workers, **kwargs)
-        violations = pandas.concat([violations, supplement], ignore_index=True)
-    return violations
+    return shacl_sparql.dedupe_invalid(violations)
 
 
 def _connection(data, table=None, schema=None, table_name=None):
