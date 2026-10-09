@@ -174,7 +174,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
                 data_type_meta = profile_data.get_object_data(data_type).to_dict()
 
-                xsd = {"xsd:type": types[data_type_name]} if data_type_name in types else {}
+                xsd = {"xsd:type": types.get(data_type_name, "")}
                 profile[data_type_name] = {
                     "description": data_type_meta.get("comment", ""),
                     "type": data_type_meta.get("stereotype", ""),
