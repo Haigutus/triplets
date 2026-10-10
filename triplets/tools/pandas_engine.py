@@ -1006,8 +1006,9 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
         Object types left out of the diff, e.g. the parser metadata
         ``["NamespaceMap", "Distribution"]`` (default is None: nothing left out).
     include_objects : list, optional
-        Only these object types are diffed (default is None: all); ``exclude_objects``
-        applies after it.
+        Only these object types are diffed (default is None: all). Types are matched
+        against each dataset's own Type rows, so an object stated under another class
+        in the other file is not matched.
     context_keys : list, optional
         Keys whose unchanged values are shown in each hunk as `` `` context lines,
         e.g. ``["IdentifiedObject.name"]``.
@@ -1024,16 +1025,29 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
     >>> print_triplets_diff(old_data, new_data, exclude_objects=["NamespaceMap"],
     ...                     context_keys=["IdentifiedObject.name"])
     """
+    old_labels = old_data.loc[old_data["KEY"] == file_id_key, "VALUE"].tolist()
+    new_labels = new_data.loc[new_data["KEY"] == file_id_key, "VALUE"].tolist()
+    old_data = _select_types(old_data, include_objects, exclude_objects)
+    new_data = _select_types(new_data, include_objects, exclude_objects)
     diff = diff_triplets(old_data, new_data)
     keys = ["Type", *(context_keys or [])]
     related = pandas.concat([
         data.loc[data["ID"].isin(diff["ID"]) & data["KEY"].isin(keys), ["ID", "KEY", "VALUE"]].assign(side=side)
         for side, data in (("old", old_data), ("new", new_data))])
     return print_diff(diff[["ID", "KEY", "VALUE", "_merge"]].astype(str).itertuples(index=False, name=None),
-                      related.itertuples(index=False, name=None),
-                      old_data.loc[old_data["KEY"] == file_id_key, "VALUE"].tolist(),
-                      new_data.loc[new_data["KEY"] == file_id_key, "VALUE"].tolist(),
-                      exclude_objects, include_objects, context_keys, stat)
+                      related.itertuples(index=False, name=None), old_labels, new_labels, context_keys, stat)
+
+
+def _select_types(data, include_objects=None, exclude_objects=None):
+    """Drop the objects whose Type is in ``exclude_objects`` or, when given, not in
+    ``include_objects``. Matches the Type rows in ``data`` only, no schema."""
+    if not include_objects and not exclude_objects:
+        return data
+    types = data.loc[data["KEY"] == "Type", ["ID", "VALUE"]]
+    dropped = types["VALUE"].isin(exclude_objects or [])
+    if include_objects:
+        dropped |= ~types["VALUE"].isin(include_objects)
+    return data[~data["ID"].isin(types.loc[dropped, "ID"])]
 
 
 def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),

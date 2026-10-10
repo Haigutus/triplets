@@ -181,8 +181,10 @@ Start of the 0.3 line.
 - **One diff report for all engines.** pandas, polars and duckdb
   `print_triplets_diff` print the same output (they had three formats; duckdb
   ignored `exclude_objects`). Hunks and keys are sorted, `-` before `+`.
-  Exclusion now also drops changed objects (it only matched objects whose
-  `Type` row was in the diff), and matches the type in either file.
+  `exclude_objects` / `include_objects` filter each input by its own `Type`
+  rows before diffing (no schema); exclusion only matched objects whose
+  `Type` row was in the diff. polars `diff_triplets` casts `ID` / `KEY` /
+  `VALUE` to String when one side is Categorical.
 - **CLI logging at WARNING**; `cim-spreadsheet` no longer prints INFO lines.
 - **to-cim without `--rdf-map`** warns and writes the classes in the triplets
   namespace; it wrote nothing and still reported success.

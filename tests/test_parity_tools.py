@@ -48,9 +48,10 @@ def make_context(df: pandas.DataFrame) -> dict:
         "INSTANCE_ID": ["mi"] * 5,
     })
     # removed (first 100 rows), changed (every *.r value) and added (NEWID) objects
-    diff_data = df.iloc[100:].copy()
-    diff_data.loc[diff_data["KEY"].astype(str).str.endswith(".r"), "VALUE"] = "0"
-    diff_data = pandas.concat([diff_data, df.iloc[:2].assign(ID="NEWID")], ignore_index=True)
+    # plain strings while df may be categorical: engines must diff mixed dtypes
+    diff_data = df.iloc[100:].astype(str)
+    diff_data.loc[diff_data["KEY"].str.endswith(".r"), "VALUE"] = "0"
+    diff_data = pandas.concat([diff_data, df.iloc[:2].astype(str).assign(ID="NEWID")], ignore_index=True)
     return {"type": type_name, "key": key, "name": name, "id": reference, "reference": reference,
             "instances": instances, "subset": subset, "update_data": update_data,
             "new_data": df.iloc[100:], "multi_data": multi_data, "multi_type": "MultiThing",

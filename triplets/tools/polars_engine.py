@@ -444,11 +444,18 @@ def remove_triplets_from_triplets(from_triplet, what_triplet, columns=["ID", "KE
     return from_triplet.join(what_triplet.select(columns), on=columns, how="anti")
 
 
+def _strings(data, columns=("ID", "KEY", "VALUE")):
+    """Cast the triplet columns to String where they are not."""
+    return data.with_columns(pl.col(column).cast(pl.String) for column in columns
+                             if data.schema[column] != pl.String)
+
+
 def diff_triplets(old_data, new_data):
     """Rows unique to old (left_only) or new (right_only), matching the pandas
     outer-merge shape: columns [ID, KEY, VALUE, INSTANCE_ID_OLD, INSTANCE_ID_NEW, _merge]."""
-    old = old_data.with_columns(pl.lit(True).alias("_in_old"))
-    new = new_data.with_columns(pl.lit(True).alias("_in_new"))
+    # join keys must share a dtype: a Categorical / Enum frame meets a String one after edits
+    old = _strings(old_data).with_columns(pl.lit(True).alias("_in_old"))
+    new = _strings(new_data).with_columns(pl.lit(True).alias("_in_new"))
     merged = old.join(new, on=["ID", "KEY", "VALUE"], how="full", suffix="_NEW", coalesce=True)
     merged = merged.with_columns(
         pl.when(pl.col("_in_old").is_null()).then(pl.lit("right_only"))
@@ -470,6 +477,10 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
                         include_objects=None, context_keys=None, stat=False):
     """Print a unified diff of two triplet datasets; returns the number of
     differing triplets shown. Same output and options as the pandas engine."""
+    old_labels = old_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list()
+    new_labels = new_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list()
+    old_data = _strings(_select_types(old_data, include_objects, exclude_objects))
+    new_data = _strings(_select_types(new_data, include_objects, exclude_objects))
     diff = diff_triplets(old_data, new_data)
     keys = ["Type", *(context_keys or [])]
     related = pl.concat([
@@ -477,9 +488,20 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
         .select("ID", "KEY", "VALUE", pl.lit(side).alias("side"))
         for side, data in (("old", old_data), ("new", new_data))])
     return print_diff(diff.select("ID", "KEY", "VALUE", "_merge").iter_rows(), related.iter_rows(),
-                      old_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list(),
-                      new_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list(),
-                      exclude_objects, include_objects, context_keys, stat)
+                      old_labels, new_labels, context_keys, stat)
+
+
+def _select_types(data, include_objects=None, exclude_objects=None):
+    """Drop the objects whose Type is in ``exclude_objects`` or, when given, not in
+    ``include_objects``. Matches the Type rows in ``data`` only, no schema."""
+    if not include_objects and not exclude_objects:
+        return data
+    value = pl.col("VALUE").cast(pl.String)
+    dropped = value.is_in(list(exclude_objects or []))
+    if include_objects:
+        dropped = dropped | ~value.is_in(list(include_objects))
+    ids = data.filter((pl.col("KEY").cast(pl.String) == "Type") & dropped).select("ID")
+    return data.join(ids, on="ID", how="anti")
 
 
 def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),

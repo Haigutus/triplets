@@ -651,19 +651,35 @@ def print_triplets_diff(self, new_data, file_id_key="label", exclude_objects=Non
                         table=None, schema=None, table_name=None):
     """Print a unified diff of the table against new_data; returns the number of
     differing triplets shown. Same output and options as the pandas engine."""
-    diff = diff_triplets(self, new_data, table=table, schema=schema, table_name=table_name)
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    diff_rows = diff.select("ID, KEY, VALUE, _merge").fetchall()
-    keys = _in_list(["Type", *(context_keys or [])])
-    sides = " UNION ALL ".join(
-        f"SELECT ID, KEY, VALUE, '{side}' AS side FROM {source} "
-        f"WHERE KEY IN ({keys}) AND ID IN (SELECT ID FROM ({diff.sql_query()}))"
-        for side, source in (("old", table_name), ("new", "_new_data")))
-    related = self.sql(sides).fetchall()
-    labels = [self.sql(f"SELECT VALUE FROM {source} WHERE KEY = {_lit(file_id_key)}").fetchall()
+    _materialize(self, new_data, "_new_data")
+    labels = [[label for label, in self.sql(f"SELECT VALUE FROM {source} WHERE KEY = {_lit(file_id_key)}").fetchall()]
               for source in (table_name, "_new_data")]
-    return print_diff(diff_rows, related, [label for label, in labels[0]], [label for label, in labels[1]],
-                      exclude_objects, include_objects, context_keys, stat)
+    self.execute(f"CREATE OR REPLACE TEMP VIEW _diff_old AS {_select_types(table_name, include_objects, exclude_objects)}")
+    self.execute(f"CREATE OR REPLACE TEMP VIEW _diff_new AS {_select_types('_new_data', include_objects, exclude_objects)}")
+    diff = ("SELECT ID, KEY, VALUE, 'left_only' AS _merge FROM _diff_old "
+            "WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _diff_new) "
+            "UNION ALL SELECT ID, KEY, VALUE, 'right_only' FROM _diff_new "
+            "WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _diff_old)")
+    keys = _in_list(["Type", *(context_keys or [])])
+    related = self.sql(" UNION ALL ".join(
+        f"SELECT ID, KEY, VALUE, '{side}' FROM {source} WHERE KEY IN ({keys}) AND ID IN (SELECT ID FROM ({diff}))"
+        for side, source in (("old", "_diff_old"), ("new", "_diff_new")))).fetchall()
+    return print_diff(self.sql(diff).fetchall(), related, *labels, context_keys, stat)
+
+
+def _select_types(source, include_objects=None, exclude_objects=None):
+    """SELECT over ``source`` without the objects whose Type is in ``exclude_objects``
+    or, when given, not in ``include_objects`` (Type rows of ``source`` only)."""
+    dropped = []
+    if exclude_objects:
+        dropped.append(f"VALUE IN ({_in_list(exclude_objects)})")
+    if include_objects:
+        dropped.append(f"VALUE NOT IN ({_in_list(include_objects)})")
+    if not dropped:
+        return f"SELECT * FROM {source}"
+    return (f"SELECT * FROM {source} WHERE ID NOT IN "
+            f"(SELECT ID FROM {source} WHERE KEY = 'Type' AND ({' OR '.join(dropped)}))")
 
 
 # ── Transform ────────────────────────────────────────────────────────────────

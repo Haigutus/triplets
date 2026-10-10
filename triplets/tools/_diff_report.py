@@ -1,6 +1,6 @@
 """Unified-diff report shared by every engine's ``print_triplets_diff``.
 
-Engines only collect plain rows; filtering, ordering and layout live here so
+Engines filter by type and collect plain rows; ordering and layout live here so
 the output is identical whatever engine computed the diff.
 """
 from collections import Counter, defaultdict
@@ -8,9 +8,8 @@ from collections import Counter, defaultdict
 SIGN = {"left_only": "-", "right_only": "+"}
 
 
-def print_diff(diff_rows, related_rows, old_labels, new_labels,
-               exclude_objects=None, include_objects=None, context_keys=None, stat=False):
-    """Print the diff; returns the number of differing triplets after filtering.
+def print_diff(diff_rows, related_rows, old_labels, new_labels, context_keys=None, stat=False):
+    """Print the diff; returns the number of differing triplets.
 
     diff_rows : (ID, KEY, VALUE, _merge) with _merge left_only / right_only
     related_rows : (ID, KEY, VALUE, side) for the diff IDs, side old / new, KEY
@@ -23,17 +22,9 @@ def print_diff(diff_rows, related_rows, old_labels, new_labels,
         if key in (context_keys or ()):
             context[id_].add((key, value))
 
-    def kept(id_):
-        # a profile may restate an object under another class (EQ ACLineSegment, SSH Equipment): match either
-        types = {old_types.get(id_), new_types.get(id_)} - {None}
-        if not types:  # no Type row anywhere (raw triplets): always shown
-            return True
-        return not types & set(exclude_objects or ()) and (not include_objects or bool(types & set(include_objects)))
-
     changes = defaultdict(list)
     for id_, key, value, merge in diff_rows:
-        if kept(id_):
-            changes[id_].append((key, SIGN[merge], value))
+        changes[id_].append((key, SIGN[merge], value))
     if not changes:
         return 0
 

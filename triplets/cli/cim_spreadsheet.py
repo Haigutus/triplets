@@ -139,18 +139,9 @@ from uuid import uuid4
 from ..export import export_to_cimxml
 from ..parser import parse
 from ..tools import tableviews_to_triplets
+from ..tools.pandas_engine import _select_types
 from . import add_common_arguments, excluded_types
 
-
-def _select_types(data, include_objects=(), exclude_objects=()):
-    """Keep objects whose Type is in ``include_objects`` (all if empty) and not in ``exclude_objects``."""
-    if not include_objects and not exclude_objects:
-        return data
-    types = data.loc[data["KEY"] == "Type", ["ID", "VALUE"]]
-    dropped = types["VALUE"].isin(exclude_objects)
-    if include_objects:
-        dropped |= ~types["VALUE"].isin(include_objects)
-    return data[~data["ID"].isin(types.loc[dropped, "ID"])]
 
 def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, multivalue=True,
                        exclude_objects=(), include_objects=()):
