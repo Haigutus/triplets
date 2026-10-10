@@ -56,8 +56,10 @@ Features
 - Unified diff format output for easy reading
 - Support for ZIP archives (single or nested)
 - Parser metadata (NamespaceMap, Distribution) left out unless ``--keep-metadata``
-- More object types left out with ``-ex``
-- Exit code 0 when equal, 1 when different, 2 on error (as ``diff``)
+- Only some object types with ``--include``, more left out with ``-ex``
+- Unchanged values shown for orientation with ``--context KEY``
+- Counts per type only with ``--stat``
+- Exit code 0 when equal (nothing printed), 1 when different, 2 on error (as ``diff``)
 - Handles large CIM files efficiently
 
 Examples
@@ -75,21 +77,38 @@ Diff everything, parser metadata included::
 
     $ cim-diff original.xml modified.xml --keep-metadata
 
+Only line segments, with their names, or only the counts::
+
+    $ cim-diff original.xml modified.xml --include ACLineSegment --context IdentifiedObject.name
+    $ cim-diff original.xml modified.xml --stat
+
 Diff between ZIP archives::
 
     $ cim-diff original.zip modified.zip
 
 Output Format
 -------------
-The tool outputs differences in unified diff format::
+Counts of removed, added and changed objects per type, then one hunk per
+object (sorted by type and ID), keys sorted, ``-`` before ``+``::
 
-    --- Objects in original_file
-    +++ Objects in modified_file
-    - ObjectID ObjectType.attribute oldValue
-    + ObjectID ObjectType.attribute newValue
+    --- original.xml
+    +++ modified.xml
 
-Lines starting with '-' indicate values removed (in original but not in modified).
-Lines starting with '+' indicate values added (in modified but not in original).
+    @@ -1,0 +1,0 @@ Removed:
+      Terminal 1
+
+    @@ -1,0 +1,0 @@ Added:
+
+    @@ -1,0 +1,0 @@ Changed:
+      ACLineSegment 1
+
+    @@ -1,2 +1,2 @@ ACLineSegment c77668c9-6993-4391-8c03-29fc802ad605
+    -ACLineSegment.r -> 9.6
+    +ACLineSegment.r -> 9.99
+     IdentifiedObject.name -> CL15
+
+``-`` lines are only in the original, ``+`` lines only in the modified file,
+`` `` lines are unchanged values asked for with ``--context``.
 
 Default Exclusions
 ------------------
@@ -108,11 +127,12 @@ triplets.tools.print_triplets_diff : Core diff function
 """
 
 import argparse
+import logging
 import sys
 
 from ..parser import parse
 from ..tools import print_triplets_diff
-from . import add_exclusion_arguments, excluded_types
+from . import add_common_arguments, excluded_types, names
 
 def main():
     """
@@ -176,9 +196,14 @@ def main():
     )
     parser.add_argument('original_file', type=str, help='Original file path')
     parser.add_argument('changed_file', type=str, help='Changed file path')
-    add_exclusion_arguments(parser, "the diff")
+    add_common_arguments(parser, "the diff")
+    parser.add_argument('--context', action='extend', type=names, default=[], metavar='KEY',
+                        help='Also show the unchanged values of these keys in each changed object, '
+                             'e.g. --context IdentifiedObject.name. Repeat or comma-separate for more')
+    parser.add_argument('--stat', action='store_true', help='Only the removed / added / changed counts per type')
 
     args = parser.parse_args()
+    logging.basicConfig(level=logging.WARNING)
 
     try:
         original_data = parse([args.original_file])
@@ -187,7 +212,8 @@ def main():
         print(f"Error: {error}", file=sys.stderr)
         sys.exit(2)
 
-    differences = print_triplets_diff(original_data, changed_data, exclude_objects=excluded_types(args))
+    differences = print_triplets_diff(original_data, changed_data, exclude_objects=excluded_types(args),
+                                      include_objects=args.include, context_keys=args.context, stat=args.stat)
     sys.exit(1 if differences else 0)
 
 if __name__ == "__main__":

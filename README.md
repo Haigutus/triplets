@@ -262,12 +262,21 @@ cim-spreadsheet -i output.xlsx -o out/ --rdf-map schema.json  # back to CIM XML
 cim-diff original.xml modified.xml
 cim-diff original.xml modified.xml -ex Terminal,ConnectivityNode   # also leave out these classes
 cim-diff original.xml modified.xml --keep-metadata            # also diff NamespaceMap, Distribution
+cim-diff original.xml modified.xml --include ACLineSegment --context IdentifiedObject.name
+cim-diff original.xml modified.xml --stat                     # counts per type only
 ```
 
-Both tools take the same options. They leave out `NamespaceMap` and `Distribution`
-(parser metadata, source file path) unless `--keep-metadata`. `-ex TYPE` leaves out
-more classes; repeat it or comma-separate names. `cim-diff` exits 0 when the models
-match, 1 when they differ and 2 on error, as `diff` does.
+Both tools take the same type options. They leave out `NamespaceMap` and `Distribution`
+(parser metadata, source file path) unless `--keep-metadata`. `--include TYPE` keeps
+only these classes, `-ex TYPE` leaves out more; repeat them or comma-separate names.
+`cim-diff --context KEY` also shows the unchanged values of KEY in each changed object.
+`cim-diff` exits 0 when the models match (printing nothing), 1 when they differ and
+2 on error, as `diff` does.
+
+With `--keep-metadata`, to-cim writes each model back to the path it was parsed
+from (`Distribution` label): an absolute path overwrites the source, a relative one
+is created under `-o`. Without the metadata the files are `<uuid>.xml` in `-o`.
+Without `--rdf-map`, to-cim warns and writes the classes in the triplets namespace.
 
 Spreadsheet values come back as written, except numbers, which can change their
 written form (`500` -> `500.0`). Excel keeps 15 significant digits and sheet names of

@@ -116,7 +116,50 @@ def test_cim_diff_exclusions(monkeypatch, capsys, options, shown, hidden):
 
 
 def test_cim_diff_exit_codes(monkeypatch, capsys):
-    """As diff: 0 equal, 1 different, 2 error."""
-    assert cim_diff(monkeypatch, capsys, EQ, EQ)[0] == 0
+    """As diff: 0 and no output when equal, 1 different, 2 error."""
+    assert cim_diff(monkeypatch, capsys, EQ, EQ) == (0, "")
     assert cim_diff(monkeypatch, capsys, EQ, SSH)[0] == 1
     assert cim_diff(monkeypatch, capsys, EQ, "missing.xml")[0] == 2
+
+
+def test_cim_diff_report_options(monkeypatch, capsys):
+    """--stat prints only the counts; --include narrows the types; --context adds unchanged values."""
+    _, full = cim_diff(monkeypatch, capsys, EQ, SSH)
+    _, stat = cim_diff(monkeypatch, capsys, EQ, SSH, "--stat")
+    assert full.startswith(stat) and len(full) > len(stat)
+    assert not any(" -> " in line for line in stat.splitlines())
+    _, only = cim_diff(monkeypatch, capsys, EQ, SSH, "--include", "ACLineSegment", "--stat")
+    assert "  ACLineSegment" in only and "  Terminal" not in only
+
+
+def test_cim_diff_context(tmp_path, monkeypatch, capsys):
+    changed = tmp_path / "changed.xml"
+    text = Path(EQ).read_text(encoding="utf-8")
+    changed.write_text(text.replace("<cim:ACLineSegment.r>", "<cim:ACLineSegment.r>1", 1), encoding="utf-8")
+    _, plain = cim_diff(monkeypatch, capsys, EQ, str(changed))
+    _, context = cim_diff(monkeypatch, capsys, EQ, str(changed), "--context", "IdentifiedObject.name")
+    assert "\n IdentifiedObject.name -> " not in plain
+    assert "\n IdentifiedObject.name -> " in context
+
+
+def test_version(monkeypatch, capsys):
+    code, out = cim_diff(monkeypatch, capsys, "--version")
+    assert code == 0 and triplets.__version__ in out
+
+
+def test_to_cim_without_rdf_map(source, caplog):
+    """No schema: a warning, and every class written in the triplets namespace."""
+    cim_spreadsheet.cim_to_spreadsheet(source, "model.xlsx")
+    cim_spreadsheet.spreadsheet_to_cim("model.xlsx", "out", zip_output=False)
+    assert "--rdf-map" in caplog.text
+    assert len(list(Path("out").glob("*.xml"))) == 1
+
+
+def test_round_trip_with_metadata_writes_to_label(source, reference):
+    """--keep-metadata: to-cim writes each instance to its Distribution label, a relative
+    label under -o (folders created)."""
+    Path("src").mkdir()
+    relative = shutil.move(source, "src")
+    cim_spreadsheet.cim_to_spreadsheet(relative, "model.xlsx")  # Python API keeps the metadata
+    cim_spreadsheet.spreadsheet_to_cim("model.xlsx", "out", rdf_map=RDF_MAP, zip_output=False)
+    assert triples([str(Path("out") / relative)]) == reference

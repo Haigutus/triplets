@@ -47,9 +47,14 @@ def make_context(df: pandas.DataFrame) -> dict:
         "VALUE": ["MultiThing", "first", "second", "MultiThing", "solo"],
         "INSTANCE_ID": ["mi"] * 5,
     })
+    # removed (first 100 rows), changed (every *.r value) and added (NEWID) objects
+    diff_data = df.iloc[100:].copy()
+    diff_data.loc[diff_data["KEY"].astype(str).str.endswith(".r"), "VALUE"] = "0"
+    diff_data = pandas.concat([diff_data, df.iloc[:2].assign(ID="NEWID")], ignore_index=True)
     return {"type": type_name, "key": key, "name": name, "id": reference, "reference": reference,
             "instances": instances, "subset": subset, "update_data": update_data,
-            "new_data": df.iloc[100:], "multi_data": multi_data, "multi_type": "MultiThing"}
+            "new_data": df.iloc[100:], "multi_data": multi_data, "multi_type": "MultiThing",
+            "diff_data": diff_data}
 
 
 # ── engine helpers ────────────────────────────────────────────────────────────
@@ -84,6 +89,15 @@ def _duckdb_wide_table(data, ctx):
 
 def _tv_kwargs(engine):
     return {"string_to_number": False}
+
+
+def _printed(call):
+    """(return value, stdout) of a printing call: the report text must match across engines."""
+    import contextlib
+    import io
+    with contextlib.redirect_stdout(io.StringIO()) as out:
+        result = call()
+    return result, out.getvalue()
 
 
 def _content_hash_spec(engine, data, ctx):
@@ -140,7 +154,8 @@ CALL_SPECS = {
     "references_all": lambda e, d, c: d.references_all(),
     "diff_triplets": lambda e, d, c: d.diff_triplets(_to_engine(e, c["new_data"])),
     "diff_triplets_by_instance": lambda e, d, c: d.diff_triplets_by_instance(c["instances"][0], c["instances"][1]),
-    "print_triplets_diff": lambda e, d, c: d.print_triplets_diff(_to_engine(e, c["new_data"])),
+    "print_triplets_diff": lambda e, d, c: _printed(lambda: d.print_triplets_diff(
+        _to_engine(e, c["diff_data"]), context_keys=["IdentifiedObject.name"], exclude_objects=["Terminal"])),
     # tableview_to_triplets operates on a *tableview*, so call it on the tableview object
     # (duckdb has no relation method — it unpivots a wide table by name).
     "tableview_to_triplets": lambda e, d, c: (_duckdb_wide_table(d, c) if e == "duckdb"

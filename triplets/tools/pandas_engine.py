@@ -15,6 +15,8 @@ import logging
 
 import pandas
 
+from ._diff_report import print_diff
+
 logger = logging.getLogger(__name__)
 
 
@@ -988,8 +990,9 @@ def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
 
     return diff
 
-def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects=None):
-    """Print a human-readable diff of two triplet datasets.
+def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects=None,
+                        include_objects=None, context_keys=None, stat=False):
+    """Print a unified diff of two triplet datasets, one hunk per changed object.
 
     Parameters
     ----------
@@ -1002,85 +1005,35 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
     exclude_objects : list, optional
         Object types left out of the diff, e.g. the parser metadata
         ``["NamespaceMap", "Distribution"]`` (default is None: nothing left out).
+    include_objects : list, optional
+        Only these object types are diffed (default is None: all); ``exclude_objects``
+        applies after it.
+    context_keys : list, optional
+        Keys whose unchanged values are shown in each hunk as `` `` context lines,
+        e.g. ``["IdentifiedObject.name"]``.
+    stat : bool, optional
+        Print only the Removed / Added / Changed counts per type.
 
     Returns
     -------
     int
-        Number of differing triplets (0 when the datasets match).
-
-    Notes
-    -----
-    - Outputs a diff format showing removed, added, and changed objects.
-    - Nice diff viewer https://diffy.org/
-    - TODO: Add name field for better reporting with Type.
+        Number of differing triplets shown (0 when the datasets match; nothing is printed).
 
     Examples
     --------
-    >>> print_triplets_diff(old_data, new_data, exclude_objects=["NamespaceMap"])
+    >>> print_triplets_diff(old_data, new_data, exclude_objects=["NamespaceMap"],
+    ...                     context_keys=["IdentifiedObject.name"])
     """
-    # Get diff between datasets
     diff = diff_triplets(old_data, new_data)
-    # Convert _merge to plain string before replacing (avoids categorical setitem error with pyarrow dtypes)
-    diff["_merge"] = diff["_merge"].astype(str).replace({"left_only": "-", "right_only": "+"})
-    diff = diff.sort_values(by=['ID', 'KEY'])
-
-    # Exclude defined types form export
-    if exclude_objects:
-        for object_name in exclude_objects:
-            excluded_data = filter_triplets_by_type(diff, object_name)
-            diff = remove_triplets_from_triplets(diff, excluded_data)
-            logger.info(f"INFO - removed {object_name} from diff")
-
-    # Extract types on left and right to get changed/modified types
-    removed_added_modified_types = pandas.concat([
-        old_data.merge(diff["ID"]).query("KEY == 'Type'").drop_duplicates(),
-        new_data.merge(diff["ID"]).query("KEY == 'Type'").drop_duplicates()
-        ])[["ID", "KEY", "VALUE"]].drop_duplicates()
-
-    # Print old file name
-    for _, file_id in old_data.query(f"KEY == '{file_id_key}'").VALUE.items():
-        print(f"--- {file_id}")# from-file-modification-time")
-
-    # Print new file name
-    for _, file_id in new_data.query(f"KEY == '{file_id_key}'").VALUE.items():
-        print(f"+++ {file_id}")# to-file-modification-time")
-
-    # Print changes
-
-    print("")
-    print(f"@@ -1,0 +1,0 @@ Removed:")
-
-    for key, value in diff.query("KEY == 'Type' and _merge == '-'").VALUE.value_counts().items():
-        print(" ", key, value)
-
-    print("")
-    print(f"@@ -1,0 +1,0 @@ Added:")
-    for key, value in diff.query("KEY == 'Type' and _merge == '+'").VALUE.value_counts().items():
-        print(" ", key, value)
-
-    print("")
-    print(f"@@ -1,0 +1,0 @@ Changed:")
-    for key, value in pandas.concat([removed_added_modified_types, diff.query("KEY == 'Type'")])[["ID", "KEY", "VALUE"]].drop_duplicates(keep=False).VALUE.value_counts().items():
-        print(" ", key, value)
-
-    # Types changed
-    # TODO add name field to be used with Type for better reporting
-
-    for group_name, group in removed_added_modified_types.groupby("VALUE"):
-        #print(f"Types - {group_name}")
-        for objec_type in group.itertuples():
-
-            current_diff = diff.query("ID == @objec_type.ID")
-
-            changes_on_left = len(current_diff.query("_merge == '-'"))
-            changes_on_right = len(current_diff.query("_merge == '+'"))
-            print("")
-            print(f"@@ -1,{changes_on_left} +1,{changes_on_right} @@ {objec_type.VALUE} {objec_type.ID}")
-
-            for _, change in (current_diff._merge.astype(str) + current_diff.KEY.astype(str) + " -> " + current_diff.VALUE.astype(str)).items():
-                print(change)
-
-    return len(diff)
+    keys = ["Type", *(context_keys or [])]
+    related = pandas.concat([
+        data.loc[data["ID"].isin(diff["ID"]) & data["KEY"].isin(keys), ["ID", "KEY", "VALUE"]].assign(side=side)
+        for side, data in (("old", old_data), ("new", new_data))])
+    return print_diff(diff[["ID", "KEY", "VALUE", "_merge"]].astype(str).itertuples(index=False, name=None),
+                      related.itertuples(index=False, name=None),
+                      old_data.loc[old_data["KEY"] == file_id_key, "VALUE"].tolist(),
+                      new_data.loc[new_data["KEY"] == file_id_key, "VALUE"].tolist(),
+                      exclude_objects, include_objects, context_keys, stat)
 
 
 def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),

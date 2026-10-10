@@ -9,6 +9,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Start of the 0.3 line.
 
 ### Added
+- **`cim-diff` report options**: `--stat` (counts per type only), `--include TYPE`
+  (only these classes, also in `cim-spreadsheet`), `--context KEY` (unchanged
+  values of KEY shown in each changed object, e.g. `IdentifiedObject.name`).
+  Same as `print_triplets_diff(stat=, include_objects=, context_keys=)` in
+  every engine. `--version` in both CLIs.
 - **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
   `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
   [application-profiles-library](https://github.com/entsoe/application-profiles-library)
@@ -171,8 +176,18 @@ Start of the 0.3 line.
   `Distribution`. `--no-default-exclusions` is removed. `cim-spreadsheet` applies `-ex` to
   to-cim too. `cim_to_spreadsheet()` leaves out nothing by default; pass
   `exclude_objects=triplets.cli.METADATA_TYPES` for the CLI behaviour.
-- **`cim-diff` exit code**: 0 when equal, 1 when different, 2 on error.
-  `print_triplets_diff` returns the number of differing triplets.
+- **`cim-diff` exit code**: 0 when equal (nothing printed), 1 when different,
+  2 on error. `print_triplets_diff` returns the number of differing triplets.
+- **One diff report for all engines.** pandas, polars and duckdb
+  `print_triplets_diff` print the same output (they had three formats; duckdb
+  ignored `exclude_objects`). Hunks and keys are sorted, `-` before `+`.
+  Exclusion now also drops changed objects (it only matched objects whose
+  `Type` row was in the diff), and matches the type in either file.
+- **CLI logging at WARNING**; `cim-spreadsheet` no longer prints INFO lines.
+- **to-cim without `--rdf-map`** warns and writes the classes in the triplets
+  namespace; it wrote nothing and still reported success.
+- **CIM XML export creates missing folders** for a relative file name (round
+  trip with `--keep-metadata` crashed with `FileNotFoundError`).
 - **`print_triplets_diff` no longer always drops `Distribution`**: it leaves out
   only `exclude_objects`; the `file_id_object` argument is removed. The
   unpackaged `tools/cim-diff.py` script is removed (use `cim-diff`).

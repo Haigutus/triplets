@@ -7,6 +7,8 @@ All functions accept and return polars DataFrames.
 import logging
 import polars as pl
 
+from ._diff_report import print_diff
+
 logger = logging.getLogger(__name__)
 
 
@@ -464,30 +466,20 @@ def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
     return scope.filter(pl.len().over(["ID", "KEY", "VALUE"]) == 1)
 
 
-def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects=None):
-    """Print a human-readable diff between two triplet datasets; returns the number of differing triplets."""
+def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects=None,
+                        include_objects=None, context_keys=None, stat=False):
+    """Print a unified diff of two triplet datasets; returns the number of
+    differing triplets shown. Same output and options as the pandas engine."""
     diff = diff_triplets(old_data, new_data)
-    diff = diff.sort(["ID", "KEY"])
-
-    # Exclude specified types
-    if exclude_objects:
-        for obj in exclude_objects:
-            obj_data = filter_triplets_by_type(diff, obj)
-            if not obj_data.is_empty():
-                diff = remove_triplets_from_triplets(diff, obj_data)
-
-    if diff.is_empty():
-        print("No differences found")
-        return 0
-
-    # Print grouped by ID
-    for id_val in diff["ID"].unique().to_list():
-        id_diff = diff.filter(pl.col("ID") == id_val)
-        print(f"\n{id_val}:")
-        for row in id_diff.iter_rows(named=True):
-            print(f"  {row['_merge']} {row['KEY']}: {row['VALUE']}")
-
-    return len(diff)
+    keys = ["Type", *(context_keys or [])]
+    related = pl.concat([
+        data.filter(pl.col("ID").is_in(diff["ID"].implode()) & pl.col("KEY").is_in(keys))
+        .select("ID", "KEY", "VALUE", pl.lit(side).alias("side"))
+        for side, data in (("old", old_data), ("new", new_data))])
+    return print_diff(diff.select("ID", "KEY", "VALUE", "_merge").iter_rows(), related.iter_rows(),
+                      old_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list(),
+                      new_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list(),
+                      exclude_objects, include_objects, context_keys, stat)
 
 
 def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),

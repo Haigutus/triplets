@@ -25,6 +25,8 @@ import logging
 
 from weakref import WeakKeyDictionary
 
+from ._diff_report import print_diff
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TABLE = "triplets"
@@ -644,18 +646,24 @@ def diff_triplets_by_instance(self, INSTANCE_ID_1, INSTANCE_ID_2, table=None, sc
     """)
 
 
-def print_triplets_diff(self, new_data, file_id_key="label",
-                        exclude_objects=None, table=None, schema=None, table_name=None):
-    """Print a simple removed/added diff of the table against new_data; returns the number of differing triplets."""
-    diff = diff_triplets(self, new_data, table=table, schema=schema, table_name=table_name).df()
-    removed = diff[diff["_merge"] == "left_only"]
-    added = diff[diff["_merge"] == "right_only"]
-    print(f"--- removed ({len(removed)} triplets) / +++ added ({len(added)} triplets) ---")
-    for _, row in removed.iterrows():
-        print(f"- {row['ID']} {row['KEY']} {row['VALUE']}")
-    for _, row in added.iterrows():
-        print(f"+ {row['ID']} {row['KEY']} {row['VALUE']}")
-    return len(diff)
+def print_triplets_diff(self, new_data, file_id_key="label", exclude_objects=None,
+                        include_objects=None, context_keys=None, stat=False,
+                        table=None, schema=None, table_name=None):
+    """Print a unified diff of the table against new_data; returns the number of
+    differing triplets shown. Same output and options as the pandas engine."""
+    diff = diff_triplets(self, new_data, table=table, schema=schema, table_name=table_name)
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
+    diff_rows = diff.select("ID, KEY, VALUE, _merge").fetchall()
+    keys = _in_list(["Type", *(context_keys or [])])
+    sides = " UNION ALL ".join(
+        f"SELECT ID, KEY, VALUE, '{side}' AS side FROM {source} "
+        f"WHERE KEY IN ({keys}) AND ID IN (SELECT ID FROM ({diff.sql_query()}))"
+        for side, source in (("old", table_name), ("new", "_new_data")))
+    related = self.sql(sides).fetchall()
+    labels = [self.sql(f"SELECT VALUE FROM {source} WHERE KEY = {_lit(file_id_key)}").fetchall()
+              for source in (table_name, "_new_data")]
+    return print_diff(diff_rows, related, [label for label, in labels[0]], [label for label, in labels[1]],
+                      exclude_objects, include_objects, context_keys, stat)
 
 
 # ── Transform ────────────────────────────────────────────────────────────────
