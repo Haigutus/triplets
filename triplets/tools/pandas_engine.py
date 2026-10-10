@@ -988,7 +988,7 @@ def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
 
     return diff
 
-def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None):
+def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects=None):
     """Print a human-readable diff of two triplet datasets.
 
     Parameters
@@ -997,12 +997,11 @@ def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_
         Original triplet dataset.
     new_data : pandas.DataFrame
         New triplet dataset to compare against.
-    file_id_object : str, optional
-        Object type containing file identifiers (default is 'Distribution').
     file_id_key : str, optional
-        Key containing file identifiers (default is 'label').
+        Key whose values name the files in the ``---`` / ``+++`` lines (default is 'label').
     exclude_objects : list, optional
-        List of object types to exclude from the diff (default is None).
+        Object types left out of the diff, e.g. the parser metadata
+        ``["NamespaceMap", "Distribution"]`` (default is None: nothing left out).
 
     Notes
     -----
@@ -1019,11 +1018,6 @@ def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_
     # Convert _merge to plain string before replacing (avoids categorical setitem error with pyarrow dtypes)
     diff["_merge"] = diff["_merge"].astype(str).replace({"left_only": "-", "right_only": "+"})
     diff = diff.sort_values(by=['ID', 'KEY'])
-
-    # Extract internal structures keeping file name information
-    file_id_data = filter_triplets_by_type(diff, file_id_object)
-    diff = remove_triplets_from_triplets(diff, file_id_data)
-    logger.info(f"INFO - removed {file_id_object} from diff")
 
     # Exclude defined types form export
     if exclude_objects:

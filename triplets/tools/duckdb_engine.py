@@ -644,7 +644,7 @@ def diff_triplets_by_instance(self, INSTANCE_ID_1, INSTANCE_ID_2, table=None, sc
     """)
 
 
-def print_triplets_diff(self, new_data, file_id_object="Distribution", file_id_key="label",
+def print_triplets_diff(self, new_data, file_id_key="label",
                         exclude_objects=None, table=None, schema=None, table_name=None):
     """Print a simple removed/added diff of the table against new_data."""
     diff = diff_triplets(self, new_data, table=table, schema=schema, table_name=table_name).df()

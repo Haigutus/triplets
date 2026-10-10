@@ -65,21 +65,21 @@ Basic diff between two CIM files::
 
     $ cim-diff original.xml modified.xml
 
-Diff with custom exclusions::
+Diff only some types left out (replaces the defaults)::
 
     $ cim-diff original.xml modified.xml -ex Terminal ConnectivityNode
 
-Diff without default exclusions::
+Diff everything, parser metadata included::
 
-    $ cim-diff original.xml modified.xml --no-default-exclusions
+    $ cim-diff original.xml modified.xml -ex
 
 Diff between ZIP archives::
 
     $ cim-diff original.zip modified.zip
 
-Add custom exclusions on top of defaults::
+Exclusions replace the defaults; keep them by listing them::
 
-    $ cim-diff original.xml modified.xml -ex CustomType1 CustomType2
+    $ cim-diff original.xml modified.xml -ex NamespaceMap Distribution CustomType
 
 Output Format
 -------------
@@ -101,7 +101,7 @@ typically contain auto-generated metadata that changes between exports:
 - NamespaceMap : XML namespace mappings (contains UUIDs)
 - Distribution : File distribution metadata
 
-Use --no-default-exclusions to include these in the comparison.
+Use ``-ex`` with no names to include these in the comparison.
 
 See Also
 --------
@@ -113,7 +113,7 @@ import argparse
 
 from ..parser import parse
 from ..tools import print_triplets_diff
-from . import add_exclusion_arguments, exclusions
+from . import add_exclusion_argument
 
 def main():
     """
@@ -128,17 +128,13 @@ def main():
 
         cim-diff original.xml modified.xml
 
-    With custom exclusions::
+    With other exclusions (replace the defaults)::
 
         cim-diff original.xml modified.xml -ex Terminal ACLineSegment
 
-    Without default exclusions::
+    Without exclusions::
 
-        cim-diff original.xml modified.xml --no-default-exclusions
-
-    Combined exclusions::
-
-        cim-diff original.xml modified.xml -ex CustomType --no-default-exclusions
+        cim-diff original.xml modified.xml -ex
 
     Parameters
     ----------
@@ -147,10 +143,8 @@ def main():
     changed_file : str (positional)
         Path to modified CIM XML file or ZIP archive
     -ex, --exclude_objects : list of str, optional
-        Object type names (without namespace/prefix) to exclude from diff.
-        These are added to default exclusions unless --no-default-exclusions is used.
-    --no-default-exclusions : flag, optional
-        Disable default exclusions (NamespaceMap, Distribution)
+        Object type names (without namespace/prefix) to exclude from diff,
+        default NamespaceMap Distribution. ``-ex`` with no names excludes nothing.
 
     Exit Codes
     ----------
@@ -179,16 +173,15 @@ def main():
     )
     parser.add_argument('original_file', type=str, help='Original file path')
     parser.add_argument('changed_file', type=str, help='Changed file path')
-    add_exclusion_arguments(parser, "diff")
+    add_exclusion_argument(parser, "the diff")
 
     args = parser.parse_args()
-    exclude_objects = exclusions(args)
 
     # Load and compare files
     original_data = parse([args.original_file])
     changed_data = parse([args.changed_file])
 
-    print_triplets_diff(original_data, changed_data, exclude_objects=exclude_objects if exclude_objects else None)
+    print_triplets_diff(original_data, changed_data, exclude_objects=args.exclude_objects)
 
 if __name__ == "__main__":
     main()

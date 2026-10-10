@@ -464,15 +464,10 @@ def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
     return scope.filter(pl.len().over(["ID", "KEY", "VALUE"]) == 1)
 
 
-def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None):
+def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects=None):
     """Print a human-readable diff between two triplet datasets."""
     diff = diff_triplets(old_data, new_data)
     diff = diff.sort(["ID", "KEY"])
-
-    # Remove file identification objects
-    file_ids = filter_triplets_by_type(diff, file_id_object)
-    if not file_ids.is_empty():
-        diff = remove_triplets_from_triplets(diff, file_ids)
 
     # Exclude specified types
     if exclude_objects:

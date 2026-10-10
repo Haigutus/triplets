@@ -70,21 +70,21 @@ def test_parser_metadata_left_out_by_default(source, monkeypatch):
     (which holds the source path) are not written unless asked for."""
     cim_spreadsheet.cim_to_spreadsheet(source, "default.xlsx")
     assert not sheets("default.xlsx") & {"NamespaceMap", "Distribution"}
-    monkeypatch.setattr(sys, "argv", ["cim-spreadsheet", "-i", source, "-o", "all.xlsx", "--no-default-exclusions"])
+    monkeypatch.setattr(sys, "argv", ["cim-spreadsheet", "-i", source, "-o", "all.xlsx", "-ex"])
     cim_spreadsheet.main()
     assert {"NamespaceMap", "Distribution"} <= sheets("all.xlsx")
     monkeypatch.setattr(sys, "argv", ["cim-spreadsheet", "-i", source, "-o", "fewer.xlsx", "-ex", "ACLineSegment"])
     cim_spreadsheet.main()
-    assert sheets("fewer.xlsx") == sheets("default.xlsx") - {"ACLineSegment"}
+    assert sheets("fewer.xlsx") == sheets("all.xlsx") - {"ACLineSegment"}
 
 
 SSH = str(Path(next(path for path in SVEDALA_FILES if "_SSH_" in path)).resolve())
 
 
 @pytest.mark.parametrize("options, shown, hidden", [
-    ([], ["  ACLineSegment"], ["  NamespaceMap"]),
-    (["-ex", "ACLineSegment"], [], ["  ACLineSegment", "  NamespaceMap"]),
-    (["--no-default-exclusions"], ["  ACLineSegment", "  NamespaceMap"], []),
+    ([], ["  ACLineSegment"], ["  NamespaceMap", "  Distribution"]),
+    (["-ex", "ACLineSegment"], ["  NamespaceMap", "  Distribution"], ["  ACLineSegment"]),
+    (["-ex"], ["  ACLineSegment", "  NamespaceMap", "  Distribution"], []),
 ])
 def test_cim_diff_exclusions(monkeypatch, capsys, options, shown, hidden):
     """cim-diff runs and takes the shared exclusion options (EQ vs SSH)."""

@@ -246,11 +246,25 @@ triplets.clear_caches()   # or clear everything manually
 
 ## CLI tools
 
+Install the commands on your PATH with [uv](https://docs.astral.sh/uv/), or run them without installing:
+
+```shell
+uv tool install "triplets[arrow,excel]"        # cim-spreadsheet, cim-diff for the user
+uv tool upgrade triplets
+uvx --from "triplets[arrow,excel]" cim-diff original.xml modified.xml   # one-off run
+```
+
+`excel` is needed for `.xlsx`; `arrow` makes parsing ~10x faster.
+
 ```shell
 cim-spreadsheet -i model.xml -o output.xlsx                  # one sheet per class
 cim-spreadsheet -i output.xlsx -o out/ --rdf-map schema.json  # back to CIM XML
 cim-diff original.xml modified.xml
+cim-diff original.xml modified.xml -ex                        # also diff NamespaceMap, Distribution
 ```
+
+Both tools leave out `NamespaceMap` and `Distribution` (parser metadata, source
+file path) by default. `-ex TYPE ...` replaces that list; `-ex` alone keeps everything.
 
 Spreadsheet values come back as written, except numbers, which can change their
 written form (`500` -> `500.0`). Excel keeps 15 significant digits and sheet names of

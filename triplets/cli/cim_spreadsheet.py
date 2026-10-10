@@ -112,7 +112,7 @@ Notes
   and Excel may refuse or rename the sheet. Use CSV for such models.
 - The spreadsheet leaves out ``NamespaceMap`` and ``Distribution`` by default, so
   to-cim names each CIM XML ``<uuid>.xml`` and declares the schema profile's
-  namespaces. With ``--no-default-exclusions`` the file name is the instance
+  namespaces. With ``-ex`` and no names the file name is the instance
   ``label``, the path the model was parsed from (an absolute path is used as is),
   and the namespaces are the source's.
 
@@ -136,7 +136,7 @@ from uuid import uuid4
 from ..export import export_to_cimxml
 from ..parser import parse
 from ..tools import tableviews_to_triplets
-from . import DEFAULT_EXCLUSIONS, add_exclusion_arguments, exclusions
+from . import DEFAULT_EXCLUSIONS, add_exclusion_argument
 
 def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, multivalue=True,
                        exclude_objects=DEFAULT_EXCLUSIONS):
@@ -604,7 +604,7 @@ def main():
     parser.add_argument("--zip", "-z", action="store_true", dest="zip_output", help="Zip output")
     parser.add_argument("--no-zip", action="store_false", dest="zip_output", help="Do not zip output")
     parser.set_defaults(zip_output=None)
-    add_exclusion_arguments(parser, "the spreadsheet (for to-spreadsheet conversion)")
+    add_exclusion_argument(parser, "the spreadsheet (for to-spreadsheet conversion)")
 
     # Spreadsheet to CIM specific arguments
     parser.add_argument("--rdf-map", "-r", help="Path to RDF map JSON (for to-cim conversion)")
@@ -634,7 +634,7 @@ def main():
                 format=args.format,
                 zip_output=args.zip_output,
                 multivalue=args.multivalue,
-                exclude_objects=exclusions(args)
+                exclude_objects=args.exclude_objects
             )
             print(f"Converted {args.input} → {args.output}")
 

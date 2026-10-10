@@ -162,10 +162,16 @@ Start of the 0.3 line.
 ### Fixed
 - **`cim-spreadsheet` leaves out the parser metadata** (`NamespaceMap`,
   `Distribution`, which holds the source path) like `cim-diff`, with the same
-  `--exclude_objects` / `--no-default-exclusions` options from one shared
-  definition in `triplets.cli` ([#132](https://github.com/Haigutus/triplets/issues/132)).
+  `-ex` / `--exclude_objects` option from one shared definition in
+  `triplets.cli` ([#132](https://github.com/Haigutus/triplets/issues/132)).
   Such a spreadsheet converts back to `<uuid>.xml` with the schema profile's
-  namespaces; `--no-default-exclusions` keeps the source file name and namespaces.
+  namespaces.
+- **One exclusion option in both CLIs.** `-ex` names replace the default
+  (`NamespaceMap Distribution`); `-ex` with no names keeps everything.
+  `--no-default-exclusions` is removed.
+- **`print_triplets_diff` no longer always drops `Distribution`**: it leaves out
+  only `exclude_objects`; the `file_id_object` argument is removed. The
+  unpackaged `tools/cim-diff.py` script is removed (use `cim-diff`).
 - **`cim-diff` runs again**: it called `rdf_parser.print_triplets_diff`, which
   does not exist; it now uses `parse` and `tools.print_triplets_diff`.
 - **`comment=` is written by the `python_lxml` CIM XML exporter** too: it
