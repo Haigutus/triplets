@@ -410,11 +410,11 @@ def diff_between_INSTANCE(data, INSTANCE_ID_1, INSTANCE_ID_2):
     return _fn(data, INSTANCE_ID_1, INSTANCE_ID_2)
 
 
-def print_triplet_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None):
+def print_triplet_diff(old_data, new_data, file_id_key="label"):
     """Deprecated: use triplets.tools.print_triplets_diff()"""
     warnings.warn("rdf_parser.print_triplet_diff is deprecated, use triplets.tools.print_triplets_diff()", DeprecationWarning, stacklevel=2)
     from .tools import print_triplets_diff as _fn
-    return _fn(old_data, new_data, file_id_object=file_id_object, file_id_key=file_id_key, exclude_objects=exclude_objects)
+    return _fn(old_data, new_data, file_id_key=file_id_key)
 
 
 # =============================================================================

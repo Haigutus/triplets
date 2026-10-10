@@ -25,6 +25,8 @@ import logging
 
 from weakref import WeakKeyDictionary
 
+from ._diff_report import print_diff
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TABLE = "triplets"
@@ -286,13 +288,14 @@ def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
 
 
 def filter_triplets_by_type(self, type_name, table=None, schema=None, table_name=None):
-    """Filter to only objects of a specific type. Returns DuckDBPyRelation (lazy)."""
+    """Filter to only objects of a specific type (str or list of str). Returns DuckDBPyRelation (lazy)."""
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
+    type_names = [type_name] if isinstance(type_name, str) else list(type_name)
     return self.sql(f"""
         SELECT d.* FROM {table_name} d
         WHERE d.ID IN (
             SELECT ID FROM {table_name}
-            WHERE KEY = 'Type' AND VALUE = {_lit(type_name)}
+            WHERE KEY = 'Type' AND VALUE IN ({_in_list(type_names)})
         )
     """)
 
@@ -644,17 +647,28 @@ def diff_triplets_by_instance(self, INSTANCE_ID_1, INSTANCE_ID_2, table=None, sc
     """)
 
 
-def print_triplets_diff(self, new_data, file_id_object="Distribution", file_id_key="label",
-                        exclude_objects=None, table=None, schema=None, table_name=None):
-    """Print a simple removed/added diff of the table against new_data."""
-    diff = diff_triplets(self, new_data, table=table, schema=schema, table_name=table_name).df()
-    removed = diff[diff["_merge"] == "left_only"]
-    added = diff[diff["_merge"] == "right_only"]
-    print(f"--- removed ({len(removed)} triplets) / +++ added ({len(added)} triplets) ---")
-    for _, row in removed.iterrows():
-        print(f"- {row['ID']} {row['KEY']} {row['VALUE']}")
-    for _, row in added.iterrows():
-        print(f"+ {row['ID']} {row['KEY']} {row['VALUE']}")
+def print_triplets_diff(self, new_data, file_id_key="label", types=None, context_keys=None, stat=False,
+                        table=None, schema=None, table_name=None):
+    """Print a unified diff of the table against new_data; returns the number of
+    differing triplets shown. Same output and options as the pandas engine."""
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
+    _materialize(self, new_data, "_new_data")
+    labels = [[label for label, in self.sql(f"SELECT VALUE FROM {source} WHERE KEY = {_lit(file_id_key)}").fetchall()]
+              for source in (table_name, "_new_data")]
+    # as filter_triplets_by_type, on the table and on new_data
+    kept = "TRUE" if types is None else f"VALUE IN ({_in_list(types)})" if types else "FALSE"
+    for view, source in (("_diff_old", table_name), ("_diff_new", "_new_data")):
+        where = "" if types is None else f" WHERE ID IN (SELECT ID FROM {source} WHERE KEY = 'Type' AND {kept})"
+        self.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS SELECT * FROM {source}{where}")
+    diff = ("SELECT ID, KEY, VALUE, 'left_only' AS _merge FROM _diff_old "
+            "WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _diff_new) "
+            "UNION ALL SELECT ID, KEY, VALUE, 'right_only' FROM _diff_new "
+            "WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _diff_old)")
+    keys = _in_list(["Type", *(context_keys or [])])
+    related = self.sql(" UNION ALL ".join(
+        f"SELECT ID, KEY, VALUE, '{side}' FROM {source} WHERE KEY IN ({keys}) AND ID IN (SELECT ID FROM ({diff}))"
+        for side, source in (("old", "_diff_old"), ("new", "_diff_new")))).fetchall()
+    return print_diff(self.sql(diff).fetchall(), related, *labels, context_keys, stat)
 
 
 # ── Transform ────────────────────────────────────────────────────────────────

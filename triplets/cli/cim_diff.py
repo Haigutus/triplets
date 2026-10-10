@@ -36,26 +36,30 @@ After installation, the tool can be invoked in three ways:
 
 2. **As a Python module**::
 
-    python -m triplets.tools.cim_diff_cli original.xml modified.xml
+    python -m triplets.cli.cim_diff original.xml modified.xml
 
 3. **Programmatically** in Python code::
 
-    from triplets import rdf_parser
+    from triplets import parse
+    from triplets.tools import print_triplets_diff
 
     # Load both files
-    original = rdf_parser.load_all_to_dataframe(['original.xml'])
-    modified = rdf_parser.load_all_to_dataframe(['modified.xml'])
+    original = parse(['original.xml'])
+    modified = parse(['modified.xml'])
 
     # Print diff
-    rdf_parser.print_triplets_diff(original, modified, exclude_objects=['NamespaceMap', 'Distribution'])
+    print_triplets_diff(original, modified, types=['ACLineSegment', 'Terminal'])
 
 Features
 --------
 - Semantic comparison at triplet level (ID, KEY, VALUE)
 - Unified diff format output for easy reading
 - Support for ZIP archives (single or nested)
-- Default exclusions for metadata objects (NamespaceMap, Distribution)
-- Custom exclusion lists for filtering out specific object types
+- Parser metadata (NamespaceMap, Distribution) left out unless ``--keep-metadata``
+- Only some object types with ``--include``, more left out with ``-ex``
+- Unchanged values shown for orientation with ``--context KEY``
+- Counts per type only with ``--stat``
+- Exit code 0 when equal (nothing printed), 1 when different, 2 on error (as ``diff``)
 - Handles large CIM files efficiently
 
 Examples
@@ -64,33 +68,47 @@ Basic diff between two CIM files::
 
     $ cim-diff original.xml modified.xml
 
-Diff with custom exclusions::
+Also leave out some model classes::
 
-    $ cim-diff original.xml modified.xml -ex Terminal ConnectivityNode
+    $ cim-diff original.xml modified.xml -ex Terminal -ex ConnectivityNode
+    $ cim-diff original.xml modified.xml -ex Terminal,ConnectivityNode
 
-Diff without default exclusions::
+Diff everything, parser metadata included::
 
-    $ cim-diff original.xml modified.xml --no-default-exclusions
+    $ cim-diff original.xml modified.xml --keep-metadata
+
+Only line segments, with their names, or only the counts::
+
+    $ cim-diff original.xml modified.xml --include ACLineSegment --context IdentifiedObject.name
+    $ cim-diff original.xml modified.xml --stat
 
 Diff between ZIP archives::
 
     $ cim-diff original.zip modified.zip
 
-Add custom exclusions on top of defaults::
-
-    $ cim-diff original.xml modified.xml -ex CustomType1 CustomType2
-
 Output Format
 -------------
-The tool outputs differences in unified diff format::
+Counts of removed, added and changed objects per type, then one hunk per
+object (sorted by type and ID), keys sorted, ``-`` before ``+``::
 
-    --- Objects in original_file
-    +++ Objects in modified_file
-    - ObjectID ObjectType.attribute oldValue
-    + ObjectID ObjectType.attribute newValue
+    --- original.xml
+    +++ modified.xml
 
-Lines starting with '-' indicate values removed (in original but not in modified).
-Lines starting with '+' indicate values added (in modified but not in original).
+    @@ -1,0 +1,0 @@ Removed:
+      Terminal 1
+
+    @@ -1,0 +1,0 @@ Added:
+
+    @@ -1,0 +1,0 @@ Changed:
+      ACLineSegment 1
+
+    @@ -1,2 +1,2 @@ ACLineSegment c77668c9-6993-4391-8c03-29fc802ad605
+    -ACLineSegment.r -> 9.6
+    +ACLineSegment.r -> 9.99
+     IdentifiedObject.name -> CL15
+
+``-`` lines are only in the original, ``+`` lines only in the modified file,
+`` `` lines are unchanged values asked for with ``--context``.
 
 Default Exclusions
 ------------------
@@ -100,17 +118,21 @@ typically contain auto-generated metadata that changes between exports:
 - NamespaceMap : XML namespace mappings (contains UUIDs)
 - Distribution : File distribution metadata
 
-Use --no-default-exclusions to include these in the comparison.
+Use ``--keep-metadata`` to include these in the comparison.
 
 See Also
 --------
 cim-spreadsheet : Tool for converting between CIM XML and spreadsheet formats
-triplets.rdf_parser.print_triplets_diff : Core diff function
+triplets.tools.print_triplets_diff : Core diff function
 """
 
-import sys
 import argparse
-from .. import rdf_parser
+import logging
+import sys
+
+from ..parser import parse
+from ..tools import print_triplets_diff
+from . import add_common_arguments, excluded_types, kept_types, names
 
 def main():
     """
@@ -125,17 +147,13 @@ def main():
 
         cim-diff original.xml modified.xml
 
-    With custom exclusions::
+    Also leave out some classes::
 
-        cim-diff original.xml modified.xml -ex Terminal ACLineSegment
+        cim-diff original.xml modified.xml -ex Terminal -ex ACLineSegment
 
-    Without default exclusions::
+    Without exclusions::
 
-        cim-diff original.xml modified.xml --no-default-exclusions
-
-    Combined exclusions::
-
-        cim-diff original.xml modified.xml -ex CustomType --no-default-exclusions
+        cim-diff original.xml modified.xml --keep-metadata
 
     Parameters
     ----------
@@ -143,15 +161,17 @@ def main():
         Path to original CIM XML file or ZIP archive
     changed_file : str (positional)
         Path to modified CIM XML file or ZIP archive
-    -ex, --exclude_objects : list of str, optional
-        Object type names (without namespace/prefix) to exclude from diff.
-        These are added to default exclusions unless --no-default-exclusions is used.
-    --no-default-exclusions : flag, optional
-        Disable default exclusions (NamespaceMap, Distribution)
+    -ex, --exclude_objects : str, repeatable
+        Object type name (without namespace/prefix) left out of the diff;
+        repeat or comma-separate for more.
+    --keep-metadata : flag
+        Also diff NamespaceMap and Distribution, left out by default.
 
     Exit Codes
     ----------
-    0 : Successful comparison (differences shown on stdout)
+    0 : No differences
+    1 : Differences (shown on stdout)
+    2 : Error (bad arguments, unreadable file)
 
     Notes
     -----
@@ -165,8 +185,8 @@ def main():
 
     See Also
     --------
-    triplets.rdf_parser.load_all_to_dataframe : Loads CIM XML into triplet format
-    triplets.rdf_parser.print_triplets_diff : Prints differences between triplet DataFrames
+    triplets.parser.parse : Loads CIM XML into triplet format
+    triplets.tools.print_triplets_diff : Prints differences between triplet DataFrames
     """
     parser = argparse.ArgumentParser(
         description="""Create diff in Unified format for XML RDF CIM files.
@@ -176,28 +196,26 @@ def main():
     )
     parser.add_argument('original_file', type=str, help='Original file path')
     parser.add_argument('changed_file', type=str, help='Changed file path')
-    parser.add_argument('-ex', '--exclude_objects', nargs='+', help='Names of rdf:Description rdf:type-s without namespace or prefix to be excluded from diff (default: NamespaceMap, Distribution)')
-    parser.add_argument('--no-default-exclusions', action='store_true', help='Disable default exclusions (NamespaceMap, Distribution)')
+    add_common_arguments(parser, "the diff")
+    parser.add_argument('--context', action='extend', type=names, default=[], metavar='KEY',
+                        help='Also show the unchanged values of these keys in each changed object, '
+                             'e.g. --context IdentifiedObject.name. Repeat or comma-separate for more')
+    parser.add_argument('--stat', action='store_true', help='Only the removed / added / changed counts per type')
 
     args = parser.parse_args()
+    logging.basicConfig(level=logging.WARNING)
 
-    # Default exclusions (typically objects that change due to UUIDs/metadata)
-    default_exclusions = ['NamespaceMap', 'Distribution']
+    try:
+        original_data = parse([args.original_file])
+        changed_data = parse([args.changed_file])
+    except Exception as error:
+        print(f"Error: {error}", file=sys.stderr)
+        sys.exit(2)
 
-    # Determine final exclusion list
-    if args.no_default_exclusions:
-        exclude_objects = args.exclude_objects
-    else:
-        # Combine default exclusions with user-provided ones
-        exclude_objects = default_exclusions.copy()
-        if args.exclude_objects:
-            exclude_objects.extend(args.exclude_objects)
-
-    # Load and compare files
-    original_data = rdf_parser.load_all_to_dataframe([args.original_file])
-    changed_data = rdf_parser.load_all_to_dataframe([args.changed_file])
-
-    rdf_parser.print_triplets_diff(original_data, changed_data, exclude_objects=exclude_objects if exclude_objects else None)
+    types = kept_types((original_data, changed_data), args.include, excluded_types(args))
+    differences = print_triplets_diff(original_data, changed_data, types=types,
+                                      context_keys=args.context, stat=args.stat)
+    sys.exit(1 if differences else 0)
 
 if __name__ == "__main__":
     main()

@@ -110,8 +110,14 @@ Notes
 - Excel limits sheet names to 31 characters. Longer class names (e.g.
   ``SynchronousMachineTimeConstantReactance``) are written as is: openpyxl warns
   and Excel may refuse or rename the sheet. Use CSV for such models.
-- CIM XML file names come from the instance ``label``, the path the model was
-  parsed from. An absolute path is used as is, so the export writes to that path.
+- The spreadsheet leaves out ``NamespaceMap`` and ``Distribution`` by default, so
+  to-cim names each CIM XML ``<uuid>.xml`` in ``-o`` and declares the schema
+  profile's namespaces. With ``--keep-metadata`` to-cim writes each instance to
+  its ``Distribution`` ``label``, the path the model was parsed from: an absolute
+  path overwrites the source XML, a relative one is created under ``-o``. Edit
+  the label in the spreadsheet, or leave the metadata out, to write elsewhere.
+- Without ``--rdf-map`` to-cim warns and writes every class in the triplets
+  namespace instead of a CIM profile.
 
 See Also
 --------
@@ -132,10 +138,12 @@ from uuid import uuid4
 
 from ..export import export_to_cimxml
 from ..parser import parse
-from ..tools import tableviews_to_triplets
-from ..export_schema import schemas
+from ..tools import filter_triplets_by_type, tableviews_to_triplets
+from . import add_common_arguments, excluded_types, kept_types
 
-def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, multivalue=True):
+
+def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, multivalue=True,
+                       exclude_objects=(), include_objects=()):
     """
     Convert CIM XML to spreadsheet format (Excel or CSV).
 
@@ -157,6 +165,11 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
     multivalue : bool, default True
         If True, aggregate duplicate (ID, KEY) pairs into lists in the output.
         Use False to keep duplicate pairs as separate rows.
+    exclude_objects : sequence of str, default ()
+        Class names left out, e.g. ``triplets.cli.METADATA_TYPES`` (what the CLI
+        leaves out by default).
+    include_objects : sequence of str, default ()
+        Only these classes (all if empty); ``exclude_objects`` applies after it.
 
     Raises
     ------
@@ -184,6 +197,9 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
         zip_output = (format == "csv")
 
     data = parse(cim_path)
+    types = kept_types([data], include_objects, exclude_objects)
+    if types is not None:
+        data = filter_triplets_by_type(data, types)
 
     base_name = os.path.basename(output_path).replace('.zip', '').replace('.xlsx', '').replace('.csv', '')
     if not base_name:
@@ -233,7 +249,7 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
 
 def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
                        export_type=None, multivalue=True, zip_output=None,
-                       sheets=None, triplets_sheet=None):
+                       sheets=None, triplets_sheet=None, exclude_objects=(), include_objects=()):
     """
     Convert spreadsheet format (Excel or CSV) to CIM XML.
 
@@ -251,7 +267,8 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
         Input format. If None, auto-detected from input_path extension.
         Defaults to 'excel' if ambiguous.
     rdf_map : str, optional
-        Path to RDF map JSON file for custom mappings during export
+        Path to RDF map JSON file (export schema). Without it every class is
+        written in the triplets namespace, with a warning.
     export_type : {'xml_per_instance', 'xml_per_instance_zip_per_all', 'xml_per_instance_zip_per_xml'}, optional
         How to package the CIM XML output. If None, defaults to
         'xml_per_instance_zip_per_all' if zip_output=True, else 'xml_per_instance'
@@ -269,6 +286,10 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
         to include in the output. For Excel, this is a sheet name. For CSV,
         this is a base filename (without .csv extension).
         This sheet is not processed as tableview data.
+    exclude_objects : sequence of str, default ()
+        Class names left out of the export.
+    include_objects : sequence of str, default ()
+        Only these classes (all if empty); ``exclude_objects`` applies after it.
 
     Returns
     -------
@@ -373,6 +394,9 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
 
     if raw_triplets:
         data = pandas.concat([data] + raw_triplets, ignore_index=True)
+    types = kept_types([data], include_objects, exclude_objects)
+    if types is not None:
+        data = filter_triplets_by_type(data, types)
 
     from triplets._version import get_versions
     version = get_versions()['version']
@@ -393,11 +417,14 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
 
     os.makedirs(output_path, exist_ok=True)
 
+    if rdf_map is None:
+        logging.warning("No --rdf-map given: classes are written in the triplets namespace, not a CIM profile")
+
     # Export to CIM XML
     return export_to_cimxml(
         data,
         rdf_map=rdf_map,
-        export_undefined=False,
+        export_undefined=rdf_map is None,
         export_type=export_type,
         export_base_path=output_path,
         debug=False
@@ -567,6 +594,8 @@ def main():
         cim-spreadsheet -i data.xlsx -o output/ --sheets Sheet1 Sheet2
         cim-spreadsheet -i data.xlsx -o output/ --triplets-sheet RawData
         cim-spreadsheet -i model.xml -o output.xlsx -z  # force ZIP
+        cim-spreadsheet -i model.xml -o output.xlsx -ex Terminal,ConnectivityNode
+        cim-spreadsheet -i model.xml -o output.xlsx --keep-metadata
 
     Exit Codes
     ----------
@@ -594,6 +623,7 @@ def main():
     parser.add_argument("--zip", "-z", action="store_true", dest="zip_output", help="Zip output")
     parser.add_argument("--no-zip", action="store_false", dest="zip_output", help="Do not zip output")
     parser.set_defaults(zip_output=None)
+    add_common_arguments(parser, "the output")
 
     # Spreadsheet to CIM specific arguments
     parser.add_argument("--rdf-map", "-r", help="Path to RDF map JSON (for to-cim conversion)")
@@ -603,7 +633,7 @@ def main():
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.WARNING)
 
     # Detect conversion direction if not specified
     direction = args.direction
@@ -622,7 +652,9 @@ def main():
                 args.output,
                 format=args.format,
                 zip_output=args.zip_output,
-                multivalue=args.multivalue
+                multivalue=args.multivalue,
+                exclude_objects=excluded_types(args),
+                include_objects=args.include
             )
             print(f"Converted {args.input} → {args.output}")
 
@@ -636,7 +668,9 @@ def main():
                 multivalue=args.multivalue,
                 zip_output=args.zip_output,
                 sheets=args.sheets,
-                triplets_sheet=args.triplets_sheet
+                triplets_sheet=args.triplets_sheet,
+                exclude_objects=excluded_types(args),
+                include_objects=args.include
             )
             print(f"Converted {args.input} → {args.output}")
 
