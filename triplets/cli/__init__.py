@@ -2,7 +2,7 @@
 CLI tools for the triplets package.
 """
 
-__all__ = ['cim_spreadsheet', 'cim_diff', 'METADATA_TYPES', 'add_common_arguments', 'excluded_types']
+__all__ = ['cim_spreadsheet', 'cim_diff', 'METADATA_TYPES', 'add_common_arguments', 'excluded_types', 'kept_types']
 
 # classes the parser adds to every file (namespaces, source file path): not model content
 METADATA_TYPES = ("NamespaceMap", "Distribution")
@@ -25,6 +25,18 @@ def add_common_arguments(parser, purpose):
                              f'Repeat or comma-separate for more: -ex Terminal -ex Breaker,Switch')
     parser.add_argument('--keep-metadata', action='store_true',
                         help=f'Keep the parser metadata ({", ".join(METADATA_TYPES)}), left out by default')
+
+
+def kept_types(datasets, include_objects=(), exclude_objects=()):
+    """Type names to keep, from the Type rows in ``datasets``: ``include_objects`` (all
+    if empty) minus ``exclude_objects``. None when nothing would be dropped, so
+    objects without a Type row stay."""
+    present = set().union(*(data.loc[data["KEY"] == "Type", "VALUE"] for data in datasets))
+    if not include_objects and not present & set(exclude_objects):
+        return None
+    if include_objects:
+        present &= set(include_objects)
+    return sorted(present - set(exclude_objects))
 
 
 def excluded_types(args):

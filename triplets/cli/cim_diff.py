@@ -48,7 +48,7 @@ After installation, the tool can be invoked in three ways:
     modified = parse(['modified.xml'])
 
     # Print diff
-    print_triplets_diff(original, modified, exclude_objects=['NamespaceMap', 'Distribution'])
+    print_triplets_diff(original, modified, types=['ACLineSegment', 'Terminal'])
 
 Features
 --------
@@ -132,7 +132,7 @@ import sys
 
 from ..parser import parse
 from ..tools import print_triplets_diff
-from . import add_common_arguments, excluded_types, names
+from . import add_common_arguments, excluded_types, kept_types, names
 
 def main():
     """
@@ -212,8 +212,9 @@ def main():
         print(f"Error: {error}", file=sys.stderr)
         sys.exit(2)
 
-    differences = print_triplets_diff(original_data, changed_data, exclude_objects=excluded_types(args),
-                                      include_objects=args.include, context_keys=args.context, stat=args.stat)
+    types = kept_types((original_data, changed_data), args.include, excluded_types(args))
+    differences = print_triplets_diff(original_data, changed_data, types=types,
+                                      context_keys=args.context, stat=args.stat)
     sys.exit(1 if differences else 0)
 
 if __name__ == "__main__":

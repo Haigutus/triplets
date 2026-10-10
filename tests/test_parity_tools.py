@@ -156,7 +156,7 @@ CALL_SPECS = {
     "diff_triplets": lambda e, d, c: d.diff_triplets(_to_engine(e, c["new_data"])),
     "diff_triplets_by_instance": lambda e, d, c: d.diff_triplets_by_instance(c["instances"][0], c["instances"][1]),
     "print_triplets_diff": lambda e, d, c: _printed(lambda: d.print_triplets_diff(
-        _to_engine(e, c["diff_data"]), context_keys=["IdentifiedObject.name"], exclude_objects=["Terminal"])),
+        _to_engine(e, c["diff_data"]), context_keys=["IdentifiedObject.name"], types=[c["type"], "Terminal"])),
     # tableview_to_triplets operates on a *tableview*, so call it on the tableview object
     # (duckdb has no relation method — it unpivots a wide table by name).
     "tableview_to_triplets": lambda e, d, c: (_duckdb_wide_table(d, c) if e == "duckdb"

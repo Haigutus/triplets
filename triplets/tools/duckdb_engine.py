@@ -647,8 +647,7 @@ def diff_triplets_by_instance(self, INSTANCE_ID_1, INSTANCE_ID_2, table=None, sc
     """)
 
 
-def print_triplets_diff(self, new_data, file_id_key="label", exclude_objects=None,
-                        include_objects=None, context_keys=None, stat=False,
+def print_triplets_diff(self, new_data, file_id_key="label", types=None, context_keys=None, stat=False,
                         table=None, schema=None, table_name=None):
     """Print a unified diff of the table against new_data; returns the number of
     differing triplets shown. Same output and options as the pandas engine."""
@@ -656,12 +655,11 @@ def print_triplets_diff(self, new_data, file_id_key="label", exclude_objects=Non
     _materialize(self, new_data, "_new_data")
     labels = [[label for label, in self.sql(f"SELECT VALUE FROM {source} WHERE KEY = {_lit(file_id_key)}").fetchall()]
               for source in (table_name, "_new_data")]
-    # objects kept by include / exclude, per input by its own Type rows
-    dropped = " OR ".join(([f"VALUE IN ({_in_list(exclude_objects)})"] if exclude_objects else []) +
-                          ([f"VALUE NOT IN ({_in_list(include_objects)})"] if include_objects else [])) or "FALSE"
+    # as filter_triplets_by_type, on the table and on new_data
+    kept = "TRUE" if types is None else f"VALUE IN ({_in_list(types)})" if types else "FALSE"
     for view, source in (("_diff_old", table_name), ("_diff_new", "_new_data")):
-        self.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS SELECT * FROM {source} WHERE ID NOT IN "
-                     f"(SELECT ID FROM {source} WHERE KEY = 'Type' AND ({dropped}))")
+        where = "" if types is None else f" WHERE ID IN (SELECT ID FROM {source} WHERE KEY = 'Type' AND {kept})"
+        self.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS SELECT * FROM {source}{where}")
     diff = ("SELECT ID, KEY, VALUE, 'left_only' AS _merge FROM _diff_old "
             "WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _diff_new) "
             "UNION ALL SELECT ID, KEY, VALUE, 'right_only' FROM _diff_new "

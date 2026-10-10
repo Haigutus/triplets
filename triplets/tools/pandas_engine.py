@@ -992,8 +992,7 @@ def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
 
     return diff
 
-def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects=None,
-                        include_objects=None, context_keys=None, stat=False):
+def print_triplets_diff(old_data, new_data, file_id_key="label", types=None, context_keys=None, stat=False):
     """Print a unified diff of two triplet datasets, one hunk per changed object.
 
     Parameters
@@ -1004,13 +1003,9 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
         New triplet dataset to compare against.
     file_id_key : str, optional
         Key whose values name the files in the ``---`` / ``+++`` lines (default is 'label').
-    exclude_objects : list, optional
-        Object types left out of the diff, e.g. the parser metadata
-        ``["NamespaceMap", "Distribution"]`` (default is None: nothing left out).
-    include_objects : list, optional
-        Only these object types are diffed (default is None: all). Types are matched
-        against each dataset's own Type rows, so an object stated under another class
-        in the other file is not matched.
+    types : list, optional
+        Only objects of these types are diffed (default is None: all), see
+        ``filter_triplets_by_type``. The file names are read before filtering.
     context_keys : list, optional
         Keys whose unchanged values are shown in each hunk as `` `` context lines,
         e.g. ``["IdentifiedObject.name"]``.
@@ -1024,17 +1019,14 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
 
     Examples
     --------
-    >>> print_triplets_diff(old_data, new_data, exclude_objects=["NamespaceMap"],
+    >>> print_triplets_diff(old_data, new_data, types=["ACLineSegment"],
     ...                     context_keys=["IdentifiedObject.name"])
     """
     old_labels = old_data.loc[old_data["KEY"] == file_id_key, "VALUE"].tolist()
     new_labels = new_data.loc[new_data["KEY"] == file_id_key, "VALUE"].tolist()
-    if include_objects:
-        old_data = filter_triplets_by_type(old_data, include_objects)
-        new_data = filter_triplets_by_type(new_data, include_objects)
-    if exclude_objects:
-        old_data = remove_triplets_from_triplets(old_data, filter_triplets_by_type(old_data, exclude_objects))
-        new_data = remove_triplets_from_triplets(new_data, filter_triplets_by_type(new_data, exclude_objects))
+    if types is not None:
+        old_data = filter_triplets_by_type(old_data, types)
+        new_data = filter_triplets_by_type(new_data, types)
     diff = diff_triplets(old_data, new_data)
     keys = ["Type", *(context_keys or [])]
     related = pandas.concat([

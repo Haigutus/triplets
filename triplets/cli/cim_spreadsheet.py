@@ -138,8 +138,8 @@ from uuid import uuid4
 
 from ..export import export_to_cimxml
 from ..parser import parse
-from ..tools import filter_triplets_by_type, remove_triplets_from_triplets, tableviews_to_triplets
-from . import add_common_arguments, excluded_types
+from ..tools import filter_triplets_by_type, tableviews_to_triplets
+from . import add_common_arguments, excluded_types, kept_types
 
 
 def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, multivalue=True,
@@ -197,10 +197,9 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
         zip_output = (format == "csv")
 
     data = parse(cim_path)
-    if include_objects:
-        data = filter_triplets_by_type(data, include_objects)
-    if exclude_objects:
-        data = remove_triplets_from_triplets(data, filter_triplets_by_type(data, exclude_objects))
+    types = kept_types([data], include_objects, exclude_objects)
+    if types is not None:
+        data = filter_triplets_by_type(data, types)
 
     base_name = os.path.basename(output_path).replace('.zip', '').replace('.xlsx', '').replace('.csv', '')
     if not base_name:
@@ -395,10 +394,9 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
 
     if raw_triplets:
         data = pandas.concat([data] + raw_triplets, ignore_index=True)
-    if include_objects:
-        data = filter_triplets_by_type(data, include_objects)
-    if exclude_objects:
-        data = remove_triplets_from_triplets(data, filter_triplets_by_type(data, exclude_objects))
+    types = kept_types([data], include_objects, exclude_objects)
+    if types is not None:
+        data = filter_triplets_by_type(data, types)
 
     from triplets._version import get_versions
     version = get_versions()['version']

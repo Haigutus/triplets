@@ -474,19 +474,15 @@ def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
     return scope.filter(pl.len().over(["ID", "KEY", "VALUE"]) == 1)
 
 
-def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects=None,
-                        include_objects=None, context_keys=None, stat=False):
+def print_triplets_diff(old_data, new_data, file_id_key="label", types=None, context_keys=None, stat=False):
     """Print a unified diff of two triplet datasets; returns the number of
     differing triplets shown. Same output and options as the pandas engine."""
     old_labels = old_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list()
     new_labels = new_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list()
     old_data, new_data = _strings(old_data), _strings(new_data)
-    if include_objects:
-        old_data = filter_triplets_by_type(old_data, include_objects)
-        new_data = filter_triplets_by_type(new_data, include_objects)
-    if exclude_objects:
-        old_data = remove_triplets_from_triplets(old_data, filter_triplets_by_type(old_data, exclude_objects))
-        new_data = remove_triplets_from_triplets(new_data, filter_triplets_by_type(new_data, exclude_objects))
+    if types is not None:
+        old_data = filter_triplets_by_type(old_data, types)
+        new_data = filter_triplets_by_type(new_data, types)
     diff = diff_triplets(old_data, new_data)
     keys = ["Type", *(context_keys or [])]
     related = pl.concat([

@@ -12,8 +12,8 @@ Start of the 0.3 line.
 - **`cim-diff` report options**: `--stat` (counts per type only), `--include TYPE`
   (only these classes, also in `cim-spreadsheet`), `--context KEY` (unchanged
   values of KEY shown in each changed object, e.g. `IdentifiedObject.name`).
-  Same as `print_triplets_diff(stat=, include_objects=, context_keys=)` in
-  every engine. `--version` in both CLIs.
+  `print_triplets_diff(types=, context_keys=, stat=)` in every engine; the
+  CLI builds `types` from the Type rows in the data. `--version` in both CLIs.
 - `filter_triplets_by_type` takes a list of types too (all engines).
 - **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
   `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
@@ -182,17 +182,16 @@ Start of the 0.3 line.
 - **One diff report for all engines.** pandas, polars and duckdb
   `print_triplets_diff` print the same output (they had three formats; duckdb
   ignored `exclude_objects`). Hunks and keys are sorted, `-` before `+`.
-  `exclude_objects` / `include_objects` filter each input by its own `Type`
-  rows before diffing (no schema); exclusion only matched objects whose
-  `Type` row was in the diff. polars `diff_triplets` casts `ID` / `KEY` /
-  `VALUE` to String when one side is Categorical.
+  polars `diff_triplets` casts `ID` / `KEY` / `VALUE` to String when one side
+  is Categorical.
 - **CLI logging at WARNING**; `cim-spreadsheet` no longer prints INFO lines.
 - **to-cim without `--rdf-map`** warns and writes the classes in the triplets
   namespace; it wrote nothing and still reported success.
 - **CIM XML export creates missing folders** for a relative file name (round
   trip with `--keep-metadata` crashed with `FileNotFoundError`).
-- **`print_triplets_diff` no longer always drops `Distribution`**: it leaves out
-  only `exclude_objects`; the `file_id_object` argument is removed. The
+- **`print_triplets_diff` no longer always drops `Distribution`**: `exclude_objects`
+  and `file_id_object` are replaced by `types=` (objects of these types only,
+  via `filter_triplets_by_type`; file names read before filtering). The
   unpackaged `tools/cim-diff.py` script is removed (use `cim-diff`).
 - **`cim-diff` runs again**: it called `rdf_parser.print_triplets_diff`, which
   does not exist; it now uses `parse` and `tools.print_triplets_diff`.
