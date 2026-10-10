@@ -223,9 +223,10 @@ def references_simple(data, reference, columns=None, levels=1):
 
 
 def filter_triplets_by_type(data, type_name, type_key="Type"):
-    """Filter triplet data to only include objects of a specific type."""
+    """Filter triplet data to only include objects of a specific type (str or list of str)."""
+    type_names = [type_name] if isinstance(type_name, str) else list(type_name)
     type_ids = data.filter(
-        (pl.col("KEY") == type_key) & (pl.col("VALUE") == type_name)
+        (pl.col("KEY") == type_key) & pl.col("VALUE").is_in(type_names)
     ).select("ID")
     return type_ids.join(data, on="ID", how="inner")
 
@@ -479,8 +480,13 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
     differing triplets shown. Same output and options as the pandas engine."""
     old_labels = old_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list()
     new_labels = new_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list()
-    old_data = _strings(_select_types(old_data, include_objects, exclude_objects))
-    new_data = _strings(_select_types(new_data, include_objects, exclude_objects))
+    old_data, new_data = _strings(old_data), _strings(new_data)
+    if include_objects:
+        old_data = filter_triplets_by_type(old_data, include_objects)
+        new_data = filter_triplets_by_type(new_data, include_objects)
+    if exclude_objects:
+        old_data = remove_triplets_from_triplets(old_data, filter_triplets_by_type(old_data, exclude_objects))
+        new_data = remove_triplets_from_triplets(new_data, filter_triplets_by_type(new_data, exclude_objects))
     diff = diff_triplets(old_data, new_data)
     keys = ["Type", *(context_keys or [])]
     related = pl.concat([
@@ -489,19 +495,6 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
         for side, data in (("old", old_data), ("new", new_data))])
     return print_diff(diff.select("ID", "KEY", "VALUE", "_merge").iter_rows(), related.iter_rows(),
                       old_labels, new_labels, context_keys, stat)
-
-
-def _select_types(data, include_objects=None, exclude_objects=None):
-    """Drop the objects whose Type is in ``exclude_objects`` or, when given, not in
-    ``include_objects``. Matches the Type rows in ``data`` only, no schema."""
-    if not include_objects and not exclude_objects:
-        return data
-    value = pl.col("VALUE").cast(pl.String)
-    dropped = value.is_in(list(exclude_objects or []))
-    if include_objects:
-        dropped = dropped | ~value.is_in(list(include_objects))
-    ids = data.filter((pl.col("KEY").cast(pl.String) == "Type") & dropped).select("ID")
-    return data.join(ids, on="ID", how="anti")
 
 
 def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),

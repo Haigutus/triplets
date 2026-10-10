@@ -837,21 +837,23 @@ def filter_triplets_by_type(data, type_name, type_key="Type"):
     ----------
     data : pandas.DataFrame
         Triplet dataset containing RDF data.
-    type_name : str
-        Object type to filter by (e.g., 'ACLineSegment').
+    type_name : str or list of str
+        Object type(s) to filter by (e.g., 'ACLineSegment').
     type_key : str
         Key used in triplet to indicate type, by default "Type"
 
     Returns
     -------
     pandas.DataFrame
-        Filtered triplet dataset containing only objects of the specified type.
+        Filtered triplet dataset containing only objects of the specified type(s).
 
     Examples
     --------
     >>> filtered = filter_triplets_by_type(data, "ACLineSegment")
+    >>> filtered = filter_triplets_by_type(data, ["ACLineSegment", "Terminal"])
     """
-    filter_triplet = data[(data.KEY == type_key) & (data.VALUE == type_name)]
+    type_names = [type_name] if isinstance(type_name, str) else list(type_name)
+    filter_triplet = data[(data.KEY == type_key) & data.VALUE.isin(type_names)]
 
     return filter_triplets_by_triplets(data, filter_triplet)
 
@@ -1027,8 +1029,12 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
     """
     old_labels = old_data.loc[old_data["KEY"] == file_id_key, "VALUE"].tolist()
     new_labels = new_data.loc[new_data["KEY"] == file_id_key, "VALUE"].tolist()
-    old_data = _select_types(old_data, include_objects, exclude_objects)
-    new_data = _select_types(new_data, include_objects, exclude_objects)
+    if include_objects:
+        old_data = filter_triplets_by_type(old_data, include_objects)
+        new_data = filter_triplets_by_type(new_data, include_objects)
+    if exclude_objects:
+        old_data = remove_triplets_from_triplets(old_data, filter_triplets_by_type(old_data, exclude_objects))
+        new_data = remove_triplets_from_triplets(new_data, filter_triplets_by_type(new_data, exclude_objects))
     diff = diff_triplets(old_data, new_data)
     keys = ["Type", *(context_keys or [])]
     related = pandas.concat([
@@ -1036,18 +1042,6 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
         for side, data in (("old", old_data), ("new", new_data))])
     return print_diff(diff[["ID", "KEY", "VALUE", "_merge"]].astype(str).itertuples(index=False, name=None),
                       related.itertuples(index=False, name=None), old_labels, new_labels, context_keys, stat)
-
-
-def _select_types(data, include_objects=None, exclude_objects=None):
-    """Drop the objects whose Type is in ``exclude_objects`` or, when given, not in
-    ``include_objects``. Matches the Type rows in ``data`` only, no schema."""
-    if not include_objects and not exclude_objects:
-        return data
-    types = data.loc[data["KEY"] == "Type", ["ID", "VALUE"]]
-    dropped = types["VALUE"].isin(exclude_objects or [])
-    if include_objects:
-        dropped |= ~types["VALUE"].isin(include_objects)
-    return data[~data["ID"].isin(types.loc[dropped, "ID"])]
 
 
 def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),

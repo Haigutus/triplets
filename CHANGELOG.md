@@ -14,6 +14,7 @@ Start of the 0.3 line.
   values of KEY shown in each changed object, e.g. `IdentifiedObject.name`).
   Same as `print_triplets_diff(stat=, include_objects=, context_keys=)` in
   every engine. `--version` in both CLIs.
+- `filter_triplets_by_type` takes a list of types too (all engines).
 - **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
   `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
   [application-profiles-library](https://github.com/entsoe/application-profiles-library)
