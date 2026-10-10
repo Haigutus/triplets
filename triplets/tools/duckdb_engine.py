@@ -646,7 +646,7 @@ def diff_triplets_by_instance(self, INSTANCE_ID_1, INSTANCE_ID_2, table=None, sc
 
 def print_triplets_diff(self, new_data, file_id_key="label",
                         exclude_objects=None, table=None, schema=None, table_name=None):
-    """Print a simple removed/added diff of the table against new_data."""
+    """Print a simple removed/added diff of the table against new_data; returns the number of differing triplets."""
     diff = diff_triplets(self, new_data, table=table, schema=schema, table_name=table_name).df()
     removed = diff[diff["_merge"] == "left_only"]
     added = diff[diff["_merge"] == "right_only"]
@@ -655,6 +655,7 @@ def print_triplets_diff(self, new_data, file_id_key="label",
         print(f"- {row['ID']} {row['KEY']} {row['VALUE']}")
     for _, row in added.iterrows():
         print(f"+ {row['ID']} {row['KEY']} {row['VALUE']}")
+    return len(diff)
 
 
 # ── Transform ────────────────────────────────────────────────────────────────

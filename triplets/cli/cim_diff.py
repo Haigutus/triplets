@@ -55,8 +55,9 @@ Features
 - Semantic comparison at triplet level (ID, KEY, VALUE)
 - Unified diff format output for easy reading
 - Support for ZIP archives (single or nested)
-- Default exclusions for metadata objects (NamespaceMap, Distribution)
-- Custom exclusion lists for filtering out specific object types
+- Parser metadata (NamespaceMap, Distribution) left out unless ``--keep-metadata``
+- More object types left out with ``-ex``
+- Exit code 0 when equal, 1 when different, 2 on error (as ``diff``)
 - Handles large CIM files efficiently
 
 Examples
@@ -65,21 +66,18 @@ Basic diff between two CIM files::
 
     $ cim-diff original.xml modified.xml
 
-Diff only some types left out (replaces the defaults)::
+Also leave out some model classes::
 
-    $ cim-diff original.xml modified.xml -ex Terminal ConnectivityNode
+    $ cim-diff original.xml modified.xml -ex Terminal -ex ConnectivityNode
+    $ cim-diff original.xml modified.xml -ex Terminal,ConnectivityNode
 
 Diff everything, parser metadata included::
 
-    $ cim-diff original.xml modified.xml -ex
+    $ cim-diff original.xml modified.xml --keep-metadata
 
 Diff between ZIP archives::
 
     $ cim-diff original.zip modified.zip
-
-Exclusions replace the defaults; keep them by listing them::
-
-    $ cim-diff original.xml modified.xml -ex NamespaceMap Distribution CustomType
 
 Output Format
 -------------
@@ -101,7 +99,7 @@ typically contain auto-generated metadata that changes between exports:
 - NamespaceMap : XML namespace mappings (contains UUIDs)
 - Distribution : File distribution metadata
 
-Use ``-ex`` with no names to include these in the comparison.
+Use ``--keep-metadata`` to include these in the comparison.
 
 See Also
 --------
@@ -110,10 +108,11 @@ triplets.tools.print_triplets_diff : Core diff function
 """
 
 import argparse
+import sys
 
 from ..parser import parse
 from ..tools import print_triplets_diff
-from . import add_exclusion_argument
+from . import add_exclusion_arguments, excluded_types
 
 def main():
     """
@@ -128,13 +127,13 @@ def main():
 
         cim-diff original.xml modified.xml
 
-    With other exclusions (replace the defaults)::
+    Also leave out some classes::
 
-        cim-diff original.xml modified.xml -ex Terminal ACLineSegment
+        cim-diff original.xml modified.xml -ex Terminal -ex ACLineSegment
 
     Without exclusions::
 
-        cim-diff original.xml modified.xml -ex
+        cim-diff original.xml modified.xml --keep-metadata
 
     Parameters
     ----------
@@ -142,13 +141,17 @@ def main():
         Path to original CIM XML file or ZIP archive
     changed_file : str (positional)
         Path to modified CIM XML file or ZIP archive
-    -ex, --exclude_objects : list of str, optional
-        Object type names (without namespace/prefix) to exclude from diff,
-        default NamespaceMap Distribution. ``-ex`` with no names excludes nothing.
+    -ex, --exclude_objects : str, repeatable
+        Object type name (without namespace/prefix) left out of the diff;
+        repeat or comma-separate for more.
+    --keep-metadata : flag
+        Also diff NamespaceMap and Distribution, left out by default.
 
     Exit Codes
     ----------
-    0 : Successful comparison (differences shown on stdout)
+    0 : No differences
+    1 : Differences (shown on stdout)
+    2 : Error (bad arguments, unreadable file)
 
     Notes
     -----
@@ -173,15 +176,19 @@ def main():
     )
     parser.add_argument('original_file', type=str, help='Original file path')
     parser.add_argument('changed_file', type=str, help='Changed file path')
-    add_exclusion_argument(parser, "the diff")
+    add_exclusion_arguments(parser, "the diff")
 
     args = parser.parse_args()
 
-    # Load and compare files
-    original_data = parse([args.original_file])
-    changed_data = parse([args.changed_file])
+    try:
+        original_data = parse([args.original_file])
+        changed_data = parse([args.changed_file])
+    except Exception as error:
+        print(f"Error: {error}", file=sys.stderr)
+        sys.exit(2)
 
-    print_triplets_diff(original_data, changed_data, exclude_objects=args.exclude_objects)
+    differences = print_triplets_diff(original_data, changed_data, exclude_objects=excluded_types(args))
+    sys.exit(1 if differences else 0)
 
 if __name__ == "__main__":
     main()

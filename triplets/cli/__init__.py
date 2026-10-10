@@ -2,16 +2,22 @@
 CLI tools for the triplets package.
 """
 
-__all__ = ['cim_spreadsheet', 'cim_diff', 'DEFAULT_EXCLUSIONS', 'add_exclusion_argument']
+__all__ = ['cim_spreadsheet', 'cim_diff', 'METADATA_TYPES', 'add_exclusion_arguments', 'excluded_types']
 
 # classes the parser adds to every file (namespaces, source file path): not model content
-DEFAULT_EXCLUSIONS = ("NamespaceMap", "Distribution")
+METADATA_TYPES = ("NamespaceMap", "Distribution")
 
 
-def add_exclusion_argument(parser, purpose):
-    """``-ex`` / ``--exclude_objects``, the same in every CLI: replaces the defaults; ``-ex`` alone keeps everything."""
-    defaults = " ".join(DEFAULT_EXCLUSIONS)
-    parser.add_argument('-ex', '--exclude_objects', nargs='*', default=list(DEFAULT_EXCLUSIONS), metavar='TYPE',
-                        help=f'Object types (rdf:type name without namespace) left out of {purpose}. '
-                             f'Default: {defaults}. Names given replace the default; '
-                             f'-ex with no names keeps everything.')
+def add_exclusion_arguments(parser, purpose):
+    """``-ex TYPE`` and ``--keep-metadata``, the same in every CLI; combine with :func:`excluded_types`."""
+    parser.add_argument('-ex', '--exclude_objects', action='extend', type=lambda names: names.split(','),
+                        default=[], metavar='TYPE',
+                        help=f'Object type (rdf:type name without namespace) left out of {purpose}. '
+                             f'Repeat or comma-separate for more: -ex Terminal -ex Breaker,Switch')
+    parser.add_argument('--keep-metadata', action='store_true',
+                        help=f'Keep the parser metadata ({", ".join(METADATA_TYPES)}), left out by default')
+
+
+def excluded_types(args):
+    """Types to leave out: the ``-ex`` names, plus the metadata unless ``--keep-metadata``."""
+    return args.exclude_objects + ([] if args.keep_metadata else list(METADATA_TYPES))

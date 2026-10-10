@@ -162,13 +162,17 @@ Start of the 0.3 line.
 ### Fixed
 - **`cim-spreadsheet` leaves out the parser metadata** (`NamespaceMap`,
   `Distribution`, which holds the source path) like `cim-diff`, with the same
-  `-ex` / `--exclude_objects` option from one shared definition in
+  options from one shared definition in
   `triplets.cli` ([#132](https://github.com/Haigutus/triplets/issues/132)).
   Such a spreadsheet converts back to `<uuid>.xml` with the schema profile's
   namespaces.
-- **One exclusion option in both CLIs.** `-ex` names replace the default
-  (`NamespaceMap Distribution`); `-ex` with no names keeps everything.
-  `--no-default-exclusions` is removed.
+- **Same exclusion options in both CLIs.** `-ex TYPE` leaves out more classes
+  (repeat or comma-separate); `--keep-metadata` keeps `NamespaceMap` and
+  `Distribution`. `--no-default-exclusions` is removed. `cim-spreadsheet` applies `-ex` to
+  to-cim too. `cim_to_spreadsheet()` leaves out nothing by default; pass
+  `exclude_objects=triplets.cli.METADATA_TYPES` for the CLI behaviour.
+- **`cim-diff` exit code**: 0 when equal, 1 when different, 2 on error.
+  `print_triplets_diff` returns the number of differing triplets.
 - **`print_triplets_diff` no longer always drops `Distribution`**: it leaves out
   only `exclude_objects`; the `file_id_object` argument is removed. The
   unpackaged `tools/cim-diff.py` script is removed (use `cim-diff`).

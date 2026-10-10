@@ -1003,6 +1003,11 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
         Object types left out of the diff, e.g. the parser metadata
         ``["NamespaceMap", "Distribution"]`` (default is None: nothing left out).
 
+    Returns
+    -------
+    int
+        Number of differing triplets (0 when the datasets match).
+
     Notes
     -----
     - Outputs a diff format showing removed, added, and changed objects.
@@ -1075,7 +1080,7 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
             for _, change in (current_diff._merge.astype(str) + current_diff.KEY.astype(str) + " -> " + current_diff.VALUE.astype(str)).items():
                 print(change)
 
-    # Nice diff viewer https://diffy.org/
+    return len(diff)
 
 
 def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),

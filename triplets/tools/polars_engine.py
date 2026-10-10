@@ -465,7 +465,7 @@ def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
 
 
 def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects=None):
-    """Print a human-readable diff between two triplet datasets."""
+    """Print a human-readable diff between two triplet datasets; returns the number of differing triplets."""
     diff = diff_triplets(old_data, new_data)
     diff = diff.sort(["ID", "KEY"])
 
@@ -478,7 +478,7 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
 
     if diff.is_empty():
         print("No differences found")
-        return
+        return 0
 
     # Print grouped by ID
     for id_val in diff["ID"].unique().to_list():
@@ -486,6 +486,8 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", exclude_objects
         print(f"\n{id_val}:")
         for row in id_diff.iter_rows(named=True):
             print(f"  {row['_merge']} {row['KEY']}: {row['VALUE']}")
+
+    return len(diff)
 
 
 def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),

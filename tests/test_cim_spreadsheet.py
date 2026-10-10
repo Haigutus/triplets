@@ -66,32 +66,57 @@ def sheets(path):
 
 
 def test_parser_metadata_left_out_by_default(source, monkeypatch):
-    """Same option and defaults as cim-diff: NamespaceMap and Distribution
-    (which holds the source path) are not written unless asked for."""
-    cim_spreadsheet.cim_to_spreadsheet(source, "default.xlsx")
-    assert not sheets("default.xlsx") & {"NamespaceMap", "Distribution"}
-    monkeypatch.setattr(sys, "argv", ["cim-spreadsheet", "-i", source, "-o", "all.xlsx", "-ex"])
-    cim_spreadsheet.main()
-    assert {"NamespaceMap", "Distribution"} <= sheets("all.xlsx")
-    monkeypatch.setattr(sys, "argv", ["cim-spreadsheet", "-i", source, "-o", "fewer.xlsx", "-ex", "ACLineSegment"])
-    cim_spreadsheet.main()
-    assert sheets("fewer.xlsx") == sheets("all.xlsx") - {"ACLineSegment"}
+    """Same options as cim-diff: NamespaceMap and Distribution (which holds the
+    source path) are left out unless --keep-metadata; -ex adds model classes."""
+    def run(output, *options):
+        monkeypatch.setattr(sys, "argv", ["cim-spreadsheet", "-i", source, "-o", output, *options])
+        cim_spreadsheet.main()
+        return sheets(output)
+    default = run("default.xlsx")
+    assert not default & {"NamespaceMap", "Distribution"}
+    assert run("fewer.xlsx", "-ex", "ACLineSegment") == default - {"ACLineSegment"}
+    everything = run("all.xlsx", "--keep-metadata")
+    assert everything == default | {"NamespaceMap", "Distribution"}
+    assert run("both.xlsx", "--keep-metadata", "-ex", "ACLineSegment,Terminal") == everything - {"ACLineSegment", "Terminal"}
+
+
+def test_to_cim_exclusions(source):
+    cim_spreadsheet.cim_to_spreadsheet(source, "model.xlsx")
+    cim_spreadsheet.spreadsheet_to_cim("model.xlsx", "out", rdf_map=RDF_MAP, zip_output=False,
+                                       exclude_objects=["ACLineSegment"])
+    types = {value for _, key, value in triples([str(path) for path in Path("out").glob("*.xml")]) if key == "Type"}
+    assert "ACLineSegment" not in types and "Terminal" in types
 
 
 SSH = str(Path(next(path for path in SVEDALA_FILES if "_SSH_" in path)).resolve())
 
 
+def cim_diff(monkeypatch, capsys, *argv):
+    """Run cim-diff; returns (exit code, stdout)."""
+    from triplets.cli import cim_diff
+    monkeypatch.setattr(sys, "argv", ["cim-diff", *argv])
+    with pytest.raises(SystemExit) as exit:
+        cim_diff.main()
+    return exit.value.code, capsys.readouterr().out
+
+
 @pytest.mark.parametrize("options, shown, hidden", [
     ([], ["  ACLineSegment"], ["  NamespaceMap", "  Distribution"]),
-    (["-ex", "ACLineSegment"], ["  NamespaceMap", "  Distribution"], ["  ACLineSegment"]),
-    (["-ex"], ["  ACLineSegment", "  NamespaceMap", "  Distribution"], []),
+    (["-ex", "ACLineSegment"], [], ["  ACLineSegment", "  NamespaceMap", "  Distribution"]),
+    (["--keep-metadata"], ["  ACLineSegment", "  NamespaceMap", "  Distribution"], []),
+    (["--keep-metadata", "-ex", "ACLineSegment,NamespaceMap"], ["  Distribution"], ["  ACLineSegment", "  NamespaceMap"]),
 ])
 def test_cim_diff_exclusions(monkeypatch, capsys, options, shown, hidden):
-    """cim-diff runs and takes the shared exclusion options (EQ vs SSH)."""
-    from triplets.cli import cim_diff
-    monkeypatch.setattr(sys, "argv", ["cim-diff", EQ, SSH, *options])
-    cim_diff.main()
-    out = capsys.readouterr().out
-    assert out.startswith("--- ")
-    assert all(text in out for text in shown)
-    assert not any(text in out for text in hidden)
+    """cim-diff takes the shared exclusion options (EQ vs SSH), before or after the files."""
+    for argv in ([EQ, SSH, *options], [*options, EQ, SSH]):
+        code, out = cim_diff(monkeypatch, capsys, *argv)
+        assert code == 1 and out.startswith("--- ")
+        assert all(text in out for text in shown)
+        assert not any(text in out for text in hidden)
+
+
+def test_cim_diff_exit_codes(monkeypatch, capsys):
+    """As diff: 0 equal, 1 different, 2 error."""
+    assert cim_diff(monkeypatch, capsys, EQ, EQ)[0] == 0
+    assert cim_diff(monkeypatch, capsys, EQ, SSH)[0] == 1
+    assert cim_diff(monkeypatch, capsys, EQ, "missing.xml")[0] == 2

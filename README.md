@@ -260,11 +260,14 @@ uvx --from "triplets[arrow,excel]" cim-diff original.xml modified.xml   # one-of
 cim-spreadsheet -i model.xml -o output.xlsx                  # one sheet per class
 cim-spreadsheet -i output.xlsx -o out/ --rdf-map schema.json  # back to CIM XML
 cim-diff original.xml modified.xml
-cim-diff original.xml modified.xml -ex                        # also diff NamespaceMap, Distribution
+cim-diff original.xml modified.xml -ex Terminal,ConnectivityNode   # also leave out these classes
+cim-diff original.xml modified.xml --keep-metadata            # also diff NamespaceMap, Distribution
 ```
 
-Both tools leave out `NamespaceMap` and `Distribution` (parser metadata, source
-file path) by default. `-ex TYPE ...` replaces that list; `-ex` alone keeps everything.
+Both tools take the same options. They leave out `NamespaceMap` and `Distribution`
+(parser metadata, source file path) unless `--keep-metadata`. `-ex TYPE` leaves out
+more classes; repeat it or comma-separate names. `cim-diff` exits 0 when the models
+match, 1 when they differ and 2 on error, as `diff` does.
 
 Spreadsheet values come back as written, except numbers, which can change their
 written form (`500` -> `500.0`). Excel keeps 15 significant digits and sheet names of
