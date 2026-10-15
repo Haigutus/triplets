@@ -72,6 +72,7 @@ A bundle is a dict of profile sections keyed by profile keyword
                             "namespace": ..., "parameters": [...]}
     "<Class.attribute>":   {"type": "Attribute", "dataType": ..., "xsd:type": ...,
                             "multiplicity": ..., "namespace": ...}
+                            # xsd:type "" when the type resolves to no XSD (e.g. rdf:langString)
     "<Class.Association>": {"type": "Association", "range": ..., "attrib": {...}}
     "<Class.enumAttr>":    {"type": "Enumeration", "range": ..., "values": [...]}
     "<Datatype|EnumValue>": supporting definitions referenced by the entries above
@@ -147,6 +148,8 @@ python -m triplets.rdfs_tools.cim_rdfs_to_json [bundle ...]
     '-> per serialization edition (552_ED1, 552_ED2):
         |-> convert(): one section per RDFS profile (classes, attributes,
         |   associations, enumerations, datatypes + ProfileMetadata)
+        |   # xsd:type: CIMDatatype .value → XSD rdfs:range, or → Primitive
+        |   #   via cgmes_data_types_map; "" if neither resolves
         |   # attribute→class binding (rdfs_tools.get_class_parameters):
         |   # CIM-owned terms bind via rdfs:domain; reused external terms
         |   # (dcterms:/prov:/dcat:) via the non-inferential

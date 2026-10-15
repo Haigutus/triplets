@@ -5,6 +5,7 @@ import pandas
 from triplets.tools import get_namespace_map
 from triplets.rdfs_tools import rdfs_tools
 from triplets.rdfs_tools.rdfs_tools import load_all_to_dataframe
+from triplets.iri import XSD_NS, split_iri
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,46 +14,56 @@ REPO_ROOT = Path(__file__).parents[2]
 RDFS_ROOT = REPO_ROOT / "rdfs"
 EXPORT_DIR = REPO_ROOT / "triplets" / "export_schema"
 
+# Primitive → XSD; CIMDatatypes (Area, Money, …) resolve via their .value, see xsd_types_from_rdfs
 cgmes_data_types_map = {
  'String': 'xsd:string',
- 'Simple_Float': 'xsd:float',
  'Float': 'xsd:float',
- 'Boolean': 'xsd:boolean',
- 'Reactance': 'xsd:float',
- 'Resistance': 'xsd:float',
- 'Voltage': 'xsd:float',
+ 'Decimal': 'xsd:decimal',
  'Integer': 'xsd:integer',
- 'ActivePower': 'xsd:float',
- 'ReactivePower': 'xsd:float',
- 'CurrentFlow': 'xsd:float',
- 'AngleDegrees': 'xsd:float',
- 'PerCent': 'xsd:float',
- 'Conductance': 'xsd:float',
- 'Susceptance': 'xsd:float',
- 'PU': 'xsd:float',
+ 'Boolean': 'xsd:boolean',
  'Date': 'xsd:date',
- 'Length': 'xsd:float',
  'DateTime': 'xsd:dateTime',
- 'ApparentPower': 'xsd:float',
- 'Seconds': 'xsd:float',
- 'Inductance': 'xsd:float',
- 'Money': 'xsd:float',
- 'MonthDay': 'xsd:integer',
- 'VoltagePerReactivePower': 'xsd:float',
- 'Capacitance': 'xsd:float',
- 'ActivePowerPerFrequency': 'xsd:float',
- 'ResistancePerLength': 'xsd:float',
- 'RotationSpeed': 'xsd:float',
- 'AngleRadians': 'xsd:float',
- 'InductancePerLength': 'xsd:float',
- 'ActivePowerPerCurrentFlow': 'xsd:float',
- 'CapacitancePerLength': 'xsd:float',
- 'Decimal': 'xsd:float',
- 'Frequency': 'xsd:float',
- 'Temperature': 'xsd:float',
- "IRI": "xsd:anyURI",
- "URI": "xsd:anyURI"
+ 'DateTimeStamp': 'xsd:dateTimeStamp',
+ 'Time': 'xsd:time',
+ 'MonthDay': 'xsd:gMonthDay',
+ 'Duration': 'xsd:duration',
+ 'UUID': 'xsd:string',
+ 'Version': 'xsd:string',
+ 'IRI': 'xsd:anyURI',
+ 'URI': 'xsd:anyURI',
+ 'StringIRI': 'xsd:anyURI',
+ 'StringFixedLanguage': 'xsd:string',
 }
+
+
+def _as_xsd(uri):
+    return uri.replace(XSD_NS, "xsd:", 1) if isinstance(uri, str) and uri.startswith(XSD_NS) else None
+
+
+def xsd_types_from_rdfs(profile_data):
+    """CIMDatatype local name → ``xsd:float`` from its ``.value``.
+
+    ``.value`` is typed by an XSD ``rdfs:range`` (typed RDFS) or by ``cims:dataType``
+    pointing at a Primitive (``Area.value`` → ``Float``) or another CIMDatatype;
+    the chain is followed until it reaches an XSD type or a ``cgmes_data_types_map`` key.
+    """
+    domain = profile_data.loc[profile_data["KEY"] == "domain", ["ID", "VALUE"]]
+    targets = profile_data.loc[profile_data["KEY"].isin(["range", "dataType"])]
+    targets = dict(zip(targets["ID"], targets["VALUE"]))
+    value_of = {split_iri(typ)[1]: _as_xsd(target) or split_iri(target)[1]
+                for prop_id, typ in zip(domain["ID"], domain["VALUE"])
+                if split_iri(prop_id)[1].rsplit(".", 1)[-1] == "value"
+                and (target := targets.get(prop_id))}
+
+    def resolve(name):
+        seen = set()
+        while name in value_of and name not in seen and not name.startswith("xsd:"):
+            seen.add(name)
+            name = value_of[name]
+        return name if name.startswith("xsd:") else cgmes_data_types_map.get(name)
+
+    return {name: xsd for name in value_of if (xsd := resolve(name))}
+
 
 cim_serializations = {
 "552_ED1": {
@@ -80,6 +91,8 @@ cim_serializations = {
 }
 
 def convert_profile(profile_data, serialization_version="552_ED2"):
+
+    types = {**cgmes_data_types_map, **xsd_types_from_rdfs(profile_data)}
 
     id_attribute = cim_serializations[serialization_version]["id_attribute"]
     id_prefix = cim_serializations[serialization_version]["id_prefix"]
@@ -145,31 +158,31 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
 
         else:
             data_type = parameter_dict.get("dataType")
+            range_uri = parameter_dict.get("range")
+            if not data_type and range_uri and split_iri(range_uri)[1] in types:
+                data_type = range_uri
 
-            # If regular attribute, find its data type and add to export
             if data_type:
 
-                # Set parameter type to Attribute
                 parameter_def["type"] = "Attribute"
 
-                # Get the attribute data type and add to export
                 data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(data_type)
 
                 data_type_meta = profile_data.get_object_data(data_type).to_dict()
 
-                data_type_def = {
+                xsd = {"xsd:type": types.get(data_type_name, "")}
+                profile[data_type_name] = {
                     "description": data_type_meta.get("comment", ""),
                     "type": data_type_meta.get("stereotype", ""),
-                    "xsd:type": cgmes_data_types_map.get(data_type_name, ""),
-                    "namespace": data_type_namespace
+                    **xsd,
+                    "namespace": data_type_namespace,
                 }
-
-                # Add data type to export
-                profile[data_type_name] = data_type_def
-
-                # Add data type to attribute definition
                 parameter_def["dataType"] = data_type_name
-                parameter_def["xsd:type"] = data_type_def["xsd:type"]
+                parameter_def.update(xsd)
+
+            elif xsd := _as_xsd(range_uri):
+                parameter_def["type"] = "Attribute"
+                parameter_def["xsd:type"] = xsd
 
             # If enumeration
             else:
