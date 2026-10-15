@@ -143,7 +143,7 @@ CALL_SPECS = {
     "get_namespace_map": lambda e, d, c: d.get_namespace_map(),
     "triplets_to_tableviews": lambda e, d, c: d.triplets_to_tableviews(),
     "filter_triplets": lambda e, d, c: d.filter_triplets(KEY="Type", VALUE=c["type"]),
-    "filter_triplets_by_type": lambda e, d, c: d.filter_triplets_by_type(c["type"]),
+    "filter_triplets_by_type": lambda e, d, c: d.filter_triplets_by_type([c["type"], "Terminal"], type_key="Type"),
     "filter_triplets_by_triplets": lambda e, d, c: d.filter_triplets_by_triplets(_to_engine(e, c["subset"])),
     "filter_triplets_by_value": lambda e, d, c: d.filter_triplets_by_value(c["name"]),
     "references_to": lambda e, d, c: d.references_to(c["reference"]),
@@ -156,7 +156,7 @@ CALL_SPECS = {
     "diff_triplets": lambda e, d, c: d.diff_triplets(_to_engine(e, c["new_data"])),
     "diff_triplets_by_instance": lambda e, d, c: d.diff_triplets_by_instance(c["instances"][0], c["instances"][1]),
     "print_triplets_diff": lambda e, d, c: _printed(lambda: d.print_triplets_diff(
-        _to_engine(e, c["diff_data"]), exclude_objects=["NamespaceMap"], include_objects=[c["type"], "Terminal"],
+        _to_engine(e, c["diff_data"]), exclude_objects=["Terminal"], include_objects=[c["type"], "Terminal", "ConnectivityNode"],
         context_keys=["IdentifiedObject.name"])),
     # tableview_to_triplets operates on a *tableview*, so call it on the tableview object
     # (duckdb has no relation method — it unpivots a wide table by name).
@@ -276,16 +276,18 @@ def test_module_dispatch_parity(svedala_pandas, svedala_ctx, func, engine):
 
 @pytest.mark.parametrize("engine", ["polars", "duckdb"])
 def test_print_triplets_diff_missing_and_repeated_values(engine):
-    """A missing VALUE and a row repeated on one side match themselves: same report as pandas."""
+    """A missing VALUE and a row repeated on one side match themselves, and exclusion drops a
+    changed object: same report as pandas."""
     pytest.importorskip(engine)
     old = pandas.DataFrame({"ID": ["a", "a", "a", "a", "b", "b"],
                             "KEY": ["Type", "Type", "x", "y", "Type", "x"],
                             "VALUE": ["Breaker", "Breaker", None, "1", "Line", "2"],
                             "INSTANCE_ID": ["i1", "i2", "i1", "i1", "i1", "i1"]})
     new = old.drop(index=[1, 5]).assign(VALUE=lambda data: data["VALUE"].where(data["KEY"] != "y", "2"))
-    expected = _printed(lambda: build_engine("pandas", old).print_triplets_diff(new))
-    assert expected[0] == 3
-    assert _printed(lambda: build_engine(engine, old).print_triplets_diff(_to_engine(engine, new))) == expected
+    for options, count in (({}, 3), ({"exclude_objects": ["Breaker"]}, 1)):  # Breaker "a" changed, not added
+        expected = _printed(lambda: build_engine("pandas", old).print_triplets_diff(new, **options))
+        assert expected[0] == count
+        assert _printed(lambda: build_engine(engine, old).print_triplets_diff(_to_engine(engine, new), **options)) == expected
 
 
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────

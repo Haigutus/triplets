@@ -164,8 +164,14 @@ def main():
     -ex, --exclude_objects : str, repeatable
         Object type name (without namespace/prefix) left out of the diff;
         repeat or comma-separate for more.
+    --include : str, repeatable
+        Only these object types; repeat or comma-separate for more.
     --keep-metadata : flag
         Also diff NamespaceMap and Distribution, left out by default.
+    --context : str, repeatable
+        Keys whose unchanged values are shown in each changed object.
+    --stat : flag
+        Only the Removed / Added / Changed counts per type.
 
     Exit Codes
     ----------

@@ -622,16 +622,16 @@ def diff_triplets(self, new_data, table=None, schema=None, table_name=None):
     _merge column. Returns DuckDBPyRelation."""
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     _materialize(self, new_data, "_new_data")
-    # NOT EXISTS with IS NOT DISTINCT FROM: a missing VALUE matches itself, like the pandas merge
-    missing_in = "NOT EXISTS (SELECT 1 FROM {} o WHERE o.ID = d.ID AND o.KEY = d.KEY AND o.VALUE IS NOT DISTINCT FROM d.VALUE)"
+    # IS NOT DISTINCT FROM: a missing VALUE matches itself, like the pandas merge
+    anti = "ANTI JOIN {} o ON o.ID = d.ID AND o.KEY = d.KEY AND o.VALUE IS NOT DISTINCT FROM d.VALUE"
     return self.sql(f"""
         SELECT ID, KEY, VALUE, INSTANCE_ID AS INSTANCE_ID_OLD, NULL AS INSTANCE_ID_NEW,
                'left_only' AS _merge
-        FROM {table_name} d WHERE {missing_in.format("_new_data")}
+        FROM {table_name} d {anti.format("_new_data")}
         UNION ALL BY NAME
         SELECT ID, KEY, VALUE, NULL AS INSTANCE_ID_OLD, INSTANCE_ID AS INSTANCE_ID_NEW,
                'right_only' AS _merge
-        FROM _new_data d WHERE {missing_in.format(table_name)}
+        FROM _new_data d {anti.format(table_name)}
     """)
 
 

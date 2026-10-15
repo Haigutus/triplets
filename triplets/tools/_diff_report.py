@@ -5,12 +5,14 @@ the output is identical whatever engine computed the diff.
 """
 from collections import Counter, defaultdict
 
+import pandas
+
 SIGN = {"left_only": "-", "right_only": "+"}
 
 
 def text(value):
-    """Cell as text; missing (None / NaN) is empty, whatever engine produced it."""
-    return "" if value is None or value != value else str(value)
+    """Cell as text; missing (None / NaN / NA) is empty, whatever engine produced it."""
+    return "" if pandas.isna(value) else str(value)
 
 
 def print_diff(diff_rows, related_rows, old_labels, new_labels, context_keys=None, stat=False):

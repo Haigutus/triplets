@@ -267,8 +267,9 @@ cim-diff original.xml modified.xml --stat                     # counts per type 
 ```
 
 Both tools take the same type options. They leave out `NamespaceMap` and `Distribution`
-(parser metadata, source file path) unless `--keep-metadata`. `--include TYPE` keeps
-only these classes, `-ex TYPE` leaves out more; repeat them or comma-separate names.
+(parser metadata, source file path) unless `--keep-metadata` or `--include` names them.
+`--include TYPE` keeps only these classes, `-ex TYPE` leaves out more (also from
+`--include`); repeat them or comma-separate names.
 `cim-diff --context KEY` also shows the unchanged values of KEY in each changed object.
 `cim-diff` exits 0 when the models match, 1 when they differ and
 2 on error, as `diff` does.
