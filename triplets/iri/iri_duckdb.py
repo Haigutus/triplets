@@ -17,4 +17,5 @@ def local_value(column, kind=None):
     if kind in ("class", "enum"):
         return _local(column)
     node = f"regexp_replace({column}, '{ID_PREFIX_RE.pattern}', '')"
-    return node if kind == "reference" else f"regexp_replace({node}, '{GUESS_NAME_RE.pattern}', '')"
+    # a namespace IRI ("...#") has no name: keep it whole
+    return node if kind == "reference" else f"COALESCE(NULLIF(regexp_replace({node}, '{GUESS_NAME_RE.pattern}', ''), ''), {node})"

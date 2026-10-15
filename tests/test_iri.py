@@ -103,6 +103,9 @@ LOCAL_CASES = [
     ("local_value", "https://cim4.eu/ns/nc#Kind.value", "Kind.value"),
     ("local_value", "http://a#b#c", "c"),                     # last '#'
     ("local_value", "http://example.org/path/only", "http://example.org/path/only"),   # never '/'
+    ("local_value", "http://iec.ch/TC57/CIM100#", "http://iec.ch/TC57/CIM100#"),     # namespace: no name
+    ("local_value", "http://a#b/", "http://a#b/"),
+    ("local_value", "http://a#b#", "http://a#b#"),
     ("local_value", "urn:example:thing", "urn:example:thing"),
     ("local_value", "Breaker", "Breaker"),
     ("local_key", None, None),

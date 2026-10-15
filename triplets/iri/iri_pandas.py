@@ -25,6 +25,11 @@ def _local(series):
     return series.str.replace(SPLIT_RE.pattern, "", regex=True)
 
 
+def _guess(node):
+    name = node.str.replace(GUESS_NAME_RE.pattern, "", regex=True)
+    return name.mask(name == "", node)                    # a namespace IRI ("...#") has no name
+
+
 def split_iri(series):
     """→ (namespace, local) Series; namespace "" where there is no delimiter."""
     return series.str.extract(f"(?P<namespace>{SPLIT_RE.pattern})", expand=False).fillna(""), _local(series)
@@ -59,9 +64,9 @@ def local_value(series, kind=None):
         return _local(series) if kind in ("class", "enum") else local_id(series)
     node = local_id(series)
     if kind is None:
-        return node.str.replace(GUESS_NAME_RE.pattern, "", regex=True)
+        return _guess(node)
     guessed = kind.isna().to_numpy()
-    value = node.mask(guessed, node.str.replace(GUESS_NAME_RE.pattern, "", regex=True)) if guessed.any() else node
+    value = node.mask(guessed, _guess(node)) if guessed.any() else node
     names = (_eq(kind, "class") | _eq(kind, "enum"))
     return value.mask(names, by_distinct(series.where(names), _local)) if names.any() else value
 

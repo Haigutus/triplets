@@ -73,7 +73,7 @@ URI_PREFIXES = ("http://", "https://", "urn:")
 ID_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, ID_PREFIXES)) + ")")
 URI_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, URI_PREFIXES)) + ")")
 SPLIT_RE = re.compile(r"^(?:.*[#/]|urn:.*:)")  # the namespace: up to the last "#" or "/", else a URN's last ":"
-GUESS_NAME_RE = re.compile(r"^http.*#(?:.*/)?")   # local_value guess: split_iri's namespace, only for http IRIs with a "#"
+GUESS_NAME_RE = re.compile(r"^http.*#(?:.*/)?")   # local_value guess: split_iri's namespace, only for http IRIs with a "#"; an empty rest keeps the value whole
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 """Canonical lowercase mRID — what the exporters turn into ``urn:uuid:``."""
 REFERENCE_LIKE = re.compile(
@@ -139,7 +139,8 @@ def local_value(iri, kind=None):
     - ``"reference"`` → a node: :func:`local_id` (other namespaces stay whole).
     - ``None`` — no schema, guess: :func:`local_id`, then an ``http(s)`` IRI with a ``#`` is
       taken as a name (enum / class: ``Kind.value``, its :func:`split_iri` local name);
-      anything else stays whole (``/``-only IRIs are external references). None → None.
+      anything else stays whole (``/``-only IRIs are external references, a namespace IRI
+      ending in ``#`` or ``/`` has no name). None → None.
     """
     if iri is None:
         return None
@@ -147,7 +148,7 @@ def local_value(iri, kind=None):
         return split_iri(iri)[1]
     iri = local_id(iri)
     if kind is None and iri.startswith("http") and "#" in iri:
-        return split_iri(iri)[1]
+        return split_iri(iri)[1] or iri
     return iri
 
 
