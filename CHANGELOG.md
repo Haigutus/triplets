@@ -6,9 +6,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Start of the 0.3 line.
-
 ### Added
+- **`cim-diff` report options**: `--stat` (counts per type only), `--include TYPE`
+  (only these classes, also in `cim-spreadsheet`), `--context KEY` (unchanged
+  values of KEY shown in each changed object, e.g. `IdentifiedObject.name`).
+  `print_triplets_diff(include_objects=, context_keys=, stat=)` in every
+  engine, next to `exclude_objects`. `--version` in both CLIs.
+- `filter_triplets_by_type` takes a list or array of types too (all engines);
+  duckdb takes `type_key` like pandas and polars.
 - **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
   `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
   [application-profiles-library](https://github.com/entsoe/application-profiles-library)
@@ -160,6 +165,41 @@ Start of the 0.3 line.
   no longer prefixed with `urn:uuid:` by the N-Quads graph term.
 
 ### Fixed
+- **`cim-spreadsheet` leaves out the parser metadata** (`NamespaceMap`,
+  `Distribution`, which holds the source path) like `cim-diff`, with the same
+  options from one shared definition in
+  `triplets.cli` ([#132](https://github.com/Haigutus/triplets/issues/132)).
+  Such a spreadsheet converts back to `<uuid>.xml` with the schema profile's
+  namespaces.
+- **Same exclusion options in both CLIs.** `-ex TYPE` leaves out more classes
+  (repeat or comma-separate); `--keep-metadata` keeps `NamespaceMap` and
+  `Distribution`. `--no-default-exclusions` is removed. `cim-spreadsheet` applies `-ex` to
+  to-cim too. `cim_to_spreadsheet()` leaves out nothing by default; pass
+  `exclude_objects=triplets.cli.METADATA_TYPES` for the CLI behaviour.
+- **`cim-diff` exit code**: 0 when equal, 1 when different, 2 on error.
+  `print_triplets_diff` returns the number of differing triplets.
+- **One diff report for all engines.** pandas, polars and duckdb
+  `print_triplets_diff` print the same output (they had three formats; duckdb
+  ignored `exclude_objects`). Hunks and keys are sorted, `-` before `+`.
+  polars `diff_triplets` casts `ID` / `KEY` / `VALUE` to String when one side
+  is Categorical.
+- **CLI logging at WARNING**; `cim-spreadsheet` no longer prints INFO lines.
+- **to-cim without `--rdf-map`** warns and writes the classes in the triplets
+  namespace; it wrote nothing and still reported success.
+- **CIM XML export creates missing folders** for a relative file name (round
+  trip with `--keep-metadata` crashed with `FileNotFoundError`).
+- **`print_triplets_diff` `exclude_objects` leaves out changed objects too**:
+  it matched only removed and added ones. File names are read before
+  filtering. `file_id_object=None` keeps `Distribution` in the diff. The
+  unpackaged `tools/cim-diff.py` script is removed (use `cim-diff`).
+- **Missing VALUE is `""` in `diff_triplets`** (all engines): it matches a
+  missing or `""` VALUE and is returned as `""`. duckdb dropped such rows,
+  polars reported them as removed and added.
+- **`filter_triplets_by_type` returns each row once** (pandas, polars): a type
+  declared in several files repeated its objects' rows. pandas is about 3x
+  faster.
+- **`cim-diff` runs again**: it called `rdf_parser.print_triplets_diff`, which
+  does not exist; it now uses `parse` and `tools.print_triplets_diff`.
 - **`comment=` is written by the `python_lxml` CIM XML exporter** too: it
   serialized the root element only, so the comment before it was dropped
   ([#131](https://github.com/Haigutus/triplets/issues/131)).

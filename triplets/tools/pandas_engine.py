@@ -15,6 +15,8 @@ import logging
 
 import pandas
 
+from ._diff_report import print_diff
+
 logger = logging.getLogger(__name__)
 
 
@@ -835,23 +837,23 @@ def filter_triplets_by_type(data, type_name, type_key="Type"):
     ----------
     data : pandas.DataFrame
         Triplet dataset containing RDF data.
-    type_name : str
-        Object type to filter by (e.g., 'ACLineSegment').
+    type_name : str or list-like of str
+        Object type(s) to filter by (e.g., 'ACLineSegment'); list, tuple, set, Series or array.
     type_key : str
         Key used in triplet to indicate type, by default "Type"
 
     Returns
     -------
     pandas.DataFrame
-        Filtered triplet dataset containing only objects of the specified type.
+        Filtered triplet dataset containing only objects of the specified type(s).
 
     Examples
     --------
     >>> filtered = filter_triplets_by_type(data, "ACLineSegment")
+    >>> filtered = filter_triplets_by_type(data, ["ACLineSegment", "Terminal"])
     """
-    filter_triplet = data[(data.KEY == type_key) & (data.VALUE == type_name)]
-
-    return filter_triplets_by_triplets(data, filter_triplet)
+    type_names = [type_name] if isinstance(type_name, str) else [str(name) for name in type_name]
+    return data[data.ID.isin(data.ID[(data.KEY == type_key) & data.VALUE.isin(type_names)])]
 
 
 def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex=False):
@@ -955,12 +957,13 @@ def diff_triplets(old_data, new_data):
     -------
     pandas.DataFrame
         DataFrame containing triplets unique to old_data or new_data, with an '_merge' column
-        indicating 'left_only' (in old_data) or 'right_only' (in new_data).
+        indicating 'left_only' (in old_data) or 'right_only' (in new_data). A missing VALUE is "".
 
     Examples
     --------
     >>> diff = diff_triplets(old_data, new_data)
     """
+    old_data, new_data = [data.assign(VALUE=data["VALUE"].fillna("")) for data in (old_data, new_data)]  # missing VALUE is "", as in every engine
     return old_data.merge(new_data, on=["ID", "KEY", "VALUE"], how='outer', indicator=True, suffixes=("_OLD", "_NEW"), sort=False).query("_merge != 'both'")
 
 def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
@@ -988,8 +991,9 @@ def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
 
     return diff
 
-def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None):
-    """Print a human-readable diff of two triplet datasets.
+def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None,
+                        include_objects=None, context_keys=None, stat=False):
+    """Print a unified diff of two triplet datasets, one hunk per changed object.
 
     Parameters
     ----------
@@ -998,90 +1002,47 @@ def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_
     new_data : pandas.DataFrame
         New triplet dataset to compare against.
     file_id_object : str, optional
-        Object type containing file identifiers (default is 'Distribution').
+        Object type holding the file names, left out of the diff (default is 'Distribution').
     file_id_key : str, optional
-        Key containing file identifiers (default is 'label').
+        Key whose values name the files in the ``---`` / ``+++`` lines (default is 'label').
+        The file names are read before any filtering.
     exclude_objects : list, optional
-        List of object types to exclude from the diff (default is None).
+        Object types left out of the diff (default is None).
+    include_objects : list, optional
+        Only objects of these types are diffed (default is None: all); ``exclude_objects`` applies after it.
+    context_keys : list, optional
+        Keys whose unchanged values are shown in each hunk as `` `` context lines,
+        e.g. ``["IdentifiedObject.name"]``.
+    stat : bool, optional
+        Print only the Removed / Added / Changed counts per type.
+
+    Returns
+    -------
+    int
+        Number of differing triplets (0 when the datasets match).
 
     Notes
     -----
-    - Outputs a diff format showing removed, added, and changed objects.
-    - Nice diff viewer https://diffy.org/
-    - TODO: Add name field for better reporting with Type.
+    Nice diff viewer https://diffy.org/
 
     Examples
     --------
-    >>> print_triplets_diff(old_data, new_data, exclude_objects=["NamespaceMap"])
+    >>> print_triplets_diff(old_data, new_data, exclude_objects=["NamespaceMap"],
+    ...                     context_keys=["IdentifiedObject.name"])
     """
-    # Get diff between datasets
+    old_labels = old_data.loc[old_data["KEY"] == file_id_key, "VALUE"].tolist()
+    new_labels = new_data.loc[new_data["KEY"] == file_id_key, "VALUE"].tolist()
+    excluded = [*(exclude_objects or []), *([file_id_object] if file_id_object else [])]
+    if include_objects:
+        old_data, new_data = filter_triplets_by_type(old_data, include_objects), filter_triplets_by_type(new_data, include_objects)
+    old_data, new_data = [data[~data["ID"].isin(filter_triplets_by_type(data, excluded)["ID"])] for data in (old_data, new_data)]
     diff = diff_triplets(old_data, new_data)
-    # Convert _merge to plain string before replacing (avoids categorical setitem error with pyarrow dtypes)
-    diff["_merge"] = diff["_merge"].astype(str).replace({"left_only": "-", "right_only": "+"})
-    diff = diff.sort_values(by=['ID', 'KEY'])
-
-    # Extract internal structures keeping file name information
-    file_id_data = filter_triplets_by_type(diff, file_id_object)
-    diff = remove_triplets_from_triplets(diff, file_id_data)
-    logger.info(f"INFO - removed {file_id_object} from diff")
-
-    # Exclude defined types form export
-    if exclude_objects:
-        for object_name in exclude_objects:
-            excluded_data = filter_triplets_by_type(diff, object_name)
-            diff = remove_triplets_from_triplets(diff, excluded_data)
-            logger.info(f"INFO - removed {object_name} from diff")
-
-    # Extract types on left and right to get changed/modified types
-    removed_added_modified_types = pandas.concat([
-        old_data.merge(diff["ID"]).query("KEY == 'Type'").drop_duplicates(),
-        new_data.merge(diff["ID"]).query("KEY == 'Type'").drop_duplicates()
-        ])[["ID", "KEY", "VALUE"]].drop_duplicates()
-
-    # Print old file name
-    for _, file_id in old_data.query(f"KEY == '{file_id_key}'").VALUE.items():
-        print(f"--- {file_id}")# from-file-modification-time")
-
-    # Print new file name
-    for _, file_id in new_data.query(f"KEY == '{file_id_key}'").VALUE.items():
-        print(f"+++ {file_id}")# to-file-modification-time")
-
-    # Print changes
-
-    print("")
-    print(f"@@ -1,0 +1,0 @@ Removed:")
-
-    for key, value in diff.query("KEY == 'Type' and _merge == '-'").VALUE.value_counts().items():
-        print(" ", key, value)
-
-    print("")
-    print(f"@@ -1,0 +1,0 @@ Added:")
-    for key, value in diff.query("KEY == 'Type' and _merge == '+'").VALUE.value_counts().items():
-        print(" ", key, value)
-
-    print("")
-    print(f"@@ -1,0 +1,0 @@ Changed:")
-    for key, value in pandas.concat([removed_added_modified_types, diff.query("KEY == 'Type'")])[["ID", "KEY", "VALUE"]].drop_duplicates(keep=False).VALUE.value_counts().items():
-        print(" ", key, value)
-
-    # Types changed
-    # TODO add name field to be used with Type for better reporting
-
-    for group_name, group in removed_added_modified_types.groupby("VALUE"):
-        #print(f"Types - {group_name}")
-        for objec_type in group.itertuples():
-
-            current_diff = diff.query("ID == @objec_type.ID")
-
-            changes_on_left = len(current_diff.query("_merge == '-'"))
-            changes_on_right = len(current_diff.query("_merge == '+'"))
-            print("")
-            print(f"@@ -1,{changes_on_left} +1,{changes_on_right} @@ {objec_type.VALUE} {objec_type.ID}")
-
-            for _, change in (current_diff._merge.astype(str) + current_diff.KEY.astype(str) + " -> " + current_diff.VALUE.astype(str)).items():
-                print(change)
-
-    # Nice diff viewer https://diffy.org/
+    keys = ["Type", *(context_keys or [])]
+    related = pandas.concat([
+        data.loc[data["ID"].isin(diff["ID"]) & data["KEY"].isin(keys), ["ID", "KEY", "VALUE"]].assign(side=side)
+        for side, data in (("old", old_data), ("new", new_data))]).astype({"VALUE": object}).fillna({"VALUE": ""})
+    return print_diff(diff[["ID", "KEY", "VALUE"]].assign(_merge=diff["_merge"].astype(str)).itertuples(index=False, name=None),
+                      related.itertuples(index=False, name=None), old_labels, new_labels, context_keys, stat)
 
 
 def content_hash(data, ignore_types=("Distribution", "NamespaceMap", "FullModel"),

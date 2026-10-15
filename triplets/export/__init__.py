@@ -396,6 +396,7 @@ def export_to_cimxml(data,
 
         for file_object in exported_files:
             export_path = os.path.join(export_base_path, file_object.name)
+            os.makedirs(os.path.dirname(export_path) or ".", exist_ok=True)
             with open(export_path, 'wb') as export_file_object:
 
                 # Ensure that the read pointer is at the start of the file
