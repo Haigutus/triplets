@@ -65,7 +65,7 @@ cim:BreakerShape a sh:NodeShape ;
 
 CGMES_SHACL_DIR = Path(os.environ.get(
     "TRIPLETS_CGMES_SHACL",
-    "/home/kvilgo/GIT/application-profiles-library/CGMES/CurrentRelease/SHACL"))
+    "test_data/CGMES-AP/CGMES/SHACL"))
 # the ENTSO-E profiles split constraints: Simple carries datatype/nodeKind,
 # Complex carries sparql/range/cardinality — real validation uses both
 CGMES_EQ_SHACL_FILES = [

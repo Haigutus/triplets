@@ -361,21 +361,15 @@ def _rows(cases, name):
     return [case[1:] for case in cases if case[0] == name]
 
 
-def _has(flavor, name):
-    module = {"duckdb": iri_duckdb}.get(flavor)
-    return hasattr(module, name) if module else True
-
-
 @pytest.mark.parametrize("name,text,expected", LOCAL_CASES)
 def test_scalar_local(name, text, expected):
     assert getattr(iri, name)(text) == expected
 
 
-@pytest.mark.parametrize("flavor", FLAVORS)
-@pytest.mark.parametrize("name", sorted({case[0] for case in LOCAL_CASES}))
+# iri_duckdb holds only the names the duckdb SHACL engine uses
+@pytest.mark.parametrize("flavor,name", [(flavor, name) for name in sorted({case[0] for case in LOCAL_CASES})
+                                         for flavor in FLAVORS if flavor != "duckdb" or hasattr(iri_duckdb, name)])
 def test_flavor_local_matches_scalar(flavor, name):
-    if not _has(flavor, name):
-        pytest.skip(f"{flavor} has no {name}")
     apply, _ = FLAVORS[flavor]()
     rows = _rows(LOCAL_CASES, name)
     assert apply(name, [text for text, _ in rows]) == [expected for _, expected in rows]

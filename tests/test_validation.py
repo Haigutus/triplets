@@ -30,10 +30,10 @@ cim:ACLineSegmentShape a sh:NodeShape ;
                   sh:message "Conductor.length must be xsd:float" ] .
 """
 
-# Real CGMES SHACL shapes — external, skip-guarded (not vendored into the repo).
+# Real CGMES SHACL shapes from the test_data/CGMES-AP submodule (skip if not checked out).
 CGMES_SHACL_DIR = Path(os.environ.get(
     "TRIPLETS_CGMES_SHACL",
-    "/home/kvilgo/GIT/application-profiles-library/CGMES/CurrentRelease/SHACL"))
+    "test_data/CGMES-AP/CGMES/SHACL"))
 CGMES_EQ_SHACL = CGMES_SHACL_DIR / "61970-301_Equipment-AP-Con-Complex-SHACL.ttl"
 
 

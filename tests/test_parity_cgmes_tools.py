@@ -32,7 +32,6 @@ def make_context(df: pandas.DataFrame) -> dict:
     equipment_id = str((equip if not equip.empty else type_rows)["ID"].iloc[0])
     return {
         "metadata": cgmes.get_metadata_from_FullModel(df),
-        "models": cgmes.get_loaded_models(df),
         "equipment_id": equipment_id,
         "eic_type": "ACLineSegment",
         "setpoint": 100.0,
@@ -44,9 +43,10 @@ CALL_SPECS = {
     "get_metadata_from_FullModel": lambda d, c: cgmes.get_metadata_from_FullModel(d),
     "update_FullModel_from_dict": lambda d, c: cgmes.update_FullModel_from_dict(d, c["metadata"]),
     "update_FullModel_from_filename": lambda d, c: cgmes.update_FullModel_from_filename(d),
-    "update_filename_from_FullModel": lambda d, c: cgmes.update_filename_from_FullModel(d),
+    # CGMES 3.0 headers carry no processType/modelingEntity/messageType: fill them from the file names first
+    "update_filename_from_FullModel": lambda d, c: cgmes.update_filename_from_FullModel(cgmes.update_FullModel_from_filename(d)),
     "get_loaded_models": lambda d, c: cgmes.get_loaded_models(d),
-    "get_model_triplets": lambda d, c: cgmes.get_model_triplets(d, c["models"]),
+    "get_model_triplets": lambda d, c: cgmes.get_model_triplets(d, next(iter(cgmes.get_loaded_models(d).values()))),
     "get_loaded_model_parts": lambda d, c: cgmes.get_loaded_model_parts(d),
     "get_loaded_profiles": lambda d, c: cgmes.get_loaded_profiles(d),
     "get_model_relations": lambda d, c: cgmes.get_model_relations(d),

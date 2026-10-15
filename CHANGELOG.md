@@ -165,6 +165,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   no longer prefixed with `urn:uuid:` by the N-Quads graph term.
 
 ### Fixed
+- **`scale_load`** works without `NonConformLoad` objects (was `TypeError`).
+- **`update_FullModel_from_filename`** parses the file name, not the whole
+  `label` path (a directory with `_` broke the split and the update raised
+  `KeyError: 'ID'`).
+- Tests: the CGMES SHACL shapes come from the new `test_data/CGMES-AP`
+  submodule (was a hard-coded local path, so those tests always skipped); CI
+  runs the suite once more with the cython extensions built.
 - **`cim-spreadsheet` leaves out the parser metadata** (`NamespaceMap`,
   `Distribution`, which holds the source path) like `cim-diff`, with the same
   options from one shared definition in

@@ -93,7 +93,8 @@ def get_metadata_from_filename(file_name):
 
     #print(file_name)
     file_metadata = {}
-    file_name, file_type = file_name.split(file_type_separator)
+    # label holds the parsed path; only the file name carries metadata
+    file_name, file_type = os.path.basename(file_name).rsplit(file_type_separator, 1)
 
     # Parse file metadata
     file_meta_list = file_name.split(meta_separator)
@@ -298,7 +299,7 @@ def update_FullModel_from_dict(data, metadata, update=True, add=False):
         for key in metadata:
             additional_meta_list.append({"ID": row.ID, "KEY": key, "VALUE": metadata[key], "INSTANCE_ID": row.INSTANCE_ID})
 
-    update_data = pandas.DataFrame(additional_meta_list)
+    update_data = pandas.DataFrame(additional_meta_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
     return data.update_triplets_from_triplets(update_data, update, add)
 
@@ -338,7 +339,7 @@ def update_FullModel_from_filename(data, parser=get_metadata_from_filename, upda
             for key in metadata:
                 additional_meta_list.append({"ID": row.ID, "KEY": key, "VALUE": metadata[key], "INSTANCE_ID": row.INSTANCE_ID})
 
-    update_data = pandas.DataFrame(additional_meta_list)
+    update_data = pandas.DataFrame(additional_meta_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
     return data.update_triplets_from_triplets(update_data, update, add)
 
@@ -975,8 +976,9 @@ def scale_load(data, load_setpoint, cos_f=None):
         cos_f = math.cos(math.atan(scalable_load_q / scalable_load_p))
         logger.info(f"cos(f) not given, taking from base case -> cos(f)={cos_f:.3f}")
 
-    # Calculate total P including non-conform loads
-    total_load_p = scalable_load_p + data.type_tableview('NonConformLoad')["EnergyConsumer.p"].sum()
+    # Calculate total P including non-conform loads (type_tableview gives None when there are none)
+    non_conform = data.type_tableview('NonConformLoad')
+    total_load_p = scalable_load_p + (0 if non_conform is None else non_conform["EnergyConsumer.p"].sum())
 
     # Scale Load P across conform loads
     load_data["EnergyConsumer.p"] *= 1 + (load_setpoint - total_load_p) / scalable_load_p

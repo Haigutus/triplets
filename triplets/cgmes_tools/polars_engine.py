@@ -203,7 +203,8 @@ def scale_load(data, load_setpoint, cos_f=None):
     if cos_f is None:
         cos_f = math.cos(math.atan(scalable_q / scalable_p))
 
-    total_p = scalable_p + data.type_tableview("NonConformLoad")["EnergyConsumer.p"].cast(pl.Float64).sum()
+    non_conform = data.type_tableview("NonConformLoad")   # None when there are none
+    total_p = scalable_p + (0 if non_conform is None else non_conform["EnergyConsumer.p"].cast(pl.Float64).sum())
     new_p = p * (1 + (load_setpoint - total_p) / scalable_p)
     new_q = new_p * math.tan(math.acos(cos_f))
     load_data = load_data.with_columns([new_p.alias("EnergyConsumer.p"), new_q.alias("EnergyConsumer.q")])
