@@ -219,7 +219,7 @@ cim:ACLineSegmentShape a sh:NodeShape ;
     sh:property [ sh:path cim:ACLineSegment.r ; sh:datatype xsd:float ] .
 """
 
-CGMES_SHACL_DIR = Path("/home/kvilgo/GIT/application-profiles-library/CGMES/CurrentRelease/SHACL")
+CGMES_SHACL_DIR = Path("test_data/CGMES-AP/CGMES/SHACL")
 CGMES_EQ_SHACL_FILES = [CGMES_SHACL_DIR / "61970-600-2_Equipment-AP-Con-Simple-SHACL.ttl",
                         CGMES_SHACL_DIR / "61970-301_Equipment-AP-Con-Complex-SHACL.ttl"]
 
