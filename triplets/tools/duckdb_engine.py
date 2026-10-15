@@ -151,8 +151,9 @@ def _lit(value):
 
 
 def _in_list(values):
-    """Comma-separated SQL literal list from an iterable of values."""
-    return ", ".join(_lit(v) for v in values)
+    """Comma-separated SQL literal list from an iterable of values; NULL when
+    empty, so ``IN (...)`` matches nothing instead of failing."""
+    return ", ".join(_lit(v) for v in values) or "NULL"
 
 
 def _materialize(self, data, name):
@@ -287,15 +288,15 @@ def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
     return self.sql(f"SELECT * FROM {table_name} WHERE {where}")
 
 
-def filter_triplets_by_type(self, type_name, table=None, schema=None, table_name=None):
-    """Filter to only objects of a specific type (str or list of str). Returns DuckDBPyRelation (lazy)."""
+def filter_triplets_by_type(self, type_name, type_key="Type", table=None, schema=None, table_name=None):
+    """Filter to only objects of a specific type (str or list-like of str). Returns DuckDBPyRelation (lazy)."""
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     type_names = [type_name] if isinstance(type_name, str) else list(type_name)
     return self.sql(f"""
         SELECT d.* FROM {table_name} d
         WHERE d.ID IN (
             SELECT ID FROM {table_name}
-            WHERE KEY = 'Type' AND VALUE IN ({_in_list(type_names)})
+            WHERE KEY = {_lit(type_key)} AND VALUE IN ({_in_list(type_names)})
         )
     """)
 
@@ -621,16 +622,16 @@ def diff_triplets(self, new_data, table=None, schema=None, table_name=None):
     _merge column. Returns DuckDBPyRelation."""
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     _materialize(self, new_data, "_new_data")
+    # NOT EXISTS with IS NOT DISTINCT FROM: a missing VALUE matches itself, like the pandas merge
+    missing_in = "NOT EXISTS (SELECT 1 FROM {} o WHERE o.ID = d.ID AND o.KEY = d.KEY AND o.VALUE IS NOT DISTINCT FROM d.VALUE)"
     return self.sql(f"""
         SELECT ID, KEY, VALUE, INSTANCE_ID AS INSTANCE_ID_OLD, NULL AS INSTANCE_ID_NEW,
                'left_only' AS _merge
-        FROM {table_name}
-        WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _new_data)
+        FROM {table_name} d WHERE {missing_in.format("_new_data")}
         UNION ALL BY NAME
         SELECT ID, KEY, VALUE, NULL AS INSTANCE_ID_OLD, INSTANCE_ID AS INSTANCE_ID_NEW,
                'right_only' AS _merge
-        FROM _new_data
-        WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM {table_name})
+        FROM _new_data d WHERE {missing_in.format(table_name)}
     """)
 
 
@@ -647,28 +648,27 @@ def diff_triplets_by_instance(self, INSTANCE_ID_1, INSTANCE_ID_2, table=None, sc
     """)
 
 
-def print_triplets_diff(self, new_data, file_id_key="label", types=None, context_keys=None, stat=False,
-                        table=None, schema=None, table_name=None):
+def print_triplets_diff(self, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None,
+                        include_objects=None, context_keys=None, stat=False, table=None, schema=None, table_name=None):
     """Print a unified diff of the table against new_data; returns the number of
-    differing triplets shown. Same output and options as the pandas engine."""
+    differing triplets. Same output and options as the pandas engine."""
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
-    _materialize(self, new_data, "_new_data")
+    _materialize(self, new_data, "_diff_new_data")
     labels = [[label for label, in self.sql(f"SELECT VALUE FROM {source} WHERE KEY = {_lit(file_id_key)}").fetchall()]
-              for source in (table_name, "_new_data")]
-    # as filter_triplets_by_type, on the table and on new_data
-    kept = "TRUE" if types is None else f"VALUE IN ({_in_list(types)})" if types else "FALSE"
-    for view, source in (("_diff_old", table_name), ("_diff_new", "_new_data")):
-        where = "" if types is None else f" WHERE ID IN (SELECT ID FROM {source} WHERE KEY = 'Type' AND {kept})"
-        self.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS SELECT * FROM {source}{where}")
-    diff = ("SELECT ID, KEY, VALUE, 'left_only' AS _merge FROM _diff_old "
-            "WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _diff_new) "
-            "UNION ALL SELECT ID, KEY, VALUE, 'right_only' FROM _diff_new "
-            "WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _diff_old)")
+              for source in (table_name, "_diff_new_data")]
+    excluded = [*(exclude_objects or []), *([file_id_object] if file_id_object else [])]
+    for view, source in (("_diff_old", table_name), ("_diff_new", "_diff_new_data")):
+        typed = f"SELECT ID FROM {source} WHERE KEY = 'Type' AND VALUE IN "
+        included = f"ID IN ({typed}({_in_list(include_objects)})) AND " if include_objects else ""
+        self.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS SELECT * FROM {source} "
+                     f"WHERE {included}ID NOT IN ({typed}({_in_list(excluded)}))")
+    diff = diff_triplets(self, self.table("_diff_new"), table="_diff_old", schema="temp")
+    self.execute(f"CREATE OR REPLACE TEMP TABLE _diff AS SELECT ID, KEY, VALUE, _merge FROM ({diff.sql_query()})")
     keys = _in_list(["Type", *(context_keys or [])])
     related = self.sql(" UNION ALL ".join(
-        f"SELECT ID, KEY, VALUE, '{side}' FROM {source} WHERE KEY IN ({keys}) AND ID IN (SELECT ID FROM ({diff}))"
+        f"SELECT ID, KEY, VALUE, '{side}' FROM {source} WHERE KEY IN ({keys}) AND ID IN (SELECT ID FROM _diff)"
         for side, source in (("old", "_diff_old"), ("new", "_diff_new")))).fetchall()
-    return print_diff(self.sql(diff).fetchall(), related, *labels, context_keys, stat)
+    return print_diff(self.sql("SELECT * FROM _diff").fetchall(), related, *labels, context_keys, stat)
 
 
 # ── Transform ────────────────────────────────────────────────────────────────

@@ -223,12 +223,10 @@ def references_simple(data, reference, columns=None, levels=1):
 
 
 def filter_triplets_by_type(data, type_name, type_key="Type"):
-    """Filter triplet data to only include objects of a specific type (str or list of str)."""
-    type_names = [type_name] if isinstance(type_name, str) else list(type_name)
-    type_ids = data.filter(
-        (pl.col("KEY") == type_key) & pl.col("VALUE").is_in(type_names)
-    ).select("ID")
-    return type_ids.join(data, on="ID", how="inner")
+    """Filter triplet data to only include objects of a specific type (str or list-like of str)."""
+    type_names = [type_name] if isinstance(type_name, str) else [str(name) for name in type_name]
+    type_ids = data.filter((pl.col("KEY") == type_key) & pl.col("VALUE").is_in(type_names)).select("ID")
+    return data.join(type_ids, on="ID", how="semi")
 
 
 def filter_triplets_by_triplets(data, filter_triplet):
@@ -445,18 +443,13 @@ def remove_triplets_from_triplets(from_triplet, what_triplet, columns=["ID", "KE
     return from_triplet.join(what_triplet.select(columns), on=columns, how="anti")
 
 
-def _strings(data, columns=("ID", "KEY", "VALUE")):
-    """Cast the triplet columns to String where they are not."""
-    return data.with_columns(pl.col(column).cast(pl.String) for column in columns
-                             if data.schema[column] != pl.String)
-
-
 def diff_triplets(old_data, new_data):
     """Rows unique to old (left_only) or new (right_only), matching the pandas
     outer-merge shape: columns [ID, KEY, VALUE, INSTANCE_ID_OLD, INSTANCE_ID_NEW, _merge]."""
-    # join keys must share a dtype: a Categorical / Enum frame meets a String one after edits
-    old = _strings(old_data).with_columns(pl.lit(True).alias("_in_old"))
-    new = _strings(new_data).with_columns(pl.lit(True).alias("_in_new"))
+    # join keys must share a dtype (a Categorical frame meets a String one after edits);
+    # missing VALUE as "" so it matches itself, like the pandas merge
+    old, new = [data.with_columns(pl.col("ID", "KEY", "VALUE").cast(pl.String).fill_null(""), pl.lit(True).alias(flag))
+                for data, flag in ((old_data, "_in_old"), (new_data, "_in_new"))]
     merged = old.join(new, on=["ID", "KEY", "VALUE"], how="full", suffix="_NEW", coalesce=True)
     merged = merged.with_columns(
         pl.when(pl.col("_in_old").is_null()).then(pl.lit("right_only"))
@@ -474,15 +467,18 @@ def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
     return scope.filter(pl.len().over(["ID", "KEY", "VALUE"]) == 1)
 
 
-def print_triplets_diff(old_data, new_data, file_id_key="label", types=None, context_keys=None, stat=False):
+def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None,
+                        include_objects=None, context_keys=None, stat=False):
     """Print a unified diff of two triplet datasets; returns the number of
-    differing triplets shown. Same output and options as the pandas engine."""
+    differing triplets. Same output and options as the pandas engine."""
+    old_data, new_data = [data.with_columns(pl.col("ID", "KEY", "VALUE").cast(pl.String)) for data in (old_data, new_data)]
     old_labels = old_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list()
     new_labels = new_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list()
-    old_data, new_data = _strings(old_data), _strings(new_data)
-    if types is not None:
-        old_data = filter_triplets_by_type(old_data, types)
-        new_data = filter_triplets_by_type(new_data, types)
+    excluded = [*(exclude_objects or []), *([file_id_object] if file_id_object else [])]
+    if include_objects:
+        old_data, new_data = filter_triplets_by_type(old_data, include_objects), filter_triplets_by_type(new_data, include_objects)
+    old_data, new_data = [data.join(filter_triplets_by_type(data, excluded).select("ID"), on="ID", how="anti")
+                          for data in (old_data, new_data)]
     diff = diff_triplets(old_data, new_data)
     keys = ["Type", *(context_keys or [])]
     related = pl.concat([

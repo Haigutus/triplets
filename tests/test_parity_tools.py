@@ -156,7 +156,8 @@ CALL_SPECS = {
     "diff_triplets": lambda e, d, c: d.diff_triplets(_to_engine(e, c["new_data"])),
     "diff_triplets_by_instance": lambda e, d, c: d.diff_triplets_by_instance(c["instances"][0], c["instances"][1]),
     "print_triplets_diff": lambda e, d, c: _printed(lambda: d.print_triplets_diff(
-        _to_engine(e, c["diff_data"]), context_keys=["IdentifiedObject.name"], types=[c["type"], "Terminal"])),
+        _to_engine(e, c["diff_data"]), exclude_objects=["NamespaceMap"], include_objects=[c["type"], "Terminal"],
+        context_keys=["IdentifiedObject.name"])),
     # tableview_to_triplets operates on a *tableview*, so call it on the tableview object
     # (duckdb has no relation method — it unpivots a wide table by name).
     "tableview_to_triplets": lambda e, d, c: (_duckdb_wide_table(d, c) if e == "duckdb"
@@ -271,6 +272,20 @@ def test_module_dispatch_parity(svedala_pandas, svedala_ctx, func, engine):
     ref = run_quiet(spec, "pandas", svedala_pandas.copy(), svedala_ctx)
     out = run_quiet(spec, engine, build_engine(engine, svedala_pandas), svedala_ctx)
     assert parity(ref, out), f"tools.{func}({engine}) differs from pandas"
+
+
+@pytest.mark.parametrize("engine", ["polars", "duckdb"])
+def test_print_triplets_diff_missing_and_repeated_values(engine):
+    """A missing VALUE and a row repeated on one side match themselves: same report as pandas."""
+    pytest.importorskip(engine)
+    old = pandas.DataFrame({"ID": ["a", "a", "a", "a", "b", "b"],
+                            "KEY": ["Type", "Type", "x", "y", "Type", "x"],
+                            "VALUE": ["Breaker", "Breaker", None, "1", "Line", "2"],
+                            "INSTANCE_ID": ["i1", "i2", "i1", "i1", "i1", "i1"]})
+    new = old.drop(index=[1, 5]).assign(VALUE=lambda data: data["VALUE"].where(data["KEY"] != "y", "2"))
+    expected = _printed(lambda: build_engine("pandas", old).print_triplets_diff(new))
+    assert expected[0] == 3
+    assert _printed(lambda: build_engine(engine, old).print_triplets_diff(_to_engine(engine, new))) == expected
 
 
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────

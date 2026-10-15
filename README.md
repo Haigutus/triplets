@@ -270,7 +270,7 @@ Both tools take the same type options. They leave out `NamespaceMap` and `Distri
 (parser metadata, source file path) unless `--keep-metadata`. `--include TYPE` keeps
 only these classes, `-ex TYPE` leaves out more; repeat them or comma-separate names.
 `cim-diff --context KEY` also shows the unchanged values of KEY in each changed object.
-`cim-diff` exits 0 when the models match (printing nothing), 1 when they differ and
+`cim-diff` exits 0 when the models match, 1 when they differ and
 2 on error, as `diff` does.
 
 With `--keep-metadata`, to-cim writes each model back to the path it was parsed

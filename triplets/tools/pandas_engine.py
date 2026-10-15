@@ -837,8 +837,8 @@ def filter_triplets_by_type(data, type_name, type_key="Type"):
     ----------
     data : pandas.DataFrame
         Triplet dataset containing RDF data.
-    type_name : str or list of str
-        Object type(s) to filter by (e.g., 'ACLineSegment').
+    type_name : str or list-like of str
+        Object type(s) to filter by (e.g., 'ACLineSegment'); list, tuple, set, Series or array.
     type_key : str
         Key used in triplet to indicate type, by default "Type"
 
@@ -852,10 +852,8 @@ def filter_triplets_by_type(data, type_name, type_key="Type"):
     >>> filtered = filter_triplets_by_type(data, "ACLineSegment")
     >>> filtered = filter_triplets_by_type(data, ["ACLineSegment", "Terminal"])
     """
-    type_names = [type_name] if isinstance(type_name, str) else list(type_name)
-    filter_triplet = data[(data.KEY == type_key) & data.VALUE.isin(type_names)]
-
-    return filter_triplets_by_triplets(data, filter_triplet)
+    type_names = [type_name] if isinstance(type_name, str) else [str(name) for name in type_name]
+    return data[data.ID.isin(data.ID[(data.KEY == type_key) & data.VALUE.isin(type_names)])]
 
 
 def filter_triplets(data, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None, regex=False):
@@ -992,7 +990,8 @@ def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
 
     return diff
 
-def print_triplets_diff(old_data, new_data, file_id_key="label", types=None, context_keys=None, stat=False):
+def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None,
+                        include_objects=None, context_keys=None, stat=False):
     """Print a unified diff of two triplet datasets, one hunk per changed object.
 
     Parameters
@@ -1001,11 +1000,15 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", types=None, con
         Original triplet dataset.
     new_data : pandas.DataFrame
         New triplet dataset to compare against.
+    file_id_object : str, optional
+        Object type holding the file names, left out of the diff (default is 'Distribution').
     file_id_key : str, optional
         Key whose values name the files in the ``---`` / ``+++`` lines (default is 'label').
-    types : list, optional
-        Only objects of these types are diffed (default is None: all), see
-        ``filter_triplets_by_type``. The file names are read before filtering.
+        The file names are read before any filtering.
+    exclude_objects : list, optional
+        Object types left out of the diff (default is None).
+    include_objects : list, optional
+        Only objects of these types are diffed (default is None: all); ``exclude_objects`` applies after it.
     context_keys : list, optional
         Keys whose unchanged values are shown in each hunk as `` `` context lines,
         e.g. ``["IdentifiedObject.name"]``.
@@ -1015,24 +1018,29 @@ def print_triplets_diff(old_data, new_data, file_id_key="label", types=None, con
     Returns
     -------
     int
-        Number of differing triplets shown (0 when the datasets match; nothing is printed).
+        Number of differing triplets (0 when the datasets match).
+
+    Notes
+    -----
+    Nice diff viewer https://diffy.org/
 
     Examples
     --------
-    >>> print_triplets_diff(old_data, new_data, types=["ACLineSegment"],
+    >>> print_triplets_diff(old_data, new_data, exclude_objects=["NamespaceMap"],
     ...                     context_keys=["IdentifiedObject.name"])
     """
     old_labels = old_data.loc[old_data["KEY"] == file_id_key, "VALUE"].tolist()
     new_labels = new_data.loc[new_data["KEY"] == file_id_key, "VALUE"].tolist()
-    if types is not None:
-        old_data = filter_triplets_by_type(old_data, types)
-        new_data = filter_triplets_by_type(new_data, types)
+    excluded = [*(exclude_objects or []), *([file_id_object] if file_id_object else [])]
+    if include_objects:
+        old_data, new_data = filter_triplets_by_type(old_data, include_objects), filter_triplets_by_type(new_data, include_objects)
+    old_data, new_data = [data[~data["ID"].isin(filter_triplets_by_type(data, excluded)["ID"])] for data in (old_data, new_data)]
     diff = diff_triplets(old_data, new_data)
     keys = ["Type", *(context_keys or [])]
     related = pandas.concat([
         data.loc[data["ID"].isin(diff["ID"]) & data["KEY"].isin(keys), ["ID", "KEY", "VALUE"]].assign(side=side)
         for side, data in (("old", old_data), ("new", new_data))])
-    return print_diff(diff[["ID", "KEY", "VALUE", "_merge"]].astype(str).itertuples(index=False, name=None),
+    return print_diff(diff[["ID", "KEY", "VALUE"]].assign(_merge=diff["_merge"].astype(str)).itertuples(index=False, name=None),
                       related.itertuples(index=False, name=None), old_labels, new_labels, context_keys, stat)
 
 

@@ -8,8 +8,14 @@ from collections import Counter, defaultdict
 SIGN = {"left_only": "-", "right_only": "+"}
 
 
+def text(value):
+    """Cell as text; missing (None / NaN) is empty, whatever engine produced it."""
+    return "" if value is None or value != value else str(value)
+
+
 def print_diff(diff_rows, related_rows, old_labels, new_labels, context_keys=None, stat=False):
-    """Print the diff; returns the number of differing triplets.
+    """Print the diff; returns the number of differing triplets (0: only the
+    file labels and empty sections are printed).
 
     diff_rows : (ID, KEY, VALUE, _merge) with _merge left_only / right_only
     related_rows : (ID, KEY, VALUE, side) for the diff IDs, side old / new, KEY
@@ -17,6 +23,7 @@ def print_diff(diff_rows, related_rows, old_labels, new_labels, context_keys=Non
     """
     old_types, new_types, context = {}, {}, defaultdict(set)
     for id_, key, value, side in related_rows:
+        value = text(value)
         if key == "Type":
             (old_types if side == "old" else new_types)[id_] = value
         if key in (context_keys or ()):
@@ -24,9 +31,7 @@ def print_diff(diff_rows, related_rows, old_labels, new_labels, context_keys=Non
 
     changes = defaultdict(list)
     for id_, key, value, merge in diff_rows:
-        changes[id_].append((key, SIGN[merge], value))
-    if not changes:
-        return 0
+        changes[id_].append((key, SIGN[merge], text(value)))
 
     def status(id_):
         if id_ in old_types and id_ not in new_types:

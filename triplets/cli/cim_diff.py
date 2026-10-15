@@ -48,7 +48,7 @@ After installation, the tool can be invoked in three ways:
     modified = parse(['modified.xml'])
 
     # Print diff
-    print_triplets_diff(original, modified, types=['ACLineSegment', 'Terminal'])
+    print_triplets_diff(original, modified, exclude_objects=['NamespaceMap'], include_objects=['ACLineSegment', 'Terminal'])
 
 Features
 --------
@@ -59,7 +59,7 @@ Features
 - Only some object types with ``--include``, more left out with ``-ex``
 - Unchanged values shown for orientation with ``--context KEY``
 - Counts per type only with ``--stat``
-- Exit code 0 when equal (nothing printed), 1 when different, 2 on error (as ``diff``)
+- Exit code 0 when equal, 1 when different, 2 on error (as ``diff``)
 - Handles large CIM files efficiently
 
 Examples
@@ -132,7 +132,7 @@ import sys
 
 from ..parser import parse
 from ..tools import print_triplets_diff
-from . import add_common_arguments, excluded_types, kept_types, names
+from . import add_common_arguments, excluded_types, names
 
 def main():
     """
@@ -212,8 +212,9 @@ def main():
         print(f"Error: {error}", file=sys.stderr)
         sys.exit(2)
 
-    types = kept_types((original_data, changed_data), args.include, excluded_types(args))
-    differences = print_triplets_diff(original_data, changed_data, types=types,
+    # Distribution is left out via excluded_types, so --keep-metadata can show it
+    differences = print_triplets_diff(original_data, changed_data, file_id_object=None,
+                                      exclude_objects=excluded_types(args), include_objects=args.include,
                                       context_keys=args.context, stat=args.stat)
     sys.exit(1 if differences else 0)
 

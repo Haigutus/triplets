@@ -116,8 +116,9 @@ def test_cim_diff_exclusions(monkeypatch, capsys, options, shown, hidden):
 
 
 def test_cim_diff_exit_codes(monkeypatch, capsys):
-    """As diff: 0 and no output when equal, 1 different, 2 error."""
-    assert cim_diff(monkeypatch, capsys, EQ, EQ) == (0, "")
+    """As diff: 0 when equal (file names and empty sections only), 1 different, 2 error."""
+    code, out = cim_diff(monkeypatch, capsys, EQ, EQ)
+    assert code == 0 and out.startswith("--- ") and out.rstrip().endswith("Changed:")
     assert cim_diff(monkeypatch, capsys, EQ, SSH)[0] == 1
     assert cim_diff(monkeypatch, capsys, EQ, "missing.xml")[0] == 2
 
@@ -130,6 +131,10 @@ def test_cim_diff_report_options(monkeypatch, capsys):
     assert not any(" -> " in line for line in stat.splitlines())
     _, only = cim_diff(monkeypatch, capsys, EQ, SSH, "--include", "ACLineSegment", "--stat")
     assert "  ACLineSegment" in only and "  Terminal" not in only
+    _, only = cim_diff(monkeypatch, capsys, EQ, SSH, "--include", "ACLineSegment,Terminal", "-ex", "Terminal", "--stat")
+    assert "  ACLineSegment" in only and "  Terminal" not in only
+    _, only = cim_diff(monkeypatch, capsys, EQ, SSH, "--include", "NamespaceMap", "--stat")
+    assert "  NamespaceMap" in only and "  ACLineSegment" not in only
 
 
 def test_cim_diff_context(tmp_path, monkeypatch, capsys):

@@ -6,15 +6,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Start of the 0.3 line.
-
 ### Added
 - **`cim-diff` report options**: `--stat` (counts per type only), `--include TYPE`
   (only these classes, also in `cim-spreadsheet`), `--context KEY` (unchanged
   values of KEY shown in each changed object, e.g. `IdentifiedObject.name`).
-  `print_triplets_diff(types=, context_keys=, stat=)` in every engine; the
-  CLI builds `types` from the Type rows in the data. `--version` in both CLIs.
-- `filter_triplets_by_type` takes a list of types too (all engines).
+  `print_triplets_diff(include_objects=, context_keys=, stat=)` in every
+  engine, next to `exclude_objects`. `--version` in both CLIs.
+- `filter_triplets_by_type` takes a list or array of types too (all engines);
+  duckdb takes `type_key` like pandas and polars.
 - **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
   `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
   [application-profiles-library](https://github.com/entsoe/application-profiles-library)
@@ -177,8 +176,8 @@ Start of the 0.3 line.
   `Distribution`. `--no-default-exclusions` is removed. `cim-spreadsheet` applies `-ex` to
   to-cim too. `cim_to_spreadsheet()` leaves out nothing by default; pass
   `exclude_objects=triplets.cli.METADATA_TYPES` for the CLI behaviour.
-- **`cim-diff` exit code**: 0 when equal (nothing printed), 1 when different,
-  2 on error. `print_triplets_diff` returns the number of differing triplets.
+- **`cim-diff` exit code**: 0 when equal, 1 when different, 2 on error.
+  `print_triplets_diff` returns the number of differing triplets.
 - **One diff report for all engines.** pandas, polars and duckdb
   `print_triplets_diff` print the same output (they had three formats; duckdb
   ignored `exclude_objects`). Hunks and keys are sorted, `-` before `+`.
@@ -189,10 +188,15 @@ Start of the 0.3 line.
   namespace; it wrote nothing and still reported success.
 - **CIM XML export creates missing folders** for a relative file name (round
   trip with `--keep-metadata` crashed with `FileNotFoundError`).
-- **`print_triplets_diff` no longer always drops `Distribution`**: `exclude_objects`
-  and `file_id_object` are replaced by `types=` (objects of these types only,
-  via `filter_triplets_by_type`; file names read before filtering). The
+- **`print_triplets_diff` `exclude_objects` leaves out changed objects too**:
+  it matched only removed and added ones. File names are read before
+  filtering. `file_id_object=None` keeps `Distribution` in the diff. The
   unpackaged `tools/cim-diff.py` script is removed (use `cim-diff`).
+- **Missing VALUE matches itself in `diff_triplets`** (duckdb, polars), as in
+  pandas: duckdb dropped such rows, polars reported them as removed and added.
+- **`filter_triplets_by_type` returns each row once** (pandas, polars): a type
+  declared in several files repeated its objects' rows. pandas is about 5x
+  faster.
 - **`cim-diff` runs again**: it called `rdf_parser.print_triplets_diff`, which
   does not exist; it now uses `parse` and `tools.print_triplets_diff`.
 - **`comment=` is written by the `python_lxml` CIM XML exporter** too: it
