@@ -41,7 +41,7 @@ from triplets.export_schema import schemas
 logging.getLogger("triplets.validation").setLevel(logging.ERROR)
 
 HERE = Path(__file__).resolve().parent
-EQ = str(HERE.parent / "test_data/relicapgrid/Instance/Grid/IGM_Svedala/20220615T2230Z__Svedala_EQ_1.xml")
+EQ = str(HERE.parent / "test_data/relicapgrid/Instance/Svedala/Grid/cimxml/20220615T2230Z__Svedala_EQ_1.xml")
 
 UPSTREAM_RAW = "https://raw.githubusercontent.com/entsoe/application-profiles-library/main/CGMES/SHACL"
 SHACL_FILES = [

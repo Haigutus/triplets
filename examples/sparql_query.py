@@ -11,7 +11,7 @@ import triplets
 from triplets.export_schema import schemas
 
 REPO = Path(__file__).resolve().parent.parent
-EQ = str(REPO / "test_data/relicapgrid/Instance/Grid/IGM_Svedala/20220615T2230Z__Svedala_EQ_1.xml")
+EQ = str(REPO / "test_data/relicapgrid/Instance/Svedala/Grid/cimxml/20220615T2230Z__Svedala_EQ_1.xml")
 
 PREFIXES = """
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>

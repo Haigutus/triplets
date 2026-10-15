@@ -19,7 +19,7 @@ from rdflib.store import Store
 import triplets  # noqa: F401 — registers accessors
 
 REPO = Path(__file__).resolve().parent.parent
-FILES = sorted(str(p) for p in (REPO / "test_data/relicapgrid/Instance/Grid/IGM_Svedala").glob("*.xml"))
+FILES = sorted(str(p) for p in (REPO / "test_data/relicapgrid/Instance/Svedala/Grid/cimxml").glob("*.xml"))
 RUNS = 3
 
 PREFIX = "PREFIX cim: <http://iec.ch/TC57/CIM100#>\n"

@@ -172,6 +172,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Tests: the CGMES SHACL shapes come from the new `test_data/CGMES-AP`
   submodule (was a hard-coded local path, so those tests always skipped); CI
   runs the suite once more with the cython extensions built.
+- **A namespace IRI VALUE is kept whole.** `local_value` (all parsers, `iri_pandas`,
+  `iri_polars`, `iri_duckdb`) turned `<dcterms:conformsTo rdf:resource="http://iec.ch/TC57/CIM100#"/>`
+  into `""`: an `http` IRI with `#` and nothing after it has no local name.
+- Tests use the ReliCapGrid `cgmes-3.0_ncp-2.5_tc-2.0` release (was a February
+  commit); the NC round trip runs against the NCP 2.5.0 bundles.
 - **`cim-spreadsheet` leaves out the parser metadata** (`NamespaceMap`,
   `Distribution`, which holds the source path) like `cim-diff`, with the same
   options from one shared definition in

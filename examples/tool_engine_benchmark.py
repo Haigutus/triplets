@@ -20,7 +20,7 @@ import duckdb
 import triplets  # noqa: F401 — registers engines
 
 REPO = Path(__file__).resolve().parent.parent
-FILES = sorted(str(p) for p in (REPO / "test_data/relicapgrid/Instance/Grid/IGM_Svedala").glob("*.xml"))
+FILES = sorted(str(p) for p in (REPO / "test_data/relicapgrid/Instance/Svedala/Grid/cimxml").glob("*.xml"))
 RUNS = 3
 
 pdf = pandas.read_RDF(FILES)

@@ -9,17 +9,17 @@ INSTANCE_PATH = BASE_PATH / "test_data/relicapgrid/Instance"
 
 # Small NC files for fast tests
 NC_FILES = {
-    "AE": INSTANCE_PATH / "NetworkCode/Belgovia/Belgovia_instance/Belgovia_AE.xml",
-    "CO": INSTANCE_PATH / "NetworkCode/Belgovia/Belgovia_instance/Belgovia_CO.xml",
-    "OR": INSTANCE_PATH / "NetworkCode/Espheim/Espheim_instance/Espheim_OR.xml",
+    "AE": INSTANCE_PATH / "Belgovia/NetworkCode/cimxml/Belgovia_AE.xml",
+    "CO": INSTANCE_PATH / "Belgovia/NetworkCode/cimxml/Belgovia_CO.xml",
+    "OR": INSTANCE_PATH / "Espheim/NetworkCode/cimxml/Espheim_OR.xml",
 }
 
 # CGMES files
 CGMES_FILES = {
-    "EQ": INSTANCE_PATH / "Grid/IGM_Belgovia/20220615T2230Z__Belgovia_EQ_1.xml",
-    "SSH": INSTANCE_PATH / "Grid/IGM_Belgovia/20220615T2230Z_2D_Belgovia_SSH_1.xml",
-    "TP": INSTANCE_PATH / "Grid/IGM_Belgovia/20220615T2230Z_2D_Belgovia_TP_1.xml",
-    "SV": INSTANCE_PATH / "Grid/IGM_Belgovia/20220615T2230Z_2D_Belgovia_SV_1.xml",
+    "EQ": INSTANCE_PATH / "Belgovia/Grid/cimxml/20220615T2230Z__Belgovia_EQ_1.xml",
+    "SSH": INSTANCE_PATH / "Belgovia/Grid/cimxml/20220615T2230Z_2D_Belgovia_SSH_1.xml",
+    "TP": INSTANCE_PATH / "Belgovia/Grid/cimxml/20220615T2230Z_2D_Belgovia_TP_1.xml",
+    "SV": INSTANCE_PATH / "Belgovia/Grid/cimxml/20220615T2230Z_2D_Belgovia_SV_1.xml",
 }
 
 REALGRID_ZIP = str(BASE_PATH / "test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip")

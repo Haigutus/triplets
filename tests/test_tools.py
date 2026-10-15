@@ -17,7 +17,7 @@ from pathlib import Path
 pytestmark = pytest.mark.filterwarnings(
     r"ignore:.*is deprecated, use triplets\.:DeprecationWarning")
 
-SVEDALA_DIR = Path("test_data/relicapgrid/Instance/Grid/IGM_Svedala")
+SVEDALA_DIR = Path("test_data/relicapgrid/Instance/Svedala/Grid/cimxml")
 SVEDALA_FILES = [
     str(SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"),
     str(SVEDALA_DIR / "20220615T2230Z_2D_Svedala_SSH_1.xml"),

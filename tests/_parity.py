@@ -14,7 +14,7 @@ import pandas
 import pytest
 
 # ── datasets ──────────────────────────────────────────────────────────────────
-SVEDALA_DIR = Path("test_data/relicapgrid/Instance/Grid/IGM_Svedala")
+SVEDALA_DIR = Path("test_data/relicapgrid/Instance/Svedala/Grid/cimxml")
 SVEDALA_FILES = [str(SVEDALA_DIR / name) for name in (
     "20220615T2230Z__Svedala_EQ_1.xml",
     "20220615T2230Z_2D_Svedala_SSH_1.xml",

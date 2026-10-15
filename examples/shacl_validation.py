@@ -11,7 +11,7 @@ import triplets
 from triplets.export_schema import schemas
 
 REPO = Path(__file__).resolve().parent.parent
-EQ = str(REPO / "test_data/relicapgrid/Instance/Grid/IGM_Svedala/20220615T2230Z__Svedala_EQ_1.xml")
+EQ = str(REPO / "test_data/relicapgrid/Instance/Svedala/Grid/cimxml/20220615T2230Z__Svedala_EQ_1.xml")
 
 # A SHACL NodeShape targeting every ACLineSegment:
 #  - it must have a name              (sh:minCount)

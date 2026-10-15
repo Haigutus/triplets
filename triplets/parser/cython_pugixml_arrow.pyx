@@ -268,9 +268,10 @@ cdef extern from *:
         if (v.starts_with(http_prefix)) {
             size_t pos = v.rfind('#');
             if (pos != std::string_view::npos) {
-                v = v.substr(pos + 1);
-                size_t slash = v.rfind('/');
-                if (slash != std::string_view::npos) v = v.substr(slash + 1);
+                std::string_view name = v.substr(pos + 1);
+                size_t slash = name.rfind('/');
+                if (slash != std::string_view::npos) name = name.substr(slash + 1);
+                if (!name.empty()) v = name;   // a namespace IRI ("...#") has no name: keep it whole
             }
         }
         return v;

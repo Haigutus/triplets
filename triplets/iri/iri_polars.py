@@ -38,7 +38,10 @@ def local_value(column, kind=None):
     expr = _col(column)
     if isinstance(kind, str):
         return _local(expr) if kind in ("class", "enum") else local_id(expr)
-    guessed = local_id(expr).str.replace(GUESS_NAME_RE.pattern, "")
+    node = local_id(expr)
+    # a namespace IRI ("...#", "...#x/") has no name: keep it whole (ends_with is cheaper than an empty check)
+    guessed = (polars.when(node.str.ends_with("#") | node.str.ends_with("/"))
+               .then(node).otherwise(node.str.replace(GUESS_NAME_RE.pattern, "")))
     if kind is None:
         return guessed
     return (polars.when(kind.is_in(["class", "enum"])).then(_local(expr))
