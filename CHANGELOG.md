@@ -174,6 +174,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     `Pressure`, `Hours`, … → `xsd:float`; `Duration`, `Time`, `DateTimeStamp`,
     `UUID`, `Version`, `StringIRI`, `StringFixedLanguage` typed (were `""`)
 
+  Schema validation in the pandas / polars / duckdb engines is stricter for
+  `xsd:decimal`: `Money` / `Decimal` values in exponent form (`1e3`) or
+  `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
+
 ### Fixed
 - **NC instances resolve their profile from `dcterms:conformsTo`**, not only from
   `dcat:keyword` ([#142](https://github.com/Haigutus/triplets/issues/142)). Every

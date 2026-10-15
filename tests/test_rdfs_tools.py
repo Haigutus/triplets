@@ -290,22 +290,25 @@ def test_shipped_bundles_carry_both_iris(bundle):
         assert same == ({True} if bundle.startswith("ENTSOE_CGMES") else {False}), path.name
 
 
-EQ_RDFS2020 = Path("rdfs/ENTSOE_CGMES_3.0.0/61970-600-2_Equipment-AP-Voc-RDFS2020_v3-0-0.rdf")
-EQ_ED2 = (Path(__file__).resolve().parents[2]
-          / "application-profiles-library/CGMES/RDFS_Beta_501_Ed2_CD"
-          / "61970-600-2_Equipment-AP-Voc-RDFSED2a.rdf")
 
-
-def test_eq_rdfs2020_and_ed2_same_xsd_map():
-    """CGMES 3.0 EQ RDFS2020 and 501 Ed2 Voc agree on CIM→XSD after merge
-    (Ed2 has XSD on .value; RDFS2020 does not — the table fills that hole)."""
-    from triplets.rdfs_tools.cim_rdfs_to_json import cgmes_data_types_map, xsd_types_from_rdfs
-    if not EQ_RDFS2020.exists():
-        pytest.skip("CGMES 3.0 EQ RDFS not available")
-    if not EQ_ED2.exists():
-        pytest.skip("501 Ed2 EQ Voc not available (application-profiles-library checkout)")
-    old_data = rdfs_tools.load_all_to_dataframe(str(EQ_RDFS2020))
-    new_data = rdfs_tools.load_all_to_dataframe(str(EQ_ED2))
-    old = {**cgmes_data_types_map, **xsd_types_from_rdfs(old_data)}
-    new = {**cgmes_data_types_map, **xsd_types_from_rdfs(new_data)}
-    assert old.items() <= new.items()
+def test_xsd_types_from_rdfs():
+    """CIMDatatype .value → XSD range, Primitive or another CIMDatatype; cycles,
+    non-XSD ranges and ordinary classes with a .value resolve to nothing."""
+    from triplets.rdfs_tools.cim_rdfs_to_json import xsd_types_from_rdfs
+    cim, xsd = "http://iec.ch/TC57/CIM100#", "http://www.w3.org/2001/XMLSchema#"
+    datatype = [("stereotype", "CIMDatatype")]
+    classes = {
+        "Area": (datatype, ("dataType", cim + "Float")),                    # Primitive
+        "Money": ([("isCIMDatatype", "True")], ("range", xsd + "decimal")),  # 501 Ed2
+        "Alias": ([("stereotype", "http://iec.ch/TC57/NonStandard/UML#CIMDatatype")],
+                  ("dataType", cim + "Area")),                              # chain
+        "Loop": (datatype, ("dataType", cim + "Loop")),
+        "Text": (datatype, ("range", "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString")),
+        "CurrentLimit": ([], ("dataType", cim + "Float")),                  # not a datatype
+    }
+    rows = []
+    for name, (markers, target) in classes.items():
+        rows += [(cim + name, key, value) for key, value in markers]
+        rows += [(cim + name + ".value", "domain", cim + name), (cim + name + ".value", *target)]
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE"])
+    assert xsd_types_from_rdfs(data) == {"Area": "xsd:float", "Money": "xsd:decimal", "Alias": "xsd:float"}

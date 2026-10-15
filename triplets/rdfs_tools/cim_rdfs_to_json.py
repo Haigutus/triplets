@@ -47,7 +47,10 @@ def xsd_types_from_rdfs(profile_data):
     pointing at a Primitive (``Area.value`` → ``Float``) or another CIMDatatype;
     the chain is followed until it reaches an XSD type or a ``cgmes_data_types_map`` key.
     """
-    domain = profile_data.loc[profile_data["KEY"] == "domain", ["ID", "VALUE"]]
+    # Only CIMDatatypes: ordinary classes (CurrentLimit, SetPoint, …) also have a .value
+    datatypes = set(profile_data.query(rdfs_tools.stereotype_query("CIMDatatype")).ID)
+    datatypes |= set(profile_data.query("KEY == 'isCIMDatatype' and VALUE == 'True'").ID)
+    domain = profile_data.loc[(profile_data["KEY"] == "domain") & profile_data["VALUE"].isin(datatypes), ["ID", "VALUE"]]
     targets = profile_data.loc[profile_data["KEY"].isin(["range", "dataType"])]
     targets = dict(zip(targets["ID"], targets["VALUE"]))
     value_of = {split_iri(typ)[1]: _as_xsd(target) or split_iri(target)[1]
