@@ -963,8 +963,8 @@ def diff_triplets(old_data, new_data):
     --------
     >>> diff = diff_triplets(old_data, new_data)
     """
-    diff = old_data.merge(new_data, on=["ID", "KEY", "VALUE"], how='outer', indicator=True, suffixes=("_OLD", "_NEW"), sort=False).query("_merge != 'both'")
-    return diff.astype({"VALUE": object}).fillna({"VALUE": ""})  # missing VALUE as "", as in every engine
+    old_data, new_data = [data.assign(VALUE=data["VALUE"].fillna("")) for data in (old_data, new_data)]  # missing VALUE is "", as in every engine
+    return old_data.merge(new_data, on=["ID", "KEY", "VALUE"], how='outer', indicator=True, suffixes=("_OLD", "_NEW"), sort=False).query("_merge != 'both'")
 
 def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
     """Identify differences between two loaded INSTANCES, by thier INSTACE_ID in the same Triplet DataFrame.

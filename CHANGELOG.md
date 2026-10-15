@@ -192,9 +192,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it matched only removed and added ones. File names are read before
   filtering. `file_id_object=None` keeps `Distribution` in the diff. The
   unpackaged `tools/cim-diff.py` script is removed (use `cim-diff`).
-- **Missing VALUE matches itself in `diff_triplets`** (duckdb, polars), as in
-  pandas: duckdb dropped such rows, polars reported them as removed and added.
-  All engines return a missing VALUE as `""`.
+- **Missing VALUE is `""` in `diff_triplets`** (all engines): it matches a
+  missing or `""` VALUE and is returned as `""`. duckdb dropped such rows,
+  polars reported them as removed and added.
 - **`filter_triplets_by_type` returns each row once** (pandas, polars): a type
   declared in several files repeated its objects' rows. pandas is about 3x
   faster.

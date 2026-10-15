@@ -448,7 +448,7 @@ def diff_triplets(old_data, new_data):
     outer-merge shape: columns [ID, KEY, VALUE, INSTANCE_ID_OLD, INSTANCE_ID_NEW, _merge].
     A missing VALUE comes back as ""."""
     # join keys must share a dtype (a Categorical frame meets a String one after edits);
-    # missing VALUE as "" so it matches itself, like the pandas merge
+    # a missing VALUE is "" on both sides, as in every engine
     old, new = [data.with_columns(pl.col("ID", "KEY", "VALUE").cast(pl.String).fill_null(""), pl.lit(True).alias(flag))
                 for data, flag in ((old_data, "_in_old"), (new_data, "_in_new"))]
     merged = old.join(new, on=["ID", "KEY", "VALUE"], how="full", suffix="_NEW", coalesce=True)
