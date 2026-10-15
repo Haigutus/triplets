@@ -957,13 +957,14 @@ def diff_triplets(old_data, new_data):
     -------
     pandas.DataFrame
         DataFrame containing triplets unique to old_data or new_data, with an '_merge' column
-        indicating 'left_only' (in old_data) or 'right_only' (in new_data).
+        indicating 'left_only' (in old_data) or 'right_only' (in new_data). A missing VALUE is "".
 
     Examples
     --------
     >>> diff = diff_triplets(old_data, new_data)
     """
-    return old_data.merge(new_data, on=["ID", "KEY", "VALUE"], how='outer', indicator=True, suffixes=("_OLD", "_NEW"), sort=False).query("_merge != 'both'")
+    diff = old_data.merge(new_data, on=["ID", "KEY", "VALUE"], how='outer', indicator=True, suffixes=("_OLD", "_NEW"), sort=False).query("_merge != 'both'")
+    return diff.astype({"VALUE": object}).fillna({"VALUE": ""})  # missing VALUE as "", as in every engine
 
 def diff_triplets_by_instance(data, INSTANCE_ID_1, INSTANCE_ID_2):
     """Identify differences between two loaded INSTANCES, by thier INSTACE_ID in the same Triplet DataFrame.
@@ -1039,7 +1040,7 @@ def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_
     keys = ["Type", *(context_keys or [])]
     related = pandas.concat([
         data.loc[data["ID"].isin(diff["ID"]) & data["KEY"].isin(keys), ["ID", "KEY", "VALUE"]].assign(side=side)
-        for side, data in (("old", old_data), ("new", new_data))])
+        for side, data in (("old", old_data), ("new", new_data))]).astype({"VALUE": object}).fillna({"VALUE": ""})
     return print_diff(diff[["ID", "KEY", "VALUE"]].assign(_merge=diff["_merge"].astype(str)).itertuples(index=False, name=None),
                       related.itertuples(index=False, name=None), old_labels, new_labels, context_keys, stat)
 

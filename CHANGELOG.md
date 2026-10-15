@@ -194,6 +194,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unpackaged `tools/cim-diff.py` script is removed (use `cim-diff`).
 - **Missing VALUE matches itself in `diff_triplets`** (duckdb, polars), as in
   pandas: duckdb dropped such rows, polars reported them as removed and added.
+  All engines return a missing VALUE as `""`.
 - **`filter_triplets_by_type` returns each row once** (pandas, polars): a type
   declared in several files repeated its objects' rows. pandas is about 3x
   faster.

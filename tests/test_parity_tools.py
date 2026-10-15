@@ -288,6 +288,10 @@ def test_print_triplets_diff_missing_and_repeated_values(engine):
         expected = _printed(lambda: build_engine("pandas", old).print_triplets_diff(new, **options))
         assert expected[0] == count
         assert _printed(lambda: build_engine(engine, old).print_triplets_diff(_to_engine(engine, new), **options)) == expected
+    # a missing VALUE on one side only comes back as "" from every engine
+    for name in ("pandas", engine):
+        diff = to_pandas(build_engine(name, old).diff_triplets(_to_engine(name, new.drop(index=2))))
+        assert diff.loc[(diff["ID"] == "a") & (diff["KEY"] == "x"), "VALUE"].tolist() == [""]
 
 
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────

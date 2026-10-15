@@ -472,7 +472,7 @@ def print_triplets_diff(old_data, new_data, file_id_object="Distribution", file_
                         include_objects=None, context_keys=None, stat=False):
     """Print a unified diff of two triplet datasets; returns the number of
     differing triplets. Same output and options as the pandas engine."""
-    old_data, new_data = [data.with_columns(pl.col("ID", "KEY", "VALUE").cast(pl.String)) for data in (old_data, new_data)]
+    old_data, new_data = [data.with_columns(pl.col("ID", "KEY", "VALUE").cast(pl.String).fill_null("")) for data in (old_data, new_data)]
     old_labels = old_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list()
     new_labels = new_data.filter(pl.col("KEY") == file_id_key)["VALUE"].to_list()
     excluded = [*(exclude_objects or []), *([file_id_object] if file_id_object else [])]

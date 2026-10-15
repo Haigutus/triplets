@@ -254,7 +254,7 @@ def type_tableview(self, type_name, table=None, schema=None, table_name=None, vi
     types = [type_name] if isinstance(type_name, str) else list(type_name)
     sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
     ref = _sql_name(sch, tbl)
-    ids = f"SELECT DISTINCT ID FROM {ref} WHERE KEY = 'Type' AND VALUE IN ({_in_list(types)})" if types else "SELECT NULL AS ID WHERE FALSE"
+    ids = f"SELECT DISTINCT ID FROM {ref} WHERE KEY = 'Type' AND VALUE IN ({_in_list(types)})"
     return _pivot_view(self, view_name or "/".join(types), ids, ref, _ord_expr(self, sch, tbl), sch,
                        multivalue=multivalue)
 
@@ -622,14 +622,14 @@ def diff_triplets(self, new_data, table=None, schema=None, table_name=None):
     _merge column. Returns DuckDBPyRelation."""
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     _materialize(self, new_data, "_new_data")
-    # IS NOT DISTINCT FROM: a missing VALUE matches itself, like the pandas merge
+    # IS NOT DISTINCT FROM: a missing VALUE matches itself, like the pandas merge; returned as ""
     anti = "ANTI JOIN {} o ON o.ID = d.ID AND o.KEY = d.KEY AND o.VALUE IS NOT DISTINCT FROM d.VALUE"
     return self.sql(f"""
-        SELECT ID, KEY, VALUE, INSTANCE_ID AS INSTANCE_ID_OLD, NULL AS INSTANCE_ID_NEW,
+        SELECT ID, KEY, COALESCE(VALUE, '') AS VALUE, INSTANCE_ID AS INSTANCE_ID_OLD, NULL AS INSTANCE_ID_NEW,
                'left_only' AS _merge
         FROM {table_name} d {anti.format("_new_data")}
         UNION ALL BY NAME
-        SELECT ID, KEY, VALUE, NULL AS INSTANCE_ID_OLD, INSTANCE_ID AS INSTANCE_ID_NEW,
+        SELECT ID, KEY, COALESCE(VALUE, '') AS VALUE, NULL AS INSTANCE_ID_OLD, INSTANCE_ID AS INSTANCE_ID_NEW,
                'right_only' AS _merge
         FROM _new_data d {anti.format(table_name)}
     """)
@@ -666,7 +666,7 @@ def print_triplets_diff(self, new_data, file_id_object="Distribution", file_id_k
     self.execute(f"CREATE OR REPLACE TEMP TABLE _diff AS SELECT ID, KEY, VALUE, _merge FROM ({diff.sql_query()})")
     keys = _in_list(["Type", *(context_keys or [])])
     related = self.sql(" UNION ALL ".join(
-        f"SELECT ID, KEY, VALUE, '{side}' FROM {source} WHERE KEY IN ({keys}) AND ID IN (SELECT ID FROM _diff)"
+        f"SELECT ID, KEY, COALESCE(VALUE, ''), '{side}' FROM {source} WHERE KEY IN ({keys}) AND ID IN (SELECT ID FROM _diff)"
         for side, source in (("old", "_diff_old"), ("new", "_diff_new")))).fetchall()
     return print_diff(self.sql("SELECT * FROM _diff").fetchall(), related, *labels, context_keys, stat)
 

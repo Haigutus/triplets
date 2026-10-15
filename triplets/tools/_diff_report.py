@@ -1,18 +1,11 @@
 """Unified-diff report shared by every engine's ``print_triplets_diff``.
 
-Engines filter by type and collect plain rows; ordering and layout live here so
-the output is identical whatever engine computed the diff.
+Engines filter by type and collect plain string rows (missing VALUE as ""); ordering
+and layout live here so the output is identical whatever engine computed the diff.
 """
 from collections import Counter, defaultdict
 
-import pandas
-
 SIGN = {"left_only": "-", "right_only": "+"}
-
-
-def text(value):
-    """Cell as text; missing (None / NaN / NA) is empty, whatever engine produced it."""
-    return "" if pandas.isna(value) else str(value)
 
 
 def print_diff(diff_rows, related_rows, old_labels, new_labels, context_keys=None, stat=False):
@@ -25,7 +18,6 @@ def print_diff(diff_rows, related_rows, old_labels, new_labels, context_keys=Non
     """
     old_types, new_types, context = {}, {}, defaultdict(set)
     for id_, key, value, side in related_rows:
-        value = text(value)
         if key == "Type":
             (old_types if side == "old" else new_types)[id_] = value
         if key in (context_keys or ()):
@@ -33,7 +25,7 @@ def print_diff(diff_rows, related_rows, old_labels, new_labels, context_keys=Non
 
     changes = defaultdict(list)
     for id_, key, value, merge in diff_rows:
-        changes[id_].append((key, SIGN[merge], text(value)))
+        changes[id_].append((key, SIGN[merge], value))
 
     def status(id_):
         if id_ in old_types and id_ not in new_types:
