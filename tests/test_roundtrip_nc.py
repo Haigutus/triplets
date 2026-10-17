@@ -8,6 +8,10 @@ strict comparison holds for both).
 Profile selection is identity-based (``resolve_instance_config``): instances carry
 ``dcat:keyword`` and ``dcterms:conformsTo`` on host ``ap.cim4.eu`` while the schema
 versionIRIs use ``ap-voc.cim4.eu`` — resolution works via keyword only, pinned below.
+
+Known deviations are listed, not skipped: ``EXPECTED_FAILURES`` (strict xfail) and
+``KNOWN_MISMATCH`` (exact dropped keys) both fail on the data or triplets fix that
+resolves them, so a resolved entry cannot stay behind.
 """
 import re
 from pathlib import Path
@@ -23,7 +27,14 @@ from triplets.export_schema import schemas
 NC_DIR = Path("test_data/relicapgrid/Instance")
 SKIP_REASON = "ReliCapGrid NC test data not available (needs git submodule)"
 
-EXCLUDE_KEYWORDS = {"FAP", "PV", "CD", "CommonData", "MO"}  # present in ReliCapGrid but not NCP profiles
+# First dcat:keyword → why its instance cannot roundtrip yet (strict xfail)
+EXPECTED_FAILURES = {
+    # conformsTo declares the profile IRI, the schema has only the vocabulary IRI
+    "CommonData": "https://github.com/Haigutus/triplets/issues/142",
+    "FAP": "https://github.com/Haigutus/triplets/issues/142",
+    # Provenance prototype, no NCP profile (Instance/Svedala/NetworkCode/manifest.ttl:182)
+    "PV": "https://github.com/entsoe/relicapgrid/issues/30",
+}
 
 # Header rows must roundtrip (dcat:Dataset), only parser-injected meta rows are stripped
 _META_TYPES = {"Distribution", "NamespaceMap"}
@@ -35,14 +46,14 @@ ROUNDTRIP_MAPS = {
 
 RESOLUTION_BUNDLES = ["ENTSOE_NC_2_5_0_552_ED1", "ENTSOE_NC_2_5_0_552_ED2"]
 
-# ReliCapGrid instances that do not conform to the released NCP 2.5.0 profiles: rows with
-# these keys are dropped on export. ER: concrete EQ classes (ACLineSegment, RatioTapChanger,
-# ...) where the ER profile declares only Equipment / TapChanger / RegulatingCondEq, so
-# the whole object ("Type" too) is dropped. SAR: cim:IdentifiedObject objects not in the profile.
+# Keys of rows the NCP 2.5.0 profiles do not define; export drops them.
+# ER: concrete EQ classes (ACLineSegment, RatioTapChanger, ...) that the ER RDFS declares only
+# as Description / abstract or not at all, so the whole object ("Type" too) is dropped; APL
+# follows up on the RDFS, https://github.com/entsoe/relicapgrid/issues/340
 KNOWN_MISMATCH = {
     ("Belgovia", "ER"): {"Type", "Equipment.Circuit"},
     ("Espheim", "ER"): {"Type", "TapChanger.TapChangerController"},
-    ("Jotunheim", "SAR"): {"IdentifiedObject.mRID"},
+    ("Jotunheim", "SAR"): {"IdentifiedObject.mRID"},  # https://github.com/entsoe/relicapgrid/issues/400
     ("Svedala", "ER"): {"Type", "RegulatingCondEq.EquipmentController", "TapChanger.TapChangerController"},
 }
 
@@ -58,16 +69,21 @@ def _nc_instances():
     paths = [*NC_DIR.glob("*/NetworkCode/*.xml"), *NC_DIR.glob("*/NetworkCode/cimxml/*.xml")]
     for path in sorted(paths, key=lambda p: (len(p.name), p.name)):
         keyword = _keyword(path)
-        if keyword and keyword not in EXCLUDE_KEYWORDS:
+        if keyword:
             instances.setdefault((path.relative_to(NC_DIR).parts[0], keyword), path)
     return instances
 
 
-NC_PARAMS = [pytest.param(path, tso, keyword, id=f"{tso}-{keyword}")
+NC_PARAMS = [pytest.param(path, tso, keyword, id=f"{tso}-{keyword}",
+                          marks=pytest.mark.xfail(strict=True, reason=EXPECTED_FAILURES[keyword])
+                          if keyword in EXPECTED_FAILURES else ())
              for (tso, keyword), path in sorted(_nc_instances().items())]
 
 if not NC_PARAMS:
     pytest.skip(SKIP_REASON, allow_module_level=True)
+
+_stale = set(EXPECTED_FAILURES) - {keyword for _, _, keyword in (param.values for param in NC_PARAMS)}
+assert not _stale, f"EXPECTED_FAILURES keywords no instance has: {_stale}"
 
 
 def _canon(data):

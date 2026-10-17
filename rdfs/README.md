@@ -65,12 +65,9 @@ Generation is deterministic: rerunning `cim_rdfs_to_json` must produce no diff
   fixed in NCP 2.5.0 (`ENTSOE_NC_2.5.0`) by
   [PR #99](https://github.com/entsoe/application-profiles-library/pull/99) using
   `schema:domainIncludes` for reused external terms. 2.4.2 stays unpatched.
-- Several ReliCapGrid example instances do not conform to the released NCP 2.4.x
-  profiles (draft-only attributes; `AssociationUsed=No` directions serialized) — the
-  cases for the pinned submodule commit live in `KNOWN_MISMATCH` in
-  `tests/test_roundtrip_nc.py`. Upstream fixed most of them in the 2026-07-15
-  restructure (which also moved instances back to
-  `Instance/<TSO>/NetworkCode/cimxml/`); the surviving cases are reported in
-  [relicapgrid#340](https://github.com/entsoe/relicapgrid/issues/340). Bumping the
-  submodule past that restructure requires updating the data paths in
-  `tests/conftest.py`, `tests/_parity.py` and `tests/test_roundtrip_nc.py`.
+- Several ReliCapGrid example instances (`cgmes-3.0_ncp-2.5_tc-2.0`) do not conform to
+  the released NCP 2.5.0 profiles; each case is listed with its upstream issue in
+  `EXPECTED_FAILURES` / `KNOWN_MISMATCH` in `tests/test_roundtrip_nc.py`
+  ([relicapgrid#30](https://github.com/entsoe/relicapgrid/issues/30),
+  [#340](https://github.com/entsoe/relicapgrid/issues/340),
+  [#400](https://github.com/entsoe/relicapgrid/issues/400)).

@@ -176,7 +176,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `iri_polars`, `iri_duckdb`) turned `<dcterms:conformsTo rdf:resource="http://iec.ch/TC57/CIM100#"/>`
   into `""`: an `http` IRI with `#` and nothing after it has no local name.
 - Tests use the ReliCapGrid `cgmes-3.0_ncp-2.5_tc-2.0` release (was a February
-  commit); the NC round trip runs against the NCP 2.5.0 bundles.
+  commit); the NC round trip runs against the NCP 2.5.0 bundles. Instances that cannot
+  round-trip yet are strict xfails linked to their issue, not skipped.
 - **`cim-spreadsheet` leaves out the parser metadata** (`NamespaceMap`,
   `Distribution`, which holds the source path) like `cim-diff`, with the same
   options from one shared definition in
