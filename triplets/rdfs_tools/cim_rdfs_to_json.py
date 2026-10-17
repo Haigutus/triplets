@@ -324,6 +324,9 @@ def get_metadata(data):
             metadata["keyword"] = metadata["shortName"]
             metadata["versionInfo"] = uml.split("v")[-1] if (uml := metadata.get("entsoeUML")) else ""
             metadata["modified"] = metadata["date"]
+            # The ENTSO-E profile URI headers declare in Model.profile (EQ / EQBD: the core one, FH: the European one)
+            metadata["versionIRI"] = next((metadata[key] for key in ("entsoeURI", "entsoeURIcore", "europeanProfileURI")
+                                           if key in metadata), "")
 
     metadata = pandas.concat([metadata, category_metadata])
     metadata["title"] = data.type_tableview("Distribution").label.iloc[0].rsplit("/",1)[-1]
@@ -350,6 +353,29 @@ def export_single_profile(path, serialization_version="552_ED2", additional_meta
         json.dump(conf_dict, file_object, indent=4)
 
     return conf_dict
+
+def profile_version_iris(prof_dir):
+    """Map each IRI that identifies a profile's RDFS to the PROF profile's ``owl:versionIRI``.
+
+    The keys are the profile's own versionIRI (CGMES: the RDFS reuses it) and its
+    ``prof:hasResource`` entries (NCP: the vocabulary resource is the RDFS versionIRI).
+    A key two profiles claim (shared constraints) identifies neither and is dropped.
+    No PROF directory gives {}.
+    """
+    files = rdfs_tools.list_of_files(str(prof_dir), ".rdf") if Path(prof_dir).is_dir() else []
+    if not files:
+        return {}
+
+    data = load_all_to_dataframe(files)
+    links = data[data.KEY.isin(["versionIRI", "hasResource"])]
+    version_of = dict(links[links.KEY == "versionIRI"][["ID", "VALUE"]].values)
+
+    index, ambiguous = {}, set()
+    for profile, link in links[links.ID.isin(version_of)][["ID", "VALUE"]].values:
+        if index.setdefault(link, version_of[profile]) != version_of[profile]:
+            ambiguous.add(link)
+    return {link: version for link, version in index.items() if link not in ambiguous}
+
 
 def index_by_keyword(merged_profiles):
     """Index profiles by their keyword; profiles without one are dropped with an error."""
@@ -409,6 +435,7 @@ def build_bundle(name, spec, serialization_versions=("552_ED1", "552_ED2")):
     files_list = [file for file in rdfs_tools.list_of_files(str(RDFS_ROOT / spec["rdfs_dir"]), ".rdf")
                   if Path(file).name not in spec.get("exclude", set())]
     data = load_all_to_dataframe(files_list)
+    profile_iris = profile_version_iris(RDFS_ROOT / spec["rdfs_dir"] / "PROF")
 
     for serialization_version in serialization_versions:
 
@@ -416,6 +443,11 @@ def build_bundle(name, spec, serialization_versions=("552_ED1", "552_ED2")):
         indexed_profiles = spec["index"](merged_profiles)
 
         for keyword, profile in indexed_profiles.items():
+            # Profile IRI instances declare: from PROF when present, else the RDFS versionIRI
+            metadata = profile["ProfileMetadata"]
+            if version_iri := metadata.get("versionIRI"):
+                metadata["profileVersionIRI"] = profile_iris.get(version_iri, version_iri)
+
             # Insert Header entries into each profile, only if missing
             profile.update({key: value for key, value in header_profile.items() if key not in profile})
 

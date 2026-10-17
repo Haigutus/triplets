@@ -236,3 +236,55 @@ def test_get_namespace_and_name_prefixed_name_is_not_absolute():
     for text in ("cim:Foo", "M:1..1"):
         with pytest.raises(ValueError, match="absolute IRI"):
             rdfs_tools.get_namespace_and_name(text)
+
+
+_PROF = """<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:prof="http://www.w3.org/ns/dx/prof/">
+  <rdf:Description rdf:about="{profile}">
+    <owl:versionIRI rdf:resource="{version}"/>
+    <prof:hasResource rdf:resource="{vocabulary}"/>
+    <prof:hasResource rdf:resource="https://ap-con.cim4.eu/DatasetMetadata-Simple/3.0"/>
+  </rdf:Description>
+</rdf:RDF>
+"""
+
+
+def test_profile_version_iris_links_ncp_and_cgmes_shapes(tmp_path):
+    """NCP: the vocabulary resource is the RDFS versionIRI. CGMES: the RDFS versionIRI is
+    the profile's own. A resource two profiles share (constraints) identifies neither."""
+    from triplets.rdfs_tools.cim_rdfs_to_json import profile_version_iris
+    (tmp_path / "ER.rdf").write_text(_PROF.format(
+        profile="https://ap.cim4.eu/EquipmentReliability",
+        version="https://ap.cim4.eu/EquipmentReliability/2.5",
+        vocabulary="https://ap-voc.cim4.eu/EquipmentReliability/2.5"), encoding="utf-8")
+    (tmp_path / "EQ.rdf").write_text(_PROF.format(
+        profile="http://iec.ch/TC57/ns/CIM/CoreEquipment-EU#Ontology",
+        version="http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0",
+        vocabulary="http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0/vocabulary"), encoding="utf-8")
+
+    iris = profile_version_iris(tmp_path)
+
+    assert iris["https://ap-voc.cim4.eu/EquipmentReliability/2.5"] == "https://ap.cim4.eu/EquipmentReliability/2.5"
+    assert iris["http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0"] == "http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0"
+    assert "https://ap-con.cim4.eu/DatasetMetadata-Simple/3.0" not in iris
+    assert profile_version_iris(tmp_path / "missing") == {}
+
+
+@pytest.mark.parametrize("bundle", ["ENTSOE_CGMES_2.4.15", "ENTSOE_CGMES_3.0.0", "ENTSOE_NC_2.4.1", "ENTSOE_NC_2.5.0"])
+def test_shipped_bundles_carry_both_iris(bundle):
+    """Every section has the RDFS versionIRI (CGMES 2.4.15: its entsoeURI) and the
+    profileVersionIRI headers declare (PROF if present, else the versionIRI); CGMES uses
+    one IRI for both, NC two."""
+    import json
+    import triplets.export_schema
+    for serialization in ("552_ED1", "552_ED2"):
+        path = Path(triplets.export_schema.__file__).parent / f"{bundle}_{serialization}.json"
+        sections = {name: section["ProfileMetadata"] for name, section in json.loads(path.read_text()).items()
+                    if isinstance(section, dict) and "ProfileMetadata" in section}
+        missing = [name for name, metadata in sections.items()
+                   if not (metadata.get("versionIRI") and metadata.get("profileVersionIRI"))]
+        assert sections and not missing, (path.name, missing)
+        same = {metadata["versionIRI"] == metadata["profileVersionIRI"] for metadata in sections.values()}
+        assert same == ({True} if bundle.startswith("ENTSOE_CGMES") else {False}), path.name

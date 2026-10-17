@@ -29,7 +29,7 @@ HEADER_TYPES = ("FullModel", "Dataset")
 
 # Legacy fallback only: maps a substring of old-style (CGMES 2.4.15)
 # Model.profile URLs to the schema section. Modern schemas resolve via their
-# embedded ProfileMetadata (keyword / versionIRI / conformsTo) instead.
+# embedded ProfileMetadata (keyword / versionIRI / profileVersionIRI / conformsTo) instead.
 PROFILE_URL_MAP = {
     "EquipmentCore": "EQ",
     "EquipmentOperation": "EQ",
@@ -50,9 +50,11 @@ def _profile_identity_index(rdf_map):
     """Map every identifier a schema section declares to the section name.
 
     Sections identify themselves via their key ("EQ") and the ProfileMetadata
-    entry: keyword ("EQ"), versionIRI (the profile URI, matches old-header
-    Model.profile), conformsTo. The schema defines what to match — no
-    hardcoded knowledge per CGMES generation. An identifier several sections
+    entry: keyword ("EQ"), versionIRI (the RDFS vocabulary's own IRI),
+    profileVersionIRI (the profile IRI headers declare in Model.profile /
+    conformsTo: from PROF when the bundle has it, else equal to versionIRI;
+    they differ only in NC), conformsTo. The schema defines what to
+    match — no hardcoded knowledge per CGMES generation. An identifier several sections
     share (e.g. the IEC document URN every CGMES 3.0 section carries as
     conformsTo) identifies none of them and is dropped from the index.
     """
@@ -61,8 +63,8 @@ def _profile_identity_index(rdf_map):
         if not isinstance(section, dict):
             continue
         metadata = section.get("ProfileMetadata", {})
-        identifiers = [section_name, metadata.get("keyword"),
-                       metadata.get("versionIRI"), metadata.get("conformsTo")]
+        identifiers = [section_name, metadata.get("keyword"), metadata.get("versionIRI"),
+                       metadata.get("profileVersionIRI"), metadata.get("conformsTo")]
         for identifier in identifiers:
             if isinstance(identifier, str) and identifier:
                 if index.setdefault(identifier, section_name) != section_name:

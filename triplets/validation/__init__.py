@@ -37,7 +37,7 @@ from typing import Any
 import pandas
 
 from .._engine_detect import flavor
-from .._header import PROFILE_KEYS as _HEADER_KEYS
+from .._header import PROFILE_KEYS as _HEADER_KEYS, profile_sections
 from .._registry import EngineRegistry
 from ..iri import CIM_NS, TYPE_KEY, load_rdf_map
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
@@ -364,7 +364,7 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, u
     each profile its own header declares: the header's profile-identity
     fields (``conformsTo``, ``Model.profile``, ``keyword``,
     ``Model.messageType``) are matched against the schema profiles' declared
-    identity (versionIRI / conformsTo / keyword / section key; legacy 2.4
+    identity (versionIRI / profileVersionIRI / conformsTo / keyword / section key; legacy 2.4
     profile URLs by substring). One instance may declare several profiles —
     each runs on its own, so per-profile constraints (e.g. mRID 1..1 in
     every CGMES 3.0 profile) are checked against that instance's rows alone.
@@ -399,7 +399,7 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, u
 
     unresolved, runs = [], []
     for instance, hints in _instance_hints(data, table_name).items():
-        sections = chosen if chosen is not None else _match_profiles(hints, compiled_set)
+        sections = chosen if chosen is not None else profile_sections(hints, compiled_set.profiles, compiled_set.index)
         if not sections:
             unresolved.append(f"instance {instance}: no schema profile matched "
                               f"(hints: {hints[:4]})")
@@ -451,24 +451,6 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, u
         "source_shapes": {},
     }
     return violations
-
-
-def _match_profiles(hints, compiled_set):
-    """Sections a header's hints resolve to, in hint-priority order — exact
-    identity first, the legacy 2.4 profile-URL substrings as fallback."""
-    sections = []
-    for hint in hints:
-        section = compiled_set.section(hint)
-        if section and section not in sections:
-            sections.append(section)
-    if not sections:
-        from .._header import PROFILE_URL_MAP
-        for hint in hints:
-            for url_part, section in PROFILE_URL_MAP.items():
-                if url_part in hint and section in compiled_set.profiles \
-                        and section not in sections:
-                    sections.append(section)
-    return sections
 
 
 def _instance_hints(data, table_name="triplets"):

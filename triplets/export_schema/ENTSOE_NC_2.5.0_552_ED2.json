@@ -21,6 +21,7 @@
             "comment": "This package contains datatypes used only in the RDFS header.",
             "label": "DocAssessedElementProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/AssessedElement/2.4",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -1513,6 +1514,7 @@
             "comment": "This package contains datatypes used only in the RDFS header.",
             "label": "DocAvailabilityScheduleProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/AvailabilitySchedule/2.4",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -3857,6 +3859,7 @@
             "comment": "This package contains datatypes used only in the RDFS header.",
             "label": "DocContingencyProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/Contingency/2.3",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -4790,6 +4793,7 @@
             "comment": "This package contains equipment reliability profile.",
             "label": "EquipmentReliabilityProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/EquipmentReliability/2.5",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -18280,6 +18284,7 @@
             "comment": "This package contains the grid disturbance profile.",
             "label": "GridDisturbanceProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/GridDisturbance/1.1",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -20179,6 +20184,7 @@
             "comment": "This package contains impact assessment matrix profile.",
             "label": "ImpactAssessmentMatrixProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/ImpactAssessmentMatrix/2.4",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -21298,6 +21304,7 @@
             "comment": "This package contains monitoring area profile.",
             "label": "MonitoringAreaProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/MonitoringArea/2.3",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -22210,6 +22217,7 @@
             "comment": "This package contains the equipment object registry profile.",
             "label": "ObjectRegistryProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/ObjectRegistry/3.0",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -23244,6 +23252,7 @@
             "comment": "This package contains the power schedule profile.",
             "label": "PowerScheduleProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/PowerSchedule/2.5",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -25654,6 +25663,7 @@
             "comment": "This package contains power system project profile.",
             "label": "PowerSystemProjectProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/PowerSystemProject/2.3",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -26780,6 +26790,7 @@
             "comment": "This package contains remedial action profile.",
             "label": "RemedialActionProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/RemedialAction/2.5",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -30359,6 +30370,7 @@
             "comment": "This package contains remedial action schedule profile.",
             "label": "RemedialActionScheduleProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/RemedialActionSchedule/2.4",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -33676,6 +33688,7 @@
             "comment": "This package contains the security analysis result profile.\nThis profile is not intended to replace the Topology (TP) and State Variables (SV) profiles. Its intention is to exchange power flow result that is relevant for security optimization, either through violation or through a loading threshold. Systems should not use this profile for dumping a full database. The modeling is optimized to have the minimum size in addition to a well defined value definition (e.g. active power, apparent power,etc.).\nRecommendation: If the terminals are connected with zero impedance, it is recommended to export only one terminal with a voltage (e.g. the terminal of a BusbarSection).\nThe connection between Contingency and Remedial Action is given by the Remedial Action Profile. The connection between AssessedElement and PowerFlowResult is given by the OperationalLimit.",
             "label": "SecurityAnalysisResultProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/SecurityAnalysisResult/2.5",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -34693,6 +34706,7 @@
             "comment": "This package contains sensitivity matrix profile.",
             "label": "SensitivityMatrixProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/SensitivityMatrix/2.3",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -35647,6 +35661,7 @@
             "comment": "This package contains the state instruction schedule profile.",
             "label": "StateInstructionScheduleProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/StateInstructionSchedule/2.5",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -44778,6 +44793,7 @@
             "comment": "This package contains steady state hypothesis schedule profile.",
             "label": "SteadyStateHypothesisScheduleProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/SteadyStateHypothesisSchedule/1.1",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",
@@ -49852,6 +49868,7 @@
             "comment": "This package contains steady state instruction profile.",
             "label": "SteadyStateInstructionProfile",
             "serialization": "552_ED2",
+            "profileVersionIRI": "https://ap.cim4.eu/SteadyStateInstruction/2.5",
             "header": {
                 "identifier": "2028a9f0-2092-44d5-8858-dd856cc05626",
                 "keyword": "DM",

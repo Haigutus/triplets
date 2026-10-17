@@ -4,7 +4,7 @@ the same vectorized engines that run SHACL shapes.
 
 The schema JSON is a SET of profiles; ``compile_schema`` compiles every
 contained profile separately — one :class:`CompiledShapes` per section,
-addressable through the profiles' own declared identifiers (versionIRI /
+addressable through the profiles' own declared identifiers (versionIRI / profileVersionIRI /
 conformsTo URI, keyword, section key). **Profiles are never merged**: an
 instance file is validated per profile it declares, against that profile's
 own constraints (``validate_schema`` orchestrates this per INSTANCE_ID).
@@ -52,7 +52,7 @@ class CompiledSchema:
     """All profiles of one export schema, compiled — never merged.
 
     ``profiles`` holds one CompiledShapes per section; ``index`` maps every
-    identifier a profile declares (versionIRI / conformsTo URI, keyword,
+    identifier a profile declares (versionIRI / profileVersionIRI / conformsTo URI, keyword,
     section key — the same identity the instance headers reference) to its
     section, so instance-declared profile URIs look up directly.
     """
