@@ -49,7 +49,7 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
         file_name : from the instance 'label' (source filename) or a new UUID
         namespace_map : given > instance NamespaceMap > schema ProfileNamespaceMap
         instance_rdf_map : profile section matched by the schema's own identity
-            metadata (section key / keyword / versionIRI / conformsTo) against
+            metadata (section key / keyword / versionIRI / profileVersionIRI / conformsTo) against
             the instance header (Model.messageType, keyword, Model.profile,
             conformsTo); legacy URL-substring fallback for 2.4.15-era URLs;
             schema root when nothing matches

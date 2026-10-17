@@ -6,8 +6,9 @@ must equal the source exactly (the parser normalises ED1/ED2 identifier forms, s
 strict comparison holds for both).
 
 Profile selection is identity-based (``resolve_instance_config``): instances carry
-``dcat:keyword`` and ``dcterms:conformsTo`` on host ``ap.cim4.eu`` while the schema
-versionIRIs use ``ap-voc.cim4.eu`` — resolution works via keyword only, pinned below.
+``dcat:keyword`` and ``dcterms:conformsTo`` with the PROF profile IRI (``ap.cim4.eu``),
+which the bundles hold as ``profileVersionIRI`` next to the RDFS ``versionIRI``
+(``ap-voc.cim4.eu``) — a keyword that names content, not the profile, still resolves.
 
 Known deviations are listed, not skipped: ``EXPECTED_FAILURES`` (strict xfail) and
 ``KNOWN_MISMATCH`` (exact dropped keys) both fail on the data or triplets fix that
@@ -29,9 +30,6 @@ SKIP_REASON = "ReliCapGrid NC test data not available (needs git submodule)"
 
 # First dcat:keyword → why its instance cannot roundtrip yet (strict xfail)
 EXPECTED_FAILURES = {
-    # conformsTo declares the profile IRI, the schema has only the vocabulary IRI
-    "CommonData": "https://github.com/Haigutus/triplets/issues/142",
-    "FAP": "https://github.com/Haigutus/triplets/issues/142",
     # Provenance prototype, no NCP profile (Instance/Svedala/NetworkCode/manifest.ttl:182)
     "PV": "https://github.com/entsoe/relicapgrid/issues/30",
 }
@@ -53,8 +51,10 @@ RESOLUTION_BUNDLES = ["ENTSOE_NC_2_5_0_552_ED1", "ENTSOE_NC_2_5_0_552_ED2"]
 KNOWN_MISMATCH = {
     ("Belgovia", "ER"): {"Type", "Equipment.Circuit"},
     ("Espheim", "ER"): {"Type", "TapChanger.TapChangerController"},
-    ("Jotunheim", "SAR"): {"IdentifiedObject.mRID"},  # https://github.com/entsoe/relicapgrid/issues/400
     ("Svedala", "ER"): {"Type", "RegulatingCondEq.EquipmentController", "TapChanger.TapChangerController"},
+    ("Jotunheim", "SAR"): {"IdentifiedObject.mRID"},  # https://github.com/entsoe/relicapgrid/issues/400
+    ("commonData", "CommonData"): {"TieCorridor.BiddingZoneBorder"},  # https://github.com/entsoe/relicapgrid/issues/399
+    ("Svedala", "FAP"): {"wasAssociatedWith"},  # FAP prototype, https://github.com/entsoe/relicapgrid/issues/30
 }
 
 
@@ -113,18 +113,23 @@ def test_roundtrip_ncp_2_5_0(path, tso, keyword, serialization):
     _assert_roundtrip(path, ROUNDTRIP_MAPS[serialization], KNOWN_MISMATCH.get((tso, keyword), set()))
 
 
+# dcat:keyword naming content based on a profile; the profile comes from conformsTo
+CONTENT_KEYWORDS = {"CommonData": "ER", "FAP": "RAS"}
+
+
 @pytest.mark.parametrize("bundle", RESOLUTION_BUNDLES)
 @pytest.mark.parametrize("path,tso,keyword", NC_PARAMS)
 def test_profile_resolution(path, tso, keyword, bundle):
-    """Each instance resolves to the schema section matching its dcat:keyword."""
+    """Each instance resolves to the schema section of the profile it declares."""
     data = pandas.read_RDF([str(path)])
     _, _, section = resolve_instance_config(data, load_rdf_map(getattr(schemas, bundle)))
-    assert section.get("ProfileMetadata", {}).get("keyword") == keyword
+    assert section.get("ProfileMetadata", {}).get("keyword") == CONTENT_KEYWORDS.get(keyword, keyword)
 
 
-def test_conforms_to_alone_does_not_match():
-    """Instances declare conformsTo on ap.cim4.eu, schema versionIRIs use ap-voc.cim4.eu —
-    identity matching relies on the keyword, the conformsTo URI finds no section."""
-    index = _profile_identity_index(load_rdf_map(schemas.ENTSOE_NC_2_5_0_552_ED1))
-    assert "AE" in index
-    assert "https://ap.cim4.eu/AssessedElement/2.4" not in index
+@pytest.mark.parametrize("bundle", RESOLUTION_BUNDLES)
+def test_conforms_to_profile_iri_matches(bundle):
+    """The PROF profile IRI instances declare in conformsTo identifies the section, as does
+    the RDFS versionIRI."""
+    index = _profile_identity_index(load_rdf_map(getattr(schemas, bundle)))
+    assert index["https://ap.cim4.eu/AssessedElement/2.4"] == "AE"
+    assert index["https://ap-voc.cim4.eu/AssessedElement/2.4"] == "AE"

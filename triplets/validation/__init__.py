@@ -364,7 +364,7 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, u
     each profile its own header declares: the header's profile-identity
     fields (``conformsTo``, ``Model.profile``, ``keyword``,
     ``Model.messageType``) are matched against the schema profiles' declared
-    identity (versionIRI / conformsTo / keyword / section key; legacy 2.4
+    identity (versionIRI / profileVersionIRI / conformsTo / keyword / section key; legacy 2.4
     profile URLs by substring). One instance may declare several profiles —
     each runs on its own, so per-profile constraints (e.g. mRID 1..1 in
     every CGMES 3.0 profile) are checked against that instance's rows alone.

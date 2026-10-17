@@ -165,6 +165,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   no longer prefixed with `urn:uuid:` by the N-Quads graph term.
 
 ### Fixed
+- **NC instances resolve their profile from `dcterms:conformsTo`**, not only from
+  `dcat:keyword` ([#142](https://github.com/Haigutus/triplets/issues/142)). The NC
+  2.4.1 / 2.5.0 bundles gain `ProfileMetadata.profileVersionIRI`
+  (`https://ap.cim4.eu/<Profile>/<ver>`, from the PROF descriptors now snapshotted in
+  `rdfs/<bundle>/PROF/`) next to the RDFS `versionIRI` (`https://ap-voc.cim4.eu/...`),
+  and profile resolution matches both. A dataset whose keyword names its content
+  (ReliCapGrid `CommonData`, `FAP`) was exported against no profile and lost all rows.
 - **`scale_load`** works without `NonConformLoad` objects (was `TypeError`).
 - **`get_metadata_from_filename`** parses the file name, not the whole
   `label` path: a directory with `_` broke the split and
