@@ -324,7 +324,7 @@ def get_metadata(data):
             metadata["keyword"] = metadata["shortName"]
             metadata["versionInfo"] = uml.split("v")[-1] if (uml := metadata.get("entsoeUML")) else ""
             metadata["modified"] = metadata["date"]
-            # The ENTSO-E profile URI headers declare in Model.profile (EQ / EQBD: the core one)
+            # The ENTSO-E profile URI headers declare in Model.profile (EQ / EQBD: the core one, FH: the European one)
             metadata["versionIRI"] = next((metadata[key] for key in ("entsoeURI", "entsoeURIcore", "europeanProfileURI")
                                            if key in metadata), "")
 

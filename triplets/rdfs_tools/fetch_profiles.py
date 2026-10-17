@@ -1,4 +1,4 @@
-"""Fetch profile RDFS snapshots from upstream release branches into rdfs/<bundle>/.
+"""Fetch profile RDFS snapshots from upstream refs into rdfs/<bundle>/.
 
 The PROF descriptors (``prof_path``) go to rdfs/<bundle>/PROF/: they hold the profile
 IRI instances declare in ``dcterms:conformsTo``, which the RDFS does not carry. A spec

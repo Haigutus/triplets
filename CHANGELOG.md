@@ -168,7 +168,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **NC instances resolve their profile from `dcterms:conformsTo`**, not only from
   `dcat:keyword` ([#142](https://github.com/Haigutus/triplets/issues/142)). Every
   bundle section now has `ProfileMetadata.versionIRI` (the RDFS vocabulary IRI; CGMES
-  2.4.15: its `entsoeURI`, was missing) and `profileVersionIRI` (the profile IRI headers
+  2.4.15: its ENTSO-E profile URI constant, `entsoeURI` / `entsoeURIcore` / `europeanProfileURI`, was missing) and `profileVersionIRI` (the profile IRI headers
   declare: from the optional PROF descriptors in `rdfs/<bundle>/PROF/`, else the
   `versionIRI`), and profile resolution matches both. NC: `https://ap.cim4.eu/<Profile>/<ver>`
   vs `https://ap-voc.cim4.eu/...`; CGMES: the same IRI. A dataset whose keyword names its content

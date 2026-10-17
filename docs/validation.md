@@ -319,7 +319,7 @@ compiled.get("http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0")  # lookup by prof
 **Semantics: per instance, per declared profile — profiles are never merged.**
 The schema JSON is a SET of profiles; `compile_schema` compiles every section
 separately into a `CompiledSchema` addressable by each profile's own declared
-identity (versionIRI / conformsTo URI / keyword / section key). Every
+identity (versionIRI / profileVersionIRI / conformsTo URI / keyword / section key). Every
 INSTANCE_ID is validated on its own (the scope filter) against each profile
 its header declares — resolved from `conformsTo` (NC dcat headers),
 `Model.profile`/`Model.messageType` (CGMES), `keyword`, with the legacy 2.4

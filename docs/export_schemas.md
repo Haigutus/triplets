@@ -17,7 +17,7 @@ One JSON per (profile release, IEC 61970-552 serialization edition):
 | Bundle | Source | Runtime attribute |
 |--------|--------|-------------------|
 | `ENTSOE_CGMES_2.4.15_552_ED1/ED2.json` | `rdfs/ENTSOE_CGMES_2.4.15/` (legacy hand-collected) | `schemas.ENTSOE_CGMES_2_4_15_552_ED1/ED2` |
-| `ENTSOE_CGMES_3.0.0_552_ED1/ED2.json` | `rdfs/ENTSOE_CGMES_3.0.0/` (legacy hand-collected) | `schemas.ENTSOE_CGMES_3_0_0_552_ED1/ED2` |
+| `ENTSOE_CGMES_3.0.0_552_ED1/ED2.json` | `rdfs/ENTSOE_CGMES_3.0.0/` (legacy hand-collected RDFS; `PROF/` fetched, commit-pinned in `PROF/SOURCE.json`) | `schemas.ENTSOE_CGMES_3_0_0_552_ED1/ED2` |
 | `ENTSOE_NC_2.4.1_552_ED1/ED2.json` | `rdfs/ENTSOE_NC_2.4.1/` — snapshot of [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) branch `ncp-v2-4-1`, commit-pinned in `SOURCE.json` | `schemas.ENTSOE_NC_2_4_1_552_ED1/ED2` |
 | `ENTSOE_NC_2.5.0_552_ED1/ED2.json` | `rdfs/ENTSOE_NC_2.5.0/` — NCP 2.5.0, release branch `ncp-v2-5-0` | `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2` |
 
@@ -61,8 +61,8 @@ A bundle is a dict of profile sections keyed by profile keyword
 
 ```
 "AE": {
-    "ProfileMetadata":     keyword, title, versionInfo, versionIRI, conformsTo,
-                           serialization, ... + "header": identity of the injected
+    "ProfileMetadata":     keyword, title, versionInfo, versionIRI, profileVersionIRI,
+                           conformsTo, serialization, ... + "header": identity of the injected
                            header profile (keyword, title, identifier, versionInfo,
                            versionIRI)
     "ProfileNamespaceMap": prefix -> namespace (profile + header, merged)
@@ -103,7 +103,7 @@ resolve_instance_config(instance_data, rdf_map)
 |
 |-> _profile_identity_index(rdf_map)
 |   every section registers: section key, ProfileMetadata.keyword,
-|   versionIRI, conformsTo -> section name
+|   versionIRI, profileVersionIRI, conformsTo -> section name
 |
 |-> _instance_profile_hints(instance_data)
 |   header fields in priority order:
@@ -114,9 +114,14 @@ resolve_instance_config(instance_data, rdf_map)
 '-> fallback: schema root (warns)
 ```
 
-Note: NC instances declare `dcterms:conformsTo` on host `ap.cim4.eu` while the
-schema `versionIRI` uses `ap-voc.cim4.eu`, so NC resolution works via
-`dcat:keyword` (pinned by `tests/test_roundtrip_nc.py`).
+`versionIRI` is the RDFS vocabulary's own IRI; `profileVersionIRI` is the profile
+IRI headers declare. With W3C PROF descriptors in `rdfs/<bundle>/PROF/` it is the
+`owl:versionIRI` of the `prof:Profile` whose own `owl:versionIRI` or one of whose
+`prof:hasResource` equals the RDFS `versionIRI`; without PROF it equals `versionIRI`.
+They differ only in NC: an NC dataset declares `dcterms:conformsTo`
+`https://ap.cim4.eu/<Profile>/<ver>`, its vocabulary is `https://ap-voc.cim4.eu/...`.
+CGMES 2.4.15 has no RDFS ontology header; its `versionIRI` is the ENTSO-E profile URI
+constant (`entsoeURI`; EQ / EQBD `entsoeURIcore`, FH `europeanProfileURI`).
 
 ## Generation Pipeline
 
@@ -126,10 +131,12 @@ as arguments and default to all:
 ```
 python -m triplets.rdfs_tools.fetch_profiles [bundle ...]
 |
-|-> SOURCES registry: name -> {repo, ref, path}
-|-> shallow sparse clone of the upstream ref
-|-> wipe + recreate rdfs/<bundle>/, copy *.rdf
-'-> write rdfs/<bundle>/SOURCE.json  {repo, ref, commit, path, fetched}
+|-> SOURCES registry: name -> {repo, ref (branch or commit), path?, prof_path?}
+|-> shallow sparse fetch of the upstream ref
+|-> per path: wipe + recreate rdfs/<bundle>/ (path), rdfs/<bundle>/PROF/ (prof_path),
+|   copy *.rdf
+'-> write SOURCE.json {repo, ref, commit, path, prof_path, fetched} into the first
+    of them (PROF/ for a PROF-only spec)
 
 python -m triplets.rdfs_tools.cim_rdfs_to_json [bundle ...]
 |
@@ -143,6 +150,8 @@ python -m triplets.rdfs_tools.cim_rdfs_to_json [bundle ...]
     |-> parse all profile RDFS in rdfs_dir (minus exclude)
     |   parse(..., engine="python_lxml_pandas", local_resources=False)
     |   # lossless: ranges/inheritance/stereotypes are cross-namespace URIs
+    |
+    |-> profile_version_iris(rdfs_dir/PROF)   # RDFS versionIRI -> profile versionIRI
     |
     '-> per serialization edition (552_ED1, 552_ED2):
         |-> convert(): one section per RDFS profile (classes, attributes,
@@ -192,10 +201,10 @@ requires exact row-set equality — deviations are named per case in a
 ```
 rdfs/                              # RDFS sources (committed snapshots)
 |-- README.md                      # provenance, onboarding, upstream defects
-|-- ENTSOE_NC_2.4.1/               # fetched: *.rdf + SOURCE.json commit pin
-|-- ENTSOE_NC_2.5.0/               # fetched: *.rdf + SOURCE.json commit pin
+|-- ENTSOE_NC_2.4.1/               # fetched: *.rdf + PROF/ + SOURCE.json commit pin
+|-- ENTSOE_NC_2.5.0/               # fetched: *.rdf + PROF/ + SOURCE.json commit pin
 |-- ENTSOE_CGMES_2.4.15/           # legacy hand-collected
-|-- ENTSOE_CGMES_3.0.0/            # legacy hand-collected
+|-- ENTSOE_CGMES_3.0.0/            # legacy hand-collected RDFS; fetched PROF/ + SOURCE.json
 '-- ENTSOE_FH/                     # header profiles for the CGMES bundles
 
 triplets/rdfs_tools/
