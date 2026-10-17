@@ -16,14 +16,19 @@ has the DatasetMetadata class linkage restored via `schema:domainIncludes`
 ([application-profiles-library#99](https://github.com/entsoe/application-profiles-library/pull/99),
 fixes [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
 
-The NCP and CGMES 3.0 snapshots also hold the PROF descriptors in `PROF/`. In NCP a profile's RDFS
-`owl:versionIRI` is its vocabulary IRI (`https://ap-voc.cim4.eu/<Profile>/<ver>`);
-instances declare the profile IRI (`https://ap.cim4.eu/<Profile>/<ver>`) in
-`dcterms:conformsTo`, which only PROF carries. Generation writes it to
-`ProfileMetadata.profileVersionIRI` for the PROF profile whose own `owl:versionIRI` or
-one of whose `prof:hasResource` equals the RDFS `versionIRI`; profile resolution
-matches both. In CGMES 3.0 both are the same IRI. Bundles without `PROF/`
-(CGMES 2.4.15) leave the field out.
+Every bundle section carries two IRIs in `ProfileMetadata`:
+
+- `versionIRI`: the RDFS vocabulary's own IRI — `owl:versionIRI` of the ontology; for
+  CGMES 2.4.15, which has no ontology header, its `entsoeURI` (EQ / EQBD:
+  `entsoeURIcore`).
+- `profileVersionIRI`: the profile IRI instances declare (`dcterms:conformsTo`,
+  `Model.profile`). Taken from the optional PROF descriptors in `PROF/` — the profile
+  whose own `owl:versionIRI` or one of whose `prof:hasResource` equals the RDFS
+  `versionIRI` — else equal to `versionIRI`.
+
+Profile resolution matches both. They differ only in NCP (`https://ap-voc.cim4.eu/<Profile>/<ver>`
+vocabulary vs `https://ap.cim4.eu/<Profile>/<ver>` profile, which only PROF carries);
+in CGMES they are the same IRI. The NCP and CGMES 3.0 snapshots hold `PROF/`.
 
 Upstream files are versionless by name (git-diff friendly); the release branch is the
 authoritative version — per-profile `owl:versionInfo` inside the files lags the release

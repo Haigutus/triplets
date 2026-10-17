@@ -272,10 +272,11 @@ def test_profile_version_iris_links_ncp_and_cgmes_shapes(tmp_path):
     assert profile_version_iris(tmp_path / "missing") == {}
 
 
-@pytest.mark.parametrize("bundle", ["ENTSOE_CGMES_3.0.0", "ENTSOE_NC_2.4.1", "ENTSOE_NC_2.5.0"])
+@pytest.mark.parametrize("bundle", ["ENTSOE_CGMES_2.4.15", "ENTSOE_CGMES_3.0.0", "ENTSOE_NC_2.4.1", "ENTSOE_NC_2.5.0"])
 def test_shipped_bundles_carry_both_iris(bundle):
-    """Bundles built with PROF give every section the RDFS versionIRI and the PROF
-    profileVersionIRI; CGMES uses one IRI for both, NC two."""
+    """Every section has the RDFS versionIRI (CGMES 2.4.15: its entsoeURI) and the
+    profileVersionIRI headers declare (PROF if present, else the versionIRI); CGMES uses
+    one IRI for both, NC two."""
     import json
     import triplets.export_schema
     for serialization in ("552_ED1", "552_ED2"):

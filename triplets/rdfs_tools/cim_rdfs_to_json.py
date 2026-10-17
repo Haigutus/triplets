@@ -324,6 +324,9 @@ def get_metadata(data):
             metadata["keyword"] = metadata["shortName"]
             metadata["versionInfo"] = uml.split("v")[-1] if (uml := metadata.get("entsoeUML")) else ""
             metadata["modified"] = metadata["date"]
+            # The ENTSO-E profile URI headers declare in Model.profile (EQ / EQBD: the core one)
+            metadata["versionIRI"] = next((metadata[key] for key in ("entsoeURI", "entsoeURIcore", "europeanProfileURI")
+                                           if key in metadata), "")
 
     metadata = pandas.concat([metadata, category_metadata])
     metadata["title"] = data.type_tableview("Distribution").label.iloc[0].rsplit("/",1)[-1]
@@ -440,9 +443,10 @@ def build_bundle(name, spec, serialization_versions=("552_ED1", "552_ED2")):
         indexed_profiles = spec["index"](merged_profiles)
 
         for keyword, profile in indexed_profiles.items():
-            # Profile IRI from PROF: what instances declare in dcterms:conformsTo
-            if profile_iri := profile_iris.get(profile["ProfileMetadata"].get("versionIRI")):
-                profile["ProfileMetadata"]["profileVersionIRI"] = profile_iri
+            # Profile IRI instances declare: from PROF when present, else the RDFS versionIRI
+            metadata = profile["ProfileMetadata"]
+            if version_iri := metadata.get("versionIRI"):
+                metadata["profileVersionIRI"] = profile_iris.get(version_iri, version_iri)
 
             # Insert Header entries into each profile, only if missing
             profile.update({key: value for key, value in header_profile.items() if key not in profile})
