@@ -15,6 +15,15 @@ has the DatasetMetadata class linkage restored via `schema:domainIncludes`
 ([application-profiles-library#99](https://github.com/entsoe/application-profiles-library/pull/99),
 fixes [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
 
+The NCP snapshots also hold the PROF descriptors in `PROF/`. A profile's RDFS
+`owl:versionIRI` is its vocabulary IRI (`https://ap-voc.cim4.eu/<Profile>/<ver>`);
+instances declare the profile IRI (`https://ap.cim4.eu/<Profile>/<ver>`) in
+`dcterms:conformsTo`, which only PROF carries. Generation writes it to
+`ProfileMetadata.profileVersionIRI` for the PROF profile whose own `owl:versionIRI` or
+one of whose `prof:hasResource` equals the RDFS `versionIRI`; profile resolution
+matches both. Bundles without `PROF/` (CGMES) leave the field out: there the RDFS
+`versionIRI` already is the profile IRI.
+
 Upstream files are versionless by name (git-diff friendly); the release branch is the
 authoritative version — per-profile `owl:versionInfo` inside the files lags the release
 (e.g. the AE profile still says 2.4.0 on `ncp-v2-4-1`). Each fetched snapshot carries a
@@ -50,10 +59,6 @@ Generation is deterministic: rerunning `cim_rdfs_to_json` must produce no diff
 - Migrate the legacy CGMES snapshots to the fetch workflow (upstream branches
   `cgmes-v3-0` / `cgmes-v2-4`); filenames differ from the local copies, so that is a
   separate migration with its own regeneration diff review.
-- Record the instance-facing `https://ap.cim4.eu/<Profile>/<ver>` IRI in
-  `ProfileMetadata` so export profile resolution can match `conformsTo` directly
-  instead of relying on the `dcat:keyword` hint (instances use `ap.cim4.eu`, schema
-  `versionIRI` uses `ap-voc.cim4.eu`).
 
 ## Known upstream defects (reported)
 
