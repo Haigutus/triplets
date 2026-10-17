@@ -197,6 +197,7 @@ VALUE_KIND_CASES = [
     ("http://example.org/profile/EQ/3.0", None, "http://example.org/profile/EQ/3.0"),   # guess: "/" only → whole
     ("urn:example:thing", None, "urn:example:thing"),
     ("urn:uuid:" + UUID, None, UUID),
+    ("http://iec.ch/TC57/CIM100#", None, "http://iec.ch/TC57/CIM100#"),              # guess: namespace → whole
 ]
 
 
@@ -487,6 +488,7 @@ PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
   </nc:Thing>
   <voc:Dataset rdf:about="urn:uuid:_d">
     <dcterms:conformsTo rdf:resource="http://example.org/profile/EQ/3.0"/>
+    <dcterms:conformsTo rdf:resource="http://iec.ch/TC57/CIM100#"/>
   </voc:Dataset>
 </rdf:RDF>
 """.format(uuid=UUID)

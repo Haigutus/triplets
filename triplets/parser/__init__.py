@@ -97,7 +97,7 @@ def parse(
     local_resources : bool, default True
         Resource (``rdf:resource`` / ``rdf:nodeID``) values in local form,
         ``triplets.iri.local_value``: the ID prefix stripped and http(s) IRIs cut to their
-        ``#fragment`` (CIM instance data convention) — enumerations are stored as
+        ``#fragment`` (CIM instance data convention; a namespace IRI ending in ``#`` stays whole) — enumerations are stored as
         ``ControlAreaTypeKind.Interchange``; filters against the full CIM URI will not match.
         False is the absolute form: IDs and resource references are resolved against the
         document's declared absolute ``xml:base`` at parse time, ``triplets.iri.resolve_iri``

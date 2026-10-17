@@ -4,7 +4,7 @@ read_nquads turns N-Quads / N-Triples text (path, bytes, or file-like) back
 into a triplet DataFrame [ID, KEY, VALUE, INSTANCE_ID], applying the inverse
 of the export conventions (triplets.iri): ID / INSTANCE_ID via local_id,
 KEY via local_key (rdf:type → 'Type'), VALUE via local_value (urn:uuid: and any
-http(s) #fragment namespace shortened), datatype / language annotations
+http(s) #fragment namespace shortened, a namespace IRI ending in # kept whole), datatype / language annotations
 dropped (values keep their lexical form), graph → INSTANCE_ID (absent → None).
 
 Line splitting runs in Arrow compute, term conversion in vectorized pandas
