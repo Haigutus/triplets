@@ -1,7 +1,7 @@
 {
-    "repo": "https://github.com/entsoe/CGMES-AP.git",
-    "ref": "main",
+    "repo": "https://github.com/entsoe/application-profiles-library.git",
+    "ref": "f256fdb119b57737d086db47425285c248d8ca1e",
     "prof_path": "CGMES/PROF",
-    "commit": "e96dd4e323b1e2236e141dd03bf9adea81672e00",
+    "commit": "f256fdb119b57737d086db47425285c248d8ca1e",
     "fetched": "2026-10-17"
 }

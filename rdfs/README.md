@@ -8,7 +8,7 @@ generation is reproducible offline and upstream changes arrive as reviewable dif
 |---|---|---|
 | `ENTSOE_NC_2.4.1/` | [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) release branch `ncp-v2-4-1` — the most recent official NCP publication | branch name + `SOURCE.json` commit pin |
 | `ENTSOE_NC_2.5.0/` | same repo, release branch `ncp-v2-5-0` (tag `ncp-2.5.0`) | branch name + `SOURCE.json` commit pin |
-| `ENTSOE_CGMES_3.0.0/PROF/` | [entsoe/CGMES-AP](https://github.com/entsoe/CGMES-AP) `main` (CGMES moved out of the profiles library on 2026-10-15) | `PROF/SOURCE.json` commit pin |
+| `ENTSOE_CGMES_3.0.0/PROF/` | [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) commit `f256fdb` (`main` before CGMES moved out; `cgmes-v3-0` has no PROF) | `PROF/SOURCE.json` commit pin |
 | `ENTSOE_CGMES_2.4.15/`, `ENTSOE_CGMES_3.0.0/`, `ENTSOE_FH/` | legacy hand-collected RDFS sets (predate the fetch workflow) | version in filenames |
 
 NCP 2.4.2 is **not** onboarded (already published; ENTSO-E will not patch it). NCP 2.5.0
