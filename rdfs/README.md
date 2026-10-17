@@ -81,4 +81,5 @@ Generation is deterministic: rerunning `cim_rdfs_to_json` must produce no diff
   `EXPECTED_FAILURES` / `KNOWN_MISMATCH` in `tests/test_roundtrip_nc.py`
   ([relicapgrid#30](https://github.com/entsoe/relicapgrid/issues/30),
   [#340](https://github.com/entsoe/relicapgrid/issues/340),
+  [#399](https://github.com/entsoe/relicapgrid/issues/399),
   [#400](https://github.com/entsoe/relicapgrid/issues/400)).
