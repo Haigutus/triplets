@@ -25,6 +25,7 @@
             "label": "DiagramLayoutProfile",
             "comment": "This standard specifies an exchange profile for schematics with the following characteristics.\nA generic method for linking the diagram object to the domain data. Domain data and diagram layout data can be exchanged together with the domain data, or separately from each other with the assumption that domain data will have already been imported should diagram layout data be imported separately.\nIt does not require or imply a specific domain data format. Therefore, it supports domain data modelled according to the IEC 61970-301 Common information model (CIM) that is exchanged in the IEC 61970-501 format (CIM RDF schema). Diagram layout data references domain data in compliance with IEC/TR 62541-1, <i>OPC Unified Architecture</i>).\nThe intended usage of this standard is that the source of a diagram will use the standard to encode the layout of their diagram as they created it. It is then incumbent upon any receiver to supply the means of using that diagram layout in their system.\n<ul>\n\t<li>In the simplest situation, if the source uses Switch object placements, the receiver creates a generic Switch template in the receiver's system that will be used to render Switches (i.e. there is no exchange of Switch templates).</li>\n\t<li>In more complex situations, a 1:1 correspondence may not be desirable, and receivers may have to create generic transformations in order to use exchanges.</li>\n\t<li>However, in both situations, it is expected that once an investment is made in a strategy for rendering, repeated imports may be carried out automatically.</li>\n</ul>\nSupports the exchange of diagram objects that have no relationship to domain data, i.e., pure static background objects.\nSupports multiple representations of the same domain object in the same or different diagrams.\nAllows the diagram to be used as the unit of exchange, providing a straightforward approach to partial exchange, or an exchange between systems that have a separate model and repository for diagram layout data. \nSupports assignment of diagram objects to layers or other means, for showing or hiding information based on zoom level and/or user interest.\nA generic method for proprietary extensions to enable full round tripping (export and import back into the same system) without information loss within a system, and without breaking the standard exchange format.",
             "serialization": "552_ED1",
+            "profileVersionIRI": "http://iec.ch/TC57/ns/CIM/DiagramLayout-EU/3.0",
             "header": {
                 "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
                 "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
@@ -1284,6 +1285,7 @@
             "label": "DynamicsProfile",
             "comment": "This is the IEC 61970-457 profile.",
             "serialization": "552_ED1",
+            "profileVersionIRI": "http://iec.ch/TC57/ns/CIM/Dynamics-EU/1.0",
             "header": {
                 "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
                 "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
@@ -38376,6 +38378,7 @@
             "label": "CoreEquipmentProfile",
             "comment": "This is the IEC 61970-452 core equipment profile.",
             "serialization": "552_ED1",
+            "profileVersionIRI": "http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0",
             "header": {
                 "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
                 "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
@@ -48243,6 +48246,7 @@
             "label": "EquipmentBoundaryProfile",
             "comment": "This profile is deprecated. Use core equipment profile part of the IEC 61970-452 document. ",
             "serialization": "552_ED1",
+            "profileVersionIRI": "http://iec.ch/TC57/ns/CIM/EquipmentBoundary-EU/3.0",
             "header": {
                 "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
                 "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
@@ -49616,6 +49620,7 @@
             "label": "GeographicalLocationProfile",
             "comment": "This is the  geographical location profile as in 61968-13.",
             "serialization": "552_ED1",
+            "profileVersionIRI": "http://iec.ch/TC57/ns/CIM/GeographicalLocation-EU/3.0",
             "header": {
                 "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
                 "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
@@ -50588,6 +50593,7 @@
             "label": "OperationProfile",
             "comment": "This is the IEC 61970-452 operation profile.",
             "serialization": "552_ED1",
+            "profileVersionIRI": "http://iec.ch/TC57/ns/CIM/Operation-EU/3.0",
             "header": {
                 "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
                 "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
@@ -53891,6 +53897,7 @@
             "label": "ShortCircuitProfile",
             "comment": "This is the IEC 61970-452 short circuit profile.",
             "serialization": "552_ED1",
+            "profileVersionIRI": "http://iec.ch/TC57/ns/CIM/ShortCircuit-EU/3.0",
             "header": {
                 "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
                 "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
@@ -56281,6 +56288,7 @@
             "label": "StateVariablesProfile",
             "comment": "A state variables dataset which conforms to the IEC 61970-456 state variables profile contains all objects required to complete the specification of a steady-state solution. \nA state variables dataset is always exchanged in full. \nA state variables dataset of an assembled model contains state variables related objects for all model authority sets being part of the assembled model.",
             "serialization": "552_ED1",
+            "profileVersionIRI": "http://iec.ch/TC57/ns/CIM/StateVariables-EU/3.0",
             "header": {
                 "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
                 "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
@@ -57625,6 +57633,7 @@
             "label": "SteadyStateHypothesisProfile",
             "comment": "A steady state hypothesis dataset which conforms to the IEC 61970-456 steady state hypothesis profile contains all objects required to exchange input parameters to be able to perform load flow simulations. Due to the nature of the SSH profile, all objects in a Steady State Hypothesis instance file should have persistent mRIDs.",
             "serialization": "552_ED1",
+            "profileVersionIRI": "http://iec.ch/TC57/ns/CIM/SteadyStateHypothesis-EU/3.0",
             "header": {
                 "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
                 "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
@@ -60551,6 +60560,7 @@
             "label": "TopologyProfile",
             "comment": "A topology dataset which conforms to the IEC 61970-456 topology profile contains all objects defined in a topology profile and includes data for topology information relating to a given exchange.",
             "serialization": "552_ED1",
+            "profileVersionIRI": "http://iec.ch/TC57/ns/CIM/Topology-EU/3.0",
             "header": {
                 "identifier": "urn:uuid:0693858e-f49d-46c2-805d-1dbb9fd9d90f",
                 "title": "Header-AP-Voc-RDFS2020_v2-3-5.rdf",
