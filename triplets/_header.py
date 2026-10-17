@@ -52,8 +52,8 @@ def _profile_identity_index(rdf_map):
     Sections identify themselves via their key ("EQ") and the ProfileMetadata
     entry: keyword ("EQ"), versionIRI (the RDFS vocabulary's own IRI; CGMES
     reuses the profile IRI there, so it matches Model.profile / conformsTo),
-    profileVersionIRI (the PROF profile IRI NC headers declare in conformsTo;
-    only in bundles built with PROF), conformsTo. The schema defines what to
+    profileVersionIRI (the PROF profile IRI headers declare in conformsTo; NC
+    differs from versionIRI, CGMES 3.0 equals it), conformsTo. The schema defines what to
     match — no hardcoded knowledge per CGMES generation. An identifier several sections
     share (e.g. the IEC document URN every CGMES 3.0 section carries as
     conformsTo) identifies none of them and is dropped from the index.

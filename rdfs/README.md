@@ -8,21 +8,22 @@ generation is reproducible offline and upstream changes arrive as reviewable dif
 |---|---|---|
 | `ENTSOE_NC_2.4.1/` | [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) release branch `ncp-v2-4-1` — the most recent official NCP publication | branch name + `SOURCE.json` commit pin |
 | `ENTSOE_NC_2.5.0/` | same repo, release branch `ncp-v2-5-0` (tag `ncp-2.5.0`) | branch name + `SOURCE.json` commit pin |
-| `ENTSOE_CGMES_2.4.15/`, `ENTSOE_CGMES_3.0.0/`, `ENTSOE_FH/` | legacy hand-collected sets (predate the fetch workflow) | version in filenames |
+| `ENTSOE_CGMES_3.0.0/PROF/` | [entsoe/CGMES-AP](https://github.com/entsoe/CGMES-AP) `main` (CGMES moved out of the profiles library on 2026-10-15) | `PROF/SOURCE.json` commit pin |
+| `ENTSOE_CGMES_2.4.15/`, `ENTSOE_CGMES_3.0.0/`, `ENTSOE_FH/` | legacy hand-collected RDFS sets (predate the fetch workflow) | version in filenames |
 
 NCP 2.4.2 is **not** onboarded (already published; ENTSO-E will not patch it). NCP 2.5.0
 has the DatasetMetadata class linkage restored via `schema:domainIncludes`
 ([application-profiles-library#99](https://github.com/entsoe/application-profiles-library/pull/99),
 fixes [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
 
-The NCP snapshots also hold the PROF descriptors in `PROF/`. A profile's RDFS
+The NCP and CGMES 3.0 snapshots also hold the PROF descriptors in `PROF/`. In NCP a profile's RDFS
 `owl:versionIRI` is its vocabulary IRI (`https://ap-voc.cim4.eu/<Profile>/<ver>`);
 instances declare the profile IRI (`https://ap.cim4.eu/<Profile>/<ver>`) in
 `dcterms:conformsTo`, which only PROF carries. Generation writes it to
 `ProfileMetadata.profileVersionIRI` for the PROF profile whose own `owl:versionIRI` or
 one of whose `prof:hasResource` equals the RDFS `versionIRI`; profile resolution
-matches both. Bundles without `PROF/` (CGMES) leave the field out: there the RDFS
-`versionIRI` already is the profile IRI.
+matches both. In CGMES 3.0 both are the same IRI. Bundles without `PROF/`
+(CGMES 2.4.15) leave the field out.
 
 Upstream files are versionless by name (git-diff friendly); the release branch is the
 authoritative version — per-profile `owl:versionInfo` inside the files lags the release

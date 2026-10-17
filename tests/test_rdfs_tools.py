@@ -270,3 +270,20 @@ def test_profile_version_iris_links_ncp_and_cgmes_shapes(tmp_path):
     assert iris["http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0"] == "http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0"
     assert "https://ap-con.cim4.eu/DatasetMetadata-Simple/3.0" not in iris
     assert profile_version_iris(tmp_path / "missing") == {}
+
+
+@pytest.mark.parametrize("bundle", ["ENTSOE_CGMES_3.0.0", "ENTSOE_NC_2.4.1", "ENTSOE_NC_2.5.0"])
+def test_shipped_bundles_carry_both_iris(bundle):
+    """Bundles built with PROF give every section the RDFS versionIRI and the PROF
+    profileVersionIRI; CGMES uses one IRI for both, NC two."""
+    import json
+    import triplets.export_schema
+    for serialization in ("552_ED1", "552_ED2"):
+        path = Path(triplets.export_schema.__file__).parent / f"{bundle}_{serialization}.json"
+        sections = {name: section["ProfileMetadata"] for name, section in json.loads(path.read_text()).items()
+                    if isinstance(section, dict) and "ProfileMetadata" in section}
+        missing = [name for name, metadata in sections.items()
+                   if not (metadata.get("versionIRI") and metadata.get("profileVersionIRI"))]
+        assert sections and not missing, (path.name, missing)
+        same = {metadata["versionIRI"] == metadata["profileVersionIRI"] for metadata in sections.values()}
+        assert same == ({True} if bundle.startswith("ENTSOE_CGMES") else {False}), path.name
