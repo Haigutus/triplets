@@ -143,7 +143,7 @@ in `tests/test_iri.py`).
 | `ID` | bare UUID / bare name | `local_id`: strip exactly **one** of `urn:uuid:`, `#_`, `_` (longest first) |
 | `KEY` | `Class.attr` or `Type` | element tag local name (N-Quads / SPARQL: `local_key`, the `split_iri` local name — `dcterms:issued` → `issued`) |
 | `VALUE` (Type) | `Breaker` | tag local name (N-Quads / SPARQL: `local_value(…, "class")`) |
-| `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then an `http(s)` IRI with `#` → its `split_iri` local name (`…#c/d` → `d`); without `#` it stays whole |
+| `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then an `http(s)` IRI with `#` → its `split_iri` local name (`…#c/d` → `d`); without `#`, or a namespace IRI ending in `#` / `/`, it stays whole |
 | `VALUE` (literal) | text verbatim | — |
 | `INSTANCE_ID` | bare UUID | fresh `uuid4()` per parsed file |
 
