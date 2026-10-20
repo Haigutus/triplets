@@ -28,8 +28,8 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
     compiled : CompiledShapes
         From ``triplets.validation.compile`` — this engine uses the shapes graph.
     rdf_map : dict or str, optional
-        Export schema — xsd-typed literals in the data graph, and (when
-        present) ``rdfs:subClassOf`` mixed in via pyshacl ``ont_graph`` so
+        Export schema — xsd-typed literals in the data graph, and its
+        ``inheritance`` as ``rdfs:subClassOf`` via pyshacl ``ont_graph``, so
         ``sh:targetClass`` / ``sh:class`` see SHACL instances of ancestors.
     scope : iterable of INSTANCE_ID, optional
         Validate only these instances' named graphs — data outside the scope
@@ -59,7 +59,7 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
 
     data_graph = scoped_graph(load_dataset(data, rdf_map=rdf_map, store=store,
                                            undefined_namespace=undefined_namespace), scope)
-    ont_graph = _ontology_graph(rdf_map, undefined_namespace) if rdf_map is not None else None
+    ont_graph = _ontology_graph(rdf_map, undefined_namespace) if rdf_map else None
 
     conforms, report_graph, _report_text = pyshacl_validate(
         data_graph, shacl_graph=compiled.graph, ont_graph=ont_graph,

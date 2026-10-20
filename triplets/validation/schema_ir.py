@@ -131,7 +131,7 @@ def subclass_triples(rdf_map, undefined_namespace=TRIPLETS_NS):
 
 def descendants(schema):
     """ancestor local name → frozenset of concrete Class names inheriting it."""
-    return {key: frozenset(names) for key, names in _concrete_index(schema).items()}
+    return {key: frozenset(names) for key, names in _concrete_index(load_rdf_map(schema)).items()}
 
 
 def _concrete_index(schema):

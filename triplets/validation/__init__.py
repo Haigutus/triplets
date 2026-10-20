@@ -97,7 +97,8 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         SHACL shapes (format auto-detected by extension). Pass the result of
         ``compile(shapes)`` to reuse the parsed shapes across validations.
     rdf_map : dict or str, optional
-        Export schema — xsd-typed literals in the data graph (optional).
+        Export schema — xsd-typed literals in the data graph; with the pyshacl
+        engine also its ``inheritance`` as ``rdfs:subClassOf`` (pyshacl ``ont_graph``).
     scope : iterable of INSTANCE_ID, optional
         Validate only these instances' named graphs — data outside the scope
         is not loaded, so references into unscoped instances count as absent.

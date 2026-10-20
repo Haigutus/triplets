@@ -10,8 +10,10 @@ reported in the run's coverage metadata, `skipped_shapes` /
   `inheritance` is mixed in as pyshacl `ont_graph` (instance data is not
   mutated), so `sh:targetClass` / `sh:class` on a parent reach its
   subclasses. Parents are the absolute IRIs the schema records; a bare name
-  takes `undefined_namespace`, as for `rdf:type` in the data graph.
-  polars / pandas / duckdb match `sh:targetClass` against the exact `Type`.
+  resolves like `rdf:type` in the data graph (schema namespace, else
+  `undefined_namespace`). polars / pandas / duckdb, and the lexical
+  `sh:datatype` supplement of a pyshacl run, match `sh:targetClass` against
+  the exact `Type`.
 - **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
   Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /
   `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —
@@ -382,7 +384,8 @@ data.shacl.validate(shapes)
     |   '-> shacl_polars.validate(data, compiled, rdf_map)
     |       # reads raw VALUEs; lexical findings emitted inline
     |       # (pyshacl path instead: load_dataset -> scoped_graph ->
-    |       #  pyshacl.validate(compiled.graph) -> report_to_violations)
+    |       #  pyshacl.validate(compiled.graph, ont_graph=rdfs:subClassOf
+    |       #  from rdf_map) -> report_to_violations)
     |
     '-> + shacl_pandas datatype/lexical supplement   # ONLY for engine="pyshacl"
 ```
