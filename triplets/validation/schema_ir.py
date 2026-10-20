@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._header import _profile_identity_index
-from ..iri import TRIPLETS_NS, TYPE_KEY, absolute_name, load_rdf_map, load_schema, local_value, namespaces, rdf_map_entries
+from ..iri import TRIPLETS_NS, TYPE_KEY, absolute_name, load_schema, local_value, namespaces, rdf_map_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,6 @@ def subclass_triples(rdf_map, undefined_namespace=TRIPLETS_NS):
     bare parent name in a hand-made schema, resolve like the data graph's ``Type``
     (:func:`~triplets.iri.absolute_name`): the schema namespace, else *undefined_namespace*.
     """
-    rdf_map = load_rdf_map(rdf_map)
     names = namespaces(rdf_map)
     return list(dict.fromkeys(
         (child, parent)
@@ -131,7 +130,7 @@ def subclass_triples(rdf_map, undefined_namespace=TRIPLETS_NS):
 
 def descendants(schema):
     """ancestor local name → frozenset of concrete Class names inheriting it."""
-    return {key: frozenset(names) for key, names in _concrete_index(load_rdf_map(schema)).items()}
+    return {key: frozenset(names) for key, names in _concrete_index(schema).items()}
 
 
 def _concrete_index(schema):

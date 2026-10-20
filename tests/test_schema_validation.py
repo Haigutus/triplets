@@ -5,6 +5,8 @@ vocabulary-accurate rdfs:/xsd:/schema: types, not fake SHACL.
 
 Semantics under test: validation runs per INSTANCE_ID, per profile the
 instance declares — profiles are never merged."""
+import json
+
 import pandas
 import pytest
 
@@ -466,7 +468,8 @@ class TestSubclassIris:
         from triplets.export_schema import schemas
         from triplets.iri import TRIPLETS_NS
         from triplets.validation.schema_ir import subclass_triples
-        triples = subclass_triples(schemas.ENTSOE_NC_2_5_0_552_ED2)
+        with open(schemas.ENTSOE_NC_2_5_0_552_ED2) as file:
+            triples = subclass_triples(json.load(file))
         assert triples and not any(TRIPLETS_NS in iri for pair in triples for iri in pair)
 
     def test_descendants_index(self):
