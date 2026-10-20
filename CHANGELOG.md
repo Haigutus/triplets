@@ -31,6 +31,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   attributes. Identical findings are reported once on every engine (a
   property shape on both a parent and a child node shape, the same triple in
   two instance files).
+- **Property-level `sh:or` / `sh:not` judge value nodes:** a nested shape
+  without its own `sh:path` now constrains the property's values. Before, it
+  compiled with no path: `sh:or ( [ sh:datatype … ] [ sh:in … ] )` reported
+  nothing and `sh:not [ sh:in (…) ]` flagged every focus node.
 - **`inheritance=True` on `validate`, `validate_schema` and `compile_schema`:**
   False matches the exact `rdf:type` on every engine (pyshacl without
   `ont_graph`), and schema association ranges accept the range class only

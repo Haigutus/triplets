@@ -573,13 +573,42 @@ def _and(context, rule):
     return violations
 
 
+def _value_pairs(rows):
+    """(focus, value) string pairs of a path_rows frame — the value nodes a
+    property-level operator judges."""
+    return set(zip(rows["FOCUS"].astype(str), rows["PATH_VALUE"].astype(str)))
+
+
+def _failed_values(pairs, result):
+    """The *pairs* that *result* violates. A nested finding on another value or
+    with none (a nested shape with its own sh:path) fails every value of that focus."""
+    by_focus = {}
+    for focus, value in pairs:
+        by_focus.setdefault(focus, set()).add((focus, value))
+    failed = set()
+    for focus, value in zip(result["ID"].astype(str), result["VALUE"]):
+        pair = (focus, str(value))
+        failed |= {pair} if not pandas.isna(value) and pair in pairs else by_focus.get(focus, set())
+    return failed
+
+
+def _value_frame(rule, pairs, message):
+    pairs = sorted(pairs)
+    return _frame(rule, [focus for focus, _ in pairs], [value for _, value in pairs], message)
+
+
 def _or(context, rule):
-    """sh:or — a focus node violates only when EVERY alternative is violated."""
+    """sh:or — violates only when EVERY alternative is violated: per focus node
+    in a node shape, per value node in a property shape."""
     focus_ids = getattr(rule, "focus_ids", None)
-    violating_sets = [set(_run_nested(context, alternative, focus_ids)["ID"])
-                      for alternative in rule.params]
-    focus = sorted(set.intersection(*violating_sets)) if violating_sets else []
-    return _frame(rule, focus, None, "no sh:or alternative is satisfied")
+    results = [_run_nested(context, alternative, focus_ids) for alternative in rule.params]
+    if rule.path is None:
+        violating_sets = [set(result["ID"]) for result in results]
+        focus = sorted(set.intersection(*violating_sets)) if violating_sets else []
+        return _frame(rule, focus, None, "no sh:or alternative is satisfied")
+    pairs = _value_pairs(context.path_rows(rule))
+    failing = set.intersection(pairs, *(_failed_values(pairs, result) for result in results))
+    return _value_frame(rule, failing, "no sh:or alternative is satisfied")
 
 
 def _node(context, rule):
@@ -600,11 +629,15 @@ def _node(context, rule):
 
 
 def _not(context, rule):
-    """sh:not — a focus node violates when it SATISFIES the negated shape."""
-    violating = set(_run_nested(context, rule.params, getattr(rule, "focus_ids", None))["ID"])
-    ids = context.focus(rule)
-    conforming = [focus for focus in ids if focus not in violating]
-    return _frame(rule, conforming, None, "node conforms to the negated shape")
+    """sh:not — violates when it SATISFIES the negated shape: per focus node in
+    a node shape, per value node in a property shape."""
+    nested = _run_nested(context, rule.params, getattr(rule, "focus_ids", None))
+    if rule.path is None:
+        violating = set(nested["ID"])
+        conforming = [focus for focus in context.focus(rule) if focus not in violating]
+        return _frame(rule, conforming, None, "node conforms to the negated shape")
+    pairs = _value_pairs(context.path_rows(rule))
+    return _value_frame(rule, pairs - _failed_values(pairs, nested), "value conforms to the negated shape")
 
 
 # component → validator. The polars and duckdb compilers implement this same

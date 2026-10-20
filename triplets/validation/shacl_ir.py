@@ -273,13 +273,16 @@ def _node_rows(graph, SH, shape, target_class, target_kind="class"):
 
 
 def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=None,
-                target_kind="class"):
+                target_kind="class", value_path=None):
     """One property shape → IR rows (one per constraint component present).
 
     *visited* tracks shapes already expanded through sh:node / sh:or / sh:and /
     sh:not, so shape graphs that reference each other cannot recurse forever.
     *parent* is the owning NodeShape's meta — a property shape without its own
     sh:name / sh:description inherits them (authors commonly title the node shape).
+    *value_path*: the owning property shape's (path, inverse, via_type) for a
+    shape nested in its sh:or / sh:and / sh:not — a nested shape without its own
+    sh:path constrains that property's value nodes.
     """
     if str(shape_uri) in visited:
         logger.warning("shape reference cycle at %s — constraint dropped", shape_uri)
@@ -287,6 +290,8 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
     visited = visited | {str(shape_uri)}
     path_node = graph.value(shape_uri, SH.path)
     path, inverse, via_type = _resolve_path(graph, SH, path_node)
+    if path_node is None and value_path is not None:
+        path, inverse, via_type = value_path
     if path_node is not None and path is None:
         logger.warning(
             "sh:path at %s is a property path the vectorized engines cannot express "
@@ -308,10 +313,12 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
     rows.extend(_sparql_rows(graph, SH, shape_uri, meta))
 
     # logical operators: params are nested row-dict lists, recursion via RDF lists
+    value_path = (path, inverse, via_type) if path else None
     for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and")):
         head = graph.value(shape_uri, term)
         if head is not None:
-            nested = [_shape_rows(graph, SH, item, target_class, visited, target_kind=target_kind)
+            nested = [_shape_rows(graph, SH, item, target_class, visited, target_kind=target_kind,
+                                  value_path=value_path)
                       for item in _rdf_list(graph, head, lambda node: node)]
             rows.append({**meta, "component": component, "params": nested})
 
@@ -319,7 +326,7 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
     if negated is not None:
         rows.append({**meta, "component": "sh:not",
                      "params": _shape_rows(graph, SH, negated, target_class, visited,
-                                           target_kind=target_kind)})
+                                           target_kind=target_kind, value_path=value_path)})
 
     node_shape = graph.value(shape_uri, SH.node)
     if node_shape is not None:

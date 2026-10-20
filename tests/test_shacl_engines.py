@@ -724,3 +724,31 @@ def test_pyshacl_ont_graph_abstract_target():
     assert violating(bare, "sh:minCount") == set()
     bound = triplets.validation.validate(data, graph, engine="pyshacl", rdf_map=TOY_SCHEMA)
     assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
+
+
+# property-level logical operators: a nested shape without its own sh:path
+# constrains the property's value nodes (SHACL: each value node conforms)
+VALUE_OR = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ;
+        sh:or ( [ sh:in ( "A" ) ] [ sh:pattern "^B" ] ) ] ."""
+VALUE_NOT = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:not [ sh:in ( "B" ) ] ] ."""
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("shape, properties, expected", [
+    (VALUE_OR, [("IdentifiedObject.name", "C")], {("b1", "C")}),
+    (VALUE_OR, [("IdentifiedObject.name", "A"), ("IdentifiedObject.name", "Bx")], set()),   # each value passes one
+    (VALUE_OR, [("IdentifiedObject.name", "A"), ("IdentifiedObject.name", "C")], {("b1", "C")}),
+    (VALUE_NOT, [("IdentifiedObject.name", "C")], set()),
+    (VALUE_NOT, [("IdentifiedObject.name", "B")], {("b1", "B")}),
+], ids=["or-fails", "or-each-value-passes", "or-one-value-fails", "not-passes", "not-fails"])
+def test_property_logical_operators_judge_value_nodes(engine_name, shape, properties, expected):
+    pytest.importorskip(engine_name)
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    data = pandas.DataFrame(breaker("b1", *properties), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    v = triplets.validation.validate(data, graph, engine=engine_name, lexical=False)
+    component = "sh:or" if shape is VALUE_OR else "sh:not"
+    assert violating(v, component) == expected
