@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._header import _profile_identity_index
-from ..iri import CIM_NS, TYPE_KEY, absolute_name, is_absolute, load_schema, local_value, namespaces, rdf_map_entries
+from ..iri import TRIPLETS_NS, TYPE_KEY, absolute_name, load_rdf_map, load_schema, local_value, namespaces, rdf_map_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
 
 logger = logging.getLogger(__name__)
@@ -111,24 +111,21 @@ def compile_schema(rdf_map, closed=False) -> CompiledSchema:
     return compiled
 
 
-def subclass_triples(rdf_map, undefined_namespace=CIM_NS):
+def subclass_triples(rdf_map, undefined_namespace=TRIPLETS_NS):
     """``(child_iri, parent_iri)`` for each ``inheritance`` step.
 
-    A child uses its own Class entry's namespace. Parents are absolute IRIs in the
-    shipped bundles; a local one resolves like the child, and an abstract parent with
-    no Class entry (``Equipment``, ``IdentifiedObject``, …) takes *undefined_namespace*
-    (CIM100), so an NC class in ``cim4.eu`` still subclasses ``CIM100#Equipment``.
+    Parents are the absolute IRIs the bundles record (an NC class inherits
+    ``https://cim.ucaiug.io/ns#IdentifiedObject``) and pass through. A child, and a
+    bare parent name in a hand-made schema, resolve like the data graph's ``Type``
+    (:func:`~triplets.iri.absolute_name`): the schema namespace, else *undefined_namespace*.
     """
+    rdf_map = load_rdf_map(rdf_map)
     names = namespaces(rdf_map)
-
-    def to_iri(name):
-        return name if is_absolute(name) else absolute_name(local_value(name, "class"), names, undefined_namespace)
-
     return list(dict.fromkeys(
         (child, parent)
         for name, entry in rdf_map_entries(rdf_map) if entry.get("type") == "Class"
-        for child in (to_iri(name),)
-        for parent in map(to_iri, entry.get("inheritance", ()))
+        for child in (absolute_name(name, names, undefined_namespace),)
+        for parent in (absolute_name(ancestor, names, undefined_namespace) for ancestor in entry.get("inheritance", ()))
         if parent != child))
 
 

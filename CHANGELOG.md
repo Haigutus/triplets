@@ -15,11 +15,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `filter_triplets_by_type` takes a list or array of types too (all engines);
   duckdb takes `type_key` like pandas and polars.
 - **pyshacl `ont_graph` from the export schema:** when `rdf_map` is passed,
-  `rdfs:subClassOf` triples are mixed into the run (not the instance graph)
-  so `sh:targetClass` / `sh:class` follow SHACL instance semantics. Each
-  class IRI uses that class's own namespace; abstracts with no Class entry
-  (`Equipment`, `IdentifiedObject`) stay on CIM100, so an NC class does not
-  invent `cim4.eu#Equipment`.
+  its `inheritance` is mixed into the run as `rdfs:subClassOf` (not into the
+  instance graph), so `sh:targetClass` / `sh:class` on a parent class reach
+  its subclasses. Parent IRIs come from the schema as is
+  (`https://cim.ucaiug.io/ns#IdentifiedObject` for NC);
+  `schema_ir.subclass_triples(rdf_map, undefined_namespace=TRIPLETS_NS)`.
 - **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
   `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
   [application-profiles-library](https://github.com/entsoe/application-profiles-library)

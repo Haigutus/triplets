@@ -72,8 +72,8 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
 def _ontology_graph(rdf_map, undefined_namespace):
     """``rdfs:subClassOf`` triples from the export schema, as a pyshacl ont_graph.
 
-    Each class IRI uses that class's own namespace (abstract parents without a
-    Class entry take *undefined_namespace*). The instance data graph is not mutated.
+    Same IRIs as the data graph's ``rdf:type``: one *undefined_namespace* for both.
+    The instance data graph is not mutated.
     """
     import rdflib
     from .schema_ir import subclass_triples
