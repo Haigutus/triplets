@@ -682,6 +682,32 @@ def test_inheritance_off_matches_exact_type(engine_name):
     assert off.attrs["validation"]["inheritance"] is False
 
 
+# NC-style bundle: ACLineSegment's list stops at Equipment; Breaker's list
+# is the only record of Equipment → PowerSystemResource → IdentifiedObject
+TRUNCATED_SCHEMA = {
+    "SSI": {"ACLineSegment": {"type": "Class", "namespace": CIM,
+                              "inheritance": [CIM + "ACLineSegment", CIM + "Equipment"]}},
+    "EQ": {"Breaker": {"type": "Class", "namespace": CIM,
+                       "inheritance": [CIM + name for name in ("Breaker", "Switch", "Equipment",
+                                                               "PowerSystemResource", "IdentifiedObject")]}},
+}
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_inheritance_is_transitive_across_profiles(engine_name):
+    """sh:targetClass IdentifiedObject reaches an ACLineSegment whose own list
+    stops at Equipment, like rdfs:subClassOf."""
+    pytest.importorskip(engine_name)
+    shape = """cim:IoShape a sh:NodeShape ; sh:targetClass cim:IdentifiedObject ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    data = pandas.DataFrame([("a1", "Type", "ACLineSegment", "eq")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    v = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TRUNCATED_SCHEMA)
+    assert violating(v, "sh:minCount") == {("a1", None)}
+
+
 def test_pyshacl_ont_graph_abstract_target():
     """pyshacl + rdf_map: sh:targetClass Equipment hits concrete subclasses via
     ont_graph rdfs:subClassOf — instance Type stays Breaker."""

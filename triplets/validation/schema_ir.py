@@ -120,7 +120,9 @@ def compile_schema(rdf_map, closed=False, inheritance=True) -> CompiledSchema:
 
 
 def subclass_triples(rdf_map, undefined_namespace=TRIPLETS_NS):
-    """``(child_iri, parent_iri)`` for each ``inheritance`` step.
+    """``(child_iri, parent_iri)`` pairs from each ``inheritance`` list, read
+    child-first: the class to every ancestor, and each ancestor to the ones after
+    it — for some classes another class's list is the only record of that step.
 
     Parents are the absolute IRIs the bundles record (an NC class inherits
     ``https://cim.ucaiug.io/ns#IdentifiedObject``) and pass through. A child, and a
@@ -131,9 +133,10 @@ def subclass_triples(rdf_map, undefined_namespace=TRIPLETS_NS):
     return list(dict.fromkeys(
         (child, parent)
         for name, entry in rdf_map_entries(rdf_map) if entry.get("type") == "Class"
-        for child in (absolute_name(name, names, undefined_namespace),)
-        for parent in (absolute_name(ancestor, names, undefined_namespace) for ancestor in entry.get("inheritance", ()))
-        if parent != child))
+        for chain in (list(dict.fromkeys(absolute_name(step, names, undefined_namespace)
+                                         for step in (name, *entry.get("inheritance", ())))),)
+        for position, child in enumerate(chain)
+        for parent in chain[position + 1:]))
 
 
 def type_ancestors(compiled, rdf_map):
@@ -152,15 +155,31 @@ def type_ancestors(compiled, rdf_map):
 def _concrete_index(schema, inheritance=True):
     """ancestor local name → concrete classes inheriting it, across ALL
     sections — inheritance is model knowledge, not a profile constraint.
-    inheritance=False: each class maps to itself only."""
-    concrete = {}
+    inheritance=False: each class maps to itself only.
+
+    Transitive like rdfs:subClassOf: a profile's list can stop at a class it
+    shares with another profile (NC SSI ``ACLineSegment`` → ``Equipment``),
+    and the other profiles' lists carry the rest of the chain."""
+    ancestors, classes = {}, set()
     for entries in schema.values():
         if not isinstance(entries, dict):
             continue
         for name, entry in entries.items():
             if isinstance(entry, dict) and entry.get("type") == "Class":
-                for ancestor in (entry.get("inheritance", ()) if inheritance else (name,)):
-                    concrete.setdefault(local_value(ancestor, "class"), set()).add(name)
+                classes.add(name)
+                chain = [local_value(ancestor, "class") for ancestor in entry.get("inheritance", ())] if inheritance else []
+                ancestors.setdefault(name, set()).add(name)
+                for position, child in enumerate(chain):   # each list is child-first
+                    ancestors.setdefault(child, set()).update(chain[position:])
+    concrete = {}
+    for name in classes:
+        reached, todo = set(), [name]
+        while todo:
+            for ancestor in ancestors.get(todo.pop(), set()) - reached:
+                reached.add(ancestor)
+                todo.append(ancestor)
+        for ancestor in reached:
+            concrete.setdefault(ancestor, set()).add(name)
     return concrete
 
 

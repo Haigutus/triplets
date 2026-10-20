@@ -14,7 +14,10 @@ reported in the run's coverage metadata, `skipped_shapes` /
   `undefined_namespace`).
 - **Vectorized engines + `rdf_map`:** class membership is each object's
   `Type` plus that class's ancestors from the schema `inheritance`, built once
-  per run: `sh:targetClass Equipment` hits `Breaker`.
+  per run: `sh:targetClass Equipment` hits `Breaker`. Transitive across
+  profiles, like `rdfs:subClassOf`: an NC class whose list stops at
+  `Equipment` still reaches `IdentifiedObject` through the other lists (the
+  pyshacl `ont_graph` gets the same steps).
   SHACL shapes only; schema validation keeps one rule set per Class entry.
   Without `rdf_map`, match is exact `Type`. Identical findings are reported
   once (a property shape on both a parent and a child node shape, the same
