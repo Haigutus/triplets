@@ -472,15 +472,33 @@ class TestSubclassIris:
             triples = subclass_triples(json.load(file))
         assert triples and not any(TRIPLETS_NS in iri for pair in triples for iri in pair)
 
-    def test_descendants_index(self):
-        from triplets.validation.schema_ir import descendants
+    def test_type_ancestors(self):
+        from triplets.validation.schema_ir import type_ancestors
+        shacl, rdfs = triplets.validation.CompiledShapes(graph=None, ir=None, hash="", sources=()), compile_schema(SCHEMA)
         schema = {"EQ": {
             "Breaker": {"type": "Class", "inheritance": [self.CIM + "Breaker", self.CIM + "Switch", self.CIM + "Equipment"]},
-            "Disconnector": {"type": "Class", "inheritance": [self.CIM + "Disconnector", self.CIM + "Switch", self.CIM + "Equipment"]},
+            "Disconnector": {"type": "Class", "inheritance": [self.CIM + "Disconnector", self.CIM + "Switch"]},
         }}
-        index = descendants(schema)
-        assert index["Equipment"] == frozenset({"Breaker", "Disconnector"})
-        assert index["Breaker"] == frozenset({"Breaker"})
+        assert set(type_ancestors(shacl, schema)) == {("Breaker", "Switch"), ("Breaker", "Equipment"),
+                                                     ("Disconnector", "Switch")}
+        assert type_ancestors(shacl, {}) == []
+        assert type_ancestors(next(iter(rdfs.profiles.values())), schema) == []   # schema IR is already per class
+
+
+def test_schema_validation_does_not_widen_to_subclasses(engine):
+    """A concrete parent Class entry (Switch) keeps its own schema rules: a Breaker
+    is not checked against Switch's closed property list or its minOccurs."""
+    section = {**EQ_SECTION, "Switch": {
+        "type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+        "inheritance": ["#Switch", "#Equipment"], "parameters": ["IdentifiedObject.mRID", "Switch.retained"]}}
+    schema = {"EQ": section}
+    clean = breaker("b1", *OK_PROPS) + CONTAINED
+    v = validate_schema(frame(clean), schema, engine=engine, profiles=("EQ",), closed=True)
+    assert violating(v, "schema:domainIncludes") == set()
+    missing = breaker("b1", ("IdentifiedObject.name", "B"), ("Equipment.EquipmentContainer", "vl1")) + CONTAINED
+    v = validate_schema(frame(missing), schema, engine=engine, profiles=("EQ",))
+    shapes = v.loc[v["VIOLATION_TYPE"] == "xsd:minOccurs", "SOURCE_SHAPE"].tolist()
+    assert len(shapes) == 1 and "Breaker.IdentifiedObject.mRID" in shapes[0], shapes
 
 
 def test_accessor():

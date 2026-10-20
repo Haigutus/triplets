@@ -12,10 +12,12 @@ reported in the run's coverage metadata, `skipped_shapes` /
   subclasses. Parents are the absolute IRIs the schema records; a bare name
   resolves like `rdf:type` in the data graph (schema namespace, else
   `undefined_namespace`).
-- **Vectorized engines + `rdf_map`:** a Type index is expanded once
-  (ancestor → union of descendant IDs). `sh:targetClass Equipment` hits
-  `Breaker` without cloning IR rows. Without `rdf_map`, match is exact
-  `Type`.
+- **Vectorized engines + `rdf_map`:** class membership is each object's
+  `Type` plus that class's ancestors from the schema `inheritance`, built once
+  per run: `sh:targetClass Equipment` hits `Breaker`, without extra IR rows.
+  SHACL shapes only; schema validation keeps one rule set per Class entry.
+  Without `rdf_map`, match is exact `Type`. A finding reached through both a
+  parent and a child node shape is reported once.
 - **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
   Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /
   `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —

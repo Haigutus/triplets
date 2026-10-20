@@ -128,28 +128,17 @@ def subclass_triples(rdf_map, undefined_namespace=TRIPLETS_NS):
         if parent != child))
 
 
-def expand_type_index(exact, schema):
-    """``{Type value: id-collection}`` plus ancestor keys → union of descendants.
+def type_ancestors(compiled, rdf_map):
+    """``(Type, ancestor)`` local-name pairs that widen ``sh:targetClass`` / ``sh:class``
+    to subclasses in the vectorized engines (``Breaker`` → ``Switch``, ``Equipment``, …).
 
-    *exact* is the per-``Type`` grouping already built from instance data.
-    Abstract names (``Equipment``) gain an entry; concrete names are unchanged
-    (their descendant set is themselves). Collections are concatenated in the
-    caller's type (list / ndarray / Series) — the caller unique-s them.
+    SHACL shapes only: schema-compiled IR already targets every Class entry with its
+    inherited attributes, so widening it would fire a parent's rules on each subclass.
     """
-    expanded = dict(exact)
-    for ancestor, leaves in descendants(schema).items():
-        parts = [exact[leaf] for leaf in leaves if leaf in exact]
-        # instances typed as the abstract ancestor itself (Type=Equipment)
-        if ancestor in exact and ancestor not in leaves:
-            parts = [exact[ancestor], *parts]
-        if parts:
-            expanded[ancestor] = parts[0] if len(parts) == 1 else parts
-    return expanded
-
-
-def descendants(schema):
-    """ancestor local name → frozenset of concrete Class names inheriting it."""
-    return {key: frozenset(names) for key, names in _concrete_index(schema).items()}
+    if not rdf_map or compiled.language != "shacl":
+        return []
+    return [(leaf, ancestor) for ancestor, leaves in _concrete_index(rdf_map).items()
+            for leaf in leaves if leaf != ancestor]
 
 
 def _concrete_index(schema):

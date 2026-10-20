@@ -26,9 +26,10 @@ import logging
 import pandas
 import polars
 
+from .schema_ir import type_ancestors
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_polars, load_rdf_map, node_kind, value_types
+from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -39,22 +40,22 @@ _COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 class _Context:
     """Lazy base + eagerly materialized shared indices (built once per validate)."""
 
-    def __init__(self, frame, rdf_map=None):
+    def __init__(self, frame, rdf_map=None, ancestors=()):
         self.base = frame.lazy()
         self.rdf_map = rdf_map
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID")
-        # (ID, CLASS) pairs: the objects' own Type rows (what a ( assoc rdf:type )
-        # path yields), and the class-membership side of the batched joins —
-        # with rdf_map the latter also lists every ancestor class
+        # the objects' own Type rows — what a ( assoc rdf:type ) path yields
         self.types = type_rows.rename({"VALUE": "CLASS"}).lazy()
-        self.membership = self.types
+        # class membership: Type rows plus each ancestor class (schema inheritance)
+        if ancestors:
+            pairs = polars.DataFrame(ancestors, schema={"VALUE": type_rows.schema["VALUE"], "ANCESTOR": polars.String},
+                                     orient="row")
+            wider = type_rows.join(pairs, on="VALUE").select(polars.col("ANCESTOR").cast(type_rows.schema["VALUE"]).alias("VALUE"), "ID")
+            type_rows = polars.concat([type_rows, wider]).unique()
+        self.membership = type_rows.rename({"VALUE": "CLASS"}).lazy()
         self._class_ids = {key[0]: part["ID"] for key, part
                            in type_rows.partition_by("VALUE", as_dict=True).items()}
-        if rdf_map is not None:
-            self._class_ids, membership = self._with_ancestors(rdf_map)
-            if membership is not None:
-                self.membership = membership.lazy()
         # is_in wants the membership collection as one list value (imploded);
         # precompute per class so thousands of rule plans share them.
         self._class_ids_imploded = {key: ids.implode()
@@ -62,25 +63,6 @@ class _Context:
         self._all_ids = frame["ID"].unique().implode()
         self._frame = frame
         self._subjects = {}   # KEY → (ids, imploded) for sh:targetSubjectsOf focus
-
-    def _with_ancestors(self, rdf_map):
-        """Precompute ancestor → concat(descendant IDs) and extra membership rows."""
-        from .schema_ir import expand_type_index
-        schema = load_rdf_map(rdf_map)
-        expanded = expand_type_index(self._class_ids, schema)
-        class_ids = {}
-        frames = []
-        for name, parts in expanded.items():
-            if isinstance(parts, list):
-                class_ids[name] = polars.concat(parts).unique()
-            else:
-                class_ids[name] = parts
-            if len(class_ids[name]):
-                frames.append(polars.DataFrame({
-                    "CLASS": [name] * len(class_ids[name]), "ID": class_ids[name],
-                }))
-        membership = polars.concat(frames) if frames else None
-        return class_ids, membership
 
     def class_ids(self, target_class):
         """Flat ID Series (plan *data*, e.g. focus_frame)."""
@@ -523,7 +505,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]
 
-    context = _Context(frame, rdf_map)
+    context = _Context(frame, rdf_map, type_ancestors(compiled, rdf_map))
     batched, plans = {}, []
     for rule in vectorized:
         # batching joins on class membership — subjectsOf targets and two-hop

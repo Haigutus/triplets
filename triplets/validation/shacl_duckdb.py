@@ -24,8 +24,9 @@ import pandas
 
 from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
+from .schema_ir import type_ancestors
 from .shacl_report import VIOLATION_COLUMNS
-from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_duckdb, load_rdf_map, node_kind, value_types
+from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, value_types
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -33,36 +34,30 @@ logger = logging.getLogger(__name__)
 _BATCH_SIZE = 100  # constraints per UNION ALL statement
 
 
-def _class_sql(table, context):
-    """Instances of a class (bound with one class-name parameter).
-
-    ``context.types_table`` is a precomputed (ID, VALUE) relation that already
-    includes ancestor names when rdf_map was passed; otherwise Type rows.
-    """
-    types_table = getattr(context, "types_table", None)
-    if types_table is not None:
-        return f"SELECT ID FROM {types_table} WHERE VALUE = ?"
-    return f"SELECT ID FROM {table} WHERE KEY = '{TYPE_KEY}' AND VALUE = ?"
+def _class_sql():
+    """Instances of a class (bound with one class-name parameter): the ``_shacl_types``
+    table ``validate`` builds — Type rows, plus each ancestor class with rdf_map."""
+    return "SELECT ID FROM _shacl_types WHERE VALUE = ?"
 
 
-def _focus_sql(rule, table, context):
+def _focus_sql(rule, table):
     """The rule's focus nodes (bound with one target_class parameter): a class's
     instances, or the subjects carrying the target property (sh:targetSubjectsOf)."""
     if getattr(rule, "target_kind", "class") == "subjectsOf":
         return f"SELECT DISTINCT ID FROM {table} WHERE KEY = ?"
-    return _class_sql(table, context)
+    return _class_sql()
 
 
-def _rows_sql(rule, table, context):
+def _rows_sql(rule, table):
     """The rule's path as (FOCUS, PV) rows — inverse- and via_type-aware, like
     the other engines (via_type: PV = the referenced object's type; a target
     without a Type row yields no value node, hence the inner join)."""
     if rule.inverse:
         sql = (f"SELECT VALUE AS FOCUS, ID AS PV FROM {table} "
-               f"WHERE KEY = ? AND VALUE IN ({_focus_sql(rule, table, context)})")
+               f"WHERE KEY = ? AND VALUE IN ({_focus_sql(rule, table)})")
     else:
         sql = (f"SELECT ID AS FOCUS, VALUE AS PV FROM {table} "
-               f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table, context)})")
+               f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table)})")
     if getattr(rule, "via_type", False):
         sql = (f"SELECT r.FOCUS AS FOCUS, t.VALUE AS PV FROM ({sql}) r "
                f"JOIN {table} t ON t.ID = r.PV AND t.KEY = '{TYPE_KEY}'")
@@ -87,8 +82,8 @@ _NULL_VALUE = "CAST(NULL AS VARCHAR)"
 # ── SQL builders: (rule, table, context) → (sql, params) ─────────────────────
 
 def _min_count(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table, context)
-    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table, context)}) f "
+    rows, rows_params = _rows_sql(rule, table)
+    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table)}) f "
                 f"LEFT JOIN (SELECT FOCUS, COUNT(*) AS n FROM ({rows}) GROUP BY FOCUS) c "
                 f"ON f.ID = c.FOCUS WHERE COALESCE(c.n, 0) < ?")
     return _wrap(rule, f"{rule.path} occurs fewer than {rule.params} time(s)",
@@ -97,7 +92,7 @@ def _min_count(rule, table, context):
 
 
 def _max_count(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table, context)
+    rows, rows_params = _rows_sql(rule, table)
     from_sql = f"SELECT FOCUS FROM ({rows}) GROUP BY FOCUS HAVING COUNT(*) > ?"
     return _wrap(rule, f"{rule.path} occurs more than {rule.params} time(s)",
                  from_sql, [*rows_params, rule.params], "TRUE", [], value_expr=_NULL_VALUE)
@@ -109,7 +104,7 @@ def _datatype(rule, table, context):
     if spec is None:
         return None
     valid_pattern, warn_pattern = spec
-    rows, rows_params = _rows_sql(rule, table, context)
+    rows, rows_params = _rows_sql(rule, table)
 
     warn_sql = "regexp_full_match(PV, ?)" if warn_pattern else "FALSE"
     warn_params = [warn_pattern] if warn_pattern else []
@@ -129,19 +124,19 @@ def _datatype(rule, table, context):
 
 
 def _pattern(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table, context)
+    rows, rows_params = _rows_sql(rule, table)
     return _wrap(rule, f"value does not match pattern '{rule.params}'",
                  rows, rows_params, "NOT regexp_matches(PV, ?)", [rule.params])
 
 
 def _min_length(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table, context)
+    rows, rows_params = _rows_sql(rule, table)
     return _wrap(rule, f"value is shorter than {rule.params} characters",
                  rows, rows_params, "length(PV) < ?", [rule.params])
 
 
 def _max_length(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table, context)
+    rows, rows_params = _rows_sql(rule, table)
     return _wrap(rule, f"value is longer than {rule.params} characters",
                  rows, rows_params, "length(PV) > ?", [rule.params])
 
@@ -149,14 +144,14 @@ def _max_length(rule, table, context):
 def _range(operator, description):
     """Numeric range builder factory; non-castable values are the datatype check's job."""
     def builder(rule, table, context):
-        rows, rows_params = _rows_sql(rule, table, context)
+        rows, rows_params = _rows_sql(rule, table)
         return _wrap(rule, f"value is {description} {rule.params}",
                      rows, rows_params, f"TRY_CAST(PV AS DOUBLE) {operator} ?", [rule.params])
     return builder
 
 
 def _in(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table, context)
+    rows, rows_params = _rows_sql(rule, table)
     allowed = [str(value) for value in rule.params]
     local = iri_duckdb.local_value("PV")
     return _wrap(rule, f"value is not one of {sorted(allowed)}",
@@ -164,8 +159,8 @@ def _in(rule, table, context):
 
 
 def _has_value(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table, context)
-    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table, context)}) f "
+    rows, rows_params = _rows_sql(rule, table)
+    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table)}) f "
                 f"WHERE f.ID NOT IN (SELECT FOCUS FROM ({rows}) WHERE PV = ?)")
     return _wrap(rule, f"{rule.path} does not have required value '{rule.params}'",
                  from_sql, [rule.target_class, *rows_params, str(rule.params)], "TRUE", [],
@@ -173,15 +168,15 @@ def _has_value(rule, table, context):
 
 
 def _class(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table, context)
+    rows, rows_params = _rows_sql(rule, table)
     return _wrap(rule, f"referenced object is not of class {rule.params}",
-                 rows, rows_params, f"PV NOT IN ({_class_sql(table, context)})", [rule.params])
+                 rows, rows_params, f"PV NOT IN ({_class_sql()})", [rule.params])
 
 
 def _schema_range(rule, table, context):
     """triplets:range — ANY of the target's types in the allowed set conforms
     (issue #100); targets without a Type row are silent."""
-    rows, rows_params = _rows_sql(rule, table, context)
+    rows, rows_params = _rows_sql(rule, table)
     placeholders = ", ".join("?" for _ in rule.params)
     condition = (f"EXISTS (SELECT 1 FROM {table} x WHERE x.ID = PV AND x.KEY = '{TYPE_KEY}') "
                  f"AND PV NOT IN (SELECT ID FROM {table} x "
@@ -194,7 +189,7 @@ def _node_kind(rule, table, context):
     if rule.params not in ("IRI", "Literal"):
         logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)", rule.params, rule.shape_id)
         return None
-    rows, rows_params = _rows_sql(rule, table, context)
+    rows, rows_params = _rows_sql(rule, table)
     # via_type value nodes are the referenced objects' types — always IRIs
     kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types)
     if kind is not None:                                 # schema decides for the whole path
@@ -209,18 +204,18 @@ def _node_kind(rule, table, context):
                  rows, rows_params, condition, condition_params)
 
 
-def _pair_sql(rule, table, context, other_path):
+def _pair_sql(rule, table, other_path):
     """Both paths' values per focus node, for the pair constraints."""
-    left, left_params = _rows_sql(rule, table, context)
+    left, left_params = _rows_sql(rule, table)
     right = (f"SELECT ID AS FOCUS, VALUE AS OTHER FROM {table} "
-             f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table, context)})")
+             f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table)})")
     return left, left_params, right, [other_path, rule.target_class]
 
 
 def _equals(rule, table, context):
     """sh:equals is set equality per focus node: a value present at only one
     of the two properties is a violation; matching multi-valued sets conform."""
-    left, left_params, right, right_params = _pair_sql(rule, table, context, rule.params)
+    left, left_params, right, right_params = _pair_sql(rule, table, rule.params)
     from_sql = (f"SELECT a.FOCUS AS FOCUS, a.PV AS PV FROM ({left}) a "
                 f"ANTI JOIN ({right}) b ON a.FOCUS = b.FOCUS AND a.PV = b.OTHER "
                 f"UNION ALL "
@@ -231,7 +226,7 @@ def _equals(rule, table, context):
 
 
 def _disjoint(rule, table, context):
-    left, left_params, right, right_params = _pair_sql(rule, table, context, rule.params)
+    left, left_params, right, right_params = _pair_sql(rule, table, rule.params)
     from_sql = (f"SELECT a.FOCUS AS FOCUS, a.PV AS PV FROM ({left}) a "
                 f"JOIN ({right}) b ON a.FOCUS = b.FOCUS WHERE a.PV = b.OTHER")
     return _wrap(rule, f"{rule.path} shares a value with {rule.params}",
@@ -242,7 +237,7 @@ def _pair_compare(operator, description):
     """sh:lessThan(-OrEquals): violation when the comparison does not hold
     (incl. non-numeric pairs — null comparisons count as failed, like pandas)."""
     def builder(rule, table, context):
-        left, left_params, right, right_params = _pair_sql(rule, table, context, rule.params)
+        left, left_params, right, right_params = _pair_sql(rule, table, rule.params)
         from_sql = (f"SELECT a.FOCUS AS FOCUS, a.PV AS PV FROM ({left}) a "
                     f"JOIN ({right}) b ON a.FOCUS = b.FOCUS "
                     f"WHERE NOT COALESCE(TRY_CAST(a.PV AS DOUBLE) {operator} TRY_CAST(b.OTHER AS DOUBLE), FALSE)")
@@ -254,7 +249,7 @@ def _pair_compare(operator, description):
 def _closed(rule, table, context):
     allowed = list(set(rule.params) | {TYPE_KEY})
     sql = (f"SELECT ID, KEY, VALUE, ? AS VIOLATION_TYPE, ? AS MESSAGE, ? AS SEVERITY, ? AS SOURCE_SHAPE "
-           f"FROM {table} WHERE ID IN ({_focus_sql(rule, table, context)}) AND NOT list_contains(?, KEY)")
+           f"FROM {table} WHERE ID IN ({_focus_sql(rule, table)}) AND NOT list_contains(?, KEY)")
     params = [rule.component, rule.message or "property is not allowed on a closed shape",
               rule.severity, rule.shape_id, rule.target_class, allowed]
     return sql, params
@@ -288,35 +283,23 @@ SQL_BUILDERS = {
 class _Context:
     """Schema-driven term-kind decisions (shared with the other vectorized engines)."""
 
-    def __init__(self, rdf_map, types_table=None):
+    def __init__(self, rdf_map):
         self.rdf_map = rdf_map
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
-        self.types_table = types_table
 
 
-def _register_type_index(connection, table, rdf_map):
-    """Temp (ID, VALUE) relation: instance Type rows, plus ancestor names when
-    rdf_map is present — so ``VALUE = 'Equipment'`` hits Breaker IDs."""
-    types = connection.execute(
-        f"SELECT ID, VALUE FROM {table} WHERE KEY = '{TYPE_KEY}'").df()
-    if rdf_map is not None and not types.empty:
-        from .schema_ir import expand_type_index
-        schema = load_rdf_map(rdf_map)
-        exact = {value: group["ID"].to_numpy() for value, group
-                 in types.groupby("VALUE", sort=False)}
-        expanded = expand_type_index(exact, schema)
-        rows = []
-        for name, parts in expanded.items():
-            if isinstance(parts, list):
-                ids = pandas.unique(pandas.concat(
-                    [pandas.Series(part) for part in parts], ignore_index=True))
-            else:
-                ids = parts
-            for object_id in ids:
-                rows.append((object_id, name))
-        types = pandas.DataFrame(rows, columns=["ID", "VALUE"])
-    connection.register("_shacl_types", types)
-    return "_shacl_types"
+def _create_types_table(connection, table, ancestors):
+    """Temp ``_shacl_types`` (ID, VALUE): each object's Type rows, and its ancestor
+    classes from *ancestors* ``(Type, ancestor)`` pairs. A native table: a registered
+    pandas frame scanned by thousands of subqueries is several times slower."""
+    types = f"SELECT ID, VALUE FROM {table} WHERE KEY = '{TYPE_KEY}'"
+    if ancestors:
+        connection.register("_shacl_type_ancestors", pandas.DataFrame(ancestors, columns=["VALUE", "ANCESTOR"]))
+        types = (f"WITH types AS ({types}) SELECT ID, VALUE FROM types UNION ALL "
+                 f"SELECT types.ID, pairs.ANCESTOR FROM types JOIN _shacl_type_ancestors pairs USING (VALUE)")
+    connection.execute(f"CREATE OR REPLACE TEMP TABLE _shacl_types AS SELECT DISTINCT ID, VALUE FROM ({types})")
+    if ancestors:
+        connection.unregister("_shacl_type_ancestors")
 
 
 def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
@@ -343,7 +326,8 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]
 
-    context = _Context(rdf_map, types_table=_register_type_index(connection, table, rdf_map))
+    _create_types_table(connection, table, type_ancestors(compiled, rdf_map))
+    context = _Context(rdf_map)
     built = [statement for rule in vectorized
              if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]
 

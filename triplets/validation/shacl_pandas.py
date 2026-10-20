@@ -44,7 +44,8 @@ import numpy
 import pandas
 
 from ..export.nquads_utils import make_subject
-from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, load_rdf_map, node_kind, split_iri, value_types
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, split_iri, value_types
+from .schema_ir import type_ancestors
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -90,9 +91,10 @@ class _Context:
     instead of once per rule (the polars/duckdb compilers follow the same shape).
     """
 
-    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS):
+    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS, ancestors=()):
         self.data = data
         self.rdf_map = rdf_map
+        self.ancestors = ancestors   # (Type, ancestor) pairs — see schema_ir.type_ancestors
         self.undefined_namespace = undefined_namespace
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self._by_key = None
@@ -122,28 +124,16 @@ class _Context:
         return self._by_key.get(key, self.data.iloc[0:0])
 
     def class_ids(self, target_class):
-        """IDs of all instances of *target_class* (and, with rdf_map, its descendants)."""
+        """IDs of all instances of *target_class*, subclasses included (``ancestors``)."""
         if self._class_ids is None:
-            exact = {value: frame["ID"].unique() for value, frame
-                     in self.key_rows(TYPE_KEY).groupby("VALUE", observed=True, sort=False)}
-            self._class_ids = self._with_ancestors(exact)
+            types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype({"VALUE": object})
+            if self.ancestors:
+                pairs = pandas.DataFrame(self.ancestors, columns=["VALUE", "ANCESTOR"], dtype=object)
+                wider = types.merge(pairs, on="VALUE")[["ID", "ANCESTOR"]].rename(columns={"ANCESTOR": "VALUE"})
+                types = pandas.concat([types, wider], ignore_index=True)
+            self._class_ids = {value: frame["ID"].unique() for value, frame
+                               in types.groupby("VALUE", sort=False)}
         return self._class_ids.get(target_class, _NO_IDS)
-
-    def _with_ancestors(self, exact):
-        """Precompute ancestor → concat(descendant IDs). One pass; then O(1) lookup."""
-        if self.rdf_map is None:
-            return exact
-        from .schema_ir import expand_type_index
-        schema = load_rdf_map(self.rdf_map)
-        expanded = expand_type_index(exact, schema)
-        out = {}
-        for name, parts in expanded.items():
-            if isinstance(parts, list):
-                out[name] = pandas.unique(numpy.concatenate(
-                    [numpy.asarray(part, dtype=object) for part in parts]))
-            else:
-                out[name] = parts
-        return out
 
     @property
     def all_ids(self):
@@ -680,7 +670,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     if skipped:
         logger.debug("pandas engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
 
-    context = _Context(data, rdf_map, undefined_namespace)
+    context = _Context(data, rdf_map, undefined_namespace, type_ancestors(compiled, rdf_map))
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
 
