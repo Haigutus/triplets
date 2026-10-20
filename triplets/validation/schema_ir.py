@@ -21,7 +21,7 @@ Cardinality comes from the schema's already-resolved ``xsd:minOccours`` /
 ``xsd:maxOccours`` fields, datatypes from ``xsd:type`` (the lexical registry
 consumes that form directly), enumeration membership from ``values``, and
 association targets from ``range`` expanded to concrete subclasses via the
-classes' ``inheritance`` lists — the expansion index spans ALL sections
+classes' ``inheritance`` lists (``inheritance=True``, the default) — the expansion index spans ALL sections
 (class inheritance is model knowledge, not a profile constraint). A
 referenced object conforms when ANY of its types is in the range set;
 dangling references are silent. No rdflib on this path: ``graph`` is None
@@ -73,20 +73,26 @@ class CompiledSchema:
         return self.index.get(str(identifier))
 
 
-def compile_schema(rdf_map, closed=False) -> CompiledSchema:
+def compile_schema(rdf_map, closed=False, inheritance=True) -> CompiledSchema:
     """Compile every profile contained in the export schema (dict or path).
 
     closed=False (default): properties a profile does not define for a class
     are not reported. closed=True adds one schema:domainIncludes check per
     class and profile.
+
+    inheritance=True (default): an association range accepts the concrete
+    subclasses of the range class. False: only the range class itself — a
+    range naming an abstract class (no Class entry) is skipped and listed in
+    ``skipped_shapes``. Class rules never widen either way: each Class entry
+    already lists its inherited attributes.
     """
     schema, digest, source = load_schema(rdf_map)
-    key = f"schema|closed={closed}|{digest}"
+    key = f"schema|closed={closed}|inheritance={inheritance}|{digest}"
     if key in _COMPILE_CACHE:
         logger.debug("schema compile cache hit: %s", key[:30])
         return _COMPILE_CACHE[key]
 
-    concrete = _concrete_index(schema)
+    concrete = _concrete_index(schema, inheritance)
     profiles, skipped = {}, []
     for section, entries in schema.items():
         if not isinstance(entries, dict):
@@ -141,16 +147,17 @@ def type_ancestors(compiled, rdf_map):
             for leaf in leaves if leaf != ancestor]
 
 
-def _concrete_index(schema):
+def _concrete_index(schema, inheritance=True):
     """ancestor local name → concrete classes inheriting it, across ALL
-    sections — inheritance is model knowledge, not a profile constraint."""
+    sections — inheritance is model knowledge, not a profile constraint.
+    inheritance=False: each class maps to itself only."""
     concrete = {}
     for entries in schema.values():
         if not isinstance(entries, dict):
             continue
         for name, entry in entries.items():
             if isinstance(entry, dict) and entry.get("type") == "Class":
-                for ancestor in entry.get("inheritance", ()):
+                for ancestor in (entry.get("inheritance", ()) if inheritance else (name,)):
                     concrete.setdefault(local_value(ancestor, "class"), set()).add(name)
     return concrete
 

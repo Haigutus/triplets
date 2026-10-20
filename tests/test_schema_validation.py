@@ -158,6 +158,31 @@ def test_association_range_abstract_expansion(engine):
         == 'referenced object sub1 found — Substation "Main Sub"'
 
 
+def test_association_range_without_inheritance(engine):
+    """inheritance=False: a concrete range (Switch) accepts Switch only, not its
+    subclass Breaker; an abstract range (EquipmentContainer) is skipped and
+    listed in the coverage."""
+    section = {**EQ_SECTION,
+               "Switch": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                          "inheritance": ["#Switch", "#Equipment"], "parameters": ["Breaker.backup"]},
+               "Breaker": {**EQ_SECTION["Breaker"],
+                           "parameters": [*EQ_SECTION["Breaker"]["parameters"], "Breaker.backup"]},
+               "Breaker.backup": {"type": "Association", "multiplicity": "0..1",
+                                  "xsd:minOccours": "0", "xsd:maxOccours": "1", "range": "#Switch"}}
+    schema = {"EQ": section}
+    rows = (breaker("b1", *OK_PROPS, ("Breaker.backup", "b2")) + CONTAINED
+            + breaker("b2", *OK_PROPS) + [("sub1", "Type", "Substation", "eq")])
+    rows = [row if row != ("b2", "Equipment.EquipmentContainer", "vl1", "eq")
+            else ("b2", "Equipment.EquipmentContainer", "sub1", "eq") for row in rows]
+    on = validate_schema(frame(rows), schema, engine=engine, profiles=("EQ",))
+    assert violating(on, "rdfs:range") == {("b2", "sub1")}
+    off = validate_schema(frame(rows), schema, engine=engine, profiles=("EQ",), inheritance=False)
+    assert violating(off, "rdfs:range") == {("b1", "b2")}
+    assert any("EquipmentContainer" in entry for entry in off.attrs["validation"]["skipped_shapes"])
+    assert off.attrs["validation"]["inheritance"] is False
+    assert compile_schema(schema).hash != compile_schema(schema, inheritance=False).hash
+
+
 def test_association_multi_typed_target_conforms(engine):
     """SSH/TP re-type EQ objects (issue #100): a target with several rdf:type
     values conforms when ANY of them is in the expanded range set."""

@@ -27,6 +27,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   validation (`validate_schema`) is unchanged: its rules are already per
   Class entry. A finding reached through both a parent and a child node
   shape is reported once, on every engine.
+- **`inheritance=True` on `validate`, `validate_schema` and `compile_schema`:**
+  False matches the exact `rdf:type` on every engine (pyshacl without
+  `ont_graph`), and schema association ranges accept the range class only
+  (abstract ranges skipped). Recorded in `attrs["validation"]["inheritance"]`.
 - **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
   `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
   [application-profiles-library](https://github.com/entsoe/application-profiles-library)

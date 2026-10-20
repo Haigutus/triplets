@@ -486,7 +486,8 @@ BATCH_BUILDERS = {
 }
 
 
-def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None, **kwargs):
+def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
+             inheritance=True, **kwargs):
     """Validate triplet data against the compiled constraint table (lazy polars).
 
     Parameters mirror shacl_pandas.validate. Vectorized components run as one
@@ -505,7 +506,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]
 
-    context = _Context(frame, rdf_map, type_ancestors(compiled, rdf_map))
+    context = _Context(frame, rdf_map, type_ancestors(compiled, rdf_map) if inheritance else ())
     batched, plans = {}, []
     for rule in vectorized:
         # batching joins on class membership — subjectsOf targets and two-hop
@@ -534,7 +535,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         from . import shacl_pandas
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
-                                           max_workers=max_workers, **kwargs)
+                                           max_workers=max_workers, inheritance=inheritance, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     return violations
 

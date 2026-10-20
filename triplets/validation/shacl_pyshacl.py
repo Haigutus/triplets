@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 def validate(data, compiled, rdf_map=None, scope=None, inference="none",
-             advanced=True, abort_on_first=False, store="memory", undefined_namespace=CIM_NS, **kwargs):
+             advanced=True, abort_on_first=False, store="memory", undefined_namespace=CIM_NS,
+             inheritance=True, **kwargs):
     """Validate triplet data against compiled shapes; return a violations DataFrame.
 
     Parameters
@@ -28,9 +29,10 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
     compiled : CompiledShapes
         From ``triplets.validation.compile`` — this engine uses the shapes graph.
     rdf_map : dict or str, optional
-        Export schema — xsd-typed literals in the data graph, and its
-        ``inheritance`` as ``rdfs:subClassOf`` via pyshacl ``ont_graph``, so
-        ``sh:targetClass`` / ``sh:class`` see SHACL instances of ancestors.
+        Export schema — xsd-typed literals in the data graph, and (with
+        ``inheritance``) its ``inheritance`` lists as ``rdfs:subClassOf`` via
+        pyshacl ``ont_graph``, so ``sh:targetClass`` / ``sh:class`` see SHACL
+        instances of ancestors. inheritance=False passes no ``ont_graph``.
     scope : iterable of INSTANCE_ID, optional
         Validate only these instances' named graphs — data outside the scope
         is not loaded, so references into unscoped instances count as absent.
@@ -59,7 +61,7 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
 
     data_graph = scoped_graph(load_dataset(data, rdf_map=rdf_map, store=store,
                                            undefined_namespace=undefined_namespace), scope)
-    ont_graph = _ontology_graph(rdf_map, undefined_namespace) if rdf_map else None
+    ont_graph = _ontology_graph(rdf_map, undefined_namespace) if rdf_map and inheritance else None
 
     conforms, report_graph, _report_text = pyshacl_validate(
         data_graph, shacl_graph=compiled.graph, ont_graph=ont_graph,
