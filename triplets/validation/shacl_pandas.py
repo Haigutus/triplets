@@ -639,7 +639,7 @@ CONSTRAINT_VALIDATORS = {
 
 
 def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
-             undefined_namespace=CIM_NS, **kwargs):
+             undefined_namespace=CIM_NS, inheritance=True, **kwargs):
     """Validate triplet data against the compiled constraint table.
 
     Parameters
@@ -658,6 +658,9 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     max_workers : int, optional
         Run the sh:sparql constraint queries in parallel processes (fork).
         None = sequential.
+    inheritance : bool, default True
+        Class targets and sh:class also match subclass instances (rdf_map
+        ``inheritance``); False = exact rdf:type only.
     """
     data = _to_pandas(data)
     if scope is not None:
@@ -670,7 +673,8 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     if skipped:
         logger.debug("pandas engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
 
-    context = _Context(data, rdf_map, undefined_namespace, type_ancestors(compiled, rdf_map))
+    context = _Context(data, rdf_map, undefined_namespace,
+                       type_ancestors(compiled, rdf_map) if inheritance else ())
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
 

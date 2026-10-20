@@ -18,6 +18,11 @@ reported in the run's coverage metadata, `skipped_shapes` /
   SHACL shapes only; schema validation keeps one rule set per Class entry.
   Without `rdf_map`, match is exact `Type`. A finding reached through both a
   parent and a child node shape is reported once.
+- **`inheritance=False`** (`validate`, `validate_schema`, `compile_schema`)
+  turns the subclass walk off on every engine: SHACL class targets and
+  `sh:class` match the exact `rdf:type` (pyshacl gets no `ont_graph`); schema
+  association ranges accept the range class only, and a range naming an
+  abstract class is skipped (`skipped_shapes`). The run metadata records it.
 - **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
   Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /
   `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —
@@ -353,7 +358,8 @@ Per profile the checks are: cardinality from the resolved `xsd:minOccours`/
 declares it 0..1/not serialized, CGMES 3.0/NCP 1..1), datatype lexical checks
 from `xsd:type`, enumeration membership from `values`, association targets
 from `range` expanded to concrete subclasses via `inheritance` (the expansion
-index spans all sections — inheritance is model knowledge). A referenced
+index spans all sections — inheritance is model knowledge; `inheritance=False`
+keeps the range class only). A referenced
 object conforms when ANY of its types is in the range set; dangling
 references are silent (cross-instance references resolve outside the scope).
 `closed=True` adds an unknown-property check per class and profile

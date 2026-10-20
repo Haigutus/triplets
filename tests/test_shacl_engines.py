@@ -662,6 +662,24 @@ def test_shape_on_parent_and_child_reports_once(engine):
     assert (v["VIOLATION_TYPE"] == "sh:minCount").sum() == 1
 
 
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_inheritance_off_matches_exact_type(engine_name):
+    """inheritance=False: sh:targetClass Equipment no longer reaches a Breaker,
+    on every engine (pyshacl gets no ont_graph)."""
+    pytest.importorskip(engine_name)
+    shape = """cim:EqShape a sh:NodeShape ; sh:targetClass cim:Equipment ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    on = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA)
+    off = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, inheritance=False)
+    assert violating(on, "sh:minCount") == {("b1", None)}
+    assert violating(off, "sh:minCount") == set()
+    assert off.attrs["validation"]["inheritance"] is False
+
+
 def test_pyshacl_ont_graph_abstract_target():
     """pyshacl + rdf_map: sh:targetClass Equipment hits concrete subclasses via
     ont_graph rdfs:subClassOf — instance Type stays Breaker."""

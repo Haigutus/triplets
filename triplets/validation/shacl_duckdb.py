@@ -303,7 +303,7 @@ def _create_types_table(connection, table, ancestors):
 
 
 def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
-             table=None, schema=None, table_name=None, **kwargs):
+             table=None, schema=None, table_name=None, inheritance=True, **kwargs):
     """Validate triplet data against the compiled constraint table (DuckDB SQL).
 
     Parameters mirror shacl_pandas.validate, plus:
@@ -326,7 +326,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]
 
-    _create_types_table(connection, table, type_ancestors(compiled, rdf_map))
+    _create_types_table(connection, table, type_ancestors(compiled, rdf_map) if inheritance else ())
     context = _Context(rdf_map)
     built = [statement for rule in vectorized
              if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]
@@ -354,7 +354,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         frame = connection.execute(f"SELECT * FROM {table}").df()
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
-                                           max_workers=max_workers, **kwargs)
+                                           max_workers=max_workers, inheritance=inheritance, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     return violations
 

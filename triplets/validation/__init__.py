@@ -87,7 +87,7 @@ def get_engine(name: str = "auto"):
 
 
 def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True,
-             context=False, undefined_namespace=CIM_NS, **kwargs):
+             context=False, undefined_namespace=CIM_NS, inheritance=True, **kwargs):
     """Validate triplet data against SHACL shapes; return a violations DataFrame.
 
     Parameters
@@ -97,8 +97,8 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         SHACL shapes (format auto-detected by extension). Pass the result of
         ``compile(shapes)`` to reuse the parsed shapes across validations.
     rdf_map : dict or str, optional
-        Export schema — xsd-typed literals in the data graph; with the pyshacl
-        engine also its ``inheritance`` as ``rdfs:subClassOf`` (pyshacl ``ont_graph``).
+        Export schema — xsd-typed literals in the data graph, and its
+        ``inheritance`` lists for the subclass walk (see ``inheritance``).
     scope : iterable of INSTANCE_ID, optional
         Validate only these instances' named graphs — data outside the scope
         is not loaded, so references into unscoped instances count as absent.
@@ -118,6 +118,11 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     undefined_namespace : str, default CIM100
         Namespace for names the schema does not declare (every name without
         an rdf_map) in the graph the sh:sparql constraints and pyshacl see.
+    inheritance : bool, default True
+        ``sh:targetClass`` and ``sh:class`` also match instances of subclasses,
+        from the rdf_map ``inheritance`` lists (pyshacl: as ``rdfs:subClassOf``
+        in ``ont_graph``). False matches the exact ``rdf:type`` only. No effect
+        without an rdf_map.
 
     The returned frame carries the validation-run metadata in
     ``violations.attrs["validation"]`` (start/end timestamps and duration,
@@ -132,24 +137,27 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     engine_name, engine_mod = get_engine(engine)
     table_ref = _table_ref(data, **kwargs)
     violations = _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical,
-                      undefined_namespace=undefined_namespace, **kwargs)
+                      undefined_namespace=undefined_namespace, inheritance=inheritance, **kwargs)
     violations = _present(violations, data, compiled.ir, compiled.language, table_ref)
     if context:
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
     violations.attrs["validation"] = _report_metadata(
         violations, data, compiled, engine_name, started, table_name=table_ref)
+    violations.attrs["validation"]["inheritance"] = inheritance
     return violations
 
 
-def _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, undefined_namespace=CIM_NS, **kwargs):
+def _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, undefined_namespace=CIM_NS,
+         inheritance=True, **kwargs):
     """One engine pass, plus the lexical datatype supplement when the engine
     does not emit it itself — raw violations, presentation columns not yet added."""
     violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, scope=scope,
-                                     undefined_namespace=undefined_namespace, **kwargs)
+                                     undefined_namespace=undefined_namespace, inheritance=inheritance, **kwargs)
     if lexical and engine_name not in _LEXICAL_BUILTIN:
         from . import shacl_pandas
         supplement = shacl_pandas.validate(data, compiled, rdf_map=rdf_map, scope=scope,
-                                           components=("sh:datatype",), undefined_namespace=undefined_namespace)
+                                           components=("sh:datatype",), undefined_namespace=undefined_namespace,
+                                           inheritance=inheritance)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     # one finding once: a property shape on a parent and a child node shape both
     # reach a subclass instance, like the lexical supplement repeats pyshacl
@@ -358,7 +366,8 @@ def _type_map(data, table_name="triplets"):
     return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
 
 
-def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, undefined_namespace=CIM_NS, **kwargs):
+def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, undefined_namespace=CIM_NS,
+                    inheritance=True, **kwargs):
     """Validate triplet data against the export schema — per instance, per
     declared profile; profiles are never merged.
 
@@ -377,11 +386,13 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, u
         raise ValueError. Default None = resolve from each instance's header;
         instances resolving to nothing are skipped and reported in the run
         metadata coverage (``skipped_shapes``).
+    inheritance : bool, default True
+        Passed to ``compile_schema``: association ranges accept subclasses.
     """
     import triplets
 
     started = datetime.now(timezone.utc)
-    compiled_set = compile_schema(rdf_map, closed=closed)   # caches on the file digest — takes the path
+    compiled_set = compile_schema(rdf_map, closed=closed, inheritance=inheritance)   # caches on the file digest
     rdf_map = load_rdf_map(rdf_map)                          # dict for every per-profile engine run
     table_name = _table_ref(data, **kwargs)
     engine_name, engine_mod = get_engine(engine)
@@ -413,7 +424,8 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, u
     frames = []
     for instance, section in runs:
         sub = _run(data, compiled_set.profiles[section], engine_name, engine_mod,
-                   rdf_map, [instance], lexical, undefined_namespace=undefined_namespace, **kwargs)
+                   rdf_map, [instance], lexical, undefined_namespace=undefined_namespace,
+                   inheritance=inheritance, **kwargs)
         sub["PROFILE"] = section
         frames.append(sub)
 
@@ -445,6 +457,7 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, u
         "source": _source_labels(data, table_name=table_name),
         "references": list(compiled_set.sources),
         "language": "rdfs",
+        "inheritance": inheritance,
         "profiles": used,
         "node_shapes": sum(compiled_set.profiles[s].stats["node_shapes"] for s in used),
         "constraints": sum(compiled_set.profiles[s].stats["constraints"] for s in used),
