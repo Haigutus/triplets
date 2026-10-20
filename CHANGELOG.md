@@ -23,7 +23,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **polars / pandas / duckdb SHACL follow the export-schema inheritance:** with
   `rdf_map`, `sh:targetClass` / `sh:class` on a parent class reach its
   subclasses (`Equipment` → `Breaker`), through one class-membership index per
-  run built from `schema_ir.type_ancestors`; the IR is not fanned out. Schema
+  run built from `schema_ir.type_ancestors`; the IR is not fanned out. The
+  walk is transitive across profiles (NC lists stop at shared classes, e.g. SSI
+  `ACLineSegment` → `Equipment`); schema association ranges and the pyshacl
+  `ont_graph` (`subclass_triples`) use the same steps. Schema
   class rules do not widen: each Class entry already lists its inherited
   attributes. Identical findings are reported once on every engine (a
   property shape on both a parent and a child node shape, the same triple in

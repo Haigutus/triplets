@@ -158,6 +158,18 @@ def test_association_range_abstract_expansion(engine):
         == 'referenced object sub1 found — Substation "Main Sub"'
 
 
+def test_association_range_expansion_is_transitive():
+    """A range class reached only through another profile's list still expands:
+    ACLineSegment's own list stops at Equipment, Breaker's goes on to IdentifiedObject."""
+    schema = {"SSI": {"ACLineSegment": {"type": "Class", "inheritance": ["#ACLineSegment", "#Equipment"]}},
+              "EQ": {"Breaker": {"type": "Class", "inheritance": ["#Breaker", "#Equipment", "#IdentifiedObject"],
+                                 "parameters": ["Breaker.Owner"]},
+                     "Breaker.Owner": {"type": "Association", "xsd:minOccours": "0", "xsd:maxOccours": "1",
+                                       "range": "#IdentifiedObject"}}}
+    rows = compile_schema(schema).profiles["EQ"].ir.query("component == 'triplets:range'")
+    assert rows["params"].iloc[0] == ["ACLineSegment", "Breaker"]
+
+
 def test_association_range_without_inheritance(engine):
     """inheritance=False: a concrete range (Switch) accepts Switch only, not its
     subclass Breaker; an abstract range (EquipmentContainer) is skipped and
@@ -504,8 +516,9 @@ class TestSubclassIris:
             "Breaker": {"type": "Class", "inheritance": [self.CIM + "Breaker", self.CIM + "Switch", self.CIM + "Equipment"]},
             "Disconnector": {"type": "Class", "inheritance": [self.CIM + "Disconnector", self.CIM + "Switch"]},
         }}
+        # Disconnector's list stops at Switch; Breaker's list carries Switch → Equipment
         assert set(type_ancestors(shacl, schema)) == {("Breaker", "Switch"), ("Breaker", "Equipment"),
-                                                     ("Disconnector", "Switch")}
+                                                     ("Disconnector", "Switch"), ("Disconnector", "Equipment")}
         assert type_ancestors(shacl, {}) == []
         assert type_ancestors(next(iter(rdfs.profiles.values())), schema) == []   # schema IR is already per class
 
