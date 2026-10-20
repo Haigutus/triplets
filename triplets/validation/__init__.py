@@ -150,10 +150,11 @@ def _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, undef
         from . import shacl_pandas
         supplement = shacl_pandas.validate(data, compiled, rdf_map=rdf_map, scope=scope,
                                            components=("sh:datatype",), undefined_namespace=undefined_namespace)
-        violations = (pandas.concat([violations, supplement], ignore_index=True)
-                      .drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
-                                               "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
-    return violations
+        violations = pandas.concat([violations, supplement], ignore_index=True)
+    # one finding once: a property shape on a parent and a child node shape both
+    # reach a subclass instance, like the lexical supplement repeats pyshacl
+    return violations.drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
+                                              "SOURCE_SHAPE", "SEVERITY"], ignore_index=True)
 
 
 def _present(violations, data, ir, language, table_name="triplets"):

@@ -648,6 +648,20 @@ def test_sh_class_accepts_subclasses_via_index(engine):
     assert violating(v, "sh:class") == {("b2", "sub1")}
 
 
+def test_shape_on_parent_and_child_reports_once(engine):
+    """One property shape on both a parent and a child node shape (CGMES SHACL
+    attaches inherited attributes to each) reaches a Breaker twice: one finding, like pyshacl."""
+    shape = """cim:NameShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 .
+        cim:SwitchShape a sh:NodeShape ; sh:targetClass cim:Switch ; sh:property cim:NameShape .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:NameShape ."""
+    data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    assert (v["VIOLATION_TYPE"] == "sh:minCount").sum() == 1
+
+
 def test_pyshacl_ont_graph_abstract_target():
     """pyshacl + rdf_map: sh:targetClass Equipment hits concrete subclasses via
     ont_graph rdfs:subClassOf — instance Type stays Breaker."""
