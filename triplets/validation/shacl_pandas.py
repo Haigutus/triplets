@@ -647,9 +647,10 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     data : triplet DataFrame (pandas/polars), arrow, or DuckDB connection
     compiled : CompiledShapes
         From ``triplets.validation.compile`` — this engine executes the IR.
-    rdf_map : dict or str, optional
-        Used only for the sh:sparql constraints (typed literals in the queried
-        graph); every other component reads the raw lexical forms directly.
+    rdf_map : dict, optional
+        Loaded export schema: typed literals for the sh:sparql graph, the
+        IRI/literal decision for sh:nodeKind, and the ``inheritance`` lists
+        for the subclass walk. Every other component reads the raw lexical forms.
     scope : iterable of INSTANCE_ID, optional
         Validate only rows of these instances.
     components : iterable of component names, optional

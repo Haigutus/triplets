@@ -320,3 +320,44 @@ def test_input_flavor_parity(mixed_data, shape_file):
 
     native_duckdb = con.shacl.validate(shape_file, engine="duckdb")   # SQL directly on the table
     assert _violation_set(native_duckdb) == _violation_set(reference)
+
+
+# CGMES 61970-452 EQ shape on a parent class (RegulatingControl): with the
+# schema inheritance it reaches every TapChangerControl, which never has a
+# RegulatingCondEq — pyshacl (ont_graph) and the vectorized engines must agree
+REGULATING_CONTROL_SHAPE = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix eq452: <http://iec.ch/TC57/ns/CIM/Equipment-EU/constraints/IEC61970-452/3.0#> .
+
+eq452:RegulatingControl a sh:NodeShape ;
+    sh:property eq452:RegulatingControl-RegulatingEquipment ;
+    sh:targetClass cim:RegulatingControl .
+eq452:RegulatingControl-RegulatingEquipment a sh:PropertyShape ;
+    sh:path [ sh:inversePath cim:RegulatingCondEq.RegulatingControl ] ;
+    sh:minCount 1 ;
+    sh:severity sh:Violation .
+"""
+
+
+@pytest.mark.parametrize("inheritance", [True, False])
+def test_inheritance_parity_on_real_data(svedala_eq, tmp_path, inheritance):
+    """Svedala EQ: all engines report the same TapChangerControls with the
+    inheritance walk, and none without it."""
+    pytest.importorskip("polars")
+    pytest.importorskip("duckdb")
+    from triplets.export_schema import schemas
+
+    path = tmp_path / "regulating_control.ttl"
+    path.write_text(REGULATING_CONTROL_SHAPE)
+    rdf_map = triplets.iri.load_rdf_map(schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+    found = {engine: set(triplets.validation.validate(
+                 svedala_eq, str(path), engine=engine, rdf_map=rdf_map, inheritance=inheritance).query(
+                 "VIOLATION_TYPE == 'sh:minCount'")["ID"])
+             for engine in ("pyshacl", "pandas", "polars", "duckdb")}
+    assert all(ids == found["pyshacl"] for ids in found.values()), {k: len(v) for k, v in found.items()}
+    types = svedala_eq.query("KEY == 'Type'").set_index("ID")["VALUE"]
+    if inheritance:
+        assert found["pyshacl"] and set(types[list(found["pyshacl"])]) == {"TapChangerControl"}
+    else:
+        assert found["pyshacl"] == set()

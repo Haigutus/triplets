@@ -14,15 +14,17 @@ reported in the run's coverage metadata, `skipped_shapes` /
   `undefined_namespace`).
 - **Vectorized engines + `rdf_map`:** class membership is each object's
   `Type` plus that class's ancestors from the schema `inheritance`, built once
-  per run: `sh:targetClass Equipment` hits `Breaker`, without extra IR rows.
+  per run: `sh:targetClass Equipment` hits `Breaker`.
   SHACL shapes only; schema validation keeps one rule set per Class entry.
-  Without `rdf_map`, match is exact `Type`. A finding reached through both a
-  parent and a child node shape is reported once.
+  Without `rdf_map`, match is exact `Type`. Identical findings are reported
+  once (a property shape on both a parent and a child node shape, the same
+  triple in two instance files).
 - **`inheritance=False`** (`validate`, `validate_schema`, `compile_schema`)
   turns the subclass walk off on every engine: SHACL class targets and
   `sh:class` match the exact `rdf:type` (pyshacl gets no `ont_graph`); schema
   association ranges accept the range class only, and a range naming an
-  abstract class is skipped (`skipped_shapes`). The run metadata records it.
+  abstract class is skipped (`skipped_shapes`) — most CIM ranges are abstract,
+  so most range checks drop out. The run metadata records it.
 - **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
   Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /
   `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —

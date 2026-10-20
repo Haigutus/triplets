@@ -49,9 +49,8 @@ class _Context:
         self.types = type_rows.rename({"VALUE": "CLASS"}).lazy()
         # class membership: Type rows plus each ancestor class (schema inheritance)
         if ancestors:
-            pairs = polars.DataFrame(ancestors, schema={"VALUE": type_rows.schema["VALUE"], "ANCESTOR": polars.String},
-                                     orient="row")
-            wider = type_rows.join(pairs, on="VALUE").select(polars.col("ANCESTOR").cast(type_rows.schema["VALUE"]).alias("VALUE"), "ID")
+            pairs = polars.DataFrame(ancestors, schema={"VALUE": polars.String, "ANCESTOR": polars.String}, orient="row")
+            wider = type_rows.join(pairs, on="VALUE").select(polars.col("ANCESTOR").alias("VALUE"), "ID")
             type_rows = polars.concat([type_rows, wider]).unique()
         self.membership = type_rows.rename({"VALUE": "CLASS"}).lazy()
         self._class_ids = {key[0]: part["ID"] for key, part

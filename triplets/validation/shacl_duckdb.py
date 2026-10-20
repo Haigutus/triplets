@@ -356,6 +356,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
                                            components={rule.component for rule in fallback},
                                            max_workers=max_workers, inheritance=inheritance, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
+    connection.execute("DROP TABLE IF EXISTS _shacl_types")   # don't leave it on the caller's connection
     return violations
 
 
