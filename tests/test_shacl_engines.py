@@ -572,11 +572,10 @@ def test_in_member_with_slash_iri_matches_the_whole_value(engine):
     assert violating(v, "sh:in") == {("b2", "http://example.org/kinds/b")}
 
 
+CIM = "http://iec.ch/TC57/CIM100#"
 TOY_SCHEMA = {"EQ": {
-    "Breaker": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
-                "inheritance": ["#Breaker", "#Switch", "#Equipment"]},
-    "Disconnector": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
-                     "inheritance": ["#Disconnector", "#Switch", "#Equipment"]},
+    name: {"type": "Class", "namespace": CIM, "inheritance": [CIM + name, CIM + "Switch", CIM + "Equipment"]}
+    for name in ("Breaker", "Disconnector")
 }}
 
 

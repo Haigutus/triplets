@@ -444,39 +444,36 @@ def test_legacy_url_map_covers_all_24_sections():
 
 
 class TestSubclassIris:
-    """Class IRIs for rdfs:subClassOf — each name uses its own namespace."""
+    """rdfs:subClassOf pairs: absolute parents pass through, the child and a bare
+    parent resolve like the data graph's Type."""
+    CIM, NC, CIM_NC = "http://iec.ch/TC57/CIM100#", "https://cim4.eu/ns/nc#", "https://cim.ucaiug.io/ns#"
 
-    def test_nc_child_subclasses_cim_abstract(self):
-        from triplets.validation.schema_ir import CIM_NS, subclass_triples
-        schema = {"AE": {
-            "AssessedElement": {
-                "type": "Class",
-                "namespace": "https://cim4.eu/ns/nc#",
-                "inheritance": ["#AssessedElement", "#IdentifiedObject"],
-            },
-        }}
-        triples = set(subclass_triples(schema))
-        child = "https://cim4.eu/ns/nc#AssessedElement"
-        assert (child, CIM_NS + "IdentifiedObject") in triples
-        assert (child, "https://cim4.eu/ns/nc#IdentifiedObject") not in triples
-
-    def test_full_uri_inheritance_kept(self):
+    def test_absolute_parents_pass_through(self):
         from triplets.validation.schema_ir import subclass_triples
-        parent = "http://iec.ch/TC57/CIM100#Equipment"
-        schema = {"EQ": {
-            "Breaker": {
-                "type": "Class",
-                "namespace": "http://iec.ch/TC57/CIM100#",
-                "inheritance": ["#Breaker", parent],
-            },
-        }}
-        assert ( "http://iec.ch/TC57/CIM100#Breaker", parent) in subclass_triples(schema)
+        schema = {"AE": {"AssessedElement": {
+            "type": "Class", "namespace": self.NC,
+            "inheritance": [self.NC + "AssessedElement", self.CIM_NC + "IdentifiedObject"]}}}
+        assert subclass_triples(schema) == [(self.NC + "AssessedElement", self.CIM_NC + "IdentifiedObject")]
+
+    def test_bare_parent_takes_undefined_namespace(self):
+        from triplets.iri import TRIPLETS_NS
+        from triplets.validation.schema_ir import subclass_triples
+        schema = {"EQ": {"Breaker": {"type": "Class", "namespace": self.CIM, "inheritance": ["Equipment"]}}}
+        assert subclass_triples(schema) == [(self.CIM + "Breaker", TRIPLETS_NS + "Equipment")]
+        assert subclass_triples(schema, self.CIM) == [(self.CIM + "Breaker", self.CIM + "Equipment")]
+
+    def test_shipped_bundle_parents_are_absolute(self):
+        from triplets.export_schema import schemas
+        from triplets.iri import TRIPLETS_NS
+        from triplets.validation.schema_ir import subclass_triples
+        triples = subclass_triples(schemas.ENTSOE_NC_2_5_0_552_ED2)
+        assert triples and not any(TRIPLETS_NS in iri for pair in triples for iri in pair)
 
     def test_descendants_index(self):
         from triplets.validation.schema_ir import descendants
         schema = {"EQ": {
-            "Breaker": {"type": "Class", "inheritance": ["#Breaker", "#Switch", "#Equipment"]},
-            "Disconnector": {"type": "Class", "inheritance": ["#Disconnector", "#Switch", "#Equipment"]},
+            "Breaker": {"type": "Class", "inheritance": [self.CIM + "Breaker", self.CIM + "Switch", self.CIM + "Equipment"]},
+            "Disconnector": {"type": "Class", "inheritance": [self.CIM + "Disconnector", self.CIM + "Switch", self.CIM + "Equipment"]},
         }}
         index = descendants(schema)
         assert index["Equipment"] == frozenset({"Breaker", "Disconnector"})
