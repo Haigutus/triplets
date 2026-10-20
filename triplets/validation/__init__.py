@@ -159,8 +159,9 @@ def _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, undef
                                            components=("sh:datatype",), undefined_namespace=undefined_namespace,
                                            inheritance=inheritance)
         violations = pandas.concat([violations, supplement], ignore_index=True)
-    # one finding once: a property shape on a parent and a child node shape both
-    # reach a subclass instance, like the lexical supplement repeats pyshacl
+    # identical findings once: a property shape on a parent and a child node shape
+    # both reach a subclass instance, the same triple sits in two instance files,
+    # the lexical supplement repeats pyshacl
     return violations.drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
                                               "SOURCE_SHAPE", "SEVERITY"], ignore_index=True)
 

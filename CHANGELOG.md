@@ -24,13 +24,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `rdf_map`, `sh:targetClass` / `sh:class` on a parent class reach its
   subclasses (`Equipment` → `Breaker`), through one class-membership index per
   run built from `schema_ir.type_ancestors`; the IR is not fanned out. Schema
-  validation (`validate_schema`) is unchanged: its rules are already per
-  Class entry. A finding reached through both a parent and a child node
-  shape is reported once, on every engine.
+  class rules do not widen: each Class entry already lists its inherited
+  attributes. Identical findings are reported once on every engine (a
+  property shape on both a parent and a child node shape, the same triple in
+  two instance files).
 - **`inheritance=True` on `validate`, `validate_schema` and `compile_schema`:**
   False matches the exact `rdf:type` on every engine (pyshacl without
   `ont_graph`), and schema association ranges accept the range class only
-  (abstract ranges skipped). Recorded in `attrs["validation"]["inheritance"]`.
+  (abstract ranges skipped, so most CIM range checks drop out). Recorded in
+  `attrs["validation"]["inheritance"]`.
 - **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
   `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
   [application-profiles-library](https://github.com/entsoe/application-profiles-library)

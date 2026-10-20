@@ -83,8 +83,10 @@ def compile_schema(rdf_map, closed=False, inheritance=True) -> CompiledSchema:
     inheritance=True (default): an association range accepts the concrete
     subclasses of the range class. False: only the range class itself — a
     range naming an abstract class (no Class entry) is skipped and listed in
-    ``skipped_shapes``. Class rules never widen either way: each Class entry
-    already lists its inherited attributes.
+    ``skipped_shapes``. Most CIM ranges are abstract (``IdentifiedObject``,
+    ``ConductingEquipment``), so False drops most range checks. Class rules
+    never widen either way: each Class entry already lists its inherited
+    attributes.
     """
     schema, digest, source = load_schema(rdf_map)
     key = f"schema|closed={closed}|inheritance={inheritance}|{digest}"
@@ -216,7 +218,7 @@ def _property_rows(meta, prop, entry, concrete, skipped):
                          "params": sorted(targets)})
         else:
             skipped.append(f"{meta['target_class']}.{prop}: association range "
-                           f"{entry.get('range')!r} names no known class")
+                           f"{entry.get('range')!r} matches no Class entry")
     return rows
 
 

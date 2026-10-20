@@ -648,9 +648,11 @@ def test_sh_class_accepts_subclasses_via_index(engine):
     assert violating(v, "sh:class") == {("b2", "sub1")}
 
 
-def test_shape_on_parent_and_child_reports_once(engine):
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_shape_on_parent_and_child_reports_once(engine_name):
     """One property shape on both a parent and a child node shape (CGMES SHACL
     attaches inherited attributes to each) reaches a Breaker twice: one finding, like pyshacl."""
+    pytest.importorskip(engine_name)
     shape = """cim:NameShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 .
         cim:SwitchShape a sh:NodeShape ; sh:targetClass cim:Switch ; sh:property cim:NameShape .
         cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:NameShape ."""
@@ -658,7 +660,7 @@ def test_shape_on_parent_and_child_reports_once(engine):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    v = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA)
     assert (v["VIOLATION_TYPE"] == "sh:minCount").sum() == 1
 
 
