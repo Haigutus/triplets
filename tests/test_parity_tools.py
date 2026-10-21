@@ -297,6 +297,13 @@ def test_print_triplets_diff_missing_and_repeated_values(engine):
         assert diff.loc[(diff["ID"] == "a") & (diff["KEY"] == "x")].empty
 
 
+def test_polars_tableview_row_order_matches_pandas(svedala_pandas):
+    """Rows come in pandas order on every call: float sums over a view (scale_load) depend on it."""
+    data = build_engine("polars", svedala_pandas)
+    expected = svedala_pandas.type_tableview("ConformLoad").index.tolist()
+    for _ in range(5):
+        assert polars_engine.type_tableview(data, "ConformLoad")["ID"].to_list() == expected
+
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(f, e, id=f"{f}-{e}")
                  for f in sorted(ALL_FUNCTIONS) for e in ("pandas", "polars", "duckdb")]

@@ -185,6 +185,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **polars tableviews return rows in a fixed order**, sorted by ID like pandas
+  (`type_tableview`, `key_tableview`, `id_tableview`). Row order changed from call to
+  call, so float sums over a view, such as `scale_load`, differed in the last digits.
 - **`duckdb` extra capped below 2.0** (`duckdb>=1.5.3,<2`). DuckDB 2.0 refuses a
   new query while an `execute()` result is unfinished and drops the `x -> ...`
   lambda syntax, which the DuckDB tools, `read_rdf` and tableviews still use.
