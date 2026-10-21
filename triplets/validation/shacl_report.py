@@ -142,7 +142,7 @@ def violations_to_report_graph(violations, report_source=None, report_references
     (str or sequence — validated file name(s) / shape file name(s)).
 
     Defaults come from ``violations.attrs["validation"]`` — the metadata
-    ``validate()`` stamps on the frame (timestamp of the validation run, tool
+    the validation functions stamp on the frame (timestamp of the validation run, tool
     version, data/shape file names). Explicit arguments override it.
     """
     import rdflib
@@ -170,7 +170,7 @@ def violations_to_report_graph(violations, report_source=None, report_references
     graph.bind("dcterms", dcterms)
 
     # embed the violated shapes' definitions (CBD graphs stamped by
-    # validate()) so sh:sourceShape is never an empty blank node — the
+    # validate_shacl()) so sh:sourceShape is never an empty blank node — the
     # constraint parameters (sh:in list, sh:minCount, ...) are IN the report
     for shape_graph in meta.get("source_shapes", {}).values():
         for triple in shape_graph:
@@ -265,7 +265,7 @@ def _messages(row, language="shacl"):
 
 def message_prefix(violation_type, source=None, language="shacl"):
     """[<language>_message] = the text is the shape's/schema's own message;
-    [engine_message] = the engine worded it. validate() stamps MESSAGE_SOURCE
+    [engine_message] = the engine worded it. the validation functions stamp MESSAGE_SOURCE
     on every row; frames without it fall back to the violation-type namespace
     (triplets:* → engine). The constraint language ("shacl"; "rdfs" for
     schema-compiled runs) names the whole tag family in both report formats."""
@@ -342,7 +342,7 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
     report_source : str or sequence, optional
         ``dcterms:source`` on the ValidationReport (validated file name(s)).
         Metadata only — ``sources`` is the one that runs the locate pass.
-        Default: the data file names ``validate()`` stamped in
+        Default: the data file names the validation functions stamped in
         ``violations.attrs["validation"]``.
     report_references : str or sequence, optional
         ``dcterms:references`` on the ValidationReport (shape file name(s)).

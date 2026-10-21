@@ -176,7 +176,7 @@ else:
 
 
 # ── SPARQL / SHACL namespaces ────────────────────────────────────────────────
-# Namespace-only (no root monkey-patches): "query" and "validate" are too
+# Namespace-only (no root monkey-patches): "query" and "validate_shacl" are too
 # generic to claim on DataFrame/connection classes. The dispatchers auto-detect
 # the input flavor, so the same function backs all three namespaces.
 from . import sparql, validation
@@ -185,7 +185,7 @@ _QUERY_NAMESPACES = {
     "sparql": ({"query": sparql.query}, "SPARQL queries via the `sparql` namespace."),
     # enrich/locate/to_sarif/to_shacl_report take a *violations* frame (plain pandas) —
     # the namespace is registered on every DataFrame, so violations.shacl.to_sarif() works
-    "shacl": ({"validate": validation.validate,
+    "shacl": ({"validate_shacl": validation.validate_shacl,
                "validate_schema": validation.validate_schema,
                "enrich": validation.enrich,
                "locate": validation.locate_violations,

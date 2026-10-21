@@ -208,7 +208,7 @@ cim:ACLineSegmentShape a sh:NodeShape ;
         sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value } HAVING(?value = "no-such-name")' ] ;
     ] .
 """, format="turtle")
-    violations = triplets.validation.validate(svedala, shape, engine="pandas")
+    violations = triplets.validation.validate_shacl(svedala, shape, engine="pandas")
     flags = violations[violations["VIOLATION_TYPE"] == "triplets:invalidSparql"]
     assert len(flags) == 1                                       # flagged once, not per fanout
     assert flags["SEVERITY"].iloc[0] == "Warning"
@@ -233,5 +233,5 @@ cim:ACLineSegmentShape a sh:NodeShape ;
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=shape, format="turtle")
-    violations = triplets.validation.validate(svedala, graph, engine="pandas")
+    violations = triplets.validation.validate_shacl(svedala, graph, engine="pandas")
     assert len(violations.loc[violations["VIOLATION_TYPE"] == "sh:sparql"]) == 0  # clean data, but executed

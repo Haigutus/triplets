@@ -60,10 +60,10 @@ def test_datatype_parity_pyshacl_vs_pandas(mixed_data, shape_file):
     """Same sh:datatype violations; lexicalForm Warnings are documented extras."""
     from triplets.export_schema import schemas
 
-    reference = triplets.validation.validate(mixed_data, shape_file, engine="pyshacl",
+    reference = triplets.validation.validate_shacl(mixed_data, shape_file, engine="pyshacl",
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                              lexical=False)
-    ours = triplets.validation.validate(mixed_data, shape_file, engine="pandas")
+    ours = triplets.validation.validate_shacl(mixed_data, shape_file, engine="pandas")
 
     assert _violation_set(reference) == _violation_set(ours) == {("a3", "Conductor.length", "abc")}
 
@@ -79,10 +79,10 @@ def test_datatype_parity_on_real_data(shape_file):
     from triplets.export_schema import schemas
 
     data = pandas.read_RDF([SVEDALA_EQ])
-    reference = triplets.validation.validate(data, shape_file, engine="pyshacl",
+    reference = triplets.validation.validate_shacl(data, shape_file, engine="pyshacl",
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                              lexical=False)
-    ours = triplets.validation.validate(data, shape_file, engine="pandas")
+    ours = triplets.validation.validate_shacl(data, shape_file, engine="pandas")
     assert _violation_set(reference) == _violation_set(ours)
 
 
@@ -161,10 +161,10 @@ def test_component_parity(component, engine, tmp_path):
     shape.write_text(_CASE_SHAPE.format(body=body))
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
-    reference = triplets.validation.validate(data, str(shape), engine="pyshacl",
+    reference = triplets.validation.validate_shacl(data, str(shape), engine="pyshacl",
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                              lexical=False)
-    ours = triplets.validation.validate(data, str(shape), engine=engine)
+    ours = triplets.validation.validate_shacl(data, str(shape), engine=engine)
 
     assert set(reference.loc[reference["VIOLATION_TYPE"] == component, "ID"]) == expected, "pyshacl disagrees"
     assert set(ours.loc[ours["VIOLATION_TYPE"] == component, "ID"]) == expected, f"{engine} engine disagrees"
@@ -194,11 +194,11 @@ cim:VoltageLevelShape a sh:NodeShape ;
            (A2, "Equipment.EquipmentContainer", bare_vl, "eq")],
         columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
-    reference = triplets.validation.validate(data, str(shape), engine="pyshacl",
+    reference = triplets.validation.validate_shacl(data, str(shape), engine="pyshacl",
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                              lexical=False)
     for engine in ("pandas", "polars", "duckdb"):
-        ours = triplets.validation.validate(data, str(shape), engine=engine)
+        ours = triplets.validation.validate_shacl(data, str(shape), engine=engine)
         assert set(ours.loc[ours["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, f"{engine} engine disagrees"
     assert set(reference.loc[reference["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, "pyshacl disagrees"
 
@@ -246,7 +246,7 @@ def test_benchmark_engines(benchmark, svedala_eq, timing_shape, engine):
     from triplets.export_schema import schemas
     compiled = triplets.validation.compile(timing_shape)
     benchmark.extra_info.update({"engine": engine})
-    benchmark(lambda: triplets.validation.validate(
+    benchmark(lambda: triplets.validation.validate_shacl(
         svedala_eq, compiled, engine=engine,
         rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*", lexical=False))
 
@@ -263,7 +263,7 @@ def test_benchmark_pyshacl_oxigraph_store(benchmark, svedala_eq, timing_shape):
     from triplets.export_schema import schemas
     compiled = triplets.validation.compile(timing_shape)
     benchmark.extra_info.update({"engine": "pyshacl", "store": "oxigraph"})
-    benchmark(lambda: triplets.validation.validate(
+    benchmark(lambda: triplets.validation.validate_shacl(
         svedala_eq, compiled, engine="pyshacl", store="oxigraph",
         rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*", lexical=False))
 
@@ -296,7 +296,7 @@ def test_benchmark_real_profile_vectorized(benchmark, svedala_eq, engine):
     vectorized = [c for c in compiled.ir["component"].unique() if c != "sh:sparql"]
     benchmark.extra_info.update({"ir_rows": len(compiled.ir), "engine": engine})
     benchmark.pedantic(
-        lambda: triplets.validation.validate(svedala_eq, compiled, engine=engine,
+        lambda: triplets.validation.validate_shacl(svedala_eq, compiled, engine=engine,
                                              components=vectorized,
                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*"),
         rounds=2, iterations=1)
@@ -304,10 +304,10 @@ def test_benchmark_real_profile_vectorized(benchmark, svedala_eq, engine):
 
 def test_input_flavor_parity(mixed_data, shape_file):
     """pandas engine gives identical findings for pandas / polars / duckdb input."""
-    reference = triplets.validation.validate(mixed_data, shape_file, engine="pandas")
+    reference = triplets.validation.validate_shacl(mixed_data, shape_file, engine="pandas")
 
     polars = pytest.importorskip("polars")
-    from_polars = triplets.validation.validate(polars.from_pandas(mixed_data), shape_file,
+    from_polars = triplets.validation.validate_shacl(polars.from_pandas(mixed_data), shape_file,
                                                engine="pandas")
     assert _violation_set(from_polars) == _violation_set(reference)
 
@@ -315,10 +315,10 @@ def test_input_flavor_parity(mixed_data, shape_file):
     con = duckdb.connect()
     con.register("src", mixed_data)
     con.execute("CREATE TABLE triplets AS SELECT * FROM src")
-    from_duckdb = con.shacl.validate(shape_file, engine="pandas")
+    from_duckdb = con.shacl.validate_shacl(shape_file, engine="pandas")
     assert _violation_set(from_duckdb) == _violation_set(reference)
 
-    native_duckdb = con.shacl.validate(shape_file, engine="duckdb")   # SQL directly on the table
+    native_duckdb = con.shacl.validate_shacl(shape_file, engine="duckdb")   # SQL directly on the table
     assert _violation_set(native_duckdb) == _violation_set(reference)
 
 
@@ -351,7 +351,7 @@ def test_inheritance_parity_on_real_data(svedala_eq, tmp_path, inheritance):
     path = tmp_path / "regulating_control.ttl"
     path.write_text(REGULATING_CONTROL_SHAPE)
     rdf_map = triplets.iri.load_rdf_map(schemas.ENTSOE_CGMES_3_0_0_552_ED1)
-    found = {engine: set(triplets.validation.validate(
+    found = {engine: set(triplets.validation.validate_shacl(
                  svedala_eq, str(path), engine=engine, rdf_map=rdf_map, rdf_map_scope=["EQ"],
                  inheritance=inheritance).query("VIOLATION_TYPE == 'sh:minCount'")["ID"])
              for engine in ("pyshacl", "pandas", "polars", "duckdb")}

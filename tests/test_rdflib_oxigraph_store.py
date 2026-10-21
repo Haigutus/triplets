@@ -100,8 +100,8 @@ def test_pyshacl_identical_violations_across_stores():
     graph.parse(data=SHAPE, format="turtle")
 
     key = ["ID", "KEY", "VIOLATION_TYPE", "SEVERITY"]
-    memory = triplets.validation.validate(FRAME, graph, engine="pyshacl", store="memory")
-    oxigraph = triplets.validation.validate(FRAME.copy(), graph, engine="pyshacl", store="oxigraph")
+    memory = triplets.validation.validate_shacl(FRAME, graph, engine="pyshacl", store="memory")
+    oxigraph = triplets.validation.validate_shacl(FRAME.copy(), graph, engine="pyshacl", store="oxigraph")
     assert len(memory) > 0    # minCount 2 / missing length must trip
     left = memory[key].sort_values(key).reset_index(drop=True)
     right = oxigraph[key].sort_values(key).reset_index(drop=True)
@@ -117,10 +117,10 @@ def test_pyshacl_scoped_identical_across_stores():
     graph.parse(data=SHAPE, format="turtle")
 
     key = ["ID", "KEY", "VIOLATION_TYPE"]
-    memory = triplets.validation.validate(FRAME, graph, engine="pyshacl",
-                                          store="memory", scope=["g1"])
-    oxigraph = triplets.validation.validate(FRAME.copy(), graph, engine="pyshacl",
-                                            store="oxigraph", scope=["g1"])
+    memory = triplets.validation.validate_shacl(FRAME, graph, engine="pyshacl",
+                                          store="memory", data_scope=["g1"])
+    oxigraph = triplets.validation.validate_shacl(FRAME.copy(), graph, engine="pyshacl",
+                                            store="oxigraph", data_scope=["g1"])
     left = memory[key].sort_values(key).reset_index(drop=True)
     right = oxigraph[key].sort_values(key).reset_index(drop=True)
     assert left.equals(right)

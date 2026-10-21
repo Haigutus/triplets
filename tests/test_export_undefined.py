@@ -115,7 +115,7 @@ def test_validate_undefined_namespace_reaches_sparql_constraints():
     <http://p> sh:declare [ sh:prefix "acme" ; sh:namespace "http://acme#"^^xsd:anyURI ] ."""
     graph = rdflib.Graph()
     graph.parse(data=shape, format="turtle")
-    violations = triplets.validation.validate(frame(), graph, engine="pandas", undefined_namespace="http://acme#")
+    violations = triplets.validation.validate_shacl(frame(), graph, engine="pandas", undefined_namespace="http://acme#")
     assert set(violations.loc[violations["VIOLATION_TYPE"] == "sh:sparql", "VALUE"]) == {"bar"}
 
 

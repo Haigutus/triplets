@@ -277,7 +277,7 @@ def test_shacl_sparql_delegation_via_oxigraph(no_qlever, svedala):
     assert triplets.sparql.get_engine("auto")[0] == "oxigraph"
     graph = shape_graph('SELECT $this ?value WHERE { $this $PATH ?value . '
                         'FILTER (str(?value) = "no-such-name") }')
-    violations = triplets.validation.validate(svedala, graph, engine="pandas")
+    violations = triplets.validation.validate_shacl(svedala, graph, engine="pandas")
     assert len(violations.loc[violations["VIOLATION_TYPE"] == "sh:sparql"]) == 0
 
 
@@ -287,12 +287,12 @@ def test_shacl_sparql_positive_violations_parity(no_qlever, svedala):
     pytest.importorskip("pyshacl")
     graph = shape_graph("SELECT $this ?value WHERE { $this $PATH ?value }")
 
-    via_oxigraph = triplets.validation.validate(svedala, graph, engine="pandas")
+    via_oxigraph = triplets.validation.validate_shacl(svedala, graph, engine="pandas")
     import triplets.sparql as sparql_registry
     saved = sparql_registry._REGISTRY.auto
     sparql_registry._REGISTRY.auto = ["rdflib"]
     try:
-        via_rdflib = triplets.validation.validate(svedala, graph, engine="pandas")
+        via_rdflib = triplets.validation.validate_shacl(svedala, graph, engine="pandas")
     finally:
         sparql_registry._REGISTRY.auto = saved
 
@@ -340,7 +340,7 @@ def test_benchmark_shacl_sparql_backend(benchmark, svedala, monkeypatch, sparql_
     graph.parse(data=SPARQL_HEAVY_SHAPE, format="turtle")
     compiled = triplets.validation.compile(graph)
     benchmark.extra_info.update({"sparql_engine": sparql_engine})
-    benchmark(lambda: triplets.validation.validate(svedala, compiled, engine="pandas"))
+    benchmark(lambda: triplets.validation.validate_shacl(svedala, compiled, engine="pandas"))
 
 
 def test_invalid_constraint_query_reported_not_fixed(no_qlever, svedala):
@@ -352,7 +352,7 @@ def test_invalid_constraint_query_reported_not_fixed(no_qlever, svedala):
     pytest.importorskip("pyshacl")
     graph = shape_graph('SELECT $this ?value WHERE { $this $PATH ?value . '
                         'FILTER (str(?value) = "no-such-name") } GROUP BY $this')
-    violations = triplets.validation.validate(svedala, graph, engine="pandas")
+    violations = triplets.validation.validate_shacl(svedala, graph, engine="pandas")
     flags = violations[violations["VIOLATION_TYPE"] == "triplets:invalidSparql"]
     assert len(flags) == 1                                       # flagged once, not per fanout
     assert flags["SEVERITY"].iloc[0] == "Warning"
