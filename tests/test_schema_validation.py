@@ -158,16 +158,16 @@ def test_association_range_abstract_expansion(engine):
         == 'referenced object sub1 found — Substation "Main Sub"'
 
 
-def test_association_range_expansion_is_transitive():
-    """A range class reached only through another profile's list still expands:
-    ACLineSegment's own list stops at Equipment, Breaker's goes on to IdentifiedObject."""
+def test_association_range_expansion_follows_own_entries():
+    """ACLineSegment's list stops at Equipment and Equipment has no Class entry:
+    Breaker's longer list is not read as Equipment's parents, so only Breaker expands."""
     schema = {"SSI": {"ACLineSegment": {"type": "Class", "inheritance": ["#ACLineSegment", "#Equipment"]}},
               "EQ": {"Breaker": {"type": "Class", "inheritance": ["#Breaker", "#Equipment", "#IdentifiedObject"],
                                  "parameters": ["Breaker.Owner"]},
                      "Breaker.Owner": {"type": "Association", "xsd:minOccours": "0", "xsd:maxOccours": "1",
                                        "range": "#IdentifiedObject"}}}
     rows = compile_schema(schema).profiles["EQ"].ir.query("component == 'triplets:range'")
-    assert rows["params"].iloc[0] == ["ACLineSegment", "Breaker"]
+    assert rows["params"].iloc[0] == ["Breaker"]
 
 
 def test_association_range_without_inheritance(engine):
@@ -480,47 +480,6 @@ def test_legacy_url_map_covers_all_24_sections():
         sections = {name for name, entry in json.load(file).items()
                     if isinstance(entry, dict)}
     assert sections <= set(PROFILE_URL_MAP.values())
-
-
-class TestSubclassIris:
-    """rdfs:subClassOf pairs: absolute parents pass through, the child and a bare
-    parent resolve like the data graph's Type."""
-    CIM, NC, CIM_NC = "http://iec.ch/TC57/CIM100#", "https://cim4.eu/ns/nc#", "https://cim.ucaiug.io/ns#"
-
-    def test_absolute_parents_pass_through(self):
-        from triplets.validation.schema_ir import subclass_triples
-        schema = {"AE": {"AssessedElement": {
-            "type": "Class", "namespace": self.NC,
-            "inheritance": [self.NC + "AssessedElement", self.CIM_NC + "IdentifiedObject"]}}}
-        assert subclass_triples(schema) == [(self.NC + "AssessedElement", self.CIM_NC + "IdentifiedObject")]
-
-    def test_bare_parent_takes_undefined_namespace(self):
-        from triplets.iri import TRIPLETS_NS
-        from triplets.validation.schema_ir import subclass_triples
-        schema = {"EQ": {"Breaker": {"type": "Class", "namespace": self.CIM, "inheritance": ["Equipment"]}}}
-        assert subclass_triples(schema) == [(self.CIM + "Breaker", TRIPLETS_NS + "Equipment")]
-        assert subclass_triples(schema, self.CIM) == [(self.CIM + "Breaker", self.CIM + "Equipment")]
-
-    def test_shipped_bundle_parents_are_absolute(self):
-        from triplets.export_schema import schemas
-        from triplets.iri import TRIPLETS_NS
-        from triplets.validation.schema_ir import subclass_triples
-        with open(schemas.ENTSOE_NC_2_5_0_552_ED2) as file:
-            triples = subclass_triples(json.load(file))
-        assert triples and not any(TRIPLETS_NS in iri for pair in triples for iri in pair)
-
-    def test_type_ancestors(self):
-        from triplets.validation.schema_ir import type_ancestors
-        shacl, rdfs = triplets.validation.CompiledShapes(graph=None, ir=None, hash="", sources=()), compile_schema(SCHEMA)
-        schema = {"EQ": {
-            "Breaker": {"type": "Class", "inheritance": [self.CIM + "Breaker", self.CIM + "Switch", self.CIM + "Equipment"]},
-            "Disconnector": {"type": "Class", "inheritance": [self.CIM + "Disconnector", self.CIM + "Switch"]},
-        }}
-        # Disconnector's list stops at Switch; Breaker's list carries Switch → Equipment
-        assert set(type_ancestors(shacl, schema)) == {("Breaker", "Switch"), ("Breaker", "Equipment"),
-                                                     ("Disconnector", "Switch"), ("Disconnector", "Equipment")}
-        assert type_ancestors(shacl, {}) == []
-        assert type_ancestors(next(iter(rdfs.profiles.values())), schema) == []   # schema IR is already per class
 
 
 def test_schema_validation_does_not_widen_to_subclasses(engine):

@@ -46,32 +46,37 @@ PROFILE_URL_MAP = {
 }
 
 
-def _profile_identity_index(rdf_map):
-    """Map every identifier a schema section declares to the section name.
+def profile_identifiers(rdf_map):
+    """Every identifier a schema section declares → the sections declaring it, in schema order.
 
     Sections identify themselves via their key ("EQ") and the ProfileMetadata
     entry: keyword ("EQ"), versionIRI (the RDFS vocabulary's own IRI),
     profileVersionIRI (the profile IRI headers declare in Model.profile /
     conformsTo: from PROF when the bundle has it, else equal to versionIRI;
     they differ only in NC), conformsTo. The schema defines what to
-    match — no hardcoded knowledge per CGMES generation. An identifier several sections
-    share (e.g. the IEC document URN every CGMES 3.0 section carries as
-    conformsTo) identifies none of them and is dropped from the index.
+    match — no hardcoded knowledge per CGMES generation. An identifier several
+    sections share (e.g. the IEC document URN every CGMES 3.0 section carries as
+    conformsTo) lists all of them.
     """
-    index, ambiguous = {}, set()
+    identifiers = {}
     for section_name, section in rdf_map.items():
         if not isinstance(section, dict):
             continue
         metadata = section.get("ProfileMetadata", {})
-        identifiers = [section_name, metadata.get("keyword"), metadata.get("versionIRI"),
-                       metadata.get("profileVersionIRI"), metadata.get("conformsTo")]
-        for identifier in identifiers:
+        for identifier in (section_name, metadata.get("keyword"), metadata.get("versionIRI"),
+                           metadata.get("profileVersionIRI"), metadata.get("conformsTo")):
             if isinstance(identifier, str) and identifier:
-                if index.setdefault(identifier, section_name) != section_name:
-                    ambiguous.add(identifier)
-    for identifier in ambiguous:
-        del index[identifier]
-    return index
+                sections = identifiers.setdefault(identifier, [])
+                if section_name not in sections:
+                    sections.append(section_name)
+    return identifiers
+
+
+def _profile_identity_index(rdf_map):
+    """Identifier → section for every identifier exactly one section declares
+    (:func:`profile_identifiers`); shared identifiers identify none of them."""
+    return {identifier: sections[0] for identifier, sections in profile_identifiers(rdf_map).items()
+            if len(sections) == 1}
 
 
 def profile_sections(hints, rdf_map, identity_index=None):

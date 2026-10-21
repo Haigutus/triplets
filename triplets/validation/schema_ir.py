@@ -20,9 +20,9 @@ does not masquerade as SHACL (constraint language ``"rdfs"``):
 Cardinality comes from the schema's already-resolved ``xsd:minOccours`` /
 ``xsd:maxOccours`` fields, datatypes from ``xsd:type`` (the lexical registry
 consumes that form directly), enumeration membership from ``values``, and
-association targets from ``range`` expanded to concrete subclasses via the
-classes' ``inheritance`` lists (``inheritance=True``, the default) — the expansion index spans ALL sections
-(class inheritance is model knowledge, not a profile constraint). A
+association targets from ``range`` expanded to concrete subclasses via
+:func:`~triplets.validation.schema_scope.class_ancestors` over every section
+(``inheritance=True``, the default). A
 referenced object conforms when ANY of its types is in the range set;
 dangling references are silent. No rdflib on this path: ``graph`` is None
 and the pyshacl engine refuses schema-compiled shapes.
@@ -34,7 +34,8 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._header import _profile_identity_index
-from ..iri import TRIPLETS_NS, TYPE_KEY, absolute_name, load_schema, local_value, namespaces, rdf_map_entries
+from ..iri import TYPE_KEY, load_schema, local_value
+from .schema_scope import ALL, class_ancestors
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
 
 logger = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ def compile_schema(rdf_map, closed=False, inheritance=True) -> CompiledSchema:
         logger.debug("schema compile cache hit: %s", key[:30])
         return _COMPILE_CACHE[key]
 
-    concrete = _concrete_index(schema, inheritance)
+    concrete = _range_index(schema, inheritance)
     profiles, skipped = {}, []
     for section, entries in schema.items():
         if not isinstance(entries, dict):
@@ -119,68 +120,16 @@ def compile_schema(rdf_map, closed=False, inheritance=True) -> CompiledSchema:
     return compiled
 
 
-def subclass_triples(rdf_map, undefined_namespace=TRIPLETS_NS):
-    """``(child_iri, parent_iri)`` pairs from each ``inheritance`` list, read
-    child-first: the class to every ancestor, and each ancestor to the ones after
-    it — for some classes another class's list is the only record of that step.
-
-    Parents are the absolute IRIs the bundles record (an NC class inherits
-    ``https://cim.ucaiug.io/ns#IdentifiedObject``) and pass through. A child, and a
-    bare parent name in a hand-made schema, resolve like the data graph's ``Type``
-    (:func:`~triplets.iri.absolute_name`): the schema namespace, else *undefined_namespace*.
-    """
-    names = namespaces(rdf_map)
-    return list(dict.fromkeys(
-        (child, parent)
-        for name, entry in rdf_map_entries(rdf_map) if entry.get("type") == "Class"
-        for chain in (list(dict.fromkeys(absolute_name(step, names, undefined_namespace)
-                                         for step in (name, *entry.get("inheritance", ())))),)
-        for position, child in enumerate(chain)
-        for parent in chain[position + 1:]))
-
-
-def type_ancestors(compiled, rdf_map):
-    """``(Type, ancestor)`` local-name pairs that widen ``sh:targetClass`` / ``sh:class``
-    to subclasses in the vectorized engines (``Breaker`` → ``Switch``, ``Equipment``, …).
-
-    SHACL shapes only: schema-compiled IR already targets every Class entry with its
-    inherited attributes, so widening it would fire a parent's rules on each subclass.
-    """
-    if not rdf_map or compiled.language != "shacl":
-        return []
-    return [(leaf, ancestor) for ancestor, leaves in _concrete_index(rdf_map).items()
-            for leaf in leaves if leaf != ancestor]
-
-
-def _concrete_index(schema, inheritance=True):
-    """ancestor local name → concrete classes inheriting it, across ALL
-    sections — inheritance is model knowledge, not a profile constraint.
-    inheritance=False: each class maps to itself only.
-
-    Transitive like rdfs:subClassOf: a profile's list can stop at a class it
-    shares with another profile (NC SSI ``ACLineSegment`` → ``Equipment``),
-    and the other profiles' lists carry the rest of the chain."""
-    ancestors, classes = {}, set()
-    for entries in schema.values():
-        if not isinstance(entries, dict):
-            continue
-        for name, entry in entries.items():
-            if isinstance(entry, dict) and entry.get("type") == "Class":
-                classes.add(name)
-                chain = [local_value(ancestor, "class") for ancestor in entry.get("inheritance", ())] if inheritance else []
-                ancestors.setdefault(name, set()).add(name)
-                for position, child in enumerate(chain):   # each list is child-first
-                    ancestors.setdefault(child, set()).update(chain[position:])
-    concrete = {}
-    for name in classes:
-        reached, todo = set(), [name]
-        while todo:
-            for ancestor in ancestors.get(todo.pop(), set()) - reached:
-                reached.add(ancestor)
-                todo.append(ancestor)
-        for ancestor in reached:
-            concrete.setdefault(ancestor, set()).add(name)
-    return concrete
+def _range_index(schema, inheritance=True):
+    """class local name → the Class entries an association range on it accepts: the
+    class itself and, with *inheritance*, every class whose :func:`class_ancestors`
+    (all sections) reach it."""
+    index = {}
+    for name, steps in class_ancestors(schema, ALL).items():
+        index.setdefault(name, set()).add(name)
+        for parent in (local_value(step, "class") for step in steps) if inheritance else ():
+            index.setdefault(parent, set()).add(name)
+    return index
 
 
 def _section_rows(section, entries, concrete, closed, skipped):

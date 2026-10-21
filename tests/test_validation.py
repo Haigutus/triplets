@@ -54,7 +54,7 @@ def shape_file(tmp_path_factory):
 def test_typed_data_conforms(svedala_eq, shape_file):
     """With rdf_map, Conductor.length is xsd:float → datatype constraint passes."""
     from triplets.export_schema import schemas
-    violations = svedala_eq.shacl.validate(shape_file, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+    violations = svedala_eq.shacl.validate(shape_file, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                            engine="reference", lexical=False)
     assert isinstance(violations, pandas.DataFrame)
     assert len(violations) == 0
@@ -115,7 +115,7 @@ def test_lexical_supplements_pyshacl(lexical_data, shape_file):
     """Default validate(): pyshacl report + lexical findings, no duplicate rows."""
     from triplets.export_schema import schemas
     violations = triplets.validation.validate(lexical_data, shape_file,
-                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+                                              rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
     # pyshacl accepts both "1" and "abc"... "abc"^^xsd:float is ill-typed → sh:datatype;
     # "1" passes pyshacl but the lexical check reports it as a Warning.
     assert (violations.loc[violations["VALUE"] == "1", "VIOLATION_TYPE"] == "triplets:lexicalForm").all()
@@ -141,5 +141,5 @@ def test_real_cgmes_eq_shapes(svedala_eq):
     """Validate Svedala EQ against the real CGMES Equipment SHACL profile."""
     from triplets.export_schema import schemas
     from triplets.validation.shacl_report import VIOLATION_COLUMNS
-    violations = svedala_eq.shacl.validate(str(CGMES_EQ_SHACL), rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+    violations = svedala_eq.shacl.validate(str(CGMES_EQ_SHACL), rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
     assert list(violations.columns) == VIOLATION_COLUMNS

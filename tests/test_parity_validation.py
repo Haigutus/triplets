@@ -61,7 +61,7 @@ def test_datatype_parity_pyshacl_vs_pandas(mixed_data, shape_file):
     from triplets.export_schema import schemas
 
     reference = triplets.validation.validate(mixed_data, shape_file, engine="pyshacl",
-                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                              lexical=False)
     ours = triplets.validation.validate(mixed_data, shape_file, engine="pandas")
 
@@ -80,7 +80,7 @@ def test_datatype_parity_on_real_data(shape_file):
 
     data = pandas.read_RDF([SVEDALA_EQ])
     reference = triplets.validation.validate(data, shape_file, engine="pyshacl",
-                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                              lexical=False)
     ours = triplets.validation.validate(data, shape_file, engine="pandas")
     assert _violation_set(reference) == _violation_set(ours)
@@ -162,7 +162,7 @@ def test_component_parity(component, engine, tmp_path):
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
     reference = triplets.validation.validate(data, str(shape), engine="pyshacl",
-                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                              lexical=False)
     ours = triplets.validation.validate(data, str(shape), engine=engine)
 
@@ -195,7 +195,7 @@ cim:VoltageLevelShape a sh:NodeShape ;
         columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
     reference = triplets.validation.validate(data, str(shape), engine="pyshacl",
-                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                              lexical=False)
     for engine in ("pandas", "polars", "duckdb"):
         ours = triplets.validation.validate(data, str(shape), engine=engine)
@@ -248,7 +248,7 @@ def test_benchmark_engines(benchmark, svedala_eq, timing_shape, engine):
     benchmark.extra_info.update({"engine": engine})
     benchmark(lambda: triplets.validation.validate(
         svedala_eq, compiled, engine=engine,
-        rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, lexical=False))
+        rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*", lexical=False))
 
 
 @pytest.mark.performance
@@ -265,7 +265,7 @@ def test_benchmark_pyshacl_oxigraph_store(benchmark, svedala_eq, timing_shape):
     benchmark.extra_info.update({"engine": "pyshacl", "store": "oxigraph"})
     benchmark(lambda: triplets.validation.validate(
         svedala_eq, compiled, engine="pyshacl", store="oxigraph",
-        rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, lexical=False))
+        rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*", lexical=False))
 
 
 @pytest.mark.performance
@@ -298,7 +298,7 @@ def test_benchmark_real_profile_vectorized(benchmark, svedala_eq, engine):
     benchmark.pedantic(
         lambda: triplets.validation.validate(svedala_eq, compiled, engine=engine,
                                              components=vectorized,
-                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1),
+                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*"),
         rounds=2, iterations=1)
 
 
@@ -352,8 +352,8 @@ def test_inheritance_parity_on_real_data(svedala_eq, tmp_path, inheritance):
     path.write_text(REGULATING_CONTROL_SHAPE)
     rdf_map = triplets.iri.load_rdf_map(schemas.ENTSOE_CGMES_3_0_0_552_ED1)
     found = {engine: set(triplets.validation.validate(
-                 svedala_eq, str(path), engine=engine, rdf_map=rdf_map, inheritance=inheritance).query(
-                 "VIOLATION_TYPE == 'sh:minCount'")["ID"])
+                 svedala_eq, str(path), engine=engine, rdf_map=rdf_map, rdf_map_scope=["EQ"],
+                 inheritance=inheritance).query("VIOLATION_TYPE == 'sh:minCount'")["ID"])
              for engine in ("pyshacl", "pandas", "polars", "duckdb")}
     assert all(ids == found["pyshacl"] for ids in found.values()), {k: len(v) for k, v in found.items()}
     types = svedala_eq.query("KEY == 'Type'").set_index("ID")["VALUE"]

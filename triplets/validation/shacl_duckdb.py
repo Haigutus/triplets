@@ -24,7 +24,7 @@ import pandas
 
 from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
-from .schema_ir import type_ancestors
+from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS
 from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, value_types
 from .shacl_pandas import DATATYPES
@@ -302,8 +302,8 @@ def _create_types_table(connection, table, ancestors):
         connection.unregister("_shacl_type_ancestors")
 
 
-def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
-             table=None, schema=None, table_name=None, inheritance=True, **kwargs):
+def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
+             table=None, schema=None, table_name=None, ancestors=None, **kwargs):
     """Validate triplet data against the compiled constraint table (DuckDB SQL).
 
     Parameters mirror shacl_pandas.validate, plus:
@@ -313,8 +313,8 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         the connection, else ``triplets``).
     """
     connection, table = _connection(data, table=table, schema=schema, table_name=table_name)
-    if scope is not None:
-        values = ", ".join("'" + str(instance).replace("'", "''") + "'" for instance in scope)
+    if data_scope is not None:
+        values = ", ".join("'" + str(instance).replace("'", "''") + "'" for instance in data_scope)
         connection.execute(f"CREATE OR REPLACE TEMP VIEW _shacl_scoped AS "
                            f"SELECT * FROM {table} WHERE INSTANCE_ID IN ({values})")
         table = '"_shacl_scoped"'
@@ -326,7 +326,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]
 
-    _create_types_table(connection, table, type_ancestors(compiled, rdf_map) if inheritance else ())
+    _create_types_table(connection, table, ancestor_pairs(ancestors))
     context = _Context(rdf_map)
     built = [statement for rule in vectorized
              if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]
@@ -354,7 +354,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         frame = connection.execute(f"SELECT * FROM {table}").df()
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
-                                           max_workers=max_workers, inheritance=inheritance, **kwargs)
+                                           max_workers=max_workers, ancestors=ancestors, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     connection.execute("DROP TABLE IF EXISTS _shacl_types")   # don't leave it on the caller's connection
     return violations

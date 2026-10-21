@@ -18,9 +18,9 @@ if find_spec("pyshacl") is None:  # registry contract: an unavailable engine fai
 logger = logging.getLogger(__name__)
 
 
-def validate(data, compiled, rdf_map=None, scope=None, inference="none",
+def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
              advanced=True, abort_on_first=False, store="memory", undefined_namespace=CIM_NS,
-             inheritance=True, **kwargs):
+             ancestors=None, **kwargs):
     """Validate triplet data against compiled shapes; return a violations DataFrame.
 
     Parameters
@@ -28,16 +28,19 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
     data : triplet DataFrame (pandas/polars), arrow, or DuckDB connection
     compiled : CompiledShapes
         From ``triplets.validation.compile`` — this engine uses the shapes graph.
-    rdf_map : dict or str, optional
-        Export schema — xsd-typed literals in the data graph, and (with
-        ``inheritance``) its ``inheritance`` lists as ``rdfs:subClassOf`` via
-        pyshacl ``ont_graph``, so ``sh:targetClass`` / ``sh:class`` see SHACL
-        instances of ancestors. inheritance=False passes no ``ont_graph``.
-    scope : iterable of INSTANCE_ID, optional
+    rdf_map : dict, optional
+        Scoped export schema (``schema_scope.scoped_rdf_map``) — xsd-typed
+        literals and class IRIs in the data graph.
+    ancestors : dict, optional
+        ``schema_scope.class_ancestors`` map, given to pyshacl as ``rdfs:subClassOf``
+        in ``ont_graph`` (already closed, so pyshacl's own closure adds nothing):
+        ``sh:targetClass`` / ``sh:class`` see SHACL instances of ancestors.
+        None passes no ``ont_graph``.
+    data_scope : iterable of INSTANCE_ID, optional
         Validate only these instances' named graphs — data outside the scope
         is not loaded, so references into unscoped instances count as absent.
         Include dependency instances in the scope (or validate the full
-        union, scope=None) for cross-instance checks.
+        union, data_scope=None) for cross-instance checks.
     inference, advanced, abort_on_first : passed to pyshacl.validate.
     **kwargs : other engines' options (components, max_workers, table_name) —
         accepted and ignored, per the shared engine contract.
@@ -60,8 +63,8 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
     from pyshacl import validate as pyshacl_validate
 
     data_graph = scoped_graph(load_dataset(data, rdf_map=rdf_map, store=store,
-                                           undefined_namespace=undefined_namespace), scope)
-    ont_graph = _ontology_graph(rdf_map, undefined_namespace) if rdf_map and inheritance else None
+                                           undefined_namespace=undefined_namespace), data_scope)
+    ont_graph = _ontology_graph(ancestors, rdf_map, undefined_namespace) if ancestors else None
 
     conforms, report_graph, _report_text = pyshacl_validate(
         data_graph, shacl_graph=compiled.graph, ont_graph=ont_graph,
@@ -71,16 +74,16 @@ def validate(data, compiled, rdf_map=None, scope=None, inference="none",
     return report_to_violations(report_graph)
 
 
-def _ontology_graph(rdf_map, undefined_namespace):
-    """``rdfs:subClassOf`` triples from the export schema, as a pyshacl ont_graph.
+def _ontology_graph(ancestors, rdf_map, undefined_namespace):
+    """``rdfs:subClassOf`` triples of the ancestor map, as a pyshacl ont_graph.
 
     Same IRIs as the data graph's ``rdf:type``: one *undefined_namespace* for both.
     The instance data graph is not mutated.
     """
     import rdflib
-    from .schema_ir import subclass_triples
+    from .schema_scope import ancestor_triples
 
     graph = rdflib.Graph()
-    for child, parent in subclass_triples(rdf_map, undefined_namespace):
+    for child, parent in ancestor_triples(ancestors, rdf_map, undefined_namespace):
         graph.add((rdflib.URIRef(child), rdflib.RDFS.subClassOf, rdflib.URIRef(parent)))
     return graph

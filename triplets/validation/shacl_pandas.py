@@ -45,7 +45,7 @@ import pandas
 
 from ..export.nquads_utils import make_subject
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, split_iri, value_types
-from .schema_ir import type_ancestors
+from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ class _Context:
     def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS, ancestors=()):
         self.data = data
         self.rdf_map = rdf_map
-        self.ancestors = ancestors   # (Type, ancestor) pairs — see schema_ir.type_ancestors
+        self.ancestors = ancestors   # (Type, ancestor) pairs — see schema_scope.ancestor_pairs
         self.undefined_namespace = undefined_namespace
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self._by_key = None
@@ -671,8 +671,8 @@ CONSTRAINT_VALIDATORS = {
 }
 
 
-def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
-             undefined_namespace=CIM_NS, inheritance=True, **kwargs):
+def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
+             undefined_namespace=CIM_NS, ancestors=None, **kwargs):
     """Validate triplet data against the compiled constraint table.
 
     Parameters
@@ -681,10 +681,10 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     compiled : CompiledShapes
         From ``triplets.validation.compile`` — this engine executes the IR.
     rdf_map : dict, optional
-        Loaded export schema: typed literals for the sh:sparql graph, the
-        IRI/literal decision for sh:nodeKind, and the ``inheritance`` lists
-        for the subclass walk. Every other component reads the raw lexical forms.
-    scope : iterable of INSTANCE_ID, optional
+        Scoped export schema (``schema_scope.scoped_rdf_map``): typed literals for
+        the sh:sparql graph and the IRI/literal decision for sh:nodeKind. Every
+        other component reads the raw lexical forms.
+    data_scope : iterable of INSTANCE_ID, optional
         Validate only rows of these instances.
     components : iterable of component names, optional
         Restrict to a subset (e.g. ``("sh:datatype",)`` for the lexical
@@ -692,13 +692,13 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     max_workers : int, optional
         Run the sh:sparql constraint queries in parallel processes (fork).
         None = sequential.
-    inheritance : bool, default True
-        Class targets and sh:class also match subclass instances (rdf_map
-        ``inheritance``); False = exact rdf:type only.
+    ancestors : dict, optional
+        ``schema_scope.class_ancestors`` map: class targets and sh:class also
+        match subclass instances. None = exact rdf:type only.
     """
     data = _to_pandas(data)
-    if scope is not None:
-        data = data[data["INSTANCE_ID"].isin(list(scope))]
+    if data_scope is not None:
+        data = data[data["INSTANCE_ID"].isin(list(data_scope))]
 
     rules = compiled.ir
     if components is not None:
@@ -707,8 +707,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     if skipped:
         logger.debug("pandas engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
 
-    context = _Context(data, rdf_map, undefined_namespace,
-                       type_ancestors(compiled, rdf_map) if inheritance else ())
+    context = _Context(data, rdf_map, undefined_namespace, ancestor_pairs(ancestors))
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
 

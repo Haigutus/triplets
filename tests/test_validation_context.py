@@ -87,7 +87,7 @@ def test_enrich_sources_optional(violations):
 
 def test_validate_context_flag(shapes):
     result = triplets.validation.validate(DATA, shapes, engine="pandas",
-                                          rdf_map=RDF_MAP, context=True)
+                                          rdf_map=RDF_MAP, rdf_map_scope="*", context=True)
     assert set(ENRICHMENT_COLUMNS) <= set(result.columns)
     assert result["OBJECT_NAME"].iloc[0] == "Line 1"
     assert result["SCHEMA_DESCRIPTION"].iloc[0].startswith("Segment length")

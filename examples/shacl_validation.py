@@ -52,7 +52,7 @@ print(violations[["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE"]].head(10).t
 
 header("3. Validate WITH a schema (rdf_map) — VALUEs get proper xsd types")
 print("Now Conductor.length is exported as xsd:float, so the datatype check passes.\n")
-violations_typed = data.shacl.validate(shape_path, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+violations_typed = data.shacl.validate(shape_path, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                        engine="reference", lexical=False)
 print(f"Violations found: {len(violations_typed)}")
 if violations_typed.empty:
@@ -84,7 +84,7 @@ compiled = triplets.validation.compile(shape_path)
 print(f"CompiledShapes: {len(compiled.ir)} IR rows, hash {compiled.hash[:12]}…")
 print("IR (constraint table):")
 print(compiled.ir[["target_class", "path", "component", "params", "severity"]].to_string(index=False))
-data.shacl.validate(compiled, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)   # no re-parse
+data.shacl.validate(compiled, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")   # no re-parse
 print("\nSecond validate() against the same shapes reused the compiled IR (cache hit).")
 
 header("Done")
