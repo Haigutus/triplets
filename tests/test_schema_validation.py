@@ -80,6 +80,11 @@ def test_min_occurs(engine):
     assert violating(v, "xsd:minOccurs") == {("b2", None)}      # name missing
 
 
+def test_profile_cells_are_independent_lists(engine):
+    v = run(breaker("b1") + breaker("b2"), engine)
+    assert len(v) > 1 and v["PROFILE"].iloc[0] is not v["PROFILE"].iloc[1]
+
+
 def test_max_occurs(engine):
     rows = breaker("b1", *OK, ("IdentifiedObject.name", "B-again"))
     v = run(rows, engine)

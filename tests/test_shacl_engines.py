@@ -730,6 +730,29 @@ def test_inheritance_follows_the_scoped_profiles(engine_name, instance_type, rdf
     assert violating(v, "sh:minCount") == ({("a1", None)} if reached else set())
 
 
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_empty_data_scope_loads_no_instance(engine_name):
+    """data_scope=[] validates nothing, on every engine."""
+    pytest.importorskip(engine_name)
+    data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    assert triplets.validation.validate_shacl(data, io_shapes(), engine=engine_name, data_scope=[]).empty
+
+
+def test_rdf_map_scope_needs_an_rdf_map():
+    data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    with pytest.raises(ValueError, match="pass the rdf_map"):
+        triplets.validation.validate_shacl(data, io_shapes(), rdf_map_scope="EQ")
+
+
+def test_inheritance_metadata_says_whether_it_was_applied():
+    data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    assert triplets.validation.validate_shacl(data, io_shapes(), engine="pandas").attrs["validation"][
+        "inheritance"] is False                                     # no rdf_map: nothing applied
+    applied = triplets.validation.validate_shacl(data, io_shapes(), engine="pandas", rdf_map=SCOPED_SCHEMA,
+                                                 rdf_map_scope="*")
+    assert applied.attrs["validation"]["inheritance"] is True
+
+
 def test_rdf_map_without_scope_entries_raises():
     """A sectioned bundle has no root entries: rdf_map_scope=None is a caller error."""
     data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])

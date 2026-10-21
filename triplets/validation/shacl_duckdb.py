@@ -323,8 +323,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     connection, table = _connection(data, table=table, schema=schema, table_name=table_name)
     if data_scope is not None:
         values = ", ".join("'" + str(instance).replace("'", "''") + "'" for instance in data_scope)
-        connection.execute(f"CREATE OR REPLACE TEMP VIEW _shacl_scoped AS "
-                           f"SELECT * FROM {table} WHERE INSTANCE_ID IN ({values})")
+        where = f"INSTANCE_ID IN ({values})" if values else "FALSE"   # an empty scope loads no instance
+        connection.execute(f"CREATE OR REPLACE TEMP VIEW _shacl_scoped AS SELECT * FROM {table} WHERE {where}")
         table = '"_shacl_scoped"'
 
     if "duckdb" not in compiled.plans:   # setdefault would re-split on every call

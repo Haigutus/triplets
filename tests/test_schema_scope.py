@@ -66,12 +66,56 @@ def test_merge_rules():
     assert merged["Switch.kind"]["values"] == ["SwitchKind.a", "SwitchKind.b"]
     # not checked → skipped_shapes; checked more loosely → relaxed_constraints
     assert notes == {
-        "skipped_shapes": ["IdentifiedObject.name: datatype conflict (EQ: xsd:string, OP: xsd:integer) — not checked"],
+        "skipped_shapes": ["IdentifiedObject.name: datatype conflict (EQ: xsd:string, OP: xsd:integer) — not typed or checked by the schema"],
         "relaxed_constraints": ["IdentifiedObject.name: cardinality relaxed to 0..n (EQ: 1..1, OP: 0..n)",
                                 "Switch.kind: enumeration values united (EQ + OP)"]}
     # merge order does not change the relaxed cardinality
     other = scoped_rdf_map(SCHEMA, ["OP", "EQ"])[0][SCOPE_KEY]["IdentifiedObject.name"]
     assert (other["xsd:minOccours"], other["xsd:maxOccours"]) == ("0", "n")
+
+
+def attribute(low, high, datatype="xsd:string"):
+    entry = {"type": "Attribute", "multiplicity": f"{low}..{high}", "xsd:minOccours": low, "xsd:maxOccours": high}
+    return {**entry, "xsd:type": datatype} if datatype else entry
+
+
+def test_notes_quote_every_profile_own_value():
+    """Three profiles: one note per key, each profile's own cardinality — not the running merge."""
+    schema = {section: {"IdentifiedObject.name": attribute(low, high)}
+              for section, low, high in (("DL", "1", "1"), ("DY", "0", "1"), ("GL", "1", "2"))}
+    merged, notes = scoped_rdf_map(schema, "*")
+    assert merged[SCOPE_KEY]["IdentifiedObject.name"]["multiplicity"] == "0..2"
+    assert notes["relaxed_constraints"] == [
+        "IdentifiedObject.name: cardinality relaxed to 0..2 (DL: 1..1, DY: 0..1, GL: 1..2)"]
+
+
+def test_missing_bound_is_no_bound():
+    """A profile without xsd:maxOccours sets no upper bound — the merge never adds one."""
+    schema = {"A": {"X.v": attribute("0", "")}, "B": {"X.v": attribute("1", "1")}}
+    merged = scoped_rdf_map(schema, "*")[0][SCOPE_KEY]["X.v"]
+    assert (merged["xsd:minOccours"], merged["xsd:maxOccours"]) == ("0", "n")
+
+
+def test_untyped_and_typed_definitions_conflict():
+    schema = {"A": {"X.v": attribute("0", "1", datatype=None)}, "B": {"X.v": attribute("0", "1", "xsd:integer")}}
+    merged, notes = scoped_rdf_map(schema, "*")
+    assert "xsd:type" not in merged[SCOPE_KEY]["X.v"]
+    assert notes["skipped_shapes"] == [
+        "X.v: datatype conflict (A: untyped, B: xsd:integer) — not typed or checked by the schema"]
+
+
+def test_root_profile_metadata_is_not_a_profile():
+    schema = {"ProfileMetadata": {"keyword": "ROOT"}, **SCHEMA}
+    assert scope_sections(schema, "*") == ["EQ", "OP", "SC"]
+    with pytest.raises(ValueError, match="unknown"):
+        scope_sections(schema, "ProfileMetadata")
+
+
+def test_class_ancestors_load_the_rdf_map():
+    """class_ancestors is a public entry point: a schema path loads like everywhere else."""
+    ancestors = class_ancestors(schemas.ENTSOE_NC_2_5_0_552_ED2, ["SSI"])
+    assert {step.split("#")[-1] for step in ancestors["ACLineSegment"]} == {"Conductor", "ConductingEquipment",
+                                                                           "Equipment"}
 
 
 def test_root_entries():

@@ -142,4 +142,4 @@ def test_real_cgmes_eq_shapes(svedala_eq):
     from triplets.export_schema import schemas
     from triplets.validation.shacl_report import VIOLATION_COLUMNS
     violations = svedala_eq.shacl.validate_shacl(str(CGMES_EQ_SHACL), rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
-    assert list(violations.columns) == VIOLATION_COLUMNS
+    assert list(violations.columns) == [*VIOLATION_COLUMNS, "EXPECTED", "MESSAGE_SOURCE"]

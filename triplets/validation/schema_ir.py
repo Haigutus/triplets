@@ -28,12 +28,11 @@ import logging
 import pandas
 
 from ..iri import TYPE_KEY, load_schema, local_value
-from .schema_scope import SCOPE_KEY, class_ancestors, scope_sections, scoped_rdf_map
+from .schema_scope import (_PROPERTY_TYPES, SCOPE_KEY, _merged_entries, class_ancestors, require_entries,
+                           scope_sections, scoped_rdf_map)
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
 
 logger = logging.getLogger(__name__)
-
-_PROPERTY_TYPES = ("Attribute", "Association", "Enumeration")
 
 # engine dispatch key → presented violation type (vocabulary-accurate)
 PRESENTED = {"sh:minCount": "xsd:minOccurs", "sh:maxCount": "xsd:maxOccurs",
@@ -61,9 +60,7 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False) -> 
 
     scoped, notes = scoped_rdf_map(schema, rdf_map_scope)
     entries = scoped[SCOPE_KEY]
-    if not any(isinstance(entry, dict) and entry.get("type") == "Class" for entry in entries.values()):
-        raise ValueError(f"rdf_map_scope {rdf_map_scope!r} selects no Class entries — name the profiles "
-                         "(section keys / profile IRIs, or '*' for all)")
+    require_entries(entries, rdf_map_scope, classes=True)
     ir = pandas.DataFrame(_class_rows(sections, entries, report_undefined_keys), columns=IR_COLUMNS)
     ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
     compiled = CompiledShapes(
@@ -100,7 +97,8 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
     if key in _COMPILE_CACHE:
         return _COMPILE_CACHE[key]
 
-    scoped, notes = scoped_rdf_map(schema, rdf_map_scope)
+    entries = _merged_entries(schema, rdf_map_scope)[1]   # the merge's datatype/cardinality notes concern no reference
+    require_entries(entries, rdf_map_scope, classes=True)
     combined = None if sources is None else list(dict.fromkeys([*sources, *targets]))
     ancestors = class_ancestors(schema, combined)
     accepted = {}
@@ -108,8 +106,8 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
         accepted.setdefault(name, set()).add(name)
         for parent in (local_value(step, "class") for step in steps) if inheritance else ():
             accepted.setdefault(parent, set()).add(name)
-    rows, skipped = [], list(notes["skipped_shapes"])
-    for meta, prop, entry in _associations(sources, scoped[SCOPE_KEY]):
+    rows, skipped = [], []
+    for meta, prop, entry in _associations(sources, entries):
         classes = accepted.get(local_value(entry.get("range", ""), "class"))
         if not classes:
             skipped.append(f"{meta['target_class']}.{prop}: association range {entry.get('range')!r} "

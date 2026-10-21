@@ -18,16 +18,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every input has a scope named after it, `data` + `data_scope` (INSTANCE_IDs;
   rows outside are not loaded) and `rdf_map` + `rdf_map_scope` (profiles of the
   export schema: section keys and/or declared profile IRIs, mixed; `"*"` every
-  section; None the root entries; a scope without entries raises). Listed
+  section; None the root entries; an empty scope raises). Listed
   profiles are merged for the run (`schema_scope.scoped_rdf_map`): parameter,
   inheritance and enumeration lists united, cardinality relaxed to the
-  loosest, a key whose datatype differs left untyped and unchecked (listed in
-  `skipped_shapes`), the loosened checks listed in `relaxed_constraints`; the merged ProfileMetadata keeps every
+  loosest (a missing bound is no bound), a key whose datatype differs (or is
+  missing in one profile) left untyped and unchecked (listed in
+  `skipped_shapes`), the loosened checks listed in `relaxed_constraints`,
+  each note quoting every profile's own value; the merged ProfileMetadata keeps every
   profile's identity (section keys, each field as a list in scope order).
   `rdf_map_entries` (and the flat maps on it) skip ProfileMetadata. Nothing in `triplets.validation` reads
   instance headers.
   - `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=True)`
-    — SHACL; the scoped profiles give typed literals, nodeKind and class inheritance.
+    — SHACL; the scoped profiles give typed literals, nodeKind and class
+    inheritance. The `inheritance` flag stays on `validate_shacl` and
+    `validate_schema_references`; `attrs["validation"]["inheritance"]` says
+    whether it was applied.
   - `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False)`
     — cardinality, datatypes and enumerations, each instance on its own,
     against the merged profiles; PROFILE and `attrs["validation"]["profiles"]`
@@ -42,10 +47,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     `skipped_shapes`. `compile_references` compiles the checks.
   - `cgmes_tools.declared_profiles` (header → profiles, legacy 2.4.15 URLs)
     and `cgmes_tools.validate_by_header` (each instance against its declared
-    profiles, optionally its references against all other loaded instances)
+    profiles, optionally its references against every loaded instance;
+    `data_scope` selects the validated instances only)
     hold the CIM header logic.
   - `concat_violations(frames)` joins the frames of several runs, merging their
-    run metadata.
+    run metadata (shape and constraint counts once per `compiled_hash`).
 - **Class inheritance follows the scoped profiles, the same on every engine:**
   `schema_scope.class_ancestors(rdf_map, rdf_map_scope)` unions same-named
   Class entries' `inheritance` lists and closes the relation only through

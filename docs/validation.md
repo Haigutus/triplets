@@ -9,7 +9,7 @@ any RDF loaded as triplets, CIM or not. Every input has a scope named after it:
 | Input | Scope | Values |
 |-------|-------|--------|
 | `data` | `data_scope` | INSTANCE_IDs — rows outside the scope are not loaded, so references into unscoped instances count as absent |
-| `rdf_map` | `rdf_map_scope` | the export schema's profiles: section keys (`"EQ"`) and/or the IRIs a profile declares (keyword / versionIRI / profileVersionIRI / conformsTo), mixed, in any sequence; `"*"` = every section; None = the rdf_map's root entries (an unsectioned, hand-made schema — a sectioned bundle has none). An unknown identifier, one several profiles share, and a scope without entries raise `ValueError` |
+| `rdf_map` | `rdf_map_scope` | the export schema's profiles: section keys (`"EQ"`) and/or the IRIs a profile declares (keyword / versionIRI / profileVersionIRI / conformsTo), mixed, in any sequence; `"*"` = every section; None = the rdf_map's root entries (an unsectioned, hand-made schema — a sectioned bundle has none). An unknown identifier, one several profiles share, and an empty scope raise `ValueError`: no entries at all for `validate_shacl`, no Class entries for the schema validations. `rdf_map_scope` without an `rdf_map` raises too |
 
 | Function | Checks | Runs |
 |----------|--------|------|
@@ -30,15 +30,21 @@ Operation and ShortCircuit as published. Same-named entries combine:
 
 - Class `parameters` and `inheritance` lists: union.
 - Property cardinality: the lowest `xsd:minOccours`, the highest
-  `xsd:maxOccours` (`n` = unbounded); `multiplicity` follows.
-- Attribute `xsd:type`: when the profiles differ the intended type is
-  unknown — the key is left untyped (no datatype check, plain literal on
-  every engine) and logged as an error.
+  `xsd:maxOccours` (`n` = unbounded; a missing bound is no bound);
+  `multiplicity` follows.
+- Attribute `xsd:type`: when the profiles differ (a definition without a type
+  counts) the intended type is unknown — the key is left untyped and logged as
+  an error. `validate_schema` does not check its datatype. Under
+  `validate_shacl` its literals stay plain: pyshacl then reports an
+  `sh:datatype` shape on such a key for every value, while the vectorized
+  engines' lexical check judges the text.
 - Enumeration `values`: union.
 
 Datatype conflicts (not checked) are listed in the run's `skipped_shapes`;
 relaxed cardinalities and united enumerations (checked, more loosely) in its
-`relaxed_constraints`, with one warning per run naming their count. The merged `ProfileMetadata` keeps every profile's
+`relaxed_constraints`, with one warning per run naming their count; each note
+quotes every profile's own value (`cardinality relaxed to 0..2 (DL: 1..1, DY:
+0..1, GL: 1..2)`). The merged `ProfileMetadata` keeps every profile's
 identity: `sections` (the section keys, in scope order) and each field as a
 list in the same order (`keyword: ["EQ", "OP", "SC"]`, `versionIRI: [...]`). A merged run is never stricter than running the
 listed profiles one by one: parameters only add, cardinality only relaxes.
@@ -318,7 +324,7 @@ united, differing values kept as the list of distinct values):
 | `compiled_hash` | the compiled rule set's hash (`CompiledShapes.hash`) — `concat_violations` counts shapes and constraints once per rule set |
 | `node_shapes` / `constraints` | shape count / compiled IR constraint rows |
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
-| `inheritance` | whether class inheritance was on (`validate_shacl`, `validate_schema_references`) |
+| `inheritance` | whether class inheritance was applied — `validate_shacl`: an rdf_map scope with classes and `inheritance=True`; `validate_schema_references`: the `inheritance` flag |
 | `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — those two empty for `engine="pyshacl"` (spec-complete); association ranges no given profile defines (`validate_schema_references`) |
 | `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates |
@@ -467,10 +473,12 @@ schema profiles' declared identity, with the legacy CGMES 2.4.15 profile-URL
 substrings as fallback; an identifier several profiles share matches none.
 `validate_by_header` runs `validate_schema` for each group of instances
 declaring the same profiles (merged), with `references=True` also
-`validate_schema_references` against all other loaded instances and their
-declared profiles, and joins the runs with `concat_violations`. An instance
-whose header matches no profile is skipped and named in `skipped_shapes`;
-`rdf_map_scope=` overrides the declared profiles for header-less data.
+`validate_schema_references` against every loaded instance and its declared
+profiles, and joins the runs with `concat_violations`. `data_scope=` selects
+the validated instances; references still resolve in every loaded instance.
+An instance whose header matches no profile is skipped and named in
+`skipped_shapes`; `rdf_map_scope=` overrides the declared profiles for
+header-less data.
 
 ## Shared Loading (`_rdflib_loader.py`)
 

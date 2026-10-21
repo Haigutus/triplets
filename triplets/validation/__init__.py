@@ -52,9 +52,9 @@ import pandas
 from .._engine_detect import flavor
 from .._registry import EngineRegistry
 from ..iri import CIM_NS, load_rdf_map
-from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
+from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
-from .schema_scope import SCOPE_KEY, scope_sections
+from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
 from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
                            violations_to_csv, violations_to_excel)
@@ -151,11 +151,12 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
     rdf_map = load_rdf_map(rdf_map)        # dict from here on — the engines and enrich take only dicts
     started = datetime.now(timezone.utc)   # after compile — duration is the run, cache-independent
+    if not rdf_map and rdf_map_scope is not None:
+        raise ValueError("rdf_map_scope names profiles of an rdf_map — pass the rdf_map too")
     scoped, notes = scoped_rdf_map(rdf_map, rdf_map_scope) if rdf_map else ({}, None)
-    if rdf_map and not set(scoped[SCOPE_KEY]) - {"ProfileMetadata"}:
-        raise ValueError("rdf_map_scope selects no schema entries — name the profiles "
-                         "(section keys / profile IRIs, or '*' for all)")
-    ancestors = class_ancestors(rdf_map, rdf_map_scope) if rdf_map and inheritance else None
+    if rdf_map:
+        require_entries(scoped[SCOPE_KEY], rdf_map_scope)
+    ancestors = _class_ancestors(scoped[SCOPE_KEY]) if rdf_map and inheritance else None
     engine_name, engine_mod = get_engine(engine)
     table_ref = _table_ref(data, **kwargs)
     violations = _run(data, compiled, engine_name, engine_mod, scoped, data_scope, lexical,
@@ -163,8 +164,9 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     violations = _present(violations, compiled.ir, compiled.language)
     violations.attrs["validation"] = _report_metadata(
         violations, data, compiled, engine_name, started, table_name=table_ref, notes=notes)
-    violations.attrs["validation"]["inheritance"] = inheritance
-    violations.attrs["validation"]["profiles"] = scope_sections(rdf_map, rdf_map_scope) if rdf_map else None
+    violations.attrs["validation"]["inheritance"] = bool(ancestors)   # applied: an rdf_map with classes, the flag on
+    violations.attrs["validation"]["profiles"] = (scoped[SCOPE_KEY].get("ProfileMetadata", {}).get("sections")
+                                                  if rdf_map else None)
     return violations
 
 
@@ -420,7 +422,7 @@ def _instance_triples(data, instance, keys, table_name="triplets"):
 
 def _profile_column(violations, sections):
     """PROFILE: the list of scoped section keys on every row (None for the root entries)."""
-    return pandas.Series([None if sections is None else list(sections)] * len(violations),
+    return pandas.Series([None if sections is None else list(sections) for _ in range(len(violations))],
                          index=violations.index, dtype=object)
 
 

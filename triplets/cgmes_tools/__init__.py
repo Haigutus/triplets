@@ -146,8 +146,8 @@ def validate_by_header(data, rdf_map, data_scope=None, rdf_map_scope=None, repor
     Instances declaring the same profiles run together through
     ``triplets.validation.validate_schema`` (each instance still counted on its
     own, its declared profiles merged). With *references*,
-    ``validate_schema_references`` checks each instance's references against all
-    other loaded instances and their declared profiles. An instance whose header
+    ``validate_schema_references`` checks each instance's references against
+    every loaded instance and its declared profiles. An instance whose header
     matches no profile is skipped and named in ``skipped_shapes``.
 
     data_scope : iterable of INSTANCE_ID, optional
