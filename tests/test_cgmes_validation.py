@@ -124,6 +124,36 @@ def test_references_against_the_other_loaded_instances(engine):
     assert set(zip(v["ID"], v["VIOLATION_TYPE"], v["VALUE"])) == {("b2", "rdfs:range", "b1")}
 
 
+def test_data_scope_selects_sources_but_references_see_every_instance(engine):
+    """data_scope=["ssh"]: only the SSH instance is validated, its reference into
+    the EQ instance resolves there — no false triplets:missing."""
+    rows = ([("h1", "keyword", "EQ", "eq"), ("h2", "keyword", "SSH", "ssh"), ("vl1", "Type", "VoltageLevel", "eq")]
+            + breaker("b1", *OK, ("Equipment.EquipmentContainer", "vl1"))
+            + breaker("b2", ("IdentifiedObject.mRID", "b2"), ("Switch.open", "true"),
+                      ("Equipment.EquipmentContainer", "vl1"), instance="ssh"))
+    schema = {**SCHEMA, "SSH": {**SCHEMA["SSH"], "Breaker": {**SCHEMA["SSH"]["Breaker"], "parameters": [
+        *SCHEMA["SSH"]["Breaker"]["parameters"], "Equipment.EquipmentContainer"]},
+        "Equipment.EquipmentContainer": SCHEMA["EQ"]["Equipment.EquipmentContainer"],
+        "VoltageLevel": SCHEMA["EQ"]["VoltageLevel"]}}
+    v = cgmes_tools.validate_by_header(frame(rows), schema, data_scope=["ssh"], references=True, engine=engine)
+    assert v.empty
+    assert v.attrs["validation"]["profiles"] == ["SSH"]
+
+
+def test_schema_and_reference_runs_count_their_own_rules(engine):
+    """concat_violations counts constraints once per compiled rule set — a schema
+    run and a reference run on the same profiles both count."""
+    from triplets import validation
+    data = frame([("h1", "keyword", "EQ", "eq")] + breaker("b1", *OK))
+    schema_run = validation.validate_schema(data, SCHEMA, rdf_map_scope=["EQ"], engine=engine)
+    reference_run = validation.validate_schema_references(data, SCHEMA, ["eq"], ["EQ"], engine=engine)
+    both = validation.concat_violations([schema_run, reference_run])
+    assert both.attrs["validation"]["constraints"] == (schema_run.attrs["validation"]["constraints"]
+                                                       + reference_run.attrs["validation"]["constraints"])
+    again = validation.concat_violations([schema_run, schema_run])
+    assert again.attrs["validation"]["constraints"] == schema_run.attrs["validation"]["constraints"]
+
+
 def test_duckdb_connection_with_configured_table():
     duckdb = pytest.importorskip("duckdb")
     con = duckdb.connect(table="grid", schema="cim")

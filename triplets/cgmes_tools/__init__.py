@@ -150,6 +150,9 @@ def validate_by_header(data, rdf_map, data_scope=None, rdf_map_scope=None, repor
     other loaded instances and their declared profiles. An instance whose header
     matches no profile is skipped and named in ``skipped_shapes``.
 
+    data_scope : iterable of INSTANCE_ID, optional
+        The instances to validate; None = every instance. References are still
+        looked up in every loaded instance.
     rdf_map_scope : profile identifier(s), optional
         Override the declared profiles for every instance (header-less data).
     """
@@ -157,31 +160,32 @@ def validate_by_header(data, rdf_map, data_scope=None, rdf_map_scope=None, repor
     from ..iri import load_rdf_map
 
     rdf_map = load_rdf_map(rdf_map)
-    declared = declared_profiles(data, rdf_map, data_scope, **kwargs)
+    loaded = declared_profiles(data, rdf_map, **kwargs)
     if rdf_map_scope is not None:
-        declared = {instance: rdf_map_scope for instance in declared}
+        override = [rdf_map_scope] if isinstance(rdf_map_scope, str) else list(rdf_map_scope)
+        loaded = {instance: override for instance in loaded}
+    declared = loaded if data_scope is None else {str(instance): loaded.get(str(instance), [])
+                                                   for instance in data_scope}
     groups, unresolved = {}, []
     for instance, sections in declared.items():
         if sections:
-            groups.setdefault(tuple([sections] if isinstance(sections, str) else sections), []).append(instance)
+            groups.setdefault(tuple(sections), []).append(instance)
         else:
             unresolved.append(f"instance {instance}: no schema profile matched its header")
-    loaded = list(declared)
-    target_profiles = list(dict.fromkeys(section for sections in groups for section in sections))
+    target_profiles = list(dict.fromkeys(section for sections in loaded.values() for section in sections))
     frames = []
     for sections, instances in groups.items():
         frames.append(validation.validate_schema(data, rdf_map, data_scope=instances, rdf_map_scope=list(sections),
                                                  report_undefined_keys=report_undefined_keys, engine=engine, **kwargs))
         if references:
             frames.append(validation.validate_schema_references(
-                data, rdf_map, instances, list(sections), loaded, target_profiles,
+                data, rdf_map, instances, list(sections), list(loaded), target_profiles,
                 report_missing_targets=report_missing_targets, engine=engine, **kwargs))
     violations = validation.concat_violations(frames)
-    if violations.empty and not frames:
-        violations = pandas.DataFrame(columns=[*validation.VIOLATION_COLUMNS, "PROFILE"])
-        violations.attrs["validation"] = {"language": "rdfs", "skipped_shapes": []}
-    violations.attrs["validation"]["skipped_shapes"] = [*violations.attrs["validation"].get("skipped_shapes", []),
-                                                        *unresolved]
+    if "PROFILE" not in violations.columns:            # no instance resolved: no run stamped it
+        violations["PROFILE"] = pandas.Series(dtype=object)
+    meta = violations.attrs.setdefault("validation", {"language": "rdfs", "skipped_shapes": []})
+    meta["skipped_shapes"] = [*meta.get("skipped_shapes", []), *unresolved]
     return violations
 
 

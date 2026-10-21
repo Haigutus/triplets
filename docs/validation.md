@@ -305,7 +305,7 @@ from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an exp
 the returned frame as `violations.attrs["validation"]`. Every report exporter
 reads it, so all formats tell the same story; `concat_violations(frames)`
 joins the frames of several runs of one constraint language and merges their
-metadata (earliest start, latest end, counts once per distinct run, lists
+metadata (earliest start, latest end, counts once per compiled rule set, lists
 united, differing values kept as the list of distinct values):
 
 | key | meaning |
@@ -315,6 +315,7 @@ united, differing values kept as the list of distinct values):
 | `creator` | tool + version |
 | `source` | data file names (from the data's Distribution label meta rows) |
 | `references` | shape file names (recorded at compile) |
+| `compiled_hash` | the compiled rule set's hash (`CompiledShapes.hash`) — `concat_violations` counts shapes and constraints once per rule set |
 | `node_shapes` / `constraints` | shape count / compiled IR constraint rows |
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
 | `inheritance` | whether class inheritance was on (`validate_shacl`, `validate_schema_references`) |
