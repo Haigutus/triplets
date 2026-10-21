@@ -257,9 +257,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
-- **`duckdb` extra capped below 2.0** (`duckdb>=1.5.3,<2`). DuckDB 2.0 refuses a
-  new query while an `execute()` result is unfinished and drops the `x -> ...`
-  lambda syntax, which the DuckDB tools, `read_rdf` and tableviews still use.
+- **polars tableviews return rows in a fixed order**, sorted by ID like pandas
+  (`type_tableview`, `key_tableview`, `id_tableview`). Row order changed from call to
+  call, so float sums over a view, such as `scale_load`, differed in the last digits.
+- **DuckDB 2.0 support** (1.5.3 still works). Results are fetched in full before
+  the next call on the connection, `tableview_to_triplets(multivalue=True)` uses
+  `lambda x:` instead of the removed `x ->`, and Arrow exports read relations
+  (no extra copy).
+- **duckdb `references` / `references_simple`:** an object that references
+  itself (e.g. by `IdentifiedObject.mRID`) keeps level 0, like pandas.
 - **NC instances resolve their profile from `dcterms:conformsTo`**, not only from
   `dcat:keyword` ([#142](https://github.com/Haigutus/triplets/issues/142)). Every
   bundle section now has `ProfileMetadata.versionIRI` (the RDFS vocabulary IRI; CGMES

@@ -75,17 +75,17 @@ def test_read_rdf_append_and_replace():
     n1 = con.read_rdf("tests/data/minimal_cim.xml")
     n2 = con.read_rdf("tests/data/minimal_cim.xml", append=True)
     assert n1 == n2 > 0
-    assert con.execute("SELECT COUNT(*) FROM triplets").fetchone()[0] == n1 + n2
-    assert con.execute("SELECT COUNT(DISTINCT INSTANCE_ID) FROM triplets").fetchone()[0] == 2
+    assert con.execute("SELECT COUNT(*) FROM triplets").fetchall()[0][0] == n1 + n2
+    assert con.execute("SELECT COUNT(DISTINCT INSTANCE_ID) FROM triplets").fetchall()[0][0] == 2
 
     n3 = con.read_rdf("tests/data/minimal_cim.xml")   # default: replace
-    assert con.execute("SELECT COUNT(*) FROM triplets").fetchone()[0] == n3
+    assert con.execute("SELECT COUNT(*) FROM triplets").fetchall()[0][0] == n3
 
 
 def test_read_rdf_append_creates_missing_table():
     con = duckdb.connect()
     rows = con.read_rdf("tests/data/minimal_cim.xml", append=True)
-    assert con.execute("SELECT COUNT(*) FROM triplets").fetchone()[0] == rows > 0
+    assert con.execute("SELECT COUNT(*) FROM triplets").fetchall()[0][0] == rows > 0
 
 
 def test_read_rdf_empty_input_creates_standard_table():
@@ -136,7 +136,7 @@ def test_read_only_connection_resolves_stored_config(tmp_path):
 def test_bare_connect_writes_no_config():
     con = duckdb.connect()
     count = con.execute("SELECT COUNT(*) FROM duckdb_tables() "
-                        "WHERE table_name = '_triplets_config'").fetchone()[0]
+                        "WHERE table_name = '_triplets_config'").fetchall()[0][0]
     assert count == 0
 
 
@@ -158,7 +158,7 @@ def test_mutators_preserve_extra_columns():
     rows = con.execute("SELECT ID, note FROM triplets ORDER BY ID").fetchall()
     assert ("a", "keep-b") in rows                  # extra column survived every mutator
     assert ("new", None) in rows                    # inserted rows get NULL extras
-    assert con.execute("SELECT COUNT(*) FROM triplets").fetchone()[0] == 2
+    assert con.execute("SELECT COUNT(*) FROM triplets").fetchall()[0][0] == 2
     values = con.execute("SELECT VALUE FROM triplets WHERE ID = 'a'").fetchall()
     assert values == [("renamed",)]                 # update applied on the surviving row
 
@@ -203,9 +203,9 @@ def test_views_created_in_configured_schema():
     con.register("_src", _frame())
     con.execute("CREATE TABLE cim.grid AS SELECT * FROM _src")
     con.type_tableview("Breaker")
-    row = con.execute("SELECT schema_name FROM duckdb_views() "
-                      "WHERE view_name = 'Breaker'").fetchone()
-    assert row == ("cim",)
+    rows = con.execute("SELECT schema_name FROM duckdb_views() "
+                       "WHERE view_name = 'Breaker'").fetchall()
+    assert rows == [("cim",)]
 
 
 

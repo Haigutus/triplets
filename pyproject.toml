@@ -93,7 +93,7 @@ docs = [
     "sphinx-multiversion>=0.2.4",
 ]
 duckdb = [
-    "duckdb>=1.5.3,<2",   # 2.0: unfinished execute() results block the connection; `->` lambdas removed
+    "duckdb>=1.5.3",
     # con.read_rdf streams through parse_batches, which requires an arrow parser engine
     "pyarrow>=25.0.1,<26",   # floor = build pin below; bump both together (ABI)
 ]
