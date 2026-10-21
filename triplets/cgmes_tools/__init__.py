@@ -113,6 +113,117 @@ def _data_dispatch(name):
     return wrapper
 
 
+# ── schema validation by instance header (the CIM orchestration) ────────────
+
+def declared_profiles(data, rdf_map, data_scope=None, **kwargs):
+    """``{INSTANCE_ID: [schema section, ...]}`` — the profiles each instance header declares.
+
+    The header's profile-identity fields (``Model.messageType``, ``keyword``,
+    ``Model.profile``, ``conformsTo``) are matched against the schema profiles'
+    own declared identity (section key / keyword / versionIRI / profileVersionIRI /
+    conformsTo; an identifier several profiles share identifies none), legacy
+    CGMES 2.4.15 profile URLs by substring. An instance without a match maps to
+    an empty list. DuckDB: ``table`` / ``schema`` / ``table_name`` kwargs.
+
+    Examples
+    --------
+    >>> declared_profiles(data, schemas.ENTSOE_CGMES_3_0_0_552_ED2)
+    {'4f8d…': ['EQ'], '9a1c…': ['SSH']}
+    """
+    from .._header import profile_sections
+    from ..iri import load_rdf_map
+
+    rdf_map = load_rdf_map(rdf_map)
+    hints = _instance_hints(data, _table(data, **kwargs))
+    instances = hints if data_scope is None else {instance: hints.get(str(instance), []) for instance in data_scope}
+    return {instance: profile_sections(found, rdf_map) for instance, found in instances.items()}
+
+
+def validate_by_header(data, rdf_map, data_scope=None, rdf_map_scope=None, report_undefined_keys=False,
+                       references=False, report_missing_targets=True, engine="auto", **kwargs):
+    """Schema-validate every instance against the profiles its header declares.
+
+    Instances declaring the same profiles run together through
+    ``triplets.validation.validate_schema`` (each instance still counted on its
+    own, its declared profiles merged). With *references*,
+    ``validate_schema_references`` checks each instance's references against all
+    other loaded instances and their declared profiles. An instance whose header
+    matches no profile is skipped and named in ``skipped_shapes``.
+
+    rdf_map_scope : profile identifier(s), optional
+        Override the declared profiles for every instance (header-less data).
+    """
+    from .. import validation
+    from ..iri import load_rdf_map
+
+    rdf_map = load_rdf_map(rdf_map)
+    declared = declared_profiles(data, rdf_map, data_scope, **kwargs)
+    if rdf_map_scope is not None:
+        declared = {instance: rdf_map_scope for instance in declared}
+    groups, unresolved = {}, []
+    for instance, sections in declared.items():
+        if sections:
+            groups.setdefault(tuple([sections] if isinstance(sections, str) else sections), []).append(instance)
+        else:
+            unresolved.append(f"instance {instance}: no schema profile matched its header")
+    loaded = list(declared)
+    target_profiles = list(dict.fromkeys(section for sections in groups for section in sections))
+    frames = []
+    for sections, instances in groups.items():
+        frames.append(validation.validate_schema(data, rdf_map, data_scope=instances, rdf_map_scope=list(sections),
+                                                 report_undefined_keys=report_undefined_keys, engine=engine, **kwargs))
+        if references:
+            frames.append(validation.validate_schema_references(
+                data, rdf_map, instances, list(sections), loaded, target_profiles,
+                report_missing_targets=report_missing_targets, engine=engine, **kwargs))
+    violations = validation.concat_violations(frames)
+    if violations.empty and not frames:
+        violations = pandas.DataFrame(columns=[*validation.VIOLATION_COLUMNS, "PROFILE"])
+        violations.attrs["validation"] = {"language": "rdfs", "skipped_shapes": []}
+    violations.attrs["validation"]["skipped_shapes"] = [*violations.attrs["validation"].get("skipped_shapes", []),
+                                                        *unresolved]
+    return violations
+
+
+def _table(data, table=None, schema=None, table_name=None, **kwargs):
+    """The triplets relation of a DuckDB connection; unused for other flavors."""
+    if flavor(data) == "duckdb":
+        from ..tools.duckdb_engine import _resolve_table
+        return _resolve_table(data, table=table, schema=schema, table_name=table_name)
+    return table_name or "triplets"
+
+
+def _instance_hints(data, table_name="triplets"):
+    """{INSTANCE_ID: [header profile hints, priority-ordered]} — every
+    instance appears, hint-less ones with an empty list (any input flavor)."""
+    kind = flavor(data)
+    if kind == "duckdb":
+        placeholders = ", ".join("?" for _ in PROFILE_KEYS)
+        header = pandas.DataFrame(data.execute(
+            f"SELECT INSTANCE_ID, KEY, VALUE FROM {table_name} WHERE KEY IN ({placeholders})",
+            list(PROFILE_KEYS)).fetchall(), columns=["INSTANCE_ID", "KEY", "VALUE"])
+        instances = [row[0] for row in data.execute(
+            f"SELECT DISTINCT INSTANCE_ID FROM {table_name}").fetchall()]
+    else:
+        if kind == "pyarrow":
+            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+            kind = "pandas"
+        if kind == "polars":
+            header = data.filter(data["KEY"].is_in(list(PROFILE_KEYS))).to_pandas()
+            instances = data["INSTANCE_ID"].unique().to_list()
+        else:
+            header = data.loc[data["KEY"].isin(PROFILE_KEYS)]
+            instances = data["INSTANCE_ID"].unique().tolist()
+
+    hints = {str(instance): [] for instance in instances}
+    priority = {key: rank for rank, key in enumerate(PROFILE_KEYS)}
+    header = header.sort_values("KEY", key=lambda keys: keys.map(priority), kind="stable")
+    for instance, value in zip(header["INSTANCE_ID"].astype(str), header["VALUE"]):
+        if value is not None and not pandas.isna(value):
+            hints[instance].append(str(value))
+    return hints
+
+
 for _name in DATA_FUNCTIONS:
     globals()[_name] = _data_dispatch(_name)
 
@@ -124,4 +235,5 @@ __all__ = [
     "get_metadata_from_filename", "get_filename_from_metadata",
     "get_metadata_from_xml",
     "PROFILE_KEYS", "REFERENCE_KEYS", "HEADER_TYPES",
+    "declared_profiles", "validate_by_header",
 ] + DATA_FUNCTIONS + list(DEPRECATED_ALIASES)

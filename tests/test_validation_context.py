@@ -184,3 +184,7 @@ def test_concat_violations_merges_run_metadata(shapes):
     schema_run.attrs["validation"] = {**first.attrs["validation"], "language": "rdfs"}
     with pytest.raises(ValueError, match="one constraint language"):
         concat_violations([first, schema_run])
+    schema_run = first.copy()
+    schema_run.attrs["validation"] = {**first.attrs["validation"], "language": "rdfs"}
+    with pytest.raises(ValueError, match="one constraint language"):
+        concat_violations([first, schema_run])
