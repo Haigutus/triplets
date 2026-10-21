@@ -37,12 +37,12 @@ from typing import Any
 import pandas
 
 from .._engine_detect import flavor
-from .._header import PROFILE_KEYS as _HEADER_KEYS, profile_sections
+from .._header import PROFILE_KEYS as _HEADER_KEYS
 from .._registry import EngineRegistry
 from ..iri import CIM_NS, TYPE_KEY, load_rdf_map
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
 from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
-from .schema_scope import SCOPE_KEY
+from .schema_scope import SCOPE_KEY, scope_sections
 from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
                            violations_to_csv, violations_to_excel)
@@ -158,6 +158,7 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     violations.attrs["validation"] = _report_metadata(
         violations, data, compiled, engine_name, started, table_name=table_ref, conflicts=conflicts)
     violations.attrs["validation"]["inheritance"] = inheritance
+    violations.attrs["validation"]["profiles"] = scope_sections(rdf_map, rdf_map_scope) if rdf_map else None
     return violations
 
 
@@ -381,86 +382,48 @@ def _type_map(data, table_name="triplets"):
     return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
 
 
-def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, undefined_namespace=CIM_NS,
-                    inheritance=True, **kwargs):
-    """Validate triplet data against the export schema — per instance, per
-    declared profile; profiles are never merged.
+def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_undefined_keys=False,
+                    engine="auto", undefined_namespace=CIM_NS, **kwargs):
+    """Validate triplet data against the export schema: cardinality, datatypes and
+    enumerations of the scoped profiles, per instance.
 
-    Every INSTANCE_ID is validated separately (the scope filter), against
-    each profile its own header declares: the header's profile-identity
-    fields (``conformsTo``, ``Model.profile``, ``keyword``,
-    ``Model.messageType``) are matched against the schema profiles' declared
-    identity (versionIRI / profileVersionIRI / conformsTo / keyword / section key; legacy 2.4
-    profile URLs by substring). One instance may declare several profiles —
-    each runs on its own, so per-profile constraints (e.g. mRID 1..1 in
-    every CGMES 3.0 profile) are checked against that instance's rows alone.
+    Every instance in *data_scope* is validated on its own (cardinality never
+    counts rows of another instance) against the profiles in *rdf_map_scope*,
+    merged into one (``triplets.validation.schema_scope``). Class rules never
+    widen to subclasses; references are checked by ``validate_schema_references``.
 
-    profiles : sequence of profile identifiers, optional
-        Explicit override applied to EVERY instance (section key, keyword or
-        profile URI) — for header-less or legacy data. Unknown identifiers
-        raise ValueError. Default None = resolve from each instance's header;
-        instances resolving to nothing are skipped and reported in the run
-        metadata coverage (``skipped_shapes``).
-    inheritance : bool, default True
-        Passed to ``compile_schema``: association ranges accept subclasses.
+    data_scope : iterable of INSTANCE_ID, optional
+        The instances to validate; None = every instance in *data*.
+    rdf_map_scope : profile identifier or sequence of them
+        Section keys and/or declared profile IRIs (``["EQ", "OP", "SC"]`` for a
+        CGMES 3.0 EQ file); ``"*"`` = every section; None = the root entries.
+        A scope without Class entries raises ValueError.
+    report_undefined_keys : bool, default False
+        Also report keys on an object that no scoped profile defines for its class.
+
+    The PROFILE column lists the scoped section keys (``["EQ", "OP", "SC"]``).
     """
     import triplets
 
     started = datetime.now(timezone.utc)
-    compiled_set = compile_schema(rdf_map, closed=closed, inheritance=inheritance)   # caches on the file digest
-    rdf_map = load_rdf_map(rdf_map)                          # dict for every per-profile engine run
+    compiled = compile_schema(rdf_map, rdf_map_scope, report_undefined_keys)   # caches on the file digest
+    rdf_map = load_rdf_map(rdf_map)
+    sections = scope_sections(rdf_map, rdf_map_scope)
     table_name = _table_ref(data, **kwargs)
     engine_name, engine_mod = get_engine(engine)
-    lexical = kwargs.pop("lexical", True)
     context = kwargs.pop("context", False)
 
-    chosen = None
-    if profiles is not None:
-        chosen = []
-        for identifier in profiles:
-            section = compiled_set.section(identifier)
-            if section is None:
-                raise ValueError(f"unknown schema profile {identifier!r}; available: "
-                                 f"{', '.join(sorted(compiled_set.profiles))}")
-            if section not in chosen:
-                chosen.append(section)
-
-    unresolved, runs = [], []
-    for instance, hints in _instance_hints(data, table_name).items():
-        sections = chosen if chosen is not None else profile_sections(hints, compiled_set.profiles, compiled_set.index)
-        if not sections:
-            unresolved.append(f"instance {instance}: no schema profile matched "
-                              f"(hints: {hints[:4]})")
-            continue
-        runs.extend((instance, section) for section in sections)
-
-    # one raw engine pass per (instance, profile) — the scope filter keeps
-    # counting per instance; describe/expected/enrich run ONCE on the concat
-    frames = []
-    for instance, section in runs:
-        sub = _run(data, compiled_set.profiles[section], engine_name, engine_mod,
-                   rdf_map, [instance], lexical, undefined_namespace=undefined_namespace, **kwargs)
-        sub["PROFILE"] = section
-        frames.append(sub)
-
-    used = sorted({section for _, section in runs})
+    instances = list(data_scope) if data_scope is not None else _instances(data, table_name)
+    # one raw engine pass per instance — describe/expected/enrich run ONCE on the concat
+    frames = [_run(data, compiled, engine_name, engine_mod, None, [instance], False,
+                   undefined_namespace=undefined_namespace, **kwargs) for instance in instances]
     violations = (pandas.concat(frames, ignore_index=True) if frames
-                  else pandas.DataFrame(columns=VIOLATION_COLUMNS + ["PROFILE"]))
-    ir = (pandas.concat([compiled_set.profiles[section].ir for section in used],
-                        ignore_index=True) if used
-          else pandas.DataFrame(columns=IR_COLUMNS))
-    violations = _present(violations, data, ir, "rdfs", table_name)
+                  else pandas.DataFrame(columns=VIOLATION_COLUMNS))
+    violations["PROFILE"] = _profile_column(violations, sections)
+    violations = _present(violations, data, compiled.ir, "rdfs", table_name)
     if context:
-        union = CompiledShapes(graph=None, ir=ir, hash=compiled_set.hash,
-                               sources=compiled_set.sources, language="rdfs")
-        violations = enrich(violations, data=data, shapes=union, rdf_map=rdf_map)
-    skipped = sorted(
-        {f"{section}: {entry}" for section in used
-         for entry in compiled_set.profiles[section].stats["skipped_shapes"]}
-        | set(unresolved))
-    skipped_components = sorted({
-        component for section in used for component in
-        compiled_set.profiles[section].plans.get(engine_name, ((), (), ()))[2]})
+        violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
+    skipped_components = sorted(compiled.plans.get(engine_name, ((), (), ()))[2])
     finished = datetime.now(timezone.utc)
     violations.attrs["validation"] = {
         "started_at": _iso(started),
@@ -469,17 +432,34 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, u
         "engine": engine_name,
         "creator": f"triplets {triplets.__version__}",
         "source": _source_labels(data, table_name=table_name),
-        "references": list(compiled_set.sources),
+        "references": list(compiled.sources),
         "language": "rdfs",
-        "inheritance": inheritance,
-        "profiles": used,
-        "node_shapes": sum(compiled_set.profiles[s].stats["node_shapes"] for s in used),
-        "constraints": sum(compiled_set.profiles[s].stats["constraints"] for s in used),
-        "skipped_shapes": skipped,
+        "profiles": sections,
+        "node_shapes": compiled.stats["node_shapes"],
+        "constraints": compiled.stats["constraints"],
+        "skipped_shapes": list(compiled.stats["skipped_shapes"]),
         "skipped_components": skipped_components,
         "source_shapes": {},
     }
     return violations
+
+
+def _profile_column(violations, sections):
+    """PROFILE: the list of scoped section keys on every row (None for the root entries)."""
+    return pandas.Series([None if sections is None else list(sections)] * len(violations),
+                         index=violations.index, dtype=object)
+
+
+def _instances(data, table_name="triplets"):
+    """Every INSTANCE_ID in the data, in first-seen order (any input flavor)."""
+    kind = flavor(data)
+    if kind == "duckdb":
+        return [row[0] for row in data.execute(f"SELECT DISTINCT INSTANCE_ID FROM {table_name}").fetchall()]
+    if kind == "pyarrow":
+        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+    if kind == "polars":
+        return data["INSTANCE_ID"].unique(maintain_order=True).to_list()
+    return data["INSTANCE_ID"].unique().tolist()
 
 
 def _instance_hints(data, table_name="triplets"):
