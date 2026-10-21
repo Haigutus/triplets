@@ -517,7 +517,7 @@ validation.validate_schema(data, rdf_map, data_scope, rdf_map_scope)
 |-> compile_schema(rdf_map, rdf_map_scope)     # merged, cached
 '-> one engine pass per instance (data_scope=[instance]), PROFILE = the scoped section keys
 
-enrich(violations, data=, shapes=, rdf_map=)  # TARGET + context columns, a separate call
+enrich(violations, data=, shapes=, rdf_map=, data_scope=)  # TARGET + context columns, a separate call
 ```
 
 ## File Layout
@@ -606,10 +606,12 @@ exports with source locations — `uv run examples/shacl_reports.py`).
 
 ## Context enrichment (`validation/context.py`)
 
-`enrich(violations, data=, shapes=, rdf_map=, rdf_map_scope=)` — a separate
-call after any validation — appends `ENRICHMENT_COLUMNS` to the report.
-Every source is optional; absent sources leave their columns null, so the
-output schema is stable:
+`enrich(violations, data=, shapes=, rdf_map=, rdf_map_scope=, data_scope=)` —
+a separate call after any validation — appends `ENRICHMENT_COLUMNS` to the
+report. Every source is optional; absent sources leave their columns null, so
+the output schema is stable. `data_scope` reads only those instances of
+`data` — pass the validation's own scope so TARGET finds exactly what the run
+saw:
 
 | Columns | Source | Content |
 |---------|--------|---------|

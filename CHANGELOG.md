@@ -88,7 +88,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   MESSAGE_SOURCE (from the rules); TARGET (the referenced object found, or not;
   the duplicate values of a maximum-count finding) is `enrich`'s first
   column. `context=True` is removed: call `enrich(violations, data=, shapes=,
-  rdf_map=, rdf_map_scope=)`.
+  rdf_map=, rdf_map_scope=, data_scope=)` — `data_scope` reads only the
+  instances the run saw.
 - **NC inheritance:** `AutomationFunction`, `BaseCaseCurrentLimit`,
   `DirectCurrentEquipmentController` and `PowerTransferCorridor` no longer
   reach `PowerSystemResource` / `IdentifiedObject` (their own lists stop

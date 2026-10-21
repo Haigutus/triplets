@@ -165,6 +165,34 @@ def test_schema_context_reads_the_merged_scope():
     assert enrich(violations, rdf_map=rdf_map, rdf_map_scope=["EQ", "SC"])["SCHEMA_MULTIPLICITY"].tolist() == ["1..1"]
 
 
+@pytest.mark.parametrize("flavor", ["pandas", "polars", "duckdb"])
+def test_enrich_data_scope_reads_what_the_run_saw(flavor):
+    """The run sees only i2, so x1 is missing — enrich(data_scope=) agrees; the
+    whole data would find x1 in i1."""
+    cim = "http://iec.ch/TC57/CIM100#"
+    schema = {"EQ": {"ProfileMetadata": {"keyword": "EQ"},
+                     "Breaker": {"type": "Class", "namespace": cim, "inheritance": [cim + "Breaker"],
+                                 "parameters": ["Equipment.EquipmentContainer"]},
+                     "VoltageLevel": {"type": "Class", "namespace": cim, "inheritance": [cim + "VoltageLevel"]},
+                     "Equipment.EquipmentContainer": {"type": "Association", "xsd:minOccours": "0",
+                                                      "xsd:maxOccours": "1", "range": cim + "VoltageLevel"}}}
+    data = pandas.DataFrame([("x1", "Type", "VoltageLevel", "i1"), ("b1", "Type", "Breaker", "i2"),
+                             ("b1", "Equipment.EquipmentContainer", "x1", "i2")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    violations = triplets.validation.validate_schema_references(data, schema, ["i2"], ["EQ"], engine="pandas")
+    assert violations["VIOLATION_TYPE"].tolist() == ["triplets:missing"]
+    if flavor == "polars":
+        data = pytest.importorskip("polars").from_pandas(data)
+    elif flavor == "duckdb":
+        connection = pytest.importorskip("duckdb").connect()
+        connection.register("_rows", data)
+        connection.execute("CREATE TABLE triplets AS SELECT * FROM _rows")
+        data = connection
+    scoped = enrich(violations, data=data, data_scope=["i2"])
+    assert scoped["TARGET"].tolist() == ["referenced object x1 not found in the data"]
+    assert enrich(violations, data=data)["TARGET"].tolist() == ["referenced object x1 found — VoltageLevel"]
+
+
 def test_concat_violations_merges_run_metadata(shapes):
     """Two runs of the same shapes: rows concatenated, the run window spans both,
     shape counts once, data sources united."""
