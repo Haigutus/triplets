@@ -358,14 +358,16 @@ def validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_
     table_name = _table_ref(data, **kwargs)
     engine_name, engine_mod = get_engine(engine)
     targets = list(target_data_scope or ())
+    sources = list(data_scope)
+    # the association triple itself must be in the source instance — an object
+    # repeated in a target file (EQ and SSH share IDs) brings the target's own rows
+    own_triples = _instance_triples(data, sources, compiled.ir["path"].dropna().unique().tolist(), table_name)
     frames = []
-    for instance in data_scope:
+    for instance in sources:
         found = _run(data, compiled, engine_name, engine_mod, None,
                      [instance, *(target for target in targets if target != instance)], False,
                      undefined_namespace=undefined_namespace, **kwargs)
-        # the association triple itself must be in the source instance — an object
-        # repeated in a target file (EQ and SSH share IDs) brings the target's own rows
-        own = _instance_triples(data, instance, compiled.ir["path"].dropna().unique().tolist(), table_name)
+        own = own_triples.get(str(instance), set())
         mask = [triple in own for triple in zip(found["ID"], found["KEY"], found["VALUE"])]
         frames.append(found.loc[pandas.Series(mask, index=found.index, dtype=bool)])
     violations = (pandas.concat(frames, ignore_index=True) if frames
@@ -402,22 +404,32 @@ def _schema_metadata(compiled, engine_name, started, data, table_name, sections)
     }
 
 
-def _instance_triples(data, instance, keys, table_name="triplets"):
-    """{(ID, KEY, VALUE)} of one instance's rows at *keys* (any input flavor)."""
+def _instance_triples(data, instances, keys, table_name="triplets"):
+    """{INSTANCE_ID: {(ID, KEY, VALUE)}} of the *instances*' rows at *keys* — one pass
+    over the data for every source instance (any input flavor)."""
+    instances = [str(instance) for instance in instances]
+    if not instances or not keys:
+        return {}
     kind = flavor(data)
     if kind == "duckdb":
-        if not keys:
-            return set()
-        placeholders = ", ".join("?" for _ in keys)
-        return set(data.execute(f"SELECT ID, KEY, VALUE FROM {table_name} WHERE INSTANCE_ID = ? "
-                                f"AND KEY IN ({placeholders})", [str(instance), *keys]).fetchall())
-    if kind == "pyarrow":
-        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-    if kind == "polars":
-        rows = data.filter((data["INSTANCE_ID"] == str(instance)) & data["KEY"].is_in(keys))
-        return set(zip(rows["ID"].to_list(), rows["KEY"].to_list(), rows["VALUE"].to_list()))
-    rows = data.loc[(data["INSTANCE_ID"].astype(str) == str(instance)) & data["KEY"].isin(keys)]
-    return set(zip(rows["ID"].astype(str), rows["KEY"].astype(str), rows["VALUE"].astype(str)))
+        rows = pandas.DataFrame(data.execute(
+            f"SELECT INSTANCE_ID, ID, KEY, VALUE FROM {table_name} "
+            f"WHERE INSTANCE_ID IN ({', '.join('?' for _ in instances)}) "
+            f"AND KEY IN ({', '.join('?' for _ in keys)})", [*instances, *keys]).fetchall(),
+            columns=["INSTANCE_ID", "ID", "KEY", "VALUE"])
+    else:
+        if kind == "pyarrow":
+            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+        if kind == "polars":
+            rows = data.filter(data["INSTANCE_ID"].is_in(instances) & data["KEY"].is_in(keys)).to_pandas()
+        else:
+            rows = data.loc[data["KEY"].isin(keys)]
+            rows = rows.loc[rows["INSTANCE_ID"].astype(str).isin(instances)]
+    triples = {}
+    for instance, identifier, key, value in zip(rows["INSTANCE_ID"].astype(str), rows["ID"].astype(str),
+                                                rows["KEY"].astype(str), rows["VALUE"].astype(str)):
+        triples.setdefault(instance, set()).add((identifier, key, value))
+    return triples
 
 
 def _profile_column(violations, sections):
