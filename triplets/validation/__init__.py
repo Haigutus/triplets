@@ -37,7 +37,6 @@ from typing import Any
 import pandas
 
 from .._engine_detect import flavor
-from .._header import PROFILE_KEYS as _HEADER_KEYS
 from .._registry import EngineRegistry
 from ..iri import CIM_NS, load_rdf_map
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
@@ -343,11 +342,11 @@ def validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_
     sections = scope_sections(rdf_map, rdf_map_scope)
     table_name = _table_ref(data, **kwargs)
     engine_name, engine_mod = get_engine(engine)
-    data_scope = list(data_scope)
-    targets = [instance for instance in (target_data_scope or ()) if instance not in data_scope]
+    targets = list(target_data_scope or ())
     frames = []
     for instance in data_scope:
-        found = _run(data, compiled, engine_name, engine_mod, None, [instance, *targets], False,
+        found = _run(data, compiled, engine_name, engine_mod, None,
+                     [instance, *(target for target in targets if target != instance)], False,
                      undefined_namespace=undefined_namespace, **kwargs)
         # the association triple itself must be in the source instance — an object
         # repeated in a target file (EQ and SSH share IDs) brings the target's own rows
@@ -420,37 +419,6 @@ def _instances(data, table_name="triplets"):
     if kind == "polars":
         return data["INSTANCE_ID"].unique(maintain_order=True).to_list()
     return data["INSTANCE_ID"].unique().tolist()
-
-
-def _instance_hints(data, table_name="triplets"):
-    """{INSTANCE_ID: [header profile hints, priority-ordered]} — every
-    instance appears, hint-less ones with an empty list (any input flavor)."""
-    kind = flavor(data)
-    if kind == "duckdb":
-        placeholders = ", ".join("?" for _ in _HEADER_KEYS)
-        header = pandas.DataFrame(data.execute(
-            f"SELECT INSTANCE_ID, KEY, VALUE FROM {table_name} WHERE KEY IN ({placeholders})",
-            list(_HEADER_KEYS)).fetchall(), columns=["INSTANCE_ID", "KEY", "VALUE"])
-        instances = [row[0] for row in data.execute(
-            f"SELECT DISTINCT INSTANCE_ID FROM {table_name}").fetchall()]
-    else:
-        if kind == "pyarrow":
-            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-            kind = "pandas"
-        if kind == "polars":
-            header = data.filter(data["KEY"].is_in(list(_HEADER_KEYS))).to_pandas()
-            instances = data["INSTANCE_ID"].unique().to_list()
-        else:
-            header = data.loc[data["KEY"].isin(_HEADER_KEYS)]
-            instances = data["INSTANCE_ID"].unique().tolist()
-
-    hints = {str(instance): [] for instance in instances}
-    priority = {key: rank for rank, key in enumerate(_HEADER_KEYS)}
-    header = header.sort_values("KEY", key=lambda keys: keys.map(priority), kind="stable")
-    for instance, value in zip(header["INSTANCE_ID"].astype(str), header["VALUE"]):
-        if value is not None and not pandas.isna(value):
-            hints[instance].append(str(value))
-    return hints
 
 
 def _report_metadata(violations, data, compiled, engine_name, started, table_name="triplets", conflicts=()):
