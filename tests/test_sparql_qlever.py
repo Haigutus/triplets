@@ -126,9 +126,9 @@ def test_scope_parity(svedala):
     other = next(i for i in set(svedala["INSTANCE_ID"].astype(str).unique()) if i != eq_instance)
 
     q = PREFIXES + "SELECT (COUNT(?s) AS ?n) WHERE { ?s rdf:type cim:ACLineSegment }"
-    in_scope = int(triplets.sparql.query(svedala, q, scope=[eq_instance], engine="qlever")["n"].iloc[0])
-    out_scope = int(triplets.sparql.query(svedala, q, scope=[other], engine="qlever")["n"].iloc[0])
-    reference = int(triplets.sparql.query(svedala, q, scope=[eq_instance], engine="rdflib")["n"].iloc[0])
+    in_scope = int(triplets.sparql.query(svedala, q, data_scope=[eq_instance], engine="qlever")["n"].iloc[0])
+    out_scope = int(triplets.sparql.query(svedala, q, data_scope=[other], engine="qlever")["n"].iloc[0])
+    reference = int(triplets.sparql.query(svedala, q, data_scope=[eq_instance], engine="rdflib")["n"].iloc[0])
     assert in_scope == reference > 0
     assert out_scope == 0
 
@@ -142,7 +142,7 @@ def test_scope_shares_index(svedala):
     triplets.sparql.query(svedala, q, engine="qlever")
     cached = len(sparql_qlever._INDEXES)
     instance = str(svedala["INSTANCE_ID"].astype(str).iloc[0])
-    triplets.sparql.query(svedala, q, scope=[instance], engine="qlever")
+    triplets.sparql.query(svedala, q, data_scope=[instance], engine="qlever")
     assert len(sparql_qlever._INDEXES) == cached
 
 
@@ -157,7 +157,7 @@ def test_scope_overrides_own_from(svedala):
     q = PREFIXES + (f"SELECT (COUNT(?s) AS ?n) FROM <urn:uuid:{eq_instance}> "
                     "WHERE { ?s rdf:type cim:ACLineSegment }")
     unscoped = int(triplets.sparql.query(svedala, q, engine="qlever")["n"].iloc[0])
-    scoped = int(triplets.sparql.query(svedala, q, scope=[other], engine="qlever")["n"].iloc[0])
+    scoped = int(triplets.sparql.query(svedala, q, data_scope=[other], engine="qlever")["n"].iloc[0])
     assert unscoped > 0        # the query's own FROM sees the EQ instance
     assert scoped == 0         # scope replaces it entirely
 

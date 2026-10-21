@@ -76,6 +76,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ([#99](https://github.com/entsoe/application-profiles-library/pull/99) / [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
 
 ### Changed
+- **Breaking — `sparql.query(scope=)` → `data_scope=`**, matching the validations
+  (also `_rdflib_loader.scoped_graph(dataset, data_scope=)`).
 - **Breaking — validation entry points:** `validate` is `validate_shacl` and its
   `scope` is `data_scope`; `validate_schema` takes `data_scope` /
   `rdf_map_scope` and `report_undefined_keys` (was `closed`) instead of

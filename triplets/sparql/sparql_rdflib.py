@@ -32,11 +32,11 @@ logger = logging.getLogger(__name__)
 
 
 
-def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data_unchanged=False,
+def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto", data_unchanged=False,
           undefined_namespace=CIM_NS):
     """Execute query_string over data; shape the result by query type."""
     dataset = load_dataset(data, rdf_map=rdf_map, data_unchanged=data_unchanged, undefined_namespace=undefined_namespace)
-    graph = scoped_graph(dataset, scope)
+    graph = scoped_graph(dataset, data_scope)
     result = graph.query(query_string)
     if return_type == "auto":
         return_type = "polars" if flavor(data) == "polars" else "pandas"

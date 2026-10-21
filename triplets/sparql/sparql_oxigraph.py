@@ -49,13 +49,13 @@ logger = logging.getLogger(__name__)
 _STORES = register_cache({})    # content hash → loaded in-memory pyoxigraph.Store
 
 
-def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data_unchanged=False,
+def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto", data_unchanged=False,
           undefined_namespace=CIM_NS):
     """Execute query_string over data; shape the result by query type.
 
     Queries are executed exactly as given — the text is never modified.
     A rejected query raises ValueError carrying oxigraph's message plus the
-    query text, so the failure is directly actionable. ``scope`` travels
+    query text, so the failure is directly actionable. ``data_scope`` travels
     beside the query as SPARQL-protocol default graphs: the query runs
     against exactly the union of the scoped instances' named graphs on the
     one shared store, and per the protocol these take precedence over any
@@ -63,7 +63,7 @@ def query(data, query_string, rdf_map=None, scope=None, return_type="auto", data
     deduplicated union of all named graphs).
     """
     store = _store_for(data, rdf_map, data_unchanged, undefined_namespace)
-    graphs = [NamedNode(absolute_id(instance)) for instance in scope] if scope is not None else None
+    graphs = [NamedNode(absolute_id(instance)) for instance in data_scope] if data_scope is not None else None
     if return_type == "auto":
         return_type = "polars" if flavor(data) == "polars" else "pandas"
 
