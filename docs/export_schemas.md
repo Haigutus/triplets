@@ -234,8 +234,9 @@ files = data.export_to_cimxml(rdf_map=schemas.ENTSOE_NC_2_4_1_552_ED1, export_to
 # N-Quads is edition-independent (always absolute urn:uuid: IRIs) — see the note below
 data.export_to_nquads("nc.nq", rdf_map=schemas.ENTSOE_NC_2_4_1_552_ED2)
 
-# validation context enrichment uses the same bundles
-report = data.shacl.validate(shapes, context=True, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+# validation and its context enrichment use the same bundles, scoped to the profiles
+report = data.shacl.validate_shacl(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope=["EQ"])
+report = report.shacl.enrich(data=data, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope=["EQ"])
 
 # a bundle is plain JSON — inspect it directly
 import json

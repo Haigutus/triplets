@@ -223,7 +223,7 @@ Deviations between the importers and exporters that are known and not planned:
 - **`read_nquads` drops datatypes and language tags** — values keep their lexical
   form (everything in a triplet frame is a string).
 - **The undefined namespace depends on the direction.** `export_to_nquads` writes
-  undeclared names under `http://triplets#`; `sparql.query` / `validate` load the
+  undeclared names under `http://triplets#`; `sparql.query` / `validate_shacl` load the
   same frame under CIM100. Pass `undefined_namespace=` to align them. See
   [sparql.md](sparql.md) for what SELECT returns.
 

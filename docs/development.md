@@ -87,9 +87,12 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   `key_types` (name → schema entry type), `value_types` (KEY → `literal` /
   `reference` / `enum`, by entry type only), `datatypes` (Attribute KEY → xsd
   IRI, `None` = string; anyURI included). No cache: each is ~2 ms on a 2.8 MB
-  schema. Public entry points (`validate`,
+  schema. Public entry points (`validate_shacl`,
   `validate_schema`, `export_to_*`, the qlever ingest) call `load_rdf_map`
-  once; below them only dicts flow, so a path is parsed once per call.
+  once; below them only dicts flow, so a path is parsed once per call. The
+  validations hand the engines the scoped, merged schema
+  (`validation.schema_scope.scoped_rdf_map`), so first-wins never decides
+  between profiles there.
 - **The schema entry type decides the serialisation form, never `xsd:type`**
   and never the shape of the text: an Attribute value is a literal even when
   it reads `https://…` or looks like a UUID (`xsd:type` only annotates it), an
@@ -108,7 +111,7 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   Every exporter has the same two knobs: `export_undefined` (write such rows
   or drop them — N-Quads keeps them by default, CIM XML drops them) and
   `undefined_namespace` (default `http://triplets#`). `sparql.query`,
-  `validate`, `validate_schema` and `export_to_shacl_report` always load every
+  `validate_shacl`, `validate_schema` and `export_to_shacl_report` always load every
   row and default the namespace to CIM100 so schema-less data answers `cim:`
   queries; the same frame therefore exports `triplets#Equipment` and is
   queried as `CIM100#Equipment` unless the parameter is passed.

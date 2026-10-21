@@ -1,5 +1,6 @@
-"""Instance-header vocabulary and profile identity, shared by cgmes_tools,
-validation and export.
+"""Instance-header vocabulary and profile identity, shared by cgmes_tools and
+export; validation's ``rdf_map_scope`` resolves profiles through the same
+schema identity (``profile_identifiers``) and never reads instance headers.
 
 Header handling is key-driven: functions scan for these KEYs wherever they
 appear — the header class (FullModel / dcat:Dataset / anything future) is
@@ -82,7 +83,7 @@ def _profile_identity_index(rdf_map):
 def profile_sections(hints, rdf_map, identity_index=None):
     """Every schema section an instance's header hints resolve to, in hint-priority order:
     exact schema identities, else the legacy 2.4.15 profile-URL substrings. One rule for
-    the CIM XML exporter (first section) and the validation enrichment (all of them)."""
+    the CIM XML exporter (first section) and ``cgmes_tools.declared_profiles`` (all of them)."""
     identity_index = _profile_identity_index(rdf_map) if identity_index is None else identity_index
     sections = list(dict.fromkeys(identity_index[hint] for hint in hints if hint in identity_index))
     if not sections:
