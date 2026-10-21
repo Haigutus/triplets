@@ -316,8 +316,8 @@ def _class(context, rule):
 
 def _schema_range(context, rule):
     """triplets:range — the referenced object conforms when ANY of its types
-    is in the allowed set (RDF types are cumulative, issue #100); references
-    whose target has no Type row are silent (cross-profile datasets)."""
+    is in the allowed set (RDF types are cumulative, issue #100); a target
+    without a Type row is left to triplets:missing."""
     rows = context.path_rows(rule)
     typed = context.key_rows(TYPE_KEY)["ID"].astype(str).unique()
     allowed = pandas.Index([]).append([pandas.Index(context.class_ids(cls))
@@ -325,6 +325,15 @@ def _schema_range(context, rule):
     bad = rows["PATH_VALUE"].isin(typed) & ~rows["PATH_VALUE"].isin(allowed)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"reference target is not one of {rule.params}")
+
+
+def _schema_missing(context, rule):
+    """triplets:missing — the referenced object has no Type row in the validated data."""
+    rows = context.path_rows(rule)
+    typed = context.key_rows(TYPE_KEY)["ID"].astype(str).unique()
+    bad = ~rows["PATH_VALUE"].isin(typed)
+    return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
+                  "referenced object not found in the data")
 
 
 def _node_kind(context, rule):
@@ -659,6 +668,7 @@ CONSTRAINT_VALIDATORS = {
     "sh:hasValue": _has_value,
     "sh:class": _class,
     "triplets:range": _schema_range,
+    "triplets:missing": _schema_missing,
     "sh:nodeKind": _node_kind,
     "sh:equals": _equals,
     "sh:disjoint": _disjoint,

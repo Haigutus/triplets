@@ -480,9 +480,10 @@ KNOWN_COMPONENTS = {
     "sh:minLength", "sh:maxLength", "sh:nodeKind", "sh:hasValue", "sh:in",
     "sh:equals", "sh:disjoint", "sh:lessThan", "sh:lessThanOrEquals", "sh:node",
     "sh:closed", "sh:sparql", "sh:or", "sh:and", "sh:not",
-    "triplets:range",   # schema validation: reference target's ANY type in the
-                        # allowed set (RDF types are cumulative — issue #100);
-                        # dangling references are silent (cross-profile sets)
+    "triplets:range",   # schema references: the target's ANY type in the allowed
+                        # set (RDF types are cumulative — issue #100); a target
+                        # without a Type row is left to triplets:missing
+    "triplets:missing",  # schema references: the target has no Type row in the data
 }
 
 
