@@ -323,7 +323,7 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
     return violations
 
 
-def validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_data_scope=(),
+def validate_schema_references(data, rdf_map, data_scope=None, rdf_map_scope=None, target_data_scope=None,
                                target_rdf_map_scope=(), report_missing_targets=True, engine="auto",
                                inheritance=True, undefined_namespace=CIM_NS, **kwargs):
     """Check the reference types of the source instances' associations.
@@ -335,12 +335,13 @@ def validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_
     class or, with *inheritance*, one of its subclasses — the classes the source
     and *target_rdf_map_scope* profiles define. Findings are on source objects only.
 
-    data_scope : iterable of INSTANCE_ID
-        The source instances.
-    rdf_map_scope : profile identifier or sequence of them
-        The source profiles — their associations are checked.
+    data_scope : iterable of INSTANCE_ID, optional
+        The source instances; None = every instance.
+    rdf_map_scope : profile identifier or sequence of them, optional
+        The source profiles — their associations are checked; None = the root entries.
     target_data_scope : iterable of INSTANCE_ID, optional
-        Instances holding the referenced objects (e.g. the EQ for an SSH).
+        Instances holding the referenced objects (e.g. the EQ for an SSH);
+        None = every instance, ``[]`` = none (only the source itself).
     target_rdf_map_scope : profile identifier or sequence of them, optional
         Profiles defining the referenced classes. A range class no source or
         target profile defines cannot be decided: the association is listed in
@@ -357,8 +358,9 @@ def validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_
     sections = scope_sections(rdf_map, rdf_map_scope)
     table_name = _table_ref(data, **kwargs)
     engine_name, engine_mod = get_engine(engine)
-    targets = list(target_data_scope or ())
-    sources = list(data_scope)
+    loaded = _instances(data, table_name) if data_scope is None or target_data_scope is None else None
+    sources = loaded if data_scope is None else list(data_scope)
+    targets = loaded if target_data_scope is None else list(target_data_scope)
     # the association triple itself must be in the source instance — an object
     # repeated in a target file (EQ and SSH share IDs) brings the target's own rows
     own_triples = _instance_triples(data, sources, compiled.ir["path"].dropna().unique().tolist(), table_name)

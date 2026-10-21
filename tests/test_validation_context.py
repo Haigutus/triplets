@@ -179,7 +179,7 @@ def test_enrich_data_scope_reads_what_the_run_saw(flavor):
     data = pandas.DataFrame([("x1", "Type", "VoltageLevel", "i1"), ("b1", "Type", "Breaker", "i2"),
                              ("b1", "Equipment.EquipmentContainer", "x1", "i2")],
                             columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    violations = triplets.validation.validate_schema_references(data, schema, ["i2"], ["EQ"], engine="pandas")
+    violations = triplets.validation.validate_schema_references(data, schema, ["i2"], ["EQ"], [], engine="pandas")   # no targets
     assert violations["VIOLATION_TYPE"].tolist() == ["triplets:missing"]
     if flavor == "polars":
         data = pytest.importorskip("polars").from_pandas(data)
