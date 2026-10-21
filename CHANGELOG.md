@@ -21,8 +21,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   section; None the root entries; a scope without entries raises). Listed
   profiles are merged for the run (`schema_scope.scoped_rdf_map`): parameter,
   inheritance and enumeration lists united, cardinality relaxed to the
-  loosest, a key whose datatype differs left untyped and unchecked — each
-  conflict listed in `skipped_shapes`; the merged ProfileMetadata keeps every
+  loosest, a key whose datatype differs left untyped and unchecked (listed in
+  `skipped_shapes`), the loosened checks listed in `relaxed_constraints`; the merged ProfileMetadata keeps every
   profile's identity (section keys, each field as a list in scope order).
   `rdf_map_entries` (and the flat maps on it) skip ProfileMetadata. Nothing in `triplets.validation` reads
   instance headers.

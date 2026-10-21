@@ -59,7 +59,7 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False) -> 
         logger.debug("schema compile cache hit: %s", key[:40])
         return _COMPILE_CACHE[key]
 
-    scoped, conflicts = scoped_rdf_map(schema, rdf_map_scope)
+    scoped, notes = scoped_rdf_map(schema, rdf_map_scope)
     entries = scoped[SCOPE_KEY]
     if not any(isinstance(entry, dict) and entry.get("type") == "Class" for entry in entries.values()):
         raise ValueError(f"rdf_map_scope {rdf_map_scope!r} selects no Class entries — name the profiles "
@@ -69,7 +69,8 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False) -> 
     compiled = CompiledShapes(
         graph=None, ir=ir, hash=key, sources=(source,), language="rdfs",
         stats={"node_shapes": int(ir["target_class"].nunique()), "constraints": len(ir),
-               "skipped_shapes": list(conflicts), "unknown_components": []})
+               "skipped_shapes": notes["skipped_shapes"],
+               "relaxed_constraints": notes["relaxed_constraints"], "unknown_components": []})
     _COMPILE_CACHE[key] = compiled
     logger.debug("compiled schema %s: %d constraints", sections, len(ir))
     return compiled
@@ -99,7 +100,7 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
     if key in _COMPILE_CACHE:
         return _COMPILE_CACHE[key]
 
-    scoped, conflicts = scoped_rdf_map(schema, rdf_map_scope)
+    scoped, notes = scoped_rdf_map(schema, rdf_map_scope)
     combined = None if sources is None else list(dict.fromkeys([*sources, *targets]))
     ancestors = class_ancestors(schema, combined)
     accepted = {}
@@ -107,7 +108,7 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
         accepted.setdefault(name, set()).add(name)
         for parent in (local_value(step, "class") for step in steps) if inheritance else ():
             accepted.setdefault(parent, set()).add(name)
-    rows, skipped = [], list(conflicts)
+    rows, skipped = [], list(notes["skipped_shapes"])
     for meta, prop, entry in _associations(sources, scoped[SCOPE_KEY]):
         classes = accepted.get(local_value(entry.get("range", ""), "class"))
         if not classes:
@@ -122,7 +123,8 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
     compiled = CompiledShapes(
         graph=None, ir=ir, hash=key, sources=(source,), language="rdfs",
         stats={"node_shapes": int(ir["target_class"].nunique()), "constraints": len(ir),
-               "skipped_shapes": skipped, "unknown_components": []})
+               # no cardinality or enumeration rows here: nothing the merge relaxes is checked
+               "skipped_shapes": skipped, "relaxed_constraints": [], "unknown_components": []})
     _COMPILE_CACHE[key] = compiled
     return compiled
 

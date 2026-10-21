@@ -111,12 +111,6 @@ def concat_violations(frames):
                     distinct.append(value)
     for key, values in merged.pop("_distinct", {}).items():
         merged[key] = values[0] if len(values) == 1 else values
-    for key, values in merged.pop("_distinct", {}).items():
-        merged[key] = values[0] if len(values) == 1 else values
-    for key, values in merged.pop("_distinct", {}).items():
-        merged[key] = values[0] if len(values) == 1 else values
-    for key, values in merged.pop("_distinct", {}).items():
-        merged[key] = values[0] if len(values) == 1 else values
     merged["started_at"] = min(meta["started_at"] for meta in metas)
     merged["generated_at"] = max(meta["generated_at"] for meta in metas)
     merged["duration_seconds"] = round((_moment(merged["generated_at"]) - _moment(merged["started_at"]))
