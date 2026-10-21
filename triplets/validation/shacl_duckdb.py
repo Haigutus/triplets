@@ -175,7 +175,7 @@ def _class(rule, table, context):
 
 def _schema_range(rule, table, context):
     """triplets:range — ANY of the target's types in the allowed set conforms
-    (issue #100); targets without a Type row are silent."""
+    (issue #100); a target without a Type row is left to triplets:missing."""
     rows, rows_params = _rows_sql(rule, table)
     placeholders = ", ".join("?" for _ in rule.params)
     condition = (f"EXISTS (SELECT 1 FROM {table} x WHERE x.ID = PV AND x.KEY = '{TYPE_KEY}') "
@@ -183,6 +183,13 @@ def _schema_range(rule, table, context):
                  f"WHERE x.KEY = '{TYPE_KEY}' AND x.VALUE IN ({placeholders}))")
     return _wrap(rule, f"reference target is not one of {rule.params}",
                  rows, rows_params, condition, list(rule.params))
+
+
+def _schema_missing(rule, table, context):
+    """triplets:missing — the referenced object has no Type row in the validated data."""
+    rows, rows_params = _rows_sql(rule, table)
+    condition = f"NOT EXISTS (SELECT 1 FROM {table} x WHERE x.ID = PV AND x.KEY = '{TYPE_KEY}')"
+    return _wrap(rule, "referenced object not found in the data", rows, rows_params, condition, [])
 
 
 def _node_kind(rule, table, context):
@@ -271,6 +278,7 @@ SQL_BUILDERS = {
     "sh:hasValue": _has_value,
     "sh:class": _class,
     "triplets:range": _schema_range,
+    "triplets:missing": _schema_missing,
     "sh:nodeKind": _node_kind,
     "sh:equals": _equals,
     "sh:disjoint": _disjoint,

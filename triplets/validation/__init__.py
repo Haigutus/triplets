@@ -41,7 +41,7 @@ from .._header import PROFILE_KEYS as _HEADER_KEYS
 from .._registry import EngineRegistry
 from ..iri import CIM_NS, TYPE_KEY, load_rdf_map
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
-from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
+from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .schema_scope import SCOPE_KEY, scope_sections
 from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
@@ -211,7 +211,7 @@ def _describe_associations(violations, data, ir, table_name="triplets"):
     data — the raw MESSAGE stays verbatim (exporters emit TARGET as its own
     [context_message] entry), so the error is self-contained:
 
-    - reference checks (``sh:class``/``triplets:range``, VALUE = the ref):
+    - reference checks (``sh:class``/``triplets:range``/``triplets:missing``, VALUE = the ref):
       the target's id, Type and name — or the fact that it does not exist;
     - valueType rows (``via_type``): the found type (the id is not carried);
     - ``sh:maxCount``: the actual duplicate values.
@@ -227,7 +227,7 @@ def _describe_associations(violations, data, ir, table_name="triplets"):
     described = violations["VALUE"].notna()
     via = described & keys.isin(via_rules)
     of_class = (described & ~via
-                & violations["VIOLATION_TYPE"].isin(("sh:class", "triplets:range")))
+                & violations["VIOLATION_TYPE"].isin(("sh:class", "triplets:range", "triplets:missing")))
     over_count = violations["VIOLATION_TYPE"].eq("sh:maxCount") & violations["KEY"].notna()
     if via.any():
         violations.loc[via, "TARGET"] = ("association target found, of type "
@@ -316,6 +316,7 @@ _EXPECTED = {
     "sh:hasValue": "value {}".format,
     "sh:in": lambda params: "one of: " + ", ".join(map(str, params)),
     "triplets:range": lambda params: "a reference to one of: " + ", ".join(map(str, params)),
+    "triplets:missing": lambda params: "a referenced object in the data, one of: " + ", ".join(map(str, params)),
     "sh:equals": "equal to {}".format,
     "sh:disjoint": "different from {}".format,
     "sh:lessThan": "less than {}".format,
@@ -403,8 +404,6 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
 
     The PROFILE column lists the scoped section keys (``["EQ", "OP", "SC"]``).
     """
-    import triplets
-
     started = datetime.now(timezone.utc)
     compiled = compile_schema(rdf_map, rdf_map_scope, report_undefined_keys)   # caches on the file digest
     rdf_map = load_rdf_map(rdf_map)
@@ -423,9 +422,70 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
     violations = _present(violations, data, compiled.ir, "rdfs", table_name)
     if context:
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
-    skipped_components = sorted(compiled.plans.get(engine_name, ((), (), ()))[2])
+    violations.attrs["validation"] = _schema_metadata(compiled, engine_name, started, data, table_name, sections)
+    return violations
+
+
+def validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_data_scope=(),
+                               target_rdf_map_scope=(), report_missing_targets=True, engine="auto",
+                               inheritance=True, undefined_namespace=CIM_NS, **kwargs):
+    """Check the reference types of the source instances' associations.
+
+    Every instance in *data_scope* is checked on its own against the
+    associations of its profiles (*rdf_map_scope*, merged); the referenced
+    objects are looked up in that instance and the *target_data_scope*
+    instances. A reference conforms when ANY type of its object is the range
+    class or, with *inheritance*, one of its subclasses — the classes the source
+    and *target_rdf_map_scope* profiles define. Findings are on source objects only.
+
+    data_scope : iterable of INSTANCE_ID
+        The source instances.
+    rdf_map_scope : profile identifier or sequence of them
+        The source profiles — their associations are checked.
+    target_data_scope : iterable of INSTANCE_ID, optional
+        Instances holding the referenced objects (e.g. the EQ for an SSH).
+    target_rdf_map_scope : profile identifier or sequence of them, optional
+        Profiles defining the referenced classes. A range class no source or
+        target profile defines cannot be decided: the association is listed in
+        ``skipped_shapes``.
+    report_missing_targets : bool, default True
+        Report references whose object is in neither the source nor the target
+        instances (``triplets:missing``); False leaves them silent.
+    inheritance : bool, default True
+        False accepts the range class itself only.
+    """
+    started = datetime.now(timezone.utc)
+    compiled = compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope, report_missing_targets, inheritance)
+    rdf_map = load_rdf_map(rdf_map)
+    sections = scope_sections(rdf_map, rdf_map_scope)
+    table_name = _table_ref(data, **kwargs)
+    engine_name, engine_mod = get_engine(engine)
+    data_scope = list(data_scope)
+    targets = [instance for instance in (target_data_scope or ()) if instance not in data_scope]
+    frames = []
+    for instance in data_scope:
+        found = _run(data, compiled, engine_name, engine_mod, None, [instance, *targets], False,
+                     undefined_namespace=undefined_namespace, **kwargs)
+        # the association triple itself must be in the source instance — an object
+        # repeated in a target file (EQ and SSH share IDs) brings the target's own rows
+        own = _instance_triples(data, instance, compiled.ir["path"].dropna().unique().tolist(), table_name)
+        mask = [triple in own for triple in zip(found["ID"], found["KEY"], found["VALUE"])]
+        frames.append(found.loc[pandas.Series(mask, index=found.index, dtype=bool)])
+    violations = (pandas.concat(frames, ignore_index=True) if frames
+                  else pandas.DataFrame(columns=VIOLATION_COLUMNS))
+    violations["PROFILE"] = _profile_column(violations, sections)
+    violations = _present(violations, data, compiled.ir, "rdfs", table_name)
+    violations.attrs["validation"] = _schema_metadata(compiled, engine_name, started, data, table_name, sections)
+    violations.attrs["validation"]["inheritance"] = inheritance
+    return violations
+
+
+def _schema_metadata(compiled, engine_name, started, data, table_name, sections):
+    """Run metadata of the schema validations (no shapes graph, rdfs language)."""
+    import triplets
+
     finished = datetime.now(timezone.utc)
-    violations.attrs["validation"] = {
+    return {
         "started_at": _iso(started),
         "generated_at": _iso(finished),
         "duration_seconds": round((finished - started).total_seconds(), 3),
@@ -438,10 +498,27 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
         "node_shapes": compiled.stats["node_shapes"],
         "constraints": compiled.stats["constraints"],
         "skipped_shapes": list(compiled.stats["skipped_shapes"]),
-        "skipped_components": skipped_components,
+        "skipped_components": sorted(compiled.plans.get(engine_name, ((), (), ()))[2]),
         "source_shapes": {},
     }
-    return violations
+
+
+def _instance_triples(data, instance, keys, table_name="triplets"):
+    """{(ID, KEY, VALUE)} of one instance's rows at *keys* (any input flavor)."""
+    kind = flavor(data)
+    if kind == "duckdb":
+        if not keys:
+            return set()
+        placeholders = ", ".join("?" for _ in keys)
+        return set(data.execute(f"SELECT ID, KEY, VALUE FROM {table_name} WHERE INSTANCE_ID = ? "
+                                f"AND KEY IN ({placeholders})", [str(instance), *keys]).fetchall())
+    if kind == "pyarrow":
+        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+    if kind == "polars":
+        rows = data.filter((data["INSTANCE_ID"] == str(instance)) & data["KEY"].is_in(keys))
+        return set(zip(rows["ID"].to_list(), rows["KEY"].to_list(), rows["VALUE"].to_list()))
+    rows = data.loc[(data["INSTANCE_ID"].astype(str) == str(instance)) & data["KEY"].isin(keys)]
+    return set(zip(rows["ID"].astype(str), rows["KEY"].astype(str), rows["VALUE"].astype(str)))
 
 
 def _profile_column(violations, sections):

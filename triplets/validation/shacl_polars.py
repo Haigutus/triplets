@@ -226,7 +226,7 @@ def _class(context, rule):
 
 def _schema_range(context, rule):
     """triplets:range — ANY of the target's types in the allowed set conforms
-    (issue #100); targets without a Type row are silent."""
+    (issue #100); a target without a Type row is left to triplets:missing."""
     allowed = polars.concat([polars.Series(context.class_ids(cls)) for cls in rule.params],
                             rechunk=True).implode()
     typed = context.types.select(polars.col("ID")).unique().collect()["ID"].implode()
@@ -234,6 +234,13 @@ def _schema_range(context, rule):
             .filter(polars.col("PATH_VALUE").is_in(typed)
                     & ~polars.col("PATH_VALUE").is_in(allowed)))
     return _emit(plan, rule, f"reference target is not one of {rule.params}")
+
+
+def _schema_missing(context, rule):
+    """triplets:missing — the referenced object has no Type row in the validated data."""
+    typed = context.types.select(polars.col("ID")).unique().collect()["ID"].implode()
+    plan = context.path_rows(rule).filter(~polars.col("PATH_VALUE").is_in(typed))
+    return _emit(plan, rule, "referenced object not found in the data")
 
 
 def _node_kind(context, rule):
@@ -323,6 +330,7 @@ PLAN_BUILDERS = {
     "sh:hasValue": _has_value,
     "sh:class": _class,
     "triplets:range": _schema_range,
+    "triplets:missing": _schema_missing,
     "sh:nodeKind": _node_kind,
     "sh:equals": _equals,
     "sh:disjoint": _disjoint,
