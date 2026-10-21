@@ -126,6 +126,33 @@ def test_without_inheritance(engine):
     assert v.attrs["validation"]["inheritance"] is False
 
 
+def test_duckdb_connection_keeps_source_rows_only():
+    """The source-row filter on a DuckDB connection (the SQL branch)."""
+    duckdb = pytest.importorskip("duckdb")
+    connection = duckdb.connect()
+    connection.register("_rows", frame(breaker("b1", "bay1") + CONTAINERS + breaker("b1", "sub1", instance="ssh")))
+    connection.execute("CREATE TABLE triplets AS SELECT * FROM _rows")
+    assert len(validate_schema_references(connection, SCHEMA, ["eq"], ["EQ"], ["ssh"], engine="duckdb")) == 0
+    v = validate_schema_references(connection, SCHEMA, ["ssh"], ["EQ"], ["eq"], engine="duckdb")
+    assert violating(v, "rdfs:range") == {("b1", "sub1")}
+
+
+def test_missing_targets_export(tmp_path):
+    """triplets:missing travels through the SHACL report and SARIF like any finding."""
+    import json
+    rdflib = pytest.importorskip("rdflib")
+    rows = breaker("b1", "ghost") + CONTAINERS
+    v = validate_schema_references(frame(rows), SCHEMA, ["eq"], ["EQ"], engine="pandas")
+    v.shacl.to_shacl_report(path=str(tmp_path / "report.ttl"))
+    graph = rdflib.Graph().parse(str(tmp_path / "report.ttl"), format="turtle")
+    component = rdflib.URIRef("http://www.w3.org/ns/shacl#sourceConstraintComponent")
+    assert [str(value).rsplit("#", 1)[-1] for value in graph.objects(None, component)] == ["missing"]
+    v.shacl.to_sarif(path=str(tmp_path / "report.sarif"))
+    sarif = json.loads((tmp_path / "report.sarif").read_text())
+    results = sarif["runs"][0]["results"]
+    assert len(results) == 1 and "ghost" in json.dumps(results[0])
+
+
 def test_compiled_references_cache():
     compiled = compile_references(SCHEMA, ["SV"], ["TP"])
     assert compiled is compile_references(SCHEMA, ["SV"], ["TP"])
