@@ -8,14 +8,14 @@ any RDF loaded as triplets, CIM or not. Every input has a scope named after it:
 
 | Input | Scope | Values |
 |-------|-------|--------|
-| `data` | `data_scope` | INSTANCE_IDs — rows outside the scope are not loaded, so references into unscoped instances count as absent |
+| `data` | `data_scope` | INSTANCE_IDs — rows outside the scope are not loaded, so references into unscoped instances count as absent; None = every instance, `[]` = none |
 | `rdf_map` | `rdf_map_scope` | the export schema's profiles: section keys (`"EQ"`) and/or the IRIs a profile declares (keyword / versionIRI / profileVersionIRI / conformsTo), mixed, in any sequence; `"*"` = every section; None = the rdf_map's root entries (an unsectioned, hand-made schema — a sectioned bundle has none). An unknown identifier, one several profiles share, and an empty scope raise `ValueError`: no entries at all for `validate_shacl`, no Class entries for the schema validations. `rdf_map_scope` without an `rdf_map` raises too |
 
 | Function | Checks | Runs |
 |----------|--------|------|
 | `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=True)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision and class inheritance | once over the scoped data |
 | `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False)` | cardinality, datatypes and enumerations of the scoped profiles (merged); `report_undefined_keys` also reports keys no scoped profile defines for the object's class | per instance in `data_scope` — cardinality never counts another instance's rows |
-| `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_data_scope, target_rdf_map_scope, report_missing_targets=True, inheritance=True)` | the reference type of each association of the source profiles (merged, or a union of several): valid classes from the source and target profiles, referenced objects from the source and target instances | per source instance; findings on source objects only |
+| `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_data_scope, target_rdf_map_scope=(), report_missing_targets=True, inheritance=True)` — `target_data_scope=None` = every instance | the reference type of each association of the source profiles (merged, or a union of several): valid classes from the source and target profiles, referenced objects from the source and target instances | per source instance; findings on source objects only |
 
 The CIM header logic lives outside the core, in `triplets.cgmes_tools`:
 `declared_profiles(data, rdf_map)` maps each instance to the profiles its
@@ -413,6 +413,8 @@ violations = data.shacl.validate_schema(rdf_map, data_scope=[eq_id], rdf_map_sco
                                         engine="duckdb", report_undefined_keys=True)
 references = triplets.validation.validate_schema_references(
     data, rdf_map, [ssh_id], ["SSH"], target_data_scope=[eq_id], target_rdf_map_scope=["EQ"])
+references = triplets.validation.validate_schema_references(   # every loaded instance, source and target
+    data, rdf_map, rdf_map_scope=["SSH"], target_rdf_map_scope=["EQ"])
 compiled = triplets.validation.compile_schema(rdf_map, ["EQ", "OP", "SC"])     # cached
 compiled = triplets.validation.compile_references(rdf_map, ["SSH"], ["EQ"])
 ```

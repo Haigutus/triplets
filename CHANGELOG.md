@@ -41,7 +41,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope,
     target_data_scope, target_rdf_map_scope, report_missing_targets=True, inheritance=True)`
     — the reference types of each source instance's associations, against the
-    objects in the source and target instances; valid classes from the source
+    objects in the source and target instances (both data scopes default to
+    every instance); valid classes from the source
     and target profiles; a reference to an object not in the data is
     `triplets:missing`; a range class no given profile defines is listed in
     `skipped_shapes`. `compile_references` compiles the checks.

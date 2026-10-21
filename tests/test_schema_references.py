@@ -92,6 +92,10 @@ def test_targets_are_looked_up_in_the_target_instances(engine):
     assert violating(v, "rdfs:range") == {("v2", "bay1")}
     without_targets = validate_schema_references(frame(rows), SCHEMA, ["sv"], ["SV"], [], ["TP"], engine=engine)
     assert violating(without_targets, "triplets:missing") == {("v1", "n1"), ("v2", "bay1")}
+    # no data scopes: every instance is a source and a target
+    everything = validate_schema_references(frame(rows), SCHEMA, rdf_map_scope=["SV"],
+                                            target_rdf_map_scope=["TP"], engine=engine)
+    assert violating(everything, "rdfs:range") == {("v2", "bay1")}
 
 
 def test_findings_are_on_source_rows_only(engine):
