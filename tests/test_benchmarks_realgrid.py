@@ -73,7 +73,7 @@ def test_parse_realgrid_to_duckdb(benchmark):
         data.read_rdf([REALGRID_ZIP])
         return data
     data = benchmark(_run)
-    assert data.execute("SELECT COUNT(*) FROM triplets").fetchone()[0] > 1_000_000
+    assert data.execute("SELECT COUNT(*) FROM triplets").fetchall()[0][0] > 1_000_000
 
 
 # ── type_tableview benchmarks ───────────────────────────────────────────────
