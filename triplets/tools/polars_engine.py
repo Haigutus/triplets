@@ -33,7 +33,8 @@ def _tableview(ids, data, string_to_number, multivalue, label):
         logger.warning(f'No data available for {label}')
         return None
 
-    object_data = ids.select("ID").unique().join(data, on="ID", how="inner")
+    # semi join keeps data order, so keep="first" and list order match pandas run to run
+    object_data = data.join(ids.select("ID"), on="ID", how="semi")
 
     if multivalue:
         # Aggregate all values per (ID, KEY) into lists, then pivot (maintain_order so
@@ -55,8 +56,11 @@ def _tableview(ids, data, string_to_number, multivalue, label):
                     .alias(col)
                 )
     else:
-        data_view = object_data.unique(subset=["ID", "KEY"], keep="first").pivot(on="KEY", index="ID", values="VALUE")
+        data_view = (object_data.unique(subset=["ID", "KEY"], keep="first", maintain_order=True)
+                     .pivot(on="KEY", index="ID", values="VALUE"))
 
+    # rows sorted by ID like the pandas pivot; float sums over a view are then reproducible
+    data_view = data_view.sort("ID")
     return _numeric_columns(data_view) if string_to_number else data_view
 
 
