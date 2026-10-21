@@ -197,8 +197,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Violation enrichment reads the schema per profile:** `SCHEMA_DESCRIPTION` /
   `SCHEMA_MULTIPLICITY` come from the profiles the violation was checked
   against (the `PROFILE` column, else `enrich(rdf_map_scope=)` — one scope, or
-  one per instance), merged like the run, the first-wins merged view only as
-  fallback. Before, a multiplicity that differs between profiles (NC 2.5
+  one per instance — else the run's recorded profiles), merged like the run;
+  rows without profiles read the root entries, and another profile's text is
+  never borrowed. Before, a multiplicity that differs between profiles (NC 2.5
   `BaseTimeSeries.timeSeriesKind`: SIS `0..1`, AS `1..1`) showed whichever
   profile came first.
 - **Importers share two rule sources.** The python XML engines and the legacy

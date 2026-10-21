@@ -42,7 +42,7 @@ relaxed cardinalities and united enumerations (checked, more loosely) in its
 identity: `sections` (the section keys, in scope order) and each field as a
 list in the same order (`keyword: ["EQ", "OP", "SC"]`, `versionIRI: [...]`). A merged run is never stricter than running the
 listed profiles one by one: parameters only add, cardinality only relaxes.
-The shipped bundles merged whole (`"*"`) differ in cardinality for 5–16 keys
+The shipped bundles merged whole (`"*"`) differ in cardinality for 1–15 keys
 and in datatype only for CGMES 2.4.15 FH `Model.version`.
 
 ### Class inheritance (`schema_scope.class_ancestors`)
@@ -160,12 +160,12 @@ registries that consume it are internal.
 | `sh:closed` | list[str] — the **fully resolved** allowed KEY list: `sh:ignoredProperties` + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included) |
 | `sh:or` / `sh:and` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
 | `sh:not` | list[dict] — nested IR row dicts |
+| `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time |
+| `sh:sparql` | `{"select": SELECT text with `$this`/`$PATH` placeholders, "prefixes": resolved `PREFIX` header, "path": full IRI of the owning `sh:path` or None}` |
 
 In a property shape, a nested `sh:or` / `sh:and` / `sh:not` shape without its
 own `sh:path` takes the property's path: it judges each value node, and
 `sh:or` / `sh:not` report per value (`VALUE` = the value node).
-| `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time |
-| `sh:sparql` | `{"select": SELECT text with `$this`/`$PATH` placeholders, "prefixes": resolved `PREFIX` header, "path": full IRI of the owning `sh:path` or None}` |
 
 Compile-time behaviors worth knowing: a NodeShape with several `sh:targetClass`
 (the ENTSO-E profiles do this) emits every row once per target class; shape
@@ -263,9 +263,10 @@ relative and non-ASCII allowed) — no controls, space, DEL or ``<>"{}|^`\``, an
 `%` only as a `%XX` escape. `"has space"^^xsd:anyURI` is an `sh:datatype`
 violation on every engine; `xsd:string` stays unchecked.
 
-`rdf_map` still matters for the pyshacl path: without it every `VALUE` is an
-untyped string, so `sh:datatype xsd:float` trips on everything; with it the
-N-Quads export attaches real `xsd` types and only genuinely broken values fail.
+`rdf_map` + `rdf_map_scope` matter for the pyshacl path: without them every
+`VALUE` is an untyped string, so `sh:datatype xsd:float` trips on everything;
+with them the N-Quads export attaches the scoped profiles' `xsd` types and only
+genuinely broken values fail.
 
 ## Result Structure
 
@@ -340,10 +341,8 @@ data file + sidecar).
 
 Every message states its origin with a prefix, and the constraint text is
 never rewritten — raw `sh:message` / engine wording stays verbatim behind its
-tag:
-
-Exactly one of `[shacl_message]`/`[engine_message]` appears per result — the constraint
-text has one author.
+tag. Exactly one of `[shacl_message]`/`[engine_message]` appears per result —
+the constraint text has one author:
 
 | tag | carries |
 |-----|---------|
@@ -378,8 +377,8 @@ The validation stamps the message/engine distinction as a `MESSAGE_SOURCE`
 column (authored messages are known from the compiled IR); bare frames fall
 back to the violation-type namespace. The SHACL report's `dcterms:creator`
 names the engine (`"triplets 0.2.0 (engine: polars)"`); SARIF carries it in
-the run properties. The SHACL
-report carries them as separate `sh:resultMessage`s (results stay one per
+the run properties. The SHACL report carries the tagged entries as separate
+`sh:resultMessage`s (results stay one per
 violation — merging them would break sh:ValidationReport semantics); SARIF
 carries them as newline-separated blocks in one `message.text`, adds
 `[count]` / `[examples]` blocks for grouped results, and puts the occurrence
@@ -428,7 +427,7 @@ Class rules never widen to subclasses.
 profiles.** Each source instance's associations (the source profiles, merged)
 are checked with the referenced objects looked up in that instance and the
 `target_data_scope` instances. A reference conforms when ANY type of its
-object (RDF types are cumulative — issue #100) is the range class or, with
+object (RDF types are cumulative) is the range class or, with
 `inheritance`, a subclass by `class_ancestors` over the source and target
 profiles. A range class none of those profiles defines cannot be decided: the
 association is listed in `skipped_shapes`. With `report_missing_targets=True`
@@ -609,7 +608,7 @@ output schema is stable:
 | `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows) |
 | `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` |
 | `SHAPE_NAME`, `SHAPE_DESCRIPTION` | shapes | `sh:name` / `sh:description` (a property shape inherits the parent NodeShape's) |
-| `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition in the profiles the violation was checked against — the `PROFILE` column, else `rdf_map_scope` (one scope, or `{INSTANCE_ID: scope}`), merged like the run (the multiplicity that was checked); the first-wins merged view of every section when neither is given |
+| `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition in the profiles the violation was checked against — the `PROFILE` column, else `rdf_map_scope` (one scope, or `{INSTANCE_ID: scope}`), else the run's `attrs["validation"]["profiles"]` — merged like the run (the multiplicity that was checked). Rows without profiles read the root entries; a name the profiles lack stays empty |
 | `CLASS_DESCRIPTION` | rdf_map | the object's class description |
 
 `enrich` reads no instance headers. Pass the *same* shapes object the

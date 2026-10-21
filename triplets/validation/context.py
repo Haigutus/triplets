@@ -15,7 +15,6 @@ import logging
 import pandas
 
 from .._engine_detect import flavor
-from ..export.nquads_utils import flatten_schema
 from ..iri import TYPE_KEY, load_rdf_map, value_types
 from .schema_scope import _merged_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes
@@ -56,9 +55,10 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
         Export schema — fills SCHEMA_DESCRIPTION / SCHEMA_MULTIPLICITY for
         the violation's KEY and CLASS_DESCRIPTION for the object's type, from
         the profiles the violation was checked against: the PROFILE column
-        (the schema validations — a list of section keys), else *rdf_map_scope*. A violation with
-        neither, or a name its profiles lack, falls back to the first-wins
-        merged view of every section.
+        (the schema validations — a list of section keys), else *rdf_map_scope*,
+        else the run's ``attrs["validation"]["profiles"]``, merged like the run.
+        A row with none of them reads the root entries; a name its profiles lack
+        stays empty — another profile's text is never borrowed.
     rdf_map_scope : profile identifier(s), or {INSTANCE_ID: profile identifier(s)}, optional
         The profiles of rows without a PROFILE (a validate_shacl run): one scope
         for every row, or one per instance.
@@ -133,6 +133,8 @@ def _row_scopes(violations, rdf_map_scope):
     def as_scope(scope):
         return None if scope is None else (scope,) if isinstance(scope, str) else tuple(scope)
 
+    if rdf_map_scope is None:
+        rdf_map_scope = violations.attrs.get("validation", {}).get("profiles")
     if isinstance(rdf_map_scope, dict):
         given = violations["INSTANCE_ID"].map(lambda instance: as_scope(rdf_map_scope.get(instance)))
     else:
@@ -288,19 +290,18 @@ def _add_shape_context(violations, ir):
 
 def _add_schema_context(violations, rdf_map, scopes):
     """Per-row lookup in the row's merged profiles (``scoped_rdf_map`` — the
-    multiplicity checked, relaxed when profiles differ), the first-wins merged
-    view (``flatten_schema``) where a row has no profiles or they lack the name."""
-    key_info, class_info = flatten_schema(rdf_map)
-    merged_views = {scope: _merged_entries(rdf_map, list(scope))[1] for scope in set(scopes.dropna())}
-    columns = (("SCHEMA_DESCRIPTION", "KEY", "description", {k: i.get("description") for k, i in key_info.items()}),
-               ("SCHEMA_MULTIPLICITY", "KEY", "multiplicity", {k: i.get("multiplicity") for k, i in key_info.items()}),
-               ("CLASS_DESCRIPTION", "OBJECT_TYPE", "description", class_info))
-    for column, name_column, field, merged in columns:
-        fallback = violations[name_column].map(merged)
-        own = [(merged_views[scope].get(name) or {}).get(field) if scope is not None and isinstance(name, str) else None
-               for scope, name in zip(scopes, violations[name_column])]
-        violations[column] = pandas.Series(own, index=violations.index, dtype=object).where(
-            lambda series: series.notna(), fallback)
+    multiplicity checked, relaxed when profiles differ); rows without profiles
+    read the root entries."""
+    views = {scope: _merged_entries(rdf_map, None if scope is None else list(scope))[1]
+             for scope in set(scopes)}
+    columns = (("SCHEMA_DESCRIPTION", "KEY", "description"),
+               ("SCHEMA_MULTIPLICITY", "KEY", "multiplicity"),
+               ("CLASS_DESCRIPTION", "OBJECT_TYPE", "description"))
+    for column, name_column, field in columns:
+        violations[column] = pandas.Series(
+            [(views[scope].get(name) or {}).get(field) if isinstance(name, str) else None
+             for scope, name in zip(scopes, violations[name_column])],
+            index=violations.index, dtype=object)
 
 
 def _to_pandas(data):
