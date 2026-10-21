@@ -32,7 +32,7 @@ ENRICHMENT_COLUMNS = [
 ]
 
 
-def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None, **kwargs):
+def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None, data_scope=None, **kwargs):
     """Return a copy of the violations frame with ENRICHMENT_COLUMNS added.
 
     Parameters
@@ -63,6 +63,9 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
     rdf_map_scope : profile identifier(s), or {INSTANCE_ID: profile identifier(s)}, optional
         The profiles of rows without a PROFILE (a validate_shacl run): one scope
         for every row, or one per instance.
+    data_scope : iterable of INSTANCE_ID, optional
+        Read only these instances of *data* — pass the validation's own scope,
+        so TARGET finds exactly what the run saw (data outside is not loaded).
     """
     enriched = violations.copy()
     for column in ENRICHMENT_COLUMNS:
@@ -72,8 +75,11 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
 
     if data is not None:
         from . import _table_ref
+        table_name = _table_ref(data, **kwargs)
+        if data_scope is not None:
+            data, table_name = _scoped(data, data_scope, table_name), "triplets"
         ir = compiled.ir if compiled is not None and compiled.ir is not None else pandas.DataFrame(columns=IR_COLUMNS)
-        _add_target(enriched, data, ir, value_types(rdf_map), _table_ref(data, **kwargs))
+        _add_target(enriched, data, ir, value_types(rdf_map), table_name)
         _add_instance_context(enriched, _to_pandas(data))
     if compiled is not None:
         _add_shape_context(enriched, compiled.ir)
@@ -302,6 +308,20 @@ def _add_schema_context(violations, rdf_map, scopes):
             [(views[scope].get(name) or {}).get(field) if isinstance(name, str) else None
              for scope, name in zip(scopes, violations[name_column])],
             index=violations.index, dtype=object)
+
+
+def _scoped(data, data_scope, table_name="triplets"):
+    """The rows of the *data_scope* instances, as a pandas / polars frame."""
+    instances = [str(instance) for instance in data_scope]
+    kind = flavor(data)
+    if kind == "duckdb":
+        where = f"INSTANCE_ID IN ({', '.join('?' for _ in instances)})" if instances else "FALSE"
+        return data.execute(f"SELECT * FROM {table_name} WHERE {where}", instances).df()
+    if kind == "polars":
+        return data.filter(data["INSTANCE_ID"].is_in(instances))
+    if kind == "pyarrow":
+        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+    return data[data["INSTANCE_ID"].astype(str).isin(instances)]
 
 
 def _to_pandas(data):
