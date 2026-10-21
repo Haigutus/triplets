@@ -98,13 +98,13 @@ def _resolve_store(store):
     return store
 
 
-def scoped_graph(dataset, scope=None):
+def scoped_graph(dataset, data_scope=None):
     """Return the graph to query/validate: full union, or just the scoped instances.
 
     Parameters
     ----------
     dataset : rdflib.Dataset
-    scope : iterable of INSTANCE_ID (str), optional
+    data_scope : iterable of INSTANCE_ID (str), optional
         When given, return a concrete Graph holding the union of those
         instances' named graphs (the quad's graph component does the
         filtering). A concrete Graph — not a view — is required because
@@ -112,12 +112,12 @@ def scoped_graph(dataset, scope=None):
         ReadOnlyGraphAggregate. The copy is only the reduced scope, which is
         the point of scoping. When None, the full default-union dataset is used.
     """
-    if scope is None:
+    if data_scope is None:
         return dataset
 
     import rdflib
 
     graph = rdflib.Graph()
-    for instance_id in scope:
+    for instance_id in data_scope:
         graph += dataset.get_context(rdflib.URIRef(absolute_id(instance_id)))
     return graph

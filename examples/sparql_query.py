@@ -64,10 +64,10 @@ header("6. Scope a query to a single instance graph")
 inst = data[(data["KEY"] == "Type") & (data["VALUE"] == "ACLineSegment")]["INSTANCE_ID"]
 eq_instance = str(inst.astype(str).iloc[0])
 q = PREFIXES + "SELECT (COUNT(?s) AS ?n) WHERE { ?s rdf:type cim:ACLineSegment }"
-in_scope = int(data.sparql.query(q, scope=[eq_instance])["n"].iloc[0])
-out_scope = int(data.sparql.query(q, scope=["00000000-0000-0000-0000-000000000000"])["n"].iloc[0])
+in_scope = int(data.sparql.query(q, data_scope=[eq_instance])["n"].iloc[0])
+out_scope = int(data.sparql.query(q, data_scope=["00000000-0000-0000-0000-000000000000"])["n"].iloc[0])
 print(f"ACLineSegments in EQ instance graph : {in_scope}")
 print(f"ACLineSegments in an empty graph    : {out_scope}")
 
 header("Done")
-print("Engine: rdflib reference  |  API: df.sparql.query(sparql, rdf_map=, scope=)")
+print("Engine: rdflib reference  |  API: df.sparql.query(sparql, rdf_map=, data_scope=)")

@@ -53,7 +53,7 @@ def get_engine(name: str = "auto"):
     return _REGISTRY.get(name)
 
 
-def query(data, query_string, rdf_map=None, scope=None, engine="auto", return_type="auto",
+def query(data, query_string, rdf_map=None, data_scope=None, engine="auto", return_type="auto",
           data_unchanged=False, undefined_namespace=CIM_NS):
     """Run a SPARQL query over triplet data.
 
@@ -65,7 +65,7 @@ def query(data, query_string, rdf_map=None, scope=None, engine="auto", return_ty
         ASK → bool, CONSTRUCT/DESCRIBE → triplet DataFrame.
     rdf_map : dict or str, optional
         Export schema — enables xsd-typed literals in the queried graph (optional).
-    scope : iterable of INSTANCE_ID, optional
+    data_scope : iterable of INSTANCE_ID, optional
         Restrict the queried data to these instances' named graphs; all data
         stays loaded for reference resolution. None = full union.
     engine : str, default "auto"
@@ -89,5 +89,5 @@ def query(data, query_string, rdf_map=None, scope=None, engine="auto", return_ty
         store keeps every row (the N-Quads ``export_undefined=True`` form).
     """
     engine_name, engine_mod = get_engine(engine)
-    return engine_mod.query(data, query_string, rdf_map=rdf_map, scope=scope, return_type=return_type,
+    return engine_mod.query(data, query_string, rdf_map=rdf_map, data_scope=data_scope, return_type=return_type,
                             data_unchanged=data_unchanged, undefined_namespace=undefined_namespace)

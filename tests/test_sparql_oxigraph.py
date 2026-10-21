@@ -145,9 +145,9 @@ def test_scope_parity(svedala):
     other = next(i for i in set(svedala["INSTANCE_ID"].astype(str).unique()) if i != eq_instance)
 
     q = PREFIXES + "SELECT (COUNT(?s) AS ?n) WHERE { ?s rdf:type cim:ACLineSegment }"
-    in_scope = int(triplets.sparql.query(svedala, q, scope=[eq_instance], engine="oxigraph")["n"].iloc[0])
-    out_scope = int(triplets.sparql.query(svedala, q, scope=[other], engine="oxigraph")["n"].iloc[0])
-    reference = int(triplets.sparql.query(svedala, q, scope=[eq_instance], engine="rdflib")["n"].iloc[0])
+    in_scope = int(triplets.sparql.query(svedala, q, data_scope=[eq_instance], engine="oxigraph")["n"].iloc[0])
+    out_scope = int(triplets.sparql.query(svedala, q, data_scope=[other], engine="oxigraph")["n"].iloc[0])
+    reference = int(triplets.sparql.query(svedala, q, data_scope=[eq_instance], engine="rdflib")["n"].iloc[0])
     assert in_scope == reference > 0
     assert out_scope == 0
 
@@ -161,7 +161,7 @@ def test_scope_shares_store(svedala):
     triplets.sparql.query(svedala, q, engine="oxigraph")
     cached = len(sparql_oxigraph._STORES)
     instance = str(svedala["INSTANCE_ID"].astype(str).iloc[0])
-    triplets.sparql.query(svedala, q, scope=[instance], engine="oxigraph")
+    triplets.sparql.query(svedala, q, data_scope=[instance], engine="oxigraph")
     assert len(sparql_oxigraph._STORES) == cached
 
 
@@ -176,7 +176,7 @@ def test_scope_overrides_own_from(svedala):
     q = PREFIXES + (f"SELECT (COUNT(?s) AS ?n) FROM <urn:uuid:{eq_instance}> "
                     "WHERE { ?s rdf:type cim:ACLineSegment }")
     unscoped = int(triplets.sparql.query(svedala, q, engine="oxigraph")["n"].iloc[0])
-    scoped = int(triplets.sparql.query(svedala, q, scope=[other], engine="oxigraph")["n"].iloc[0])
+    scoped = int(triplets.sparql.query(svedala, q, data_scope=[other], engine="oxigraph")["n"].iloc[0])
     assert unscoped > 0        # the query's own FROM sees the EQ instance
     assert scoped == 0         # scope replaces it entirely
 
@@ -240,13 +240,13 @@ def test_multi_instance_scope_duplicates_documented():
     union — a triple present in several scoped instances yields one solution
     per instance (DISTINCT dedupes). Single-instance scope is exact."""
     q = PREFIXES + "SELECT ?name WHERE { ?s cim:IdentifiedObject.name ?name }"
-    multi = triplets.sparql.query(DUPLICATED, q, scope=["g1", "g2"], engine="oxigraph")
+    multi = triplets.sparql.query(DUPLICATED, q, data_scope=["g1", "g2"], engine="oxigraph")
     assert len(multi) == 2                                   # the documented residual
     distinct = triplets.sparql.query(
         DUPLICATED, PREFIXES + "SELECT DISTINCT ?name WHERE { ?s cim:IdentifiedObject.name ?name }",
-        scope=["g1", "g2"], engine="oxigraph")
+        data_scope=["g1", "g2"], engine="oxigraph")
     assert len(distinct) == 1
-    single = triplets.sparql.query(DUPLICATED, q, scope=["g1"], engine="oxigraph")
+    single = triplets.sparql.query(DUPLICATED, q, data_scope=["g1"], engine="oxigraph")
     assert len(single) == 1
 
 
