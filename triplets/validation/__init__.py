@@ -39,14 +39,14 @@ import pandas
 from .._engine_detect import flavor
 from .._header import PROFILE_KEYS as _HEADER_KEYS
 from .._registry import EngineRegistry
-from ..iri import CIM_NS, TYPE_KEY, load_rdf_map
+from ..iri import CIM_NS, load_rdf_map
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .schema_scope import SCOPE_KEY, scope_sections
 from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
                            violations_to_csv, violations_to_excel)
-from .context import ENRICHMENT_COLUMNS, enrich  # noqa: F401 — public API
+from .context import ENRICHMENT_COLUMNS, concat_violations, enrich  # noqa: F401 — public API
 from .locations import LOCATION_COLUMNS, locate_violations  # noqa: F401 — public API
 from .sarif import export_to_sarif  # noqa: F401 — public API
 
@@ -89,7 +89,7 @@ def get_engine(name: str = "auto"):
 
 
 def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=None, engine="auto", lexical=True,
-                   context=False, undefined_namespace=CIM_NS, inheritance=True, **kwargs):
+                   undefined_namespace=CIM_NS, inheritance=True, **kwargs):
     """Validate triplet data against SHACL shapes; return a violations DataFrame.
 
     Parameters
@@ -119,10 +119,6 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     lexical : bool, default True
         Append the lexical-form datatype findings (the deliberate deviation
         from pyshacl — see shacl_pandas) to the engine's report.
-    context : bool, default False
-        Run the slower enrichment pass (triplets.validation.context.enrich):
-        adds instance/file, object type/name, shape name/description and
-        schema definition columns to the report.
     undefined_namespace : str, default CIM100
         Namespace for names the schema does not declare (every name without
         an rdf_map) in the graph the sh:sparql constraints and pyshacl see.
@@ -152,9 +148,7 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     table_ref = _table_ref(data, **kwargs)
     violations = _run(data, compiled, engine_name, engine_mod, scoped, data_scope, lexical,
                       undefined_namespace=undefined_namespace, ancestors=ancestors, **kwargs)
-    violations = _present(violations, data, compiled.ir, compiled.language, table_ref)
-    if context:
-        violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
+    violations = _present(violations, compiled.ir, compiled.language)
     violations.attrs["validation"] = _report_metadata(
         violations, data, compiled, engine_name, started, table_name=table_ref, conflicts=conflicts)
     violations.attrs["validation"]["inheritance"] = inheritance
@@ -181,10 +175,10 @@ def _run(data, compiled, engine_name, engine_mod, rdf_map, data_scope, lexical, 
                                               "SOURCE_SHAPE", "SEVERITY"], ignore_index=True)
 
 
-def _present(violations, data, ir, language, table_name="triplets"):
-    """The shared presentation pass: TARGET / EXPECTED / MESSAGE_SOURCE and
-    the vocabulary-accurate violation types for non-SHACL constraint languages."""
-    violations = _describe_associations(violations, data, ir, table_name=table_name)
+def _present(violations, ir, language):
+    """The shared presentation pass — from the rules alone: EXPECTED /
+    MESSAGE_SOURCE and the vocabulary-accurate violation types for non-SHACL
+    constraint languages. What was found in the data is ``enrich``'s TARGET."""
     violations["EXPECTED"] = _expected(violations, ir)
     violations["MESSAGE_SOURCE"] = _message_sources(violations, ir)
     if language != "shacl":              # present vocabulary-accurate types, not fake SHACL
@@ -204,98 +198,6 @@ def _table_ref(data, **kwargs):
                               schema=kwargs.get("schema"),
                               table_name=kwargs.get("table_name"))
     return kwargs.get("table_name", "triplets")
-
-
-def _describe_associations(violations, data, ir, table_name="triplets"):
-    """Findings get a TARGET entry stating what was actually found in the
-    data — the raw MESSAGE stays verbatim (exporters emit TARGET as its own
-    [context_message] entry), so the error is self-contained:
-
-    - reference checks (``sh:class``/``triplets:range``/``triplets:missing``, VALUE = the ref):
-      the target's id, Type and name — or the fact that it does not exist;
-    - valueType rows (``via_type``): the found type (the id is not carried);
-    - ``sh:maxCount``: the actual duplicate values.
-    One shared pass over the violations frame; no per-engine code.
-    """
-    violations["TARGET"] = pandas.Series(None, index=violations.index, dtype=object)
-    if violations.empty or ir.empty:
-        return violations
-    via_rules = set(zip(ir.loc[ir["via_type"], "shape_id"],
-                        ir.loc[ir["via_type"], "path"]))
-    keys = pandas.Series(list(zip(violations["SOURCE_SHAPE"], violations["KEY"])),
-                         index=violations.index)
-    described = violations["VALUE"].notna()
-    via = described & keys.isin(via_rules)
-    of_class = (described & ~via
-                & violations["VIOLATION_TYPE"].isin(("sh:class", "triplets:range", "triplets:missing")))
-    over_count = violations["VIOLATION_TYPE"].eq("sh:maxCount") & violations["KEY"].notna()
-    if via.any():
-        violations.loc[via, "TARGET"] = ("association target found, of type "
-                                         + violations.loc[via, "VALUE"].astype(str))
-    if of_class.any():
-        types, names = _type_map(data, table_name), _name_map(data, table_name)
-
-        def describe_reference(ref):
-            found = types.get(ref)
-            if found is None:
-                return f"referenced object {ref} not found in the data"
-            name = names.get(ref)
-            return f'referenced object {ref} found — {found}' + (f' "{name}"' if name else "")
-
-        violations.loc[of_class, "TARGET"] = (
-            violations.loc[of_class, "VALUE"].astype(str).map(describe_reference))
-    if over_count.any():
-        violations.loc[over_count, "TARGET"] = _found_values(
-            violations.loc[over_count, ["ID", "KEY"]], data, table_name)
-    return violations
-
-
-def _name_map(data, table_name="triplets"):
-    """{ID: IdentifiedObject.name} from the data (any input flavor)."""
-    kind = flavor(data)
-    if kind == "duckdb":
-        return dict(data.execute(
-            f"SELECT ID, VALUE FROM {table_name} "
-            f"WHERE KEY = 'IdentifiedObject.name'").fetchall())
-    if kind == "pyarrow":
-        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-        kind = "pandas"
-    if kind == "polars":
-        rows = data.filter(data["KEY"] == "IdentifiedObject.name")
-        return dict(zip(rows["ID"].to_list(), rows["VALUE"].to_list()))
-    rows = data.loc[data["KEY"] == "IdentifiedObject.name"]
-    return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
-
-
-def _found_values(pairs, data, table_name="triplets", cap=5):
-    """Per violated (ID, KEY): "found N values: 'a', 'b', …" — the validator
-    sees WHICH duplicates to remove without opening the instance data."""
-    kind = flavor(data)
-    keys = list(pairs["KEY"].astype(str).unique())
-    if kind == "duckdb":
-        placeholders = ", ".join("?" for _ in keys)
-        rows = pandas.DataFrame(data.execute(
-            f"SELECT ID, KEY, VALUE FROM {table_name} WHERE KEY IN ({placeholders})",
-            keys).fetchall(), columns=["ID", "KEY", "VALUE"])
-    else:
-        if kind == "pyarrow":
-            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-            kind = "pandas"
-        if kind == "polars":
-            rows = data.filter(data["KEY"].is_in(keys)).to_pandas()
-        else:
-            rows = data.loc[data["KEY"].isin(keys)]
-    rows = rows.astype({"ID": str, "KEY": str})
-
-    def describe(values):
-        quoted = [f"'{value}'" for value in values[:cap]]
-        more = f", … ({len(values)} total)" if len(values) > cap else ""
-        return f"found {len(values)} values: {', '.join(quoted)}{more}"
-
-    grouped = (rows.groupby(["ID", "KEY"], observed=True)["VALUE"]
-               .apply(lambda values: describe(list(values))))
-    return pandas.Series(list(zip(pairs["ID"].astype(str), pairs["KEY"].astype(str))),
-                         index=pairs.index).map(grouped)
 
 
 # what a violated constraint requires, worded from its IR parameter — the
@@ -367,22 +269,6 @@ def _message_sources(violations, ir):
             for message in violations["MESSAGE"]]
 
 
-def _type_map(data, table_name="triplets"):
-    """{ID: Type} from the data's Type rows (any input flavor)."""
-    kind = flavor(data)
-    if kind == "duckdb":
-        return dict(data.execute(
-            f"SELECT ID, VALUE FROM {table_name} WHERE KEY = '{TYPE_KEY}'").fetchall())
-    if kind == "pyarrow":
-        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-        kind = "pandas"
-    if kind == "polars":
-        rows = data.filter(data["KEY"] == TYPE_KEY)
-        return dict(zip(rows["ID"].to_list(), rows["VALUE"].to_list()))
-    rows = data.loc[data["KEY"] == TYPE_KEY]
-    return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
-
-
 def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_undefined_keys=False,
                     engine="auto", undefined_namespace=CIM_NS, **kwargs):
     """Validate triplet data against the export schema: cardinality, datatypes and
@@ -410,18 +296,15 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
     sections = scope_sections(rdf_map, rdf_map_scope)
     table_name = _table_ref(data, **kwargs)
     engine_name, engine_mod = get_engine(engine)
-    context = kwargs.pop("context", False)
 
     instances = list(data_scope) if data_scope is not None else _instances(data, table_name)
-    # one raw engine pass per instance — describe/expected/enrich run ONCE on the concat
+    # one raw engine pass per instance — the presentation pass runs ONCE on the concat
     frames = [_run(data, compiled, engine_name, engine_mod, None, [instance], False,
                    undefined_namespace=undefined_namespace, **kwargs) for instance in instances]
     violations = (pandas.concat(frames, ignore_index=True) if frames
                   else pandas.DataFrame(columns=VIOLATION_COLUMNS))
     violations["PROFILE"] = _profile_column(violations, sections)
-    violations = _present(violations, data, compiled.ir, "rdfs", table_name)
-    if context:
-        violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
+    violations = _present(violations, compiled.ir, "rdfs")
     violations.attrs["validation"] = _schema_metadata(compiled, engine_name, started, data, table_name, sections)
     return violations
 
@@ -474,7 +357,7 @@ def validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_
     violations = (pandas.concat(frames, ignore_index=True) if frames
                   else pandas.DataFrame(columns=VIOLATION_COLUMNS))
     violations["PROFILE"] = _profile_column(violations, sections)
-    violations = _present(violations, data, compiled.ir, "rdfs", table_name)
+    violations = _present(violations, compiled.ir, "rdfs")
     violations.attrs["validation"] = _schema_metadata(compiled, engine_name, started, data, table_name, sections)
     violations.attrs["validation"]["inheritance"] = inheritance
     return violations
