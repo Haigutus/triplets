@@ -187,13 +187,20 @@ Validate against SHACL shape files; the result is a violations DataFrame
 (empty = conforms) with the same shape across all engines:
 
 ```python
+import triplets
 from triplets.export_schema import schemas
 
-violations = data.shacl.validate("shapes.ttl", rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+rdf_map = schemas.ENTSOE_CGMES_3_0_0_552_ED1
+violations = data.shacl.validate_shacl("shapes.ttl", rdf_map=rdf_map, rdf_map_scope=["EQ"])
 
-# slower optional context pass: source file, object type/name,
-# shape sh:name/sh:description, schema attribute/class definitions
-violations = data.shacl.validate(shapes, context=True)
+# schema validation: cardinality / datatypes per instance, reference types
+# against target instances — or by instance header via cgmes_tools
+violations = data.shacl.validate_schema(rdf_map, rdf_map_scope=["EQ"])
+violations = triplets.cgmes_tools.validate_by_header(data, rdf_map, references=True)
+
+# context pass, a separate call: what was found, source file, object
+# type/name, shape sh:name/sh:description, schema attribute/class definitions
+violations = violations.shacl.enrich(data=data, rdf_map=rdf_map)
 
 # SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer — grouped by default
 # (one result per rule with occurrenceCount + sample instances)

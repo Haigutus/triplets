@@ -1,4 +1,15 @@
-"""SHACL validation over triplet data.
+"""Validation over triplet data — three generic validations, scoped by the caller:
+
+- ``validate_shacl`` — SHACL shapes;
+- ``validate_schema`` — the export schema's cardinality, datatypes and
+  enumerations, per instance;
+- ``validate_schema_references`` — the reference types of associations, per
+  source instance, against target instances and profiles.
+
+Every input has a scope named after it: ``data`` + ``data_scope`` (INSTANCE_IDs),
+``rdf_map`` + ``rdf_map_scope`` (profiles, merged — ``schema_scope``). Nothing
+here reads instance headers; ``triplets.cgmes_tools.validate_by_header`` does.
+``enrich`` adds the context columns in a separate call.
 
 Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
 - pyshacl — reference, spec-complete, rdflib-based; always available with the
@@ -18,6 +29,8 @@ into ``CompiledShapes`` (shapes graph + flat constraint table, cached by
 content hash). Engines receive the compiled object:
 
     validate(data, compiled, rdf_map=None, data_scope=None, ancestors=None, **kwargs) → violations DataFrame
+
+(``rdf_map`` the scoped schema, ``ancestors`` the ``class_ancestors`` map.)
 
 pyshacl consumes the graph; the vectorized engines consume the IR (and cache
 their own plan per engine in ``CompiledShapes.plans``) — they never touch

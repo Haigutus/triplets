@@ -14,32 +14,54 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   engine, next to `exclude_objects`. `--version` in both CLIs.
 - `filter_triplets_by_type` takes a list or array of types too (all engines);
   duckdb takes `type_key` like pandas and polars.
-- **pyshacl `ont_graph` from the export schema:** when `rdf_map` is passed,
-  its `inheritance` is mixed into the run as `rdfs:subClassOf` (not into the
-  instance graph), so `sh:targetClass` / `sh:class` on a parent class reach
-  its subclasses. Parent IRIs come from the schema as is
-  (`https://cim.ucaiug.io/ns#IdentifiedObject` for NC);
-  `schema_ir.subclass_triples(rdf_map, undefined_namespace=TRIPLETS_NS)`.
-- **polars / pandas / duckdb SHACL follow the export-schema inheritance:** with
-  `rdf_map`, `sh:targetClass` / `sh:class` on a parent class reach its
-  subclasses (`Equipment` → `Breaker`), through one class-membership index per
-  run built from `schema_ir.type_ancestors`; the IR is not fanned out. The
-  walk is transitive across profiles (NC lists stop at shared classes, e.g. SSI
-  `ACLineSegment` → `Equipment`); schema association ranges and the pyshacl
-  `ont_graph` (`subclass_triples`) use the same steps. Schema
-  class rules do not widen: each Class entry already lists its inherited
-  attributes. Identical findings are reported once on every engine (a
-  property shape on both a parent and a child node shape, the same triple in
-  two instance files).
+- **Validation API — three generic validations, scoped by the caller:**
+  every input has a scope named after it, `data` + `data_scope` (INSTANCE_IDs;
+  rows outside are not loaded) and `rdf_map` + `rdf_map_scope` (profiles of the
+  export schema: section keys and/or declared profile IRIs, mixed; `"*"` every
+  section; None the root entries; a scope without entries raises). Listed
+  profiles are merged for the run (`schema_scope.scoped_rdf_map`): parameter,
+  inheritance and enumeration lists united, cardinality relaxed to the
+  loosest, a key whose datatype differs left untyped and unchecked — each
+  conflict listed in `skipped_shapes`; the merged ProfileMetadata keeps every
+  profile's identity (section keys, each field as a list in scope order).
+  `rdf_map_entries` (and the flat maps on it) skip ProfileMetadata. Nothing in `triplets.validation` reads
+  instance headers.
+  - `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=True)`
+    — SHACL; the scoped profiles give typed literals, nodeKind and class inheritance.
+  - `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False)`
+    — cardinality, datatypes and enumerations, each instance on its own,
+    against the merged profiles; PROFILE and `attrs["validation"]["profiles"]`
+    list the scoped section keys (`["EQ", "OP", "SC"]`), the reports format
+    the list for display.
+  - `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope,
+    target_data_scope, target_rdf_map_scope, report_missing_targets=True, inheritance=True)`
+    — the reference types of each source instance's associations, against the
+    objects in the source and target instances; valid classes from the source
+    and target profiles; a reference to an object not in the data is
+    `triplets:missing`; a range class no given profile defines is listed in
+    `skipped_shapes`. `compile_references` compiles the checks.
+  - `cgmes_tools.declared_profiles` (header → profiles, legacy 2.4.15 URLs)
+    and `cgmes_tools.validate_by_header` (each instance against its declared
+    profiles, optionally its references against all other loaded instances)
+    hold the CIM header logic.
+  - `concat_violations(frames)` joins the frames of several runs, merging their
+    run metadata.
+- **Class inheritance follows the scoped profiles, the same on every engine:**
+  `schema_scope.class_ancestors(rdf_map, rdf_map_scope)` unions same-named
+  Class entries' `inheritance` lists and closes the relation only through
+  classes with their own entry in the scope. The vectorized engines widen
+  `sh:targetClass` / `sh:class` through one class-membership index built from
+  its pairs (the IR is not fanned out); pyshacl gets the same edges as
+  `rdfs:subClassOf` in `ont_graph` (recorded parent IRIs as is,
+  `https://cim.ucaiug.io/ns#IdentifiedObject` for NC). `inheritance=False`
+  matches the exact `rdf:type`. Schema class rules never widen: each Class
+  entry already lists its inherited attributes. Identical findings are
+  reported once on every engine (a property shape on both a parent and a
+  child node shape, the same triple in two instance files).
 - **Property-level `sh:or` / `sh:not` judge value nodes:** a nested shape
   without its own `sh:path` now constrains the property's values. Before, it
   compiled with no path: `sh:or ( [ sh:datatype … ] [ sh:in … ] )` reported
   nothing and `sh:not [ sh:in (…) ]` flagged every focus node.
-- **`inheritance=True` on `validate`, `validate_schema` and `compile_schema`:**
-  False matches the exact `rdf:type` on every engine (pyshacl without
-  `ont_graph`), and schema association ranges accept the range class only
-  (abstract ranges skipped, so most CIM range checks drop out). Recorded in
-  `attrs["validation"]["inheritance"]`.
 - **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
   `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
   [application-profiles-library](https://github.com/entsoe/application-profiles-library)
@@ -47,6 +69,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ([#99](https://github.com/entsoe/application-profiles-library/pull/99) / [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
 
 ### Changed
+- **Breaking — validation entry points:** `validate` is `validate_shacl` and its
+  `scope` is `data_scope`; `validate_schema` takes `data_scope` /
+  `rdf_map_scope` and `report_undefined_keys` (was `closed`) instead of
+  resolving instance headers (`profiles=` removed — `cgmes_tools.validate_by_header`
+  reads headers); listed profiles are merged instead of run one by one; its
+  `rdfs:range` reference findings move to `validate_schema_references`.
+  `compile_schema(rdf_map, rdf_map_scope, report_undefined_keys)` returns one
+  `CompiledShapes` (`CompiledSchema` removed). The engines take `data_scope`
+  and an `ancestors` map. A sectioned `rdf_map` needs `rdf_map_scope`.
+- **Breaking — enrichment is its own call:** validation adds EXPECTED and
+  MESSAGE_SOURCE (from the rules); TARGET (the referenced object found, or not;
+  the duplicate values of a maximum-count finding) is `enrich`'s first
+  column. `context=True` is removed: call `enrich(violations, data=, shapes=,
+  rdf_map=, rdf_map_scope=)`.
+- **NC inheritance:** `AutomationFunction`, `BaseCaseCurrentLimit`,
+  `DirectCurrentEquipmentController` and `PowerTransferCorridor` no longer
+  reach `PowerSystemResource` / `IdentifiedObject` (their own lists stop
+  earlier, and no other class's list is read as their parents). CGMES
+  inheritance is unchanged.
 - **`triplets.iri`** — one public package for the triplet ↔ IRI contract:
   `local_id` / `local_key(iri, type_key)` / `local_value(iri, kind)` (local forms,
   all on one split, `split_iri` → namespace + local name; `TYPE_KEY`,
@@ -103,7 +144,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of being written bare; an `undefined_namespace` the document already
   binds, such as CIM100, keeps its own prefix instead of adding `triplets:`). Schema-less `export_to_nquads` therefore
   changes from CIM100 to `http://triplets#`. A schema-less query does not:
-  `sparql.query`, `validate`, `validate_schema` and `export_to_shacl_report`
+  `sparql.query`, `validate_shacl`, `validate_schema` and `export_to_shacl_report`
   keep every row and default `undefined_namespace` to CIM100, so `cim:`
   queries keep working; all of them take the parameter.
 - **Performance** (RealGrid, 1.15M rows): `read_nquads` 12.2 s → 2.9 s (line
@@ -154,12 +195,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `URI` excepted), so first-wins merging is order-independent where the
   exporters rely on it. What depended on order was the merged human context.
 - **Violation enrichment reads the schema per profile:** `SCHEMA_DESCRIPTION` /
-  `SCHEMA_MULTIPLICITY` come from the violation's own profile (the `PROFILE`
-  column, else the profile the instance header resolves to — the CIM XML
-  exporter's rule, now one shared `_header.profile_section`), the first-wins
-  merged view only as fallback. Before, a multiplicity that differs between
-  profiles (NC 2.5 `BaseTimeSeries.timeSeriesKind`: SIS `0..1`, AS `1..1`)
-  showed whichever profile came first.
+  `SCHEMA_MULTIPLICITY` come from the profiles the violation was checked
+  against (the `PROFILE` column, else `enrich(rdf_map_scope=)` — one scope, or
+  one per instance), merged like the run, the first-wins merged view only as
+  fallback. Before, a multiplicity that differs between profiles (NC 2.5
+  `BaseTimeSeries.timeSeriesKind`: SIS `0..1`, AS `1..1`) showed whichever
+  profile came first.
 - **Importers share two rule sources.** The python XML engines and the legacy
   `rdf_parser.load_RDF_to_list` run one row loop (`parser.utils.iter_rdf_rows`);
   the RDF-term readers (`read_nquads`, CONSTRUCT on every engine, `sh:sparql`
@@ -186,7 +227,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   limitations*.
 - `violations_to_report_graph` / `export_to_shacl_report` accept `rdf_map`;
   `sh:resultPath` then keeps the profile namespace instead of CIM100.
-- SPARQL / validation `scope` builds graph IRIs with `absolute_id`: a URI-shaped
+- SPARQL `scope` / validation `data_scope` build graph IRIs with `absolute_id`: a URI-shaped
   `INSTANCE_ID` scopes correctly (was silently empty), and an `https:` one is
   no longer prefixed with `urn:uuid:` by the N-Quads graph term.
 - **Export-schema `xsd:type` comes from the RDFS.** `cim_rdfs_to_json`
