@@ -237,8 +237,8 @@ def _messages(row, language="shacl"):
     if cell("MESSAGE") is not None:
         messages.append(f"{message_prefix(row.VIOLATION_TYPE, cell('MESSAGE_SOURCE'), language)} "
                         f"{row.MESSAGE}")
-    if cell("PROFILE") is not None:
-        messages.append(f"[{language}_profile] {row.PROFILE}")
+    if profile_text(getattr(row, "PROFILE", None)) is not None:
+        messages.append(f"[{language}_profile] {profile_text(row.PROFILE)}")
     if cell("VALUE") is not None:
         messages.append(f"[context_value] {row.VALUE}")
     if cell("EXPECTED") is not None:
@@ -392,6 +392,18 @@ def _buffer(name, payload):
     return buffer
 
 
+def profile_text(value):
+    """A PROFILE cell as text: the scoped section keys joined with ", " (display only)."""
+    if isinstance(value, (list, tuple)):
+        return ", ".join(map(str, value)) or None
+    return None if value is None or pandas.isna(value) else str(value)
+
+
+def _with_profile_text(violations):
+    return (violations.assign(PROFILE=violations["PROFILE"].map(profile_text))
+            if "PROFILE" in violations.columns else violations)
+
+
 def _meta_frame(meta):
     return pandas.DataFrame(_meta_rows(meta), columns=["KEY", "VALUE"])
 
@@ -404,7 +416,7 @@ def violations_to_csv(violations, path="violations.csv", export_to_memory=False)
     same convention as the other exports."""
     path = os.fspath(path)
     stem, suffix = os.path.splitext(os.path.basename(path))
-    files = [_buffer(os.path.basename(path), violations.to_csv(index=False).encode("utf-8"))]
+    files = [_buffer(os.path.basename(path), _with_profile_text(violations).to_csv(index=False).encode("utf-8"))]
     meta = violations.attrs.get("validation")
     if meta:
         files.append(_buffer(f"{stem}_meta{suffix}",
@@ -428,7 +440,7 @@ def violations_to_excel(violations, path="violations.xlsx", export_to_memory=Fal
     meta = violations.attrs.get("validation")
     buffer = io.BytesIO()
     with pandas.ExcelWriter(buffer, engine="openpyxl") as writer:
-        violations.to_excel(writer, sheet_name="violations", index=False)
+        _with_profile_text(violations).to_excel(writer, sheet_name="violations", index=False)
         if meta:
             _meta_frame(meta).to_excel(writer, sheet_name="metadata", index=False)
     buffer.name = os.path.basename(path)
