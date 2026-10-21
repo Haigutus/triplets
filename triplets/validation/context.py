@@ -18,6 +18,7 @@ from .._engine_detect import flavor
 from ..iri import TYPE_KEY, load_rdf_map, value_types
 from .schema_scope import _merged_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes
+from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +85,12 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
 def concat_violations(frames):
     """Concatenate violations frames, merging their run metadata (``attrs["validation"]``):
     the earliest start, the latest end and the duration between them; shape and
-    constraint counts once per distinct run (language, profiles, references); lists
-    and dicts united; other values kept when equal, else the list of distinct
-    values. The runs must share one constraint language (ValueError otherwise)."""
+    constraint counts once per compiled rule set (``compiled_hash``); lists and
+    dicts united; other values kept when equal, else the list of distinct values.
+    The runs must share one constraint language (ValueError otherwise)."""
     frames = list(frames)
     if not frames:
-        return pandas.DataFrame()
+        return pandas.DataFrame(columns=VIOLATION_COLUMNS)
     violations = pandas.concat(frames, ignore_index=True)
     metas = [frame.attrs["validation"] for frame in frames if frame.attrs.get("validation")]
     if not metas:
@@ -115,8 +116,7 @@ def concat_violations(frames):
     merged["generated_at"] = max(meta["generated_at"] for meta in metas)
     merged["duration_seconds"] = round((_moment(merged["generated_at"]) - _moment(merged["started_at"]))
                                        .total_seconds(), 3)
-    runs = {(meta.get("language"), str(meta.get("profiles")), tuple(meta.get("references", ()))):
-            (meta.get("node_shapes", 0), meta.get("constraints", 0)) for meta in metas}
+    runs = {meta.get("compiled_hash"): (meta.get("node_shapes", 0), meta.get("constraints", 0)) for meta in metas}
     merged["node_shapes"] = sum(counts[0] for counts in runs.values())
     merged["constraints"] = sum(counts[1] for counts in runs.values())
     violations.attrs["validation"] = merged

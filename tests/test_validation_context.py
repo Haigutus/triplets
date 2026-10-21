@@ -180,11 +180,7 @@ def test_concat_violations_merges_run_metadata(shapes):
     assert meta["generated_at"] == second.attrs["validation"]["generated_at"]
     assert meta["node_shapes"] == first.attrs["validation"]["node_shapes"]
     assert meta["source"] == ["20220615T2230Z_Svedala_EQ.xml", "other.xml"]
-    assert concat_violations([]).empty
-    schema_run = first.copy()
-    schema_run.attrs["validation"] = {**first.attrs["validation"], "language": "rdfs"}
-    with pytest.raises(ValueError, match="one constraint language"):
-        concat_violations([first, schema_run])
+    assert concat_violations([]).empty and "SOURCE_SHAPE" in concat_violations([]).columns
     schema_run = first.copy()
     schema_run.attrs["validation"] = {**first.attrs["validation"], "language": "rdfs"}
     with pytest.raises(ValueError, match="one constraint language"):
