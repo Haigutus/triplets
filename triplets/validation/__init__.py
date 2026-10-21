@@ -17,7 +17,7 @@ Compile once: ``compile(shapes)`` parses the shapes with rdflib exactly once
 into ``CompiledShapes`` (shapes graph + flat constraint table, cached by
 content hash). Engines receive the compiled object:
 
-    validate(data, compiled, rdf_map=None, scope=None, **kwargs) → violations DataFrame
+    validate(data, compiled, rdf_map=None, data_scope=None, ancestors=None, **kwargs) → violations DataFrame
 
 pyshacl consumes the graph; the vectorized engines consume the IR (and cache
 their own plan per engine in ``CompiledShapes.plans``) — they never touch
@@ -88,8 +88,8 @@ def get_engine(name: str = "auto"):
     return _REGISTRY.get(name)
 
 
-def validate(data, shapes, rdf_map=None, scope=None, rdf_map_scope=None, engine="auto", lexical=True,
-             context=False, undefined_namespace=CIM_NS, inheritance=True, **kwargs):
+def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=None, engine="auto", lexical=True,
+                   context=False, undefined_namespace=CIM_NS, inheritance=True, **kwargs):
     """Validate triplet data against SHACL shapes; return a violations DataFrame.
 
     Parameters
@@ -102,11 +102,11 @@ def validate(data, shapes, rdf_map=None, scope=None, rdf_map_scope=None, engine=
         Export schema — xsd-typed literals in the data graph, the schema-driven
         sh:nodeKind decision and the class inheritance (see ``inheritance``),
         from the profiles in ``rdf_map_scope``.
-    scope : iterable of INSTANCE_ID, optional
+    data_scope : iterable of INSTANCE_ID, optional
         Validate only these instances' named graphs — data outside the scope
         is not loaded, so references into unscoped instances count as absent.
         Include dependency instances in the scope (or validate the full
-        union, scope=None) for cross-instance checks.
+        union, data_scope=None) for cross-instance checks.
     rdf_map_scope : profile identifier or sequence of them, optional
         The rdf_map profiles the run uses, merged into one: section keys
         (``"EQ"``) and/or declared profile IRIs; ``"*"`` = every section;
@@ -150,7 +150,7 @@ def validate(data, shapes, rdf_map=None, scope=None, rdf_map_scope=None, engine=
     ancestors = class_ancestors(rdf_map, rdf_map_scope) if rdf_map and inheritance else None
     engine_name, engine_mod = get_engine(engine)
     table_ref = _table_ref(data, **kwargs)
-    violations = _run(data, compiled, engine_name, engine_mod, scoped, scope, lexical,
+    violations = _run(data, compiled, engine_name, engine_mod, scoped, data_scope, lexical,
                       undefined_namespace=undefined_namespace, ancestors=ancestors, **kwargs)
     violations = _present(violations, data, compiled.ir, compiled.language, table_ref)
     if context:

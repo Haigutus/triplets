@@ -75,7 +75,7 @@ def compile_shapes(shapes) -> CompiledShapes:
 def _shape_stats(graph, ir):
     """Coverage facts for the report metadata: shape/constraint counts plus
     what the vectorized engines skip (mirrors the parse_ir warnings as data —
-    the pyshacl reference engine covers everything, so validate() reports
+    the pyshacl reference engine covers everything, so validate_shacl() reports
     these only for vectorized runs)."""
     import rdflib
 
@@ -182,7 +182,7 @@ def split_rules(ir, implemented, fallback_components, engine):
     engine's registries.
 
     Engines cache the result in ``CompiledShapes.plans[engine]`` so the split
-    runs once per compiled shapes, not once per validate call; validate()
+    runs once per compiled shapes, not once per validate call; validate_shacl()
     reads the skipped components into the report metadata.
     """
     rules = list(ir.itertuples())

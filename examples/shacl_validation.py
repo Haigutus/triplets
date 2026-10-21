@@ -46,13 +46,13 @@ print(f"ACLineSegment instances in the data: {n_lines}")
 
 header("2. Validate WITHOUT a schema — VALUEs are untyped strings")
 print("'cim:Conductor.length' is a plain string, so sh:datatype xsd:float fails.\n")
-violations = data.shacl.validate(shape_path, engine="reference", lexical=False)
+violations = data.shacl.validate_shacl(shape_path, engine="reference", lexical=False)
 print(f"Violations found: {len(violations)}")
 print(violations[["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE"]].head(10).to_string(index=False))
 
 header("3. Validate WITH a schema (rdf_map) — VALUEs get proper xsd types")
 print("Now Conductor.length is exported as xsd:float, so the datatype check passes.\n")
-violations_typed = data.shacl.validate(shape_path, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
+violations_typed = data.shacl.validate_shacl(shape_path, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                        engine="reference", lexical=False)
 print(f"Violations found: {len(violations_typed)}")
 if violations_typed.empty:
@@ -61,9 +61,9 @@ if violations_typed.empty:
 header("4. Scope validation to a single instance graph")
 instance = str(data["INSTANCE_ID"].astype(str).iloc[0])
 print(f"Scoping to INSTANCE_ID = {instance}")
-scoped = data.shacl.validate(shape_path, engine="reference", scope=[instance], lexical=False)
+scoped = data.shacl.validate_shacl(shape_path, engine="reference", data_scope=[instance], lexical=False)
 print(f"In-scope violations:     {len(scoped)}")
-out = data.shacl.validate(shape_path, engine="reference", scope=["00000000-0000-0000-0000-000000000000"], lexical=False)
+out = data.shacl.validate_shacl(shape_path, engine="reference", data_scope=["00000000-0000-0000-0000-000000000000"], lexical=False)
 print(f"Out-of-scope violations: {len(out)}  (no ACLineSegments target this graph)")
 
 header("5. The lexical-form check — the deliberate deviation from pyshacl")
@@ -76,7 +76,7 @@ mixed = pandas.DataFrame([
     ("a3", "Type", "ACLineSegment", "eq"), ("a3", "IdentifiedObject.name", "L3", "eq"),
     ("a3", "Conductor.length", "abc", "eq"),    # not a float   — Violation (sh:datatype)
 ], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-findings = triplets.validation.validate(mixed, shape_path, engine="pandas")
+findings = triplets.validation.validate_shacl(mixed, shape_path, engine="pandas")
 print(findings[["ID", "VALUE", "VIOLATION_TYPE", "SEVERITY", "MESSAGE"]].to_string(index=False))
 
 header("6. Compile once, validate many")
@@ -84,8 +84,8 @@ compiled = triplets.validation.compile(shape_path)
 print(f"CompiledShapes: {len(compiled.ir)} IR rows, hash {compiled.hash[:12]}…")
 print("IR (constraint table):")
 print(compiled.ir[["target_class", "path", "component", "params", "severity"]].to_string(index=False))
-data.shacl.validate(compiled, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")   # no re-parse
-print("\nSecond validate() against the same shapes reused the compiled IR (cache hit).")
+data.shacl.validate_shacl(compiled, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")   # no re-parse
+print("\nSecond validate_shacl() against the same shapes reused the compiled IR (cache hit).")
 
 header("Done")
-print("Engines: polars (auto, fast) + pandas (debugging) + pyshacl (reference)  |  API: df.shacl.validate(shapes, rdf_map=, scope=)")
+print("Engines: polars (auto, fast) + pandas (debugging) + pyshacl (reference)  |  API: df.shacl.validate_shacl(shapes, rdf_map=, data_scope=, rdf_map_scope=)")

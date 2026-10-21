@@ -54,7 +54,7 @@ def shape_file(tmp_path_factory):
 def test_typed_data_conforms(svedala_eq, shape_file):
     """With rdf_map, Conductor.length is xsd:float → datatype constraint passes."""
     from triplets.export_schema import schemas
-    violations = svedala_eq.shacl.validate(shape_file, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
+    violations = svedala_eq.shacl.validate_shacl(shape_file, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
                                            engine="reference", lexical=False)
     assert isinstance(violations, pandas.DataFrame)
     assert len(violations) == 0
@@ -62,15 +62,15 @@ def test_typed_data_conforms(svedala_eq, shape_file):
 
 def test_untyped_data_trips_datatype(svedala_eq, shape_file):
     """Without rdf_map, Conductor.length is a plain string → xsd:float violations."""
-    violations = svedala_eq.shacl.validate(shape_file, engine="reference", lexical=False)
+    violations = svedala_eq.shacl.validate_shacl(shape_file, engine="reference", lexical=False)
     assert len(violations) > 0
     assert (violations["VIOLATION_TYPE"] == "sh:datatype").all()
 
 
 def test_violations_columns(svedala_eq, shape_file):
     from triplets.validation.shacl_report import VIOLATION_COLUMNS
-    violations = svedala_eq.shacl.validate(shape_file)
-    # canonical schema + the columns validate() stamps
+    violations = svedala_eq.shacl.validate_shacl(shape_file)
+    # canonical schema + the columns validate_shacl() stamps
     assert list(violations.columns) == VIOLATION_COLUMNS + ["TARGET", "EXPECTED", "MESSAGE_SOURCE"]
     # focusNode stripped to bare UUID (no urn:uuid:)
     assert not violations["ID"].str.startswith("urn:uuid:").any()
@@ -79,9 +79,9 @@ def test_violations_columns(svedala_eq, shape_file):
 def test_scope_excludes_out_of_scope_instances(svedala_eq, shape_file):
     """Scoping to an instance without ACLineSegments yields no violations."""
     instance = str(svedala_eq["INSTANCE_ID"].astype(str).iloc[0])
-    in_scope = svedala_eq.shacl.validate(shape_file, engine="reference", scope=[instance])
+    in_scope = svedala_eq.shacl.validate_shacl(shape_file, engine="reference", data_scope=[instance])
     assert len(in_scope) > 0  # the EQ instance has the ACLineSegments
-    out_scope = svedala_eq.shacl.validate(shape_file, engine="reference", scope=["00000000-0000-0000-0000-000000000000"])
+    out_scope = svedala_eq.shacl.validate_shacl(shape_file, engine="reference", data_scope=["00000000-0000-0000-0000-000000000000"])
     assert len(out_scope) == 0
 
 
@@ -102,7 +102,7 @@ def lexical_data():
 
 def test_lexical_two_levels(lexical_data, shape_file):
     """"abc" → sh:datatype Violation; "1" under xsd:float → triplets:lexicalForm Warning."""
-    violations = triplets.validation.validate(lexical_data, shape_file, engine="pandas")
+    violations = triplets.validation.validate_shacl(lexical_data, shape_file, engine="pandas")
     by_value = violations.set_index("VALUE")
     assert by_value.loc["abc", "VIOLATION_TYPE"] == "sh:datatype"
     assert by_value.loc["abc", "SEVERITY"] == "Violation"
@@ -112,9 +112,9 @@ def test_lexical_two_levels(lexical_data, shape_file):
 
 
 def test_lexical_supplements_pyshacl(lexical_data, shape_file):
-    """Default validate(): pyshacl report + lexical findings, no duplicate rows."""
+    """Default validate_shacl(): pyshacl report + lexical findings, no duplicate rows."""
     from triplets.export_schema import schemas
-    violations = triplets.validation.validate(lexical_data, shape_file,
+    violations = triplets.validation.validate_shacl(lexical_data, shape_file,
                                               rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
     # pyshacl accepts both "1" and "abc"... "abc"^^xsd:float is ill-typed → sh:datatype;
     # "1" passes pyshacl but the lexical check reports it as a Warning.
@@ -127,7 +127,7 @@ def test_lexical_supplements_pyshacl(lexical_data, shape_file):
 
 def test_lexical_polars_input(lexical_data, shape_file):
     polars = pytest.importorskip("polars")
-    violations = triplets.validation.validate(polars.from_pandas(lexical_data), shape_file,
+    violations = triplets.validation.validate_shacl(polars.from_pandas(lexical_data), shape_file,
                                               engine="pandas")
     assert (violations["VALUE"] == "1").any()
 
@@ -141,5 +141,5 @@ def test_real_cgmes_eq_shapes(svedala_eq):
     """Validate Svedala EQ against the real CGMES Equipment SHACL profile."""
     from triplets.export_schema import schemas
     from triplets.validation.shacl_report import VIOLATION_COLUMNS
-    violations = svedala_eq.shacl.validate(str(CGMES_EQ_SHACL), rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
+    violations = svedala_eq.shacl.validate_shacl(str(CGMES_EQ_SHACL), rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
     assert list(violations.columns) == VIOLATION_COLUMNS

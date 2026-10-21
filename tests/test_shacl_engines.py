@@ -35,7 +35,7 @@ def run(rows, shape_turtle, engine):
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape_turtle, format="turtle")
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    return triplets.validation.validate(data, graph, engine=engine)
+    return triplets.validation.validate_shacl(data, graph, engine=engine)
 
 
 def breaker(object_id, *properties):
@@ -167,7 +167,7 @@ def test_node_kind_by_schema(engine):
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    v = triplets.validation.validate(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine=engine)
+    v = triplets.validation.validate_shacl(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine=engine)
     assert violating(v, "sh:nodeKind") == {("b1", "not-a-uuid"), ("b2", "11111111-1111-1111-1111-111111111111")}
 
 
@@ -192,7 +192,7 @@ def test_node_kind_iri_on_association_follows_schema(engine):
     graph.parse(data=PREFIX + SHAPE.format(body="sh:path cim:Equipment.EquipmentContainer ; sh:nodeKind sh:IRI"),
                 format="turtle")
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    v = triplets.validation.validate(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine=engine)
+    v = triplets.validation.validate_shacl(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine=engine)
     assert violating(v, "sh:nodeKind") == set()
 
 
@@ -306,8 +306,8 @@ def test_sparql_max_workers_matches_sequential(engine):
     graph.parse(data=PREFIX + SPARQL_SHAPE, format="turtle")
     data = pandas.DataFrame(breaker("b1", ("Switch.state", "bad")) + breaker("b2", ("Switch.state", "open")),
                             columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    sequential = triplets.validation.validate(data, graph, engine=engine)
-    parallel = triplets.validation.validate(data, graph, engine=engine, max_workers=2)
+    sequential = triplets.validation.validate_shacl(data, graph, engine=engine)
+    parallel = triplets.validation.validate_shacl(data, graph, engine=engine, max_workers=2)
     assert violating(parallel, "sh:sparql") == violating(sequential, "sh:sparql") == {("b1", "bad")}
 
 
@@ -444,7 +444,7 @@ def test_ill_typed_value_fails_sparql_engine_once_with_context():
             ("a2", "IdentifiedObject.name", "reserved", "eq")]
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
-    violations = triplets.validation.validate(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine="pandas")
+    violations = triplets.validation.validate_shacl(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine="pandas")
 
     notes = violations[violations["VIOLATION_TYPE"] == "triplets:invalidSparql"]
     assert len(notes) == 1, "the cached ingest failure must be reported once, not per rule"
@@ -551,7 +551,7 @@ def test_enum_violation_value_pyshacl_parity(engine):
                 format="turtle")
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
     for name in (engine, "pyshacl"):
-        v = triplets.validation.validate(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine=name)
+        v = triplets.validation.validate_shacl(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine=name)
         assert violating(v, "sh:in") == {("b2", "SwitchKind.other")}, name
 
 
@@ -593,9 +593,9 @@ def test_abstract_target_class_walks_type_index(engine):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    bare = triplets.validation.validate(data, graph, engine=engine)
+    bare = triplets.validation.validate_shacl(data, graph, engine=engine)
     assert violating(bare, "sh:minCount") == set()
-    bound = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    bound = triplets.validation.validate_shacl(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
     # IR stays one row per constraint — walk is in the Type index, not a fan-out
     compiled = triplets.validation.compile(graph)
@@ -613,7 +613,7 @@ def test_abstract_target_keeps_direct_equipment_type_rows(engine):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    bound = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    bound = triplets.validation.validate_shacl(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert violating(bound, "sh:minCount") == {("b1", None), ("e1", None)}
 
 
@@ -629,7 +629,7 @@ def test_sequence_path_via_type_reads_instance_types_with_schema(engine):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    v = triplets.validation.validate_shacl(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert violating(v, "sh:in") == {("b2", "Substation")}
     assert violating(v, "sh:maxCount") == set()
 
@@ -644,7 +644,7 @@ def test_sh_class_accepts_subclasses_via_index(engine):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    v = triplets.validation.validate_shacl(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert violating(v, "sh:class") == {("b2", "sub1")}
 
 
@@ -660,7 +660,7 @@ def test_shape_on_parent_and_child_reports_once(engine_name):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    v = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    v = triplets.validation.validate_shacl(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert (v["VIOLATION_TYPE"] == "sh:minCount").sum() == 1
 
 
@@ -675,8 +675,8 @@ def test_inheritance_off_matches_exact_type(engine_name):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    on = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
-    off = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*", inheritance=False)
+    on = triplets.validation.validate_shacl(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    off = triplets.validation.validate_shacl(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*", inheritance=False)
     assert violating(on, "sh:minCount") == {("b1", None)}
     assert violating(off, "sh:minCount") == set()
     assert off.attrs["validation"]["inheritance"] is False
@@ -720,7 +720,7 @@ def test_inheritance_follows_the_scoped_profiles(engine_name, instance_type, rdf
     profiles' own Class entries — the same on every engine, pyshacl included."""
     pytest.importorskip(engine_name)
     data = pandas.DataFrame([("a1", "Type", instance_type, "eq")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    v = triplets.validation.validate(data, io_shapes(), engine=engine_name, rdf_map=SCOPED_SCHEMA,
+    v = triplets.validation.validate_shacl(data, io_shapes(), engine=engine_name, rdf_map=SCOPED_SCHEMA,
                                      rdf_map_scope=rdf_map_scope)
     assert violating(v, "sh:minCount") == ({("a1", None)} if reached else set())
 
@@ -729,7 +729,7 @@ def test_rdf_map_without_scope_entries_raises():
     """A sectioned bundle has no root entries: rdf_map_scope=None is a caller error."""
     data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
     with pytest.raises(ValueError, match="rdf_map_scope"):
-        triplets.validation.validate(data, io_shapes(), rdf_map=SCOPED_SCHEMA)
+        triplets.validation.validate_shacl(data, io_shapes(), rdf_map=SCOPED_SCHEMA)
 
 
 def test_merge_conflicts_reach_the_run_metadata():
@@ -739,7 +739,7 @@ def test_merge_conflicts_reach_the_run_metadata():
               "B": {"Model.version": {"type": "Attribute", "xsd:type": "xsd:integer"}}}
     data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
     for name in ("pandas", "pyshacl"):
-        v = triplets.validation.validate(data, io_shapes(), engine=name, rdf_map=schema, rdf_map_scope="*")
+        v = triplets.validation.validate_shacl(data, io_shapes(), engine=name, rdf_map=schema, rdf_map_scope="*")
         assert any("Model.version: datatype conflict" in entry
                    for entry in v.attrs["validation"]["skipped_shapes"]), name
 
@@ -756,9 +756,9 @@ def test_pyshacl_ont_graph_abstract_target():
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    bare = triplets.validation.validate(data, graph, engine="pyshacl")
+    bare = triplets.validation.validate_shacl(data, graph, engine="pyshacl")
     assert violating(bare, "sh:minCount") == set()
-    bound = triplets.validation.validate(data, graph, engine="pyshacl", rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    bound = triplets.validation.validate_shacl(data, graph, engine="pyshacl", rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
 
 
@@ -785,6 +785,6 @@ def test_property_logical_operators_judge_value_nodes(engine_name, shape, proper
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
     data = pandas.DataFrame(breaker("b1", *properties), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    v = triplets.validation.validate(data, graph, engine=engine_name, lexical=False)
+    v = triplets.validation.validate_shacl(data, graph, engine=engine_name, lexical=False)
     component = "sh:or" if shape is VALUE_OR else "sh:not"
     assert violating(v, component) == expected

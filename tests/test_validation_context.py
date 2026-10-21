@@ -52,7 +52,7 @@ def shapes():
 
 @pytest.fixture()
 def violations(shapes):
-    return triplets.validation.validate(DATA, shapes, engine="pandas")
+    return triplets.validation.validate_shacl(DATA, shapes, engine="pandas")
 
 
 def test_enrich_all_sources(violations, shapes):
@@ -86,7 +86,7 @@ def test_enrich_sources_optional(violations):
 
 
 def test_validate_context_flag(shapes):
-    result = triplets.validation.validate(DATA, shapes, engine="pandas",
+    result = triplets.validation.validate_shacl(DATA, shapes, engine="pandas",
                                           rdf_map=RDF_MAP, rdf_map_scope="*", context=True)
     assert set(ENRICHMENT_COLUMNS) <= set(result.columns)
     assert result["OBJECT_NAME"].iloc[0] == "Line 1"
@@ -98,7 +98,7 @@ def test_pyshacl_engine_enrichment_degrades_gracefully(shapes):
     """pyshacl SOURCE_SHAPE joins on the same shape IRIs; anonymous property
     shapes fall back to null shape columns — never an error."""
     pytest.importorskip("pyshacl")
-    violations = triplets.validation.validate(DATA, shapes, engine="pyshacl",
+    violations = triplets.validation.validate_shacl(DATA, shapes, engine="pyshacl",
                                               context=True)
     assert set(ENRICHMENT_COLUMNS) <= set(violations.columns)
     assert (violations["OBJECT_TYPE"] == "ACLineSegment").any()

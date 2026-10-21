@@ -69,7 +69,7 @@ print(f"parsed {len(data):,} triples from {Path(EQ).name}")
 
 # >>> pristine data conforms: no Violations, only the lexical-form style
 # >>> Warnings of the documented datatype deviation (integer-form floats)
-pristine = data.shacl.validate(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
+pristine = data.shacl.validate_shacl(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
 print(f"\npristine: {pristine['SEVERITY'].value_counts().to_dict()}")
 
 # >>> introduce three issues deliberately
@@ -87,7 +87,7 @@ broken.loc[(broken["ID"] == terminal) & (broken["KEY"] == "Terminal.ConductingEq
 
 # >>> validate again — engine="auto" is the polars executor, the Complex
 # >>> sh:sparql rules are delegated to the SPARQL engine (oxigraph)
-violations = broken.shacl.validate(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
+violations = broken.shacl.validate_shacl(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
 found = violations[violations["SEVERITY"] == "Violation"]
 print(f"\nafter breaking 3 things: {len(found)} Violations")
 print(found[["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE"]].to_string(index=False, max_colwidth=60))

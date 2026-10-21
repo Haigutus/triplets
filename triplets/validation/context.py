@@ -1,6 +1,6 @@
 """Optional context enrichment for violations frames.
 
-The slower opt-in pass (``validate(..., context=True)`` or a standalone
+The slower opt-in pass (``validate_shacl(..., context=True)`` or a standalone
 ``enrich`` call) that adds human/schema context columns to the canonical
 violations frame: which instance/file the object came from, what the object
 is, what the shape says about itself, and what the export schema defines for

@@ -124,7 +124,7 @@ def build_sarif(violations, group=True, sources=None):
             "version": getattr(triplets, "__version__", None),
             "rules": rules,
         })},
-        # the validation-run metadata validate() stamps on the frame — the
+        # the validation-run metadata the validation functions stamp on the frame — the
         # same facts the sh:ValidationReport carries as prov/dcterms terms;
         # timestamps go to the invocation, everything else (engine, duration,
         # shape/constraint counts, coverage) to the run property bag
