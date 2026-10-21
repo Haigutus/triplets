@@ -4,7 +4,7 @@ instances, with the valid classes from the source and target profiles."""
 import pandas
 import pytest
 
-from triplets.validation import compile_references, validate_schema_references
+from triplets.validation import compile_references, enrich, validate_schema_references
 
 ENGINES = ["pandas", "polars", "duckdb"]
 CIM = "http://iec.ch/TC57/CIM100#"
@@ -62,6 +62,7 @@ def test_range_accepts_subclasses(engine):
     rows = breaker("b1", "bay1") + breaker("b2", "sub1") + CONTAINERS
     v = validate_schema_references(frame(rows), SCHEMA, ["eq"], ["EQ"], engine=engine)
     assert violating(v, "rdfs:range") == {("b2", "sub1")} and violating(v, "triplets:missing") == set()
+    v = enrich(v, data=frame(rows), rdf_map=SCHEMA)              # the schema tells a reference from an enum
     assert v["TARGET"].tolist() == ['referenced object sub1 found — Substation "Main Sub"']
     assert v["EXPECTED"].tolist() == ["a reference to one of: Bay, VoltageLevel"]
     assert v["PROFILE"].tolist() == [["EQ"]]
@@ -71,6 +72,7 @@ def test_missing_targets(engine):
     rows = breaker("b1", "ghost") + CONTAINERS
     v = validate_schema_references(frame(rows), SCHEMA, ["eq"], ["EQ"], engine=engine)
     assert violating(v, "triplets:missing") == {("b1", "ghost")}
+    v = enrich(v, data=frame(rows))
     assert v["TARGET"].tolist() == ["referenced object ghost not found in the data"]
     quiet = validate_schema_references(frame(rows), SCHEMA, ["eq"], ["EQ"], report_missing_targets=False,
                                        engine=engine)

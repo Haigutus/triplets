@@ -71,7 +71,7 @@ def test_violations_columns(svedala_eq, shape_file):
     from triplets.validation.shacl_report import VIOLATION_COLUMNS
     violations = svedala_eq.shacl.validate_shacl(shape_file)
     # canonical schema + the columns validate_shacl() stamps
-    assert list(violations.columns) == VIOLATION_COLUMNS + ["TARGET", "EXPECTED", "MESSAGE_SOURCE"]
+    assert list(violations.columns) == VIOLATION_COLUMNS + ["EXPECTED", "MESSAGE_SOURCE"]
     # focusNode stripped to bare UUID (no urn:uuid:)
     assert not violations["ID"].str.startswith("urn:uuid:").any()
 

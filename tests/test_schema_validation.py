@@ -8,7 +8,7 @@ profiles the caller scopes, merged into one; nothing reads instance headers."""
 import pandas
 import pytest
 
-from triplets.validation import compile_schema, validate_schema
+from triplets.validation import compile_schema, enrich, validate_schema
 
 ENGINES = ["pandas", "polars", "duckdb"]
 CIM = "http://iec.ch/TC57/CIM100#"
@@ -81,8 +81,10 @@ def test_min_occurs(engine):
 
 
 def test_max_occurs(engine):
-    v = run(breaker("b1", *OK, ("IdentifiedObject.name", "B-again")), engine)
+    rows = breaker("b1", *OK, ("IdentifiedObject.name", "B-again"))
+    v = run(rows, engine)
     assert violating(v, "xsd:maxOccurs") == {("b1", None)}
+    v = enrich(v, data=frame(rows))
     assert v.loc[v["VIOLATION_TYPE"] == "xsd:maxOccurs", "TARGET"].iloc[0] == "found 2 values: 'B', 'B-again'"
 
 
@@ -238,7 +240,8 @@ def test_sarif_title_grouping_is_per_profile_property():
     another property's or profile's findings."""
     from triplets.validation.sarif import build_sarif
 
-    v = run(breaker("b1") + breaker("b2"), "pandas", context=True)     # nameless, mRID-less
+    rows = breaker("b1") + breaker("b2")                              # nameless, mRID-less
+    v = enrich(run(rows, "pandas"), data=frame(rows), rdf_map=SCHEMA)
     names = {rule["name"] for rule in build_sarif(v)["runs"][0]["tool"]["driver"]["rules"]}
     assert {"RDFS EQ Breaker IdentifiedObject.name (2×)", "RDFS EQ Breaker IdentifiedObject.mRID (2×)"} <= names
 

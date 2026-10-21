@@ -140,6 +140,7 @@ def test_class_target_names_referenced_type(engine):
             + breaker("b2", ("Equipment.EquipmentContainer", "ghost"))
             + [("sub1", "Type", "Substation", "eq")])
     v = run(rows, SHAPE.format(body="sh:path cim:Equipment.EquipmentContainer ; sh:class cim:VoltageLevel"), engine)
+    v = triplets.validation.enrich(v, data=pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"]))
     targets = dict(zip(v["ID"], v["TARGET"]))
     assert targets["b1"] == "referenced object sub1 found — Substation"
     assert targets["b2"] == "referenced object ghost not found in the data"
@@ -474,9 +475,13 @@ def test_sequence_path_via_type(engine):
             + breaker("b2", ("Equipment.EquipmentContainer", "sub1"))
             + breaker("b3", ("Equipment.EquipmentContainer", "missing"))
             + [("bay1", "Type", "Bay", "eq"), ("sub1", "Type", "Substation", "eq")])
-    v = run(rows, VALUE_TYPE_SHAPE, engine)
+    import rdflib
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    compiled = triplets.validation.compile(rdflib.Graph().parse(data=PREFIX + VALUE_TYPE_SHAPE, format="turtle"))
+    v = triplets.validation.validate_shacl(data, compiled, engine=engine)
     assert violating(v, "sh:in") == {("b2", "Substation")}
     assert violating(v, "sh:nodeKind") == set()   # types are IRIs by definition
+    v = triplets.validation.enrich(v, data=data, shapes=compiled)   # shapes: which rows are valueType rows
     # authored text verbatim; the found type is its own TARGET entry
     flagged = v.loc[v["VIOLATION_TYPE"] == "sh:in"].iloc[0]
     assert flagged["MESSAGE"] == "container must be a Bay or a VoltageLevel"
