@@ -49,17 +49,17 @@ def _sql_name(schema, table):
 
 
 def _is_read_only(connection):
-    row = connection.execute(
-        "SELECT value FROM duckdb_settings() WHERE name = 'access_mode'").fetchone()
-    return row is not None and str(row[0]).lower() == "read_only"
+    rows = connection.execute(
+        "SELECT value FROM duckdb_settings() WHERE name = 'access_mode'").fetchall()
+    return bool(rows) and str(rows[0][0]).lower() == "read_only"
 
 
 def _load_config(connection):
     """(schema, table) stored in the database, or None when never configured."""
     exists = connection.execute(
         "SELECT 1 FROM duckdb_tables() "
-        "WHERE schema_name = 'main' AND table_name = '_triplets_config'").fetchone()
-    if exists is None:
+        "WHERE schema_name = 'main' AND table_name = '_triplets_config'").fetchall()
+    if not exists:
         return None
     stored = dict(connection.execute(f"SELECT key, value FROM {_CONFIG_TABLE}").fetchall())
     return stored.get("schema"), stored.get("table", _DEFAULT_TABLE)
@@ -109,11 +109,11 @@ def _ord_expr(connection, schema, table):
     ``row_number() OVER ()`` when the target has none (a VIEW or a registered
     frame) — order then follows scan order, so only tie-breaks among duplicate
     (ID, KEY) rows are affected."""
-    row = connection.execute(
+    rows = connection.execute(
         "SELECT 1 FROM duckdb_tables() "
         "WHERE table_name = ? AND schema_name = COALESCE(?, current_schema())",
-        [table, schema]).fetchone()
-    if row is not None:
+        [table, schema]).fetchall()
+    if rows:
         return "rowid"
     logger.debug("%s has no rowid (view/registered frame) — using row_number()", table)
     return "row_number() OVER ()"
@@ -365,12 +365,14 @@ def _refs_from_sql(reference, levels, table_name, ord_expr="rowid"):
 
 def _references_sql(reference, levels, table_name, keep_ord=False, ord_expr="rowid"):
     """references_from + references_to, deduped on (ID,KEY,VALUE,INSTANCE_ID)
-    keeping the FROM side first — matches pandas concat+drop_duplicates. _ord is
+    keeping the FROM side, then the lowest level first — matches pandas
+    concat+drop_duplicates (an object referencing itself, e.g. by mRID, is
+    reached again one level down). _ord is
     the base-table load order (kept only when a downstream pivot needs it)."""
     drop = "_src, _rn" if keep_ord else "_src, _rn, _ord"
     return f"""
         SELECT * EXCLUDE ({drop}) FROM (
-            SELECT *, row_number() OVER (PARTITION BY ID, KEY, VALUE, INSTANCE_ID ORDER BY _src, _ord) AS _rn
+            SELECT *, row_number() OVER (PARTITION BY ID, KEY, VALUE, INSTANCE_ID ORDER BY _src, level, _ord) AS _rn
             FROM (
                 SELECT *, 0 AS _src FROM ({_refs_from_sql(reference, levels, table_name, ord_expr)})
                 UNION ALL
@@ -501,7 +503,7 @@ def references_simple(self, reference, columns=None, levels=1, table=None, schem
     sel = "".join(f', p."{c}"' for c in keep)
     return self.sql(f"""
         WITH refs AS ({refs_sql}),
-        p AS (PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE FROM refs GROUP BY ID, KEY)
+        p AS (PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE FROM ({refs_sql}) GROUP BY ID, KEY)
               ON KEY USING FIRST(VALUE) GROUP BY ID),
         m AS (SELECT ID, ANY_VALUE(level) AS level, ANY_VALUE(ID_FROM) AS ID_FROM,
                      ANY_VALUE(ID_TO) AS ID_TO FROM refs GROUP BY ID)
@@ -697,7 +699,7 @@ def tableview_to_triplets(self, table=None, schema=None, table_name=None, multiv
             SELECT ID, KEY,
                    CASE WHEN trim(VALUE) LIKE '[%' AND trim(VALUE) LIKE '%]'
                         THEN list_transform(string_split(trim(trim(VALUE), ' []'), ','),
-                                            x -> trim(x, ' ''"'))
+                                            lambda x: trim(x, ' ''"'))
                         ELSE [VALUE] END AS vals
             FROM (UNPIVOT {table_name} ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE)
             WHERE VALUE IS NOT NULL)
@@ -731,5 +733,5 @@ def content_hash(self, ignore_types=("Distribution", "NamespaceMap", "FullModel"
         source += (f" WHERE ID NOT IN (SELECT ID FROM {table_name}"
                    f" WHERE KEY = 'Type' AND VALUE IN ({_in_list(ignore_types)}))")
     row = self.execute(f"SELECT count(*), sum(h)::VARCHAR, bit_xor(h)::VARCHAR"
-                       f" FROM ({source})").fetchone()
+                       f" FROM ({source})").fetchall()[0]
     return hashlib.blake2b(repr(row).encode(), digest_size=16).hexdigest()
