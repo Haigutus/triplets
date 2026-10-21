@@ -139,7 +139,8 @@ def test_listed_profiles_are_merged(engine):
     assert set(zip(v["KEY"], v["VIOLATION_TYPE"])) == {("Breaker.operated", "xsd:minOccurs")}
     assert profiles(v) == {("EQ", "OP")}
     assert any(entry.startswith("IdentifiedObject.name: cardinality relaxed")
-               for entry in v.attrs["validation"]["skipped_shapes"])
+               for entry in v.attrs["validation"]["relaxed_constraints"])
+    assert v.attrs["validation"]["skipped_shapes"] == []
 
 
 def test_datatype_conflict_is_not_checked(engine):

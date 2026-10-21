@@ -36,8 +36,9 @@ Operation and ShortCircuit as published. Same-named entries combine:
   every engine) and logged as an error.
 - Enumeration `values`: union.
 
-Every merge decision is listed in the run's `skipped_shapes`, and one warning
-per run names their count. The merged `ProfileMetadata` keeps every profile's
+Datatype conflicts (not checked) are listed in the run's `skipped_shapes`;
+relaxed cardinalities and united enumerations (checked, more loosely) in its
+`relaxed_constraints`, with one warning per run naming their count. The merged `ProfileMetadata` keeps every profile's
 identity: `sections` (the section keys, in scope order) and each field as a
 list in the same order (`keyword: ["EQ", "OP", "SC"]`, `versionIRI: [...]`). A merged run is never stricter than running the
 listed profiles one by one: parameters only add, cardinality only relaxes.
@@ -316,7 +317,8 @@ united, differing values kept as the list of distinct values):
 | `node_shapes` / `constraints` | shape count / compiled IR constraint rows |
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
 | `inheritance` | whether class inheritance was on (`validate_shacl`, `validate_schema_references`) |
-| `skipped_shapes` | what THIS run did not evaluate as written: the schema merge decisions (every engine); unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — those two empty for `engine="pyshacl"` (spec-complete); association ranges no given profile defines (`validate_schema_references`) |
+| `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — those two empty for `engine="pyshacl"` (spec-complete); association ranges no given profile defines (`validate_schema_references`) |
+| `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates |
 
 The coverage keys turn the compile/engine warnings into data: a report that

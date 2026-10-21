@@ -151,7 +151,7 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
     rdf_map = load_rdf_map(rdf_map)        # dict from here on — the engines and enrich take only dicts
     started = datetime.now(timezone.utc)   # after compile — duration is the run, cache-independent
-    scoped, conflicts = scoped_rdf_map(rdf_map, rdf_map_scope) if rdf_map else ({}, [])
+    scoped, notes = scoped_rdf_map(rdf_map, rdf_map_scope) if rdf_map else ({}, None)
     if rdf_map and not set(scoped[SCOPE_KEY]) - {"ProfileMetadata"}:
         raise ValueError("rdf_map_scope selects no schema entries — name the profiles "
                          "(section keys / profile IRIs, or '*' for all)")
@@ -162,7 +162,7 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
                       undefined_namespace=undefined_namespace, ancestors=ancestors, **kwargs)
     violations = _present(violations, compiled.ir, compiled.language)
     violations.attrs["validation"] = _report_metadata(
-        violations, data, compiled, engine_name, started, table_name=table_ref, conflicts=conflicts)
+        violations, data, compiled, engine_name, started, table_name=table_ref, notes=notes)
     violations.attrs["validation"]["inheritance"] = inheritance
     violations.attrs["validation"]["profiles"] = scope_sections(rdf_map, rdf_map_scope) if rdf_map else None
     return violations
@@ -393,6 +393,7 @@ def _schema_metadata(compiled, engine_name, started, data, table_name, sections)
         "node_shapes": compiled.stats["node_shapes"],
         "constraints": compiled.stats["constraints"],
         "skipped_shapes": list(compiled.stats["skipped_shapes"]),
+        "relaxed_constraints": list(compiled.stats["relaxed_constraints"]),
         "skipped_components": sorted(compiled.plans.get(engine_name, ((), (), ()))[2]),
         "source_shapes": {},
     }
@@ -434,21 +435,23 @@ def _instances(data, table_name="triplets"):
     return data["INSTANCE_ID"].unique().tolist()
 
 
-def _report_metadata(violations, data, compiled, engine_name, started, table_name="triplets", conflicts=()):
+def _report_metadata(violations, data, compiled, engine_name, started, table_name="triplets", notes=None):
     """The validation-run facts every report exporter reads (violations.attrs).
 
     Coverage (skipped_shapes / skipped_components) is what THIS run did not
-    evaluate: the schema merge *conflicts* (every engine), compile-level skips
+    evaluate: the schema merge's skips in *notes* (every engine), compile-level skips
     plus the engine's own gaps for vectorized engines — none of those for the
-    spec-complete pyshacl reference engine.
+    spec-complete pyshacl reference engine. relaxed_constraints: the merge's
+    loosened checks.
     """
     import triplets
 
     finished = datetime.now(timezone.utc)
+    notes = notes or {"skipped_shapes": [], "relaxed_constraints": []}
     if engine_name == "pyshacl":
-        skipped_shapes, skipped_components = list(conflicts), []
+        skipped_shapes, skipped_components = list(notes["skipped_shapes"]), []
     else:
-        skipped_shapes = [*conflicts, *compiled.stats.get("skipped_shapes", [])]
+        skipped_shapes = [*notes["skipped_shapes"], *compiled.stats.get("skipped_shapes", [])]
         skipped_components = sorted({*compiled.stats.get("unknown_components", ()),
                                      *compiled.plans.get(engine_name, ((), (), ()))[2]})
     return {
@@ -463,6 +466,7 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
         "constraints": compiled.stats.get("constraints", 0),
         "language": compiled.language,
         "skipped_shapes": skipped_shapes,
+        "relaxed_constraints": list(notes["relaxed_constraints"]),
         "skipped_components": skipped_components,
         # rdflib graphs, in-memory only — the SHACL report embeds them;
         # SARIF properties and the csv/excel sidecars skip this key

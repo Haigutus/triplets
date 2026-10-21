@@ -40,8 +40,8 @@ def test_scope_errors(rdf_map_scope, match):
 
 
 def test_one_profile_is_copied_unchanged():
-    scoped, conflicts = scoped_rdf_map(SCHEMA, ["EQ"])
-    assert list(scoped) == [SCOPE_KEY] and conflicts == []
+    scoped, notes = scoped_rdf_map(SCHEMA, ["EQ"])
+    assert list(scoped) == [SCOPE_KEY] and notes == {"skipped_shapes": [], "relaxed_constraints": []}
     assert scoped[SCOPE_KEY]["IdentifiedObject.name"] == SCHEMA["EQ"]["IdentifiedObject.name"]
     assert scoped[SCOPE_KEY]["ProfileMetadata"] == {"sections": ["EQ"], "keyword": ["EQ"],
                                                     "versionIRI": ["http://example.org/EQ/1"]}
@@ -55,7 +55,7 @@ def test_merged_profile_metadata_keeps_every_identity():
 
 
 def test_merge_rules():
-    scoped, conflicts = scoped_rdf_map(SCHEMA, ["EQ", "OP"])
+    scoped, notes = scoped_rdf_map(SCHEMA, ["EQ", "OP"])
     merged = scoped[SCOPE_KEY]
     name = merged["IdentifiedObject.name"]
     assert (name["xsd:minOccours"], name["xsd:maxOccours"], name["multiplicity"]) == ("0", "n", "0..n")
@@ -64,9 +64,11 @@ def test_merge_rules():
     assert merged["Breaker"]["parameters"] == ["IdentifiedObject.name", "Switch.kind"]
     assert merged["Breaker"]["inheritance"] == [CIM + "Breaker", CIM + "Switch", CIM + "Equipment"]
     assert merged["Switch.kind"]["values"] == ["SwitchKind.a", "SwitchKind.b"]
-    assert conflicts == ["IdentifiedObject.name: cardinality relaxed to 0..n (EQ: 1..1, OP: 0..n)",
-                         "IdentifiedObject.name: datatype conflict (EQ: xsd:string, OP: xsd:integer) — not checked",
-                         "Switch.kind: enumeration values united (EQ + OP)"]
+    # not checked → skipped_shapes; checked more loosely → relaxed_constraints
+    assert notes == {
+        "skipped_shapes": ["IdentifiedObject.name: datatype conflict (EQ: xsd:string, OP: xsd:integer) — not checked"],
+        "relaxed_constraints": ["IdentifiedObject.name: cardinality relaxed to 0..n (EQ: 1..1, OP: 0..n)",
+                                "Switch.kind: enumeration values united (EQ + OP)"]}
     # merge order does not change the relaxed cardinality
     other = scoped_rdf_map(SCHEMA, ["OP", "EQ"])[0][SCOPE_KEY]["IdentifiedObject.name"]
     assert (other["xsd:minOccours"], other["xsd:maxOccours"]) == ("0", "n")
@@ -85,8 +87,8 @@ def test_root_entries():
 def test_shipped_bundles_merge_with_one_datatype_conflict(bundle, datatype_conflicts):
     """Merging every section of a shipped bundle: only CGMES 2.4.15 FH Model.version
     (integer) clashes with the other profiles (string)."""
-    _, conflicts = scoped_rdf_map(load_rdf_map(getattr(schemas, bundle)), "*")
-    assert [entry.split(":")[0] for entry in conflicts if "datatype conflict" in entry] == datatype_conflicts
+    _, notes = scoped_rdf_map(load_rdf_map(getattr(schemas, bundle)), "*")
+    assert [entry.split(":")[0] for entry in notes["skipped_shapes"]] == datatype_conflicts
 
 
 SCOPED = {
