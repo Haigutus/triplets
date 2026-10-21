@@ -257,6 +257,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`duckdb` extra capped below 2.0** (`duckdb>=1.5.3,<2`). DuckDB 2.0 refuses a
+  new query while an `execute()` result is unfinished and drops the `x -> ...`
+  lambda syntax, which the DuckDB tools, `read_rdf` and tableviews still use.
 - **NC instances resolve their profile from `dcterms:conformsTo`**, not only from
   `dcat:keyword` ([#142](https://github.com/Haigutus/triplets/issues/142)). Every
   bundle section now has `ProfileMetadata.versionIRI` (the RDFS vocabulary IRI; CGMES
