@@ -42,6 +42,8 @@ from .._registry import EngineRegistry
 from ..iri import CIM_NS, TYPE_KEY, load_rdf_map
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
 from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
+from .schema_scope import SCOPE_KEY
+from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
                            violations_to_csv, violations_to_excel)
 from .context import ENRICHMENT_COLUMNS, enrich  # noqa: F401 — public API
@@ -86,7 +88,7 @@ def get_engine(name: str = "auto"):
     return _REGISTRY.get(name)
 
 
-def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True,
+def validate(data, shapes, rdf_map=None, scope=None, rdf_map_scope=None, engine="auto", lexical=True,
              context=False, undefined_namespace=CIM_NS, inheritance=True, **kwargs):
     """Validate triplet data against SHACL shapes; return a violations DataFrame.
 
@@ -97,13 +99,19 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         SHACL shapes (format auto-detected by extension). Pass the result of
         ``compile(shapes)`` to reuse the parsed shapes across validations.
     rdf_map : dict or str, optional
-        Export schema — xsd-typed literals in the data graph, and its
-        ``inheritance`` lists for the subclass walk (see ``inheritance``).
+        Export schema — xsd-typed literals in the data graph, the schema-driven
+        sh:nodeKind decision and the class inheritance (see ``inheritance``),
+        from the profiles in ``rdf_map_scope``.
     scope : iterable of INSTANCE_ID, optional
         Validate only these instances' named graphs — data outside the scope
         is not loaded, so references into unscoped instances count as absent.
         Include dependency instances in the scope (or validate the full
         union, scope=None) for cross-instance checks.
+    rdf_map_scope : profile identifier or sequence of them, optional
+        The rdf_map profiles the run uses, merged into one: section keys
+        (``"EQ"``) and/or declared profile IRIs; ``"*"`` = every section;
+        None = the rdf_map's root entries. A scope without entries raises
+        ValueError (see ``triplets.validation.schema_scope``).
     engine : str, default "auto"
         "polars" (performance), "pandas" (debugging), "duckdb"
         (larger-than-memory) or "pyshacl" (reference). "auto" picks
@@ -120,9 +128,10 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         an rdf_map) in the graph the sh:sparql constraints and pyshacl see.
     inheritance : bool, default True
         ``sh:targetClass`` and ``sh:class`` also match instances of subclasses,
-        from the rdf_map ``inheritance`` lists (pyshacl: as ``rdfs:subClassOf``
-        in ``ont_graph``). False matches the exact ``rdf:type`` only. No effect
-        without an rdf_map.
+        from the scoped profiles' ``inheritance`` lists
+        (:func:`~triplets.validation.schema_scope.class_ancestors`; pyshacl: as
+        ``rdfs:subClassOf`` in ``ont_graph``). False matches the exact
+        ``rdf:type`` only. No effect without an rdf_map.
 
     The returned frame carries the validation-run metadata in
     ``violations.attrs["validation"]`` (start/end timestamps and duration,
@@ -134,30 +143,35 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
     rdf_map = load_rdf_map(rdf_map)        # dict from here on — the engines and enrich take only dicts
     started = datetime.now(timezone.utc)   # after compile — duration is the run, cache-independent
+    scoped, conflicts = scoped_rdf_map(rdf_map, rdf_map_scope) if rdf_map else ({}, [])
+    if rdf_map and not set(scoped[SCOPE_KEY]) - {"ProfileMetadata"}:
+        raise ValueError("rdf_map_scope selects no schema entries — name the profiles "
+                         "(section keys / profile IRIs, or '*' for all)")
+    ancestors = class_ancestors(rdf_map, rdf_map_scope) if rdf_map and inheritance else None
     engine_name, engine_mod = get_engine(engine)
     table_ref = _table_ref(data, **kwargs)
-    violations = _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical,
-                      undefined_namespace=undefined_namespace, inheritance=inheritance, **kwargs)
+    violations = _run(data, compiled, engine_name, engine_mod, scoped, scope, lexical,
+                      undefined_namespace=undefined_namespace, ancestors=ancestors, **kwargs)
     violations = _present(violations, data, compiled.ir, compiled.language, table_ref)
     if context:
         violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
     violations.attrs["validation"] = _report_metadata(
-        violations, data, compiled, engine_name, started, table_name=table_ref)
+        violations, data, compiled, engine_name, started, table_name=table_ref, conflicts=conflicts)
     violations.attrs["validation"]["inheritance"] = inheritance
     return violations
 
 
-def _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, undefined_namespace=CIM_NS,
-         inheritance=True, **kwargs):
+def _run(data, compiled, engine_name, engine_mod, rdf_map, data_scope, lexical, undefined_namespace=CIM_NS,
+         ancestors=None, **kwargs):
     """One engine pass, plus the lexical datatype supplement when the engine
     does not emit it itself — raw violations, presentation columns not yet added."""
-    violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, scope=scope,
-                                     undefined_namespace=undefined_namespace, inheritance=inheritance, **kwargs)
+    violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, data_scope=data_scope,
+                                     undefined_namespace=undefined_namespace, ancestors=ancestors, **kwargs)
     if lexical and engine_name not in _LEXICAL_BUILTIN:
         from . import shacl_pandas
-        supplement = shacl_pandas.validate(data, compiled, rdf_map=rdf_map, scope=scope,
+        supplement = shacl_pandas.validate(data, compiled, rdf_map=rdf_map, data_scope=data_scope,
                                            components=("sh:datatype",), undefined_namespace=undefined_namespace,
-                                           inheritance=inheritance)
+                                           ancestors=ancestors)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     # identical findings once: a property shape on a parent and a child node shape
     # both reach a subclass instance, the same triple sits in two instance files,
@@ -425,8 +439,7 @@ def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, u
     frames = []
     for instance, section in runs:
         sub = _run(data, compiled_set.profiles[section], engine_name, engine_mod,
-                   rdf_map, [instance], lexical, undefined_namespace=undefined_namespace,
-                   inheritance=inheritance, **kwargs)
+                   rdf_map, [instance], lexical, undefined_namespace=undefined_namespace, **kwargs)
         sub["PROFILE"] = section
         frames.append(sub)
 
@@ -500,20 +513,21 @@ def _instance_hints(data, table_name="triplets"):
     return hints
 
 
-def _report_metadata(violations, data, compiled, engine_name, started, table_name="triplets"):
+def _report_metadata(violations, data, compiled, engine_name, started, table_name="triplets", conflicts=()):
     """The validation-run facts every report exporter reads (violations.attrs).
 
     Coverage (skipped_shapes / skipped_components) is what THIS run did not
-    evaluate: compile-level skips plus the engine's own gaps for vectorized
-    engines; empty for the spec-complete pyshacl reference engine.
+    evaluate: the schema merge *conflicts* (every engine), compile-level skips
+    plus the engine's own gaps for vectorized engines — none of those for the
+    spec-complete pyshacl reference engine.
     """
     import triplets
 
     finished = datetime.now(timezone.utc)
     if engine_name == "pyshacl":
-        skipped_shapes, skipped_components = [], []
+        skipped_shapes, skipped_components = list(conflicts), []
     else:
-        skipped_shapes = compiled.stats.get("skipped_shapes", [])
+        skipped_shapes = [*conflicts, *compiled.stats.get("skipped_shapes", [])]
         skipped_components = sorted({*compiled.stats.get("unknown_components", ()),
                                      *compiled.plans.get(engine_name, ((), (), ()))[2]})
     return {

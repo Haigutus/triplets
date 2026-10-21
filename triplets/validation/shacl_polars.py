@@ -26,7 +26,7 @@ import logging
 import pandas
 import polars
 
-from .schema_ir import type_ancestors
+from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
 from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
@@ -485,8 +485,8 @@ BATCH_BUILDERS = {
 }
 
 
-def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None,
-             inheritance=True, **kwargs):
+def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
+             ancestors=None, **kwargs):
     """Validate triplet data against the compiled constraint table (lazy polars).
 
     Parameters mirror shacl_pandas.validate. Vectorized components run as one
@@ -495,8 +495,8 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     so results are identical across both.
     """
     frame = _to_polars(data)
-    if scope is not None:
-        frame = frame.filter(polars.col("INSTANCE_ID").is_in([str(s) for s in scope]))
+    if data_scope is not None:
+        frame = frame.filter(polars.col("INSTANCE_ID").is_in([str(s) for s in data_scope]))
 
     if "polars" not in compiled.plans:   # setdefault would re-split on every call
         compiled.plans["polars"] = split_rules(compiled.ir, PLAN_BUILDERS, FALLBACK_COMPONENTS, "polars")
@@ -505,7 +505,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]
 
-    context = _Context(frame, rdf_map, type_ancestors(compiled, rdf_map) if inheritance else ())
+    context = _Context(frame, rdf_map, ancestor_pairs(ancestors))
     batched, plans = {}, []
     for rule in vectorized:
         # batching joins on class membership — subjectsOf targets and two-hop
@@ -534,7 +534,7 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         from . import shacl_pandas
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
-                                           max_workers=max_workers, inheritance=inheritance, **kwargs)
+                                           max_workers=max_workers, ancestors=ancestors, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     return violations
 

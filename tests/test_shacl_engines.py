@@ -167,7 +167,7 @@ def test_node_kind_by_schema(engine):
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    v = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine=engine)
+    v = triplets.validation.validate(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine=engine)
     assert violating(v, "sh:nodeKind") == {("b1", "not-a-uuid"), ("b2", "11111111-1111-1111-1111-111111111111")}
 
 
@@ -192,7 +192,7 @@ def test_node_kind_iri_on_association_follows_schema(engine):
     graph.parse(data=PREFIX + SHAPE.format(body="sh:path cim:Equipment.EquipmentContainer ; sh:nodeKind sh:IRI"),
                 format="turtle")
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    v = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine=engine)
+    v = triplets.validation.validate(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine=engine)
     assert violating(v, "sh:nodeKind") == set()
 
 
@@ -444,7 +444,7 @@ def test_ill_typed_value_fails_sparql_engine_once_with_context():
             ("a2", "IdentifiedObject.name", "reserved", "eq")]
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
-    violations = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine="pandas")
+    violations = triplets.validation.validate(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine="pandas")
 
     notes = violations[violations["VIOLATION_TYPE"] == "triplets:invalidSparql"]
     assert len(notes) == 1, "the cached ingest failure must be reported once, not per rule"
@@ -551,7 +551,7 @@ def test_enum_violation_value_pyshacl_parity(engine):
                 format="turtle")
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
     for name in (engine, "pyshacl"):
-        v = triplets.validation.validate(data, graph, rdf_map=rdf_map, engine=name)
+        v = triplets.validation.validate(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine=name)
         assert violating(v, "sh:in") == {("b2", "SwitchKind.other")}, name
 
 
@@ -595,7 +595,7 @@ def test_abstract_target_class_walks_type_index(engine):
     graph.parse(data=PREFIX + shape, format="turtle")
     bare = triplets.validation.validate(data, graph, engine=engine)
     assert violating(bare, "sh:minCount") == set()
-    bound = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    bound = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
     # IR stays one row per constraint — walk is in the Type index, not a fan-out
     compiled = triplets.validation.compile(graph)
@@ -613,7 +613,7 @@ def test_abstract_target_keeps_direct_equipment_type_rows(engine):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    bound = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    bound = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert violating(bound, "sh:minCount") == {("b1", None), ("e1", None)}
 
 
@@ -629,7 +629,7 @@ def test_sequence_path_via_type_reads_instance_types_with_schema(engine):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert violating(v, "sh:in") == {("b2", "Substation")}
     assert violating(v, "sh:maxCount") == set()
 
@@ -644,7 +644,7 @@ def test_sh_class_accepts_subclasses_via_index(engine):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA)
+    v = triplets.validation.validate(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert violating(v, "sh:class") == {("b2", "sub1")}
 
 
@@ -660,7 +660,7 @@ def test_shape_on_parent_and_child_reports_once(engine_name):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    v = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA)
+    v = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert (v["VIOLATION_TYPE"] == "sh:minCount").sum() == 1
 
 
@@ -675,37 +675,73 @@ def test_inheritance_off_matches_exact_type(engine_name):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    on = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA)
-    off = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, inheritance=False)
+    on = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    off = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*", inheritance=False)
     assert violating(on, "sh:minCount") == {("b1", None)}
     assert violating(off, "sh:minCount") == set()
     assert off.attrs["validation"]["inheritance"] is False
 
 
-# NC-style bundle: ACLineSegment's list stops at Equipment; Breaker's list
-# is the only record of Equipment → PowerSystemResource → IdentifiedObject
-TRUNCATED_SCHEMA = {
+# NC-style bundle: SSI's ACLineSegment list stops at Equipment; Breaker's EQ list
+# runs on to IdentifiedObject; ER has its own Equipment entry; TP and EQ define
+# ConnectivityNode with different lists
+SCOPED_SCHEMA = {
     "SSI": {"ACLineSegment": {"type": "Class", "namespace": CIM,
                               "inheritance": [CIM + "ACLineSegment", CIM + "Equipment"]}},
     "EQ": {"Breaker": {"type": "Class", "namespace": CIM,
                        "inheritance": [CIM + name for name in ("Breaker", "Switch", "Equipment",
-                                                               "PowerSystemResource", "IdentifiedObject")]}},
+                                                               "PowerSystemResource", "IdentifiedObject")]},
+           "ConnectivityNode": {"type": "Class", "namespace": CIM,
+                                "inheritance": [CIM + "ConnectivityNode", CIM + "IdentifiedObject"]}},
+    "ER": {"Equipment": {"type": "Class", "namespace": CIM,
+                         "inheritance": [CIM + "Equipment", CIM + "PowerSystemResource", CIM + "IdentifiedObject"]}},
+    "TP": {"ConnectivityNode": {"type": "Class", "namespace": CIM, "inheritance": [CIM + "ConnectivityNode"]}},
 }
+IO_SHAPE = """cim:IoShape a sh:NodeShape ; sh:targetClass cim:IdentifiedObject ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+
+
+def io_shapes():
+    import rdflib
+    return rdflib.Graph().parse(data=PREFIX + IO_SHAPE, format="turtle")
 
 
 @pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
-def test_inheritance_is_transitive_across_profiles(engine_name):
-    """sh:targetClass IdentifiedObject reaches an ACLineSegment whose own list
-    stops at Equipment, like rdfs:subClassOf."""
+@pytest.mark.parametrize("instance_type, rdf_map_scope, reached", [
+    ("ACLineSegment", ["SSI"], False),
+    ("ACLineSegment", ["SSI", "EQ"], False),      # Breaker's list is no definition of Equipment
+    ("ACLineSegment", ["SSI", "ER"], True),       # through ER's own Equipment entry
+    ("ConnectivityNode", ["TP"], False),
+    ("ConnectivityNode", ["TP", "EQ"], True),     # same-named entries union their lists
+    ("ConnectivityNode", "*", True),
+], ids=["ssi", "ssi+eq", "ssi+er", "tp", "tp+eq", "all"])
+def test_inheritance_follows_the_scoped_profiles(engine_name, instance_type, rdf_map_scope, reached):
+    """sh:targetClass IdentifiedObject reaches an instance only through the scoped
+    profiles' own Class entries — the same on every engine, pyshacl included."""
     pytest.importorskip(engine_name)
-    shape = """cim:IoShape a sh:NodeShape ; sh:targetClass cim:IdentifiedObject ;
-        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
-    data = pandas.DataFrame([("a1", "Type", "ACLineSegment", "eq")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    import rdflib
-    graph = rdflib.Graph()
-    graph.parse(data=PREFIX + shape, format="turtle")
-    v = triplets.validation.validate(data, graph, engine=engine_name, rdf_map=TRUNCATED_SCHEMA)
-    assert violating(v, "sh:minCount") == {("a1", None)}
+    data = pandas.DataFrame([("a1", "Type", instance_type, "eq")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    v = triplets.validation.validate(data, io_shapes(), engine=engine_name, rdf_map=SCOPED_SCHEMA,
+                                     rdf_map_scope=rdf_map_scope)
+    assert violating(v, "sh:minCount") == ({("a1", None)} if reached else set())
+
+
+def test_rdf_map_without_scope_entries_raises():
+    """A sectioned bundle has no root entries: rdf_map_scope=None is a caller error."""
+    data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    with pytest.raises(ValueError, match="rdf_map_scope"):
+        triplets.validation.validate(data, io_shapes(), rdf_map=SCOPED_SCHEMA)
+
+
+def test_merge_conflicts_reach_the_run_metadata():
+    """A datatype conflict between the scoped profiles is listed as not checked, on pyshacl too."""
+    pytest.importorskip("pyshacl")
+    schema = {"A": {"Model.version": {"type": "Attribute", "xsd:type": "xsd:string"}},
+              "B": {"Model.version": {"type": "Attribute", "xsd:type": "xsd:integer"}}}
+    data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    for name in ("pandas", "pyshacl"):
+        v = triplets.validation.validate(data, io_shapes(), engine=name, rdf_map=schema, rdf_map_scope="*")
+        assert any("Model.version: datatype conflict" in entry
+                   for entry in v.attrs["validation"]["skipped_shapes"]), name
 
 
 def test_pyshacl_ont_graph_abstract_target():
@@ -722,7 +758,7 @@ def test_pyshacl_ont_graph_abstract_target():
     graph.parse(data=PREFIX + shape, format="turtle")
     bare = triplets.validation.validate(data, graph, engine="pyshacl")
     assert violating(bare, "sh:minCount") == set()
-    bound = triplets.validation.validate(data, graph, engine="pyshacl", rdf_map=TOY_SCHEMA)
+    bound = triplets.validation.validate(data, graph, engine="pyshacl", rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
 
 

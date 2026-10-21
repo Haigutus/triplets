@@ -213,9 +213,10 @@ def load_schema(rdf_map):
 
 def rdf_map_entries(rdf_map):
     """Every ``(name, entry)`` across profile sections, reversed so a dict comprehension
-    over it keeps the FIRST occurrence in schema order (a dict keeps the last write)."""
+    over it keeps the FIRST occurrence in schema order (a dict keeps the last write).
+    A section's ``ProfileMetadata`` describes the profile, it is no schema name."""
     return [(name, entry) for profile in load_rdf_map(rdf_map).values() if isinstance(profile, dict)
-            for name, entry in profile.items() if isinstance(entry, dict)][::-1]
+            for name, entry in profile.items() if isinstance(entry, dict) and name != "ProfileMetadata"][::-1]
 
 
 def namespaces(rdf_map):

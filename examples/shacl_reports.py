@@ -69,7 +69,7 @@ print(f"parsed {len(data):,} triples from {Path(EQ).name}")
 
 # >>> pristine data conforms: no Violations, only the lexical-form style
 # >>> Warnings of the documented datatype deviation (integer-form floats)
-pristine = data.shacl.validate(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+pristine = data.shacl.validate(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
 print(f"\npristine: {pristine['SEVERITY'].value_counts().to_dict()}")
 
 # >>> introduce three issues deliberately
@@ -87,7 +87,7 @@ broken.loc[(broken["ID"] == terminal) & (broken["KEY"] == "Terminal.ConductingEq
 
 # >>> validate again — engine="auto" is the polars executor, the Complex
 # >>> sh:sparql rules are delegated to the SPARQL engine (oxigraph)
-violations = broken.shacl.validate(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+violations = broken.shacl.validate(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
 found = violations[violations["SEVERITY"] == "Violation"]
 print(f"\nafter breaking 3 things: {len(found)} Violations")
 print(found[["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE"]].to_string(index=False, max_colwidth=60))
@@ -97,7 +97,7 @@ print(found[["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE"]].to_string(index
 # >>> stamps SOURCE_URI / SOURCE_LINE onto every violation —
 # >>> both report exports below reuse the same columns
 enriched = violations.shacl.enrich(data=broken, shapes=shapes,
-                                   rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+                                   rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*")
 located = enriched.shacl.locate(sources=[EQ])
 print("\nenriched + located Violations (what/where):")
 print(located.loc[located["SEVERITY"] == "Violation",
