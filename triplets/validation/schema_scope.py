@@ -11,21 +11,24 @@ Same-named entries combine, never stricter than the profiles run one by one:
 
 - Class: ``parameters`` and ``inheritance`` lists union.
 - Property cardinality: lowest ``xsd:minOccours``, highest ``xsd:maxOccours``
-  (``n`` = unbounded) — a warning per run names the relaxed keys.
-- Attribute ``xsd:type``: on a difference the intended type is unknown, so the
-  key is left untyped (no datatype check, plain literal) — logged as an error.
+  (``n`` = unbounded; a missing bound is no bound) — a warning per run names
+  the relaxed keys.
+- Attribute ``xsd:type``: on a difference (a definition without a type counts)
+  the intended type is unknown, so the key is left untyped (no datatype check,
+  plain literal) — logged as an error.
 - Enumeration ``values``: union, with the same warning.
 
 Each decision is returned as text: datatype conflicts for the run's
 ``skipped_shapes`` (not checked), relaxed cardinalities and united enumerations
-for its ``relaxed_constraints`` (checked, more loosely). The
+for its ``relaxed_constraints`` (checked, more loosely), each quoting every
+profile's own value. The
 merged ProfileMetadata keeps every profile's identity: ``sections`` (the
 section keys, in scope order) and each field as a list in the same order.
 """
 import logging
 
 from .._header import profile_identifiers
-from ..iri import absolute_name, is_iri, local_value, namespaces
+from ..iri import absolute_name, is_iri, load_rdf_map, local_value, namespaces
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,19 @@ def _is_section(value):
     return isinstance(value, dict) and not isinstance(value.get("type"), str)
 
 
+def _sections(rdf_map):
+    """The rdf_map's profile section keys, in schema order (a root-level
+    ProfileMetadata is not a profile)."""
+    return [name for name, value in rdf_map.items() if name != "ProfileMetadata" and _is_section(value)]
+
+
+def _root_entries(rdf_map):
+    """The rdf_map's root entries — an unsectioned, hand-made schema."""
+    sections = set(_sections(rdf_map))
+    return {name: entry for name, entry in rdf_map.items()
+            if isinstance(entry, dict) and name not in sections and name != "ProfileMetadata"}
+
+
 def scope_sections(rdf_map, rdf_map_scope):
     """Section keys an ``rdf_map_scope`` names, in the given order; ``None`` → None (root).
 
@@ -52,14 +68,14 @@ def scope_sections(rdf_map, rdf_map_scope):
     if ALL in identifiers:
         if len(identifiers) > 1:
             raise ValueError(f"rdf_map_scope {ALL!r} means every profile — do not combine it with others")
-        return [name for name, value in rdf_map.items() if _is_section(value)]
-    index = profile_identifiers(rdf_map)
+        return _sections(rdf_map)
+    index, valid = profile_identifiers(rdf_map), set(_sections(rdf_map))
     sections = []
     for identifier in map(str, identifiers):
-        found = index.get(identifier)
+        found = [name for name in index.get(identifier, ()) if name in valid]
         if not found:
             raise ValueError(f"unknown rdf_map_scope profile {identifier!r}; available: "
-                             f"{', '.join(name for name, value in rdf_map.items() if _is_section(value))}")
+                             f"{', '.join(_sections(rdf_map))}")
         if len(found) > 1:
             raise ValueError(f"rdf_map_scope {identifier!r} is declared by several profiles "
                              f"({', '.join(found)}) — name them by section key")
@@ -89,53 +105,60 @@ def _merged_entries(rdf_map, rdf_map_scope):
     """(sections, merged entries, notes) — the merge without logging."""
     sections = scope_sections(rdf_map, rdf_map_scope)
     if sections is None:
-        sources = [(None, {name: entry for name, entry in rdf_map.items()
-                           if isinstance(entry, dict) and not _is_section(entry)})]
+        sources = [(None, _root_entries(rdf_map))]
     else:
         sources = [(section, rdf_map[section]) for section in sections]
-    merged, origin, notes = {}, {}, {"skipped_shapes": [], "relaxed_constraints": []}
+    merged, notes = {}, {"skipped_shapes": [], "relaxed_constraints": []}
     if sections is not None:
         metadata = [rdf_map[section].get("ProfileMetadata", {}) for section in sections]
         fields = dict.fromkeys(field for each in metadata for field in each)
         merged["ProfileMetadata"] = {"sections": list(sections),
                                      **{field: [each.get(field) for each in metadata] for field in fields}}
+    definitions = {}                       # name → [(section, entry)] in scope order
     for section, entries in sources:
         for name, entry in entries.items():
-            if name == "ProfileMetadata":      # merged above, field by field
-                continue
-            if name not in merged:
-                merged[name], origin[name] = (dict(entry) if isinstance(entry, dict) else entry), section
-            elif isinstance(entry, dict) and isinstance(merged[name], dict):
-                _merge_entry(name, merged[name], entry, origin[name], section, notes)
+            if name != "ProfileMetadata":  # merged above, field by field
+                definitions.setdefault(name, []).append((section, entry))
+    for name, found in definitions.items():
+        first = found[0][1]
+        merged[name] = dict(first) if isinstance(first, dict) else first
+        if len(found) > 1 and isinstance(first, dict):
+            _merge_entry(name, merged[name], [(section, entry) for section, entry in found
+                                              if isinstance(entry, dict)], notes)
     return sections, merged, notes
 
 
-def _merge_entry(name, merged, entry, first, section, notes):
-    """Combine a later profile's *entry* into *merged* (the rules in the module docstring)."""
+def _merge_entry(name, merged, found, notes):
+    """Combine every profile's definition of *name* (``found``: ``[(section, entry)]``)
+    into *merged* — the rules in the module docstring; notes quote each profile's own value."""
     kind = merged.get("type")
     if kind == "Class":
         for field in ("parameters", "inheritance"):
-            if entry.get(field):
-                merged[field] = list(dict.fromkeys([*merged.get(field, ()), *entry[field]]))
+            values = [value for _, entry in found for value in entry.get(field, ())]
+            if values:
+                merged[field] = list(dict.fromkeys(values))
         return
     if kind not in _PROPERTY_TYPES:
         return
-    low = [merged.get("xsd:minOccours", ""), entry.get("xsd:minOccours", "")]
-    high = [merged.get("xsd:maxOccours", ""), entry.get("xsd:maxOccours", "")]
-    if low[0] != low[1] or high[0] != high[1]:
-        merged["xsd:minOccours"] = min(low, key=lambda value: int(value) if value.isdigit() else 0)
-        merged["xsd:maxOccours"] = ("n" if "n" in high else
-                                    max(high, key=lambda value: int(value) if value.isdigit() else -1))
+    low = [entry.get("xsd:minOccours", "") for _, entry in found]
+    high = [entry.get("xsd:maxOccours", "") for _, entry in found]
+    if len(set(low)) > 1 or len(set(high)) > 1:
+        # a missing / non-numeric bound is no bound: min 0, max unbounded
+        merged["xsd:minOccours"] = min(low, key=int) if all(value.isdigit() for value in low) else "0"
+        merged["xsd:maxOccours"] = max(high, key=int) if all(value.isdigit() for value in high) else "n"
         merged["multiplicity"] = f"{merged['xsd:minOccours']}..{merged['xsd:maxOccours']}"
-        notes["relaxed_constraints"].append(f"{name}: cardinality relaxed to {merged['multiplicity']} "
-                         f"({first}: {low[0]}..{high[0]}, {section}: {low[1]}..{high[1]})")
-    datatype = merged.get("xsd:type")
-    if kind == "Attribute" and datatype and entry.get("xsd:type", datatype) != datatype:
-        notes["skipped_shapes"].append(f"{name}: datatype conflict ({first}: {merged.pop('xsd:type')}, "
-                         f"{section}: {entry['xsd:type']}) — not checked")
-    if kind == "Enumeration" and set(entry.get("values", ())) != set(merged.get("values", ())):
-        merged["values"] = list(dict.fromkeys([*merged.get("values", ()), *entry.get("values", ())]))
-        notes["relaxed_constraints"].append(f"{name}: enumeration values united ({first} + {section})")
+        each = ", ".join(f"{section}: {lower}..{upper}" for (section, _), lower, upper in zip(found, low, high))
+        notes["relaxed_constraints"].append(f"{name}: cardinality relaxed to {merged['multiplicity']} ({each})")
+    types = [entry.get("xsd:type") for _, entry in found]
+    if kind == "Attribute" and len(set(types)) > 1:
+        merged.pop("xsd:type", None)
+        each = ", ".join(f"{section}: {datatype or 'untyped'}" for (section, _), datatype in zip(found, types))
+        notes["skipped_shapes"].append(f"{name}: datatype conflict ({each}) — not typed or checked by the schema")
+    values = [entry.get("values", ()) for _, entry in found]
+    if kind == "Enumeration" and len({frozenset(value) for value in values}) > 1:
+        merged["values"] = list(dict.fromkeys(value for each in values for value in each))
+        notes["relaxed_constraints"].append(
+            f"{name}: enumeration values united ({' + '.join(section for section, _ in found)})")
 
 
 def class_ancestors(rdf_map, rdf_map_scope=None):
@@ -146,7 +169,12 @@ def class_ancestors(rdf_map, rdf_map_scope=None):
     ancestors that have a Class entry of their own in the scope — another
     class's list is never read as a definition of its parents.
     """
-    entries = _merged_entries(rdf_map, rdf_map_scope)[1] if rdf_map else {}
+    rdf_map = load_rdf_map(rdf_map)
+    return _class_ancestors(_merged_entries(rdf_map, rdf_map_scope)[1] if rdf_map else {})
+
+
+def _class_ancestors(entries):
+    """:func:`class_ancestors` over already-merged scope entries."""
     direct = {name: {step for step in entry.get("inheritance", ()) if local_value(step, "class") != name}
               for name, entry in entries.items()
               if isinstance(entry, dict) and entry.get("type") == "Class"}
@@ -163,6 +191,16 @@ def class_ancestors(rdf_map, rdf_map_scope=None):
         return closed[name]
 
     return {name: walk(name, frozenset()) for name in direct}
+
+
+def require_entries(entries, rdf_map_scope, classes=False):
+    """ValueError when the scope leaves nothing to validate against: no entries at
+    all, or — *classes* — no Class entries (the schema validations' targets)."""
+    found = (any(isinstance(entry, dict) and entry.get("type") == "Class" for entry in entries.values())
+             if classes else bool(set(entries) - {"ProfileMetadata"}))
+    if not found:
+        raise ValueError(f"rdf_map_scope {rdf_map_scope!r} selects no {'Class ' if classes else ''}entries — "
+                         "name the profiles (section keys / profile IRIs, or '*' for all)")
 
 
 def ancestor_pairs(ancestors):
