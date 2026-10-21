@@ -56,7 +56,7 @@ def violations(shapes):
 
 
 def test_enrich_all_sources(violations, shapes):
-    result = enrich(violations, data=DATA, shapes=shapes, rdf_map=RDF_MAP)
+    result = enrich(violations, data=DATA, shapes=shapes, rdf_map=RDF_MAP, rdf_map_scope="EQ")
     assert len(result) == 1
     row = result.iloc[0]
     assert row["VIOLATION_TYPE"] == "sh:minCount"
@@ -80,15 +80,16 @@ def test_enrich_sources_optional(violations):
     assert only_data["OBJECT_NAME"].iloc[0] == "Line 1"
     assert only_data["SHAPE_NAME"].isna().all()
 
-    only_schema = enrich(violations, rdf_map=RDF_MAP)
+    only_schema = enrich(violations, rdf_map=RDF_MAP, rdf_map_scope="EQ")
     assert only_schema["SCHEMA_MULTIPLICITY"].iloc[0] == "1..1"
+    assert enrich(violations, rdf_map=RDF_MAP)["SCHEMA_MULTIPLICITY"].isna().all()   # no profiles: root, empty here
     assert only_schema["CLASS_DESCRIPTION"].isna().all()   # needs OBJECT_TYPE from data
 
 
 def test_enrich_after_validate(shapes):
     violations = triplets.validation.validate_shacl(DATA, shapes, engine="pandas", rdf_map=RDF_MAP, rdf_map_scope="*")
     assert "TARGET" not in violations.columns                # what was found comes from enrich
-    result = enrich(violations, data=DATA, shapes=shapes, rdf_map=RDF_MAP, rdf_map_scope="*")
+    result = enrich(violations, data=DATA, shapes=shapes, rdf_map=RDF_MAP)   # the run's profiles from attrs
     assert set(ENRICHMENT_COLUMNS) <= set(result.columns)
     assert result["OBJECT_NAME"].iloc[0] == "Line 1"
     assert result["SCHEMA_DESCRIPTION"].iloc[0].startswith("Segment length")
@@ -148,19 +149,19 @@ def test_schema_context_is_looked_up_by_profile():
     assert enrich(violations, rdf_map=rdf_map, rdf_map_scope="AS")["SCHEMA_DESCRIPTION"].tolist() == ["as", "as"]
     merged = enrich(violations.assign(PROFILE=[["AS", "SIS"]] * 2), rdf_map=rdf_map)
     assert merged["SCHEMA_MULTIPLICITY"].tolist() == ["0..1", "0..1"]
-    fallback = enrich(violations, rdf_map=rdf_map)                    # no profile: first-wins view
-    assert fallback["SCHEMA_MULTIPLICITY"].tolist() == ["0..1", "0..1"]
+    unscoped = enrich(violations, rdf_map=rdf_map)                    # no profiles: the (empty) root
+    assert unscoped["SCHEMA_MULTIPLICITY"].isna().all()
 
 
 def test_schema_context_reads_the_merged_scope():
     """Profiles merged for a run: a KEY only the second defines comes from that
-    profile, not the first-wins view of every section."""
+    profile; another profile's text is never borrowed."""
     rdf_map = {"EQ": {"ProfileMetadata": {"keyword": "EQ"}, "A.x": {"type": "Attribute", "multiplicity": "0..1"}},
                "OTHER": {"ProfileMetadata": {"keyword": "OTHER"}, "A.y": {"type": "Attribute", "multiplicity": "0..n"}},
                "SC": {"ProfileMetadata": {"keyword": "SC"}, "A.y": {"type": "Attribute", "multiplicity": "1..1"}}}
     violations = pandas.DataFrame({"ID": ["a1"], "KEY": ["A.y"], "VALUE": [None], "VIOLATION_TYPE": ["sh:minCount"],
                                    "MESSAGE": [""], "SEVERITY": ["Violation"], "SOURCE_SHAPE": [None]})
-    assert enrich(violations, rdf_map=rdf_map)["SCHEMA_MULTIPLICITY"].tolist() == ["0..n"]
+    assert enrich(violations, rdf_map=rdf_map, rdf_map_scope="EQ")["SCHEMA_MULTIPLICITY"].tolist() == [None]
     assert enrich(violations, rdf_map=rdf_map, rdf_map_scope=["EQ", "SC"])["SCHEMA_MULTIPLICITY"].tolist() == ["1..1"]
 
 
