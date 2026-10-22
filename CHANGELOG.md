@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Vectorized engines walk `sh:targetObjectsOf` and `sh:targetNode`** (IR
+  `target_by="VALUE"` — the VALUEs under the KEY, referenced objects whether
+  described in the data or not — and `target_by="ID"` — one ID, in the data or
+  not, so the ENTSO-E `sh:targetNode cim:IDuniqueness` idiom gives a dataset-wide
+  `sh:sparql` its focus). Same findings as pyshacl on pandas, polars and duckdb.
+  Only `sh:targetClass` and `sh:class` follow the schema inheritance. `sh:rule`
+  shapes are listed in `skipped_shapes` (pyshacl applies rules, the vectorized
+  engines never do).
 - **`cim-diff` report options**: `--stat` (counts per type only), `--include TYPE`
   (only these classes, also in `cim-spreadsheet`), `--context KEY` (unchanged
   values of KEY shown in each changed object, e.g. `IdentifiedObject.name`).

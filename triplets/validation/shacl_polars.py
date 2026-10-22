@@ -61,7 +61,7 @@ class _Context:
                                     for key, ids in self._class_ids.items()}
         self._all_ids = frame["ID"].unique().implode()
         self._frame = frame
-        self._subjects = {}   # KEY → (ids, imploded) for sh:targetSubjectsOf focus
+        self._subjects = {}   # (column, KEY) → (ids, imploded) for KEY / VALUE targets
 
     def class_ids(self, class_name):
         """Flat ID Series (plan *data*, e.g. focus_frame)."""
@@ -75,23 +75,34 @@ class _Context:
     def all_ids(self):
         return self._all_ids
 
-    def _subjects_of(self, key):
-        if key not in self._subjects:
-            ids = self._frame.filter(polars.col("KEY") == key)["ID"].unique()
-            self._subjects[key] = (ids, ids.implode())
-        return self._subjects[key]
+    def _ids_of(self, key, column):
+        """(ids, imploded) of the KEY's rows at *column* — ID (targetSubjectsOf)
+        or VALUE (targetObjectsOf), computed once per KEY."""
+        cache_key = (column, key)
+        if cache_key not in self._subjects:
+            ids = self._frame.filter(polars.col("KEY") == key)[column].unique().rename("ID")
+            self._subjects[cache_key] = (ids, ids.implode())
+        return self._subjects[cache_key]
+
+    def _focus(self, rule):
+        """(flat IDs, imploded IDs) the rule applies to, by ``target_by``."""
+        by = getattr(rule, "target_by", "Type")
+        if by == "KEY":
+            return self._ids_of(rule.target_on, "ID")
+        if by == "VALUE":
+            return self._ids_of(rule.target_on, "VALUE")
+        if by == "ID":
+            ids = polars.Series("ID", [rule.target_on], dtype=polars.Utf8)
+            return ids, ids.implode()
+        return self.class_ids(rule.target_on), self.class_ids_in(rule.target_on)
 
     def focus_ids(self, rule):
         """Flat focus ID Series (plan data, e.g. focus_frame)."""
-        if getattr(rule, "target_by", "Type") == "KEY":
-            return self._subjects_of(rule.target_on)[0]
-        return self.class_ids(rule.target_on)
+        return self._focus(rule)[0]
 
     def focus_ids_in(self, rule):
         """Imploded focus IDs for is_in membership tests."""
-        if getattr(rule, "target_by", "Type") == "KEY":
-            return self._subjects_of(rule.target_on)[1]
-        return self.class_ids_in(rule.target_on)
+        return self._focus(rule)[1]
 
     def path_rows(self, rule):
         """The rule's path as a lazy (FOCUS, PATH_VALUE) plan, restricted to the rule's focus."""

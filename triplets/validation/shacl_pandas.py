@@ -144,13 +144,18 @@ class _Context:
 
     def focus(self, rule):
         """The rule's focus nodes: an explicit ``focus_ids`` (set by sh:node — the
-        referenced value nodes), the subjects carrying the target property
-        (sh:targetSubjectsOf), or all instances of the rule's target class."""
+        referenced value nodes), else what ``target_by`` names: the IDs having
+        the KEY, the VALUEs under the KEY, the one ID, or the Type's instances."""
         focus_ids = getattr(rule, "focus_ids", None)
         if focus_ids is not None:
             return focus_ids
-        if getattr(rule, "target_by", "Type") == "KEY":
+        by = getattr(rule, "target_by", "Type")
+        if by == "KEY":
             return self.key_rows(rule.target_on)["ID"].unique()
+        if by == "VALUE":
+            return self.key_rows(rule.target_on)["VALUE"].astype(str).unique()
+        if by == "ID":
+            return numpy.array([rule.target_on], dtype=object)
         return self.class_ids(rule.target_on)
 
     def path_rows(self, rule):
