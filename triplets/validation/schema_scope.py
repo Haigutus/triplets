@@ -28,32 +28,13 @@ section keys, in scope order) and each field as a list in the same order.
 import logging
 
 from .._header import profile_identifiers
-from ..iri import absolute_name, is_iri, load_rdf_map, local_value, namespaces
+from ..iri import _root_entries, _sections, absolute_name, is_iri, load_rdf_map, local_value, namespaces
 
 logger = logging.getLogger(__name__)
 
 ALL = "*"
 SCOPE_KEY = "rdf_map_scope"   # dict key of the merged section — internal, never parsed or shown
 _PROPERTY_TYPES = ("Attribute", "Association", "Enumeration")
-
-
-def _is_section(value):
-    """A profile section — a dict of entries; an entry is a dict with a ``type`` string
-    (a section may hold an entry *named* ``type``)."""
-    return isinstance(value, dict) and not isinstance(value.get("type"), str)
-
-
-def _sections(rdf_map):
-    """The rdf_map's profile section keys, in schema order (a root-level
-    ProfileMetadata is not a profile)."""
-    return [name for name, value in rdf_map.items() if name != "ProfileMetadata" and _is_section(value)]
-
-
-def _root_entries(rdf_map):
-    """The rdf_map's root entries — an unsectioned, hand-made schema."""
-    sections = set(_sections(rdf_map))
-    return {name: entry for name, entry in rdf_map.items()
-            if isinstance(entry, dict) and name not in sections and name != "ProfileMetadata"}
 
 
 def scope_sections(rdf_map, rdf_map_scope):

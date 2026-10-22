@@ -211,12 +211,37 @@ def load_schema(rdf_map):
     return json.loads(content), hashlib.sha256(content).hexdigest(), os.path.basename(str(rdf_map))
 
 
+_SCHEMA_METADATA = ("ProfileMetadata", "ProfileNamespaceMap")
+"""A profile's own description and prefixes, in a section or at a flat schema's root:
+neither a profile section nor a schema name."""
+
+
+def _is_section(value):
+    """A profile section — a dict of entries; an entry is a dict with a ``type`` string
+    (a section may hold an entry *named* ``type``)."""
+    return isinstance(value, dict) and not isinstance(value.get("type"), str)
+
+
+def _sections(rdf_map):
+    """The rdf_map's profile section keys, in schema order."""
+    return [name for name, value in rdf_map.items() if name not in _SCHEMA_METADATA and _is_section(value)]
+
+
+def _root_entries(rdf_map):
+    """The rdf_map's root entries — an unsectioned, hand-made schema (a sectioned bundle has none)."""
+    return {name: entry for name, entry in rdf_map.items()
+            if name not in _SCHEMA_METADATA and isinstance(entry, dict) and not _is_section(entry)}
+
+
 def rdf_map_entries(rdf_map):
-    """Every ``(name, entry)`` across profile sections, reversed so a dict comprehension
-    over it keeps the FIRST occurrence in schema order (a dict keeps the last write).
-    A section's ``ProfileMetadata`` describes the profile, it is no schema name."""
-    return [(name, entry) for profile in load_rdf_map(rdf_map).values() if isinstance(profile, dict)
-            for name, entry in profile.items() if isinstance(entry, dict) and name != "ProfileMetadata"][::-1]
+    """Every ``(name, entry)`` of the schema: the root entries, then each profile section's in
+    schema order — reversed so a dict comprehension over it keeps the FIRST (a dict keeps the
+    last write). A name both the root and a section define takes the root entry: the root is
+    what validation reads by default (``rdf_map_scope=None``)."""
+    rdf_map = load_rdf_map(rdf_map)
+    sources = [_root_entries(rdf_map), *(rdf_map[name] for name in _sections(rdf_map))]
+    return [(name, entry) for entries in sources for name, entry in entries.items()
+            if isinstance(entry, dict) and name not in _SCHEMA_METADATA][::-1]
 
 
 def namespaces(rdf_map):

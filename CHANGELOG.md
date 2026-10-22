@@ -257,6 +257,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **A flat schema (entries at the root, no profile sections) fills the IRI maps**
+  ([#128](https://github.com/Haigutus/triplets/issues/128)). `export_to_nquads` wrote
+  every name under `http://triplets#` without datatypes, and `sparql.query`,
+  `read_nquads(rdf_map=)` and the SHACL report got no namespaces. A root dict with a
+  `type` string is an entry, one without is a section; a name both define takes the root entry.
 - **polars tableviews return rows in a fixed order**, sorted by ID like pandas
   (`type_tableview`, `key_tableview`, `id_tableview`). Row order changed from call to
   call, so float sums over a view, such as `scale_load`, differed in the last digits.
