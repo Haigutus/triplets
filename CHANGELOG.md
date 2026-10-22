@@ -74,6 +74,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   [application-profiles-library](https://github.com/entsoe/application-profiles-library)
   release branch `ncp-v2-5-0` (`NCP/RDFS`, tag `ncp-2.5.0`). DatasetMetadata header attributes bind again via `schema:domainIncludes`
   ([#99](https://github.com/entsoe/application-profiles-library/pull/99) / [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
+- **`sh:deactivated` honoured; `validate_shacl(deactivated_shapes=)`** — every
+  shape compiles once; `compiled.deactivated` lists the shapes the graph
+  declares `sh:deactivated`, and the run's rule set is `compiled.active(...)`:
+  the declared set switched off, or the caller's set instead of it (None =
+  declared, `[]` = run everything) before any engine runs (node, property and
+  standalone property shapes, `sh:node` targets, logical members; paths stay
+  declared under `sh:closed`; truthiness as pyshacl, a plain `"false"`
+  deactivates). pyshacl receives the same set. One compiled base serves the
+  NC validation aggregates that switch different shapes off. IR rows carry
+  their lineage in a `shapes` column.
 
 ### Changed
 - **Breaking — `sparql.query(scope=)` → `data_scope=`**, matching the validations
@@ -271,6 +281,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every name under `http://triplets#` without datatypes, and `sparql.query`,
   `read_nquads(rdf_map=)` and the SHACL report got no namespaces. A root dict with a
   `type` string is an entry, one without is a section; a name both define takes the root entry.
+- SHACL report `sh:resultPath` takes the schema namespace with `rdf_map=`:
+  regression test ([#133](https://github.com/Haigutus/triplets/issues/133)).
 - **polars tableviews return rows in a fixed order**, sorted by ID like pandas
   (`type_tableview`, `key_tableview`, `id_tableview`). Row order changed from call to
   call, so float sums over a view, such as `scale_load`, differed in the last digits.
