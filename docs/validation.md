@@ -147,8 +147,8 @@ registries that consume it are internal.
 |-------|------|---------|
 | `shape_id` | str | full shape IRI (blank-node id for anonymous property shapes) — becomes `SOURCE_SHAPE` in reports and the join key for `enrich` |
 | `shapes` | tuple[str] | lineage: the shape ids whose switch-off removes the row, outermost first — NodeShape → property shape → `sh:node` target / logical member → the defining shape (nested row dicts carry it too) |
-| `target_class` | str | local name: the class for `target_kind="class"`, the property KEY for `"subjectsOf"` |
-| `target_kind` | `"class"` / `"subjectsOf"` | which target declaration produced the row |
+| `target_on` | str | what the shape applies to, named by `target_by`: the Type name (`sh:targetClass`) or the KEY (`sh:targetSubjectsOf`) |
+| `target_by` | `"Type"` / `"KEY"` | how the rows are picked: `Type` = objects of that Type (subclasses with `inheritance`); `KEY` = objects having that KEY |
 | `path` | str \| None | the property as one triplet KEY (local name); None for node-level constraints (`sh:closed`, node-level `sh:sparql`) |
 | `inverse` | bool | `sh:inversePath` — engines swap the FOCUS/VALUE direction |
 | `via_type` | bool | the `( assoc rdf:type )` sequence path: the value nodes are the referenced objects' *types* |

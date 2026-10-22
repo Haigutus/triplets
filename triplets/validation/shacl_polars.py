@@ -63,13 +63,13 @@ class _Context:
         self._frame = frame
         self._subjects = {}   # KEY → (ids, imploded) for sh:targetSubjectsOf focus
 
-    def class_ids(self, target_class):
+    def class_ids(self, class_name):
         """Flat ID Series (plan *data*, e.g. focus_frame)."""
-        return self._class_ids.get(target_class, _NO_IDS)
+        return self._class_ids.get(class_name, _NO_IDS)
 
-    def class_ids_in(self, target_class):
+    def class_ids_in(self, class_name):
         """Imploded ID Series for is_in membership tests."""
-        return self._class_ids_imploded.get(target_class, _NO_IDS_IMPLODED)
+        return self._class_ids_imploded.get(class_name, _NO_IDS_IMPLODED)
 
     @property
     def all_ids(self):
@@ -83,15 +83,15 @@ class _Context:
 
     def focus_ids(self, rule):
         """Flat focus ID Series (plan data, e.g. focus_frame)."""
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
-            return self._subjects_of(rule.target_class)[0]
-        return self.class_ids(rule.target_class)
+        if getattr(rule, "target_by", "Type") == "KEY":
+            return self._subjects_of(rule.target_on)[0]
+        return self.class_ids(rule.target_on)
 
     def focus_ids_in(self, rule):
         """Imploded focus IDs for is_in membership tests."""
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
-            return self._subjects_of(rule.target_class)[1]
-        return self.class_ids_in(rule.target_class)
+        if getattr(rule, "target_by", "Type") == "KEY":
+            return self._subjects_of(rule.target_on)[1]
+        return self.class_ids_in(rule.target_on)
 
     def path_rows(self, rule):
         """The rule's path as a lazy (FOCUS, PATH_VALUE) plan, restricted to the rule's focus."""
@@ -355,7 +355,7 @@ def _rules_frame(rules, message, **extra):
     """The rules of one component as plan data (message = default-text builder)."""
     columns = {
         "KEY": [rule.path for rule in rules],
-        "CLASS": [rule.target_class for rule in rules],
+        "CLASS": [rule.target_on for rule in rules],
         "MESSAGE": [rule.message or message(rule) for rule in rules],
         "SEVERITY": [rule.severity for rule in rules],
         "SOURCE_SHAPE": [rule.shape_id for rule in rules],
@@ -473,7 +473,7 @@ def _batch_in(context, rules):
         rules, lambda r: f"value is not one of {sorted(str(v) for v in r.params)}")
     allowed = polars.LazyFrame({
         "KEY": [rule.path for rule in rules for _ in rule.params],
-        "CLASS": [rule.target_class for rule in rules for _ in rule.params],
+        "CLASS": [rule.target_on for rule in rules for _ in rule.params],
         "SOURCE_SHAPE": [rule.shape_id for rule in rules for _ in rule.params],
         "_LOCAL": [str(value) for rule in rules for value in rule.params],
     })
@@ -516,11 +516,11 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     context = _Context(frame, rdf_map, ancestor_pairs(ancestors))
     batched, plans = {}, []
     for rule in vectorized:
-        # batching joins on class membership — subjectsOf targets and two-hop
+        # batching joins on class membership — KEY targets and two-hop
         # (via_type) paths take the per-rule path
         if (rule.component in BATCH_BUILDERS and not rule.inverse
                 and not getattr(rule, "via_type", False)
-                and getattr(rule, "target_kind", "class") == "class"):
+                and getattr(rule, "target_by", "Type") == "Type"):
             batched.setdefault(rule.component, []).append(rule)
         elif (plan := PLAN_BUILDERS[rule.component](context, rule)) is not None:
             plans.append(plan)

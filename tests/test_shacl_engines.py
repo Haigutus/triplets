@@ -359,7 +359,7 @@ def test_node_cycle_dropped(engine):
     assert violating(v, "sh:node") == {("b1", "x1")}   # x1 has no name
 
 
-def test_target_class_isolation(engine):
+def test_target_isolation(engine):
     """Constraints only apply to the target class — other types are untouched."""
     rows = breaker("b1") + [("d1", "Type", "Disconnector", "eq")]
     v = run(rows, SHAPE.format(body="sh:path cim:IdentifiedObject.name ; sh:minCount 1"), engine)
@@ -587,7 +587,7 @@ TOY_SCHEMA = {"EQ": {
 }}
 
 
-def test_abstract_target_class_walks_type_index(engine):
+def test_abstract_target_walks_type_index(engine):
     """sh:targetClass Equipment hits Breaker/Disconnector via a precomputed
     Type index (IR is not fanned out). Without rdf_map, match is exact."""
     shape = """cim:EqShape a sh:NodeShape ; sh:targetClass cim:Equipment ;
@@ -604,7 +604,7 @@ def test_abstract_target_class_walks_type_index(engine):
     assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
     # IR stays one row per constraint — walk is in the Type index, not a fan-out
     compiled = triplets.validation.compile(graph)
-    assert compiled.ir["target_class"].tolist() == ["Equipment"]
+    assert compiled.ir["target_on"].tolist() == ["Equipment"]
 
 
 def test_abstract_target_keeps_direct_equipment_type_rows(engine):

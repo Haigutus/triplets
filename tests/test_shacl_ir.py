@@ -85,7 +85,7 @@ def test_ir_columns_and_components(shape_file):
     ir = compile_shapes(shape_file).ir
     assert list(ir.columns) == IR_COLUMNS
     assert set(ir["component"]) <= KNOWN_COMPONENTS
-    assert (ir["target_class"] == "Breaker").all()
+    assert (ir["target_on"] == "Breaker").all()
 
     by_component = ir.set_index("component")
     # closed params = compile-time allowed list: ignoredProperties + this shape's

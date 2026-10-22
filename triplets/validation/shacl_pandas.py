@@ -123,8 +123,8 @@ class _Context:
                             in self.data.groupby("KEY", observed=True, sort=False)}
         return self._by_key.get(key, self.data.iloc[0:0])
 
-    def class_ids(self, target_class):
-        """IDs of all instances of *target_class*, subclasses included (``ancestors``)."""
+    def class_ids(self, class_name):
+        """IDs of all instances of *class_name*, subclasses included (``ancestors``)."""
         if self._class_ids is None:
             types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype({"VALUE": object})
             if self.ancestors:
@@ -133,7 +133,7 @@ class _Context:
                 types = pandas.concat([types, wider], ignore_index=True)
             self._class_ids = {value: frame["ID"].unique() for value, frame
                                in types.groupby("VALUE", sort=False)}
-        return self._class_ids.get(target_class, _NO_IDS)
+        return self._class_ids.get(class_name, _NO_IDS)
 
     @property
     def all_ids(self):
@@ -149,9 +149,9 @@ class _Context:
         focus_ids = getattr(rule, "focus_ids", None)
         if focus_ids is not None:
             return focus_ids
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
-            return self.key_rows(rule.target_class)["ID"].unique()
-        return self.class_ids(rule.target_class)
+        if getattr(rule, "target_by", "Type") == "KEY":
+            return self.key_rows(rule.target_on)["ID"].unique()
+        return self.class_ids(rule.target_on)
 
     def path_rows(self, rule):
         """The rule's path as (FOCUS, PATH_VALUE) pairs, restricted to the rule's focus.
@@ -183,8 +183,8 @@ class _Context:
     def pair_rows(self, rule, other_path):
         """FOCUS + both paths' values, for the pair constraints (equals/disjoint/lessThan)."""
         left = self.path_rows(rule)
-        other = SimpleNamespace(target_class=rule.target_class,
-                                target_kind=getattr(rule, "target_kind", "class"),
+        other = SimpleNamespace(target_on=rule.target_on,
+                                target_by=getattr(rule, "target_by", "Type"),
                                 path=other_path, inverse=False,
                                 focus_ids=getattr(rule, "focus_ids", None))
         right = self.path_rows(other).rename(columns={"PATH_VALUE": "OTHER_VALUE"})
@@ -496,7 +496,7 @@ def _not_evaluated(rule, error):
     """The message for a constraint no engine could run: name the shape and
     its target/path (anonymous property shapes only have a blank-node id),
     say plainly that nothing was checked — a shapes bug, not a data finding."""
-    where = f"{rule.target_class}/{rule.path}" if rule.path else rule.target_class
+    where = f"{rule.target_on}/{rule.path}" if rule.path else rule.target_on
     return (f"sh:sparql constraint of shape {split_iri(str(rule.shape_id))[1]} ({where}) was "
             f"NOT evaluated — the query is defective on every engine "
             f"(rdflib: {str(error).splitlines()[0]}). "
