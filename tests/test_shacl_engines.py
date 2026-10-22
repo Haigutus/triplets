@@ -985,3 +985,105 @@ def test_property_logical_operators_judge_value_nodes(engine_name, shape, proper
     v = triplets.validation.validate_shacl(data, graph, engine=engine_name, lexical=False)
     component = "sh:or" if shape is VALUE_OR else "sh:not"
     assert violating(v, component) == expected
+
+
+# ── sh:targetNode / sh:targetObjectsOf ───────────────────────────────────────
+
+def frame(rows):
+    return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+
+# references are IRIs in the graph pyshacl sees only when the schema says so
+REFERENCES = {"EQ": {"Equipment.EquipmentContainer": {"type": "Association"}}}
+
+
+def parity(rows, shape, engine, component, data_scope=None, rdf_map=None):
+    """The engine's violating set, asserted equal to pyshacl's."""
+    pytest.importorskip("pyshacl")
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    found = {name: violating(triplets.validation.validate_shacl(
+        frame(rows), graph, engine=name, data_scope=data_scope, lexical=False,
+        rdf_map=rdf_map, rdf_map_scope="*" if rdf_map else None), component)
+             for name in (engine, "pyshacl")}
+    assert found[engine] == found["pyshacl"], found
+    return found[engine]
+
+
+def test_target_node_present_and_absent(engine):
+    """sh:targetNode picks one ID, in the data or not — an absent node still
+    fails sh:minCount (SHACL: a targetNode is a focus node unconditionally)."""
+    shape = """cim:Picked a sh:NodeShape ;
+        sh:targetNode <urn:uuid:b1>, <urn:uuid:absent> ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = breaker("b1") + breaker("b2")
+    assert parity(rows, shape, engine, "sh:minCount") == {("b1", None), ("absent", None)}
+
+
+def test_target_node_virtual_iri_with_sparql(engine):
+    """The ENTSO-E idiom: sh:targetNode names a class IRI that is in no data,
+    only to give a dataset-wide sh:sparql constraint a focus; the finding's ID
+    is that IRI and VALUE the offending object."""
+    shape = '''cim:Virtual a sh:NodeShape ; sh:targetNode cim:IDuniqueness ;
+        sh:property [ sh:path rdf:type ;
+            sh:sparql [ a sh:SPARQLConstraint ; sh:message "no name" ;
+                sh:select """SELECT $this ?value WHERE { ?value a <http://iec.ch/TC57/CIM100#Breaker> .
+                           FILTER NOT EXISTS { ?value <http://iec.ch/TC57/CIM100#IdentifiedObject.name> ?n } }""" ] ] .'''
+    rows = breaker("b1", ("IdentifiedObject.name", "n")) + breaker("b2")
+    assert parity(rows, shape, engine, "sh:sparql") == {("http://iec.ch/TC57/CIM100#IDuniqueness", "b2")}
+
+
+def test_target_node_under_data_scope(engine):
+    """The picked ID stays a focus node whatever the scope; its rows are read
+    from the scoped instances only."""
+    shape = """cim:Picked a sh:NodeShape ; sh:targetNode <urn:uuid:b1> ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = breaker("b1", ("IdentifiedObject.name", "n")) + [("b1", "Type", "Breaker", "other")]
+    assert parity(rows, shape, engine, "sh:minCount") == set()
+    assert parity(rows, shape, engine, "sh:minCount", data_scope=["other"]) == {("b1", None)}
+
+
+def test_target_objects_of(engine):
+    """sh:targetObjectsOf picks the VALUEs under the KEY — the referenced
+    objects, including one the data does not describe."""
+    shape = """cim:Containers a sh:NodeShape ;
+        sh:targetObjectsOf cim:Equipment.EquipmentContainer ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "bay1"))
+            + breaker("b2", ("Equipment.EquipmentContainer", "bay2"))
+            + breaker("b3", ("Equipment.EquipmentContainer", "dangling"))
+            + [("bay1", "Type", "Bay", "eq"), ("bay1", "IdentifiedObject.name", "B1", "eq"),
+               ("bay2", "Type", "Bay", "eq")])
+    assert parity(rows, shape, engine, "sh:minCount", rdf_map=REFERENCES) == {("bay2", None), ("dangling", None)}
+
+
+def test_target_objects_of_literal_value(engine):
+    """A literal VALUE is a focus node too (SHACL targets any object node)."""
+    shape = """cim:Names a sh:NodeShape ; sh:targetObjectsOf cim:IdentifiedObject.name ;
+        sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ."""
+    rows = breaker("b1", ("IdentifiedObject.name", "n"))
+    assert parity(rows, shape, engine, "sh:minCount") == {("n", None)}
+
+
+def test_target_objects_of_under_data_scope(engine):
+    shape = """cim:Containers a sh:NodeShape ;
+        sh:targetObjectsOf cim:Equipment.EquipmentContainer ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "bay1"))
+            + [("b2", "Type", "Breaker", "other"), ("b2", "Equipment.EquipmentContainer", "bay2", "other")])
+    assert parity(rows, shape, engine, "sh:minCount", rdf_map=REFERENCES) == {("bay1", None), ("bay2", None)}
+    assert parity(rows, shape, engine, "sh:minCount", data_scope=["other"], rdf_map=REFERENCES) == {("bay2", None)}
+
+
+def test_targets_other_than_type_never_widen(engine):
+    """Only target_by="Type" (and sh:class) follow the schema inheritance."""
+    shape = """cim:Picked a sh:NodeShape ; sh:targetObjectsOf cim:Equipment.EquipmentContainer ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
+    rows = breaker("b1", ("Equipment.EquipmentContainer", "bay1")) + [("bay1", "Type", "Bay", "eq"),
+                                                                       ("sub1", "Type", "Substation", "eq")]
+    import rdflib
+    graph = rdflib.Graph()
+    graph.parse(data=PREFIX + shape, format="turtle")
+    v = triplets.validation.validate_shacl(frame(rows), graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    assert violating(v, "sh:minCount") == {("bay1", None)}

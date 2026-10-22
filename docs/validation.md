@@ -73,7 +73,9 @@ So the engines agree by construction. Each profile is its own world: NC SSI's
 `ACLineSegment` list stops at `Equipment`, and SSI has no IdentifiedObject
 attributes — it reaches `IdentifiedObject` only when a scoped profile (ER) has
 an `Equipment` entry of its own. `inheritance=False` matches the exact
-`rdf:type` on every engine (pyshacl without `ont_graph`). Schema class rules
+`rdf:type` on every engine (pyshacl without `ont_graph`). Only `sh:targetClass`
+(`target_by="Type"`) and `sh:class` widen; KEY / VALUE / ID targets pick exactly
+what they name. Schema class rules
 never widen: each Class entry already lists its inherited attributes.
 Identical findings are reported once (a property shape on both a parent and a
 child node shape, the same triple in two instance files).
@@ -83,11 +85,13 @@ child node shape, the same triple in two instance files).
 Known engine gaps (each reported in the run's coverage metadata,
 `skipped_shapes` / `skipped_components`):
 
-- **Vectorized engines walk `sh:targetClass` and `sh:targetSubjectsOf`.**
-  Shapes reached solely through `sh:targetNode` / `sh:targetObjectsOf` /
+- **Vectorized engines walk `sh:targetClass`, `sh:targetSubjectsOf`,
+  `sh:targetObjectsOf` and `sh:targetNode`.** Shapes reached solely through
   `sh:target` (or using `sh:xone`) are invisible to polars/pandas/duckdb —
   `compile()` logs a warning naming them; use `engine="pyshacl"` for full
-  spec coverage.
+  spec coverage. `sh:rule` (SPARQLRule inference) is never applied by the
+  vectorized engines; pyshacl applies it (`advanced=True`), so shapes with
+  rules diverge by design — both land in `skipped_shapes`.
 - **Property paths**: direct, `sh:inversePath`, and the two-step sequence
   `sh:path ( assoc rdf:type )` (the ENTSO-E "valueType" pattern — the
   constraint applies to the referenced object's type; a dangling reference
@@ -147,8 +151,8 @@ registries that consume it are internal.
 |-------|------|---------|
 | `shape_id` | str | full shape IRI (blank-node id for anonymous property shapes) — becomes `SOURCE_SHAPE` in reports and the join key for `enrich` |
 | `shapes` | tuple[str] | lineage: the shape ids whose switch-off removes the row, outermost first — NodeShape → property shape → `sh:node` target / logical member → the defining shape (nested row dicts carry it too) |
-| `target_on` | str | what the shape applies to, named by `target_by`: the Type name (`sh:targetClass`) or the KEY (`sh:targetSubjectsOf`) |
-| `target_by` | `"Type"` / `"KEY"` | how the rows are picked: `Type` = objects of that Type (subclasses with `inheritance`); `KEY` = objects having that KEY |
+| `target_on` | str | what the shape applies to, read by `target_by`: a Type name, a KEY or an ID |
+| `target_by` | `"Type"` / `"KEY"` / `"VALUE"` / `"ID"` | how the rows are picked: `Type` = objects of that Type (`sh:targetClass`; subclasses with `inheritance`); `KEY` = the IDs having that KEY (`sh:targetSubjectsOf`); `VALUE` = the VALUEs under that KEY (`sh:targetObjectsOf` — referenced objects, described in the data or not; literal values too); `ID` = that one ID (`sh:targetNode`; `urn:uuid:` stripped, any other IRI verbatim — it need not occur in the data, the ENTSO-E shapes use a class IRI as the focus of a dataset-wide `sh:sparql`) |
 | `path` | str \| None | the property as one triplet KEY (local name); None for node-level constraints (`sh:closed`, node-level `sh:sparql`) |
 | `inverse` | bool | `sh:inversePath` — engines swap the FOCUS/VALUE direction |
 | `via_type` | bool | the `( assoc rdf:type )` sequence path: the value nodes are the referenced objects' *types* |
@@ -348,7 +352,7 @@ united, differing values kept as the list of distinct values):
 | `node_shapes` / `constraints` | count of NodeShapes not switched off / IR constraint rows of the run's rule set |
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
 | `inheritance` | whether class inheritance was applied — `validate_shacl`: an rdf_map scope with classes and `inheritance=True`; `validate_schema_references`: the `inheritance` flag |
-| `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — those two empty for `engine="pyshacl"` (spec-complete); association ranges no given profile defines (`validate_schema_references`) |
+| `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); unreachable targets (`sh:target` / `xone`), `sh:rule` shapes (not applied) and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — those two empty for `engine="pyshacl"` (spec-complete); association ranges no given profile defines (`validate_schema_references`) |
 | `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates |
 

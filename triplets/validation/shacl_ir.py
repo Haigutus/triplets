@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._caches import register_cache
-from ..iri import SH_NS, local_key, local_value, split_iri
+from ..iri import SH_NS, local_id, local_key, local_value, split_iri
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,8 @@ IR_COLUMNS = ["shape_id", "shapes", "target_on", "target_by", "path", "inverse",
               "component", "params", "severity", "message", "name", "description"]
 
 _SHAPE_FORMATS = {".ttl": "turtle", ".rdf": "xml", ".xml": "xml", ".nt": "nt", ".jsonld": "json-ld"}
+# shape declarations the IR does not walk — reported, pyshacl covers them
+_NOT_WALKED = ("target", "xone")
 
 
 @dataclass
@@ -108,9 +110,10 @@ def _shape_stats(graph, ir):
 
     SH = rdflib.Namespace(SH_NS)
     skipped = set()
-    for term in (SH.targetNode, SH.targetObjectsOf, SH.target, SH.xone):
-        skipped |= {f"{subject}: sh:{split_iri(term)[1]} not walked"
-                    for subject, _ in graph.subject_objects(term)}
+    for name in _NOT_WALKED:
+        skipped |= {f"{subject}: sh:{name} not walked" for subject, _ in graph.subject_objects(SH[name])}
+    # pyshacl (advanced=True) applies SPARQLRule inference; the IR does not
+    skipped |= {f"{subject}: sh:rule not applied" for subject, _ in graph.subject_objects(SH.rule)}
     for subject in set(graph.subjects(SH.path)):
         path_node = graph.value(subject, SH.path)
         if path_node is not None and _resolve_path(graph, SH, path_node)[0] is None:
@@ -287,11 +290,11 @@ def split_rules(ir, implemented, fallback_components, engine):
 def parse_ir(graph) -> pandas.DataFrame:
     """Walk NodeShapes → property shapes → one IR row per constraint component.
 
-    A NodeShape may declare several sh:targetClass (the ENTSO-E profiles do);
-    every constraint row is emitted once per target. ``sh:targetSubjectsOf``
-    targets compile the same way with target_by="KEY" — the engines
-    resolve the focus as the subjects carrying that KEY instead of a class's
-    instances.
+    A NodeShape may declare several targets (the ENTSO-E profiles do); every
+    constraint row is emitted once per target, ``target_by`` saying how the
+    engines pick the rows: ``Type`` (sh:targetClass), ``KEY`` (sh:targetSubjectsOf:
+    the IDs having that KEY), ``VALUE`` (sh:targetObjectsOf: the VALUEs under
+    that KEY), ``ID`` (sh:targetNode).
     """
     import rdflib
 
@@ -302,21 +305,24 @@ def parse_ir(graph) -> pandas.DataFrame:
             rows.extend(_node_rows(graph, SH, shape, local_value(target, "class")))
         for target in graph.objects(shape, SH.targetSubjectsOf):
             rows.extend(_node_rows(graph, SH, shape, local_key(target), target_by="KEY"))
+        for target in graph.objects(shape, SH.targetObjectsOf):
+            rows.extend(_node_rows(graph, SH, shape, local_key(target), target_by="VALUE"))
+        for target in graph.objects(shape, SH.targetNode):
+            # the ID as the data spells it (urn:uuid: stripped); any other IRI
+            # verbatim — a targetNode need not occur in the data at all
+            rows.extend(_node_rows(graph, SH, shape, local_id(target), target_by="ID"))
 
-    # Only sh:targetClass / sh:targetSubjectsOf are walked into the IR —
-    # shapes reached exclusively through other target declarations (or
-    # sh:xone) are INVISIBLE to the vectorized engines and would silently
-    # under-validate. Warn loudly; the pyshacl reference engine covers them
-    # (engine="pyshacl").
-    invisible = {term: count for term in
-                 (SH.targetNode, SH.targetObjectsOf, SH.target, SH.xone)
-                 if (count := sum(1 for _ in graph.subject_objects(term)))}
+    # Shapes reached only through declarations the IR does not walk are
+    # INVISIBLE to the vectorized engines and would silently under-validate.
+    # Warn loudly; the pyshacl reference engine covers them (engine="pyshacl").
+    invisible = {name: count for name in _NOT_WALKED
+                 if (count := sum(1 for _ in graph.subject_objects(SH[name])))}
     if invisible:
         logger.warning(
             "shapes use SHACL features the vectorized engines do not implement — "
             "affected shapes are skipped by the polars/pandas/duckdb engines; "
             "use engine=\"pyshacl\" for full coverage: %s",
-            ", ".join(f"sh:{split_iri(term)[1]} (x{count})" for term, count in invisible.items()))
+            ", ".join(f"sh:{name} (x{count})" for name, count in invisible.items()))
 
     ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
     # identical re-declarations behave like ONE shape (issue #99): the ENTSO-E
@@ -496,8 +502,8 @@ def _shape_meta(graph, SH, shape_uri, target_on, path, inverse, target_by="Type"
         "shape_id": str(shape_uri),
         # lineage: the enclosing shapes, outermost first, then this one
         "shapes": (*shapes, str(shape_uri)),
-        # target_on names what the shape applies to, read by target_by: the Type
-        # name (sh:targetClass) or the KEY (sh:targetSubjectsOf)
+        # target_on names what the shape applies to, read by target_by: a Type
+        # name, a KEY (targetSubjectsOf / targetObjectsOf) or an ID (targetNode)
         "target_on": target_on,
         "target_by": target_by,
         "path": path,

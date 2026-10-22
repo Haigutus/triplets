@@ -153,24 +153,49 @@ def test_ir_real_cgmes_eq_shapes():
     assert not unknown, f"unexpected components in real shapes: {unknown}"
 
 
-def test_invisible_targets_warn_at_compile(caplog, tmp_path):
-    """Shapes reached only through targets the IR does not walk must warn —
-    the vectorized engines would otherwise silently under-validate."""
+def test_target_node_and_objects_of_compile(tmp_path):
+    """sh:targetNode → target_by="ID" (the ID as the data spells it), sh:targetObjectsOf
+    → target_by="VALUE" (the KEY); one row per target."""
+    path = tmp_path / "targets.ttl"
+    path.write_text("""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+
+cim:Picked a sh:NodeShape ;
+    sh:targetNode <urn:uuid:11111111-2222-3333-4444-555555555555>, cim:IDuniqueness ;
+    sh:targetObjectsOf cim:Equipment.EquipmentContainer ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+""")
+    compiled = compile_shapes(str(path))
+    assert set(zip(compiled.ir["target_by"], compiled.ir["target_on"])) == {
+        ("ID", "11111111-2222-3333-4444-555555555555"), ("ID", "http://iec.ch/TC57/CIM100#IDuniqueness"),
+        ("VALUE", "Equipment.EquipmentContainer")}
+    assert compiled.stats["skipped_shapes"] == []
+
+
+def test_not_walked_declarations_warn_at_compile(caplog, tmp_path):
+    """Shapes reached only through declarations the IR does not walk (custom
+    sh:target, sh:rule) must warn and land in skipped_shapes — the vectorized
+    engines would otherwise silently under-validate."""
     import logging
     path = tmp_path / "invisible.ttl"
     path.write_text("""
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix ex: <http://example.org/> .
 
-cim:PickedNodeShape a sh:NodeShape ;
-    sh:targetNode <urn:uuid:11111111-2222-3333-4444-555555555555> ;
+cim:Custom a sh:NodeShape ;
+    sh:target ex:NotSparql ;
+    sh:rule [ a sh:SPARQLRule ; sh:construct "CONSTRUCT { $this cim:x 1 } WHERE { $this a cim:Breaker }" ] ;
     sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
 """)
     with caplog.at_level(logging.WARNING, logger="triplets.validation.shacl_ir"):
         compiled = compile_shapes(str(path))
     assert len(compiled.ir) == 0                           # invisible to the IR
-    assert any("sh:targetNode" in record.getMessage()
+    assert any("sh:target" in record.getMessage()
                for record in caplog.records if record.levelname == "WARNING")
+    assert compiled.stats["skipped_shapes"] == ["http://iec.ch/TC57/CIM100#Custom: sh:rule not applied",
+                                                "http://iec.ch/TC57/CIM100#Custom: sh:target not walked"]
 
 
 def test_component_registries_agree():
