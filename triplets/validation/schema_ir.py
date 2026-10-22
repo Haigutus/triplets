@@ -66,7 +66,7 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False) -> 
     ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
     compiled = CompiledShapes(
         graph=None, ir=ir, hash=key, sources=(source,), language="rdfs",
-        stats={"node_shapes": int(ir["target_class"].nunique()), "constraints": len(ir),
+        stats={"node_shapes": int(ir["target_on"].nunique()), "constraints": len(ir),
                "skipped_shapes": notes["skipped_shapes"],
                "relaxed_constraints": notes["relaxed_constraints"], "unknown_components": []})
     _COMPILE_CACHE[key] = compiled
@@ -111,7 +111,7 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
     for meta, prop, entry in _associations(sources, entries):
         classes = accepted.get(local_value(entry.get("range", ""), "class"))
         if not classes:
-            skipped.append(f"{meta['target_class']}.{prop}: association range {entry.get('range')!r} "
+            skipped.append(f"{meta['target_on']}.{prop}: association range {entry.get('range')!r} "
                            "matches no Class entry of the source or target profiles")
             continue
         rows.append({**meta, "component": "triplets:range", "params": sorted(classes)})
@@ -121,7 +121,7 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
     ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
     compiled = CompiledShapes(
         graph=None, ir=ir, hash=key, sources=(source,), language="rdfs",
-        stats={"node_shapes": int(ir["target_class"].nunique()), "constraints": len(ir),
+        stats={"node_shapes": int(ir["target_on"].nunique()), "constraints": len(ir),
                # no cardinality or enumeration rows here: nothing the merge relaxes is checked
                "skipped_shapes": skipped, "relaxed_constraints": [], "unknown_components": []})
     _COMPILE_CACHE[key] = compiled
@@ -151,8 +151,8 @@ def _class_meta(sections, entries):
     prefix = _shape_prefix(sections)
     for name, entry in entries.items():
         if isinstance(entry, dict) and entry.get("type") == "Class":
-            yield {"shape_id": f"{prefix}{name}", "shapes": (f"{prefix}{name}",), "target_class": name,
-                   "target_kind": "class", "path": None, "inverse": False, "via_type": False,
+            yield {"shape_id": f"{prefix}{name}", "shapes": (f"{prefix}{name}",), "target_on": name,
+                   "target_by": "Type", "path": None, "inverse": False, "via_type": False,
                    "component": None, "params": None, "severity": "Violation", "message": None,
                    # no name: the SARIF title synthesizes "RDFS <profile> <Class> <attr>"
                    "name": None, "description": entry.get("description")}, entry

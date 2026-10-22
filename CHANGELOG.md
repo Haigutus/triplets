@@ -90,6 +90,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   IR rows carry their lineage in a `shapes` column.
 
 ### Changed
+- **Breaking — IR columns renamed**: `target_kind` → `target_by` (`"Type"` for
+  `sh:targetClass`, `"KEY"` for `sh:targetSubjectsOf`) and `target_class` →
+  `target_on` (the Type name or the KEY). The IR speaks the repo's own
+  vocabulary (ID, KEY, VALUE, Type), not SHACL's.
 - **Breaking — `sparql.query(scope=)` → `data_scope=`**, matching the validations
   (also `_rdflib_loader.scoped_graph(dataset, data_scope=)`).
 - **Breaking — validation entry points:** `validate` is `validate_shacl` and its
