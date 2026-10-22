@@ -1161,3 +1161,34 @@ def test_node_level_operators_over_deactivated_shapes(engine_name):
         sh:and ( [ sh:deactivated true ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ] ) ."""
     assert findings(run(rows, negated, engine_name)) == {("b1", "sh:not"), ("b2", "sh:not")}
     assert findings(run(rows, conjunct, engine_name)) == set()
+
+
+# ── sh:xone ──────────────────────────────────────────────────────────────────
+
+def test_xone_node_level(engine):
+    """Exactly one alternative: both or neither violates."""
+    shape = """cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:xone ( [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]
+                  [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) ."""
+    rows = (breaker("both", ("IdentifiedObject.name", "n"), ("IdentifiedObject.description", "d"))
+            + breaker("name", ("IdentifiedObject.name", "n")) + breaker("neither"))
+    assert parity(rows, shape, engine, "sh:xone", values=False) == {"both", "neither"}
+
+
+def test_xone_property_level_judges_values(engine):
+    """Under a path, each value node needs exactly one alternative."""
+    shape = """cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:xone ( [ sh:pattern "^A" ] [ sh:pattern "Z$" ] ) ] ."""
+    rows = breaker("b1", ("IdentifiedObject.name", "AZ"), ("IdentifiedObject.name", "Ax"),
+                   ("IdentifiedObject.name", "xx"))
+    assert parity(rows, shape, engine, "sh:xone") == {("b1", "AZ"), ("b1", "xx")}
+
+
+def test_xone_deactivated_member_conforms(engine):
+    """A deactivated member is satisfied for every node: with the name present
+    two alternatives hold."""
+    shape = """cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:xone ( [ sh:deactivated true ; sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ]
+                  [ sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ] ) ."""
+    rows = breaker("b1", ("IdentifiedObject.name", "n")) + breaker("b2")
+    assert parity(rows, shape, engine, "sh:xone", values=False) == {"b1"}

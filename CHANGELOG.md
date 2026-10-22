@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`sh:xone` in the vectorized engines** — exactly one alternative must hold,
+  per focus node on a node shape and per value node under a path (`VALUE` = the
+  value node); an empty (switched-off) alternative holds. pandas implements it,
+  polars and duckdb hand it to pandas like the other logical operators. Same
+  findings as pyshacl.
 - **Vectorized engines walk `sh:targetObjectsOf` and `sh:targetNode`** (IR
   `target_by="VALUE"` — the VALUEs under the KEY, referenced objects whether
   described in the data or not — and `target_by="ID"` — one ID, in the data or

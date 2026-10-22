@@ -627,6 +627,22 @@ def _or(context, rule):
     return _value_frame(rule, failing, "no sh:or alternative is satisfied")
 
 
+def _xone(context, rule):
+    """sh:xone — violates unless EXACTLY one alternative is satisfied: per focus
+    node in a node shape, per value node in a property shape. An empty
+    alternative (a switched-off member) is satisfied."""
+    focus_ids = getattr(rule, "focus_ids", None)
+    results = [_run_nested(context, alternative, focus_ids) for alternative in rule.params]
+    message = "not exactly one sh:xone alternative is satisfied"
+    if rule.path is None:
+        violating = [set(result["ID"]) for result in results]
+        focus = [node for node in context.focus(rule) if sum(node not in ids for ids in violating) != 1]
+        return _frame(rule, focus, None, message)
+    pairs = _value_pairs(context.path_rows(rule))
+    failed = [_failed_values(pairs, result) for result in results]
+    return _value_frame(rule, {pair for pair in pairs if sum(pair not in fails for fails in failed) != 1}, message)
+
+
 def _node(context, rule):
     """sh:node — every value at the path must conform to the referenced shape.
 
@@ -684,6 +700,7 @@ CONSTRAINT_VALIDATORS = {
     "sh:closed": _closed,
     "sh:and": _and,
     "sh:or": _or,
+    "sh:xone": _xone,
     "sh:not": _not,
 }
 

@@ -12,7 +12,7 @@ IR: one row per shape x path x constraint component.
     shape_id, shapes, target_on, path, inverse, component, params,
     severity, message, name, description
 ``params`` holds the component's parameter: a scalar (sh:minCount), a list
-(sh:in), or nested row-dict lists (sh:or / sh:and / sh:not). Unknown
+(sh:in), or nested row-dict lists (sh:or / sh:and / sh:xone / sh:not). Unknown
 components are kept as rows and logged — engines skip what they don't
 implement; pyshacl still covers the full spec. ``shapes`` is the row's
 lineage — the shape ids whose ``sh:deactivated`` removes it; every shape
@@ -36,7 +36,7 @@ IR_COLUMNS = ["shape_id", "shapes", "target_on", "target_by", "path", "inverse",
 
 _SHAPE_FORMATS = {".ttl": "turtle", ".rdf": "xml", ".xml": "xml", ".nt": "nt", ".jsonld": "json-ld"}
 # shape declarations the IR does not walk — reported, pyshacl covers them
-_NOT_WALKED = ("target", "xone")
+_NOT_WALKED = ("target",)
 
 
 @dataclass
@@ -172,8 +172,8 @@ def _without(rows, off):
 
 
 def _prune(component, params, off):
-    """A switched-off member or sh:node target empties: an empty sh:or / sh:and
-    member and sh:node target conform, an empty sh:not shape flags every value —
+    """A switched-off member or sh:node target empties: an empty sh:or / sh:and /
+    sh:xone member and sh:node target conform, an empty sh:not shape flags every value —
     pyshacl's sh:deactivated semantics."""
     if component not in _NESTED:
         return params
@@ -185,6 +185,7 @@ def _prune(component, params, off):
 _NESTED = {
     "sh:or": (lambda params: params, lambda params, lists: lists),
     "sh:and": (lambda params: params, lambda params, lists: lists),
+    "sh:xone": (lambda params: params, lambda params, lists: lists),
     "sh:not": (lambda params: [params], lambda params, lists: lists[0]),
     "sh:node": (lambda params: [params["rows"]], lambda params, lists: {**params, "rows": lists[0]}),
 }
@@ -272,7 +273,7 @@ def _content_hash(shapes):
 # Nested/query components every vectorized engine delegates to the pandas
 # implementations — part of the shared IR contract, defined here so no engine
 # needs to import another engine for a constant.
-FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:not", "sh:node", "sh:sparql"}
+FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:xone", "sh:not", "sh:node", "sh:sparql"}
 
 
 def split_rules(ir, implemented, fallback_components, engine):
@@ -363,14 +364,14 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
                 target_by="Type", value_path=None, skipped=None, shapes=()):
     """One shape → IR rows (one per constraint component present): the targeted
     NodeShape, each of its property shapes, a shape referenced through sh:node,
-    a member of sh:or / sh:and / sh:not — one walker for all of them.
+    a member of sh:or / sh:and / sh:xone / sh:not — one walker for all of them.
 
-    *visited* tracks shapes already expanded through sh:node / sh:or / sh:and /
-    sh:not, so shape graphs that reference each other cannot recurse forever.
+    *visited* tracks shapes already expanded through sh:node and the logical
+    operators, so shape graphs that reference each other cannot recurse forever.
     *parent* is the owning shape's meta — a property shape without its own
     sh:name / sh:description inherits them (authors commonly title the node shape).
     *value_path*: the owning property shape's (path, inverse, via_type) for a
-    shape nested in its sh:or / sh:and / sh:not — a nested shape without its own
+    shape nested in its logical operators — a nested shape without its own
     sh:path constrains that property's value nodes.
     *skipped* collects what the IR cannot express, as (lineage, text) entries.
     *shapes* is the lineage of the shapes enclosing this one.
@@ -459,14 +460,15 @@ def _closed_rows(graph, SH, shape, meta):
 
 
 def _logical_rows(graph, SH, shape, meta, value_path=None, **walk):
-    """sh:or / sh:and / sh:not: params are nested row-dict lists, recursion via
+    """sh:or / sh:and / sh:xone / sh:not: params are nested row-dict lists, recursion via
     RDF lists. A member the IR cannot express (no shape triples at all, a
     component no engine implements anywhere in it, or a part of it already
     skipped) makes the operator undecidable: the row is dropped and named in
     *skipped* — never judged on a partial member, which would fire on every
     focus node. Decided at compile time, whatever is switched off later."""
     rows = []
-    for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and"), (SH["not"], "sh:not")):
+    for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and"), (SH.xone, "sh:xone"),
+                            (SH["not"], "sh:not")):
         head = graph.value(shape, term)
         if head is None:
             continue
@@ -623,7 +625,7 @@ KNOWN_COMPONENTS = {
     "sh:maxInclusive", "sh:minExclusive", "sh:maxExclusive", "sh:pattern",
     "sh:minLength", "sh:maxLength", "sh:nodeKind", "sh:hasValue", "sh:in",
     "sh:equals", "sh:disjoint", "sh:lessThan", "sh:lessThanOrEquals", "sh:node",
-    "sh:closed", "sh:sparql", "sh:or", "sh:and", "sh:not",
+    "sh:closed", "sh:sparql", "sh:or", "sh:and", "sh:xone", "sh:not",
     "triplets:range",   # schema references: the target's ANY type in the allowed
                         # set (RDF types are cumulative — issue #100); a target
                         # without a Type row is left to triplets:missing
