@@ -9,12 +9,14 @@ SQL) in ``CompiledShapes.plans`` — re-validating new data against the same
 shapes never recompiles anything.
 
 IR: one row per shape x path x constraint component.
-    shape_id, target_class, path, inverse, component, params,
+    shape_id, shapes, target_class, path, inverse, component, params,
     severity, message, name, description
 ``params`` holds the component's parameter: a scalar (sh:minCount), a list
 (sh:in), or nested row-dict lists (sh:or / sh:and / sh:not). Unknown
 components are kept as rows and logged — engines skip what they don't
-implement; pyshacl still covers the full spec.
+implement; pyshacl still covers the full spec. ``shapes`` is the row's
+lineage — the shape ids whose ``sh:deactivated`` removes it; every shape
+compiles, and ``CompiledShapes.active()`` filters the switched-off ones.
 """
 import hashlib
 import logging
@@ -29,7 +31,7 @@ from ..iri import SH_NS, local_key, local_value, split_iri
 
 logger = logging.getLogger(__name__)
 
-IR_COLUMNS = ["shape_id", "target_class", "target_kind", "path", "inverse", "via_type",
+IR_COLUMNS = ["shape_id", "shapes", "target_class", "target_kind", "path", "inverse", "via_type",
               "component", "params", "severity", "message", "name", "description"]
 
 _SHAPE_FORMATS = {".ttl": "turtle", ".rdf": "xml", ".xml": "xml", ".nt": "nt", ".jsonld": "json-ld"}
@@ -46,6 +48,31 @@ class CompiledShapes:
     language: str = "shacl"       # constraint language — "rdfs" for schema-compiled IR
     stats: dict = field(default_factory=dict)  # coverage facts (see _shape_stats)
     plans: dict = field(default_factory=dict)  # engine name → compiled artifact (lazy)
+    # shape ids switched off: on the full compile those the graph declares
+    # sh:deactivated; on a filtered compile the set switched off in it
+    deactivated: frozenset = frozenset()
+    base: object = field(default=None, repr=False)   # the full compile this one was filtered from
+    _active: dict = field(default_factory=dict, repr=False, compare=False)   # switched-off set → filtered
+
+    def active(self, deactivated_shapes=None):
+        """The run's rule set: *deactivated_shapes* (a shape IRI or an iterable of
+        them) switched off — None = this compile's own set (on the full compile the
+        shapes the graph declares), [] = every shape runs, any other set replaces the
+        declared one. The same compile, its IR without their rows; cached per set on
+        the full compile, the full compile itself when nothing is declared or chosen.
+        [] over a declared set is a compile of its own: pyshacl then validates the
+        declared shapes too."""
+        base = self.base or self
+        if isinstance(deactivated_shapes, str):
+            deactivated_shapes = [deactivated_shapes]
+        chosen = self.deactivated if deactivated_shapes is None else frozenset(map(str, deactivated_shapes))
+        if not chosen and not base.deactivated:
+            return base
+        if base.graph is None:
+            raise ValueError("deactivated_shapes needs SHACL shapes — a schema compile has none")
+        if chosen not in base._active:
+            base._active[chosen] = _switched_off(base, chosen)
+        return base._active[chosen]
 
 
 _COMPILE_CACHE: dict = register_cache({})  # content hash → CompiledShapes
@@ -67,7 +94,7 @@ def compile_shapes(shapes) -> CompiledShapes:
     ir = parse_ir(graph)
     logger.debug("compiled %d constraint rows from %d shape triples", len(ir), len(graph))
     compiled = CompiledShapes(graph=graph, ir=ir, hash=key, sources=_source_names(shapes),
-                              stats=_shape_stats(graph, ir))
+                              stats=_shape_stats(graph, ir), deactivated=_declared_deactivated(graph))
     _COMPILE_CACHE[key] = compiled
     return compiled
 
@@ -88,13 +115,73 @@ def _shape_stats(graph, ir):
         path_node = graph.value(subject, SH.path)
         if path_node is not None and _resolve_path(graph, SH, path_node)[0] is None:
             skipped.add(f"{subject}: unsupported sh:path form")
-    unknown = ir.loc[~ir["component"].isin(KNOWN_COMPONENTS), "component"].unique()
     return {
         "node_shapes": sum(1 for _ in graph.subjects(rdflib.RDF.type, SH.NodeShape)),
         "constraints": len(ir),
         "skipped_shapes": sorted(skipped),
-        "unknown_components": sorted(unknown),
+        "unknown_components": _unknown_components(ir),
     }
+
+
+def _unknown_components(ir):
+    return sorted(ir.loc[~ir["component"].isin(KNOWN_COMPONENTS), "component"].unique())
+
+
+def _declared_deactivated(graph):
+    """Shape ids the graph marks sh:deactivated. Truthiness follows pyshacl
+    (bool(literal.value)): true, a non-empty plain literal (so a plain "false")
+    or a non-zero number deactivates; "false"^^xsd:boolean does not."""
+    import rdflib
+
+    SH = rdflib.Namespace(SH_NS)
+    return frozenset(str(shape) for shape, flag in graph.subject_objects(SH.deactivated)
+                     if bool(flag.toPython()))
+
+
+def _term(shape_id):
+    """A shape id (``shape_id`` / ``shapes`` string form) → its rdflib term."""
+    import rdflib
+    return rdflib.URIRef(shape_id) if "://" in shape_id or shape_id.startswith("urn:") else rdflib.BNode(shape_id)
+
+
+def _switched_off(base, off):
+    """*base* with the shapes in *off* switched off: rows whose lineage meets *off*
+    dropped, nested members and sh:node targets pruned the same way. Engines cache
+    their split per object, so the filtered compile gets fresh ``plans``."""
+    import rdflib
+
+    SH = rdflib.Namespace(SH_NS)
+    ir = base.ir.loc[base.ir["shapes"].map(off.isdisjoint)].reset_index(drop=True)
+    ir["params"] = [_prune(component, params, off) for component, params in zip(ir["component"], ir["params"])]
+    stats = {**base.stats, "constraints": len(ir),
+             "node_shapes": sum(1 for shape in base.graph.subjects(rdflib.RDF.type, SH.NodeShape)
+                                if str(shape) not in off),
+             "unknown_components": _unknown_components(ir),
+             # by the entry's leading subject: a skipped shape nested under a switched-off one stays listed
+             "skipped_shapes": [entry for entry in base.stats["skipped_shapes"]
+                                if entry.split(": ", 1)[0] not in off]}
+    digest = hashlib.sha256("\n".join(sorted(off)).encode()).hexdigest()[:12]
+    return CompiledShapes(graph=base.graph, ir=ir, hash=f"{base.hash}:off-{digest}", sources=base.sources,
+                          language=base.language, stats=stats, deactivated=off, base=base)
+
+
+def _without(rows, off):
+    """Nested row dicts without the switched-off ones, their own nesting pruned."""
+    return [{**row, "params": _prune(row["component"], row["params"], off)}
+            for row in rows if off.isdisjoint(row["shapes"])]
+
+
+def _prune(component, params, off):
+    """A switched-off member or sh:node target empties: an empty sh:or / sh:and
+    member and sh:node target conform, an empty sh:not shape flags every value —
+    pyshacl's sh:deactivated semantics."""
+    if component in ("sh:or", "sh:and"):
+        return [_without(member, off) for member in params]
+    if component == "sh:not":
+        return _without(params, off)
+    if component == "sh:node":
+        return {**params, "rows": _without(params["rows"], off)}
+    return params
 
 
 def _paths(shapes):
@@ -234,15 +321,18 @@ def parse_ir(graph) -> pandas.DataFrame:
     ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
     # identical re-declarations behave like ONE shape (issue #99): the ENTSO-E
     # Simple files re-declare shared property-shape URIs per profile file —
-    # duplicated rules double-counted in the polars batch path
+    # duplicated rules double-counted in the polars batch path. Rows that differ
+    # only in lineage (one property shape under two node shapes with the same
+    # target) both stay, so switching one node shape off keeps the other's;
+    # validate_shacl reports their findings once.
     signature = ir.assign(params=ir["params"].astype(str))
     ir = ir.loc[~signature.duplicated()].reset_index(drop=True)
     # DataFrame construction turns None into NaN — which is TRUTHY, so the
     # engines' `rule.message or default` would emit NaN instead of the default
     # (object dtype: the str dtype would coerce the None straight back to NaN)
     ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
-    unknown = ir.loc[~ir["component"].isin(KNOWN_COMPONENTS), "component"].unique()
-    if len(unknown):
+    unknown = _unknown_components(ir)
+    if unknown:
         logger.info("IR contains components no vectorized engine implements yet: %s", ", ".join(unknown))
     return ir
 
@@ -268,12 +358,12 @@ def _node_rows(graph, SH, shape, target_class, target_kind="class"):
     rows.extend(_sparql_rows(graph, SH, shape, meta))
     for property_shape in graph.objects(shape, SH.property):
         rows.extend(_shape_rows(graph, SH, property_shape, target_class, parent=meta,
-                                target_kind=target_kind))
+                                target_kind=target_kind, shapes=meta["shapes"]))
     return rows
 
 
 def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=None,
-                target_kind="class", value_path=None):
+                target_kind="class", value_path=None, shapes=()):
     """One property shape → IR rows (one per constraint component present).
 
     *visited* tracks shapes already expanded through sh:node / sh:or / sh:and /
@@ -283,6 +373,7 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
     *value_path*: the owning property shape's (path, inverse, via_type) for a
     shape nested in its sh:or / sh:and / sh:not — a nested shape without its own
     sh:path constrains that property's value nodes.
+    *shapes* is the lineage of the shapes enclosing this one.
     """
     if str(shape_uri) in visited:
         logger.warning("shape reference cycle at %s — constraint dropped", shape_uri)
@@ -299,7 +390,7 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
             shape_uri)
         return []
     meta = _shape_meta(graph, SH, shape_uri, target_class, path, inverse,
-                       target_kind=target_kind, via_type=via_type)
+                       target_kind=target_kind, via_type=via_type, shapes=shapes)
     if parent is not None:
         meta["name"] = meta["name"] or parent["name"]
         meta["description"] = meta["description"] or parent["description"]
@@ -318,7 +409,7 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
         head = graph.value(shape_uri, term)
         if head is not None:
             nested = [_shape_rows(graph, SH, item, target_class, visited, target_kind=target_kind,
-                                  value_path=value_path)
+                                  value_path=value_path, shapes=meta["shapes"])
                       for item in _rdf_list(graph, head, lambda node: node)]
             rows.append({**meta, "component": component, "params": nested})
 
@@ -326,11 +417,13 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
     if negated is not None:
         rows.append({**meta, "component": "sh:not",
                      "params": _shape_rows(graph, SH, negated, target_class, visited,
-                                           target_kind=target_kind, value_path=value_path)})
+                                           target_kind=target_kind, value_path=value_path,
+                                           shapes=meta["shapes"])})
 
     node_shape = graph.value(shape_uri, SH.node)
     if node_shape is not None:
-        nested = _node_expansion(graph, SH, node_shape, target_class, visited, target_kind)
+        nested = _node_expansion(graph, SH, node_shape, target_class, visited, target_kind,
+                                 shapes=meta["shapes"])
         if nested is None:
             logger.warning("sh:node cycle at %s — constraint dropped (%s)", node_shape, shape_uri)
         else:
@@ -340,7 +433,7 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
     return rows
 
 
-def _node_expansion(graph, SH, node_shape, target_class, visited, target_kind="class"):
+def _node_expansion(graph, SH, node_shape, target_class, visited, target_kind="class", shapes=()):
     """sh:node — expand the referenced shape into nested IR rows at compile time.
 
     params = {"shape": local name (for messages), "rows": nested row dicts}.
@@ -354,11 +447,11 @@ def _node_expansion(graph, SH, node_shape, target_class, visited, target_kind="c
 
     rows = []
     meta = _shape_meta(graph, SH, node_shape, target_class, path=None, inverse=False,
-                       target_kind=target_kind)
+                       target_kind=target_kind, shapes=shapes)
     rows.extend(_sparql_rows(graph, SH, node_shape, meta))
     for property_shape in graph.objects(node_shape, SH.property):
         rows.extend(_shape_rows(graph, SH, property_shape, target_class, visited,
-                                target_kind=target_kind))
+                                target_kind=target_kind, shapes=meta["shapes"]))
     return rows
 
 
@@ -394,13 +487,15 @@ def _sparql_rows(graph, SH, shape_uri, meta):
 
 
 def _shape_meta(graph, SH, shape_uri, target_class, path, inverse, target_kind="class",
-                via_type=False):
+                via_type=False, shapes=()):
     severity = graph.value(shape_uri, SH.severity)
     message = graph.value(shape_uri, SH.message)
     name = graph.value(shape_uri, SH.name)
     description = graph.value(shape_uri, SH.description)
     return {
         "shape_id": str(shape_uri),
+        # lineage: the enclosing shapes, outermost first, then this one
+        "shapes": (*shapes, str(shape_uri)),
         # target_class holds the target term's local name: a class name for
         # target_kind="class", the property KEY for target_kind="subjectsOf"
         "target_class": target_class,
