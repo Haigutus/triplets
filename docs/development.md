@@ -82,8 +82,8 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
 `split_iri(…)[1]`.
 
 - The absolute side takes flat maps built from `rdf_map`, one function per
-  map, each a single comprehension over `rdf_map_entries` (all profile
-  sections, first occurrence wins): `namespaces` (name → namespace IRI),
+  map, each a single comprehension over `rdf_map_entries` (the root entries
+  of a flat schema, then every profile section; first occurrence wins): `namespaces` (name → namespace IRI),
   `key_types` (name → schema entry type), `value_types` (KEY → `literal` /
   `reference` / `enum`, by entry type only), `datatypes` (Attribute KEY → xsd
   IRI, `None` = string; anyURI included). No cache: each is ~2 ms on a 2.8 MB
