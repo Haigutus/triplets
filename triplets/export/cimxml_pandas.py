@@ -137,7 +137,9 @@ def generate_xml(instance_data,
 
         Notes
         -----
-        - Supports profile-based mapping (e.g., "EQ", "SSH") via ``Model.profile`` or ``Model.messageType``.
+        - Exports against every profile the instance header declares (``Model.profile``,
+          ``Model.messageType``, ``keyword``, ``conformsTo``), merged: a CGMES 3.0 EQ file
+          declaring EQ, OP and SC writes the keys of all three.
         - Uses ``lxml.etree`` with ``ElementMaker`` for XML construction.
         - Undefined classes are exported with ``rdf:about="urn:uuid:<ID>"`` when ``export_undefined=True``.
         """

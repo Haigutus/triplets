@@ -76,7 +76,8 @@ data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
     |       |
     |       |-> cimxml_utils.resolve_instance_config()
     |       |   |-> file_name from 'label' (source filename) or new UUID
-    |       |   |-> profile sub-schema via Model.messageType / Model.profile
+    |       |   |-> every declared profile section, merged (header: Model.messageType /
+    |       |   |   keyword / Model.profile / conformsTo)
     |       |   '-> namespace map: given > instance NamespaceMap > schema
     |       |
     |       |  python_lxml                     cython_pugixml
