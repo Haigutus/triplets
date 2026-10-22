@@ -534,3 +534,30 @@ cim:C a sh:NodeShape ; sh:targetClass cim:Switch ; sh:or ( md:FullModel ) ."""))
     assert compiled.active([CIM + "A"]).stats["skipped_shapes"] == [bare, deep]   # still reached through B
     assert compiled.active([CIM + "A", CIM + "B"]).stats["skipped_shapes"] == [bare]
     assert compiled.active([CIM + "C"]).stats["skipped_shapes"] == [deep]
+
+
+def test_xone_compiles_like_or():
+    compiled = compile_shapes(_graph("""cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:xone ( [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] cim:M ) .
+        cim:M sh:path cim:IdentifiedObject.description ; sh:minCount 1 ."""))
+    (row,) = compiled.ir.to_dict("records")
+    assert (row["component"], row["path"]) == ("sh:xone", None)
+    assert [[(member["component"], member["path"]) for member in alternative] for alternative in row["params"]] == [
+        [("sh:minCount", "IdentifiedObject.name")], [("sh:minCount", "IdentifiedObject.description")]]
+    assert compiled.active([CIM + "M"]).ir["params"][0][1] == []     # a switched-off member empties
+    assert compiled.stats["skipped_shapes"] == []
+
+
+CGMES_DY_COMPLEX = CGMES_SHACL_DIR / "61970-302_Dynamics-AP-Con-Complex-SHACL.ttl"
+
+
+@pytest.mark.skipif(not CGMES_DY_COMPLEX.exists(), reason="CGMES-AP submodule not checked out")
+def test_dynamics_shapes_compile_xone():
+    """CGMES-AP Dynamics: the two sh:xone shapes compile, nothing unknown."""
+    compiled = compile_shapes(str(CGMES_DY_COMPLEX))
+    xone = compiled.ir[compiled.ir["component"] == "sh:xone"]
+    assert xone["shape_id"].nunique() == 2
+    assert len(xone) == 35                                            # one row per sh:targetClass
+    assert xone["path"].isna().all()
+    assert compiled.stats["unknown_components"] == []
+    assert not any("xone" in entry for entry in compiled.stats["skipped_shapes"])

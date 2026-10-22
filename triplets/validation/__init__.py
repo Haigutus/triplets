@@ -245,6 +245,7 @@ _EXPECTED = {
     "sh:disjoint": "different from {}".format,
     "sh:lessThan": "less than {}".format,
     "sh:lessThanOrEquals": "at most {}".format,
+    "sh:xone": lambda params: f"exactly one of {len(params)} alternatives",
 }
 
 

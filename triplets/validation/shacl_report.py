@@ -50,6 +50,7 @@ _COMPONENT_MAP = {
     "ClosedConstraintComponent": "sh:closed",
     "OrConstraintComponent": "sh:or",
     "AndConstraintComponent": "sh:and",
+    "XoneConstraintComponent": "sh:xone",
     "NotConstraintComponent": "sh:not",
     "SPARQLConstraintComponent": "sh:sparql",
 }

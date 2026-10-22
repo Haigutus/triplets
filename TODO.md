@@ -16,8 +16,8 @@ qlever (auto when built, performance).
   on `triplets.sparql` now that qlever/oxigraph make it cheap; a custom `sh:target`
   without `sh:select` stays pyshacl-only. Compile-time warning + `skipped_shapes`
   name the affected shapes.
-- [ ] `sh:xone` (2 uses in the library) — not in the IR component table (covered by
-  the same compile warning; pyshacl-only).
+- [x] `sh:xone` (2 uses in the library) — in the IR; pandas implements it, polars and
+  duckdb delegate it to pandas like the other logical operators.
 - [x] qlever SELECT typing: all values are lexical strings **by design** (arrow decode,
   all-string triplets convention; consumers cast) — rdflib reference stays python-typed.
 - [x] per-query engine-state keying costs a content_hash of the input (~260 ms per

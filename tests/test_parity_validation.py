@@ -130,6 +130,11 @@ COMPONENT_CASES = {
                          (A1, "Equipment.EquipmentContainer", VL, "eq"),
                          (A2, "Equipment.EquipmentContainer", SUB, "eq")],
         {A2}),
+    "sh:xone": (  # per value node: exactly one alternative holds
+        'sh:path cim:IdentifiedObject.name ; sh:xone ( [ sh:pattern "^L" ] [ sh:pattern "1$" ] )',
+        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "L1", "eq"),
+                         (A2, "IdentifiedObject.name", "L2", "eq")],
+        {A1}),
     "sh:sparql": (  # $PATH placeholder, like the real ENTSO-E constraint queries
         """sh:path cim:IdentifiedObject.name ;
            sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "forbidden") }' ]""",
