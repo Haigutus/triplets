@@ -27,8 +27,9 @@ import logging
 
 import pandas
 
+from .._header import _PROPERTY_TYPES
 from ..iri import TYPE_KEY, load_schema, local_value
-from .schema_scope import (_PROPERTY_TYPES, SCOPE_KEY, _merged_entries, class_ancestors, require_entries,
+from .schema_scope import (SCOPE_KEY, _merged_entries, class_ancestors, require_entries,
                            scope_sections, scoped_rdf_map)
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
 

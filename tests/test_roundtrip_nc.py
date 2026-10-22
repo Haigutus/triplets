@@ -122,8 +122,8 @@ CONTENT_KEYWORDS = {"CommonData": "ER", "FAP": "RAS"}
 def test_profile_resolution(path, tso, keyword, bundle):
     """Each instance resolves to the schema section of the profile it declares."""
     data = pandas.read_RDF([str(path)])
-    _, _, section = resolve_instance_config(data, load_rdf_map(getattr(schemas, bundle)))
-    assert section.get("ProfileMetadata", {}).get("keyword") == CONTENT_KEYWORDS.get(keyword, keyword)
+    _, _, merged = resolve_instance_config(data, load_rdf_map(getattr(schemas, bundle)))
+    assert merged.get("ProfileMetadata", {}).get("keyword") == [CONTENT_KEYWORDS.get(keyword, keyword)]
 
 
 @pytest.mark.parametrize("bundle", RESOLUTION_BUNDLES)

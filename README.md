@@ -74,8 +74,8 @@ bundles (`schemas.ENTSOE_CGMES_2_4_15_552_ED1`,
 `schemas.ENTSOE_CGMES_3_0_0_552_ED1`, …) the versioned **NC (Network Code)**
 profiles are available as `schemas.ENTSOE_NC_2_4_1_552_ED1` /
 `schemas.ENTSOE_NC_2_4_1_552_ED2`. The `_ED1` / `_ED2` suffix selects the
-serialization edition; profile resolution is schema-driven, so the right
-profile section is matched from the instance header.
+serialization edition; profile resolution is schema-driven: every profile
+section the instance header declares is matched and used.
 
 Look into examples folders for more
 

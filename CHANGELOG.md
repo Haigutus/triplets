@@ -257,6 +257,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **CIM XML export uses every profile the instance header declares**
+  ([#128](https://github.com/Haigutus/triplets/issues/128)), merged like `rdf_map_scope`
+  (both engines). A CGMES 3.0 EQ file declaring EQ, OP and SC was exported against EQ
+  only: the OP and SC keys (`ACLineSegment.r0`, …) were dropped, or written as
+  `triplets:` with `export_undefined=True`. A class concrete in any declared profile
+  is instantiated (`rdf:ID` in ED1), whatever the order of the header rows.
+  `resolve_instance_config` returns the merged schema (its `ProfileMetadata` fields are
+  lists). An instance that matches no profile of a sectioned schema now warns, naming the
+  file and the schema's profiles, also without a header (it exported an empty file silently).
 - **A flat schema (entries at the root, no profile sections) fills the IRI maps**
   ([#128](https://github.com/Haigutus/triplets/issues/128)). `export_to_nquads` wrote
   every name under `http://triplets#` without datatypes, and `sparql.query`,
