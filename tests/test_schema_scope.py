@@ -1,6 +1,7 @@
 """rdf_map_scope: profile resolution, the merged schema and the class inheritance map."""
 import pytest
 
+from triplets._header import profile_identifiers
 from triplets.export_schema import schemas
 from triplets.iri import TRIPLETS_NS, datatypes, load_rdf_map
 from triplets.validation.schema_scope import (SCOPE_KEY, ancestor_pairs, ancestor_triples, class_ancestors,
@@ -123,6 +124,14 @@ def test_root_entries():
     scoped, _ = scoped_rdf_map(flat, None)
     assert list(scoped[SCOPE_KEY]) == ["Breaker"]                 # root: no ProfileMetadata
     assert scoped_rdf_map(SCHEMA, None)[0] == {SCOPE_KEY: {}}
+
+
+
+def test_flat_schema_declares_no_profiles():
+    """Root entries and the root ProfileNamespaceMap / ProfileMetadata identify no profile section."""
+    flat = load_rdf_map(schemas.ENTSOE_CGMES_3_0_0_552_ED2)["EQ"]
+    assert profile_identifiers(flat) == {}
+    assert scope_sections(flat, "*") == []
 
 
 @pytest.mark.parametrize("bundle, datatype_conflicts", [

@@ -110,10 +110,19 @@ resolve_instance_config(instance_data, rdf_map)
 |   header fields in priority order:
 |   Model.messageType > keyword > Model.profile > conformsTo
 |
-|-> first hint found in the index wins
+|-> every hint found in the index, in hint order (EQ, OP, SC for a CGMES 3.0 EQ file)
 |-> fallback: legacy 2.4.15 Model.profile URL substrings (PROFILE_URL_MAP)
-'-> fallback: schema root (warns)
+|-> fallback: the schema's root entries (a flat schema; warns on a sectioned one)
+|
+'-> merge_sections(): the matched sections as one schema, merged like
+    validation's rdf_map_scope; then a class concrete in any matched section is
+    instantiated (rdf:ID in ED1), described (rdf:about) only when every matched
+    section describes it; the first matched section gives the ProfileNamespaceMap
 ```
+
+A flat schema — entries at the root, no profile sections — is used as it is. At the
+root, a dict with a `type` string is an entry, one without is a profile section;
+`ProfileMetadata` and `ProfileNamespaceMap` are neither.
 
 `versionIRI` is the RDFS vocabulary's own IRI; `profileVersionIRI` is the profile
 IRI headers declare. With W3C PROF descriptors in `rdfs/<bundle>/PROF/` it is the

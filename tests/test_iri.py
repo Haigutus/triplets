@@ -12,6 +12,7 @@ import pytest
 
 import triplets
 from triplets import iri
+from triplets.export_schema import schemas
 from triplets.iri import CIM_NS, RDF_TYPE, TRIPLETS_NS, XSD_NS, iri_duckdb, iri_pandas
 
 CIM16 = "http://iec.ch/TC57/2013/CIM-schema-cim16#"
@@ -83,6 +84,32 @@ def test_flat_maps_from_shipped_schema_path():
     assert "Diagram.DiagramStyle" not in iri.datatypes(rdf_map)          # Association: never a datatype
     assert iri.namespaces(rdf_map)["OrientationKind.negative"] == CIM16
     assert "Equipment" not in iri.namespaces(rdf_map)          # abstract: no entry → undefined_namespace at use
+
+
+def test_flat_schema_gives_the_same_maps_as_sectioned():
+    """A root dict with a ``type`` string is an entry, one without is a section."""
+    typed = {name: entry for name, entry in RDF_MAP["EQ"].items() if "type" in entry}   # at the root, untyped reads as a section
+    flat = {**typed, "ProfileNamespaceMap": {"cim": CIM16}}
+    sectioned = {"EQ": typed}
+    for build in (iri.namespaces, iri.value_types, iri.datatypes, iri.key_types):
+        assert build(flat) == build(sectioned) != {}
+
+
+def test_mixed_schema_root_entry_wins():
+    mixed = {"SSH": {"Breaker": {"type": "Association", "namespace": NC}},
+             "Breaker": {"type": "Attribute", "namespace": CIM16}}
+    assert iri.namespaces(mixed) == {"Breaker": CIM16}
+    assert iri.value_types(mixed) == {"Breaker": "literal"}
+
+
+def test_nquads_with_flat_schema_writes_schema_namespaces():
+    flat = iri.load_rdf_map(schemas.ENTSOE_CGMES_3_0_0_552_ED2)["EQ"]
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i"), ("b1", "Switch.normalOpen", "true", "i")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    lines = data.export_to_nquads(rdf_map=flat, export_to_memory=True).read().decode().splitlines()
+    assert f"<urn:uuid:b1> <{RDF_TYPE}> <{CIM_NS}Breaker> <urn:uuid:i> ." in lines
+    assert f'<urn:uuid:b1> <{CIM_NS}Switch.normalOpen> "true"^^<{XSD_NS}boolean> <urn:uuid:i> .' in lines
+    assert not any(TRIPLETS_NS in line for line in lines)
 
 
 # ── local (schema-free), one row per rule ──────────────────────────────────────
