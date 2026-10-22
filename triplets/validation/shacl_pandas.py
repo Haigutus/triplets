@@ -581,6 +581,8 @@ def _run_nested(context, row_dicts, focus_ids=None):
 def _and(context, rule):
     """sh:and — every nested shape must hold; each nested violation is reported."""
     focus_ids = getattr(rule, "focus_ids", None)
+    if not rule.params:                              # sh:and ( ) holds for every node
+        return _empty()
     violations = pandas.concat([_run_nested(context, alternative, focus_ids)
                                 for alternative in rule.params], ignore_index=True)
     violations["VIOLATION_TYPE"] = "sh:and"

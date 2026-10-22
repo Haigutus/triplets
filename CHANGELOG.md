@@ -279,6 +279,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **Node-level `sh:or` / `sh:and` / `sh:not` on a NodeShape are compiled** (they
+  were silently skipped, not even listed in `skipped_shapes`); a logical member
+  or `sh:node` shape carrying its own `sh:property` (or `sh:closed`) is
+  expanded instead of compiling to an empty, always-satisfied alternative. One
+  walker now compiles targeted, referenced and member shapes alike.
+- **`sh:qualifiedValueShape` / `sh:qualifiedMinCount` / `sh:qualifiedMaxCount`
+  (and `sh:uniqueLang`, `sh:languageIn`) are reported in `skipped_components`**;
+  a logical operator over such a member, over a bare IRI with no shape, or over
+  a member with a part already skipped (a dropped operator, an inexpressible
+  `sh:path`) is skipped and named in
+  `skipped_shapes` instead of being judged on its expressible part (which fired
+  on every focus node). A value constraint on a node shape itself (`sh:class`,
+  `sh:in`, … judging the focus node) is named in `skipped_shapes`; it was
+  silently ignored. `sh:and ( )` no longer raises.
 - SHACL report `sh:resultPath` takes the schema namespace with `rdf_map=`:
   regression test ([#133](https://github.com/Haigutus/triplets/issues/133)).
 - **polars tableviews return rows in a fixed order**, sorted by ID like pandas
