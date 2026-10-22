@@ -1090,16 +1090,20 @@ def frame(rows):
 REFERENCES = {"EQ": {"Equipment.EquipmentContainer": {"type": "Association"}}}
 
 
-def parity(rows, shape, engine, component, data_scope=None, rdf_map=None):
-    """The engine's violating set, asserted equal to pyshacl's."""
+def parity(rows, shape, engine, component, data_scope=None, rdf_map=None, values=True):
+    """The engine's violating set, asserted equal to pyshacl's. ``values=False``
+    compares the focus IDs only (pyshacl's VALUE of a focus-level finding is the
+    focus node itself; the engines leave it empty)."""
     pytest.importorskip("pyshacl")
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    found = {name: violating(triplets.validation.validate_shacl(
-        frame(rows), graph, engine=name, data_scope=data_scope, lexical=False,
-        rdf_map=rdf_map, rdf_map_scope="*" if rdf_map else None), component)
-             for name in (engine, "pyshacl")}
+    found = {}
+    for name in (engine, "pyshacl"):
+        pairs = violating(triplets.validation.validate_shacl(
+            frame(rows), graph, engine=name, data_scope=data_scope, lexical=False,
+            rdf_map=rdf_map, rdf_map_scope="*" if rdf_map else None), component)
+        found[name] = pairs if values else {focus for focus, _ in pairs}
     assert found[engine] == found["pyshacl"], found
     return found[engine]
 
@@ -1180,3 +1184,73 @@ def test_targets_other_than_type_never_widen(engine):
     graph.parse(data=PREFIX + shape, format="turtle")
     v = triplets.validation.validate_shacl(frame(rows), graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
     assert violating(v, "sh:minCount") == {("bay1", None)}
+
+
+# ── node-level logical operators; members with their own property shapes ─────
+
+def test_node_level_logical_operators(engine):
+    """sh:or / sh:not on the NodeShape judge the focus nodes themselves."""
+    shape = """cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:or ( [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]
+                [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) ;
+        sh:not [ sh:path cim:Switch.state ; sh:hasValue "banned" ] ."""
+    rows = (breaker("named", ("IdentifiedObject.name", "n")) + breaker("described", ("IdentifiedObject.description", "d"))
+            + breaker("bare") + breaker("banned", ("IdentifiedObject.name", "n"), ("Switch.state", "banned")))
+    for component, expected in (("sh:or", {"bare"}), ("sh:not", {"banned"})):
+        assert parity(rows, shape, engine, component, values=False) == expected, component
+
+
+def test_logical_member_with_property_shapes(engine):
+    """A NodeShape as a member: under a path its property shapes judge the value
+    nodes; at node level they judge the focus."""
+    shape = """cim:Named a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+    cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:or ( cim:Named [ sh:hasValue <urn:uuid:ok> ] ) ] ;
+        sh:not cim:Named ."""
+    rows = (breaker("b1", ("Equipment.EquipmentContainer", "named"))                     # value conforms
+            + breaker("b2", ("Equipment.EquipmentContainer", "ok"))                      # second alternative
+            + breaker("b3", ("Equipment.EquipmentContainer", "bare"))                    # neither
+            + breaker("b4", ("IdentifiedObject.name", "n"))                              # conforms to Named → sh:not
+            + [("named", "Type", "Bay", "eq"), ("named", "IdentifiedObject.name", "N", "eq"),
+               ("ok", "Type", "Bay", "eq"), ("bare", "Type", "Bay", "eq")])
+    assert parity(rows, shape, engine, "sh:or", rdf_map=REFERENCES) == {("b3", "bare")}
+    assert parity(rows, shape, engine, "sh:not", rdf_map=REFERENCES, values=False) == {"b4"}
+
+
+def test_operator_over_unknown_component_reports_nothing(engine):
+    """sh:or ( [ sh:not <qualifiedValueShape shape> ] [...] ) is not evaluated on
+    the member's expressible part (that would flag every focus node); the run
+    says so in skipped_shapes."""
+    shape = """cim:Q a sh:NodeShape ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:qualifiedValueShape [ sh:hasValue "n" ] ; sh:qualifiedMinCount 1 ] .
+    cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:or ( [ sh:not cim:Q ] [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) ."""
+    rows = breaker("b1", ("IdentifiedObject.name", "n")) + breaker("b2")
+    v = run(rows, shape, engine)
+    assert v.empty
+    assert any("sh:not member http://iec.ch/TC57/CIM100#Q uses" in entry
+               for entry in v.attrs["validation"]["skipped_shapes"])
+
+
+def test_node_level_value_constraint_is_reported_not_run(engine):
+    """sh:in on a node shape judges the focus node itself: the vectorized
+    engines do not evaluate it (pyshacl does) and the run says so."""
+    shape = "cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:in ( <urn:uuid:b1> ) ."
+    v = run(breaker("b1") + breaker("b2"), shape, engine)
+    assert v.empty
+    assert "http://iec.ch/TC57/CIM100#N: node-level sh:in not evaluated" in v.attrs["validation"]["skipped_shapes"]
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_node_level_operators_over_deactivated_shapes(engine_name):
+    """At node level too: a deactivated negated shape conforms for every focus,
+    so sh:not flags them all; a deactivated sh:and member holds."""
+    pytest.importorskip(engine_name)
+    rows = breaker("b1", ("IdentifiedObject.name", "n")) + breaker("b2")
+    negated = """cim:Named a sh:NodeShape ; sh:deactivated true ;
+            sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+        cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:not cim:Named ."""
+    conjunct = """cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:and ( [ sh:deactivated true ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ] ) ."""
+    assert findings(run(rows, negated, engine_name)) == {("b1", "sh:not"), ("b2", "sh:not")}
+    assert findings(run(rows, conjunct, engine_name)) == set()

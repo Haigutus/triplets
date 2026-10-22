@@ -252,6 +252,7 @@ def _graph(turtle):
         @prefix sh: <http://www.w3.org/ns/shacl#> .
         @prefix cim: <{CIM}> .
         @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+        @prefix md: <http://iec.ch/TC57/61970-552/ModelDescription/1#> .
         {turtle}""", format="turtle")
 
 
@@ -397,3 +398,139 @@ def test_cached_graphs_survive_compiled_graph_mutation(tmp_path):
     second = shacl_ir.compile_shapes([str(shared), str(other)])
     assert (rdflib.URIRef("urn:x"), rdflib.URIRef("urn:y"), rdflib.URIRef("urn:z")) \
         not in second.graph
+
+
+def test_node_level_logical_operators_compile():
+    """sh:or / sh:and / sh:not on the NodeShape itself judge its focus nodes."""
+    compiled = compile_shapes(_graph("""
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:or ( [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]
+            [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) ;
+    sh:not [ sh:path cim:Switch.state ; sh:hasValue "banned" ] ."""))
+    rows = compiled.ir.set_index("component")
+    assert set(rows.index) == {"sh:or", "sh:not"}
+    assert rows["path"].isna().all()                                # focus-level
+    assert [member[0]["path"] for member in rows.loc["sh:or", "params"]] == [
+        "IdentifiedObject.name", "IdentifiedObject.description"]
+    assert compiled.stats["skipped_shapes"] == []
+
+
+def test_member_with_property_shapes_expands():
+    """A NodeShape used as a logical member: its sh:property rows judge the same
+    focus at node level, and the value nodes (a sh:node-style row) under a path."""
+    compiled = compile_shapes(_graph("""
+cim:Named a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:not cim:Named ;
+    sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:or ( cim:Named [ sh:hasValue "x" ] ) ] ."""))
+    rows = compiled.ir.set_index("component")
+    negated = rows.loc["sh:not", "params"]
+    assert [(row["component"], row["path"]) for row in negated] == [("sh:minCount", "IdentifiedObject.name")]
+    first, second = rows.loc["sh:or", "params"]
+    assert [(row["component"], row["path"]) for row in first] == [("sh:node", "Equipment.EquipmentContainer")]
+    assert first[0]["params"]["shape"] == "Named"
+    assert [(row["component"], row["path"]) for row in first[0]["params"]["rows"]] == [("sh:minCount", "IdentifiedObject.name")]
+    assert [row["component"] for row in second] == ["sh:hasValue"]
+
+
+def test_unknown_components_are_rows_and_reported():
+    """Terms no engine implements compile to rows with params None (top level and
+    nested), so the run metadata can name them."""
+    compiled = compile_shapes(_graph("""
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ;
+        sh:qualifiedValueShape [ sh:hasValue "n" ] ; sh:qualifiedMinCount 1 ] ;
+    sh:property [ sh:path cim:IdentifiedObject.description ;
+        sh:and ( [ sh:uniqueLang true ] ) ] ."""))
+    rows = compiled.ir.set_index("component")
+    assert rows.loc["sh:qualifiedValueShape", "params"] is None
+    assert compiled.stats["unknown_components"] == ["sh:qualifiedMinCount", "sh:qualifiedValueShape"]
+    assert "sh:and" not in rows.index                                # its member is not expressible: skipped, named
+    assert [entry[entry.index("sh:and"):] for entry in compiled.stats["skipped_shapes"]] == [
+        "sh:and member %s uses sh:uniqueLang — not evaluated" % entry_member(compiled)]
+
+
+def entry_member(compiled):
+    """The blank-node id of the one sh:and member in *compiled*'s graph."""
+    import rdflib
+    SH = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    head = next(compiled.graph.objects(None, SH["and"]))
+    return str(compiled.graph.value(head, rdflib.RDF.first))
+
+
+def test_logical_member_with_unknown_component_drops_the_operator(caplog):
+    """sh:or ( [ sh:not <shape with sh:qualifiedValueShape> ] [...] ): judged on
+    the member's expressible part, sh:not [] would fire on every focus node —
+    the operator is skipped and named instead."""
+    with caplog.at_level("WARNING", logger="triplets.validation.shacl_ir"):
+        compiled = compile_shapes(_graph("""
+cim:Q a sh:NodeShape ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:qualifiedValueShape [ sh:hasValue "n" ] ; sh:qualifiedMinCount 1 ] .
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:or ( [ sh:not cim:Q ] [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:maxCount 1 ] ."""))
+    assert list(compiled.ir["component"]) == ["sh:maxCount"]        # the sibling still runs
+    outer, inner = sorted(compiled.stats["skipped_shapes"])       # the member is a blank node
+    assert inner.endswith("sh:not member http://iec.ch/TC57/CIM100#Q uses sh:qualifiedMinCount, "
+                          "sh:qualifiedValueShape — not evaluated")
+    assert outer.startswith("http://iec.ch/TC57/CIM100#N: sh:or member ")
+    assert outer.endswith(" holds a part that was not evaluated")
+    assert any("not evaluated" in record.getMessage() for record in caplog.records)
+
+
+def test_logical_member_without_shape_is_skipped():
+    """A bare IRI in the member list (no shape triples) cannot be judged."""
+    compiled = compile_shapes(_graph("""
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ;
+    sh:or ( md:FullModel md:DifferenceModel ) ."""))
+    assert list(compiled.ir["component"]) == ["sh:minCount"]
+    assert compiled.stats["skipped_shapes"] == [
+        "http://iec.ch/TC57/CIM100#N: sh:or member http://iec.ch/TC57/61970-552/ModelDescription/1#DifferenceModel has no shape — not evaluated",
+        "http://iec.ch/TC57/CIM100#N: sh:or member http://iec.ch/TC57/61970-552/ModelDescription/1#FullModel has no shape — not evaluated"]
+
+
+def test_sh_node_expands_closed_and_logical_operators():
+    """A shape referenced through sh:node is walked like a targeted one: its
+    sh:closed and node-level operators judge the referenced value nodes."""
+    compiled = compile_shapes(_graph("""
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:C ] .
+cim:C a sh:NodeShape ; sh:closed true ;
+    sh:property [ sh:path cim:IdentifiedObject.name ] ;
+    sh:not [ sh:path cim:IdentifiedObject.name ; sh:hasValue "banned" ] ."""))
+    nested = compiled.ir.iloc[0]["params"]["rows"]
+    assert {row["component"] for row in nested} == {"sh:closed", "sh:not"}
+    assert next(row["params"] for row in nested if row["component"] == "sh:closed") == ["IdentifiedObject.name"]
+
+
+def test_node_level_value_constraints_are_skipped():
+    """sh:in / sh:class on a node shape judge the focus node itself: no row, an
+    entry in skipped_shapes, and an operator over such a member is dropped."""
+    compiled = compile_shapes(_graph("""
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:in ( cim:x ) ;
+    sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:T ] ;
+    sh:or ( [ sh:class cim:Breaker ] [ sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ] ) .
+cim:T a sh:NodeShape ; sh:class cim:VoltageLevel ."""))
+    assert [(row["component"], row["params"]["rows"]) for row in compiled.ir.to_dict("records")] == [("sh:node", [])]
+    skipped = compiled.stats["skipped_shapes"]
+    assert CIM + "N: node-level sh:in not evaluated" in skipped
+    assert CIM + "T: node-level sh:class not evaluated" in skipped
+    assert any(entry.startswith(CIM + "N: sh:or member ") and "holds a part that was not evaluated" in entry for entry in skipped)
+
+
+def test_skipped_shapes_follow_the_switch_off():
+    """skipped_shapes entries carry their lineage: switching off the node shape
+    above an inexpressible path, or the shape holding a dropped operator, takes
+    the entry along — and only that entry."""
+    compiled = compile_shapes(_graph("""
+cim:A a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:Deep .
+cim:B a sh:NodeShape ; sh:targetClass cim:Disconnector ; sh:property cim:Deep .
+cim:Deep sh:path ( cim:a cim:b cim:c ) ; sh:minCount 1 .
+cim:C a sh:NodeShape ; sh:targetClass cim:Switch ; sh:or ( md:FullModel ) ."""))
+    deep = CIM + "Deep: unsupported sh:path form"
+    bare = CIM + "C: sh:or member http://iec.ch/TC57/61970-552/ModelDescription/1#FullModel has no shape — not evaluated"
+    assert compiled.stats["skipped_shapes"] == [bare, deep]
+    assert compiled.active([CIM + "A"]).stats["skipped_shapes"] == [bare, deep]   # still reached through B
+    assert compiled.active([CIM + "A", CIM + "B"]).stats["skipped_shapes"] == [bare]
+    assert compiled.active([CIM + "C"]).stats["skipped_shapes"] == [deep]
