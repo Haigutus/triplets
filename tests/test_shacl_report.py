@@ -34,6 +34,20 @@ def test_report_graph_roundtrip():
     pandas.testing.assert_frame_equal(_canon(back), _canon(VIOLATIONS))
 
 
+def test_path_less_result_echoing_the_focus_has_no_value():
+    """A result without sh:resultPath whose sh:value is the focus node (pyshacl's
+    node-level sh:or / sh:not / sh:xone) gives VALUE None; another value is kept."""
+    import rdflib
+    graph = rdflib.Graph().parse(format="turtle", data="""
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        [] a sh:ValidationResult ; sh:focusNode <urn:uuid:b1> ; sh:value <urn:uuid:b1> ;
+            sh:sourceConstraintComponent sh:OrConstraintComponent .
+        [] a sh:ValidationResult ; sh:focusNode <urn:uuid:b2> ; sh:value <urn:uuid:other> ;
+            sh:sourceConstraintComponent sh:SPARQLConstraintComponent .""")
+    value = report_to_violations(graph).set_index("ID")["VALUE"]
+    assert pandas.isna(value["b1"]) and value["b2"] == "other"
+
+
 def test_report_graph_shape():
     import rdflib
     sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")

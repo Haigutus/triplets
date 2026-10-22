@@ -298,6 +298,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on every focus node). A value constraint on a node shape itself (`sh:class`,
   `sh:in`, … judging the focus node) is named in `skipped_shapes`; it was
   silently ignored. `sh:and ( )` no longer raises.
+- pyshacl findings without a property path leave `VALUE` empty, as the other
+  engines do (pyshacl's `sh:value` there is the focus node, already in `ID`).
 - SHACL report `sh:resultPath` takes the schema namespace with `rdf_map=`:
   regression test ([#133](https://github.com/Haigutus/triplets/issues/133)).
 - **polars tableviews return rows in a fixed order**, sorted by ID like pandas
