@@ -50,6 +50,7 @@ _COMPONENT_MAP = {
     "ClosedConstraintComponent": "sh:closed",
     "OrConstraintComponent": "sh:or",
     "AndConstraintComponent": "sh:and",
+    "XoneConstraintComponent": "sh:xone",
     "NotConstraintComponent": "sh:not",
     "SPARQLConstraintComponent": "sh:sparql",
 }
@@ -65,13 +66,16 @@ def report_to_violations(report_graph):
 
     for result in report_graph.subjects(rdflib.RDF.type, sh.ValidationResult):
         path = report_graph.value(result, sh.resultPath)
+        focus = report_graph.value(result, sh.focusNode)
         value = report_graph.value(result, sh.value)
+        if path is None and value == focus:     # pyshacl echoes the focus node on path-less results; ID holds it
+            value = None
         component = report_graph.value(result, sh.sourceConstraintComponent)
         severity = report_graph.value(result, sh.resultSeverity)
         shape = report_graph.value(result, sh.sourceShape)
         message = _constraint_message(report_graph.objects(result, sh.resultMessage))
 
-        columns["ID"].append(local_id(decode_iri(report_graph.value(result, sh.focusNode))))
+        columns["ID"].append(local_id(decode_iri(focus)))
         columns["KEY"].append(local_key(decode_iri(path)))
         columns["VALUE"].append(_term_value(value, path == rdflib.RDF.type))
         columns["VIOLATION_TYPE"].append(_component(component))

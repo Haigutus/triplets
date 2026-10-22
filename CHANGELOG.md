@@ -7,6 +7,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`sh:xone` in the vectorized engines** — exactly one alternative must hold,
+  per focus node on a node shape and per value node under a path (`VALUE` = the
+  value node); an empty (switched-off) alternative holds. pandas implements it,
+  polars and duckdb hand it to pandas like the other logical operators. Same
+  findings as pyshacl.
+- **Vectorized engines walk `sh:targetObjectsOf` and `sh:targetNode`** (IR
+  `target_by="VALUE"` — the VALUEs under the KEY, referenced objects whether
+  described in the data or not — and `target_by="ID"` — one ID, in the data or
+  not, so the ENTSO-E `sh:targetNode cim:IDuniqueness` idiom gives a dataset-wide
+  `sh:sparql` its focus). Same findings as pyshacl on pandas, polars and duckdb.
+  Only `sh:targetClass` and `sh:class` follow the schema inheritance. `sh:rule`
+  shapes are listed in `skipped_shapes` (pyshacl applies rules, the vectorized
+  engines never do).
 - **`cim-diff` report options**: `--stat` (counts per type only), `--include TYPE`
   (only these classes, also in `cim-spreadsheet`), `--context KEY` (unchanged
   values of KEY shown in each changed object, e.g. `IdentifiedObject.name`).
@@ -86,6 +99,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   their lineage in a `shapes` column.
 
 ### Changed
+- **Breaking — IR columns renamed**: `target_kind` → `target_by` (`"Type"` for
+  `sh:targetClass`, `"KEY"` for `sh:targetSubjectsOf`) and `target_class` →
+  `target_on` (the Type name or the KEY). The IR speaks the repo's own
+  vocabulary (ID, KEY, VALUE, Type), not SHACL's.
 - **Breaking — `sparql.query(scope=)` → `data_scope=`**, matching the validations
   (also `_rdflib_loader.scoped_graph(dataset, data_scope=)`).
 - **Breaking — validation entry points:** `validate` is `validate_shacl` and its
@@ -267,6 +284,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **Node-level `sh:or` / `sh:and` / `sh:not` on a NodeShape are compiled** (they
+  were silently skipped, not even listed in `skipped_shapes`); a logical member
+  or `sh:node` shape carrying its own `sh:property` (or `sh:closed`) is
+  expanded instead of compiling to an empty, always-satisfied alternative. One
+  walker now compiles targeted, referenced and member shapes alike.
+- **`sh:qualifiedValueShape` / `sh:qualifiedMinCount` / `sh:qualifiedMaxCount`
+  (and `sh:uniqueLang`, `sh:languageIn`) are reported in `skipped_components`**;
+  a logical operator over such a member, over a bare IRI with no shape, or over
+  a member with a part already skipped (a dropped operator, an inexpressible
+  `sh:path`) is skipped and named in
+  `skipped_shapes` instead of being judged on its expressible part (which fired
+  on every focus node). A value constraint on a node shape itself (`sh:class`,
+  `sh:in`, … judging the focus node) is named in `skipped_shapes`; it was
+  silently ignored. `sh:and ( )` no longer raises.
+- pyshacl findings without a property path leave `VALUE` empty, as the other
+  engines do (pyshacl's `sh:value` there is the focus node, already in `ID`).
 - SHACL report `sh:resultPath` takes the schema namespace with `rdf_map=`:
   regression test ([#133](https://github.com/Haigutus/triplets/issues/133)).
 - **polars tableviews return rows in a fixed order**, sorted by ID like pandas

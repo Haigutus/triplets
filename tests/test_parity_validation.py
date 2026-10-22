@@ -89,7 +89,7 @@ def test_datatype_parity_on_real_data(shape_file):
 # ── component parity matrix: pandas engine vs pyshacl, per constraint ─────────
 # Real CIM keys (so rdf_map types the literals) and UUID ids (so references
 # export as urn:uuid IRIs). Expected = violating focus IDs; both engines must
-# report exactly these under the same VIOLATION_TYPE.
+# report exactly these under the same VIOLATION_TYPE, with the same VALUEs.
 def _uuid(n):
     return f"{n:08d}-0000-0000-0000-000000000000"
 
@@ -130,6 +130,11 @@ COMPONENT_CASES = {
                          (A1, "Equipment.EquipmentContainer", VL, "eq"),
                          (A2, "Equipment.EquipmentContainer", SUB, "eq")],
         {A2}),
+    "sh:xone": (  # per value node: exactly one alternative holds
+        'sh:path cim:IdentifiedObject.name ; sh:xone ( [ sh:pattern "^L" ] [ sh:pattern "1$" ] )',
+        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "L1", "eq"),
+                         (A2, "IdentifiedObject.name", "L2", "eq")],
+        {A1}),
     "sh:sparql": (  # $PATH placeholder, like the real ENTSO-E constraint queries
         """sh:path cim:IdentifiedObject.name ;
            sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "forbidden") }' ]""",
@@ -166,8 +171,12 @@ def test_component_parity(component, engine, tmp_path):
                                              lexical=False)
     ours = triplets.validation.validate_shacl(data, str(shape), engine=engine)
 
-    assert set(reference.loc[reference["VIOLATION_TYPE"] == component, "ID"]) == expected, "pyshacl disagrees"
-    assert set(ours.loc[ours["VIOLATION_TYPE"] == component, "ID"]) == expected, f"{engine} engine disagrees"
+    def pairs(violations):
+        rows = violations[violations["VIOLATION_TYPE"] == component]
+        return set(zip(rows["ID"], rows["VALUE"].astype(object).where(rows["VALUE"].notna(), None)))
+
+    assert {focus for focus, _ in pairs(reference)} == expected, "pyshacl disagrees"
+    assert pairs(ours) == pairs(reference), f"{engine} engine disagrees"
 
 
 def test_node_parity(tmp_path):

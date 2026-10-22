@@ -9,10 +9,10 @@ SQL) in ``CompiledShapes.plans`` — re-validating new data against the same
 shapes never recompiles anything.
 
 IR: one row per shape x path x constraint component.
-    shape_id, shapes, target_class, path, inverse, component, params,
+    shape_id, shapes, target_on, path, inverse, component, params,
     severity, message, name, description
 ``params`` holds the component's parameter: a scalar (sh:minCount), a list
-(sh:in), or nested row-dict lists (sh:or / sh:and / sh:not). Unknown
+(sh:in), or nested row-dict lists (sh:or / sh:and / sh:xone / sh:not). Unknown
 components are kept as rows and logged — engines skip what they don't
 implement; pyshacl still covers the full spec. ``shapes`` is the row's
 lineage — the shape ids whose ``sh:deactivated`` removes it; every shape
@@ -27,14 +27,16 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._caches import register_cache
-from ..iri import SH_NS, local_key, local_value, split_iri
+from ..iri import SH_NS, local_id, local_key, local_value, split_iri
 
 logger = logging.getLogger(__name__)
 
-IR_COLUMNS = ["shape_id", "shapes", "target_class", "target_kind", "path", "inverse", "via_type",
+IR_COLUMNS = ["shape_id", "shapes", "target_on", "target_by", "path", "inverse", "via_type",
               "component", "params", "severity", "message", "name", "description"]
 
 _SHAPE_FORMATS = {".ttl": "turtle", ".rdf": "xml", ".xml": "xml", ".nt": "nt", ".jsonld": "json-ld"}
+# shape declarations the IR does not walk — reported, pyshacl covers them
+_NOT_WALKED = ("target",)
 
 
 @dataclass
@@ -53,6 +55,8 @@ class CompiledShapes:
     deactivated: frozenset = frozenset()
     base: object = field(default=None, repr=False)   # the full compile this one was filtered from
     _active: dict = field(default_factory=dict, repr=False, compare=False)   # switched-off set → filtered
+    # what the IR cannot express, as (lineage, text): a switched-off shape takes its entries along
+    _skipped: frozenset = field(default=frozenset(), repr=False, compare=False)
 
     def active(self, deactivated_shapes=None):
         """The run's rule set: *deactivated_shapes* (a shape IRI or an iterable of
@@ -91,40 +95,44 @@ def compile_shapes(shapes) -> CompiledShapes:
         return _COMPILE_CACHE[key]
 
     graph = _load_shapes(shapes)
-    ir = parse_ir(graph)
+    skipped = set()
+    ir = parse_ir(graph, skipped)
     logger.debug("compiled %d constraint rows from %d shape triples", len(ir), len(graph))
     compiled = CompiledShapes(graph=graph, ir=ir, hash=key, sources=_source_names(shapes),
-                              stats=_shape_stats(graph, ir), deactivated=_declared_deactivated(graph))
+                              stats=_shape_stats(graph, ir, skipped), deactivated=_declared_deactivated(graph),
+                              _skipped=frozenset(skipped))
     _COMPILE_CACHE[key] = compiled
     return compiled
 
 
-def _shape_stats(graph, ir):
+def _shape_stats(graph, ir, skipped, off=frozenset()):
     """Coverage facts for the report metadata: shape/constraint counts plus
-    what the vectorized engines skip (mirrors the parse_ir warnings as data —
+    what the vectorized engines skip (parse_ir's *skipped* entries as data —
     the pyshacl reference engine covers everything, so validate_shacl() reports
-    these only for vectorized runs)."""
+    these only for vectorized runs). *off*: the shapes switched off."""
     import rdflib
 
     SH = rdflib.Namespace(SH_NS)
-    skipped = set()
-    for term in (SH.targetNode, SH.targetObjectsOf, SH.target, SH.xone):
-        skipped |= {f"{subject}: sh:{split_iri(term)[1]} not walked"
-                    for subject, _ in graph.subject_objects(term)}
-    for subject in set(graph.subjects(SH.path)):
-        path_node = graph.value(subject, SH.path)
-        if path_node is not None and _resolve_path(graph, SH, path_node)[0] is None:
-            skipped.add(f"{subject}: unsupported sh:path form")
     return {
-        "node_shapes": sum(1 for _ in graph.subjects(rdflib.RDF.type, SH.NodeShape)),
+        "node_shapes": sum(1 for shape in graph.subjects(rdflib.RDF.type, SH.NodeShape) if str(shape) not in off),
         "constraints": len(ir),
-        "skipped_shapes": sorted(skipped),
+        "skipped_shapes": sorted({text for _, text in skipped}),
         "unknown_components": _unknown_components(ir),
     }
 
 
 def _unknown_components(ir):
-    return sorted(ir.loc[~ir["component"].isin(KNOWN_COMPONENTS), "component"].unique())
+    return sorted(_components_in(ir.to_dict("records")) - KNOWN_COMPONENTS)
+
+
+def _components_in(rows):
+    """Every component in *rows*, the nested ones included."""
+    found = set()
+    for row in rows:
+        found.add(row["component"])
+        for member in _nested(row["component"], row["params"]):
+            found |= _components_in(member)
+    return found
 
 
 def _declared_deactivated(graph):
@@ -148,21 +156,13 @@ def _switched_off(base, off):
     """*base* with the shapes in *off* switched off: rows whose lineage meets *off*
     dropped, nested members and sh:node targets pruned the same way. Engines cache
     their split per object, so the filtered compile gets fresh ``plans``."""
-    import rdflib
-
-    SH = rdflib.Namespace(SH_NS)
     ir = base.ir.loc[base.ir["shapes"].map(off.isdisjoint)].reset_index(drop=True)
     ir["params"] = [_prune(component, params, off) for component, params in zip(ir["component"], ir["params"])]
-    stats = {**base.stats, "constraints": len(ir),
-             "node_shapes": sum(1 for shape in base.graph.subjects(rdflib.RDF.type, SH.NodeShape)
-                                if str(shape) not in off),
-             "unknown_components": _unknown_components(ir),
-             # by the entry's leading subject: a skipped shape nested under a switched-off one stays listed
-             "skipped_shapes": [entry for entry in base.stats["skipped_shapes"]
-                                if entry.split(": ", 1)[0] not in off]}
+    skipped = frozenset(entry for entry in base._skipped if off.isdisjoint(entry[0]))
     digest = hashlib.sha256("\n".join(sorted(off)).encode()).hexdigest()[:12]
     return CompiledShapes(graph=base.graph, ir=ir, hash=f"{base.hash}:off-{digest}", sources=base.sources,
-                          language=base.language, stats=stats, deactivated=off, base=base)
+                          language=base.language, stats=_shape_stats(base.graph, ir, skipped, off),
+                          deactivated=off, base=base, _skipped=skipped)
 
 
 def _without(rows, off):
@@ -172,16 +172,28 @@ def _without(rows, off):
 
 
 def _prune(component, params, off):
-    """A switched-off member or sh:node target empties: an empty sh:or / sh:and
-    member and sh:node target conform, an empty sh:not shape flags every value —
+    """A switched-off member or sh:node target empties: an empty sh:or / sh:and /
+    sh:xone member and sh:node target conform, an empty sh:not shape flags every value —
     pyshacl's sh:deactivated semantics."""
-    if component in ("sh:or", "sh:and"):
-        return [_without(member, off) for member in params]
-    if component == "sh:not":
-        return _without(params, off)
-    if component == "sh:node":
-        return {**params, "rows": _without(params["rows"], off)}
-    return params
+    if component not in _NESTED:
+        return params
+    lists, rebuild = _NESTED[component]
+    return rebuild(params, [_without(rows, off) for rows in lists(params)])
+
+
+# component → (its nested row lists, params rebuilt from new lists)
+_NESTED = {
+    "sh:or": (lambda params: params, lambda params, lists: lists),
+    "sh:and": (lambda params: params, lambda params, lists: lists),
+    "sh:xone": (lambda params: params, lambda params, lists: lists),
+    "sh:not": (lambda params: [params], lambda params, lists: lists[0]),
+    "sh:node": (lambda params: [params["rows"]], lambda params, lists: {**params, "rows": lists[0]}),
+}
+
+
+def _nested(component, params):
+    """The nested row lists of a logical or sh:node row; [] for any other component."""
+    return _NESTED[component][0](params) if component in _NESTED else []
 
 
 def _paths(shapes):
@@ -261,7 +273,7 @@ def _content_hash(shapes):
 # Nested/query components every vectorized engine delegates to the pandas
 # implementations — part of the shared IR contract, defined here so no engine
 # needs to import another engine for a constant.
-FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:not", "sh:node", "sh:sparql"}
+FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:xone", "sh:not", "sh:node", "sh:sparql"}
 
 
 def split_rules(ir, implemented, fallback_components, engine):
@@ -284,39 +296,48 @@ def split_rules(ir, implemented, fallback_components, engine):
 
 # ── shapes graph → constraint table ──────────────────────────────────────────
 
-def parse_ir(graph) -> pandas.DataFrame:
-    """Walk NodeShapes → property shapes → one IR row per constraint component.
+def parse_ir(graph, skipped=None) -> pandas.DataFrame:
+    """Walk the targeted NodeShapes → one IR row per constraint component.
 
-    A NodeShape may declare several sh:targetClass (the ENTSO-E profiles do);
-    every constraint row is emitted once per target. ``sh:targetSubjectsOf``
-    targets compile the same way with target_kind="subjectsOf" — the engines
-    resolve the focus as the subjects carrying that KEY instead of a class's
-    instances.
+    A NodeShape may declare several targets (the ENTSO-E profiles do); every
+    constraint row is emitted once per target, ``target_by`` saying how the
+    engines pick the rows: ``Type`` (sh:targetClass), ``KEY`` (sh:targetSubjectsOf:
+    the IDs having that KEY), ``VALUE`` (sh:targetObjectsOf: the VALUEs under
+    that KEY), ``ID`` (sh:targetNode). *skipped* collects what the IR cannot
+    express as (lineage, text) entries, for the run metadata.
     """
     import rdflib
 
     SH = rdflib.Namespace(SH_NS)
+    skipped = set() if skipped is None else skipped
+    targets = ((SH.targetClass, "Type", lambda node: local_value(node, "class")),
+               (SH.targetSubjectsOf, "KEY", local_key),
+               (SH.targetObjectsOf, "VALUE", local_key),
+               # the ID as the data spells it (urn:uuid: stripped); any other IRI
+               # verbatim — a targetNode need not occur in the data at all
+               (SH.targetNode, "ID", local_id))
     rows = []
     for shape in graph.subjects(rdflib.RDF.type, SH.NodeShape):
-        for target in graph.objects(shape, SH.targetClass):
-            rows.extend(_node_rows(graph, SH, shape, local_value(target, "class")))
-        for target in graph.objects(shape, SH.targetSubjectsOf):
-            rows.extend(_node_rows(graph, SH, shape, local_key(target), target_kind="subjectsOf"))
+        for term, target_by, name in targets:
+            for target in graph.objects(shape, term):
+                rows.extend(_shape_rows(graph, SH, shape, name(target), target_by=target_by, skipped=skipped))
 
-    # Only sh:targetClass / sh:targetSubjectsOf are walked into the IR —
-    # shapes reached exclusively through other target declarations (or
-    # sh:xone) are INVISIBLE to the vectorized engines and would silently
-    # under-validate. Warn loudly; the pyshacl reference engine covers them
-    # (engine="pyshacl").
-    invisible = {term: count for term in
-                 (SH.targetNode, SH.targetObjectsOf, SH.target, SH.xone)
-                 if (count := sum(1 for _ in graph.subject_objects(term)))}
+    # Shapes reached only through declarations the IR does not walk are
+    # INVISIBLE to the vectorized engines and would silently under-validate.
+    # Warn loudly; the pyshacl reference engine covers them (engine="pyshacl").
+    invisible = {name: count for name in _NOT_WALKED
+                 if (count := sum(1 for _ in graph.subject_objects(SH[name])))}
     if invisible:
         logger.warning(
             "shapes use SHACL features the vectorized engines do not implement — "
             "affected shapes are skipped by the polars/pandas/duckdb engines; "
             "use engine=\"pyshacl\" for full coverage: %s",
-            ", ".join(f"sh:{split_iri(term)[1]} (x{count})" for term, count in invisible.items()))
+            ", ".join(f"sh:{name} (x{count})" for name, count in invisible.items()))
+    for name in _NOT_WALKED:
+        skipped |= {((str(subject),), f"{subject}: sh:{name} not walked")
+                    for subject, _ in graph.subject_objects(SH[name])}
+    # pyshacl (advanced=True) applies SPARQLRule inference; the IR does not
+    skipped |= {((str(subject),), f"{subject}: sh:rule not applied") for subject, _ in graph.subject_objects(SH.rule)}
 
     ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
     # identical re-declarations behave like ONE shape (issue #99): the ENTSO-E
@@ -329,50 +350,30 @@ def parse_ir(graph) -> pandas.DataFrame:
     ir = ir.loc[~signature.duplicated()].reset_index(drop=True)
     # DataFrame construction turns None into NaN — which is TRUTHY, so the
     # engines' `rule.message or default` would emit NaN instead of the default
+    # and `rule.path is None` (a focus-level operator) would never hold
     # (object dtype: the str dtype would coerce the None straight back to NaN)
-    ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
+    for column in ("message", "path"):
+        ir[column] = ir[column].astype(object).where(ir[column].notna(), None)
     unknown = _unknown_components(ir)
     if unknown:
         logger.info("IR contains components no vectorized engine implements yet: %s", ", ".join(unknown))
     return ir
 
 
-def _node_rows(graph, SH, shape, target_class, target_kind="class"):
-    """NodeShape-level constraints (closed, sparql) + its property shapes' rows."""
-    meta = _shape_meta(graph, SH, shape, target_class, path=None, inverse=False,
-                       target_kind=target_kind)
-    rows = []
+def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=None,
+                target_by="Type", value_path=None, skipped=None, shapes=()):
+    """One shape → IR rows (one per constraint component present): the targeted
+    NodeShape, each of its property shapes, a shape referenced through sh:node,
+    a member of sh:or / sh:and / sh:xone / sh:not — one walker for all of them.
 
-    closed = graph.value(shape, SH.closed)
-    if closed is not None and closed.toPython() is True:
-        # params = the complete allowed list, resolved at compile time:
-        # sh:ignoredProperties + every (non-inverse) sh:property path of THIS shape
-        ignored = graph.value(shape, SH.ignoredProperties)
-        allowed = _rdf_list(graph, ignored, local_key) if ignored is not None else []
-        for property_shape in graph.objects(shape, SH.property):
-            path, inverse, _ = _resolve_path(graph, SH, graph.value(property_shape, SH.path))
-            if path is not None and not inverse:
-                allowed.append(path)
-        rows.append({**meta, "component": "sh:closed", "params": allowed})
-
-    rows.extend(_sparql_rows(graph, SH, shape, meta))
-    for property_shape in graph.objects(shape, SH.property):
-        rows.extend(_shape_rows(graph, SH, property_shape, target_class, parent=meta,
-                                target_kind=target_kind, shapes=meta["shapes"]))
-    return rows
-
-
-def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=None,
-                target_kind="class", value_path=None, shapes=()):
-    """One property shape → IR rows (one per constraint component present).
-
-    *visited* tracks shapes already expanded through sh:node / sh:or / sh:and /
-    sh:not, so shape graphs that reference each other cannot recurse forever.
-    *parent* is the owning NodeShape's meta — a property shape without its own
+    *visited* tracks shapes already expanded through sh:node and the logical
+    operators, so shape graphs that reference each other cannot recurse forever.
+    *parent* is the owning shape's meta — a property shape without its own
     sh:name / sh:description inherits them (authors commonly title the node shape).
     *value_path*: the owning property shape's (path, inverse, via_type) for a
-    shape nested in its sh:or / sh:and / sh:not — a nested shape without its own
+    shape nested in its logical operators — a nested shape without its own
     sh:path constrains that property's value nodes.
+    *skipped* collects what the IR cannot express, as (lineage, text) entries.
     *shapes* is the lineage of the shapes enclosing this one.
     """
     if str(shape_uri) in visited:
@@ -388,71 +389,116 @@ def _shape_rows(graph, SH, shape_uri, target_class, visited=frozenset(), parent=
             "sh:path at %s is a property path the vectorized engines cannot express "
             "as one KEY — property shape skipped; use engine=\"pyshacl\" for coverage",
             shape_uri)
+        skipped.add(((*shapes, str(shape_uri)), f"{shape_uri}: unsupported sh:path form"))
         return []
-    meta = _shape_meta(graph, SH, shape_uri, target_class, path, inverse,
-                       target_kind=target_kind, via_type=via_type, shapes=shapes)
+    meta = _shape_meta(graph, SH, shape_uri, target_on, path, inverse,
+                       target_by=target_by, via_type=via_type, shapes=shapes)
     if parent is not None:
         meta["name"] = meta["name"] or parent["name"]
         meta["description"] = meta["description"] or parent["description"]
+    walk = {"target_on": target_on, "visited": visited, "target_by": target_by, "skipped": skipped,
+            "shapes": meta["shapes"]}
     rows = []
 
     for term, component, transform in _components(SH):
         value = graph.value(shape_uri, term)
-        if value is not None:
+        if value is None:
+            continue
+        if path is None:
+            # on a node shape it judges the focus node itself, which no engine reads
+            skipped.add((meta["shapes"], f"{shape_uri}: node-level {component} not evaluated"))
+        else:
             rows.append({**meta, "component": component, "params": transform(graph, value)})
+    # components no engine implements stay visible as rows: the run metadata
+    # names them, and a logical operator over such a member is not evaluated
+    for name in _UNKNOWN_TERMS:
+        if graph.value(shape_uri, SH[name]) is not None:
+            rows.append({**meta, "component": f"sh:{name}", "params": None})
 
     rows.extend(_sparql_rows(graph, SH, shape_uri, meta))
-
-    # logical operators: params are nested row-dict lists, recursion via RDF lists
-    value_path = (path, inverse, via_type) if path else None
-    for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and")):
-        head = graph.value(shape_uri, term)
-        if head is not None:
-            nested = [_shape_rows(graph, SH, item, target_class, visited, target_kind=target_kind,
-                                  value_path=value_path, shapes=meta["shapes"])
-                      for item in _rdf_list(graph, head, lambda node: node)]
-            rows.append({**meta, "component": component, "params": nested})
-
-    negated = graph.value(shape_uri, SH["not"])
-    if negated is not None:
-        rows.append({**meta, "component": "sh:not",
-                     "params": _shape_rows(graph, SH, negated, target_class, visited,
-                                           target_kind=target_kind, value_path=value_path,
-                                           shapes=meta["shapes"])})
+    rows.extend(_logical_rows(graph, SH, shape_uri, meta,
+                              value_path=(path, inverse, via_type) if path else None, **walk))
 
     node_shape = graph.value(shape_uri, SH.node)
     if node_shape is not None:
-        nested = _node_expansion(graph, SH, node_shape, target_class, visited, target_kind,
-                                 shapes=meta["shapes"])
-        if nested is None:
+        if str(node_shape) in visited:
             logger.warning("sh:node cycle at %s — constraint dropped (%s)", node_shape, shape_uri)
         else:
+            # the referenced shape expanded at compile time; the engines run its
+            # rows against the value nodes
             rows.append({**meta, "component": "sh:node",
-                         "params": {"shape": split_iri(node_shape)[1], "rows": nested}})
+                         "params": {"shape": split_iri(node_shape)[1],
+                                    "rows": _shape_rows(graph, SH, node_shape, **walk)}})
 
+    # the shape's own property shapes (and sh:closed over them): a NodeShape —
+    # targeted, referenced or a logical member — judges its focus with them; a
+    # shape with a path judges its value nodes, like a sh:node reference
+    own = _closed_rows(graph, SH, shape_uri, meta)
+    for property_shape in graph.objects(shape_uri, SH.property):
+        own.extend(_shape_rows(graph, SH, property_shape, parent=meta, **walk))
+    if path is None:
+        rows.extend(own)
+    elif own:
+        rows.append({**meta, "component": "sh:node",
+                     "params": {"shape": split_iri(shape_uri)[1], "rows": own}})
     return rows
 
 
-def _node_expansion(graph, SH, node_shape, target_class, visited, target_kind="class", shapes=()):
-    """sh:node — expand the referenced shape into nested IR rows at compile time.
+def _closed_rows(graph, SH, shape, meta):
+    """sh:closed — params = the complete allowed list, resolved at compile time:
+    sh:ignoredProperties + every (non-inverse) sh:property path of THIS shape."""
+    closed = graph.value(shape, SH.closed)
+    if closed is None or closed.toPython() is not True:
+        return []
+    ignored = graph.value(shape, SH.ignoredProperties)
+    allowed = _rdf_list(graph, ignored, local_key) if ignored is not None else []
+    for property_shape in graph.objects(shape, SH.property):
+        path, inverse, _ = _resolve_path(graph, SH, graph.value(property_shape, SH.path))
+        if path is not None and not inverse:
+            allowed.append(path)
+    return [{**meta, "component": "sh:closed", "params": allowed}]
 
-    params = {"shape": local name (for messages), "rows": nested row dicts}.
-    The engines run the nested rows against the referenced value nodes.
-    Returns None on a reference cycle.
-    """
-    key = str(node_shape)
-    if key in visited:
-        return None
-    visited = visited | {key}
 
+def _logical_rows(graph, SH, shape, meta, value_path=None, **walk):
+    """sh:or / sh:and / sh:xone / sh:not: params are nested row-dict lists, recursion via
+    RDF lists. A member the IR cannot express (no shape triples at all, a
+    component no engine implements anywhere in it, or a part of it already
+    skipped) makes the operator undecidable: the row is dropped and named in
+    *skipped* — never judged on a partial member, which would fire on every
+    focus node. Decided at compile time, whatever is switched off later."""
     rows = []
-    meta = _shape_meta(graph, SH, node_shape, target_class, path=None, inverse=False,
-                       target_kind=target_kind, shapes=shapes)
-    rows.extend(_sparql_rows(graph, SH, node_shape, meta))
-    for property_shape in graph.objects(node_shape, SH.property):
-        rows.extend(_shape_rows(graph, SH, property_shape, target_class, visited,
-                                target_kind=target_kind, shapes=meta["shapes"]))
+    for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and"), (SH.xone, "sh:xone"),
+                            (SH["not"], "sh:not")):
+        head = graph.value(shape, term)
+        if head is None:
+            continue
+        items = [head] if component == "sh:not" else _rdf_list(graph, head, lambda node: node)
+        members = [(item, _shape_rows(graph, SH, item, value_path=value_path, **walk)) for item in items]
+        reasons = [f"{shape}: {component} member {item} {reason}"
+                   for item, member in members
+                   if (reason := _inexpressible(graph, item, member, (*meta["shapes"], str(item)), walk["skipped"]))]
+        if reasons:
+            for reason in reasons:
+                logger.warning("%s; use engine=\"pyshacl\" for coverage", reason)
+            walk["skipped"].update((meta["shapes"], reason) for reason in reasons)
+            continue
+        nested = [member for _, member in members]
+        rows.append({**meta, "component": component, "params": nested[0] if component == "sh:not" else nested})
     return rows
+
+
+def _inexpressible(graph, item, rows, lineage, skipped):
+    """Why a logical member cannot be judged: it has no shape triples (a bare
+    IRI in the list), a component no engine implements sits anywhere in it, or
+    a part of it was already skipped (an entry under its *lineage*)."""
+    if not any(True for _ in graph.predicate_objects(item)):
+        return "has no shape — not evaluated"
+    unknown = sorted(_components_in(rows) - KNOWN_COMPONENTS)
+    if unknown:
+        return f"uses {', '.join(unknown)} — not evaluated"
+    if any(shapes[:len(lineage)] == lineage for shapes, _ in skipped):
+        return "holds a part that was not evaluated"
+    return None
 
 
 def _sparql_rows(graph, SH, shape_uri, meta):
@@ -486,7 +532,7 @@ def _sparql_rows(graph, SH, shape_uri, meta):
     return rows
 
 
-def _shape_meta(graph, SH, shape_uri, target_class, path, inverse, target_kind="class",
+def _shape_meta(graph, SH, shape_uri, target_on, path, inverse, target_by="Type",
                 via_type=False, shapes=()):
     severity = graph.value(shape_uri, SH.severity)
     message = graph.value(shape_uri, SH.message)
@@ -496,10 +542,10 @@ def _shape_meta(graph, SH, shape_uri, target_class, path, inverse, target_kind="
         "shape_id": str(shape_uri),
         # lineage: the enclosing shapes, outermost first, then this one
         "shapes": (*shapes, str(shape_uri)),
-        # target_class holds the target term's local name: a class name for
-        # target_kind="class", the property KEY for target_kind="subjectsOf"
-        "target_class": target_class,
-        "target_kind": target_kind,
+        # target_on names what the shape applies to, read by target_by: a Type
+        # name, a KEY (targetSubjectsOf / targetObjectsOf) or an ID (targetNode)
+        "target_on": target_on,
+        "target_by": target_by,
         "path": path,
         "inverse": inverse,
         # ( assoc rdf:type ) sequence path: the constraint's value nodes are
@@ -569,12 +615,17 @@ def _components(SH):
     ]
 
 
+# SHACL terms no engine implements — kept as rows (params None) so the run
+# metadata names them; pyshacl covers them
+_UNKNOWN_TERMS = ("qualifiedValueShape", "qualifiedMinCount", "qualifiedMaxCount", "uniqueLang", "languageIn")
+
+
 KNOWN_COMPONENTS = {
     "sh:minCount", "sh:maxCount", "sh:datatype", "sh:class", "sh:minInclusive",
     "sh:maxInclusive", "sh:minExclusive", "sh:maxExclusive", "sh:pattern",
     "sh:minLength", "sh:maxLength", "sh:nodeKind", "sh:hasValue", "sh:in",
     "sh:equals", "sh:disjoint", "sh:lessThan", "sh:lessThanOrEquals", "sh:node",
-    "sh:closed", "sh:sparql", "sh:or", "sh:and", "sh:not",
+    "sh:closed", "sh:sparql", "sh:or", "sh:and", "sh:xone", "sh:not",
     "triplets:range",   # schema references: the target's ANY type in the allowed
                         # set (RDF types are cumulative — issue #100); a target
                         # without a Type row is left to triplets:missing
