@@ -133,7 +133,9 @@ def _associations(sections, entries):
         for prop in dict.fromkeys(entry.get("parameters", ())):
             prop_entry = entries.get(prop)
             if isinstance(prop_entry, dict) and prop_entry.get("type") == "Association":
-                yield {**meta, "path": prop, "shape_id": f"{meta['shape_id']}.{prop}"}, prop, prop_entry
+                shape_id = f"{meta['shape_id']}.{prop}"
+                yield {**meta, "path": prop, "shape_id": shape_id, "shapes": (*meta["shapes"], shape_id)}, \
+                    prop, prop_entry
 
 
 def _shape_prefix(sections):
@@ -148,7 +150,7 @@ def _class_meta(sections, entries):
     prefix = _shape_prefix(sections)
     for name, entry in entries.items():
         if isinstance(entry, dict) and entry.get("type") == "Class":
-            yield {"shape_id": f"{prefix}{name}", "target_class": name,
+            yield {"shape_id": f"{prefix}{name}", "shapes": (f"{prefix}{name}",), "target_class": name,
                    "target_kind": "class", "path": None, "inverse": False, "via_type": False,
                    "component": None, "params": None, "severity": "Violation", "message": None,
                    # no name: the SARIF title synthesizes "RDFS <profile> <Class> <attr>"
@@ -176,7 +178,8 @@ def _property_rows(meta, prop, entry):
 
     Per-property shape_id (like SHACL property shapes): rules and alert
     titles group per (profile, class, property)."""
-    meta = {**meta, "path": prop, "shape_id": f"{meta['shape_id']}.{prop}"}
+    shape_id = f"{meta['shape_id']}.{prop}"
+    meta = {**meta, "path": prop, "shape_id": shape_id, "shapes": (*meta["shapes"], shape_id)}
     rows = []
     low, high = entry.get("xsd:minOccours", ""), entry.get("xsd:maxOccours", "")
     if low.isdigit() and int(low) > 0:
