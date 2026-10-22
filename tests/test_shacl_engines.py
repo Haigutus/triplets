@@ -46,7 +46,7 @@ def breaker(object_id, *properties):
 
 def violating(violations, component):
     rows = violations[violations["VIOLATION_TYPE"] == component]
-    return set(zip(rows["ID"], rows["VALUE"].where(rows["VALUE"].notna(), None)))
+    return set(zip(rows["ID"], rows["VALUE"].astype(object).where(rows["VALUE"].notna(), None)))
 
 
 SHAPE = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property [ {body} ] ."""
@@ -1090,10 +1090,8 @@ def frame(rows):
 REFERENCES = {"EQ": {"Equipment.EquipmentContainer": {"type": "Association"}}}
 
 
-def parity(rows, shape, engine, component, data_scope=None, rdf_map=None, values=True):
-    """The engine's violating set, asserted equal to pyshacl's. ``values=False``
-    compares the focus IDs only (pyshacl's VALUE of a focus-level finding is the
-    focus node itself; the engines leave it empty)."""
+def parity(rows, shape, engine, component, data_scope=None, rdf_map=None):
+    """The engine's violating set, asserted equal to pyshacl's."""
     pytest.importorskip("pyshacl")
     import rdflib
     graph = rdflib.Graph()
@@ -1103,7 +1101,7 @@ def parity(rows, shape, engine, component, data_scope=None, rdf_map=None, values
         pairs = violating(triplets.validation.validate_shacl(
             frame(rows), graph, engine=name, data_scope=data_scope, lexical=False,
             rdf_map=rdf_map, rdf_map_scope="*" if rdf_map else None), component)
-        found[name] = pairs if values else {focus for focus, _ in pairs}
+        found[name] = pairs
     assert found[engine] == found["pyshacl"], found
     return found[engine]
 
@@ -1196,8 +1194,8 @@ def test_node_level_logical_operators(engine):
         sh:not [ sh:path cim:Switch.state ; sh:hasValue "banned" ] ."""
     rows = (breaker("named", ("IdentifiedObject.name", "n")) + breaker("described", ("IdentifiedObject.description", "d"))
             + breaker("bare") + breaker("banned", ("IdentifiedObject.name", "n"), ("Switch.state", "banned")))
-    for component, expected in (("sh:or", {"bare"}), ("sh:not", {"banned"})):
-        assert parity(rows, shape, engine, component, values=False) == expected, component
+    for component, expected in (("sh:or", {("bare", None)}), ("sh:not", {("banned", None)})):
+        assert parity(rows, shape, engine, component) == expected, component
 
 
 def test_logical_member_with_property_shapes(engine):
@@ -1214,7 +1212,7 @@ def test_logical_member_with_property_shapes(engine):
             + [("named", "Type", "Bay", "eq"), ("named", "IdentifiedObject.name", "N", "eq"),
                ("ok", "Type", "Bay", "eq"), ("bare", "Type", "Bay", "eq")])
     assert parity(rows, shape, engine, "sh:or", rdf_map=REFERENCES) == {("b3", "bare")}
-    assert parity(rows, shape, engine, "sh:not", rdf_map=REFERENCES, values=False) == {"b4"}
+    assert parity(rows, shape, engine, "sh:not", rdf_map=REFERENCES) == {("b4", None)}
 
 
 def test_operator_over_unknown_component_reports_nothing(engine):
@@ -1265,7 +1263,7 @@ def test_xone_node_level(engine):
                   [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) ."""
     rows = (breaker("both", ("IdentifiedObject.name", "n"), ("IdentifiedObject.description", "d"))
             + breaker("name", ("IdentifiedObject.name", "n")) + breaker("neither"))
-    assert parity(rows, shape, engine, "sh:xone", values=False) == {"both", "neither"}
+    assert parity(rows, shape, engine, "sh:xone") == {("both", None), ("neither", None)}
 
 
 def test_xone_property_level_judges_values(engine):
@@ -1284,4 +1282,4 @@ def test_xone_deactivated_member_conforms(engine):
         sh:xone ( [ sh:deactivated true ; sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ]
                   [ sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ] ) ."""
     rows = breaker("b1", ("IdentifiedObject.name", "n")) + breaker("b2")
-    assert parity(rows, shape, engine, "sh:xone", values=False) == {"b1"}
+    assert parity(rows, shape, engine, "sh:xone") == {("b1", None)}
