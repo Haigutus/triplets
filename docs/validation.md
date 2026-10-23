@@ -197,9 +197,14 @@ property shape's path stays declared. The filtered compile is cached per set on
 the one compile, with its own `hash` and `plans`; with nothing declared and
 nothing chosen `active()` is the compile itself. Truthiness follows pyshacl
 (`bool(literal.value)`): `true`, a non-empty plain literal — so a plain
-`"false"` deactivates — or a non-zero number; `"false"^^xsd:boolean` does not.
-pyshacl validates a copy of the shapes graph carrying exactly the chosen set as
-`sh:deactivated true` when it differs from the declared one.
+`"false"` deactivates — or a non-zero number; `"false"^^xsd:boolean` and an
+ill-typed literal (no value) do not; a non-literal or a second value raises
+ValueError at compile (pyshacl: `ShapeLoadError`). An id that names no shape in
+the graph is logged as a warning. pyshacl validates a copy of the shapes graph
+carrying exactly the chosen set as `sh:deactivated true` when it differs from
+the declared one; the shapes embedded in the SHACL report carry the same flags.
+Rows that differ only in lineage (one property shape under two node shapes with
+a common target) run once.
 
 `CompiledShapes.plans` is where each engine caches its own compiled artifact
 (the polars/duckdb `split_rules` partition) — re-validating new data against
@@ -345,7 +350,8 @@ united, differing values kept as the list of distinct values):
 | `source` | data file names (from the data's Distribution label meta rows) |
 | `references` | shape file names (recorded at compile) |
 | `compiled_hash` | the compiled rule set's hash (`CompiledShapes.hash`) — `concat_violations` counts shapes and constraints once per rule set |
-| `node_shapes` / `constraints` | count of NodeShapes not switched off / IR constraint rows of the run's rule set |
+| `deactivated_shapes` | the shape ids the run switched off, sorted (`[]` = every shape ran) |
+| `node_shapes` / `constraints` | count of NodeShapes not switched off / distinct constraints of the run's rule set (IR rows that differ only in lineage count once) |
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
 | `inheritance` | whether class inheritance was applied — `validate_shacl`: an rdf_map scope with classes and `inheritance=True`; `validate_schema_references`: the `inheritance` flag |
 | `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — those two empty for `engine="pyshacl"` (spec-complete); association ranges no given profile defines (`validate_schema_references`) |

@@ -81,9 +81,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   declared, `[]` = run everything) before any engine runs (node, property and
   standalone property shapes, `sh:node` targets, logical members; paths stay
   declared under `sh:closed`; truthiness as pyshacl, a plain `"false"`
-  deactivates). pyshacl receives the same set. One compiled base serves the
-  NC validation aggregates that switch different shapes off. IR rows carry
-  their lineage in a `shapes` column.
+  deactivates, an ill-typed literal does not, a non-literal or second value
+  raises ValueError). pyshacl and the SHACL report's embedded shapes receive
+  the same set; the run metadata lists it as `deactivated_shapes`. One compiled
+  base serves the NC validation aggregates that switch different shapes off.
+  IR rows carry their lineage in a `shapes` column.
 
 ### Changed
 - **Breaking — `sparql.query(scope=)` → `data_scope=`**, matching the validations
