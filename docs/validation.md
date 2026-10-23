@@ -194,8 +194,8 @@ switched-off shape are dropped; a switched-off `sh:or` / `sh:and` member or
 `sh:node` target empties and conforms, a switched-off `sh:not` shape empties and
 flags every node it judges (as pyshacl); under `sh:closed` a switched-off
 property shape's path stays declared. The filtered compile is cached per set on
-the one compile, with its own `hash` and `plans`; with nothing declared and
-nothing chosen `active()` is the compile itself. Truthiness follows pyshacl
+the one compile: the compile's `hash`, its own `plans`; with nothing declared
+and nothing chosen `active()` is the compile itself. Truthiness follows pyshacl
 (`bool(literal.value)`): `true`, a non-empty plain literal — so a plain
 `"false"` deactivates — or a non-zero number; `"false"^^xsd:boolean` and an
 ill-typed literal (no value) do not; a non-literal or a second value raises
@@ -339,7 +339,7 @@ from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an exp
 the returned frame as `violations.attrs["validation"]`. Every report exporter
 reads it, so all formats tell the same story; `concat_violations(frames)`
 joins the frames of several runs of one constraint language and merges their
-metadata (earliest start, latest end, counts once per compiled rule set, lists
+metadata (earliest start, latest end, counts once per rule set, lists
 united, differing values kept as the list of distinct values):
 
 | key | meaning |
@@ -349,8 +349,8 @@ united, differing values kept as the list of distinct values):
 | `creator` | tool + version |
 | `source` | data file names (from the data's Distribution label meta rows) |
 | `references` | shape file names (recorded at compile) |
-| `compiled_hash` | the compiled rule set's hash (`CompiledShapes.hash`) — `concat_violations` counts shapes and constraints once per rule set |
-| `deactivated_shapes` | the shape ids the run switched off, sorted (`[]` = every shape ran) |
+| `compiled_hash` | the shape files' content hash (`CompiledShapes.hash`, the same with any `deactivated_shapes`) |
+| `deactivated_shapes` | the shape ids the run switched off, sorted (`[]` = every shape ran); the run's rule set is `compiled_hash` + `deactivated_shapes` — `concat_violations` counts shapes and constraints once per rule set |
 | `node_shapes` / `constraints` | count of NodeShapes not switched off / distinct constraints of the run's rule set (IR rows that differ only in lineage count once) |
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
 | `inheritance` | whether class inheritance was applied — `validate_shacl`: an rdf_map scope with classes and `inheritance=True`; `validate_schema_references`: the `inheritance` flag |

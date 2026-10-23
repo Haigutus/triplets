@@ -43,7 +43,7 @@ class CompiledShapes:
 
     graph: object                 # rdflib.Graph — what pyshacl consumes
     ir: pandas.DataFrame          # constraint table — what the vectorized engines consume
-    hash: str                     # content hash of the shape sources (cache key)
+    hash: str                     # content hash of the shape sources (cache key; a filtered compile keeps it)
     sources: tuple = ()           # shape file basenames (report metadata; () for a Graph)
     language: str = "shacl"       # constraint language — "rdfs" for schema-compiled IR
     stats: dict = field(default_factory=dict)  # coverage facts (see _shape_stats)
@@ -58,8 +58,9 @@ class CompiledShapes:
         """The run's rule set: *deactivated_shapes* (a shape IRI or an iterable of
         them) switched off — None = this compile's own set (on the full compile the
         shapes the graph declares), [] = every shape runs, any other set replaces the
-        declared one. The same compile, its IR without their rows; cached per set on
-        the full compile, the full compile itself when nothing is declared or chosen.
+        declared one. The same compile and ``hash``, its IR without their rows; cached
+        per set on the full compile, the full compile itself when nothing is declared
+        or chosen.
         [] over a declared set is a compile of its own: pyshacl then validates the
         declared shapes too."""
         base = self.base or self
@@ -180,7 +181,8 @@ def _mark_switched_off(graph, compiled):
 def _switched_off(base, off):
     """*base* with the shapes in *off* switched off: rows whose lineage meets *off*
     dropped, nested members and sh:node targets pruned the same way. Engines cache
-    their split per object, so the filtered compile gets fresh ``plans``."""
+    their split per object, so the filtered compile gets fresh ``plans``; its
+    ``hash`` stays the shape files' — ``deactivated`` names what is off."""
     import rdflib
 
     SH = rdflib.Namespace(SH_NS)
@@ -196,20 +198,8 @@ def _switched_off(base, off):
              # by the entry's leading subject: a skipped shape nested under a switched-off one stays listed
              "skipped_shapes": [entry for entry in base.stats["skipped_shapes"]
                                 if entry.split(": ", 1)[0] not in off]}
-    return CompiledShapes(graph=base.graph, ir=ir, hash=f"{base.hash}:off-{_off_digest(off, base.deactivated)}",
+    return CompiledShapes(graph=base.graph, ir=ir, hash=base.hash,
                           sources=base.sources, language=base.language, stats=stats, deactivated=off, base=base)
-
-
-def _off_digest(off, declared):
-    """The switched-off set's part of the filtered hash. rdflib mints new
-    blank-node ids on every parse, so the blank nodes of *off* count as one
-    marker when they are exactly the declared ones (base.hash pins which those
-    are); blank-node ids the caller names come from this process's graph."""
-    blanks = {shape for shape in off if not _is_iri(shape)}
-    declared_blanks = {shape for shape in declared if not _is_iri(shape)}
-    marked = ["_:declared"] if blanks and blanks == declared_blanks else sorted(blanks)
-    text = "\n".join([*sorted(off - blanks), *marked])
-    return hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
 def _without(rows, off):

@@ -52,7 +52,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     `data_scope` selects the validated instances only)
     hold the CIM header logic.
   - `concat_violations(frames)` joins the frames of several runs, merging their
-    run metadata (shape and constraint counts once per `compiled_hash`).
+    run metadata (shape and constraint counts once per rule set: `compiled_hash`
+    + `deactivated_shapes`).
 - **Class inheritance follows the scoped profiles, the same on every engine:**
   `schema_scope.class_ancestors(rdf_map, rdf_map_scope)` unions same-named
   Class entries' `inheritance` lists and closes the relation only through
@@ -83,8 +84,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   declared under `sh:closed`; truthiness as pyshacl, a plain `"false"`
   deactivates, an ill-typed literal does not, a non-literal or second value
   raises ValueError). pyshacl and the SHACL report's embedded shapes receive
-  the same set; the run metadata lists it as `deactivated_shapes`. One compiled
-  base serves the NC validation aggregates that switch different shapes off.
+  the same set; the run metadata lists it as `deactivated_shapes` next to the
+  shape files' `compiled_hash`. One compiled base serves the NC validation
+  aggregates that switch different shapes off.
   IR rows carry their lineage in a `shapes` column.
 
 ### Changed

@@ -735,13 +735,29 @@ def test_deactivated_shapes_parameter(engine_name):
     assert len(_COMPILE_CACHE) == cached
     assert compiled.active([CIM + "NameShape"]) is compiled.active([CIM + "NameShape"])
     metadata = {off: v.attrs["validation"] for off, v in runs.items()}
-    assert len({run["compiled_hash"] for run in metadata.values()}) == 3
-    assert metadata[()]["compiled_hash"] == compiled.hash
-    assert metadata[("NameShape",)]["compiled_hash"] != compiled.hash
+    assert {run["compiled_hash"] for run in metadata.values()} == {compiled.hash}
     assert {off: (run["node_shapes"], run["constraints"]) for off, run in metadata.items()} == {
         (): (1, 2), ("NameShape",): (1, 1), ("DescriptionShape",): (1, 1)}
     assert {off: run["deactivated_shapes"] for off, run in metadata.items()} == {
         (): [], ("NameShape",): [CIM + "NameShape"], ("DescriptionShape",): [CIM + "DescriptionShape"]}
+
+
+def test_concat_violations_counts_each_rule_set_once():
+    """Runs of one compile with different switched-off sets sum their counts;
+    runs with the same set count once."""
+    compiled = compiled_shapes("""
+        cim:NameShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 .
+        cim:DescriptionShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.description ; sh:minCount 1 .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property cim:NameShape, cim:DescriptionShape .""")
+    rows = breaker("b1", ("IdentifiedObject.description", "d"))
+    every, without_name = (switched_off(rows, compiled, "pandas", off) for off in ((), ("NameShape",)))
+
+    def counts(frames):
+        merged = triplets.validation.concat_violations(frames).attrs["validation"]
+        return merged["node_shapes"], merged["constraints"]
+    assert counts([every, without_name]) == (2, 3)
+    assert counts([without_name, without_name]) == (1, 1)
 
 
 @pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])

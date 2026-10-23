@@ -294,25 +294,6 @@ def test_active_prunes_nested_rows():
     assert "sh:or" not in set(compiled.active([CIM + "AliasShape"]).ir["component"])
 
 
-def test_filtered_hash_stable_across_parses(tmp_path):
-    """An inline sh:deactivated shape gets a fresh blank-node id on every parse;
-    the declared set's filtered hash does not change with it."""
-    path = tmp_path / "shapes.ttl"
-    path.write_text(f"""@prefix sh: <http://www.w3.org/ns/shacl#> .
-        @prefix cim: <{CIM}> .
-        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
-            sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:deactivated true ] ;
-            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .""")
-    runs = []
-    for _ in range(2):
-        with triplets.cache_scope():
-            compiled = compile_shapes(str(path))
-            runs.append((compiled.deactivated, compiled.active().hash))
-    (first, first_hash), (second, second_hash) = runs
-    assert first != second and len(first) == len(second) == 1
-    assert first_hash == second_hash != compiled.hash
-
-
 def test_unknown_deactivated_shape_warns(caplog):
     compiled = compile_shapes(_graph(NESTED))
     with caplog.at_level("WARNING", logger="triplets.validation.shacl_ir"):
