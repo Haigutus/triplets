@@ -128,20 +128,53 @@ def _unknown_components(ir):
 
 
 def _declared_deactivated(graph):
-    """Shape ids the graph marks sh:deactivated. Truthiness follows pyshacl
-    (bool(literal.value)): true, a non-empty plain literal (so a plain "false")
-    or a non-zero number deactivates; "false"^^xsd:boolean does not."""
+    """Shape ids the graph marks sh:deactivated, as pyshacl reads the flag:
+    bool(literal.value) — true, a non-empty plain literal (so a plain "false")
+    or a non-zero number deactivates; "false"^^xsd:boolean and an ill-typed
+    literal (no value) do not. A non-literal or more than one value raises
+    ValueError (pyshacl: ShapeLoadError)."""
     import rdflib
 
     SH = rdflib.Namespace(SH_NS)
-    return frozenset(str(shape) for shape, flag in graph.subject_objects(SH.deactivated)
-                     if bool(flag.toPython()))
+    off = set()
+    for shape in set(graph.subjects(SH.deactivated)):
+        flags = set(graph.objects(shape, SH.deactivated))
+        if len(flags) > 1:
+            raise ValueError(f"shape {shape} has more than one sh:deactivated value")
+        flag = flags.pop()
+        if not isinstance(flag, rdflib.Literal):
+            raise ValueError(f"shape {shape}: the sh:deactivated value {flag} is not a literal")
+        if bool(flag.value):
+            off.add(str(shape))
+    return frozenset(off)
+
+
+def _is_iri(shape_id):
+    return "://" in shape_id or shape_id.startswith("urn:")
 
 
 def _term(shape_id):
     """A shape id (``shape_id`` / ``shapes`` string form) → its rdflib term."""
     import rdflib
-    return rdflib.URIRef(shape_id) if "://" in shape_id or shape_id.startswith("urn:") else rdflib.BNode(shape_id)
+    return rdflib.URIRef(shape_id) if _is_iri(shape_id) else rdflib.BNode(shape_id)
+
+
+def _mark_switched_off(graph, compiled):
+    """*graph* — the compiled shapes graph or a part of it — with sh:deactivated
+    true on exactly *compiled*'s switched-off shapes: re-enabled shapes lose
+    their declaration. In place, and only on shapes that are subjects in
+    *graph*; a no-op when the set is the declared one."""
+    import rdflib
+
+    deactivated = rdflib.URIRef(SH_NS + "deactivated")
+    for shape in compiled.deactivated ^ (compiled.base or compiled).deactivated:
+        node = _term(shape)
+        if (node, None, None) not in graph:
+            continue
+        graph.remove((node, deactivated, None))   # also a declared false: two values would not load
+        if shape in compiled.deactivated:
+            graph.add((node, deactivated, rdflib.Literal(True)))
+    return graph
 
 
 def _switched_off(base, off):
@@ -151,6 +184,9 @@ def _switched_off(base, off):
     import rdflib
 
     SH = rdflib.Namespace(SH_NS)
+    unknown = sorted(shape for shape in off if (_term(shape), None, None) not in base.graph)
+    if unknown:
+        logger.warning("deactivated_shapes names no shape in the shapes graph: %s", ", ".join(unknown))
     ir = base.ir.loc[base.ir["shapes"].map(off.isdisjoint)].reset_index(drop=True)
     ir["params"] = [_prune(component, params, off) for component, params in zip(ir["component"], ir["params"])]
     stats = {**base.stats, "constraints": len(_distinct(ir)),
@@ -160,9 +196,20 @@ def _switched_off(base, off):
              # by the entry's leading subject: a skipped shape nested under a switched-off one stays listed
              "skipped_shapes": [entry for entry in base.stats["skipped_shapes"]
                                 if entry.split(": ", 1)[0] not in off]}
-    digest = hashlib.sha256("\n".join(sorted(off)).encode()).hexdigest()[:12]
-    return CompiledShapes(graph=base.graph, ir=ir, hash=f"{base.hash}:off-{digest}", sources=base.sources,
-                          language=base.language, stats=stats, deactivated=off, base=base)
+    return CompiledShapes(graph=base.graph, ir=ir, hash=f"{base.hash}:off-{_off_digest(off, base.deactivated)}",
+                          sources=base.sources, language=base.language, stats=stats, deactivated=off, base=base)
+
+
+def _off_digest(off, declared):
+    """The switched-off set's part of the filtered hash. rdflib mints new
+    blank-node ids on every parse, so the blank nodes of *off* count as one
+    marker when they are exactly the declared ones (base.hash pins which those
+    are); blank-node ids the caller names come from this process's graph."""
+    blanks = {shape for shape in off if not _is_iri(shape)}
+    declared_blanks = {shape for shape in declared if not _is_iri(shape)}
+    marked = ["_:declared"] if blanks and blanks == declared_blanks else sorted(blanks)
+    text = "\n".join([*sorted(off - blanks), *marked])
+    return hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
 def _without(rows, off):

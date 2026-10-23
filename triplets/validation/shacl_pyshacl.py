@@ -8,9 +8,9 @@ import logging
 
 from importlib.util import find_spec
 
-from ..iri import CIM_NS, SH_NS
+from ..iri import CIM_NS
 from .._rdflib_loader import load_dataset, scoped_graph
-from .shacl_ir import _term
+from .shacl_ir import _mark_switched_off
 from .shacl_report import report_to_violations
 
 if find_spec("pyshacl") is None:  # registry contract: an unavailable engine fails at import
@@ -77,23 +77,19 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
 
 def _switched_off_graph(compiled):
     """The shapes graph pyshacl validates with: the compiled graph with exactly
-    the run's switched-off set marked ``sh:deactivated true`` — re-enabled shapes
-    lose their declaration. A copy only when that set differs from the declared
-    one — pyshacl (advanced=True) may mutate the graph it is given."""
+    the run's switched-off set marked ``sh:deactivated true``. A copy (prefixes
+    included — pyshacl renders its messages with them) only when that set
+    differs from the declared one — pyshacl (advanced=True) may mutate the
+    graph it is given."""
     import rdflib
 
-    declared, chosen = (compiled.base or compiled).deactivated, compiled.deactivated
-    if chosen == declared:
+    if compiled.deactivated == (compiled.base or compiled).deactivated:
         return compiled.graph
-    deactivated = rdflib.URIRef(SH_NS + "deactivated")
     graph = rdflib.Graph()
+    for prefix, namespace in compiled.graph.namespaces():
+        graph.bind(prefix, namespace, override=True, replace=True)
     graph += compiled.graph
-    for shape in chosen ^ declared:
-        node = _term(shape)
-        graph.remove((node, deactivated, None))   # also a declared false: two values would not load
-        if shape in chosen:
-            graph.add((node, deactivated, rdflib.Literal(True)))
-    return graph
+    return _mark_switched_off(graph, compiled)
 
 
 def _ontology_graph(ancestors, rdf_map, undefined_namespace):

@@ -234,6 +234,7 @@ def _graph(turtle):
     ("true", True),
     ('"false"^^xsd:boolean', False),
     ('"false"', True),   # pyshacl tests bool(literal.value): a plain "false" deactivates too
+    ('"abc"^^xsd:integer', False),   # ill-typed: no value
 ])
 def test_deactivated_shapes_compile_and_filter(flag, off):
     from triplets.validation.shacl_ir import parse_ir
@@ -291,6 +292,33 @@ def test_active_prunes_nested_rows():
     assert len(compiled.ir.set_index("component").loc["sh:or", "params"][0]) == 1   # the base keeps them
     assert active.active() is active                    # None keeps a filtered compile's own set
     assert "sh:or" not in set(compiled.active([CIM + "AliasShape"]).ir["component"])
+
+
+def test_filtered_hash_stable_across_parses(tmp_path):
+    """An inline sh:deactivated shape gets a fresh blank-node id on every parse;
+    the declared set's filtered hash does not change with it."""
+    path = tmp_path / "shapes.ttl"
+    path.write_text(f"""@prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix cim: <{CIM}> .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:deactivated true ] ;
+            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .""")
+    runs = []
+    for _ in range(2):
+        with triplets.cache_scope():
+            compiled = compile_shapes(str(path))
+            runs.append((compiled.deactivated, compiled.active().hash))
+    (first, first_hash), (second, second_hash) = runs
+    assert first != second and len(first) == len(second) == 1
+    assert first_hash == second_hash != compiled.hash
+
+
+def test_unknown_deactivated_shape_warns(caplog):
+    compiled = compile_shapes(_graph(NESTED))
+    with caplog.at_level("WARNING", logger="triplets.validation.shacl_ir"):
+        active = compiled.active(["http://example.org/Typo", CIM + "M"])
+    assert "http://example.org/Typo" in caplog.text and CIM + "M" not in caplog.text
+    assert len(active.ir) == len(compiled.ir)
 
 
 # ── per-file graph cache ──────────────────────────────────────────────────────

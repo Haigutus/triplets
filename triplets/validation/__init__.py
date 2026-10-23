@@ -52,7 +52,8 @@ import pandas
 from .._engine_detect import flavor
 from .._registry import EngineRegistry
 from ..iri import CIM_NS, load_rdf_map
-from .shacl_ir import CompiledShapes, _term, compile_shapes as compile  # noqa: A001 — public API name
+from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
+from .shacl_ir import _mark_switched_off, _term
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
 from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
@@ -265,14 +266,14 @@ def _source_shape_graphs(violations, compiled):
     """{shape id: rdflib CBD graph} of the violated shapes — the SHACL report
     embeds these so sh:sourceShape is never an empty node (term identity is
     preserved: the CBD's blank nodes ARE the compiled graph's, so they align
-    with the report's sh:sourceShape labels)."""
+    with the report's sh:sourceShape labels). sh:deactivated as the run used it."""
     graphs = {}
     if compiled.graph is None:           # schema-compiled IR — no shapes graph to embed
         return graphs
     for shape in set(violations["SOURCE_SHAPE"].dropna().astype(str)):
         cbd = compiled.graph.cbd(_term(shape))
         if len(cbd):
-            graphs[shape] = cbd
+            graphs[shape] = _mark_switched_off(cbd, compiled)
     return graphs
 
 
@@ -483,6 +484,7 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
         "source": _source_labels(data, table_name=table_name),
         "references": list(compiled.sources),
         "compiled_hash": compiled.hash,
+        "deactivated_shapes": sorted(compiled.deactivated),
         "node_shapes": compiled.stats.get("node_shapes", 0),
         "constraints": compiled.stats.get("constraints", 0),
         "language": compiled.language,
