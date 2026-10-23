@@ -822,6 +822,21 @@ def test_deactivated_shape_with_declared_false(engine_name):
     assert findings(switched_off(breaker("b1"), compiled, engine_name)) == {("b1", "sh:minCount")}
     assert findings(switched_off(breaker("b1"), compiled, engine_name, ["X"])) == set()
 
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("constraint, expected", [
+    ("sh:maxCount 1", set()),
+    ("sh:minCount 2", {("b1", "sh:minCount")}),
+])
+def test_shared_property_shape_counts_values_once(engine_name, constraint, expected):
+    """One property shape under two node shapes with the same target counts each
+    value once (issue #99): one name passes sh:maxCount 1 and fails sh:minCount 2."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes(SHARED.format(target="Breaker").replace("sh:minCount 1", constraint))
+    assert findings(switched_off(breaker("b1", ("IdentifiedObject.name", "n")), compiled, engine_name)) == expected
+    assert compiled.stats["constraints"] == 1
+
+
 @pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
 def test_shape_on_parent_and_child_reports_once(engine_name):
     """One property shape on both a parent and a child node shape (CGMES SHACL

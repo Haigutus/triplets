@@ -117,7 +117,7 @@ def _shape_stats(graph, ir):
             skipped.add(f"{subject}: unsupported sh:path form")
     return {
         "node_shapes": sum(1 for _ in graph.subjects(rdflib.RDF.type, SH.NodeShape)),
-        "constraints": len(ir),
+        "constraints": len(_distinct(ir)),
         "skipped_shapes": sorted(skipped),
         "unknown_components": _unknown_components(ir),
     }
@@ -153,7 +153,7 @@ def _switched_off(base, off):
     SH = rdflib.Namespace(SH_NS)
     ir = base.ir.loc[base.ir["shapes"].map(off.isdisjoint)].reset_index(drop=True)
     ir["params"] = [_prune(component, params, off) for component, params in zip(ir["component"], ir["params"])]
-    stats = {**base.stats, "constraints": len(ir),
+    stats = {**base.stats, "constraints": len(_distinct(ir)),
              "node_shapes": sum(1 for shape in base.graph.subjects(rdflib.RDF.type, SH.NodeShape)
                                 if str(shape) not in off),
              "unknown_components": _unknown_components(ir),
@@ -272,7 +272,7 @@ def split_rules(ir, implemented, fallback_components, engine):
     runs once per compiled shapes, not once per validate call; validate_shacl()
     reads the skipped components into the report metadata.
     """
-    rules = list(ir.itertuples())
+    rules = list(_distinct(ir).itertuples())
     vectorized = [rule for rule in rules if rule.component in implemented]
     fallback = [rule for rule in rules if rule.component in fallback_components]
     skipped = {rule.component for rule in rules} - set(implemented) - set(fallback_components)
@@ -280,6 +280,14 @@ def split_rules(ir, implemented, fallback_components, engine):
         logger.debug("%s engine skips components: %s (pyshacl covers them)",
                      engine, ", ".join(sorted(skipped)))
     return vectorized, fallback, sorted(skipped)
+
+
+def _distinct(ir):
+    """One rule per constraint for the engines: rows that differ only in lineage
+    (one property shape under two node shapes with a common target) run once —
+    the polars batch path counts every rule row (issue #99)."""
+    signature = ir.drop(columns=["shapes"]).assign(params=ir["params"].astype(str))
+    return ir.loc[~signature.duplicated()]
 
 
 # ── shapes graph → constraint table ──────────────────────────────────────────
@@ -324,7 +332,7 @@ def parse_ir(graph) -> pandas.DataFrame:
     # duplicated rules double-counted in the polars batch path. Rows that differ
     # only in lineage (one property shape under two node shapes with the same
     # target) both stay, so switching one node shape off keeps the other's;
-    # validate_shacl reports their findings once.
+    # split_rules hands the engines one of them.
     signature = ir.assign(params=ir["params"].astype(str))
     ir = ir.loc[~signature.duplicated()].reset_index(drop=True)
     # DataFrame construction turns None into NaN — which is TRUTHY, so the
