@@ -123,6 +123,9 @@ filterwarnings = [
 [tool.uv]
 exclude-newer = "P14D"
 
+[tool.uv.exclude-newer-package]
+certifi = false  # eMudhra CA compromise (GHSA-hq85-5cpj-mr62) needs certifi>=2026.10.19 inside the cooldown
+
 [build-system]
 requires = [
     "setuptools>=77",
