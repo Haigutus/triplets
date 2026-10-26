@@ -653,6 +653,268 @@ def test_sh_class_accepts_subclasses_via_index(engine):
     assert violating(v, "sh:class") == {("b2", "sub1")}
 
 
+def findings(violations):
+    return set(zip(violations["ID"], violations["VIOLATION_TYPE"]))
+
+
+DEACTIVATED = {
+    "node shape": """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:deactivated true ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .""",
+    "inline property shape": """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:deactivated true ] ;
+        sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .""",
+    # the NC profiles' form: a standalone property shape switched off
+    "standalone property shape": """cim:NameShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ;
+            sh:minCount 1 ; sh:deactivated true .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:NameShape ;
+            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .""",
+    "sh:node target": """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:ContainerShape ] ;
+            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .
+        cim:ContainerShape a sh:NodeShape ; sh:deactivated true ;
+            sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .""",
+    # a deactivated member conforms, so the sh:or holds for every aliasName value
+    "logical member": """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:IdentifiedObject.aliasName ;
+                      sh:or ( [ sh:datatype xsd:integer ; sh:deactivated true ] [ sh:datatype xsd:boolean ] ) ] ;
+        sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .""",
+    # the path of a deactivated property shape is still declared, so sh:closed allows it
+    "path under sh:closed": """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:closed true ;
+        sh:ignoredProperties ( rdf:type cim:Equipment.EquipmentContainer cim:IdentifiedObject.name ) ;
+        sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ;
+        sh:property [ sh:path cim:IdentifiedObject.aliasName ; sh:maxCount 0 ; sh:deactivated true ] .""",
+}
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("case", DEACTIVATED)
+def test_deactivated_shapes_are_not_validated(engine_name, case):
+    """b1 breaks only the deactivated constraints; b2 also lacks the active description."""
+    pytest.importorskip(engine_name)
+    rows = (breaker("b1", ("IdentifiedObject.description", "d"), ("IdentifiedObject.aliasName", "a"),
+                    ("Equipment.EquipmentContainer", "vl1"))
+            + breaker("b2", ("IdentifiedObject.aliasName", "a"), ("Equipment.EquipmentContainer", "vl1"))
+            + [("vl1", "Type", "VoltageLevel", "eq")])   # vl1 has no name
+    expected = set() if case == "node shape" else {("b2", "sh:minCount")}
+    assert findings(run(rows, DEACTIVATED[case], engine_name)) == expected
+
+
+CIM = "http://iec.ch/TC57/CIM100#"
+
+
+def compiled_shapes(shape_turtle):
+    import rdflib
+    return triplets.validation.compile(rdflib.Graph().parse(data=PREFIX + shape_turtle, format="turtle"))
+
+
+def switched_off(rows, compiled, engine_name, shapes=None):
+    """validate_shacl with the cim: *shapes* as deactivated_shapes (None: the declared set)."""
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    return triplets.validation.validate_shacl(
+        data, compiled, engine=engine_name, lexical=False,
+        deactivated_shapes=None if shapes is None else [CIM + shape for shape in shapes])
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_deactivated_shapes_parameter(engine_name):
+    """One compile, three rule sets: each switched-off set is its own cached filter."""
+    pytest.importorskip(engine_name)
+    from triplets.validation.shacl_ir import _COMPILE_CACHE
+    compiled = compiled_shapes("""
+        cim:NameShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 .
+        cim:DescriptionShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.description ; sh:minCount 1 .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property cim:NameShape, cim:DescriptionShape .""")
+    cached = len(_COMPILE_CACHE)
+    rows = breaker("b1", ("IdentifiedObject.description", "d")) + breaker("b2", ("IdentifiedObject.name", "n"))
+    runs = {off: switched_off(rows, compiled, engine_name, off) for off in ((), ("NameShape",), ("DescriptionShape",))}
+    assert {off: findings(v) for off, v in runs.items()} == {
+        (): {("b1", "sh:minCount"), ("b2", "sh:minCount")},
+        ("NameShape",): {("b2", "sh:minCount")},
+        ("DescriptionShape",): {("b1", "sh:minCount")}}
+    assert len(_COMPILE_CACHE) == cached
+    assert compiled.active([CIM + "NameShape"]) is compiled.active([CIM + "NameShape"])
+    metadata = {off: v.attrs["validation"] for off, v in runs.items()}
+    assert {run["compiled_hash"] for run in metadata.values()} == {compiled.hash}
+    assert {off: (run["node_shapes"], run["constraints"]) for off, run in metadata.items()} == {
+        (): (1, 2), ("NameShape",): (1, 1), ("DescriptionShape",): (1, 1)}
+    assert {off: run["deactivated_shapes"] for off, run in metadata.items()} == {
+        (): [], ("NameShape",): [CIM + "NameShape"], ("DescriptionShape",): [CIM + "DescriptionShape"]}
+
+
+def test_concat_violations_counts_each_rule_set_once():
+    """Runs of one compile with different switched-off sets sum their counts;
+    runs with the same set count once."""
+    compiled = compiled_shapes("""
+        cim:NameShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 .
+        cim:DescriptionShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.description ; sh:minCount 1 .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property cim:NameShape, cim:DescriptionShape .""")
+    rows = breaker("b1", ("IdentifiedObject.description", "d"))
+    every, without_name = (switched_off(rows, compiled, "pandas", off) for off in ((), ("NameShape",)))
+
+    def counts(frames):
+        merged = triplets.validation.concat_violations(frames).attrs["validation"]
+        return merged["node_shapes"], merged["constraints"]
+    assert counts([every, without_name]) == (2, 3)
+    assert counts([without_name, without_name]) == (1, 1)
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_deactivated_shapes_replace_declared(engine_name):
+    """deactivated_shapes is the run's switched-off set: None keeps the declared
+    one, [] runs every shape, a list replaces it."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes("""
+        cim:NameShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 .
+        cim:DescShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.description ; sh:minCount 1 ;
+            sh:deactivated true .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:NameShape, cim:DescShape .""")
+    rows = breaker("b1", ("IdentifiedObject.description", "d")) + breaker("b2", ("IdentifiedObject.name", "n"))
+    name, description = ("b1", "sh:minCount"), ("b2", "sh:minCount")
+    assert findings(switched_off(rows, compiled, engine_name)) == {name}
+    assert findings(switched_off(rows, compiled, engine_name, [])) == {name, description}
+    assert findings(switched_off(rows, compiled, engine_name, ["NameShape"])) == {description}
+    assert findings(switched_off(rows, compiled, engine_name, ["NameShape", "DescShape"])) == set()
+    assert compiled.deactivated == {CIM + "DescShape"}
+    # the same finding reads the same whichever set runs (pyshacl: a copy of the graph for [])
+    messages = {off: set(v.loc[v["ID"] == "b1", "MESSAGE"])
+                for off, v in ((None, switched_off(rows, compiled, engine_name)),
+                               ((), switched_off(rows, compiled, engine_name, [])))}
+    assert messages[None] == messages[()] and messages[None]
+    assert (compiled.ir["shape_id"] == CIM + "DescShape").any()
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_deactivated_shapes_single_iri(engine_name):
+    """One shape IRI as a string is that shape, not its characters."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes("""
+        cim:NameShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:NameShape .""")
+    data = pandas.DataFrame(breaker("b1"), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    v = triplets.validation.validate_shacl(data, compiled, engine=engine_name, deactivated_shapes=CIM + "NameShape")
+    assert findings(v) == findings(switched_off(breaker("b1"), compiled, engine_name, ["NameShape"])) == set()
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_deactivated_shapes_not_member(engine_name):
+    """A switched-off negated shape conforms for every value, so sh:not flags them all."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes("""cim:Banned sh:in ( "B" ) .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property [ sh:path cim:IdentifiedObject.name ; sh:not cim:Banned ] .""")
+    rows = breaker("b1", ("IdentifiedObject.name", "C")) + breaker("b2", ("IdentifiedObject.name", "B"))
+    assert findings(switched_off(rows, compiled, engine_name)) == {("b2", "sh:not")}
+    assert findings(switched_off(rows, compiled, engine_name, ["Banned"])) == {("b1", "sh:not"), ("b2", "sh:not")}
+
+
+SHARED = """cim:P a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 .
+    cim:A a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:P .
+    cim:B a sh:NodeShape ; sh:targetClass cim:{target} ; sh:property cim:P ."""
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_deactivated_shared_property_shape(engine_name):
+    """A standalone property shape switched off is off under every node shape."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes(SHARED.format(target="Disconnector"))
+    rows = breaker("b1") + [("d1", "Type", "Disconnector", "eq")]
+    assert findings(switched_off(rows, compiled, engine_name)) == {("b1", "sh:minCount"), ("d1", "sh:minCount")}
+    assert findings(switched_off(rows, compiled, engine_name, ["P"])) == set()
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_deactivated_node_shape_keeps_shared_property_shape(engine_name):
+    """Two node shapes share a property shape and a target: switching one off
+    keeps the other's constraint."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes(SHARED.format(target="Breaker"))
+    assert findings(switched_off(breaker("b1"), compiled, engine_name, ["A"])) == {("b1", "sh:minCount")}
+    assert findings(switched_off(breaker("b1"), compiled, engine_name, ["A", "B"])) == set()
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_deactivated_shape_with_declared_false(engine_name):
+    """The parameter overrides a declared sh:deactivated false."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes("""
+        cim:X a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 ;
+            sh:deactivated "false"^^xsd:boolean .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:X .""")
+    assert findings(switched_off(breaker("b1"), compiled, engine_name)) == {("b1", "sh:minCount")}
+    assert findings(switched_off(breaker("b1"), compiled, engine_name, ["X"])) == set()
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("constraint, expected", [
+    ("sh:maxCount 1", set()),
+    ("sh:minCount 2", {("b1", "sh:minCount")}),
+])
+def test_shared_property_shape_counts_values_once(engine_name, constraint, expected):
+    """One property shape under two node shapes with the same target counts each
+    value once (issue #99): one name passes sh:maxCount 1 and fails sh:minCount 2."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes(SHARED.format(target="Breaker").replace("sh:minCount 1", constraint))
+    assert findings(switched_off(breaker("b1", ("IdentifiedObject.name", "n")), compiled, engine_name)) == expected
+    assert compiled.stats["constraints"] == 1
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_deactivated_shape_ill_typed_flag(engine_name):
+    """An ill-typed sh:deactivated literal has no value, so the shape stays on (as pyshacl)."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes("""
+        cim:X a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 ;
+            sh:deactivated "abc"^^xsd:integer .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:X .""")
+    assert compiled.deactivated == frozenset()
+    assert findings(switched_off(breaker("b1"), compiled, engine_name)) == {("b1", "sh:minCount")}
+
+
+@pytest.mark.parametrize("flag", ["cim:Yes", 'true, "1"^^xsd:integer'])
+def test_deactivated_shape_invalid_flag(flag):
+    """A non-literal or a second sh:deactivated value does not load — on pyshacl either."""
+    import rdflib
+    pyshacl = pytest.importorskip("pyshacl")
+    shapes = PREFIX + f"""cim:X a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 ;
+            sh:deactivated {flag} .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:X ."""
+    graph = rdflib.Graph().parse(data=shapes, format="turtle")
+    with pytest.raises(ValueError, match=f"shape {CIM}X"):
+        triplets.validation.compile(graph)
+    with pytest.raises(pyshacl.errors.ShapeLoadError):
+        pyshacl.validate(rdflib.Graph(), shacl_graph=graph)
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_report_shapes_carry_the_run_flags(engine_name):
+    """The report's embedded shapes say sh:deactivated as the run used it: a
+    re-enabled shape without it, a shape switched off by the parameter with it."""
+    import rdflib
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes("""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:closed true ; sh:ignoredProperties ( rdf:type ) ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:deactivated true ] ;
+        sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .""")
+    by_path = dict(zip(compiled.ir["path"], compiled.ir["shape_id"]))
+    name, description = by_path["IdentifiedObject.name"], by_path["IdentifiedObject.description"]
+    rows = breaker("b1", ("IdentifiedObject.name", "n"), ("IdentifiedObject.description", "d"),
+                   ("IdentifiedObject.aliasName", "a"))
+    deactivated = rdflib.URIRef("http://www.w3.org/ns/shacl#deactivated")
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    for off, flagged in (([], set()), ([description], {description})):
+        v = triplets.validation.validate_shacl(data, compiled, engine=engine_name, lexical=False,
+                                               deactivated_shapes=off)
+        assert findings(v) == {("b1", "sh:closed")}
+        shapes = v.attrs["validation"]["source_shapes"]
+        assert set(shapes) == {CIM + "BreakerShape"}
+        cbd = shapes[CIM + "BreakerShape"]
+        assert {str(shape) for shape, _ in cbd.subject_objects(deactivated)} == flagged
+        assert {name, description} <= {str(node) for node in cbd.subjects()}
+    assert len(list(compiled.graph.subject_objects(deactivated))) == 1   # the compiled graph is untouched
+
+
 @pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
 def test_shape_on_parent_and_child_reports_once(engine_name):
     """One property shape on both a parent and a child node shape (CGMES SHACL

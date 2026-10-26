@@ -53,6 +53,7 @@ from .._engine_detect import flavor
 from .._registry import EngineRegistry
 from ..iri import CIM_NS, load_rdf_map
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
+from .shacl_ir import _mark_switched_off, _term
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
 from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
@@ -101,7 +102,7 @@ def get_engine(name: str = "auto"):
 
 
 def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=None, engine="auto", lexical=True,
-                   undefined_namespace=CIM_NS, inheritance=True, **kwargs):
+                   undefined_namespace=CIM_NS, inheritance=True, deactivated_shapes=None, **kwargs):
     """Validate triplet data against SHACL shapes; return a violations DataFrame.
 
     Parameters
@@ -140,6 +141,13 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
         (:func:`~triplets.validation.schema_scope.class_ancestors`; pyshacl: as
         ``rdfs:subClassOf`` in ``ont_graph``). False matches the exact
         ``rdf:type`` only. No effect without an rdf_map.
+    deactivated_shapes : shape IRI or iterable of them, optional
+        The shapes to switch off for this run — replaces the set the graph
+        declares (``compiled.deactivated``): None = the declared set, ``[]`` =
+        every shape runs, the declared ones included; extend or reduce it
+        freely. The NC validation aggregates switch off different shapes of a
+        shared base this way, and one compile serves every aggregate
+        (``CompiledShapes.active``).
 
     The returned frame carries the validation-run metadata in
     ``violations.attrs["validation"]`` (start/end timestamps and duration,
@@ -148,7 +156,7 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     it, so SARIF, the sh:ValidationReport and the csv/excel exports tell the
     same story.
     """
-    compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
+    compiled = (shapes if isinstance(shapes, CompiledShapes) else compile(shapes)).active(deactivated_shapes)
     rdf_map = load_rdf_map(rdf_map)        # dict from here on — the engines and enrich take only dicts
     started = datetime.now(timezone.utc)   # after compile — duration is the run, cache-independent
     if not rdf_map and rdf_map_scope is not None:
@@ -258,18 +266,14 @@ def _source_shape_graphs(violations, compiled):
     """{shape id: rdflib CBD graph} of the violated shapes — the SHACL report
     embeds these so sh:sourceShape is never an empty node (term identity is
     preserved: the CBD's blank nodes ARE the compiled graph's, so they align
-    with the report's sh:sourceShape labels)."""
-    import rdflib
-
+    with the report's sh:sourceShape labels). sh:deactivated as the run used it."""
     graphs = {}
     if compiled.graph is None:           # schema-compiled IR — no shapes graph to embed
         return graphs
     for shape in set(violations["SOURCE_SHAPE"].dropna().astype(str)):
-        node = (rdflib.URIRef(shape) if "://" in shape or shape.startswith("urn:")
-                else rdflib.BNode(shape))
-        cbd = compiled.graph.cbd(node)
+        cbd = compiled.graph.cbd(_term(shape))
         if len(cbd):
-            graphs[shape] = cbd
+            graphs[shape] = _mark_switched_off(cbd, compiled)
     return graphs
 
 
@@ -480,6 +484,7 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
         "source": _source_labels(data, table_name=table_name),
         "references": list(compiled.sources),
         "compiled_hash": compiled.hash,
+        "deactivated_shapes": sorted(compiled.deactivated),
         "node_shapes": compiled.stats.get("node_shapes", 0),
         "constraints": compiled.stats.get("constraints", 0),
         "language": compiled.language,

@@ -13,7 +13,7 @@ any RDF loaded as triplets, CIM or not. Every input has a scope named after it:
 
 | Function | Checks | Runs |
 |----------|--------|------|
-| `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=True)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision and class inheritance | once over the scoped data |
+| `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=True, deactivated_shapes=None)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision and class inheritance | once over the scoped data |
 | `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False)` | cardinality, datatypes and enumerations of the scoped profiles (merged); `report_undefined_keys` also reports keys no scoped profile defines for the object's class | per instance in `data_scope` — cardinality never counts another instance's rows |
 | `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_data_scope, target_rdf_map_scope=(), report_missing_targets=True, inheritance=True)` — `target_data_scope=None` = every instance | the reference type of each association of the source profiles (merged, or a union of several): valid classes from the source and target profiles, referenced objects from the source and target instances | per source instance; findings on source objects only |
 
@@ -134,7 +134,9 @@ shapes.ttl ──rdflib──► CompiledShapes
                         ├── graph  (rdflib shapes graph — what pyshacl consumes)
                         ├── ir     (flat constraint table — what the vectorized engines consume)
                         ├── hash   (content hash, the cache key)
-                        └── plans  {engine name → compiled artifact, filled lazily}
+                        ├── plans  {engine name → compiled artifact, filled lazily}
+                        ├── deactivated  (shape ids switched off: the graph's sh:deactivated true)
+                        └── active(deactivated_shapes) ──► CompiledShapes  (the run's rule set, cached per set)
 ```
 
 The IR is a pandas DataFrame, one row per shape × target × constraint component.
@@ -144,6 +146,7 @@ registries that consume it are internal.
 | field | type | meaning |
 |-------|------|---------|
 | `shape_id` | str | full shape IRI (blank-node id for anonymous property shapes) — becomes `SOURCE_SHAPE` in reports and the join key for `enrich` |
+| `shapes` | tuple[str] | lineage: the shape ids whose switch-off removes the row, outermost first — NodeShape → property shape → `sh:node` target / logical member → the defining shape (nested row dicts carry it too) |
 | `target_class` | str | local name: the class for `target_kind="class"`, the property KEY for `"subjectsOf"` |
 | `target_kind` | `"class"` / `"subjectsOf"` | which target declaration produced the row |
 | `path` | str \| None | the property as one triplet KEY (local name); None for node-level constraints (`sh:closed`, node-level `sh:sparql`) |
@@ -182,6 +185,27 @@ only when one member carries a nested inverse (any other path form warns and
 skips the property shape — pyshacl covers it). Unknown components are kept and
 logged — engines skip what they don't implement.
 
+Every shape compiles, `sh:deactivated` or not. `compiled.deactivated` lists the
+shapes the graph declares `sh:deactivated`; `compiled.active(deactivated_shapes)`
+is the run's rule set with exactly that argument switched off — None: the
+declared set, `[]`: nothing (every shape runs, the declared ones included), a
+shape IRI or any list: it replaces the declared set. Rows whose lineage meets a
+switched-off shape are dropped; a switched-off `sh:or` / `sh:and` member or
+`sh:node` target empties and conforms, a switched-off `sh:not` shape empties and
+flags every node it judges (as pyshacl); under `sh:closed` a switched-off
+property shape's path stays declared. The filtered compile is cached per set on
+the one compile: the compile's `hash`, its own `plans`; with nothing declared
+and nothing chosen `active()` is the compile itself. Truthiness follows pyshacl
+(`bool(literal.value)`): `true`, a non-empty plain literal — so a plain
+`"false"` deactivates — or a non-zero number; `"false"^^xsd:boolean` and an
+ill-typed literal (no value) do not; a non-literal or a second value raises
+ValueError at compile (pyshacl: `ShapeLoadError`). An id that names no shape in
+the graph is logged as a warning. pyshacl validates a copy of the shapes graph
+carrying exactly the chosen set as `sh:deactivated true` when it differs from
+the declared one; the shapes embedded in the SHACL report carry the same flags.
+Rows that differ only in lineage (one property shape under two node shapes with
+a common target) run once.
+
 `CompiledShapes.plans` is where each engine caches its own compiled artifact
 (the polars/duckdb `split_rules` partition) — re-validating new data against
 the same shapes never recompiles anything.
@@ -211,6 +235,7 @@ see [sparql.md](sparql.md).
 compiled = triplets.validation.compile(["equipment.ttl", "topology.ttl"])
 triplets.validation.validate_shacl(data_a, compiled)
 triplets.validation.validate_shacl(data_b, compiled)   # shapes parsed once, plans reused
+triplets.validation.validate_shacl(data_b, compiled, deactivated_shapes=["http://example.org/OptionalShape"])
 ```
 
 ## Engine Contract
@@ -222,7 +247,10 @@ validate(data, compiled: CompiledShapes, rdf_map=None, data_scope=None, ancestor
 ```
 
 `rdf_map` is the scoped, merged schema (`scoped_rdf_map`), `ancestors` the
-`class_ancestors` map (None = exact `rdf:type`).
+`class_ancestors` map (None = exact `rdf:type`). `validate_shacl` hands the
+engines `compiled.active(...)`, the rule set with the switched-off shapes
+already removed; an engine called directly with the full compile validates
+them too.
 
 - **pyshacl** consumes `compiled.graph` (data goes through `_rdflib_loader`);
   `ancestors` becomes its `ont_graph`.
@@ -311,7 +339,7 @@ from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an exp
 the returned frame as `violations.attrs["validation"]`. Every report exporter
 reads it, so all formats tell the same story; `concat_violations(frames)`
 joins the frames of several runs of one constraint language and merges their
-metadata (earliest start, latest end, counts once per compiled rule set, lists
+metadata (earliest start, latest end, counts once per rule set, lists
 united, differing values kept as the list of distinct values):
 
 | key | meaning |
@@ -321,8 +349,9 @@ united, differing values kept as the list of distinct values):
 | `creator` | tool + version |
 | `source` | data file names (from the data's Distribution label meta rows) |
 | `references` | shape file names (recorded at compile) |
-| `compiled_hash` | the compiled rule set's hash (`CompiledShapes.hash`) — `concat_violations` counts shapes and constraints once per rule set |
-| `node_shapes` / `constraints` | shape count / compiled IR constraint rows |
+| `compiled_hash` | the shape files' content hash (`CompiledShapes.hash`, the same with any `deactivated_shapes`) |
+| `deactivated_shapes` | the shape ids the run switched off, sorted (`[]` = every shape ran); the run's rule set is `compiled_hash` + `deactivated_shapes` — `concat_violations` counts shapes and constraints once per rule set |
+| `node_shapes` / `constraints` | count of NodeShapes not switched off / distinct constraints of the run's rule set (IR rows that differ only in lineage count once) |
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
 | `inheritance` | whether class inheritance was applied — `validate_shacl`: an rdf_map scope with classes and `inheritance=True`; `validate_schema_references`: the `inheritance` flag |
 | `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); unreachable targets (`sh:targetNode` / `targetObjectsOf` / `target` / `xone`) and inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) — those two empty for `engine="pyshacl"` (spec-complete); association ranges no given profile defines (`validate_schema_references`) |
@@ -559,6 +588,11 @@ violations = data.shacl.validate_shacl("shapes.ttl", rdf_map=rdf_map, rdf_map_sc
 # compile once, validate many
 compiled = triplets.validation.compile(["equipment.ttl", "topology.ttl"])
 violations = data.shacl.validate_shacl(compiled)
+
+# one compiled base, shapes switched off per run (the NC validation aggregates):
+# each set is filtered from the same compile and cached on it
+base = triplets.validation.compile(base_shape_files)
+violations = data.shacl.validate_shacl(base, deactivated_shapes=aggregate_off)
 
 # data_scope filters to the named graphs (validated instances) — out-of-scope
 # data is not loaded; include dependency instances for cross-instance references

@@ -216,6 +216,92 @@ def test_logical_operator_cycle_dropped(caplog):
     assert (ir["component"] == "sh:or").any()          # the outer constraint survives
 
 
+# ── sh:deactivated: every shape compiles, active() filters ───────────────────
+
+CIM = "http://iec.ch/TC57/CIM100#"
+
+
+def _graph(turtle):
+    import rdflib
+    return rdflib.Graph().parse(data=f"""
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix cim: <{CIM}> .
+        @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+        {turtle}""", format="turtle")
+
+
+@pytest.mark.parametrize("flag, off", [
+    ("true", True),
+    ('"false"^^xsd:boolean', False),
+    ('"false"', True),   # pyshacl tests bool(literal.value): a plain "false" deactivates too
+    ('"abc"^^xsd:integer', False),   # ill-typed: no value
+])
+def test_deactivated_shapes_compile_and_filter(flag, off):
+    from triplets.validation.shacl_ir import parse_ir
+    graph = _graph(f"""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:deactivated {flag} ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .""")
+    assert len(parse_ir(graph)) == 1
+    compiled = compile_shapes(graph)
+    assert compiled.deactivated == ({CIM + "BreakerShape"} if off else frozenset())
+    assert compiled.active().ir.empty is off
+    assert compiled.active().stats["node_shapes"] == int(not off)
+    assert (compiled.active() is compiled) is not off
+    assert compiled.active([]).ir.equals(compiled.ir)   # [] runs every shape, the declared ones included
+    assert (compiled.active([]) is compiled) is not off
+
+
+def test_schema_compile_has_no_shapes_to_switch_off():
+    from triplets.validation.schema_ir import compile_schema
+    rdf_map = {"Breaker": {"type": "Class", "parameters": ["IdentifiedObject.name"]},
+               "IdentifiedObject.name": {"type": "Attribute", "xsd:type": "xsd:string", "xsd:minOccours": "1"}}
+    compiled = compile_schema(rdf_map)
+    assert compiled.active() is compiled
+    with pytest.raises(ValueError, match="schema compile"):
+        compiled.active(["urn:x"])
+
+
+NESTED = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property cim:AliasShape, cim:ContainerShape .
+    cim:AliasShape sh:path cim:IdentifiedObject.aliasName ; sh:or ( cim:M [ sh:datatype xsd:boolean ] ) .
+    cim:M sh:datatype xsd:integer .
+    cim:ContainerShape sh:path cim:Equipment.EquipmentContainer ; sh:node cim:T .
+    cim:T a sh:NodeShape ; sh:property cim:TName .
+    cim:TName sh:path cim:IdentifiedObject.name ; sh:minCount 1 ."""
+
+
+def test_ir_rows_carry_their_shape_chain():
+    """shapes: the shape ids whose switch-off removes the row, outermost first."""
+    breaker, alias, container = (CIM + name for name in ("BreakerShape", "AliasShape", "ContainerShape"))
+    by_component = compile_shapes(_graph(NESTED)).ir.set_index("component")
+    assert by_component.loc["sh:or", "shapes"] == (breaker, alias)
+    first, second = by_component.loc["sh:or", "params"]
+    assert first[0]["shapes"] == (breaker, alias, CIM + "M")
+    assert second[0]["shapes"][:2] == (breaker, alias) and len(second[0]["shapes"]) == 3
+    assert by_component.loc["sh:node", "shapes"] == (breaker, container)
+    assert by_component.loc["sh:node", "params"]["rows"][0]["shapes"] == (breaker, container, CIM + "T", CIM + "TName")
+
+
+def test_active_prunes_nested_rows():
+    """A switched-off member or sh:node target empties; the operator row stays."""
+    compiled = compile_shapes(_graph(NESTED))
+    active = compiled.active([CIM + "M", CIM + "T"])
+    by_component = active.ir.set_index("component")
+    first, second = by_component.loc["sh:or", "params"]
+    assert first == [] and len(second) == 1
+    assert by_component.loc["sh:node", "params"]["rows"] == []
+    assert len(compiled.ir.set_index("component").loc["sh:or", "params"][0]) == 1   # the base keeps them
+    assert active.active() is active                    # None keeps a filtered compile's own set
+    assert "sh:or" not in set(compiled.active([CIM + "AliasShape"]).ir["component"])
+
+
+def test_unknown_deactivated_shape_warns(caplog):
+    compiled = compile_shapes(_graph(NESTED))
+    with caplog.at_level("WARNING", logger="triplets.validation.shacl_ir"):
+        active = compiled.active(["http://example.org/Typo", CIM + "M"])
+    assert "http://example.org/Typo" in caplog.text and CIM + "M" not in caplog.text
+    assert len(active.ir) == len(compiled.ir)
+
+
 # ── per-file graph cache ──────────────────────────────────────────────────────
 
 SHARED_TTL = """@prefix sh:  <http://www.w3.org/ns/shacl#> .
