@@ -34,6 +34,20 @@ def test_report_graph_roundtrip():
     pandas.testing.assert_frame_equal(_canon(back), _canon(VIOLATIONS))
 
 
+def test_path_less_result_echoing_the_focus_has_no_value():
+    """A result without sh:resultPath whose sh:value is the focus node (pyshacl's
+    node-level sh:or / sh:not / sh:xone) gives VALUE None; another value is kept."""
+    import rdflib
+    graph = rdflib.Graph().parse(format="turtle", data="""
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        [] a sh:ValidationResult ; sh:focusNode <urn:uuid:b1> ; sh:value <urn:uuid:b1> ;
+            sh:sourceConstraintComponent sh:OrConstraintComponent .
+        [] a sh:ValidationResult ; sh:focusNode <urn:uuid:b2> ; sh:value <urn:uuid:other> ;
+            sh:sourceConstraintComponent sh:SPARQLConstraintComponent .""")
+    value = report_to_violations(graph).set_index("ID")["VALUE"]
+    assert pandas.isna(value["b1"]) and value["b2"] == "other"
+
+
 def test_report_graph_shape():
     import rdflib
     sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
@@ -205,7 +219,7 @@ SKIPPED_TTL = """
 @prefix sh:  <http://www.w3.org/ns/shacl#> .
 @prefix cim: <http://iec.ch/TC57/CIM100#> .
 @prefix ex:  <http://example.org/#> .
-ex:NodeTargeted a sh:NodeShape ; sh:targetNode ex:n1 ;
+ex:CustomTarget a sh:NodeShape ; sh:target ex:NotSparql ;
     sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
 ex:DeepPath a sh:NodeShape ; sh:targetClass cim:Breaker ;
     sh:property [ sh:path ( cim:a cim:b cim:c ) ; sh:minCount 1 ] .
@@ -309,7 +323,7 @@ def test_metadata_reports_skipped_coverage(tmp_path):
     violations = triplets.validation.validate_shacl(DATA, shapes, engine="pandas")
     meta = violations.attrs["validation"]
     assert meta["node_shapes"] == 2
-    assert any("sh:targetNode" in entry for entry in meta["skipped_shapes"])
+    assert any("sh:target not walked" in entry for entry in meta["skipped_shapes"])
     assert any("unsupported sh:path" in entry for entry in meta["skipped_shapes"])
 
 
@@ -327,7 +341,7 @@ def test_run_stats_reach_sarif_and_csv(tmp_path):
     properties = build_sarif(violations)["runs"][0]["properties"]
     assert properties["engine"] == "pandas"
     assert properties["node_shapes"] == 2 and properties["duration_seconds"] >= 0
-    assert any("sh:targetNode" in entry for entry in properties["skipped_shapes"])
+    assert any("sh:target not walked" in entry for entry in properties["skipped_shapes"])
     assert properties["skipped_components"] == []       # empty list survives
 
     violations_to_csv(violations, tmp_path / "report.csv")

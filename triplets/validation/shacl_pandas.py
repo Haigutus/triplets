@@ -123,8 +123,8 @@ class _Context:
                             in self.data.groupby("KEY", observed=True, sort=False)}
         return self._by_key.get(key, self.data.iloc[0:0])
 
-    def class_ids(self, target_class):
-        """IDs of all instances of *target_class*, subclasses included (``ancestors``)."""
+    def class_ids(self, class_name):
+        """IDs of all instances of *class_name*, subclasses included (``ancestors``)."""
         if self._class_ids is None:
             types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype({"VALUE": object})
             if self.ancestors:
@@ -133,7 +133,7 @@ class _Context:
                 types = pandas.concat([types, wider], ignore_index=True)
             self._class_ids = {value: frame["ID"].unique() for value, frame
                                in types.groupby("VALUE", sort=False)}
-        return self._class_ids.get(target_class, _NO_IDS)
+        return self._class_ids.get(class_name, _NO_IDS)
 
     @property
     def all_ids(self):
@@ -144,14 +144,19 @@ class _Context:
 
     def focus(self, rule):
         """The rule's focus nodes: an explicit ``focus_ids`` (set by sh:node — the
-        referenced value nodes), the subjects carrying the target property
-        (sh:targetSubjectsOf), or all instances of the rule's target class."""
+        referenced value nodes), else what ``target_by`` names: the IDs having
+        the KEY, the VALUEs under the KEY, the one ID, or the Type's instances."""
         focus_ids = getattr(rule, "focus_ids", None)
         if focus_ids is not None:
             return focus_ids
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
-            return self.key_rows(rule.target_class)["ID"].unique()
-        return self.class_ids(rule.target_class)
+        by = getattr(rule, "target_by", "Type")
+        if by == "KEY":
+            return self.key_rows(rule.target_on)["ID"].unique()
+        if by == "VALUE":
+            return self.key_rows(rule.target_on)["VALUE"].astype(str).unique()
+        if by == "ID":
+            return numpy.array([rule.target_on], dtype=object)
+        return self.class_ids(rule.target_on)
 
     def path_rows(self, rule):
         """The rule's path as (FOCUS, PATH_VALUE) pairs, restricted to the rule's focus.
@@ -183,8 +188,8 @@ class _Context:
     def pair_rows(self, rule, other_path):
         """FOCUS + both paths' values, for the pair constraints (equals/disjoint/lessThan)."""
         left = self.path_rows(rule)
-        other = SimpleNamespace(target_class=rule.target_class,
-                                target_kind=getattr(rule, "target_kind", "class"),
+        other = SimpleNamespace(target_on=rule.target_on,
+                                target_by=getattr(rule, "target_by", "Type"),
                                 path=other_path, inverse=False,
                                 focus_ids=getattr(rule, "focus_ids", None))
         right = self.path_rows(other).rename(columns={"PATH_VALUE": "OTHER_VALUE"})
@@ -496,7 +501,7 @@ def _not_evaluated(rule, error):
     """The message for a constraint no engine could run: name the shape and
     its target/path (anonymous property shapes only have a blank-node id),
     say plainly that nothing was checked — a shapes bug, not a data finding."""
-    where = f"{rule.target_class}/{rule.path}" if rule.path else rule.target_class
+    where = f"{rule.target_on}/{rule.path}" if rule.path else rule.target_on
     return (f"sh:sparql constraint of shape {split_iri(str(rule.shape_id))[1]} ({where}) was "
             f"NOT evaluated — the query is defective on every engine "
             f"(rdflib: {str(error).splitlines()[0]}). "
@@ -576,6 +581,8 @@ def _run_nested(context, row_dicts, focus_ids=None):
 def _and(context, rule):
     """sh:and — every nested shape must hold; each nested violation is reported."""
     focus_ids = getattr(rule, "focus_ids", None)
+    if not rule.params:                              # sh:and ( ) holds for every node
+        return _empty()
     violations = pandas.concat([_run_nested(context, alternative, focus_ids)
                                 for alternative in rule.params], ignore_index=True)
     violations["VIOLATION_TYPE"] = "sh:and"
@@ -618,6 +625,22 @@ def _or(context, rule):
     pairs = _value_pairs(context.path_rows(rule))
     failing = set.intersection(pairs, *(_failed_values(pairs, result) for result in results))
     return _value_frame(rule, failing, "no sh:or alternative is satisfied")
+
+
+def _xone(context, rule):
+    """sh:xone — violates unless EXACTLY one alternative is satisfied: per focus
+    node in a node shape, per value node in a property shape. An empty
+    alternative (a switched-off member) is satisfied."""
+    focus_ids = getattr(rule, "focus_ids", None)
+    results = [_run_nested(context, alternative, focus_ids) for alternative in rule.params]
+    message = "not exactly one sh:xone alternative is satisfied"
+    if rule.path is None:
+        violating = [set(result["ID"]) for result in results]
+        focus = [node for node in context.focus(rule) if sum(node not in ids for ids in violating) != 1]
+        return _frame(rule, focus, None, message)
+    pairs = _value_pairs(context.path_rows(rule))
+    failed = [_failed_values(pairs, result) for result in results]
+    return _value_frame(rule, {pair for pair in pairs if sum(pair not in fails for fails in failed) != 1}, message)
 
 
 def _node(context, rule):
@@ -677,6 +700,7 @@ CONSTRAINT_VALIDATORS = {
     "sh:closed": _closed,
     "sh:and": _and,
     "sh:or": _or,
+    "sh:xone": _xone,
     "sh:not": _not,
 }
 

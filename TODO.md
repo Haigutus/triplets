@@ -9,17 +9,15 @@ qlever (auto when built, performance).
 
 ## Correctness / coverage
 
-- [ ] **Advanced SHACL targets are partially invisible to the vectorized engines.**
-  NodeShapes in the CGMES SHACL library use `sh:target` (SPARQLTarget) or
-  `sh:targetNode` instead of `sh:targetClass`; `shacl_ir.parse_ir` does not walk
-  those. *Compile-time warning shipped 2026-07-13* (names the features and counts,
-  points at engine="pyshacl"; called out in docs/validation.md status section).
-  **`sh:targetSubjectsOf` supported since 2026-07-16** (IR target_kind="subjectsOf",
-  focus = subjects carrying the KEY, all three engines + pyshacl parity tests).
-  Still open: SPARQLTarget can ride on `triplets.sparql` now that qlever/oxigraph
-  make it cheap; `targetNode`/`targetObjectsOf` are similarly small IR additions.
-- [ ] `sh:xone` (2 uses in the library) — not in the IR component table (covered by
-  the same compile warning; pyshacl-only).
+- [ ] **SPARQLTarget (`sh:target` with `sh:select`) is invisible to the vectorized engines.**
+  `shacl_ir.parse_ir` walks `sh:targetClass`, `sh:targetSubjectsOf`,
+  `sh:targetObjectsOf` and `sh:targetNode` (IR `target_by` = Type / KEY / VALUE /
+  ID; all three engines + pyshacl parity tests). Still open: SPARQLTarget can ride
+  on `triplets.sparql` now that qlever/oxigraph make it cheap; a custom `sh:target`
+  without `sh:select` stays pyshacl-only. Compile-time warning + `skipped_shapes`
+  name the affected shapes.
+- [x] `sh:xone` (2 uses in the library) — in the IR; pandas implements it, polars and
+  duckdb delegate it to pandas like the other logical operators.
 - [x] qlever SELECT typing: all values are lexical strings **by design** (arrow decode,
   all-string triplets convention; consumers cast) — rdflib reference stays python-typed.
 - [x] per-query engine-state keying costs a content_hash of the input (~260 ms per

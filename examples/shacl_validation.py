@@ -83,7 +83,7 @@ header("6. Compile once, validate many")
 compiled = triplets.validation.compile(shape_path)
 print(f"CompiledShapes: {len(compiled.ir)} IR rows, hash {compiled.hash[:12]}…")
 print("IR (constraint table):")
-print(compiled.ir[["target_class", "path", "component", "params", "severity"]].to_string(index=False))
+print(compiled.ir[["target_on", "path", "component", "params", "severity"]].to_string(index=False))
 data.shacl.validate_shacl(compiled, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope=["EQ"])   # no re-parse
 print("\nSecond validate_shacl() against the same shapes reused the compiled IR (cache hit).")
 
