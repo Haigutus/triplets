@@ -563,19 +563,26 @@ def _sparql_rows(graph, SH, shape_uri, meta):
         select = graph.value(sparql, SH.select)
         if select is None:
             continue
-        prefixes = "".join(
-            f"PREFIX {graph.value(declaration, SH.prefix)}: <{graph.value(declaration, SH.namespace)}>\n"
-            for ontology in graph.objects(sparql, SH.prefixes)
-            for declaration in graph.objects(ontology, SH.declare))
         message = graph.value(sparql, SH.message)
         row = {**meta, "component": "sh:sparql",
-               "params": {"select": str(select), "prefixes": prefixes,
+               "params": {"select": str(select), "prefixes": _prefixes(graph, SH, sparql),
                           # $PATH substitution needs the full IRI; only direct paths qualify
                           "path": str(path) if type(path).__name__ == "URIRef" else None}}
         if message is not None:
             row["message"] = str(message)
         rows.append(row)
     return rows
+
+
+def _prefixes(graph, SH, node):
+    """The ``PREFIX`` header of a SPARQL-based *node* (a sh:sparql constraint or a
+    SPARQL target): the sh:declare entries of its sh:prefixes, sorted by prefix —
+    the declarations are blank nodes, and the header must not change between
+    compiles of the same files."""
+    return "".join(sorted({
+        f"PREFIX {graph.value(declaration, SH.prefix)}: <{graph.value(declaration, SH.namespace)}>\n"
+        for ontology in graph.objects(node, SH.prefixes)
+        for declaration in graph.objects(ontology, SH.declare)}))
 
 
 def _shape_meta(graph, SH, shape_uri, target_on, path, inverse, target_by="Type",
