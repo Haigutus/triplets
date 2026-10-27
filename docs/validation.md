@@ -184,8 +184,23 @@ registries that consume it are internal.
 
 Each value of a parameter is a constraint of its own (SHACL §4.1): two
 `sh:node` shapes, two `sh:or` lists or two `sh:pattern` values compile to two
-rows. An empty `sh:or` / `sh:and` / `sh:xone` list raises ValueError at compile
-(pyshacl: `ShapeLoadError`).
+rows. One malformed shape does not stop the validation of the others. The
+compile runs these load checks, each one pyshacl refuses the whole shapes graph
+for (`ConstraintLoadError` / `ShapeLoadError`): a parameter taken once
+(`sh:path`, `sh:minCount`, `sh:maxCount`, `sh:datatype`, `sh:nodeKind`,
+`sh:in`, `sh:minLength`, `sh:maxLength`, `sh:closed`, `sh:deactivated`,
+`sh:uniqueLang`, `sh:languageIn`, `sh:qualifiedMinCount`,
+`sh:qualifiedMaxCount`) given twice, an empty `sh:or` / `sh:and` / `sh:xone`
+list, a non-literal `sh:deactivated`, `sh:ignoredProperties` without
+`sh:closed`, a declared `sh:PropertyShape` without `sh:path`. A shape that
+fails one is skipped and named in `skipped_shapes` with the reason (`two
+sh:path values`, `two sh:in lists`, `empty sh:or list`, `sh:PropertyShape
+without sh:path`); the rest compiles and validates. The skip is the malformed
+shape itself: a property shape alone, a node shape with its property shapes; a
+logical operator over it is dropped as over any skipped part, and so is a
+`sh:node` row whose target has nothing left (see below) — both decided at
+compile time. `sh:minInclusive` and the other
+range parameters are not in the list: pyshacl evaluates every value.
 
 The logical operators report one row per non-conforming focus node on a node
 shape (no `KEY`) and one per non-conforming value node in a property shape
@@ -225,7 +240,10 @@ evaluated at all (judging the expressible part would fire on every focus
 node): the row is dropped and named in `skipped_shapes`, the shape's other
 constraints still run. A value constraint declared on a node shape itself
 (`sh:class`, `sh:in`, `sh:datatype`, … judging the focus node) is not
-evaluated by the vectorized engines and is named in `skipped_shapes`.
+evaluated by the vectorized engines and is named in `skipped_shapes`. A
+`sh:node` row whose target has nothing left but skipped parts would conform on
+every node: it is dropped and named the same way (`<shape>: sh:node target
+<target> not evaluated`).
 
 Every shape compiles, `sh:deactivated` or not. `compiled.deactivated` lists the
 shapes the graph declares `sh:deactivated`; `compiled.active(deactivated_shapes)`
@@ -240,8 +258,11 @@ the one compile: the compile's `hash`, its own `plans`; with nothing declared
 and nothing chosen `active()` is the compile itself. Truthiness follows pyshacl
 (`bool(literal.value)`): `true`, a non-empty plain literal — so a plain
 `"false"` deactivates — or a non-zero number; `"false"^^xsd:boolean` and an
-ill-typed literal (no value) do not; a non-literal or a second value raises
-ValueError at compile (pyshacl: `ShapeLoadError`). An id that names no shape in
+ill-typed literal (no value) do not; a non-literal or a second value makes the
+shape malformed: it is skipped (see above). pyshacl loads a switched-off shape
+with some of the load-check flaws (`sh:deactivated true ; sh:minCount 1, 2`) and
+refuses the graph for others (`sh:deactivated true ; sh:path a, b`); the engines
+skip such a shape with the reason when it is switched on. An id that names no shape in
 the graph is logged as a warning. pyshacl validates a copy of the shapes graph
 carrying exactly the chosen set as `sh:deactivated true` when it differs from
 the declared one; the shapes embedded in the SHACL report carry the same flags.
@@ -412,7 +433,7 @@ united, differing values kept as the list of distinct values):
 | `node_shapes` / `constraints` | count of NodeShapes not switched off / distinct constraints of the run's rule set (IR rows that differ only in lineage count once) |
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
 | `inheritance` | whether class inheritance was applied — `validate_shacl`: an rdf_map scope with classes and `inheritance=True`; `validate_schema_references`: the `inheritance` flag |
-| `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); shapes reached only through a `sh:target` without `sh:select`, `sh:rule` shapes (not applied), inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) and logical operators over a member the IR cannot express — empty for `engine="pyshacl"` (spec-complete); a shape switched off takes its entries along; association ranges no given profile defines (`validate_schema_references`) |
+| `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); shapes reached only through a `sh:target` without `sh:select`, `sh:rule` shapes (not applied), inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run), logical operators over a member the IR cannot express and `sh:node` rows whose target has nothing left but skipped parts — empty for `engine="pyshacl"` (spec-complete); malformed shapes (the compile's load checks), each with the reason; a shape switched off takes its entries along; association ranges no given profile defines (`validate_schema_references`) |
 | `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates, and the terms the IR keeps as unimplemented rows (`sh:qualifiedValueShape`, …) |
 

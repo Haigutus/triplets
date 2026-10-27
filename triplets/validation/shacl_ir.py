@@ -139,20 +139,15 @@ def _declared_deactivated(graph):
     """Shape ids the graph marks sh:deactivated, as pyshacl reads the flag:
     bool(literal.value) — true, a non-empty plain literal (so a plain "false")
     or a non-zero number deactivates; "false"^^xsd:boolean and an ill-typed
-    literal (no value) do not. A non-literal or more than one value raises
-    ValueError (pyshacl: ShapeLoadError)."""
+    literal (no value) do not. A non-literal or a second value makes the shape
+    malformed: the compile skips it (_malformed)."""
     import rdflib
 
     SH = rdflib.Namespace(SH_NS)
     off = set()
     for shape in set(graph.subjects(SH.deactivated)):
         flags = set(graph.objects(shape, SH.deactivated))
-        if len(flags) > 1:
-            raise ValueError(f"shape {shape} has more than one sh:deactivated value")
-        flag = flags.pop()
-        if not isinstance(flag, rdflib.Literal):
-            raise ValueError(f"shape {shape}: the sh:deactivated value {flag} is not a literal")
-        if bool(flag.value):
+        if len(flags) == 1 and isinstance(flag := flags.pop(), rdflib.Literal) and bool(flag.value):
             off.add(str(shape))
     return frozenset(off)
 
@@ -416,7 +411,8 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
     *value_path*: the owning property shape's (path, inverse, via_type) for a
     shape nested in its logical operators — a nested shape without its own
     sh:path constrains that property's value nodes.
-    *skipped* collects what the IR cannot express, as (lineage, text) entries.
+    *skipped* collects what the IR cannot express, as (lineage, text) entries;
+    a malformed shape (_malformed) compiles to no rows and one such entry.
     *shapes* is the lineage of the shapes enclosing this one.
     *judged*: the shape is judged for conformance — a sh:node target, a logical
     member, or a shape below one. A property shape's own sh:property then makes
@@ -428,6 +424,11 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
         logger.warning("shape reference cycle at %s — constraint dropped", shape_uri)
         return []
     visited = visited | {str(shape_uri)}
+    reason = _malformed(graph, SH, shape_uri)
+    if reason:
+        logger.warning("%s: %s — shape skipped (pyshacl does not load the shapes graph)", shape_uri, reason)
+        skipped.add(((*shapes, str(shape_uri)), f"{shape_uri}: {reason}"))
+        return []
     path_node = graph.value(shape_uri, SH.path)
     path, inverse, via_type = _resolve_path(graph, SH, path_node)
     if path_node is None and value_path is not None:
@@ -472,9 +473,17 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
             continue
         # the referenced shape expanded at compile time; the engines run its
         # rows against the value nodes (the focus node on a node shape)
+        target = _shape_rows(graph, SH, node_shape, **{**walk, "judged": True})
+        if not target and _skipped_under(skipped, (*meta["shapes"], str(node_shape))):
+            # a target with nothing left but skipped parts would conform on every
+            # node: the row is not evaluated, as a logical operator over a skipped
+            # part (decided at compile time)
+            reason = f"{shape_uri}: sh:node target {node_shape} not evaluated"
+            logger.warning("%s; use engine=\"pyshacl\" for coverage", reason)
+            skipped.add((meta["shapes"], reason))
+            continue
         rows.append({**meta, "component": "sh:node",
-                     "params": {"shape": split_iri(node_shape)[1],
-                                "rows": _shape_rows(graph, SH, node_shape, **{**walk, "judged": True})}})
+                     "params": {"shape": split_iri(node_shape)[1], "rows": target}})
 
     # the shape's own property shapes (and sh:closed over them): a NodeShape —
     # targeted, referenced or a logical member — judges its focus with them; a
@@ -511,15 +520,13 @@ def _logical_rows(graph, SH, shape, meta, value_path=None, **walk):
     component no engine implements anywhere in it, or a part of it already
     skipped) makes the operator undecidable: the row is dropped and named in
     *skipped* — never judged on a partial member, which would fire on every
-    focus node. Decided at compile time, whatever is switched off later. An
-    empty member list raises ValueError (pyshacl does not load it either)."""
+    focus node. Decided at compile time, whatever is switched off later. A
+    shape with an empty member list never gets here (_malformed)."""
     rows = []
     for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and"), (SH.xone, "sh:xone"),
                             (SH["not"], "sh:not")):
         for head in sorted(graph.objects(shape, term), key=str):   # one operator row per value
             items = [head] if component == "sh:not" else _rdf_list(graph, head, lambda node: node)
-            if not items:
-                raise ValueError(f"shape {shape} has an empty {component} list")   # pyshacl: ShapeLoadError
             members = [(item, _member_rows(graph, SH, item, meta, value_path, **walk)) for item in items]
             reasons = [f"{shape}: {component} member {item} {reason}"
                        for item, member in members
@@ -555,9 +562,14 @@ def _inexpressible(graph, item, rows, lineage, skipped):
     unknown = sorted(_components_in(rows) - KNOWN_COMPONENTS)
     if unknown:
         return f"uses {', '.join(unknown)} — not evaluated"
-    if any(shapes[:len(lineage)] == lineage for shapes, _ in skipped):
+    if _skipped_under(skipped, lineage):
         return "holds a part that was not evaluated"
     return None
+
+
+def _skipped_under(skipped, lineage):
+    """Whether *skipped* has an entry at or below the shape *lineage*."""
+    return any(shapes[:len(lineage)] == lineage for shapes, _ in skipped)
 
 
 def _sparql_rows(graph, SH, shape_uri, meta):
@@ -680,6 +692,38 @@ def _components(SH):
         (SH.lessThan, "sh:lessThan", lambda g, v: local_key(v)),
         (SH.lessThanOrEquals, "sh:lessThanOrEquals", lambda g, v: local_key(v)),
     ]
+
+
+def _malformed(graph, SH, shape):
+    """Why *shape* is malformed, or None — these load checks, each one pyshacl
+    refuses the whole shapes graph for (ConstraintLoadError / ShapeLoadError):
+    a parameter taken once (_SINGLE) given twice, an empty sh:or / sh:and /
+    sh:xone list, a non-literal sh:deactivated, sh:ignoredProperties without
+    sh:closed, a declared sh:PropertyShape without sh:path. The compile skips
+    such a shape."""
+    import rdflib
+
+    for name, kind in _SINGLE.items():
+        if len(set(graph.objects(shape, SH[name]))) > 1:
+            return f"two sh:{name} {kind}"
+    for name in ("or", "and", "xone"):
+        if any(not _rdf_list(graph, head, lambda node: node) for head in graph.objects(shape, SH[name])):
+            return f"empty sh:{name} list"
+    flag = graph.value(shape, SH.deactivated)
+    if flag is not None and not isinstance(flag, rdflib.Literal):
+        return f"the sh:deactivated value {flag} is not a literal"
+    if graph.value(shape, SH.ignoredProperties) is not None and graph.value(shape, SH.closed) is None:
+        return "sh:ignoredProperties without sh:closed"
+    if (shape, rdflib.RDF.type, SH.PropertyShape) in graph and graph.value(shape, SH.path) is None:
+        return "sh:PropertyShape without sh:path"
+    return None
+
+
+# parameters a shape declares at most once (pyshacl refuses a second), with what one
+# value is called in the skip reason — every other parameter is one constraint per value
+_SINGLE = {**dict.fromkeys(("path", "minCount", "maxCount", "datatype", "nodeKind", "minLength", "maxLength", "closed",
+                            "deactivated", "uniqueLang", "qualifiedMinCount", "qualifiedMaxCount"), "values"),
+           "in": "lists", "languageIn": "lists"}
 
 
 # SHACL terms no engine implements — kept as rows (params None) so the run
