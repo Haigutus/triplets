@@ -9,7 +9,8 @@ import logging
 from importlib.util import find_spec
 
 from ..iri import CIM_NS
-from .._rdflib_loader import load_dataset, scoped_graph
+from .._rdflib_loader import load_dataset
+from .context import _scoped
 from .shacl_ir import _mark_switched_off
 from .shacl_report import report_to_violations
 
@@ -55,7 +56,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         (advanced=True), and the clone through the oxrdflib wrapper costs
         more than the Rust parse saves (95k warm: 1.8 s vs 1.2 s; 1.14M
         load+clone: 40 s vs 33 s). Opt in when the store is already loaded
-        for SPARQL anyway — then the load leg is free.
+        for SPARQL anyway — then the load leg is free (unscoped runs only:
+        a data_scope run loads its own store of the scoped rows).
     """
     if compiled.graph is None:
         raise ValueError("schema-compiled (rdfs) shapes carry no SHACL graph — "
@@ -63,8 +65,10 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
 
     from pyshacl import validate as pyshacl_validate
 
-    data_graph = scoped_graph(load_dataset(data, rdf_map=rdf_map, store=store,
-                                           undefined_namespace=undefined_namespace), data_scope)
+    if data_scope is not None:   # filter before the export — data outside the scope is never loaded
+        from . import _table_ref
+        data = _scoped(data, data_scope, _table_ref(data, **kwargs))
+    data_graph = load_dataset(data, rdf_map=rdf_map, store=store, undefined_namespace=undefined_namespace)
     ont_graph = _ontology_graph(ancestors, rdf_map, undefined_namespace) if ancestors else None
 
     shapes_graph = _switched_off_graph(compiled)

@@ -85,6 +85,36 @@ def test_scope_excludes_out_of_scope_instances(svedala_eq, shape_file):
     assert len(out_scope) == 0
 
 
+@pytest.mark.parametrize("flavor", ["pandas", "duckdb"])
+def test_pyshacl_scope_equals_prefiltered_and_loads_only_the_scope(shape_file, monkeypatch, flavor):
+    """data_scope=["a"] reports what the pre-filtered frame reports (a's
+    nameless x3), and only instance a's rows reach the rdflib load — b's
+    nameless x2 and its string length on x1 stay out of the data graph."""
+    from triplets.validation import shacl_pyshacl
+    rows = [("x1", "Type", "ACLineSegment", "a"), ("x1", "IdentifiedObject.name", "L1", "a"),
+            ("x3", "Type", "ACLineSegment", "a"),
+            ("x2", "Type", "ACLineSegment", "b"), ("x1", "Conductor.length", "long", "b")]
+    frame = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    data = frame
+    if flavor == "duckdb":   # the scope is filtered SQL-side
+        data = pytest.importorskip("duckdb").connect()
+        data.register("_rows", frame)
+        data.execute("CREATE TABLE triplets AS SELECT * FROM _rows")
+    loaded = []
+    load_dataset = shacl_pyshacl.load_dataset
+    monkeypatch.setattr(shacl_pyshacl, "load_dataset",
+                        lambda rows, **kwargs: loaded.append(set(rows["INSTANCE_ID"])) or load_dataset(rows, **kwargs))
+
+    key = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "SOURCE_SHAPE", "SEVERITY"]
+    scoped = triplets.validation.validate_shacl(data, shape_file, engine="pyshacl", data_scope=["a"])
+    prefiltered = triplets.validation.validate_shacl(frame[frame["INSTANCE_ID"] == "a"], shape_file, engine="pyshacl")
+    assert loaded == [{"a"}, {"a"}]
+    assert list(scoped["ID"]) == ["x3"]
+    assert scoped[key].sort_values(key).reset_index(drop=True).equals(
+        prefiltered[key].sort_values(key).reset_index(drop=True))
+    assert len(triplets.validation.validate_shacl(frame, shape_file, engine="pyshacl")) > 0   # b's rows do trip
+
+
 # ── lexical-form datatype deviation (documented divergence from pyshacl) ──────
 @pytest.fixture(scope="module")
 def lexical_data():
