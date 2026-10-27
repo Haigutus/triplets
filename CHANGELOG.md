@@ -301,6 +301,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`validate_shacl(..., lexical=False)` skips the `triplets:lexicalForm` check on every
+  engine**: pandas, polars and duckdb no longer emit the narrower-form Warnings (nested
+  datatype checks included) — the datatype check skips the second pattern; values outside
+  the lexical space stay `sh:datatype` violations. pyshacl gets no supplement, as before.
 - **pyshacl engine report**: the nested `sh:detail` results of a `sh:node` finding are no
   longer listed as findings of their own; a blank-node `sh:resultPath` (inverse, sequence or
   alternative path) reads as the KEY it resolves to, not the blank-node label; the
