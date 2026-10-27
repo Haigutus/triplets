@@ -176,7 +176,7 @@ registries that consume it are internal.
 | `sh:minInclusive` `sh:maxInclusive` `sh:minExclusive` `sh:maxExclusive` | float (integer bounds are coerced) |
 | `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern`, `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str |
 | `sh:in` | list[str] (IRIs shortened to local names) |
-| `sh:closed` | list[str] — the **fully resolved** allowed KEY list: `sh:ignoredProperties` + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included) |
+| `sh:closed` | list[str] — the **fully resolved** allowed KEY list: every `sh:ignoredProperties` list + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included) |
 | `sh:or` / `sh:and` / `sh:xone` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
 | `sh:not` | list[dict] — nested IR row dicts |
 | `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time, run against the value nodes (the focus node on a node shape); one finding per non-conforming value node |

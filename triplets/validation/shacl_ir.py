@@ -501,16 +501,18 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
 
 def _closed_rows(graph, SH, shape, meta):
     """sh:closed — params = the complete allowed list, resolved at compile time:
-    sh:ignoredProperties + every (non-inverse) sh:property path of THIS shape."""
+    every sh:ignoredProperties list (pyshacl unions them) + every (non-inverse)
+    sh:path value of THIS shape's sh:property shapes: a property shape skipped
+    for two sh:path values keeps both declared."""
     closed = graph.value(shape, SH.closed)
     if closed is None or closed.toPython() is not True:
         return []
-    ignored = graph.value(shape, SH.ignoredProperties)
-    allowed = _rdf_list(graph, ignored, local_key) if ignored is not None else []
+    allowed = [key for ignored in graph.objects(shape, SH.ignoredProperties) for key in _rdf_list(graph, ignored, local_key)]
     for property_shape in graph.objects(shape, SH.property):
-        path, inverse, _ = _resolve_path(graph, SH, graph.value(property_shape, SH.path))
-        if path is not None and not inverse:
-            allowed.append(path)
+        for path_node in graph.objects(property_shape, SH.path):
+            path, inverse, _ = _resolve_path(graph, SH, path_node)
+            if path is not None and not inverse:
+                allowed.append(path)
     return [{**meta, "component": "sh:closed", "params": allowed}]
 
 

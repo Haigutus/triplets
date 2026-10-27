@@ -204,6 +204,10 @@ CASES = {
                          breaker("b1", (LEN, "1.0"), (CUR, "2.0")) + breaker("b2", (LEN, "2.0"), (CUR, "2.0"))
                          + breaker("b3", (LEN, "3.0"), (CUR, "2.0"))),
     "closed": (f"{B} sh:closed true ; sh:ignoredProperties ( rdf:type ) ; sh:property [ sh:path cim:IdentifiedObject.name ] .", TRIO),
+    # every sh:ignoredProperties list counts: bay1's name and description are both allowed
+    "closed_two_ignored_lists": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; sh:closed true ; sh:ignoredProperties "
+                                 "( rdf:type cim:IdentifiedObject.name ), ( rdf:type cim:IdentifiedObject.description ) .",
+                                 TRIO + [("bay1", DESC, "bd", "eq")]),
     "sparql_constraint": (prop("""sh:path cim:IdentifiedObject.name ;
         sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "B1") }' ]"""), TRIO),
     "sparql_constraint_message": (prop("""sh:path cim:IdentifiedObject.name ;

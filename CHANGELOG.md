@@ -327,6 +327,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   graph for each of these. A logical operator over a malformed shape is dropped
   and named, as over any skipped part; a `sh:node` row whose target has nothing
   left but skipped parts is too (it conformed on every node).
+- **`sh:closed` allows the properties of every `sh:ignoredProperties` list** on
+  polars, pandas and duckdb, as pyshacl; one of two lists was read and the
+  properties of the other were reported. A property shape skipped for two
+  `sh:path` values keeps both paths declared.
 - **`sh:and` reports one row per non-conforming focus node** (node shape, no `KEY`)
   **or value node** (property shape), with the operator's shape, severity and
   message — it listed every nested finding with the nested `KEY` and shape
