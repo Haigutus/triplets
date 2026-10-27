@@ -308,9 +308,13 @@ them too.
   focus nodes. A target query a strict engine rejects gets the same Warning
   row and is evaluated on rdflib; one no engine can run gives a
   `triplets:invalidSparql` Violation naming the NodeShape, which then has no
-  focus. A query matching a typed literal (`md:Model.profile "…"^^xsd:anyURI`
-  in the Header shapes, `cim:TransformerEnd.endNumber 3`) matches only when
-  the `rdf_map` scope types that KEY — pyshacl sees the same graph.
+  focus; so does a query that projects no `?this`. Every NodeShape sharing
+  the query gets its own row. Prefixes come only from the `sh:declare` entries
+  of the target's `sh:prefixes` node (pyshacl also takes those of every
+  `owl:Ontology` when that node declares none). A query matching a typed
+  literal (`md:Model.profile "…"^^xsd:anyURI` in the Header shapes,
+  `cim:TransformerEnd.endNumber 3`) matches only when the `rdf_map` scope
+  types that KEY — pyshacl sees the same graph.
 
 ## The Lexical-Form Datatype Deviation
 
