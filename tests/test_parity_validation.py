@@ -1,10 +1,8 @@
-"""Cross-engine parity for SHACL validation.
-
-pyshacl is the reference. Engines must agree 1:1 on the canonical violations
-schema, modulo the one documented deviation: the lexical-form datatype check
-(`triplets:lexicalForm` Warnings are EXTRA rows the vectorized engines add;
-they must never lose a violation pyshacl reports). Grows a column per engine
-as pandas (full) / polars / duckdb land.
+"""Cross-engine SHACL parity on real data: the sh:datatype lexical-form allowance
+(`triplets:lexicalForm` Warnings are extra rows the vectorized engines add; they
+must never lose a violation pyshacl reports), Svedala datatype / inheritance /
+two-winding SPARQL target, input flavors, and the engine benchmarks. Synthetic
+per-component cases live in test_parity_shacl_matrix.py.
 """
 import pytest
 
@@ -84,132 +82,6 @@ def test_datatype_parity_on_real_data(shape_file):
                                              lexical=False)
     ours = triplets.validation.validate_shacl(data, shape_file, engine="pandas")
     assert _violation_set(reference) == _violation_set(ours)
-
-
-# ── component parity matrix: pandas engine vs pyshacl, per constraint ─────────
-# Real CIM keys (so rdf_map types the literals) and UUID ids (so references
-# export as urn:uuid IRIs). Expected = violating focus IDs; both engines must
-# report exactly these under the same VIOLATION_TYPE, with the same VALUEs.
-def _uuid(n):
-    return f"{n:08d}-0000-0000-0000-000000000000"
-
-
-A1, A2, VL, SUB = _uuid(1), _uuid(2), _uuid(71), _uuid(72)
-
-_SEGMENT_BASE = [(A1, "Type", "ACLineSegment", "eq"), (A2, "Type", "ACLineSegment", "eq")]
-
-COMPONENT_CASES = {
-    "sh:minCount": (
-        "sh:path cim:IdentifiedObject.name ; sh:minCount 1",
-        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "L1", "eq")],
-        {A2}),
-    "sh:maxCount": (
-        "sh:path cim:IdentifiedObject.name ; sh:maxCount 1",
-        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "L1", "eq"),
-                         (A1, "IdentifiedObject.name", "L1b", "eq"),
-                         (A2, "IdentifiedObject.name", "L2", "eq")],
-        {A1}),
-    "sh:pattern": (
-        'sh:path cim:IdentifiedObject.name ; sh:pattern "^[A-Z]"',
-        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "Good", "eq"),
-                         (A2, "IdentifiedObject.name", "bad", "eq")],
-        {A2}),
-    "sh:minInclusive": (
-        "sh:path cim:Conductor.length ; sh:minInclusive 0.0",
-        _SEGMENT_BASE + [(A1, "Conductor.length", "-5.0", "eq"),
-                         (A2, "Conductor.length", "3.0", "eq")],
-        {A1}),
-    "sh:in": (
-        'sh:path cim:IdentifiedObject.name ; sh:in ( "L1" "L2" )',
-        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "L1", "eq"),
-                         (A2, "IdentifiedObject.name", "other", "eq")],
-        {A2}),
-    "sh:class": (
-        "sh:path cim:Equipment.EquipmentContainer ; sh:class cim:VoltageLevel",
-        _SEGMENT_BASE + [(VL, "Type", "VoltageLevel", "eq"), (SUB, "Type", "Substation", "eq"),
-                         (A1, "Equipment.EquipmentContainer", VL, "eq"),
-                         (A2, "Equipment.EquipmentContainer", SUB, "eq")],
-        {A2}),
-    "sh:xone": (  # per value node: exactly one alternative holds
-        'sh:path cim:IdentifiedObject.name ; sh:xone ( [ sh:pattern "^L" ] [ sh:pattern "1$" ] )',
-        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "L1", "eq"),
-                         (A2, "IdentifiedObject.name", "L2", "eq")],
-        {A1}),
-    "sh:sparql": (  # $PATH placeholder, like the real ENTSO-E constraint queries
-        """sh:path cim:IdentifiedObject.name ;
-           sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "forbidden") }' ]""",
-        _SEGMENT_BASE + [(A1, "IdentifiedObject.name", "fine", "eq"),
-                         (A2, "IdentifiedObject.name", "forbidden", "eq")],
-        {A2}),
-}
-
-_CASE_SHAPE = """
-@prefix sh: <http://www.w3.org/ns/shacl#> .
-@prefix cim: <http://iec.ch/TC57/CIM100#> .
-@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
-
-cim:ACLineSegmentShape a sh:NodeShape ;
-    sh:targetClass cim:ACLineSegment ;
-    sh:property [ {body} ] .
-"""
-
-
-@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb"])
-@pytest.mark.parametrize("component", sorted(COMPONENT_CASES))
-def test_component_parity(component, engine, tmp_path):
-    if engine != "pandas":
-        pytest.importorskip(engine)
-    from triplets.export_schema import schemas
-    body, rows, expected = COMPONENT_CASES[component]
-
-    shape = tmp_path / "case.ttl"
-    shape.write_text(_CASE_SHAPE.format(body=body))
-    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-
-    reference = triplets.validation.validate_shacl(data, str(shape), engine="pyshacl",
-                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
-                                             lexical=False)
-    ours = triplets.validation.validate_shacl(data, str(shape), engine=engine)
-
-    def pairs(violations):
-        rows = violations[violations["VIOLATION_TYPE"] == component]
-        return set(zip(rows["ID"], rows["VALUE"].astype(object).where(rows["VALUE"].notna(), None)))
-
-    assert {focus for focus, _ in pairs(reference)} == expected, "pyshacl disagrees"
-    assert pairs(ours) == pairs(reference), f"{engine} engine disagrees"
-
-
-def test_node_parity(tmp_path):
-    """sh:node: referenced node must conform to the referenced (target-less) shape."""
-    from triplets.export_schema import schemas
-    shape = tmp_path / "node.ttl"
-    shape.write_text("""
-@prefix sh: <http://www.w3.org/ns/shacl#> .
-@prefix cim: <http://iec.ch/TC57/CIM100#> .
-
-cim:ACLineSegmentShape a sh:NodeShape ;
-    sh:targetClass cim:ACLineSegment ;
-    sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:VoltageLevelShape ] .
-
-cim:VoltageLevelShape a sh:NodeShape ;
-    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
-""")
-    named_vl, bare_vl = _uuid(81), _uuid(82)
-    data = pandas.DataFrame(
-        _SEGMENT_BASE
-        + [(named_vl, "Type", "VoltageLevel", "eq"), (named_vl, "IdentifiedObject.name", "VL", "eq"),
-           (bare_vl, "Type", "VoltageLevel", "eq"),
-           (A1, "Equipment.EquipmentContainer", named_vl, "eq"),
-           (A2, "Equipment.EquipmentContainer", bare_vl, "eq")],
-        columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-
-    reference = triplets.validation.validate_shacl(data, str(shape), engine="pyshacl",
-                                             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope="*",
-                                             lexical=False)
-    for engine in ("pandas", "polars", "duckdb"):
-        ours = triplets.validation.validate_shacl(data, str(shape), engine=engine)
-        assert set(ours.loc[ours["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, f"{engine} engine disagrees"
-    assert set(reference.loc[reference["VIOLATION_TYPE"] == "sh:node", "ID"]) == {A2}, "pyshacl disagrees"
 
 
 # ── timing: cross-engine + compile + real-profile (phase C baseline) ──────────

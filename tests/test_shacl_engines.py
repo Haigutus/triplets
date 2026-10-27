@@ -3,7 +3,7 @@
 Every test runs against both the pandas and the lazy polars engine: each
 hand-builds a tiny triplet dataset with one controlled defect and asserts the
 exact violating (ID, VALUE) set. pyshacl agreement is covered by
-tests/test_parity_validation.py; this file pins the shared engine semantics.
+tests/test_parity_shacl_matrix.py; this file pins the shared engine semantics.
 """
 import pytest
 
@@ -30,12 +30,13 @@ PREFIX = """
 """
 
 
-def run(rows, shape_turtle, engine):
+def run(rows, shape_turtle, engine, rdf_map=None, **kwargs):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape_turtle, format="turtle")
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    return triplets.validation.validate_shacl(data, graph, engine=engine)
+    return triplets.validation.validate_shacl(data, graph, engine=engine, rdf_map=rdf_map,
+                                              rdf_map_scope="*" if rdf_map else None, **kwargs)
 
 
 def breaker(object_id, *properties):
@@ -375,6 +376,22 @@ def test_shape_message_and_severity_carried(engine):
     assert list(v["SEVERITY"]) == ["Warning"]
 
 
+def test_two_severities_read_the_first(engine):
+    """Two sh:severity values: the first one declared, on every run (pyshacl's pick
+    follows the hash seed, so the parity matrix has no case for it)."""
+    shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:severity sh:Warning, sh:Info ] ."""
+    assert list(run(breaker("b1"), shape, engine)["SEVERITY"]) == ["Warning"]
+
+
+def test_two_messages_read_the_first(engine):
+    """Two sh:message values: the first one declared (pyshacl reports both; its report
+    reader keeps the alphabetically first, so the parity matrix has no case for it)."""
+    shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:message "beta", "alpha" ] ."""
+    assert list(run(breaker("b1"), shape, engine)["MESSAGE"]) == ["beta"]
+
+
 def test_target_subjects_of(engine):
     """sh:targetSubjectsOf — focus = every subject carrying the property,
     regardless of its class; subjects without it are not targeted."""
@@ -399,17 +416,6 @@ def test_target_subjects_of_value_test(engine):
             + breaker("b2", ("Switch.normalOpen", "true")))
     v = run(rows, shape, engine)
     assert violating(v, "sh:in") == {("b1", "open")}
-
-
-def test_target_subjects_of_pyshacl_parity(engine):
-    pytest.importorskip("pyshacl")
-    shape = """cim:SwitchStateShape a sh:NodeShape ;
-        sh:targetSubjectsOf cim:Switch.normalOpen ;
-        sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
-    rows = (breaker("b1", ("Switch.normalOpen", "true"))
-            + breaker("b2", ("Switch.normalOpen", "false"), ("IdentifiedObject.name", "B2")))
-    assert violating(run(rows, shape, engine), "sh:minCount") \
-        == violating(run(rows, shape, "pyshacl"), "sh:minCount") == {("b1", None)}
 
 
 def test_ill_typed_value_fails_sparql_engine_once_with_context():
@@ -505,23 +511,6 @@ def test_defective_sparql_reports_not_evaluated():
     assert "NOT evaluated" in message and "shapes bug" in message
 
 
-def test_sequence_path_via_type_pyshacl_parity(engine):
-    # UUID-shaped ids: the rdflib graph links references only for
-    # reference-like values, plain names would load as literals
-    pytest.importorskip("pyshacl")
-    bay = "aaaaaaaa-1111-2222-3333-444444444444"
-    sub = "bbbbbbbb-1111-2222-3333-444444444444"
-    rows = (breaker("b1", ("Equipment.EquipmentContainer", bay))
-            + breaker("b2", ("Equipment.EquipmentContainer", sub))
-            + [(bay, "Type", "Bay", "eq"), (sub, "Type", "Substation", "eq")])
-    # pyshacl reports the type as the full IRI, the triplets engines as the
-    # stored local name — same violation, compare on local names
-    reference = {(focus, value.rsplit("#", 1)[-1])
-                 for focus, value in violating(run(rows, VALUE_TYPE_SHAPE, "pyshacl"), "sh:in")}
-    assert violating(run(rows, VALUE_TYPE_SHAPE, engine), "sh:in") \
-        == reference == {("b2", "Substation")}
-
-
 def test_unsupported_property_paths_still_skip_with_warning(caplog):
     """Longer sequences / zeroOrMorePath stay out of the IR — skipped with the
     coverage warning (pyshacl covers them)."""
@@ -538,26 +527,6 @@ def test_unsupported_property_paths_still_skip_with_warning(caplog):
         compiled = triplets.validation.compile(graph)
     assert len(compiled.ir) == 0
     assert sum("cannot express" in record.message for record in caplog.records) == 2
-
-
-def test_enum_violation_value_pyshacl_parity(engine):
-    """An enum value outside sh:in reports the same local VALUE on every engine: pyshacl sees
-    the enum IRI and the report reader shortens it with iri.local_value, like read_nquads."""
-    pytest.importorskip("pyshacl")
-    import rdflib
-    rdf_map = {"EQ": {"Switch.kind": {"type": "Enumeration", "xsd:type": "xsd:anyURI",
-                                      "namespace": "http://iec.ch/TC57/CIM100#"},
-                      "SwitchKind.breaker": {"type": "EnumerationValue", "namespace": "http://iec.ch/TC57/CIM100#"},
-                      "SwitchKind.other": {"type": "EnumerationValue", "namespace": "http://iec.ch/TC57/CIM100#"},
-                      "Breaker": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#"}}}
-    rows = breaker("b1", ("Switch.kind", "SwitchKind.breaker")) + breaker("b2", ("Switch.kind", "SwitchKind.other"))
-    graph = rdflib.Graph()
-    graph.parse(data=PREFIX + SHAPE.format(body="sh:path cim:Switch.kind ; sh:in ( cim:SwitchKind.breaker )"),
-                format="turtle")
-    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    for name in (engine, "pyshacl"):
-        v = triplets.validation.validate_shacl(data, graph, rdf_map=rdf_map, rdf_map_scope="*", engine=name)
-        assert violating(v, "sh:in") == {("b2", "SwitchKind.other")}, name
 
 
 def test_rdf_type_path_compiles_to_the_type_key(engine):
@@ -686,7 +655,7 @@ DEACTIVATED = {
 }
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 @pytest.mark.parametrize("case", DEACTIVATED)
 def test_deactivated_shapes_are_not_validated(engine_name, case):
     """b1 breaks only the deactivated constraints; b2 also lacks the active description."""
@@ -715,7 +684,7 @@ def switched_off(rows, compiled, engine_name, shapes=None):
         deactivated_shapes=None if shapes is None else [CIM + shape for shape in shapes])
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_deactivated_shapes_parameter(engine_name):
     """One compile, three rule sets: each switched-off set is its own cached filter."""
     pytest.importorskip(engine_name)
@@ -760,7 +729,7 @@ def test_concat_violations_counts_each_rule_set_once():
     assert counts([without_name, without_name]) == (1, 1)
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_deactivated_shapes_replace_declared(engine_name):
     """deactivated_shapes is the run's switched-off set: None keeps the declared
     one, [] runs every shape, a list replaces it."""
@@ -777,7 +746,7 @@ def test_deactivated_shapes_replace_declared(engine_name):
     assert findings(switched_off(rows, compiled, engine_name, ["NameShape"])) == {description}
     assert findings(switched_off(rows, compiled, engine_name, ["NameShape", "DescShape"])) == set()
     assert compiled.deactivated == {CIM + "DescShape"}
-    # the same finding reads the same whichever set runs (pyshacl: a copy of the graph for [])
+    # the same finding reads the same whichever set runs
     messages = {off: set(v.loc[v["ID"] == "b1", "MESSAGE"])
                 for off, v in ((None, switched_off(rows, compiled, engine_name)),
                                ((), switched_off(rows, compiled, engine_name, [])))}
@@ -785,7 +754,7 @@ def test_deactivated_shapes_replace_declared(engine_name):
     assert (compiled.ir["shape_id"] == CIM + "DescShape").any()
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_deactivated_shapes_single_iri(engine_name):
     """One shape IRI as a string is that shape, not its characters."""
     pytest.importorskip(engine_name)
@@ -797,7 +766,7 @@ def test_deactivated_shapes_single_iri(engine_name):
     assert findings(v) == findings(switched_off(breaker("b1"), compiled, engine_name, ["NameShape"])) == set()
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_deactivated_shapes_not_member(engine_name):
     """A switched-off negated shape conforms for every value, so sh:not flags them all."""
     pytest.importorskip(engine_name)
@@ -814,7 +783,7 @@ SHARED = """cim:P a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:mi
     cim:B a sh:NodeShape ; sh:targetClass cim:{target} ; sh:property cim:P ."""
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_deactivated_shared_property_shape(engine_name):
     """A standalone property shape switched off is off under every node shape."""
     pytest.importorskip(engine_name)
@@ -824,7 +793,7 @@ def test_deactivated_shared_property_shape(engine_name):
     assert findings(switched_off(rows, compiled, engine_name, ["P"])) == set()
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_deactivated_node_shape_keeps_shared_property_shape(engine_name):
     """Two node shapes share a property shape and a target: switching one off
     keeps the other's constraint."""
@@ -834,7 +803,7 @@ def test_deactivated_node_shape_keeps_shared_property_shape(engine_name):
     assert findings(switched_off(breaker("b1"), compiled, engine_name, ["A", "B"])) == set()
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_deactivated_shape_with_declared_false(engine_name):
     """The parameter overrides a declared sh:deactivated false."""
     pytest.importorskip(engine_name)
@@ -846,7 +815,7 @@ def test_deactivated_shape_with_declared_false(engine_name):
     assert findings(switched_off(breaker("b1"), compiled, engine_name, ["X"])) == set()
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 @pytest.mark.parametrize("constraint, expected", [
     ("sh:maxCount 1", set()),
     ("sh:minCount 2", {("b1", "sh:minCount")}),
@@ -860,7 +829,7 @@ def test_shared_property_shape_counts_values_once(engine_name, constraint, expec
     assert compiled.stats["constraints"] == 1
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_deactivated_shape_ill_typed_flag(engine_name):
     """An ill-typed sh:deactivated literal has no value, so the shape stays on (as pyshacl)."""
     pytest.importorskip(engine_name)
@@ -915,7 +884,7 @@ def test_report_shapes_carry_the_run_flags(engine_name):
     assert len(list(compiled.graph.subject_objects(deactivated))) == 1   # the compiled graph is untouched
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_shape_on_parent_and_child_reports_once(engine_name):
     """One property shape on both a parent and a child node shape (CGMES SHACL
     attaches inherited attributes to each) reaches a Breaker twice: one finding, like pyshacl."""
@@ -931,10 +900,9 @@ def test_shape_on_parent_and_child_reports_once(engine_name):
     assert (v["VIOLATION_TYPE"] == "sh:minCount").sum() == 1
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_inheritance_off_matches_exact_type(engine_name):
-    """inheritance=False: sh:targetClass Equipment no longer reaches a Breaker,
-    on every engine (pyshacl gets no ont_graph)."""
+    """inheritance=False: sh:targetClass Equipment no longer reaches a Breaker."""
     pytest.importorskip(engine_name)
     shape = """cim:EqShape a sh:NodeShape ; sh:targetClass cim:Equipment ;
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
@@ -992,7 +960,7 @@ def test_inheritance_follows_the_scoped_profiles(engine_name, instance_type, rdf
     assert violating(v, "sh:minCount") == ({("a1", None)} if reached else set())
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_empty_data_scope_loads_no_instance(engine_name):
     """data_scope=[] validates nothing, on every engine."""
     pytest.importorskip(engine_name)
@@ -1061,7 +1029,7 @@ VALUE_NOT = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
     sh:property [ sh:path cim:IdentifiedObject.name ; sh:not [ sh:in ( "B" ) ] ] ."""
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 @pytest.mark.parametrize("shape, properties, expected", [
     (VALUE_OR, [("IdentifiedObject.name", "C")], {("b1", "C")}),
     (VALUE_OR, [("IdentifiedObject.name", "A"), ("IdentifiedObject.name", "Bx")], set()),   # each value passes one
@@ -1086,24 +1054,8 @@ def frame(rows):
     return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
 
-# references are IRIs in the graph pyshacl sees only when the schema says so
+# the association typed as a reference, as the CGMES schema exports it
 REFERENCES = {"EQ": {"Equipment.EquipmentContainer": {"type": "Association"}}}
-
-
-def parity(rows, shape, engine, component, data_scope=None, rdf_map=None):
-    """The engine's violating set, asserted equal to pyshacl's."""
-    pytest.importorskip("pyshacl")
-    import rdflib
-    graph = rdflib.Graph()
-    graph.parse(data=PREFIX + shape, format="turtle")
-    found = {}
-    for name in (engine, "pyshacl"):
-        pairs = violating(triplets.validation.validate_shacl(
-            frame(rows), graph, engine=name, data_scope=data_scope, lexical=False,
-            rdf_map=rdf_map, rdf_map_scope="*" if rdf_map else None), component)
-        found[name] = pairs
-    assert found[engine] == found["pyshacl"], found
-    return found[engine]
 
 
 def test_target_node_present_and_absent(engine):
@@ -1113,7 +1065,7 @@ def test_target_node_present_and_absent(engine):
         sh:targetNode <urn:uuid:b1>, <urn:uuid:absent> ;
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
     rows = breaker("b1") + breaker("b2")
-    assert parity(rows, shape, engine, "sh:minCount") == {("b1", None), ("absent", None)}
+    assert violating(run(rows, shape, engine), "sh:minCount") == {("b1", None), ("absent", None)}
 
 
 def test_target_node_virtual_iri_with_sparql(engine):
@@ -1126,7 +1078,7 @@ def test_target_node_virtual_iri_with_sparql(engine):
                 sh:select """SELECT $this ?value WHERE { ?value a <http://iec.ch/TC57/CIM100#Breaker> .
                            FILTER NOT EXISTS { ?value <http://iec.ch/TC57/CIM100#IdentifiedObject.name> ?n } }""" ] ] .'''
     rows = breaker("b1", ("IdentifiedObject.name", "n")) + breaker("b2")
-    assert parity(rows, shape, engine, "sh:sparql") == {("http://iec.ch/TC57/CIM100#IDuniqueness", "b2")}
+    assert violating(run(rows, shape, engine), "sh:sparql") == {("http://iec.ch/TC57/CIM100#IDuniqueness", "b2")}
 
 
 def test_target_node_under_data_scope(engine):
@@ -1135,8 +1087,8 @@ def test_target_node_under_data_scope(engine):
     shape = """cim:Picked a sh:NodeShape ; sh:targetNode <urn:uuid:b1> ;
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
     rows = breaker("b1", ("IdentifiedObject.name", "n")) + [("b1", "Type", "Breaker", "other")]
-    assert parity(rows, shape, engine, "sh:minCount") == set()
-    assert parity(rows, shape, engine, "sh:minCount", data_scope=["other"]) == {("b1", None)}
+    assert violating(run(rows, shape, engine), "sh:minCount") == set()
+    assert violating(run(rows, shape, engine, data_scope=["other"]), "sh:minCount") == {("b1", None)}
 
 
 def test_target_objects_of(engine):
@@ -1150,7 +1102,7 @@ def test_target_objects_of(engine):
             + breaker("b3", ("Equipment.EquipmentContainer", "dangling"))
             + [("bay1", "Type", "Bay", "eq"), ("bay1", "IdentifiedObject.name", "B1", "eq"),
                ("bay2", "Type", "Bay", "eq")])
-    assert parity(rows, shape, engine, "sh:minCount", rdf_map=REFERENCES) == {("bay2", None), ("dangling", None)}
+    assert violating(run(rows, shape, engine, rdf_map=REFERENCES), "sh:minCount") == {("bay2", None), ("dangling", None)}
 
 
 def test_target_objects_of_literal_value(engine):
@@ -1158,7 +1110,7 @@ def test_target_objects_of_literal_value(engine):
     shape = """cim:Names a sh:NodeShape ; sh:targetObjectsOf cim:IdentifiedObject.name ;
         sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ."""
     rows = breaker("b1", ("IdentifiedObject.name", "n"))
-    assert parity(rows, shape, engine, "sh:minCount") == {("n", None)}
+    assert violating(run(rows, shape, engine), "sh:minCount") == {("n", None)}
 
 
 def test_target_objects_of_under_data_scope(engine):
@@ -1167,8 +1119,8 @@ def test_target_objects_of_under_data_scope(engine):
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
     rows = (breaker("b1", ("Equipment.EquipmentContainer", "bay1"))
             + [("b2", "Type", "Breaker", "other"), ("b2", "Equipment.EquipmentContainer", "bay2", "other")])
-    assert parity(rows, shape, engine, "sh:minCount", rdf_map=REFERENCES) == {("bay1", None), ("bay2", None)}
-    assert parity(rows, shape, engine, "sh:minCount", data_scope=["other"], rdf_map=REFERENCES) == {("bay2", None)}
+    assert violating(run(rows, shape, engine, rdf_map=REFERENCES), "sh:minCount") == {("bay1", None), ("bay2", None)}
+    assert violating(run(rows, shape, engine, data_scope=["other"], rdf_map=REFERENCES), "sh:minCount") == {("bay2", None)}
 
 
 def test_targets_other_than_type_never_widen(engine):
@@ -1195,7 +1147,7 @@ def test_node_level_logical_operators(engine):
     rows = (breaker("named", ("IdentifiedObject.name", "n")) + breaker("described", ("IdentifiedObject.description", "d"))
             + breaker("bare") + breaker("banned", ("IdentifiedObject.name", "n"), ("Switch.state", "banned")))
     for component, expected in (("sh:or", {("bare", None)}), ("sh:not", {("banned", None)})):
-        assert parity(rows, shape, engine, component) == expected, component
+        assert violating(run(rows, shape, engine), component) == expected, component
 
 
 def test_logical_member_with_property_shapes(engine):
@@ -1211,8 +1163,8 @@ def test_logical_member_with_property_shapes(engine):
             + breaker("b4", ("IdentifiedObject.name", "n"))                              # conforms to Named → sh:not
             + [("named", "Type", "Bay", "eq"), ("named", "IdentifiedObject.name", "N", "eq"),
                ("ok", "Type", "Bay", "eq"), ("bare", "Type", "Bay", "eq")])
-    assert parity(rows, shape, engine, "sh:or", rdf_map=REFERENCES) == {("b3", "bare")}
-    assert parity(rows, shape, engine, "sh:not", rdf_map=REFERENCES) == {("b4", None)}
+    assert violating(run(rows, shape, engine, rdf_map=REFERENCES), "sh:or") == {("b3", "bare")}
+    assert violating(run(rows, shape, engine, rdf_map=REFERENCES), "sh:not") == {("b4", None)}
 
 
 def test_operator_over_unknown_component_reports_nothing(engine):
@@ -1239,7 +1191,7 @@ def test_node_level_value_constraint_is_reported_not_run(engine):
     assert "http://iec.ch/TC57/CIM100#N: node-level sh:in not evaluated" in v.attrs["validation"]["skipped_shapes"]
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_node_level_operators_over_deactivated_shapes(engine_name):
     """At node level too: a deactivated negated shape conforms for every focus,
     so sh:not flags them all; a deactivated sh:and member holds."""
@@ -1267,7 +1219,7 @@ def test_node_level_node(engine):
     chain = ("cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:node cim:Mid .\n"
              "cim:Mid a sh:NodeShape ; sh:node cim:Named .\n" + NAMED)
     for shape in (direct, chain):
-        assert parity(rows, shape, engine, "sh:node") == {("bare", None)}
+        assert violating(run(rows, shape, engine), "sh:node") == {("bare", None)}
 
 
 def test_node_level_node_with_own_property_shapes(engine):
@@ -1276,11 +1228,11 @@ def test_node_level_node_with_own_property_shapes(engine):
         sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .\n""" + NAMED
     rows = (breaker("both", ("IdentifiedObject.name", "n"), ("IdentifiedObject.description", "d"))
             + breaker("named", ("IdentifiedObject.name", "n")) + breaker("described", ("IdentifiedObject.description", "d")))
-    assert parity(rows, shape, engine, "sh:node") == {("described", None)}
+    assert violating(run(rows, shape, engine), "sh:node") == {("described", None)}
     assert violating(run(rows, shape, engine), "sh:minCount") == {("named", None)}
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_node_level_node_over_deactivated_shape(engine_name):
     """A deactivated referenced shape conforms for every focus, declared or switched off."""
     pytest.importorskip(engine_name)
@@ -1301,7 +1253,7 @@ def test_xone_node_level(engine):
                   [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) ."""
     rows = (breaker("both", ("IdentifiedObject.name", "n"), ("IdentifiedObject.description", "d"))
             + breaker("name", ("IdentifiedObject.name", "n")) + breaker("neither"))
-    assert parity(rows, shape, engine, "sh:xone") == {("both", None), ("neither", None)}
+    assert violating(run(rows, shape, engine), "sh:xone") == {("both", None), ("neither", None)}
 
 
 def test_xone_property_level_judges_values(engine):
@@ -1310,7 +1262,7 @@ def test_xone_property_level_judges_values(engine):
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:xone ( [ sh:pattern "^A" ] [ sh:pattern "Z$" ] ) ] ."""
     rows = breaker("b1", ("IdentifiedObject.name", "AZ"), ("IdentifiedObject.name", "Ax"),
                    ("IdentifiedObject.name", "xx"))
-    assert parity(rows, shape, engine, "sh:xone") == {("b1", "AZ"), ("b1", "xx")}
+    assert violating(run(rows, shape, engine), "sh:xone") == {("b1", "AZ"), ("b1", "xx")}
 
 
 def test_xone_deactivated_member_conforms(engine):
@@ -1320,7 +1272,7 @@ def test_xone_deactivated_member_conforms(engine):
         sh:xone ( [ sh:deactivated true ; sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ]
                   [ sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ] ) ."""
     rows = breaker("b1", ("IdentifiedObject.name", "n")) + breaker("b2")
-    assert parity(rows, shape, engine, "sh:xone") == {("b1", None)}
+    assert violating(run(rows, shape, engine), "sh:xone") == {("b1", None)}
 
 
 # ── SPARQL targets (sh:target [ a sh:SPARQLTarget ; sh:select … ]) ───────────
@@ -1367,7 +1319,7 @@ TRANSFORMER_ROWS = transformer("pt1", 2) + transformer("pt2", 2) + transformer("
 def test_sparql_target(engine):
     """The query, not the Type, picks the focus: every name is too long, only
     the two-winding transformers are reported."""
-    assert parity(TRANSFORMER_ROWS, sparql_target(TWO_WINDING), engine, "sh:maxLength", rdf_map=TRANSFORMERS) \
+    assert violating(run(TRANSFORMER_ROWS, sparql_target(TWO_WINDING), engine, rdf_map=TRANSFORMERS), "sh:maxLength") \
         == {("pt1", "PT-pt1"), ("pt2", "PT-pt2")}
 
 
@@ -1375,20 +1327,20 @@ def test_sparql_target_with_sparql_constraint(engine):
     """A sh:sparql constraint under a SPARQL target binds the target's focus nodes."""
     shape = sparql_target(TWO_WINDING, """sh:property [ sh:path cim:IdentifiedObject.name ;
         sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ] ] .""")
-    assert parity(TRANSFORMER_ROWS, shape, engine, "sh:sparql", rdf_map=TRANSFORMERS) \
+    assert violating(run(TRANSFORMER_ROWS, shape, engine, rdf_map=TRANSFORMERS), "sh:sparql") \
         == {("pt1", "PT-pt1"), ("pt2", "PT-pt2")}
 
 
 def test_sparql_target_and_target_class(engine):
     """A shape with both targets: the overlap is reported once."""
     shape = sparql_target(TWO_WINDING, "sh:targetClass cim:PowerTransformer ; " + NAME_TOO_LONG)
-    assert parity(TRANSFORMER_ROWS, shape, engine, "sh:maxLength", rdf_map=TRANSFORMERS) \
+    assert violating(run(TRANSFORMER_ROWS, shape, engine, rdf_map=TRANSFORMERS), "sh:maxLength") \
         == {("pt1", "PT-pt1"), ("pt2", "PT-pt2"), ("pt3", "PT-pt3")}
 
 
 def test_sparql_target_without_select_is_skipped(engine):
-    """A custom sh:target without sh:select stays pyshacl-only: no findings,
-    named in skipped_shapes."""
+    """A custom sh:target without sh:select: no findings, named in skipped_shapes
+    (pyshacl rejects a bare-IRI sh:target: ShapeLoadError)."""
     violations = run(TRANSFORMER_ROWS, "cim:Custom a sh:NodeShape ; sh:target cim:SomeTarget ; " + NAME_TOO_LONG, engine)
     assert len(violations) == 0
     assert violations.attrs["validation"]["skipped_shapes"] == [CIM + "Custom: sh:target not walked (no sh:select)"]
@@ -1442,7 +1394,7 @@ def test_sparql_target_rejected_by_strict_engine(engine):
     assert "the SPARQL target WAS still evaluated" in notes["MESSAGE"].iloc[0]
 
 
-@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("engine_name", ENGINES)
 def test_sparql_target_deactivated(engine_name):
     pytest.importorskip(engine_name)
     compiled = compiled_shapes(sparql_target(TWO_WINDING))
