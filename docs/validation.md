@@ -179,14 +179,23 @@ registries that consume it are internal.
 | `sh:closed` | list[str] — the **fully resolved** allowed KEY list: `sh:ignoredProperties` + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included) |
 | `sh:or` / `sh:and` / `sh:xone` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
 | `sh:not` | list[dict] — nested IR row dicts |
-| `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time, run against the value nodes (the focus node on a node shape); also a logical member with its own `sh:property` under a path (its value nodes must conform) |
+| `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time, run against the value nodes (the focus node on a node shape); one finding per non-conforming value node |
+| `sh:property` | `{"shape": local name, "rows": [nested IR row dicts]}` — a property shape's own property shapes (and its `sh:closed`), run against its value nodes; their findings are reported as they are, with the value node as `ID` |
 | `sh:sparql` | `{"select": SELECT text with `$this`/`$PATH` placeholders, "prefixes": resolved `PREFIX` header, "path": full IRI of the owning `sh:path` or None}` |
 
-In a property shape, a nested `sh:or` / `sh:and` / `sh:xone` / `sh:not` shape
-without its own `sh:path` takes the property's path: it judges each value node,
-and `sh:or` / `sh:xone` / `sh:not` report per value (`VALUE` = the value node).
-`sh:xone` holds when exactly one alternative does; an empty (switched-off)
-alternative holds for every node.
+Each value of a parameter is a constraint of its own (SHACL §4.1): two
+`sh:node` shapes, two `sh:or` lists or two `sh:pattern` values compile to two
+rows. An empty `sh:or` / `sh:and` / `sh:xone` list raises ValueError at compile
+(pyshacl: `ShapeLoadError`).
+
+The logical operators report one row per non-conforming focus node on a node
+shape (no `KEY`) and one per non-conforming value node in a property shape
+(`VALUE` = the value node), with the operator's shape, severity and message.
+In a property shape, a member without its own `sh:path` takes the property's
+path; a member with its own `sh:path` is a property shape over the value nodes
+(it compiles to a `sh:node` row of the property's path). `sh:and` holds when
+every member does, `sh:xone` when exactly one alternative does; an empty
+(switched-off) alternative holds for every node.
 
 Compile-time behaviors worth knowing: a NodeShape with several `sh:targetClass`
 (the ENTSO-E profiles do this) emits every row once per target class; shape
@@ -200,7 +209,12 @@ skips the property shape — pyshacl covers it). One walker compiles every shape
 `sh:sparql`, `sh:node` and the logical operators on the NodeShape itself judge
 its focus nodes; a
 member or referenced shape with its own `sh:property` judges the same focus at
-node level and, under a path, the value nodes (a `sh:node`-style row).
+node level. A property shape with its own `sh:property` runs those property
+shapes on its value nodes: below a `sh:node` target or a logical member (a
+shape judged for conformance) as a `sh:node` row — one finding per
+non-conforming value node, on the referring focus (SHACL §4.7.1); reached from
+the targeted NodeShape through `sh:property` only, as a `sh:property` row whose
+property shapes report their own findings on the value nodes (§4.7.2).
 
 Terms no engine implements (`sh:qualifiedValueShape`, `sh:qualifiedMinCount`,
 `sh:qualifiedMaxCount`, `sh:uniqueLang`, `sh:languageIn`) compile to rows with
@@ -243,17 +257,17 @@ the same shapes never recompiles anything.
 
 ### Component coverage per engine
 
-The shared contract lives in `shacl_ir`: `KNOWN_COMPONENTS` (all 25 keys) and
-`FALLBACK_COMPONENTS` (`sh:or/and/xone/not/node/sparql` — the nested/query components
+The shared contract lives in `shacl_ir`: `KNOWN_COMPONENTS` (all 26 keys) and
+`FALLBACK_COMPONENTS` (`sh:or/and/xone/not/node/property/sparql` — the nested/query components
 every vectorized engine delegates to the pandas implementations via
 `split_rules`). A test (`test_shacl_ir.py::test_component_registries_agree`)
 pins the registries together:
 
 | engine | registry | coverage |
 |--------|----------|----------|
-| pandas | `CONSTRAINT_VALIDATORS` | all 25 (the fallback target) |
-| polars | `PLAN_BUILDERS` (+ `BATCH_BUILDERS` fast path) | 19 vectorized + 6 delegated |
-| duckdb | `SQL_BUILDERS` | 19 vectorized + 6 delegated |
+| pandas | `CONSTRAINT_VALIDATORS` | all 26 (the fallback target) |
+| polars | `PLAN_BUILDERS` (+ `BATCH_BUILDERS` fast path) | 19 vectorized + 7 delegated |
+| duckdb | `SQL_BUILDERS` | 19 vectorized + 7 delegated |
 | pyshacl | consumes `compiled.graph`, not the IR | full spec; report vocabulary mapped back via `shacl_report._COMPONENT_MAP` |
 
 The compile cache participates in the shared engine-state lifecycle:

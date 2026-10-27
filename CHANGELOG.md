@@ -310,6 +310,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   alternative path) reads as the KEY it resolves to, not the blank-node label; the
   qualified-value, `sh:uniqueLang` and `sh:languageIn` components read as `sh:qualifiedMinCount`
   etc.
+- **Every value of a repeatable SHACL parameter is evaluated** on polars, pandas and
+  duckdb: a second `sh:node` shape, `sh:or` / `sh:and` / `sh:xone` list, `sh:not`
+  shape or `sh:pattern` / `sh:class` / `sh:hasValue` value was dropped without a
+  warning; each value is now a constraint of its own, as in pyshacl
+  ([#163](https://github.com/Haigutus/triplets/issues/163)). An empty `sh:or` /
+  `sh:and` / `sh:xone` list raises ValueError at compile (pyshacl does not load it).
+- **`sh:and` reports one row per non-conforming focus node** (node shape, no `KEY`)
+  **or value node** (property shape), with the operator's shape, severity and
+  message — it listed every nested finding with the nested `KEY` and shape
+  ([#164](https://github.com/Haigutus/triplets/issues/164)).
+- **A `sh:or` / `sh:and` / `sh:xone` / `sh:not` member with its own `sh:path`
+  inside a property shape is checked on the value nodes**, not on the focus node:
+  the engines flagged the wrong focus ([#166](https://github.com/Haigutus/triplets/issues/166)).
+- **`sh:property` on a property shape reports the inner constraint on the value
+  node** (SHACL §4.7.2), as pyshacl: it was one `sh:node` row on the referring
+  focus. Under a `sh:node` target or a logical member the property shape is still
+  judged as a whole (one `sh:node` row per value node). New IR component
+  `sh:property`.
 - `sh:node` on a node shape is evaluated by the polars, pandas and duckdb engines: one
   `sh:node` finding per non-conforming focus node, as pyshacl
   ([#160](https://github.com/Haigutus/triplets/issues/160)).
