@@ -295,10 +295,13 @@ them too.
   qlever when built, else oxigraph when installed, else rdflib): the data is
   loaded into one dataset, each constraint runs as a single SELECT with the
   focus nodes bound via `VALUES ?this {...}` and `$PATH` substituted from
-  the IR, and `max_workers=N` runs the constraint queries in parallel
-  processes on the rdflib path only (fork gives copy-on-write sharing of the
-  dataset; threads don't help rdflib — it is GIL-bound pure Python; qlever
-  and oxigraph are ms-scale sequentially).
+  the IR, and `max_workers=N` runs the constraint queries in parallel:
+  forked processes on rdflib (copy-on-write sharing of the dataset; threads
+  don't help rdflib — it is GIL-bound pure Python), threads on oxigraph and
+  qlever (they release the GIL while evaluating over one shared store).
+  Queries a strict engine rejects fall back to rdflib and do not run in
+  parallel: a shapes file with many rejected queries can be slower with
+  `max_workers` (GIL-bound fallbacks).
   For sh:sparql-heavy profiles build the qlever extension or
   `pip install triplets[oxigraph]`; the rdflib fallback runs in minutes.
   **No query fixing**: constraint queries run exactly as authored. A
