@@ -504,12 +504,15 @@ def _logical_rows(graph, SH, shape, meta, value_path=None, **walk):
     component no engine implements anywhere in it, or a part of it already
     skipped) makes the operator undecidable: the row is dropped and named in
     *skipped* — never judged on a partial member, which would fire on every
-    focus node. Decided at compile time, whatever is switched off later."""
+    focus node. Decided at compile time, whatever is switched off later. An
+    empty member list raises ValueError (pyshacl does not load it either)."""
     rows = []
     for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and"), (SH.xone, "sh:xone"),
                             (SH["not"], "sh:not")):
         for head in sorted(graph.objects(shape, term), key=str):   # one operator row per value
             items = [head] if component == "sh:not" else _rdf_list(graph, head, lambda node: node)
+            if not items:
+                raise ValueError(f"shape {shape} has an empty {component} list")   # pyshacl: ShapeLoadError
             members = [(item, _shape_rows(graph, SH, item, value_path=value_path, **walk)) for item in items]
             reasons = [f"{shape}: {component} member {item} {reason}"
                        for item, member in members

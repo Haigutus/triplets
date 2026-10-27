@@ -608,6 +608,13 @@ cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
         "IdentifiedObject.description", "IdentifiedObject.name"]
     assert sorted(rows.loc[rows["component"] == "sh:pattern", "params"]) == ["1$", "^B"]
 
+
+@pytest.mark.parametrize("operator", ["sh:or", "sh:and", "sh:xone"])
+def test_empty_member_list_raises(operator):
+    """An empty sh:or / sh:and / sh:xone list does not load (pyshacl: ShapeLoadError)."""
+    with pytest.raises(ValueError, match=f"empty {operator} list"):
+        compile_shapes(_graph(f"cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; {operator} ( ) ."))
+
 CGMES_DY_COMPLEX = CGMES_SHACL_DIR / "61970-302_Dynamics-AP-Con-Complex-SHACL.ttl"
 
 
