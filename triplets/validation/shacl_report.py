@@ -53,19 +53,38 @@ _COMPONENT_MAP = {
     "XoneConstraintComponent": "sh:xone",
     "NotConstraintComponent": "sh:not",
     "SPARQLConstraintComponent": "sh:sparql",
+    "QualifiedMinCountConstraintComponent": "sh:qualifiedMinCount",
+    "QualifiedMaxCountConstraintComponent": "sh:qualifiedMaxCount",
+    "QualifiedValueShapeConstraintComponent": "sh:qualifiedValueShape",
+    "UniqueLangConstraintComponent": "sh:uniqueLang",
+    "LanguageInConstraintComponent": "sh:languageIn",
 }
 
 
-def report_to_violations(report_graph):
-    """ValidationReport rdflib graph → violations DataFrame (single columnar pass)."""
+def report_to_violations(report_graph, shapes_graph=None):
+    """ValidationReport rdflib graph → violations DataFrame (single columnar pass).
+
+    Nested ``sh:detail`` results (the cause of a ``sh:node`` result) are not
+    listed: the parent result is the finding. With the ``shapes_graph`` the
+    report was made from, a blank-node ``sh:resultPath`` (inverse / sequence /
+    alternative path) is the KEY it resolves to; without it (reports written by
+    other tools) KEY is the blank-node label."""
     import rdflib
 
+    from .shacl_ir import _resolve_path
+
     sh = rdflib.Namespace(SH_NS)
+    details = set(report_graph.objects(None, sh.detail))
     # collect into per-column lists, build the DataFrame once (no per-row concat)
     columns = {name: [] for name in VIOLATION_COLUMNS}
 
     for result in report_graph.subjects(rdflib.RDF.type, sh.ValidationResult):
+        if result in details:
+            continue
         path = report_graph.value(result, sh.resultPath)
+        key = local_key(decode_iri(path))
+        if shapes_graph is not None and path is not None and not isinstance(path, rdflib.URIRef):
+            key = _resolve_path(shapes_graph, sh, path)[0] or key
         focus = report_graph.value(result, sh.focusNode)
         value = report_graph.value(result, sh.value)
         if path is None and value == focus:     # pyshacl echoes the focus node on path-less results; ID holds it
@@ -76,7 +95,7 @@ def report_to_violations(report_graph):
         message = _constraint_message(report_graph.objects(result, sh.resultMessage))
 
         columns["ID"].append(local_id(decode_iri(focus)))
-        columns["KEY"].append(local_key(decode_iri(path)))
+        columns["KEY"].append(key)
         columns["VALUE"].append(_term_value(value, path == rdflib.RDF.type))
         columns["VIOLATION_TYPE"].append(_component(component))
         columns["MESSAGE"].append(message)

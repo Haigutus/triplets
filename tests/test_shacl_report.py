@@ -48,6 +48,45 @@ def test_path_less_result_echoing_the_focus_has_no_value():
     assert pandas.isna(value["b1"]) and value["b2"] == "other"
 
 
+def test_detail_results_are_not_listed():
+    """A sh:detail result (the cause of a sh:node result) is not a finding of its own:
+    one row, the parent's."""
+    import rdflib
+    graph = rdflib.Graph().parse(format="turtle", data="""
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix cim: <http://iec.ch/TC57/CIM100#> .
+        [] a sh:ValidationResult ; sh:focusNode <urn:uuid:b1> ; sh:value <urn:uuid:bay1> ;
+            sh:resultPath cim:Equipment.EquipmentContainer ;
+            sh:sourceConstraintComponent sh:NodeConstraintComponent ;
+            sh:detail [ a sh:ValidationResult ; sh:focusNode <urn:uuid:bay1> ;
+                        sh:resultPath cim:IdentifiedObject.name ;
+                        sh:sourceConstraintComponent sh:MinCountConstraintComponent ] .""")
+    violations = report_to_violations(graph)
+    assert list(zip(violations["ID"], violations["KEY"], violations["VIOLATION_TYPE"])) == [
+        ("b1", "Equipment.EquipmentContainer", "sh:node")]
+
+
+def test_blank_node_result_path_resolves_through_the_shapes_graph():
+    """An inverse-path result reads the KEY the path names in the shapes graph;
+    without the shapes graph the blank-node label stays."""
+    import rdflib
+    shapes = rdflib.Graph().parse(format="turtle", data="""
+        @prefix sh: <http://www.w3.org/ns/shacl#> .
+        @prefix cim: <http://iec.ch/TC57/CIM100#> .
+        cim:BayShape a sh:NodeShape ; sh:targetClass cim:Bay ;
+            sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; sh:minCount 1 ] .""")
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    path = next(shapes.objects(None, sh.path))
+    report = rdflib.Graph()
+    result = rdflib.BNode()
+    report.add((result, rdflib.RDF.type, sh.ValidationResult))
+    report.add((result, sh.focusNode, rdflib.URIRef("urn:uuid:bay1")))
+    report.add((result, sh.resultPath, path))
+    report.add((result, sh.sourceConstraintComponent, sh.MinCountConstraintComponent))
+    assert list(report_to_violations(report, shapes_graph=shapes)["KEY"]) == ["Equipment.EquipmentContainer"]
+    assert list(report_to_violations(report)["KEY"]) == [str(path)]
+
+
 def test_report_graph_shape():
     import rdflib
     sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")

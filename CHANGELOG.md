@@ -294,6 +294,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **pyshacl engine report**: the nested `sh:detail` results of a `sh:node` finding are no
+  longer listed as findings of their own; a blank-node `sh:resultPath` (inverse, sequence or
+  alternative path) reads as the KEY it resolves to, not the blank-node label; the
+  qualified-value, `sh:uniqueLang` and `sh:languageIn` components read as `sh:qualifiedMinCount`
+  etc.
 - `sh:node` on a node shape is evaluated by the polars, pandas and duckdb engines: one
   `sh:node` finding per non-conforming focus node, as pyshacl
   ([#160](https://github.com/Haigutus/triplets/issues/160)).

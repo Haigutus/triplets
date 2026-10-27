@@ -2,8 +2,11 @@
 
 pandas is the reference; other engines'/flavors' outputs are normalised to the pandas
 output's data type and compared. Comparison is **numeric-aware** (numbers compared by
-value, not string repr) and **null-normalised**. There are intentionally no xfails in the
-harnesses — divergences surface as real failures to fix.
+value, not string repr) and **null-normalised**.
+
+SHACL matrix (``test_parity_shacl_matrix.py``): a known divergence is ``xfail(strict=True)``
+per (case, engine) with an issue URL, or a named pending draft, as reason; a fix flips it to a failure that removes
+the marker. Any other divergence fails.
 """
 import contextlib
 import inspect
@@ -84,6 +87,19 @@ def canon_frame(obj):
         df = df[df["VALUE"] != ""]
     df = df.reindex(sorted(df.columns), axis=1)
     return df.sort_values(by=list(df.columns)).reset_index(drop=True)
+
+
+VIOLATION_KEY = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "SEVERITY", "SOURCE_SHAPE", "MESSAGE"]
+LEXICAL_ALLOWANCE = "triplets:lexicalForm"   # the vectorized engines' extra Warning rows (docs/validation.md)
+
+
+def canon_violations(violations):
+    """Comparable row set of a validation frame: nulls kept as None, MESSAGE only when
+    the shape authored it (engine-worded messages differ by design), the lexical-form
+    Warnings the vectorized engines add removed (the one named allowance)."""
+    frame = violations[violations["VIOLATION_TYPE"] != LEXICAL_ALLOWANCE]
+    frame = frame.assign(MESSAGE=frame["MESSAGE"].where(frame["MESSAGE_SOURCE"] == "shacl", None))[VIOLATION_KEY]
+    return set(frame.astype(object).where(frame.notna(), None).itertuples(index=False, name=None))
 
 
 def frames_equal(a, b):
