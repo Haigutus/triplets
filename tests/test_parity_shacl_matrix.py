@@ -429,14 +429,11 @@ def known(reason, *cases):
 
 
 XFAIL = {
-    **known(ISSUE + "163 second sh:node value dropped", "prop_node_two_values", "node_node_two_values"),
     **known(ISSUE + "164 node-level sh:and: one row per nested finding",
             "node_and_paths", "node_and_shape", "node_and_shapes", "node_and_inverse_member"),
     **known(ISSUE + "164 path-level sh:and: SOURCE_SHAPE is the member's", "prop_and_values", "prop_and_node_shape"),
     **known(ISSUE + "166 member with its own sh:path checked on the focus",
             "prop_or_member_path", "prop_and_member_path", "prop_xone_member_path", "prop_not_member_path"),
-    **known(ISSUE + "163 N1 a parameter given twice: one value read",
-            "twice_or_lists", "twice_xone_lists", "twice_not", "twice_pattern", "twice_class", "twice_hasValue"),
     **known(ISSUE + "163 N1 a parameter given twice: evaluated where pyshacl rejects the shape",
             "twice_minCount", "twice_datatype", "twice_in", "twice_path"),
     **known(ISSUE + "163 N1 a parameter given twice: one value read, and #164", "twice_and_lists"),
