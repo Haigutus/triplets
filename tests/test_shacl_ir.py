@@ -250,10 +250,12 @@ def test_component_registries_agree():
     assert shacl_ir.FALLBACK_COMPONENTS <= known
     # pyshacl's report vocabulary covers the SHACL components, plus the ones only
     # pyshacl evaluates; triplets:range and triplets:missing are schema-validation-only
-    # (never emitted by pyshacl)
+    # (never emitted by pyshacl), and sh:property findings carry the nested
+    # property shapes' own components
     pyshacl_only = {"sh:qualifiedMinCount", "sh:qualifiedMaxCount", "sh:qualifiedValueShape",
                     "sh:uniqueLang", "sh:languageIn"}
-    assert set(shacl_report._COMPONENT_MAP.values()) - pyshacl_only == known - {"triplets:range", "triplets:missing"}
+    assert set(shacl_report._COMPONENT_MAP.values()) - pyshacl_only == known - {
+        "triplets:range", "triplets:missing", "sh:property"}
 
     if importlib.util.find_spec("polars"):
         from triplets.validation import shacl_polars
@@ -628,6 +630,23 @@ def test_member_with_its_own_path_under_a_path_judges_the_value_nodes():
     assert [(row["component"], row["path"]) for row in wrapper["params"]["rows"]] == [
         ("sh:minCount", "IdentifiedObject.name")]
     assert compiled.active([CIM + "M"]).ir["params"][0] == [[{**wrapper, "params": {"shape": "M", "rows": []}}]]
+
+
+def test_property_on_a_property_shape_compiles_by_context():
+    """sh:property on a property shape: reached from the targeted NodeShape it
+    is a sh:property row (its rows report on the value nodes); below a sh:node
+    target or a logical member it stays a sh:node conformance row."""
+    on_value = "sh:path cim:Equipment.EquipmentContainer ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]"
+    compiled = compile_shapes(_graph(f"""
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property [ {on_value} ] ; sh:node cim:X ;
+    sh:or ( [ {on_value} ] ) .
+cim:X a sh:NodeShape ; sh:property [ {on_value} ] ."""))
+    rows = compiled.ir.set_index("component")
+    direct = rows.loc["sh:property"]
+    assert direct["path"] == "Equipment.EquipmentContainer"
+    assert [(row["component"], row["path"]) for row in direct["params"]["rows"]] == [("sh:minCount", "IdentifiedObject.name")]
+    for nested in (rows.loc["sh:node", "params"]["rows"], rows.loc["sh:or", "params"][0]):
+        assert [(row["component"], row["path"]) for row in nested] == [("sh:node", "Equipment.EquipmentContainer")]
 
 CGMES_DY_COMPLEX = CGMES_SHACL_DIR / "61970-302_Dynamics-AP-Con-Complex-SHACL.ttl"
 

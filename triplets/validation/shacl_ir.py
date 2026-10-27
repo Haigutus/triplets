@@ -12,7 +12,8 @@ IR: one row per shape x target x path x constraint component.
     shape_id, shapes, target_on, target_by, path, inverse, via_type,
     component, params, severity, message, name, description
 ``params`` holds the component's parameter: a scalar (sh:minCount), a list
-(sh:in), or nested row-dict lists (sh:or / sh:and / sh:xone / sh:not). Unknown
+(sh:in), or nested row-dict lists (sh:or / sh:and / sh:xone / sh:not, and the
+``rows`` of sh:node / sh:property). Unknown
 components are kept as rows and logged — engines skip what they don't
 implement; pyshacl still covers the full spec. ``shapes`` is the row's
 lineage — the shape ids whose ``sh:deactivated`` removes it; every shape
@@ -224,11 +225,12 @@ _NESTED = {
     "sh:xone": (lambda params: params, lambda params, lists: lists),
     "sh:not": (lambda params: [params], lambda params, lists: lists[0]),
     "sh:node": (lambda params: [params["rows"]], lambda params, lists: {**params, "rows": lists[0]}),
+    "sh:property": (lambda params: [params["rows"]], lambda params, lists: {**params, "rows": lists[0]}),
 }
 
 
 def _nested(component, params):
-    """The nested row lists of a logical or sh:node row; [] for any other component."""
+    """The nested row lists of a logical, sh:node or sh:property row; [] for any other component."""
     return _NESTED[component][0](params) if component in _NESTED else []
 
 
@@ -309,7 +311,7 @@ def _content_hash(shapes):
 # Nested/query components every vectorized engine delegates to the pandas
 # implementations — part of the shared IR contract, defined here so no engine
 # needs to import another engine for a constant.
-FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:xone", "sh:not", "sh:node", "sh:sparql"}
+FALLBACK_COMPONENTS = {"sh:or", "sh:and", "sh:xone", "sh:not", "sh:node", "sh:property", "sh:sparql"}
 
 
 def split_rules(ir, implemented, fallback_components, engine):
@@ -402,7 +404,7 @@ def parse_ir(graph, skipped=None) -> pandas.DataFrame:
 
 
 def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=None,
-                target_by="Type", value_path=None, skipped=None, shapes=()):
+                target_by="Type", value_path=None, skipped=None, shapes=(), judged=False):
     """One shape → IR rows (one per constraint component present): the targeted
     NodeShape, each of its property shapes, a shape referenced through sh:node,
     a member of sh:or / sh:and / sh:xone / sh:not — one walker for all of them.
@@ -416,6 +418,11 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
     sh:path constrains that property's value nodes.
     *skipped* collects what the IR cannot express, as (lineage, text) entries.
     *shapes* is the lineage of the shapes enclosing this one.
+    *judged*: the shape is judged for conformance — a sh:node target, a logical
+    member, or a shape below one. A property shape's own sh:property then makes
+    one sh:node row per value node (SHACL §4.7.1); reached from the targeted
+    NodeShape through sh:property only, it is a sh:property row whose property
+    shapes report their own findings on the value nodes (§4.7.2).
     """
     if str(shape_uri) in visited:
         logger.warning("shape reference cycle at %s — constraint dropped", shape_uri)
@@ -438,7 +445,7 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
         meta["name"] = meta["name"] or parent["name"]
         meta["description"] = meta["description"] or parent["description"]
     walk = {"target_on": target_on, "visited": visited, "target_by": target_by, "skipped": skipped,
-            "shapes": meta["shapes"]}
+            "shapes": meta["shapes"], "judged": judged}
     rows = []
 
     # each value of a parameter is a constraint of its own (SHACL §4.1)
@@ -467,18 +474,18 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
         # rows against the value nodes (the focus node on a node shape)
         rows.append({**meta, "component": "sh:node",
                      "params": {"shape": split_iri(node_shape)[1],
-                                "rows": _shape_rows(graph, SH, node_shape, **walk)}})
+                                "rows": _shape_rows(graph, SH, node_shape, **{**walk, "judged": True})}})
 
     # the shape's own property shapes (and sh:closed over them): a NodeShape —
     # targeted, referenced or a logical member — judges its focus with them; a
-    # shape with a path judges its value nodes, like a sh:node reference
+    # shape with a path runs them on its value nodes (see *judged*)
     own = _closed_rows(graph, SH, shape_uri, meta)
     for property_shape in graph.objects(shape_uri, SH.property):
         own.extend(_shape_rows(graph, SH, property_shape, parent=meta, **walk))
     if path is None:
         rows.extend(own)
     elif own:
-        rows.append({**meta, "component": "sh:node",
+        rows.append({**meta, "component": "sh:node" if judged else "sh:property",
                      "params": {"shape": split_iri(shape_uri)[1], "rows": own}})
     return rows
 
@@ -532,6 +539,7 @@ def _member_rows(graph, SH, item, meta, value_path, **walk):
     property shape over the value nodes: its rows run as a sh:node row of the
     parent path, like a NodeShape member with sh:property does (one result per
     value node, reported by the operator)."""
+    walk = {**walk, "judged": True}
     if value_path is None or graph.value(item, SH.path) is None:
         return _shape_rows(graph, SH, item, value_path=value_path, **walk)
     rows = _shape_rows(graph, SH, item, **walk)
@@ -685,6 +693,7 @@ KNOWN_COMPONENTS = {
     "sh:minLength", "sh:maxLength", "sh:nodeKind", "sh:hasValue", "sh:in",
     "sh:equals", "sh:disjoint", "sh:lessThan", "sh:lessThanOrEquals", "sh:node",
     "sh:closed", "sh:sparql", "sh:or", "sh:and", "sh:xone", "sh:not",
+    "sh:property",      # a property shape's own property shapes, reported on its value nodes
     "triplets:range",   # schema references: the target's ANY type in the allowed
                         # set (RDF types are cumulative — issue #100); a target
                         # without a Type row is left to triplets:missing

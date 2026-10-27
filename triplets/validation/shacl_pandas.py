@@ -748,6 +748,13 @@ def _node(context, rule):
                   f"value does not conform to shape {rule.params['shape']}")
 
 
+def _property(context, rule):
+    """sh:property on a property shape — the nested property shapes judge the value
+    nodes and report their own findings (SHACL §4.7.2), unlike sh:node."""
+    referenced = context.path_rows(rule)["PATH_VALUE"].unique()
+    return _run_nested(context, rule.params["rows"], referenced)
+
+
 def _not(context, rule):
     """sh:not — violates when it SATISFIES the negated shape: per focus node in
     a node shape, per value node in a property shape."""
@@ -765,6 +772,7 @@ def _not(context, rule):
 CONSTRAINT_VALIDATORS = {
     "sh:sparql": _sparql,
     "sh:node": _node,
+    "sh:property": _property,
     "sh:minCount": _min_count,
     "sh:maxCount": _max_count,
     "sh:datatype": _datatype,

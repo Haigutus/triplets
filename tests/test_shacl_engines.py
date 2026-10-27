@@ -1513,3 +1513,31 @@ def test_switched_off_member_with_its_own_path(engine_name):
     found = switched_off(RING, compiled_shapes(shape), engine_name, ["M"])
     assert violating(found, "sh:or") == violating(found, "sh:and") == violating(found, "sh:xone") == set()
     assert violating(found, "sh:not") == {("b1", "b2"), ("b2", "b1")}
+
+
+ON_VALUE = "sh:path cim:Equipment.EquipmentContainer ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]"
+
+
+def test_property_on_a_property_shape_reports_on_the_value_node(engine):
+    """sh:property on a property shape: the inner property shape judges each
+    value node and reports its own finding there (SHACL §4.7.2) — no sh:node
+    row on the referring focus."""
+    found = run(TRIO, prop(ON_VALUE), engine)
+    assert [row[:3] for row in operator_rows(found, "sh:minCount")] == [("sub1", "IdentifiedObject.name", None)]
+    assert violating(found, "sh:node") == set()
+
+
+def test_property_on_a_judged_property_shape_stays_a_conformance_check(engine):
+    """Below a sh:node target the same property shape is judged for conformance
+    (§4.7.1): the referring focus gets the sh:node row."""
+    found = run(TRIO, f"{NODE_B} sh:node cim:X . cim:X a sh:NodeShape ; sh:property [ {ON_VALUE} ] .", engine)
+    assert violating(found, "sh:node") == {("b2", None)}
+    assert violating(found, "sh:minCount") == set()
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_property_on_a_property_shape_switched_off(engine_name):
+    pytest.importorskip(engine_name)
+    shape = prop("sh:path cim:Equipment.EquipmentContainer ; sh:property cim:Inner") + \
+        " cim:Inner sh:path cim:IdentifiedObject.name ; sh:minCount 1 ."
+    assert len(switched_off(TRIO, compiled_shapes(shape), engine_name, ["Inner"])) == 0
