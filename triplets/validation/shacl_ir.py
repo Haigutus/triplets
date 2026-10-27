@@ -471,7 +471,7 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
             logger.warning("sh:node cycle at %s — constraint dropped (%s)", node_shape, shape_uri)
         else:
             # the referenced shape expanded at compile time; the engines run its
-            # rows against the value nodes
+            # rows against the value nodes (the focus node on a node shape)
             rows.append({**meta, "component": "sh:node",
                          "params": {"shape": split_iri(node_shape)[1],
                                     "rows": _shape_rows(graph, SH, node_shape, **walk)}})

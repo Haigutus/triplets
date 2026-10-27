@@ -1254,6 +1254,44 @@ def test_node_level_operators_over_deactivated_shapes(engine_name):
     assert findings(run(rows, conjunct, engine_name)) == set()
 
 
+# ── node-level sh:node ───────────────────────────────────────────────────────
+
+NAMED = "cim:Named a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."
+
+
+def test_node_level_node(engine):
+    """sh:node on the NodeShape judges the focus node itself: one finding per
+    non-conforming focus, through a chain of references too."""
+    rows = breaker("named", ("IdentifiedObject.name", "n")) + breaker("bare")
+    direct = "cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:node cim:Named .\n" + NAMED
+    chain = ("cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:node cim:Mid .\n"
+             "cim:Mid a sh:NodeShape ; sh:node cim:Named .\n" + NAMED)
+    for shape in (direct, chain):
+        assert parity(rows, shape, engine, "sh:node") == {("bare", None)}
+
+
+def test_node_level_node_with_own_property_shapes(engine):
+    """The referenced shape and the node shape's own property shapes judge the same focus."""
+    shape = """cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:node cim:Named ;
+        sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .\n""" + NAMED
+    rows = (breaker("both", ("IdentifiedObject.name", "n"), ("IdentifiedObject.description", "d"))
+            + breaker("named", ("IdentifiedObject.name", "n")) + breaker("described", ("IdentifiedObject.description", "d")))
+    assert parity(rows, shape, engine, "sh:node") == {("described", None)}
+    assert violating(run(rows, shape, engine), "sh:minCount") == {("named", None)}
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_node_level_node_over_deactivated_shape(engine_name):
+    """A deactivated referenced shape conforms for every focus, declared or switched off."""
+    pytest.importorskip(engine_name)
+    rows = breaker("b1", ("IdentifiedObject.name", "n")) + breaker("b2")
+    shape = "cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:node cim:Named .\n" + NAMED
+    assert ("b2", "sh:node") in findings(switched_off(rows, compiled_shapes(shape), engine_name))
+    assert findings(switched_off(rows, compiled_shapes(shape), engine_name, ["Named"])) == set()
+    declared = shape.replace("cim:Named a sh:NodeShape ;", "cim:Named a sh:NodeShape ; sh:deactivated true ;")
+    assert findings(run(rows, declared, engine_name)) == set()
+
+
 # ── sh:xone ──────────────────────────────────────────────────────────────────
 
 def test_xone_node_level(engine):

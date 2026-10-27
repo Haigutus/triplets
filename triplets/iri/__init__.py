@@ -75,12 +75,12 @@ URI_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, URI_PREFIXES)) + ")"
 SPLIT_RE = re.compile(r"^(?:.*[#/]|urn:.*:)")  # the namespace: up to the last "#" or "/", else a URN's last ":"
 GUESS_NAME_RE = re.compile(r"^http.*#(?:.*/)?")   # local_value guess: split_iri's namespace, only for http IRIs with a "#"; an empty rest keeps the value whole
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-"""Canonical lowercase mRID — what the exporters turn into ``urn:uuid:``."""
+"""Canonical lowercase mRID — :func:`absolute_value` reads such a VALUE of a KEY the schema does not define as a reference."""
 REFERENCE_LIKE = re.compile(
     r"(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
     r"|\w+://\S+|urn:\S+|[A-Za-z]\w*\.\w+)$")
 """Loose "looks like a reference" heuristic for SHACL nodeKind when the schema
-says nothing about a key. Not the export rule — see :data:`UUID_RE`."""
+says nothing about a key. Not the RDF term rule — :func:`absolute_value` uses :data:`UUID_RE`."""
 
 IRI_UNSAFE = "".join(map(chr, range(0x21))) + '<>"{}|^`\\'
 """Characters an N-Triples / SPARQL IRIREF may not hold (controls, space, ``<>"{}|^`\\``)."""

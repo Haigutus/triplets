@@ -120,7 +120,7 @@ touching the public API:
 | Engine | File | Requires | Role |
 |--------|------|----------|------|
 | `pyshacl` | `validation/shacl_pyshacl.py` | pyshacl + rdflib (`pip install triplets[validation]`) | **reference** — spec-complete, rdflib-based. `store="oxigraph"` loads the data graph through the oxigraph SPARQL engine's cached store (identical results; opt in only when the store is already loaded for SPARQL) |
-| `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; **complete registry** — `sh:sparql` delegated to `triplets.sparql` (`max_workers` parallelizes those queries), `sh:node` expanded at compile time and run against the referenced value nodes, `sh:nodeKind` decided by the rdf_map schema (value form when schema is silent). Explicit `engine="pandas"` |
+| `pandas` | `validation/shacl_pandas.py` | core (+`sparql` extra for sh:sparql rules) | compiled-IR executor for debugging; **complete registry** — `sh:sparql` delegated to `triplets.sparql` (`max_workers` parallelizes those queries), `sh:node` expanded at compile time and run against the referenced value nodes (the focus node on a node shape), `sh:nodeKind` decided by the rdf_map schema (value form when schema is silent). Explicit `engine="pandas"` |
 | `polars` | `validation/shacl_polars.py` | polars | compiled-IR executor for performance: one LazyFrame plan per constraint, single `polars.collect_all` (parallel, common subplans eliminated). Same semantics as pandas; nested/query components delegate to the pandas implementations. The fast in-memory default |
 | `duckdb` | `validation/shacl_duckdb.py` | duckdb | compiled-IR executor for **larger-than-memory** data: one SQL query per constraint against the connection's triplets table (streams/spills via DuckDB's executor). Defaults come from the connection (`duckdb.connect(table=..., schema=...)`); call kwargs `table`/`schema`/`table_name` override. Accepts a connection or registers any frame. Constraints batch 100-per-`UNION ALL` statement — explicit choice (`engine="duckdb"`, not in auto) when the data does not fit in memory |
 
@@ -153,7 +153,7 @@ registries that consume it are internal.
 | `shapes` | tuple[str] | lineage: the shape ids whose switch-off removes the row, outermost first — NodeShape → property shape → `sh:node` target / logical member → the defining shape (nested row dicts carry it too) |
 | `target_on` | str | what the shape applies to, read by `target_by`: a Type name, a KEY or an ID |
 | `target_by` | `"Type"` / `"KEY"` / `"VALUE"` / `"ID"` | how the rows are picked: `Type` = objects of that Type (`sh:targetClass`; subclasses with `inheritance`); `KEY` = the IDs having that KEY (`sh:targetSubjectsOf`); `VALUE` = the VALUEs under that KEY (`sh:targetObjectsOf` — referenced objects, described in the data or not; literal values too); `ID` = that one ID (`sh:targetNode`; `urn:uuid:` stripped, any other IRI verbatim — it need not occur in the data, the ENTSO-E shapes use a class IRI as the focus of a dataset-wide `sh:sparql`) |
-| `path` | str \| None | the property as one triplet KEY (local name); None for node-level constraints (`sh:closed`, node-level `sh:sparql`, and `sh:or` / `sh:and` / `sh:xone` / `sh:not` on the NodeShape, which judge the focus) |
+| `path` | str \| None | the property as one triplet KEY (local name); None for node-level constraints (`sh:closed`, node-level `sh:sparql`, and `sh:node` / `sh:or` / `sh:and` / `sh:xone` / `sh:not` on the NodeShape, which judge the focus) |
 | `inverse` | bool | `sh:inversePath` — engines swap the FOCUS/VALUE direction |
 | `via_type` | bool | the `( assoc rdf:type )` sequence path: the value nodes are the referenced objects' *types* |
 | `component` | str | the dispatch key (`"sh:minCount"`, …) — see the matrix below |
@@ -173,7 +173,7 @@ registries that consume it are internal.
 | `sh:closed` | list[str] — the **fully resolved** allowed KEY list: `sh:ignoredProperties` + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included) |
 | `sh:or` / `sh:and` / `sh:xone` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
 | `sh:not` | list[dict] — nested IR row dicts |
-| `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time; also a logical member with its own `sh:property` under a path (its value nodes must conform) |
+| `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time, run against the value nodes (the focus node on a node shape); also a logical member with its own `sh:property` under a path (its value nodes must conform) |
 | `sh:sparql` | `{"select": SELECT text with `$this`/`$PATH` placeholders, "prefixes": resolved `PREFIX` header, "path": full IRI of the owning `sh:path` or None}` |
 
 In a property shape, a nested `sh:or` / `sh:and` / `sh:xone` / `sh:not` shape
@@ -191,8 +191,8 @@ only when one member carries a nested inverse (any other path form warns and
 skips the property shape — pyshacl covers it). One walker compiles every shape
 — the targeted NodeShape, its property shapes, a shape referenced through
 `sh:node`, a member of `sh:or` / `sh:and` / `sh:xone` / `sh:not`: `sh:closed`,
-`sh:sparql` and the logical operators on the NodeShape itself judge its focus
-nodes; a
+`sh:sparql`, `sh:node` and the logical operators on the NodeShape itself judge
+its focus nodes; a
 member or referenced shape with its own `sh:property` judges the same focus at
 node level and, under a path, the value nodes (a `sh:node`-style row).
 
