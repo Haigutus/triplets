@@ -386,7 +386,7 @@ def test_two_severities_read_the_first(engine):
 
 def test_two_messages_read_the_first(engine):
     """Two sh:message values: the first one declared (pyshacl reports both; its report
-    reader keeps the alphabetically first, so the parity matrix has no case for it)."""
+    reader keeps the alphabetically first — the parity matrix's message_two_values xfail)."""
     shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:message "beta", "alpha" ] ."""
     assert list(run(breaker("b1"), shape, engine)["MESSAGE"]) == ["beta"]

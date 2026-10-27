@@ -345,6 +345,7 @@ CASES = {
     "message_on_node_target_property": (prop('sh:path cim:Equipment.EquipmentContainer ; sh:node cim:Named ; sh:message "outer"')
                                         + NAMED.replace("sh:minCount 1", 'sh:minCount 1 ; sh:message "inner" ; sh:severity sh:Warning'),
                                         TRIO),
+    "message_two_values": (prop('sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:message "beta", "alpha"'), TRIO),
     # ── a parameter given twice ──────────────────────────────────────────
     "twice_or_lists": (f"{B} sh:or ( cim:Named ), ( cim:Desc ) ." + NAMED + DESCRIBED, TRIO),
     "twice_and_lists": (f"{B} sh:and ( cim:Named ), ( cim:Desc ) ." + NAMED + DESCRIBED, TRIO),
@@ -385,7 +386,6 @@ CASES = {
     "maxCount_zero": (prop("sh:path cim:IdentifiedObject.aliasName ; sh:maxCount 0"), TRIO + breaker("b4", (ALIAS, "a"))),
     "class_on_literal": (prop("sh:path cim:IdentifiedObject.name ; sh:class cim:Bay"), TRIO),
     "nodeKind_blank_node": (prop("sh:path cim:Equipment.EquipmentContainer ; sh:nodeKind sh:BlankNode"), TRIO),
-    "nodeKind_iri_or_literal": (prop("sh:path cim:IdentifiedObject.name ; sh:nodeKind sh:IRIOrLiteral"), TRIO),
     "in_numeric": (prop("sh:path cim:Conductor.length ; sh:in ( 1.0 2.0 )"), breaker("b1", (LEN, "1.0")) + breaker("b2", (LEN, "3.0"))),
     "lessThan_missing_comparand": (prop("sh:path cim:Conductor.length ; sh:lessThan cim:Switch.ratedCurrent"),
                                    breaker("b1", (LEN, "1.0")) + breaker("b2", (LEN, "3.0"), (CUR, "2.0"))),
@@ -415,8 +415,9 @@ SKIPPED = {
     "target_without_select": (f"cim:B a sh:NodeShape ; sh:target cim:SomeTarget ; {NAME_MIN}", TRIO, "sh:target not walked"),
     "or_over_unknown": (f"{B} sh:or ( [ sh:path cim:IdentifiedObject.name ; sh:uniqueLang true ] cim:Desc ) ." + DESCRIBED,
                         TRIO, "uses sh:uniqueLang"),
-    # sh:BlankNodeOrIRI is only debug-logged: no metadata entry names it
+    # sh:BlankNodeOrIRI and sh:IRIOrLiteral are only debug-logged: no metadata entry names them
     "nodeKind_blank_or_iri": (prop("sh:path cim:IdentifiedObject.name ; sh:nodeKind sh:BlankNodeOrIRI"), TRIO, None),
+    "nodeKind_iri_or_literal": (prop("sh:path cim:IdentifiedObject.name ; sh:nodeKind sh:IRIOrLiteral"), TRIO, None),
 }
 
 ISSUE = "https://github.com/Haigutus/triplets/issues/"
@@ -447,6 +448,8 @@ XFAIL = {
     **known("N9 sh:minLength on an IRI measures the local id, draft pending", "minLength_on_iri"),
     **known("N10 sh:sparql $PATH left unbound on a blank-node path, draft pending", "sparql_inverse_path"),
     **known("N11 sh:deactivated on a sh:sparql constraint ignored, draft pending", "deactivated_sparql_constraint"),
+    **known("N12 two sh:message values: the engines report the first declared, pyshacl's reader the first "
+            "alphabetically, draft pending", "message_two_values"),
 }
 
 
