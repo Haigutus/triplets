@@ -227,6 +227,18 @@ def test_closed(engine):
     assert set(v.loc[v["VIOLATION_TYPE"] == "sh:closed", "KEY"]) == {"Switch.undeclared"}
 
 
+def test_closed_allows_every_path_of_a_skipped_property_shape(engine):
+    """A property shape with two sh:path values is skipped as malformed; under
+    sh:closed both paths stay declared, whatever the triple order."""
+    rows = breaker("b1", ("IdentifiedObject.name", "n"), ("IdentifiedObject.description", "d"))
+    shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:closed true ; sh:ignoredProperties ( rdf:type ) ; sh:property cim:P .
+        cim:P sh:path cim:IdentifiedObject.name, cim:IdentifiedObject.description ."""
+    v = run(rows, shape, engine)
+    assert v.empty
+    assert v.attrs["validation"]["skipped_shapes"] == [f"{CIM}P: two sh:path values"]
+
+
 def test_or(engine):
     # name OR description must be present
     shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
