@@ -151,6 +151,10 @@ def test_ir_real_cgmes_eq_shapes():
     assert {"sh:minCount", "sh:datatype", "sh:nodeKind", "sh:sparql", "sh:minExclusive"} <= set(ir["component"])
     unknown = set(ir["component"]) - KNOWN_COMPONENTS
     assert not unknown, f"unexpected components in real shapes: {unknown}"
+    # the Complex file's SPARQL target (PowerTransformer-twoWinding) compiles
+    assert "SPARQL" in set(ir["target_by"])
+    assert not [entry for entry in compile_shapes([str(f) for f in CGMES_EQ_SHACL_FILES]).stats["skipped_shapes"]
+                if "sh:target not walked" in entry]
 
 
 def test_target_node_and_objects_of_compile(tmp_path):
@@ -195,7 +199,44 @@ cim:Custom a sh:NodeShape ;
     assert any("sh:target" in record.getMessage()
                for record in caplog.records if record.levelname == "WARNING")
     assert compiled.stats["skipped_shapes"] == ["http://iec.ch/TC57/CIM100#Custom: sh:rule not applied",
-                                                "http://iec.ch/TC57/CIM100#Custom: sh:target not walked"]
+                                                "http://iec.ch/TC57/CIM100#Custom: sh:target not walked (no sh:select)"]
+
+
+SPARQL_TARGET = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+cim: sh:declare [ sh:prefix "rdf" ; sh:namespace "http://www.w3.org/1999/02/22-rdf-syntax-ns#"^^xsd:anyURI ] ,
+                [ sh:prefix "cim" ; sh:namespace "http://iec.ch/TC57/CIM100#"^^xsd:anyURI ] .
+cim:Breakers a sh:NodeShape ;
+    {targets}
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+"""
+SELECT_BREAKERS = "SELECT ?this WHERE { ?this rdf:type cim:Breaker }"
+
+
+def test_sparql_target_compiles(tmp_path):
+    """sh:target with sh:select → target_by="SPARQL", target_on the executable
+    query: the sh:prefixes declarations (sorted) + the sh:select text."""
+    path = tmp_path / "sparql_target.ttl"
+    path.write_text(SPARQL_TARGET.replace(
+        "{targets}", f'sh:target [ a sh:SPARQLTarget ; sh:prefixes cim: ; sh:select "{SELECT_BREAKERS}" ] ;'))
+    compiled = compile_shapes(str(path))
+    assert list(zip(compiled.ir["target_by"], compiled.ir["target_on"])) == [
+        ("SPARQL", "PREFIX cim: <http://iec.ch/TC57/CIM100#>\n"
+                   "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n" + SELECT_BREAKERS)]
+    assert compiled.stats["skipped_shapes"] == []
+
+
+def test_sparql_target_next_to_target_class(tmp_path):
+    """Rows per target; switching the NodeShape off drops both."""
+    path = tmp_path / "two_targets.ttl"
+    path.write_text(SPARQL_TARGET.replace(
+        "{targets}", f'sh:targetClass cim:Breaker ; sh:target [ sh:prefixes cim: ; sh:select "{SELECT_BREAKERS}" ] ;'))
+    compiled = compile_shapes(str(path))
+    assert sorted(compiled.ir["target_by"]) == ["SPARQL", "Type"]
+    assert len(compiled.active(["http://iec.ch/TC57/CIM100#Breakers"]).ir) == 0
 
 
 def test_component_registries_agree():

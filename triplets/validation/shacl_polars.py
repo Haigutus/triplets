@@ -13,6 +13,8 @@ violations schema, same lexical-form datatype deviation — see shacl_pandas).
 The rare nested/query components (sh:or, sh:and, sh:not, sh:node, sh:sparql —
 a handful of rows even in the real profiles) are delegated to the pandas
 implementations, so coverage is complete while the hot path stays lazy.
+SPARQL targets resolve through ``shacl_pandas.sparql_targets`` once per run;
+their rules then plan like any other.
 
 Per-rule plan builders are cached in ``CompiledShapes.plans["polars"]`` — the
 IR is split and normalized once per compiled shapes, then only re-bound to
@@ -29,7 +31,8 @@ import polars
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
+from . import shacl_pandas
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -40,7 +43,7 @@ _COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 class _Context:
     """Lazy base + eagerly materialized shared indices (built once per validate)."""
 
-    def __init__(self, frame, rdf_map=None, ancestors=()):
+    def __init__(self, frame, rdf_map=None, ancestors=(), targets=None):
         self.base = frame.lazy()
         self.rdf_map = rdf_map
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
@@ -62,6 +65,10 @@ class _Context:
         self._all_ids = frame["ID"].unique().implode()
         self._frame = frame
         self._subjects = {}   # (column, KEY) → (ids, imploded) for KEY / VALUE targets
+        self._targets = {}    # SPARQL target query → (ids, imploded), from shacl_pandas.sparql_targets
+        for query, ids in (targets or {}).items():
+            ids = polars.Series("ID", list(ids), dtype=polars.Utf8)
+            self._targets[query] = (ids, ids.implode())
 
     def class_ids(self, class_name):
         """Flat ID Series (plan *data*, e.g. focus_frame)."""
@@ -87,6 +94,8 @@ class _Context:
     def _focus(self, rule):
         """(flat IDs, imploded IDs) the rule applies to, by ``target_by``."""
         by = getattr(rule, "target_by", "Type")
+        if by == "SPARQL":
+            return self._targets[rule.target_on]
         if by == "KEY":
             return self._ids_of(rule.target_on, "ID")
         if by == "VALUE":
@@ -505,7 +514,7 @@ BATCH_BUILDERS = {
 
 
 def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
-             ancestors=None, **kwargs):
+             undefined_namespace=CIM_NS, ancestors=None, **kwargs):
     """Validate triplet data against the compiled constraint table (lazy polars).
 
     Parameters mirror shacl_pandas.validate. Vectorized components run as one
@@ -524,7 +533,12 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]
 
-    context = _Context(frame, rdf_map, ancestor_pairs(ancestors))
+    # the pandas fallback resolves the targets of its own rules
+    sparql_rules = [rule for rule in vectorized if rule.target_by == "SPARQL"]
+    targets, notes = (shacl_pandas.sparql_targets(frame, sparql_rules, rdf_map=rdf_map,
+                                                  undefined_namespace=undefined_namespace)
+                      if sparql_rules else ({}, pandas.DataFrame(columns=VIOLATION_COLUMNS)))
+    context = _Context(frame, rdf_map, ancestor_pairs(ancestors), targets)
     batched, plans = {}, []
     for rule in vectorized:
         # batching joins on class membership — KEY targets and two-hop
@@ -546,14 +560,15 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         violations = violations.astype(object).where(violations.notna(), None)
     else:
         violations = pandas.DataFrame(columns=VIOLATION_COLUMNS)
+    violations = pandas.concat([violations, notes], ignore_index=True)
 
     if fallback:
         # pass the already-converted-and-scoped frame — the pandas engine
         # would otherwise redo both from the original input
-        from . import shacl_pandas
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
-                                           max_workers=max_workers, ancestors=ancestors, **kwargs)
+                                           max_workers=max_workers, undefined_namespace=undefined_namespace,
+                                           ancestors=ancestors, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     return violations
 

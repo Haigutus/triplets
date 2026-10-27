@@ -34,8 +34,8 @@ content hash). Engines receive the compiled object:
 
 pyshacl consumes the graph; the vectorized engines consume the IR (and cache
 their own plan per engine in ``CompiledShapes.plans``) — they never touch
-rdflib. sh:sparql IR rows are delegated to triplets.sparql by the vectorized
-engines (pyshacl evaluates them itself via advanced=True).
+rdflib. sh:sparql IR rows and SPARQL targets are delegated to triplets.sparql
+by the vectorized engines (pyshacl evaluates both itself via advanced=True).
 
 One deliberate deviation from pyshacl: the datatype check inspects the raw
 lexical form of VALUE (see shacl_pandas) — with ``lexical=True`` (default)
