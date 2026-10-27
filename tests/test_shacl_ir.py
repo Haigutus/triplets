@@ -615,6 +615,20 @@ def test_empty_member_list_raises(operator):
     with pytest.raises(ValueError, match=f"empty {operator} list"):
         compile_shapes(_graph(f"cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; {operator} ( ) ."))
 
+
+def test_member_with_its_own_path_under_a_path_judges_the_value_nodes():
+    """Under a path, a member with its own sh:path compiles to a sh:node row of
+    the parent path: its rows run on the value nodes (#166)."""
+    compiled = compile_shapes(_graph("""cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:or ( cim:M ) ] .
+        cim:M sh:path cim:IdentifiedObject.name ; sh:minCount 1 ."""))
+    ((wrapper,),) = compiled.ir["params"][0]
+    assert (wrapper["component"], wrapper["path"], wrapper["params"]["shape"]) == (
+        "sh:node", "Equipment.EquipmentContainer", "M")
+    assert [(row["component"], row["path"]) for row in wrapper["params"]["rows"]] == [
+        ("sh:minCount", "IdentifiedObject.name")]
+    assert compiled.active([CIM + "M"]).ir["params"][0] == [[{**wrapper, "params": {"shape": "M", "rows": []}}]]
+
 CGMES_DY_COMPLEX = CGMES_SHACL_DIR / "61970-302_Dynamics-AP-Con-Complex-SHACL.ttl"
 
 

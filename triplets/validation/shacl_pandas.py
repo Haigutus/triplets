@@ -666,8 +666,9 @@ def _value_pairs(rows):
 
 
 def _failed_values(pairs, result):
-    """The *pairs* that *result* violates. A nested finding on another value or
-    with none (a nested shape with its own sh:path) fails every value of that focus."""
+    """The *pairs* that *result* violates: a nested finding on a pair fails that
+    pair; one with no VALUE or a value not under the path (a cardinality member,
+    sh:equals) fails every value of that focus."""
     by_focus = {}
     for focus, value in pairs:
         by_focus.setdefault(focus, set()).add((focus, value))

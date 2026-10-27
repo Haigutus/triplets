@@ -1482,3 +1482,34 @@ def test_property_level_and_carries_the_operator_shape(engine):
     rows = breaker("b1", ("IdentifiedObject.name", "A"), ("IdentifiedObject.name", "ABCD"), ("IdentifiedObject.name", "AB"))
     assert operator_rows(run(rows, shape, engine), "sh:and") == [
         ("b1", "IdentifiedObject.name", "A", CIM + "P"), ("b1", "IdentifiedObject.name", "ABCD", CIM + "P")]
+
+
+MEMBER_NAMED = "[ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]"
+MEMBER_DESCRIBED = "[ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ]"
+
+
+@pytest.mark.parametrize("operator, expected", [
+    (f"sh:or ( {MEMBER_NAMED} )", {("b1", "b2")}),
+    (f"sh:and ( {MEMBER_NAMED} )", {("b1", "b2")}),
+    (f"sh:xone ( {MEMBER_NAMED} {MEMBER_DESCRIBED} )", {("b1", "b2")}),
+    (f"sh:not {MEMBER_NAMED}", {("b2", "b1")}),
+], ids=["or", "and", "xone", "not"])
+def test_member_with_its_own_path_judges_the_value_nodes(engine, operator, expected):
+    """Under a path, a member with its own sh:path is checked on each value node
+    (#166): b1's value b2 has no name, b2's value b1 has one."""
+    shape = prop(f"sh:path cim:Equipment.EquipmentContainer ; {operator}")
+    assert violating(run(RING, shape, engine), operator.split()[0]) == expected
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_switched_off_member_with_its_own_path(engine_name):
+    """A switched-off member with its own path conforms for every value node:
+    sh:or and sh:and hold, sh:xone holds with one alternative, sh:not flags every value."""
+    pytest.importorskip(engine_name)
+    shape = prop("sh:path cim:Equipment.EquipmentContainer ; sh:or ( cim:M ) ; sh:and ( cim:M ) ; "
+                 "sh:xone ( cim:M cim:D ) ; sh:not cim:M") + \
+        "cim:M sh:path cim:IdentifiedObject.name ; sh:minCount 1 . " \
+        "cim:D sh:path cim:IdentifiedObject.description ; sh:minCount 1 ."
+    found = switched_off(RING, compiled_shapes(shape), engine_name, ["M"])
+    assert violating(found, "sh:or") == violating(found, "sh:and") == violating(found, "sh:xone") == set()
+    assert violating(found, "sh:not") == {("b1", "b2"), ("b2", "b1")}
