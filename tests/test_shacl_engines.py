@@ -1330,6 +1330,9 @@ TWO_WINDING = """SELECT DISTINCT ?this WHERE {
     ?this rdf:type cim:PowerTransformer .
     FILTER NOT EXISTS { ?this ^cim:PowerTransformerEnd.PowerTransformer/cim:TransformerEnd.endNumber 3 } . }"""
 NAME_TOO_LONG = "sh:property [ sh:path cim:IdentifiedObject.name ; sh:maxLength 2 ] ."
+# a vectorized rule and one the polars / duckdb engines hand to pandas (which resolves the target again)
+NAME_RULES = """sh:property [ sh:path cim:IdentifiedObject.name ; sh:maxLength 2 ] ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:or ( [ sh:minLength 9 ] [ sh:pattern "^x" ] ) ] ."""
 
 
 def sparql_target(select, body=NAME_TOO_LONG):
@@ -1394,27 +1397,46 @@ def test_sparql_target_without_select_is_skipped(engine):
 def test_sparql_target_defective_query(engine):
     """A target query no engine can run: one Violation naming the NodeShape,
     the shape is not evaluated."""
-    shape = sparql_target("SELECT ?this WHERE { ?this nc:undeclared ?x }", """
-        sh:property [ sh:path cim:IdentifiedObject.name ; sh:maxLength 2 ] ;
-        sh:property [ sh:path cim:IdentifiedObject.name ; sh:or ( [ sh:minLength 9 ] [ sh:pattern "^x" ] ) ] .""")
-    violations = run(TRANSFORMER_ROWS, shape, engine)
+    violations = run(TRANSFORMER_ROWS, sparql_target("SELECT ?this WHERE { ?this nc:undeclared ?x }", NAME_RULES),
+                     engine)
     assert list(violations["VIOLATION_TYPE"]) == ["triplets:invalidSparql"]
     note = violations.iloc[0]
     assert (note["SEVERITY"], note["SOURCE_SHAPE"]) == ("Violation", CIM + "TwoWinding")
-    assert "SPARQL target of shape TwoWinding was NOT evaluated" in note["MESSAGE"]
+    assert "SPARQL target of shape TwoWinding was NOT evaluated — the query is defective" in note["MESSAGE"]
+
+
+def test_shared_defective_sparql_target_flags_every_shape(engine):
+    """Two NodeShapes with the same defective target query: the query runs
+    once, each shape gets its own Violation."""
+    target = 'sh:target [ sh:select "SELECT ?this WHERE { ?this nc:undeclared ?x }" ]'
+    shape = f"""cim:A a sh:NodeShape ; {target} ; {NAME_RULES}
+        cim:B a sh:NodeShape ; {target} ; {NAME_RULES}"""
+    violations = run(TRANSFORMER_ROWS, shape, engine)
+    assert sorted(zip(violations["VIOLATION_TYPE"], violations["SEVERITY"], violations["SOURCE_SHAPE"])) == [
+        ("triplets:invalidSparql", "Violation", CIM + "A"), ("triplets:invalidSparql", "Violation", CIM + "B")]
+
+
+def test_sparql_target_without_this(engine):
+    """A target query that projects no ?this gives the shape no focus and one Violation."""
+    violations = run(TRANSFORMER_ROWS, sparql_target("SELECT ?x WHERE { ?x rdf:type cim:PowerTransformer }"), engine)
+    assert list(zip(violations["VIOLATION_TYPE"], violations["SEVERITY"])) == [("triplets:invalidSparql", "Violation")]
+    assert "TwoWinding was NOT evaluated — the query projects no ?this" in violations["MESSAGE"].iloc[0]
 
 
 def test_sparql_target_rejected_by_strict_engine(engine):
     """A target query only rdflib accepts (a non-grouped projection): the focus
-    still comes from rdflib, and one Warning flags the NodeShape."""
+    still comes from rdflib, and one Warning flags the NodeShape — also when the
+    pandas fallback (sh:or) resolves the target a second time."""
     from triplets import sparql
     if sparql.get_engine("auto")[0] == "rdflib":
         pytest.skip("needs a strict auto SPARQL engine (qlever or oxigraph)")
     shape = sparql_target(TWO_WINDING.replace("SELECT DISTINCT ?this", "SELECT ?this ?name").replace(
-        "cim:PowerTransformer .", "cim:PowerTransformer ; cim:IdentifiedObject.name ?name .") + " GROUP BY ?this")
+        "cim:PowerTransformer .", "cim:PowerTransformer ; cim:IdentifiedObject.name ?name .") + " GROUP BY ?this",
+        NAME_RULES)
     violations = triplets.validation.validate_shacl(
         frame(TRANSFORMER_ROWS), compiled_shapes(shape), engine=engine, rdf_map=TRANSFORMERS, rdf_map_scope="*")
-    assert violating(violations, "sh:maxLength") == {("pt1", "PT-pt1"), ("pt2", "PT-pt2")}
+    assert violating(violations, "sh:maxLength") == violating(violations, "sh:or") \
+        == {("pt1", "PT-pt1"), ("pt2", "PT-pt2")}
     notes = violations[violations["VIOLATION_TYPE"] == "triplets:invalidSparql"]
     assert list(zip(notes["SEVERITY"], notes["SOURCE_SHAPE"])) == [("Warning", CIM + "TwoWinding")]
     assert "the SPARQL target WAS still evaluated" in notes["MESSAGE"].iloc[0]

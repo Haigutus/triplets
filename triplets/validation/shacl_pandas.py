@@ -471,20 +471,22 @@ def _select(context, query_text):
         return sparql.query(context.dataset(), query_text, engine="rdflib", return_type="pandas"), error
 
 
-def _rejected(context, shape_id, path, what, error):
-    """The Warning note for a query a strict engine rejected and rdflib still
-    ran. A cached ingest failure (data vs schema) re-raises the same exception
-    object for every query — reported once, not once per query; per-query
-    rejections are fresh exceptions and keep their own note."""
+def _rejected(context, shape_ids, path, what, error):
+    """The Warning notes, one per shape in *shape_ids*, for a query a strict
+    engine rejected and rdflib still ran. A cached ingest failure (data vs
+    schema) re-raises the same exception object for every query — reported
+    once, not once per query; per-query rejections are fresh exceptions and
+    keep their own notes."""
     from .. import sparql
     repeated = error is context.sparql_engine_error
     context.sparql_engine_error = error
     if repeated:
         return _empty()
     logger.warning("%s of %s rejected by %s — evaluated with rdflib and the shape flagged "
-                   "(fix the rule upstream):\n%s", what, shape_id, sparql.get_engine("auto")[0], error)
-    return _invalid_sparql(shape_id, path, f"{str(error).splitlines()[0]} — the {what} WAS still evaluated "
-                                           f"via the rdflib fallback; fix the shape/data upstream")
+                   "(fix the rule upstream):\n%s", what, ", ".join(shape_ids), sparql.get_engine("auto")[0], error)
+    message = (f"{str(error).splitlines()[0]} — the {what} WAS still evaluated "
+               f"via the rdflib fallback; fix the shape/data upstream")
+    return pandas.concat([_invalid_sparql(shape_id, path, message) for shape_id in shape_ids], ignore_index=True)
 
 
 def _sparql(context, rule):
@@ -506,7 +508,7 @@ def _sparql(context, rule):
     violations = _sparql_violations(rule, result)
     if rejection is None:
         return violations
-    note = _rejected(context, rule.shape_id, rule.path, "constraint", rejection)
+    note = _rejected(context, [rule.shape_id], rule.path, "constraint", rejection)
     return pandas.concat([violations, note], ignore_index=True)
 
 
@@ -538,28 +540,40 @@ def _invalid_sparql(shape_id, path, message, severity="Warning"):
 
 def _sparql_targets(context, rules):
     """The focus IDs of the SPARQL-targeted *rules* as {query: IDs} — each
-    distinct target query runs once — plus the note rows. A target query no
-    engine can run gives its NodeShape (``rule.shapes[0]``) no focus and one
-    ``triplets:invalidSparql`` Violation; a strict engine's rejection is
+    distinct target query runs once — plus the note rows, one per NodeShape
+    (``rule.shapes[0]``) the query targets. A target query no engine can run,
+    or one that projects no ``?this``, gives those shapes no focus and a
+    ``triplets:invalidSparql`` Violation each; a strict engine's rejection is
     evaluated on rdflib and flagged with a Warning, like sh:sparql."""
+    shapes = {}
+    for rule in rules:
+        shapes.setdefault(rule.target_on, set()).add(rule.shapes[0])
     targets, notes = {}, [_empty()]
-    for query_text, rule in {rule.target_on: rule for rule in rules}.items():
-        shape = rule.shapes[0]
+    for query_text, shape_ids in shapes.items():
+        shape_ids = sorted(shape_ids)
+        targets[query_text] = _NO_IDS
         try:
             result, rejection = _select(context, query_text)
-            this = result["this"].dropna().astype(str)
         except Exception as error:                        # noqa: BLE001 — defective authored query
-            logger.error("SPARQL target of %s fails on every engine: %s", shape, error)
-            targets[query_text] = _NO_IDS
-            notes.append(_invalid_sparql(shape, None, (
-                f"SPARQL target of shape {split_iri(shape)[1]} was NOT evaluated — the query is defective "
-                f"on every engine (rdflib: {str(error).splitlines()[0]}). "
-                f"A shapes bug, not a data finding; the shape went unchecked."), severity="Violation"))
+            notes.append(_unchecked_target(
+                shape_ids, f"the query is defective on every engine (rdflib: {str(error).splitlines()[0]})"))
             continue
-        targets[query_text] = _shorten(this, iri_pandas.local_id).unique()
+        if "this" not in result.columns:
+            notes.append(_unchecked_target(shape_ids, "the query projects no ?this"))
+            continue
+        targets[query_text] = _shorten(result["this"].dropna().astype(str), iri_pandas.local_id).unique()
         if rejection is not None:
-            notes.append(_rejected(context, shape, None, "SPARQL target", rejection))
+            notes.append(_rejected(context, shape_ids, None, "SPARQL target", rejection))
     return targets, pandas.concat(notes, ignore_index=True)
+
+
+def _unchecked_target(shape_ids, reason):
+    """One Violation per NodeShape whose SPARQL target gave no focus for *reason*."""
+    logger.error("SPARQL target of %s not evaluated: %s", ", ".join(shape_ids), reason)
+    return pandas.concat([_invalid_sparql(shape_id, None, (
+        f"SPARQL target of shape {split_iri(shape_id)[1]} was NOT evaluated — {reason}. "
+        f"A shapes bug, not a data finding; the shape went unchecked."), severity="Violation")
+        for shape_id in shape_ids], ignore_index=True)
 
 
 def sparql_targets(data, rules, rdf_map=None, undefined_namespace=CIM_NS):
