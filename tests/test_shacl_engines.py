@@ -1321,3 +1321,132 @@ def test_xone_deactivated_member_conforms(engine):
                   [ sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ] ) ."""
     rows = breaker("b1", ("IdentifiedObject.name", "n")) + breaker("b2")
     assert parity(rows, shape, engine, "sh:xone") == {("b1", None)}
+
+
+# ── SPARQL targets (sh:target [ a sh:SPARQLTarget ; sh:select … ]) ───────────
+
+# the CGMES Equipment target: power transformers without a third winding
+TWO_WINDING = """SELECT DISTINCT ?this WHERE {
+    ?this rdf:type cim:PowerTransformer .
+    FILTER NOT EXISTS { ?this ^cim:PowerTransformerEnd.PowerTransformer/cim:TransformerEnd.endNumber 3 } . }"""
+NAME_TOO_LONG = "sh:property [ sh:path cim:IdentifiedObject.name ; sh:maxLength 2 ] ."
+# a vectorized rule and one the polars / duckdb engines hand to pandas (which resolves the target again)
+NAME_RULES = """sh:property [ sh:path cim:IdentifiedObject.name ; sh:maxLength 2 ] ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:or ( [ sh:minLength 9 ] [ sh:pattern "^x" ] ) ] ."""
+
+
+def sparql_target(select, body=NAME_TOO_LONG):
+    """cim:TwoWinding targeted by *select*, its prefixes declared on the cim: ontology node."""
+    return f'''
+cim: sh:declare [ sh:prefix "cim" ; sh:namespace "http://iec.ch/TC57/CIM100#"^^xsd:anyURI ] ,
+                [ sh:prefix "rdf" ; sh:namespace "http://www.w3.org/1999/02/22-rdf-syntax-ns#"^^xsd:anyURI ] .
+cim:TwoWinding a sh:NodeShape ;
+    sh:target [ a sh:SPARQLTarget ; sh:prefixes cim: ; sh:select """{select}""" ] ;
+    {body}'''
+
+
+# endNumber typed and the end → transformer link an IRI, as the CGMES schema exports them
+TRANSFORMERS = {"EQ": {"TransformerEnd.endNumber": {"type": "Attribute", "xsd:type": "xsd:integer", "namespace": CIM},
+                       "PowerTransformerEnd.PowerTransformer": {"type": "Association"}}}
+
+
+def transformer(object_id, windings):
+    """Rows for one cim:PowerTransformer named PT-<id> with *windings* ends."""
+    rows = [(object_id, "Type", "PowerTransformer", "eq"),
+            (object_id, "IdentifiedObject.name", f"PT-{object_id}", "eq")]
+    for number in range(1, windings + 1):
+        end = f"{object_id}-end{number}"
+        rows += [(end, "Type", "PowerTransformerEnd", "eq"), (end, "TransformerEnd.endNumber", str(number), "eq"),
+                 (end, "PowerTransformerEnd.PowerTransformer", object_id, "eq")]
+    return rows
+
+
+TRANSFORMER_ROWS = transformer("pt1", 2) + transformer("pt2", 2) + transformer("pt3", 3)
+
+
+def test_sparql_target(engine):
+    """The query, not the Type, picks the focus: every name is too long, only
+    the two-winding transformers are reported."""
+    assert parity(TRANSFORMER_ROWS, sparql_target(TWO_WINDING), engine, "sh:maxLength", rdf_map=TRANSFORMERS) \
+        == {("pt1", "PT-pt1"), ("pt2", "PT-pt2")}
+
+
+def test_sparql_target_with_sparql_constraint(engine):
+    """A sh:sparql constraint under a SPARQL target binds the target's focus nodes."""
+    shape = sparql_target(TWO_WINDING, """sh:property [ sh:path cim:IdentifiedObject.name ;
+        sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ] ] .""")
+    assert parity(TRANSFORMER_ROWS, shape, engine, "sh:sparql", rdf_map=TRANSFORMERS) \
+        == {("pt1", "PT-pt1"), ("pt2", "PT-pt2")}
+
+
+def test_sparql_target_and_target_class(engine):
+    """A shape with both targets: the overlap is reported once."""
+    shape = sparql_target(TWO_WINDING, "sh:targetClass cim:PowerTransformer ; " + NAME_TOO_LONG)
+    assert parity(TRANSFORMER_ROWS, shape, engine, "sh:maxLength", rdf_map=TRANSFORMERS) \
+        == {("pt1", "PT-pt1"), ("pt2", "PT-pt2"), ("pt3", "PT-pt3")}
+
+
+def test_sparql_target_without_select_is_skipped(engine):
+    """A custom sh:target without sh:select stays pyshacl-only: no findings,
+    named in skipped_shapes."""
+    violations = run(TRANSFORMER_ROWS, "cim:Custom a sh:NodeShape ; sh:target cim:SomeTarget ; " + NAME_TOO_LONG, engine)
+    assert len(violations) == 0
+    assert violations.attrs["validation"]["skipped_shapes"] == [CIM + "Custom: sh:target not walked (no sh:select)"]
+
+
+def test_sparql_target_defective_query(engine):
+    """A target query no engine can run: one Violation naming the NodeShape,
+    the shape is not evaluated."""
+    violations = run(TRANSFORMER_ROWS, sparql_target("SELECT ?this WHERE { ?this nc:undeclared ?x }", NAME_RULES),
+                     engine)
+    assert list(violations["VIOLATION_TYPE"]) == ["triplets:invalidSparql"]
+    note = violations.iloc[0]
+    assert (note["SEVERITY"], note["SOURCE_SHAPE"]) == ("Violation", CIM + "TwoWinding")
+    assert "SPARQL target of shape TwoWinding was NOT evaluated — the query is defective" in note["MESSAGE"]
+
+
+def test_shared_defective_sparql_target_flags_every_shape(engine):
+    """Two NodeShapes with the same defective target query: the query runs
+    once, each shape gets its own Violation."""
+    target = 'sh:target [ sh:select "SELECT ?this WHERE { ?this nc:undeclared ?x }" ]'
+    shape = f"""cim:A a sh:NodeShape ; {target} ; {NAME_RULES}
+        cim:B a sh:NodeShape ; {target} ; {NAME_RULES}"""
+    violations = run(TRANSFORMER_ROWS, shape, engine)
+    assert sorted(zip(violations["VIOLATION_TYPE"], violations["SEVERITY"], violations["SOURCE_SHAPE"])) == [
+        ("triplets:invalidSparql", "Violation", CIM + "A"), ("triplets:invalidSparql", "Violation", CIM + "B")]
+
+
+def test_sparql_target_without_this(engine):
+    """A target query that projects no ?this gives the shape no focus and one Violation."""
+    violations = run(TRANSFORMER_ROWS, sparql_target("SELECT ?x WHERE { ?x rdf:type cim:PowerTransformer }"), engine)
+    assert list(zip(violations["VIOLATION_TYPE"], violations["SEVERITY"])) == [("triplets:invalidSparql", "Violation")]
+    assert "TwoWinding was NOT evaluated — the query projects no ?this" in violations["MESSAGE"].iloc[0]
+
+
+def test_sparql_target_rejected_by_strict_engine(engine):
+    """A target query only rdflib accepts (a non-grouped projection): the focus
+    still comes from rdflib, and one Warning flags the NodeShape — also when the
+    pandas fallback (sh:or) resolves the target a second time."""
+    from triplets import sparql
+    if sparql.get_engine("auto")[0] == "rdflib":
+        pytest.skip("needs a strict auto SPARQL engine (qlever or oxigraph)")
+    shape = sparql_target(TWO_WINDING.replace("SELECT DISTINCT ?this", "SELECT ?this ?name").replace(
+        "cim:PowerTransformer .", "cim:PowerTransformer ; cim:IdentifiedObject.name ?name .") + " GROUP BY ?this",
+        NAME_RULES)
+    violations = triplets.validation.validate_shacl(
+        frame(TRANSFORMER_ROWS), compiled_shapes(shape), engine=engine, rdf_map=TRANSFORMERS, rdf_map_scope="*")
+    assert violating(violations, "sh:maxLength") == violating(violations, "sh:or") \
+        == {("pt1", "PT-pt1"), ("pt2", "PT-pt2")}
+    notes = violations[violations["VIOLATION_TYPE"] == "triplets:invalidSparql"]
+    assert list(zip(notes["SEVERITY"], notes["SOURCE_SHAPE"])) == [("Warning", CIM + "TwoWinding")]
+    assert "the SPARQL target WAS still evaluated" in notes["MESSAGE"].iloc[0]
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_sparql_target_deactivated(engine_name):
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes(sparql_target(TWO_WINDING))
+    assert len(switched_off(TRANSFORMER_ROWS, compiled, engine_name, [])) == 3   # no rdf_map: every transformer
+    violations = switched_off(TRANSFORMER_ROWS, compiled, engine_name, ["TwoWinding"])
+    assert len(violations) == 0
+    assert violations.attrs["validation"]["deactivated_shapes"] == [CIM + "TwoWinding"]

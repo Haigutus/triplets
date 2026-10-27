@@ -12,7 +12,9 @@ violations schema, same lexical-form datatype deviation). The nested and
 query components (sh:or, sh:and, sh:not, sh:node, sh:sparql) delegate to the
 pandas implementations — they materialize the (scoped) table, which is fine:
 those are a handful of rows even in the real profiles, and sh:sparql needs an
-rdflib graph anyway.
+rdflib graph anyway. SPARQL targets materialize it the same way: their focus
+IDs resolve through ``shacl_pandas.sparql_targets`` into the ``_shacl_targets``
+table the SQL reads.
 
 Explicitly selected (``engine="duckdb"``), not in the auto order: polars owns
 the in-memory fast path; this engine is the deliberate choice when the data
@@ -26,7 +28,8 @@ from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS
-from ..iri import REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, value_types
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, value_types
+from . import shacl_pandas
 from .shacl_pandas import DATATYPES
 
 logger = logging.getLogger(__name__)
@@ -42,8 +45,11 @@ def _class_sql():
 
 def _focus_sql(rule, table):
     """The rule's focus nodes (bound with one target_on parameter), by ``target_by``:
-    the IDs having the KEY, the VALUEs under the KEY, the one ID, or the Type's instances."""
+    the IDs having the KEY, the VALUEs under the KEY, the one ID, the SPARQL
+    target's result (``_shacl_targets``), or the Type's instances."""
     by = getattr(rule, "target_by", "Type")
+    if by == "SPARQL":
+        return "SELECT ID FROM _shacl_targets WHERE QUERY = ?"
     if by == "KEY":
         return f"SELECT DISTINCT ID FROM {table} WHERE KEY = ?"
     if by == "VALUE":
@@ -315,8 +321,20 @@ def _create_types_table(connection, table, ancestors):
         connection.unregister("_shacl_type_ancestors")
 
 
+def _create_targets_table(connection, targets):
+    """Temp ``_shacl_targets`` (QUERY, ID): the focus IDs per SPARQL target query.
+    A native table, like ``_shacl_types``; the schema is explicit because an
+    empty frame types no column."""
+    pairs = pandas.DataFrame([(query, focus) for query, ids in targets.items() for focus in ids],
+                             columns=["QUERY", "ID"], dtype=object)
+    connection.execute("CREATE OR REPLACE TEMP TABLE _shacl_targets (QUERY VARCHAR, ID VARCHAR)")
+    connection.register("_shacl_target_pairs", pairs)
+    connection.execute("INSERT INTO _shacl_targets SELECT QUERY, ID FROM _shacl_target_pairs")
+    connection.unregister("_shacl_target_pairs")
+
+
 def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
-             table=None, schema=None, table_name=None, ancestors=None, **kwargs):
+             table=None, schema=None, table_name=None, undefined_namespace=CIM_NS, ancestors=None, **kwargs):
     """Validate triplet data against the compiled constraint table (DuckDB SQL).
 
     Parameters mirror shacl_pandas.validate, plus:
@@ -340,6 +358,14 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         fallback = [rule for rule in fallback if rule.component in components]
 
     _create_types_table(connection, table, ancestor_pairs(ancestors))
+    # SPARQL targets and the pandas fallback both read the (scoped) table as a frame
+    sparql_rules = [rule for rule in vectorized if rule.target_by == "SPARQL"]   # fallback resolves its own
+    frame = connection.execute(f"SELECT * FROM {table}").df() if sparql_rules or fallback else None
+    notes = pandas.DataFrame(columns=VIOLATION_COLUMNS)
+    if sparql_rules:
+        targets, notes = shacl_pandas.sparql_targets(frame, sparql_rules, rdf_map=rdf_map,
+                                                     undefined_namespace=undefined_namespace)
+        _create_targets_table(connection, targets)
     context = _Context(rdf_map)
     built = [statement for rule in vectorized
              if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]
@@ -359,17 +385,19 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     violations = (pandas.concat(frames, ignore_index=True) if frames
                   else pandas.DataFrame(columns=VIOLATION_COLUMNS))
     violations = violations.astype(object).where(violations.notna(), None)
+    violations = pandas.concat([violations, notes], ignore_index=True)
 
     if fallback:
-        # nested/query components materialize the (already scoped) table — a
-        # handful of rows even in real profiles, and sh:sparql needs rdflib anyway
-        from . import shacl_pandas
-        frame = connection.execute(f"SELECT * FROM {table}").df()
+        # nested/query components run on the materialized (already scoped) table —
+        # a handful of rows even in real profiles, and sh:sparql needs rdflib anyway
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
-                                           max_workers=max_workers, ancestors=ancestors, **kwargs)
+                                           max_workers=max_workers, undefined_namespace=undefined_namespace,
+                                           ancestors=ancestors, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
-    connection.execute("DROP TABLE IF EXISTS _shacl_types")   # don't leave it on the caller's connection
+    # don't leave them on the caller's connection
+    connection.execute("DROP TABLE IF EXISTS _shacl_types")
+    connection.execute("DROP TABLE IF EXISTS _shacl_targets")
     return violations
 
 

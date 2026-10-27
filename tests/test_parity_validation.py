@@ -370,3 +370,57 @@ def test_inheritance_parity_on_real_data(svedala_eq, tmp_path, inheritance):
         assert found["pyshacl"] and set(types[list(found["pyshacl"])]) == {"TapChangerControl"}
     else:
         assert found["pyshacl"] == set()
+
+
+# the CGMES Equipment two-winding SPARQL target over a constraint the Svedala
+# names break: 51 of its 53 transformers have a name longer than 5 characters
+TWO_WINDING_NAMES_SHAPE = '''
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix cim:   <http://iec.ch/TC57/CIM100#> .
+@prefix ex:    <http://example.org/#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+
+cim:
+    a           owl:Ontology ;
+    sh:declare [ sh:namespace "http://iec.ch/TC57/CIM100#"^^xsd:anyURI ; sh:prefix "cim" ] ;
+    sh:declare [ sh:namespace "http://www.w3.org/1999/02/22-rdf-syntax-ns#"^^xsd:anyURI ; sh:prefix "rdf" ] .
+
+ex:TwoWindingNames
+        a               sh:NodeShape ;
+        sh:property     [ sh:path cim:IdentifiedObject.name ; sh:maxLength 5 ] ;
+        sh:target
+        [
+              a sh:SPARQLTarget ;
+              sh:prefixes cim: ;
+              sh:select """
+                SELECT DISTINCT ?this
+                WHERE {
+                  ?this rdf:type cim:PowerTransformer   .
+                  FILTER NOT EXISTS {?this ^cim:PowerTransformerEnd.PowerTransformer/cim:TransformerEnd.endNumber 3}.
+                }
+                """ ;
+        ] .
+'''
+
+
+def test_sparql_target_on_real_data(svedala_eq, tmp_path):
+    """Svedala EQ: every engine reports the same 51 transformer names."""
+    pytest.importorskip("polars")
+    pytest.importorskip("duckdb")
+    from triplets.export_schema import schemas
+
+    path = tmp_path / "two_winding_names.ttl"
+    path.write_text(TWO_WINDING_NAMES_SHAPE)
+    found = {}
+    for engine in ("pyshacl", "pandas", "polars", "duckdb"):
+        violations = triplets.validation.validate_shacl(
+            svedala_eq, str(path), engine=engine, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+            rdf_map_scope=["EQ"], lexical=False)
+        assert set(violations["VIOLATION_TYPE"]) == {"sh:maxLength"}, engine
+        meta = violations.attrs["validation"]
+        assert (meta["constraints"], meta["skipped_shapes"]) == (1, []), engine
+        found[engine] = set(violations["ID"])
+    assert all(ids == found["pyshacl"] for ids in found.values()), {k: len(v) for k, v in found.items()}
+    assert len(found["pyshacl"]) == 51

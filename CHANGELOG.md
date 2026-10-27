@@ -7,6 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **SPARQL targets in the vectorized engines** (`sh:target [ a sh:SPARQLTarget ; sh:select … ]`,
+  IR `target_by="SPARQL"`): each target query runs once per validation on `triplets.sparql`
+  and its `?this` nodes are the focus. Same findings as pyshacl on pandas, polars and duckdb.
+  A target query no engine can run flags the shape as a `triplets:invalidSparql` Violation;
+  a `sh:target` without `sh:select` stays in `skipped_shapes`
+  ([#161](https://github.com/Haigutus/triplets/issues/161)).
 - **`sh:xone` in the vectorized engines** — exactly one alternative must hold,
   per focus node on a node shape and per value node under a path (`VALUE` = the
   value node); an empty (switched-off) alternative holds. pandas implements it,

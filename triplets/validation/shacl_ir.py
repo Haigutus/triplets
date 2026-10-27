@@ -8,9 +8,9 @@ and each engine caches its own compiled artifact (LazyFrame plan builders,
 SQL) in ``CompiledShapes.plans`` — re-validating new data against the same
 shapes never recompiles anything.
 
-IR: one row per shape x path x constraint component.
-    shape_id, shapes, target_on, path, inverse, component, params,
-    severity, message, name, description
+IR: one row per shape x target x path x constraint component.
+    shape_id, shapes, target_on, target_by, path, inverse, via_type,
+    component, params, severity, message, name, description
 ``params`` holds the component's parameter: a scalar (sh:minCount), a list
 (sh:in), or nested row-dict lists (sh:or / sh:and / sh:xone / sh:not). Unknown
 components are kept as rows and logged — engines skip what they don't
@@ -35,8 +35,6 @@ IR_COLUMNS = ["shape_id", "shapes", "target_on", "target_by", "path", "inverse",
               "component", "params", "severity", "message", "name", "description"]
 
 _SHAPE_FORMATS = {".ttl": "turtle", ".rdf": "xml", ".xml": "xml", ".nt": "nt", ".jsonld": "json-ld"}
-# shape declarations the IR does not walk — reported, pyshacl covers them
-_NOT_WALKED = ("target",)
 
 
 @dataclass
@@ -349,8 +347,10 @@ def parse_ir(graph, skipped=None) -> pandas.DataFrame:
     constraint row is emitted once per target, ``target_by`` saying how the
     engines pick the rows: ``Type`` (sh:targetClass), ``KEY`` (sh:targetSubjectsOf:
     the IDs having that KEY), ``VALUE`` (sh:targetObjectsOf: the VALUEs under
-    that KEY), ``ID`` (sh:targetNode). *skipped* collects what the IR cannot
-    express as (lineage, text) entries, for the run metadata.
+    that KEY), ``ID`` (sh:targetNode), ``SPARQL`` (sh:target with sh:select: the
+    IDs the query projects as ``?this``, resolved per run; ``target_on`` is the
+    executable query text). *skipped* collects what the IR cannot express as
+    (lineage, text) entries, for the run metadata.
     """
     import rdflib
 
@@ -367,21 +367,16 @@ def parse_ir(graph, skipped=None) -> pandas.DataFrame:
         for term, target_by, name in targets:
             for target in graph.objects(shape, term):
                 rows.extend(_shape_rows(graph, SH, shape, name(target), target_by=target_by, skipped=skipped))
-
-    # Shapes reached only through declarations the IR does not walk are
-    # INVISIBLE to the vectorized engines and would silently under-validate.
-    # Warn loudly; the pyshacl reference engine covers them (engine="pyshacl").
-    invisible = {name: count for name in _NOT_WALKED
-                 if (count := sum(1 for _ in graph.subject_objects(SH[name])))}
-    if invisible:
-        logger.warning(
-            "shapes use SHACL features the vectorized engines do not implement — "
-            "affected shapes are skipped by the polars/pandas/duckdb engines; "
-            "use engine=\"pyshacl\" for full coverage: %s",
-            ", ".join(f"sh:{name} (x{count})" for name, count in invisible.items()))
-    for name in _NOT_WALKED:
-        skipped |= {((str(subject),), f"{subject}: sh:{name} not walked")
-                    for subject, _ in graph.subject_objects(SH[name])}
+        # sh:select makes a SPARQL target whatever the declared type (pyshacl's rule)
+        for target in graph.objects(shape, SH.target):
+            select = graph.value(target, SH.select)
+            if select is None:   # a SPARQLTargetType instance, a JS or custom target — pyshacl only
+                logger.warning("%s: sh:target without sh:select — shape skipped by the vectorized engines; "
+                               "use engine=\"pyshacl\"", shape)
+                skipped.add(((str(shape),), f"{shape}: sh:target not walked (no sh:select)"))
+                continue
+            rows.extend(_shape_rows(graph, SH, shape, _prefixes(graph, SH, target) + str(select),
+                                    target_by="SPARQL", skipped=skipped))
     # pyshacl (advanced=True) applies SPARQLRule inference; the IR does not
     skipped |= {((str(subject),), f"{subject}: sh:rule not applied") for subject, _ in graph.subject_objects(SH.rule)}
 
@@ -563,19 +558,26 @@ def _sparql_rows(graph, SH, shape_uri, meta):
         select = graph.value(sparql, SH.select)
         if select is None:
             continue
-        prefixes = "".join(
-            f"PREFIX {graph.value(declaration, SH.prefix)}: <{graph.value(declaration, SH.namespace)}>\n"
-            for ontology in graph.objects(sparql, SH.prefixes)
-            for declaration in graph.objects(ontology, SH.declare))
         message = graph.value(sparql, SH.message)
         row = {**meta, "component": "sh:sparql",
-               "params": {"select": str(select), "prefixes": prefixes,
+               "params": {"select": str(select), "prefixes": _prefixes(graph, SH, sparql),
                           # $PATH substitution needs the full IRI; only direct paths qualify
                           "path": str(path) if type(path).__name__ == "URIRef" else None}}
         if message is not None:
             row["message"] = str(message)
         rows.append(row)
     return rows
+
+
+def _prefixes(graph, SH, node):
+    """The ``PREFIX`` header of a SPARQL-based *node* (a sh:sparql constraint or a
+    SPARQL target): the sh:declare entries of its sh:prefixes, sorted by prefix —
+    the declarations are blank nodes, and the header must not change between
+    compiles of the same files."""
+    return "".join(sorted({
+        f"PREFIX {graph.value(declaration, SH.prefix)}: <{graph.value(declaration, SH.namespace)}>\n"
+        for ontology in graph.objects(node, SH.prefixes)
+        for declaration in graph.objects(ontology, SH.declare)}))
 
 
 def _shape_meta(graph, SH, shape_uri, target_on, path, inverse, target_by="Type",
@@ -589,7 +591,8 @@ def _shape_meta(graph, SH, shape_uri, target_on, path, inverse, target_by="Type"
         # lineage: the enclosing shapes, outermost first, then this one
         "shapes": (*shapes, str(shape_uri)),
         # target_on names what the shape applies to, read by target_by: a Type
-        # name, a KEY (targetSubjectsOf / targetObjectsOf) or an ID (targetNode)
+        # name, a KEY (targetSubjectsOf / targetObjectsOf), an ID (targetNode)
+        # or a SPARQL target's query text
         "target_on": target_on,
         "target_by": target_by,
         "path": path,

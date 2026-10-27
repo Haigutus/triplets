@@ -24,7 +24,9 @@ when built, else oxigraph, else rdflib): the engine loads the data once
 nodes bound via VALUES, and ``max_workers`` runs the constraint queries in
 parallel processes on the rdflib path only (fork — copy-on-write shares the
 dataset; threads don't help GIL-bound rdflib; the embedded engines are
-ms-scale sequentially).
+ms-scale sequentially). SPARQL targets run the same way, each distinct target
+query once per validation (``sparql_targets`` — the polars and duckdb engines
+call it too).
 
 Known limits:
 - sh:nodeKind — triplets store every value as a string, so term kind is decided
@@ -108,6 +110,7 @@ class _Context:
         # Last engine exception — a cached ingest failure re-raises the same
         # object per rule; _sparql reports it once instead of once per rule.
         self.sparql_engine_error = None
+        self.targets = {}   # SPARQL target query → focus IDs (_sparql_targets)
 
     def dataset(self):
         """rdflib dataset for the sh:sparql constraints — loaded once, reused per query."""
@@ -145,11 +148,14 @@ class _Context:
     def focus(self, rule):
         """The rule's focus nodes: an explicit ``focus_ids`` (set by sh:node — the
         referenced value nodes), else what ``target_by`` names: the IDs having
-        the KEY, the VALUEs under the KEY, the one ID, or the Type's instances."""
+        the KEY, the VALUEs under the KEY, the one ID, the SPARQL target's
+        result, or the Type's instances."""
         focus_ids = getattr(rule, "focus_ids", None)
         if focus_ids is not None:
             return focus_ids
         by = getattr(rule, "target_by", "Type")
+        if by == "SPARQL":
+            return self.targets[rule.target_on]
         if by == "KEY":
             return self.key_rows(rule.target_on)["ID"].unique()
         if by == "VALUE":
@@ -445,6 +451,44 @@ def _shorten(terms, rule):
     return rule(iri_pandas.decode_iri(terms)).where(iri_pandas.is_iri(terms), terms)
 
 
+def _select(context, query_text):
+    """One SELECT over the run's data on the auto SPARQL engine → (result,
+    rejection): a strict engine's rejection is re-run on rdflib and returned as
+    *rejection* (None when the auto engine ran it). Raises when rdflib fails
+    too — the query is defective on every engine."""
+    from .. import sparql
+    # rdflib queries the shared pre-loaded dataset; other engines (qlever,
+    # oxigraph) take the raw frame and manage their own engine-state cache
+    # (one build, content-hashed)
+    if sparql.get_engine("auto")[0] == "rdflib":
+        return sparql.query(context.dataset(), query_text, return_type="pandas"), None
+    try:
+        result = sparql.query(context.data, query_text, rdf_map=context.rdf_map, return_type="pandas",
+                              data_unchanged=context.data_hashed, undefined_namespace=context.undefined_namespace)
+        context.data_hashed = True
+        return result, None
+    except Exception as error:                            # noqa: BLE001 — engine strictness
+        return sparql.query(context.dataset(), query_text, engine="rdflib", return_type="pandas"), error
+
+
+def _rejected(context, shape_ids, path, what, error):
+    """The Warning notes, one per shape in *shape_ids*, for a query a strict
+    engine rejected and rdflib still ran. A cached ingest failure (data vs
+    schema) re-raises the same exception object for every query — reported
+    once, not once per query; per-query rejections are fresh exceptions and
+    keep their own notes."""
+    from .. import sparql
+    repeated = error is context.sparql_engine_error
+    context.sparql_engine_error = error
+    if repeated:
+        return _empty()
+    logger.warning("%s of %s rejected by %s — evaluated with rdflib and the shape flagged "
+                   "(fix the rule upstream):\n%s", what, ", ".join(shape_ids), sparql.get_engine("auto")[0], error)
+    message = (f"{str(error).splitlines()[0]} — the {what} WAS still evaluated "
+               f"via the rdflib fallback; fix the shape/data upstream")
+    return pandas.concat([_invalid_sparql(shape_id, path, message) for shape_id in shape_ids], ignore_index=True)
+
+
 def _sparql(context, rule):
     """Run one sh:sparql constraint. Queries run exactly as authored — no fixing.
 
@@ -453,73 +497,89 @@ def _sparql(context, rule):
     and a ``triplets:invalidSparql`` Warning row flags the defective shape —
     broken rules get reported and fixed upstream, not auto-patched here.
     """
-    from .. import sparql
     focus_ids = context.focus(rule)
     if not len(focus_ids):
         return _empty()
-    # rdflib queries the shared pre-loaded dataset; other engines (qlever,
-    # oxigraph) take the raw frame and manage their own engine-state cache
-    # (one build, content-hashed)
-    query_text = _sparql_query_text(rule, focus_ids)
-    engine_name = sparql.get_engine("auto")[0]
-    if engine_name == "rdflib":
-        try:
-            return _sparql_violations(rule, sparql.query(context.dataset(), query_text))
-        except Exception as error:                        # noqa: BLE001 — defective authored query
-            logger.error("sh:sparql constraint %s fails on rdflib: %s", rule.shape_id, error)
-            return _invalid_sparql(rule, _not_evaluated(rule, error), severity="Violation")
-
     try:
-        result = sparql.query(context.data, query_text, rdf_map=context.rdf_map,
-                              data_unchanged=context.data_hashed, undefined_namespace=context.undefined_namespace)
-        context.data_hashed = True
-        return _sparql_violations(rule, result)
-    except Exception as error:                            # noqa: BLE001 — engine strictness
-        # A cached ingest failure (data vs schema) re-raises the same exception
-        # object for every rule — report it once, not once per rule; per-rule
-        # query rejections are fresh exceptions and keep their own note.
-        repeated = error is getattr(context, "sparql_engine_error", None)
-        context.sparql_engine_error = error
-        if not repeated:
-            logger.warning("sh:sparql constraint %s rejected by %s — evaluating with rdflib "
-                           "and flagging the shape (fix the rule upstream):\n%s",
-                           rule.shape_id, engine_name, error)
-        note = _empty() if repeated else _invalid_sparql(
-            rule, f"{str(error).splitlines()[0]} — the constraint WAS still evaluated "
-                  f"via the rdflib fallback; fix the shape/data upstream")
-        try:
-            violations = _sparql_violations(
-                rule, sparql.query(context.dataset(), query_text, engine="rdflib"))
-        except Exception as rdflib_error:                 # noqa: BLE001 — truly broken query
-            logger.error("sh:sparql constraint %s also fails on rdflib: %s",
-                         rule.shape_id, rdflib_error)
-            return _invalid_sparql(rule, _not_evaluated(rule, rdflib_error), severity="Violation")
-        return pandas.concat([violations, note], ignore_index=True)
+        result, rejection = _select(context, _sparql_query_text(rule, focus_ids))
+    except Exception as error:                            # noqa: BLE001 — defective authored query
+        logger.error("sh:sparql constraint %s fails on every engine: %s", rule.shape_id, error)
+        return _invalid_sparql(rule.shape_id, rule.path, _not_evaluated(rule, error), severity="Violation")
+    violations = _sparql_violations(rule, result)
+    if rejection is None:
+        return violations
+    note = _rejected(context, [rule.shape_id], rule.path, "constraint", rejection)
+    return pandas.concat([violations, note], ignore_index=True)
 
 
 def _not_evaluated(rule, error):
     """The message for a constraint no engine could run: name the shape and
     its target/path (anonymous property shapes only have a blank-node id),
     say plainly that nothing was checked — a shapes bug, not a data finding."""
-    where = f"{rule.target_on}/{rule.path}" if rule.path else rule.target_on
+    target = rule.target_on if rule.target_by != "SPARQL" else "sh:target"
+    where = f"{target}/{rule.path}" if rule.path else target
     return (f"sh:sparql constraint of shape {split_iri(str(rule.shape_id))[1]} ({where}) was "
             f"NOT evaluated — the query is defective on every engine "
             f"(rdflib: {str(error).splitlines()[0]}). "
             f"A shapes bug, not a data finding; this constraint went unchecked.")
 
 
-def _invalid_sparql(rule, message, severity="Warning"):
-    """One report row flagging a constraint query an engine rejected — the
-    caller words the message (rejected-but-evaluated vs not evaluated at all)."""
+def _invalid_sparql(shape_id, path, message, severity="Warning"):
+    """One report row flagging a query an engine rejected — the caller words
+    the message (rejected-but-evaluated vs not evaluated at all)."""
     return pandas.DataFrame({
         "ID": [None],
-        "KEY": rule.path,
+        "KEY": path,
         "VALUE": None,
         "VIOLATION_TYPE": "triplets:invalidSparql",
         "MESSAGE": message,
         "SEVERITY": severity,
-        "SOURCE_SHAPE": rule.shape_id,
+        "SOURCE_SHAPE": shape_id,
     }, columns=VIOLATION_COLUMNS)
+
+
+def _sparql_targets(context, rules):
+    """The focus IDs of the SPARQL-targeted *rules* as {query: IDs} — each
+    distinct target query runs once — plus the note rows, one per NodeShape
+    (``rule.shapes[0]``) the query targets. A target query no engine can run,
+    or one that projects no ``?this``, gives those shapes no focus and a
+    ``triplets:invalidSparql`` Violation each; a strict engine's rejection is
+    evaluated on rdflib and flagged with a Warning, like sh:sparql."""
+    shapes = {}
+    for rule in rules:
+        shapes.setdefault(rule.target_on, set()).add(rule.shapes[0])
+    targets, notes = {}, [_empty()]
+    for query_text, shape_ids in shapes.items():
+        shape_ids = sorted(shape_ids)
+        targets[query_text] = _NO_IDS
+        try:
+            result, rejection = _select(context, query_text)
+        except Exception as error:                        # noqa: BLE001 — defective authored query
+            notes.append(_unchecked_target(
+                shape_ids, f"the query is defective on every engine (rdflib: {str(error).splitlines()[0]})"))
+            continue
+        if "this" not in result.columns:
+            notes.append(_unchecked_target(shape_ids, "the query projects no ?this"))
+            continue
+        targets[query_text] = _shorten(result["this"].dropna().astype(str), iri_pandas.local_id).unique()
+        if rejection is not None:
+            notes.append(_rejected(context, shape_ids, None, "SPARQL target", rejection))
+    return targets, pandas.concat(notes, ignore_index=True)
+
+
+def _unchecked_target(shape_ids, reason):
+    """One Violation per NodeShape whose SPARQL target gave no focus for *reason*."""
+    logger.error("SPARQL target of %s not evaluated: %s", ", ".join(shape_ids), reason)
+    return pandas.concat([_invalid_sparql(shape_id, None, (
+        f"SPARQL target of shape {split_iri(shape_id)[1]} was NOT evaluated — {reason}. "
+        f"A shapes bug, not a data finding; the shape went unchecked."), severity="Violation")
+        for shape_id in shape_ids], ignore_index=True)
+
+
+def sparql_targets(data, rules, rdf_map=None, undefined_namespace=CIM_NS):
+    """Focus IDs of the SPARQL targets among *rules* over *data* (any flavor
+    triplets.sparql accepts) and the note rows — see ``_sparql_targets``."""
+    return _sparql_targets(_Context(data, rdf_map, undefined_namespace), rules)
 
 
 # fork inherits this by copy-on-write — the dataset is never pickled per task
@@ -749,16 +809,15 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     context = _Context(data, rdf_map, undefined_namespace, ancestor_pairs(ancestors))
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
+    context.targets, notes = _sparql_targets(context, [rule for rule in selected if rule.target_by == "SPARQL"])
 
-    frames = [CONSTRAINT_VALIDATORS[rule.component](context, rule)
-              for rule in selected if rule.component != "sh:sparql"]
+    frames = [notes, *(CONSTRAINT_VALIDATORS[rule.component](context, rule)
+                       for rule in selected if rule.component != "sh:sparql")]
     if sparql_rules and max_workers:
         frames += _sparql_parallel(context, sparql_rules, max_workers)
     else:
         frames += [_sparql(context, rule) for rule in sparql_rules]
 
-    if not frames:
-        return _empty()
     violations = pandas.concat(frames, ignore_index=True)
     # a defective shape fans out to one rule per sh:targetClass — flag it once
     invalid = violations["VIOLATION_TYPE"] == "triplets:invalidSparql"
