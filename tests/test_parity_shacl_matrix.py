@@ -429,8 +429,6 @@ def known(reason, *cases):
 
 
 XFAIL = {
-    **known(ISSUE + "166 member with its own sh:path checked on the focus",
-            "prop_or_member_path", "prop_and_member_path", "prop_xone_member_path", "prop_not_member_path"),
     **known(ISSUE + "163 N1 a parameter given twice: evaluated where pyshacl rejects the shape",
             "twice_minCount", "twice_datatype", "twice_in", "twice_path"),
     **known("N2 sh:flags not read, issue pending", "pattern_flags"),

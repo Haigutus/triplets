@@ -513,7 +513,7 @@ def _logical_rows(graph, SH, shape, meta, value_path=None, **walk):
             items = [head] if component == "sh:not" else _rdf_list(graph, head, lambda node: node)
             if not items:
                 raise ValueError(f"shape {shape} has an empty {component} list")   # pyshacl: ShapeLoadError
-            members = [(item, _shape_rows(graph, SH, item, value_path=value_path, **walk)) for item in items]
+            members = [(item, _member_rows(graph, SH, item, meta, value_path, **walk)) for item in items]
             reasons = [f"{shape}: {component} member {item} {reason}"
                        for item, member in members
                        if (reason := _inexpressible(graph, item, member, (*meta["shapes"], str(item)), walk["skipped"]))]
@@ -525,6 +525,17 @@ def _logical_rows(graph, SH, shape, meta, value_path=None, **walk):
             nested = [member for _, member in members]
             rows.append({**meta, "component": component, "params": nested[0] if component == "sh:not" else nested})
     return rows
+
+
+def _member_rows(graph, SH, item, meta, value_path, **walk):
+    """A logical member's rows. Under a path, a member with its own sh:path is a
+    property shape over the value nodes: its rows run as a sh:node row of the
+    parent path, like a NodeShape member with sh:property does (one result per
+    value node, reported by the operator)."""
+    if value_path is None or graph.value(item, SH.path) is None:
+        return _shape_rows(graph, SH, item, value_path=value_path, **walk)
+    rows = _shape_rows(graph, SH, item, **walk)
+    return [{**meta, "component": "sh:node", "params": {"shape": split_iri(item)[1], "rows": rows}}] if rows else []
 
 
 def _inexpressible(graph, item, rows, lineage, skipped):
