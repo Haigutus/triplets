@@ -10,7 +10,8 @@ as simply valid; here it is reported, on two levels:
   → VIOLATION_TYPE sh:datatype, the shape's declared severity
 - value valid but written in a non-canonical / narrower form ("1" for
   xsd:float — integer form; "0" for xsd:boolean)
-  → VIOLATION_TYPE triplets:lexicalForm, severity Warning
+  → VIOLATION_TYPE triplets:lexicalForm, severity Warning (``lexical=False``
+  skips this level)
 
 Structure: one pure function per constraint component
 ``(context, rule) → violations DataFrame``, registered in
@@ -83,6 +84,14 @@ DATATYPES = {
     # string / unlisted types: every lexical form is valid — no check
 }
 
+
+def datatype_patterns(datatype, lexical=True):
+    """(valid pattern, warn pattern or None) of an xsd datatype — None when
+    the type is unchecked. ``lexical=False`` drops the triplets:lexicalForm level."""
+    spec = DATATYPES.get(str(datatype).removeprefix("xsd:"))
+    return None if spec is None else (spec[0], spec[1] if lexical else None)
+
+
 _NO_IDS = numpy.array([], dtype=object)
 
 
@@ -93,9 +102,10 @@ class _Context:
     instead of once per rule (the polars/duckdb compilers follow the same shape).
     """
 
-    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS, ancestors=()):
+    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS, ancestors=(), lexical=True):
         self.data = data
         self.rdf_map = rdf_map
+        self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
         self.ancestors = ancestors   # (Type, ancestor) pairs — see schema_scope.ancestor_pairs
         self.undefined_namespace = undefined_namespace
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
@@ -249,7 +259,7 @@ def _datatype(context, rule):
     Deviates from pyshacl by design: reports invalid lexical forms as
     sh:datatype and valid-but-non-canonical forms as triplets:lexicalForm.
     """
-    spec = DATATYPES.get(str(rule.params).removeprefix("xsd:"))
+    spec = datatype_patterns(rule.params, context.lexical)
     if spec is None:
         return _empty()
     valid_pattern, warn_pattern = spec
@@ -771,7 +781,7 @@ CONSTRAINT_VALIDATORS = {
 
 
 def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
-             undefined_namespace=CIM_NS, ancestors=None, **kwargs):
+             undefined_namespace=CIM_NS, ancestors=None, lexical=True, **kwargs):
     """Validate triplet data against the compiled constraint table.
 
     Parameters
@@ -794,6 +804,9 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     ancestors : dict, optional
         ``schema_scope.class_ancestors`` map: class targets and sh:class also
         match subclass instances. None = exact rdf:type only.
+    lexical : bool, default True
+        sh:datatype also reports valid-but-narrower forms as triplets:lexicalForm
+        Warnings; False checks the lexical space only.
     """
     data = _to_pandas(data)
     if data_scope is not None:
@@ -806,7 +819,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     if skipped:
         logger.debug("pandas engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
 
-    context = _Context(data, rdf_map, undefined_namespace, ancestor_pairs(ancestors))
+    context = _Context(data, rdf_map, undefined_namespace, ancestor_pairs(ancestors), lexical)
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
     context.targets, notes = _sparql_targets(context, [rule for rule in selected if rule.target_by == "SPARQL"])

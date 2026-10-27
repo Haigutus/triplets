@@ -103,9 +103,10 @@ Known engine gaps (each reported in the run's coverage metadata,
   yields no value node per SHACL path semantics). Longer sequences and the
   `*OrMorePath` forms are skipped with a compile warning; `engine="pyshacl"`
   covers them.
-- **Lexical datatype checks**: with `lexical=True` (the default) datatype
-  checks judge the raw *lexical form* of values — see the dedicated section
-  below. `engine="reference"` always gives the pure pyshacl view.
+- **Lexical datatype checks**: datatype checks judge the raw *lexical form*
+  of values; with `lexical=True` (the default) a valid but narrower form is a
+  `triplets:lexicalForm` Warning — see the dedicated section below.
+  `engine="reference"` always gives the pure pyshacl view.
 - `sh:nodeKind` BlankNode(+combo) cases are intentionally not implemented in
   the vectorized engines (triplets data has no blank nodes).
 - `sh:nodeKind` follows the export schema: an Association / Enumeration path is
@@ -329,9 +330,12 @@ engines see the raw lexical form and can judge it. Two levels:
 | outside the lexical space | `"abc"` | `sh:datatype` | shape's declared severity |
 | valid but narrower/non-canonical form | `"1"` (integer form) | `triplets:lexicalForm` | `Warning` |
 
-`validate_shacl(..., lexical=True)` (the default) appends these findings to any
-engine's report (duplicates dropped on
+The vectorized engines check both levels inline. pyshacl gets the pandas
+datatype check as a supplement (duplicates dropped on
 `[ID, KEY, VALUE, VIOLATION_TYPE, SOURCE_SHAPE, SEVERITY]`).
+`validate_shacl(..., lexical=False)` skips the `triplets:lexicalForm` level on
+every engine (nested datatype checks included) and pyshacl's supplement; values
+outside the lexical space stay `sh:datatype` violations on the vectorized engines.
 Parity tests treat `triplets:lexicalForm` rows as documented extras: engines
 must never *lose* a violation pyshacl reports.
 
@@ -580,12 +584,12 @@ data.shacl.validate_shacl(shapes, rdf_map=..., rdf_map_scope=["EQ"])
     |
     |-> get_engine("auto")                     # polars (first importable)
     |   '-> shacl_polars.validate(data, compiled, scoped, data_scope, ancestors)
-    |       # reads raw VALUEs; lexical findings emitted inline
+    |       # reads raw VALUEs; lexical findings emitted inline (lexical=False: no lexicalForm)
     |       # (pyshacl path instead: load_dataset -> scoped_graph ->
     |       #  pyshacl.validate(compiled.graph, ont_graph=ancestors as
     |       #  rdfs:subClassOf) -> report_to_violations)
     |
-    |-> + shacl_pandas datatype/lexical supplement   # ONLY for engine="pyshacl"
+    |-> + shacl_pandas datatype/lexical supplement   # ONLY for engine="pyshacl", lexical=True
     '-> EXPECTED / MESSAGE_SOURCE, run metadata
 
 validation.validate_schema(data, rdf_map, data_scope, rdf_map_scope)
@@ -646,7 +650,7 @@ violations = data.shacl.validate_shacl("shapes.ttl", data_scope=[one_instance])
 # engines: auto is polars -> pandas -> pyshacl; works on any input flavor
 data.shacl.validate_shacl("shapes.ttl", engine="pyshacl")      # or "polars" / "pandas" / "duckdb"
 triplets.validation.validate_shacl(con, "shapes.ttl")          # DuckDB connection
-violations = data.shacl.validate_shacl("shapes.ttl", lexical=False)   # pure pyshacl report
+violations = data.shacl.validate_shacl("shapes.ttl", lexical=False)   # no triplets:lexicalForm Warnings (pyshacl: the pure report)
 
 # pyshacl on the oxigraph engine's cached store (identical results; opt in
 # when the store is already loaded for SPARQL — Memory is faster otherwise)
