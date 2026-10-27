@@ -288,6 +288,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- `sh:node` on a node shape is evaluated by the polars, pandas and duckdb engines: one
+  `sh:node` finding per non-conforming focus node, as pyshacl
+  ([#160](https://github.com/Haigutus/triplets/issues/160)).
 - **CIM XML export uses every profile the instance header declares**
   ([#128](https://github.com/Haigutus/triplets/issues/128)), merged like `rdf_map_scope`
   (both engines). A CGMES 3.0 EQ file declaring EQ, OP and SC was exported against EQ

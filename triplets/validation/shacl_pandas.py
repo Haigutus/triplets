@@ -644,12 +644,17 @@ def _xone(context, rule):
 
 
 def _node(context, rule):
-    """sh:node — every value at the path must conform to the referenced shape.
+    """sh:node — every value at the path must conform to the referenced shape;
+    in a node shape, the focus node itself must.
 
     The referenced shape was expanded into nested IR rows at compile time; here
     they run with the referenced value nodes as focus. A value node that
     produces any nested violation makes the referring focus node violate sh:node.
     """
+    if rule.path is None:
+        nested = _run_nested(context, rule.params["rows"], getattr(rule, "focus_ids", None))
+        return _frame(rule, sorted(set(nested["ID"])), None,
+                      f"node does not conform to shape {rule.params['shape']}")
     rows = context.path_rows(rule)
     referenced = rows["PATH_VALUE"].unique()
     if not len(referenced):

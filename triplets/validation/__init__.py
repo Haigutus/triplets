@@ -19,7 +19,7 @@ Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
 - pandas — compiled-IR executor (debugging; same complete registry and
   semantics, eager. sh:sparql delegates to triplets.sparql with optional
   max_workers; sh:node runs the compile-time-expanded referenced shape against
-  the value nodes; sh:nodeKind is decided by the rdf_map schema)
+  the value nodes (on a node shape, the focus node); sh:nodeKind is decided by the rdf_map schema)
 - duckdb — compiled-IR executor for larger-than-memory data (one SQL query
   per constraint against the triplets table, streams/spills via DuckDB;
   explicit engine="duckdb", not in auto — polars owns the in-memory fast path)
