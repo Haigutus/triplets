@@ -429,14 +429,10 @@ def known(reason, *cases):
 
 
 XFAIL = {
-    **known(ISSUE + "164 node-level sh:and: one row per nested finding",
-            "node_and_paths", "node_and_shape", "node_and_shapes", "node_and_inverse_member"),
-    **known(ISSUE + "164 path-level sh:and: SOURCE_SHAPE is the member's", "prop_and_values", "prop_and_node_shape"),
     **known(ISSUE + "166 member with its own sh:path checked on the focus",
             "prop_or_member_path", "prop_and_member_path", "prop_xone_member_path", "prop_not_member_path"),
     **known(ISSUE + "163 N1 a parameter given twice: evaluated where pyshacl rejects the shape",
             "twice_minCount", "twice_datatype", "twice_in", "twice_path"),
-    **known(ISSUE + "163 N1 a parameter given twice: one value read, and #164", "twice_and_lists"),
     **known("N2 sh:flags not read, issue pending", "pattern_flags"),
     **known("N3 sh:alternativePath reduced to its inverse member, issue pending", "path_alternative_inverse"),
     **known("N4 sh:property on a property shape reported as sh:node, issue pending", "prop_node_with_own_property"),

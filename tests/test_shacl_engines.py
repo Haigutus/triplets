@@ -1444,3 +1444,41 @@ def test_every_value_of_a_parameter_is_a_constraint(engine, shape, rows, compone
     """A parameter given twice is two constraints (SHACL §4.1), as pyshacl
     evaluates them: issue #163 for sh:node, the same for the other repeatable ones."""
     assert violating(run(rows, shape, engine), component) == expected
+
+
+def operator_rows(violations, component):
+    rows = violations[violations["VIOLATION_TYPE"] == component]
+    return sorted(zip(rows["ID"], rows["KEY"].astype(object).where(rows["KEY"].notna(), None),
+                      rows["VALUE"].astype(object).where(rows["VALUE"].notna(), None), rows["SOURCE_SHAPE"]))
+
+
+BOTH = """cim:Both a sh:NodeShape ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ;
+    sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ."""
+
+
+@pytest.mark.parametrize("shape", [
+    f"{NODE_B} sh:and ( cim:Both ) ." + BOTH,
+    f"{NODE_B} sh:and ( cim:Named cim:Desc ) ." + NAMED + DESC,
+    f"{NODE_B} sh:and ( [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] "
+    f"[ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) .",
+    f"{NODE_B} sh:and ( cim:Named ), ( cim:Desc ) ." + NAMED + DESC,
+], ids=["one_shape", "two_shapes", "two_paths", "two_lists"])
+def test_node_level_and_reports_the_focus(engine, shape):
+    """Node-level sh:and: one row per non-conforming focus node with the
+    operator's shape and no KEY, as pyshacl (#164) — not one per nested finding."""
+    rows = (breaker("b1", ("IdentifiedObject.name", "n")) + breaker("b2")
+            + breaker("b3", ("IdentifiedObject.description", "d")) + breaker("b4", ("IdentifiedObject.name", "n"),
+                                                                              ("IdentifiedObject.description", "d")))
+    found = set(operator_rows(run(rows, shape, engine), "sh:and"))
+    assert found == {(focus, None, None, CIM + "B") for focus in ("b1", "b2", "b3")}
+
+
+def test_property_level_and_carries_the_operator_shape(engine):
+    """Path-level sh:and: one row per failing value node, SOURCE_SHAPE the
+    property shape holding the operator (#164)."""
+    shape = f"""{NODE_B} sh:property cim:P .
+        cim:P sh:path cim:IdentifiedObject.name ; sh:and ( [ sh:minLength 2 ] [ sh:maxLength 3 ] ) ."""
+    rows = breaker("b1", ("IdentifiedObject.name", "A"), ("IdentifiedObject.name", "ABCD"), ("IdentifiedObject.name", "AB"))
+    assert operator_rows(run(rows, shape, engine), "sh:and") == [
+        ("b1", "IdentifiedObject.name", "A", CIM + "P"), ("b1", "IdentifiedObject.name", "ABCD", CIM + "P")]
