@@ -107,6 +107,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shape files' `compiled_hash`. One compiled base serves the NC validation
   aggregates that switch different shapes off.
   IR rows carry their lineage in a `shapes` column.
+- Tests: the CGMES 2.4 Enhanced SHACL shapes come from the new
+  `test_data/application-profiles-library-cgmes-v2-4` submodule
+  (entsoe/application-profiles-library, branch `cgmes-v2-4`). Every file
+  compiles and loads in pyshacl; the RealGrid EQ / SSH / TP / SV instances are
+  validated against them (exact types, `inheritance=False`) with the same
+  findings on pandas, polars, duckdb and pyshacl (pyshacl on SV by default,
+  the rest under `-m performance`).
 
 ### Changed
 - **Breaking — IR columns renamed**: `target_kind` → `target_by` (`"Type"` for

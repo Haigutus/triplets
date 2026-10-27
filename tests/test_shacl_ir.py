@@ -605,3 +605,28 @@ def test_dynamics_shapes_compile_xone():
     assert xone["path"].isna().all()
     assert compiled.stats["unknown_components"] == []
     assert not any("xone" in entry for entry in compiled.stats["skipped_shapes"])
+
+
+CGMES24_SHACL_DIR = Path("test_data/application-profiles-library-cgmes-v2-4/CGMES/Enhanced/SHACL")
+# DifferenceModel.forwardDifferences / reverseDifferences → Statements.* sequence paths
+FILE_HEADER_SEQUENCE_PATHS = {f"http://iec.ch/TC57/61970-552/ModelDescription/Constraints#Statements.{name}: "
+                              "unsupported sh:path form"
+                              for name in ("subject-cardinality", "subject-datatype", "predicate-cardinality",
+                                           "predicate-datatype", "object-cardinality", "object-datatype")}
+
+
+@pytest.mark.skipif(not CGMES24_SHACL_DIR.exists(), reason="application-profiles-library-cgmes-v2-4 submodule not checked out")
+def test_cgmes24_enhanced_shapes_compile():
+    """CGMES 2.4 Enhanced SHACL: every file compiles without unknown components and
+    loads in pyshacl; only the FileHeader sequence paths are skipped."""
+    pyshacl = pytest.importorskip("pyshacl")
+    import rdflib
+    files = sorted(CGMES24_SHACL_DIR.glob("*.ttl"))
+    assert len(files) == 13
+    for path in files:
+        compiled = compile_shapes(str(path))
+        assert compiled.stats["unknown_components"] == [], path.name
+        assert set(compiled.stats["skipped_shapes"]) == (
+            FILE_HEADER_SEQUENCE_PATHS if path.name == "FileHeaderProfile.ttl" else set()), path.name
+        conforms, _, _ = pyshacl.validate(rdflib.Graph(), shacl_graph=compiled.graph)
+        assert conforms, path.name

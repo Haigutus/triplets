@@ -24,7 +24,7 @@ jobs:
           lfs: true          # test_data zips (RealGrid) are LFS objects
 
       - name: Fetch test data (only the data submodules — not vendor/qlever)
-        run: git submodule update --init test_data/relicapgrid test_data/CGMES-AP
+        run: git submodule update --init test_data/relicapgrid test_data/CGMES-AP test_data/application-profiles-library-cgmes-v2-4
 
       - uses: actions/setup-python@v5
         with:
@@ -45,7 +45,7 @@ jobs:
           lfs: true
 
       - name: Fetch test data and the pugixml source
-        run: git submodule update --init test_data/relicapgrid test_data/CGMES-AP vendor/pugixml
+        run: git submodule update --init test_data/relicapgrid test_data/CGMES-AP test_data/application-profiles-library-cgmes-v2-4 vendor/pugixml
 
       - uses: actions/setup-python@v5
         with:
