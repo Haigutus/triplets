@@ -1402,3 +1402,45 @@ def test_sparql_target_deactivated(engine_name):
     violations = switched_off(TRANSFORMER_ROWS, compiled, engine_name, ["TwoWinding"])
     assert len(violations) == 0
     assert violations.attrs["validation"]["deactivated_shapes"] == [CIM + "TwoWinding"]
+
+
+# ── nested semantics ─────────────────────────────────────────────────────────
+
+DESC = "cim:Desc a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ."
+# b1 named → bay1 (named), b2 described → sub1 (bare), b3 bare
+TRIO = (breaker("b1", ("IdentifiedObject.name", "B1"), ("Equipment.EquipmentContainer", "bay1"))
+        + breaker("b2", ("IdentifiedObject.description", "d"), ("Equipment.EquipmentContainer", "sub1"))
+        + breaker("b3")
+        + [("bay1", "Type", "Bay", "eq"), ("bay1", "IdentifiedObject.name", "Bay 1", "eq"),
+           ("sub1", "Type", "Substation", "eq")])
+# breakers referencing each other: b1 (named) → b2, b2 (bare) → b1; b3 described
+RING = (breaker("b1", ("IdentifiedObject.name", "n"), ("Equipment.EquipmentContainer", "b2"))
+        + breaker("b2", ("Equipment.EquipmentContainer", "b1")) + breaker("b3", ("IdentifiedObject.description", "d")))
+NODE_B = "cim:B a sh:NodeShape ; sh:targetClass cim:Breaker ;"
+
+
+def prop(body):
+    return f"{NODE_B} sh:property [ {body} ] ."
+
+
+@pytest.mark.parametrize("shape, rows, component, expected", [
+    (prop("sh:path cim:Equipment.EquipmentContainer ; sh:node cim:Named, cim:Desc") + NAMED + DESC, RING,
+     "sh:node", {("b1", "b2"), ("b2", "b1")}),
+    (f"{NODE_B} sh:node cim:Named, cim:Desc ." + NAMED + DESC, TRIO, "sh:node", {("b1", None), ("b2", None), ("b3", None)}),
+    (f"{NODE_B} sh:or ( cim:Named ), ( cim:Desc ) ." + NAMED + DESC, TRIO, "sh:or", {("b1", None), ("b2", None), ("b3", None)}),
+    (f"{NODE_B} sh:xone ( cim:Named ), ( cim:Desc ) ." + NAMED + DESC, TRIO, "sh:xone", {("b1", None), ("b2", None), ("b3", None)}),
+    (f"{NODE_B} sh:not cim:Named, cim:Desc ." + NAMED + DESC, TRIO, "sh:not", {("b1", None), ("b2", None)}),
+    (prop('sh:path cim:IdentifiedObject.name ; sh:pattern "^B", "1$"'),
+     breaker("b1", ("IdentifiedObject.name", "B1")) + breaker("b2", ("IdentifiedObject.name", "B2"))
+     + breaker("b3", ("IdentifiedObject.name", "x1")), "sh:pattern", {("b2", "B2"), ("b3", "x1")}),
+    (prop("sh:path cim:Equipment.EquipmentContainer ; sh:class cim:Bay, cim:Substation"), TRIO,
+     "sh:class", {("b1", "bay1"), ("b2", "sub1")}),
+    (prop('sh:path cim:IdentifiedObject.name ; sh:hasValue "B1", "B2"'),
+     breaker("b1", ("IdentifiedObject.name", "B1")) + breaker("b2", ("IdentifiedObject.name", "B2"))
+     + breaker("b3", ("IdentifiedObject.name", "B1"), ("IdentifiedObject.name", "B2")),
+     "sh:hasValue", {("b1", None), ("b2", None)}),
+], ids=["prop_node", "node_node", "or", "xone", "not", "pattern", "class", "hasValue"])
+def test_every_value_of_a_parameter_is_a_constraint(engine, shape, rows, component, expected):
+    """A parameter given twice is two constraints (SHACL §4.1), as pyshacl
+    evaluates them: issue #163 for sh:node, the same for the other repeatable ones."""
+    assert violating(run(rows, shape, engine), component) == expected

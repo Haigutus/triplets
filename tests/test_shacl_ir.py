@@ -592,6 +592,22 @@ def test_xone_compiles_like_or():
     assert compiled.stats["skipped_shapes"] == []
 
 
+
+def test_every_parameter_value_compiles_to_a_row():
+    """Each value of a repeatable parameter is a constraint of its own (#163)."""
+    compiled = compile_shapes(_graph("""
+cim:Named a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+cim:Desc a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:node cim:Named, cim:Desc ;
+    sh:or ( cim:Named ), ( cim:Desc ) ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:pattern "^B", "1$" ] ."""))
+    rows = compiled.ir
+    assert sorted(params["shape"] for params in rows.loc[rows["component"] == "sh:node", "params"]) == ["Desc", "Named"]
+    assert sorted(params[0][0]["path"] for params in rows.loc[rows["component"] == "sh:or", "params"]) == [
+        "IdentifiedObject.description", "IdentifiedObject.name"]
+    assert sorted(rows.loc[rows["component"] == "sh:pattern", "params"]) == ["1$", "^B"]
+
 CGMES_DY_COMPLEX = CGMES_SHACL_DIR / "61970-302_Dynamics-AP-Con-Complex-SHACL.ttl"
 
 

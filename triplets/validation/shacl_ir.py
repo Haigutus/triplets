@@ -441,15 +441,14 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
             "shapes": meta["shapes"]}
     rows = []
 
+    # each value of a parameter is a constraint of its own (SHACL §4.1)
     for term, component, transform in _components(SH):
-        value = graph.value(shape_uri, term)
-        if value is None:
-            continue
-        if path is None:
-            # on a node shape it judges the focus node itself, which no engine reads
-            skipped.add((meta["shapes"], f"{shape_uri}: node-level {component} not evaluated"))
-        else:
-            rows.append({**meta, "component": component, "params": transform(graph, value)})
+        for value in sorted(graph.objects(shape_uri, term), key=str):
+            if path is None:
+                # on a node shape it judges the focus node itself, which no engine reads
+                skipped.add((meta["shapes"], f"{shape_uri}: node-level {component} not evaluated"))
+            else:
+                rows.append({**meta, "component": component, "params": transform(graph, value)})
     # components no engine implements stay visible as rows: the run metadata
     # names them, and a logical operator over such a member is not evaluated
     for name in _UNKNOWN_TERMS:
@@ -460,16 +459,15 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
     rows.extend(_logical_rows(graph, SH, shape_uri, meta,
                               value_path=(path, inverse, via_type) if path else None, **walk))
 
-    node_shape = graph.value(shape_uri, SH.node)
-    if node_shape is not None:
+    for node_shape in sorted(graph.objects(shape_uri, SH.node), key=str):
         if str(node_shape) in visited:
             logger.warning("sh:node cycle at %s — constraint dropped (%s)", node_shape, shape_uri)
-        else:
-            # the referenced shape expanded at compile time; the engines run its
-            # rows against the value nodes (the focus node on a node shape)
-            rows.append({**meta, "component": "sh:node",
-                         "params": {"shape": split_iri(node_shape)[1],
-                                    "rows": _shape_rows(graph, SH, node_shape, **walk)}})
+            continue
+        # the referenced shape expanded at compile time; the engines run its
+        # rows against the value nodes (the focus node on a node shape)
+        rows.append({**meta, "component": "sh:node",
+                     "params": {"shape": split_iri(node_shape)[1],
+                                "rows": _shape_rows(graph, SH, node_shape, **walk)}})
 
     # the shape's own property shapes (and sh:closed over them): a NodeShape —
     # targeted, referenced or a logical member — judges its focus with them; a
@@ -510,21 +508,19 @@ def _logical_rows(graph, SH, shape, meta, value_path=None, **walk):
     rows = []
     for term, component in ((SH["or"], "sh:or"), (SH["and"], "sh:and"), (SH.xone, "sh:xone"),
                             (SH["not"], "sh:not")):
-        head = graph.value(shape, term)
-        if head is None:
-            continue
-        items = [head] if component == "sh:not" else _rdf_list(graph, head, lambda node: node)
-        members = [(item, _shape_rows(graph, SH, item, value_path=value_path, **walk)) for item in items]
-        reasons = [f"{shape}: {component} member {item} {reason}"
-                   for item, member in members
-                   if (reason := _inexpressible(graph, item, member, (*meta["shapes"], str(item)), walk["skipped"]))]
-        if reasons:
-            for reason in reasons:
-                logger.warning("%s; use engine=\"pyshacl\" for coverage", reason)
-            walk["skipped"].update((meta["shapes"], reason) for reason in reasons)
-            continue
-        nested = [member for _, member in members]
-        rows.append({**meta, "component": component, "params": nested[0] if component == "sh:not" else nested})
+        for head in sorted(graph.objects(shape, term), key=str):   # one operator row per value
+            items = [head] if component == "sh:not" else _rdf_list(graph, head, lambda node: node)
+            members = [(item, _shape_rows(graph, SH, item, value_path=value_path, **walk)) for item in items]
+            reasons = [f"{shape}: {component} member {item} {reason}"
+                       for item, member in members
+                       if (reason := _inexpressible(graph, item, member, (*meta["shapes"], str(item)), walk["skipped"]))]
+            if reasons:
+                for reason in reasons:
+                    logger.warning("%s; use engine=\"pyshacl\" for coverage", reason)
+                walk["skipped"].update((meta["shapes"], reason) for reason in reasons)
+                continue
+            nested = [member for _, member in members]
+            rows.append({**meta, "component": component, "params": nested[0] if component == "sh:not" else nested})
     return rows
 
 
