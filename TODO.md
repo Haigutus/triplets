@@ -9,13 +9,10 @@ qlever (auto when built, performance).
 
 ## Correctness / coverage
 
-- [ ] **SPARQLTarget (`sh:target` with `sh:select`) is invisible to the vectorized engines.**
-  `shacl_ir.parse_ir` walks `sh:targetClass`, `sh:targetSubjectsOf`,
-  `sh:targetObjectsOf` and `sh:targetNode` (IR `target_by` = Type / KEY / VALUE /
-  ID; all three engines + pyshacl parity tests). Still open: SPARQLTarget can ride
-  on `triplets.sparql` now that qlever/oxigraph make it cheap; a custom `sh:target`
-  without `sh:select` stays pyshacl-only. Compile-time warning + `skipped_shapes`
-  name the affected shapes.
+- [x] **SPARQLTarget (`sh:target` with `sh:select`)** — IR `target_by="SPARQL"`, resolved
+  per run on `triplets.sparql` by all three vectorized engines (#161). Open: a custom
+  `sh:target` without `sh:select` (`sh:SPARQLTargetType` instance, JS target) stays
+  pyshacl-only; a compile-time warning + `skipped_shapes` name the affected shapes.
 - [x] `sh:xone` (2 uses in the library) — in the IR; pandas implements it, polars and
   duckdb delegate it to pandas like the other logical operators.
 - [x] qlever SELECT typing: all values are lexical strings **by design** (arrow decode,
