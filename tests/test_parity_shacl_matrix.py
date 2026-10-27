@@ -19,8 +19,6 @@ import triplets
 
 from triplets.export_schema import schemas
 
-from pyshacl.errors import ConstraintLoadError, ShapeLoadError
-
 from _parity import canon_violations
 
 ENGINES = ["pandas", "polars", "duckdb"]
@@ -355,15 +353,9 @@ CASES = {
     "twice_and_lists": (f"{B} sh:and ( cim:Named ), ( cim:Desc ) ." + NAMED + DESCRIBED, TRIO),
     "twice_xone_lists": (f"{B} sh:xone ( cim:Named ), ( cim:Desc ) ." + NAMED + DESCRIBED, TRIO),
     "twice_not": (f"{B} sh:not cim:Named, cim:Desc ." + NAMED + DESCRIBED, TRIO),
-    # pyshacl rejects these four shapes; once the engines raise at compile time too, both legs give
-    # ("raises", …) and "rejected on both sides" is the parity claim: the XFAIL entries go then
-    "twice_minCount": (prop("sh:path cim:IdentifiedObject.name ; sh:minCount 1, 2"), TRIO + breaker("b4", (NAME, "a"), (NAME, "b"))),
     "twice_pattern": (prop('sh:path cim:IdentifiedObject.name ; sh:pattern "^B", "1$"'),
                       breaker("b1", (NAME, "B1")) + breaker("b2", (NAME, "B2")) + breaker("b3", (NAME, "x1"))),
-    "twice_datatype": (prop("sh:path cim:Conductor.length ; sh:datatype xsd:float, xsd:integer"), breaker("b1", (LEN, "10.5"))),
     "twice_class": (prop("sh:path cim:Equipment.EquipmentContainer ; sh:class cim:Bay, cim:Substation"), TRIO),
-    "twice_in": (prop('sh:path cim:IdentifiedObject.name ; sh:in ( "B1" ), ( "B2" )'),
-                 breaker("b1", (NAME, "B1")) + breaker("b2", (NAME, "B2"))),
     "twice_hasValue": (prop('sh:path cim:IdentifiedObject.name ; sh:hasValue "B1", "B2"'),
                        breaker("b1", (NAME, "B1")) + breaker("b2", (NAME, "B2")) + breaker("b3", (NAME, "B1"), (NAME, "B2"))),
     "twice_sparql": (prop("""sh:path cim:IdentifiedObject.name ;
@@ -372,7 +364,6 @@ CASES = {
                      breaker("b1", (NAME, "B1")) + breaker("b2", (NAME, "B2"))),
     "twice_property_same_path": (f"{B} sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ; "
                                  "sh:property [ sh:path cim:IdentifiedObject.name ; sh:maxLength 1 ] .", TRIO),
-    "twice_path": (prop("sh:path cim:IdentifiedObject.name, cim:IdentifiedObject.description ; sh:minCount 1"), TRIO),
     # ── the CGMES 3.0 export schema, UUID ids ────────────────────────────
     "entsoe_class": ("cim:L a sh:NodeShape ; sh:targetClass cim:ACLineSegment ; "
                      "sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:class cim:VoltageLevel ] .", SEGMENTS, ENTSOE),
@@ -424,8 +415,6 @@ SKIPPED = {
     "nodeKind_iri_or_literal": (prop("sh:path cim:IdentifiedObject.name ; sh:nodeKind sh:IRIOrLiteral"), TRIO, None),
 }
 
-ISSUE = "https://github.com/Haigutus/triplets/issues/"
-
 
 def known(reason, *cases):
     """One divergence, on every engine."""
@@ -433,8 +422,6 @@ def known(reason, *cases):
 
 
 XFAIL = {
-    **known(ISSUE + "163 N1 a parameter given twice: evaluated where pyshacl rejects the shape",
-            "twice_minCount", "twice_datatype", "twice_in", "twice_path"),
     **known("N2 sh:flags not read, issue pending", "pattern_flags"),
     **known("N3 sh:alternativePath reduced to its inverse member, issue pending", "path_alternative_inverse"),
     **known("N6 sh:closed on a property shape reported on the value node, issue pending", "closed_on_property_shape"),
@@ -462,13 +449,10 @@ def frame(rows):
 
 
 def run(name, engine, **extra):
-    """The case's canonical rows on *engine*; a shape rejected at load is ("raises", <exception class>)."""
+    """The case's canonical rows on *engine*."""
     _, rows, *rest = CASES[name]
     kwargs = {"rdf_map": SCHEMA, "rdf_map_scope": "*", **(rest[0] if rest else {}), **extra}
-    try:
-        return canon_violations(triplets.validation.validate_shacl(frame(rows), compiled(name), engine=engine, **kwargs))
-    except (ValueError, ConstraintLoadError, ShapeLoadError) as error:
-        return ("raises", type(error).__name__)
+    return canon_violations(triplets.validation.validate_shacl(frame(rows), compiled(name), engine=engine, **kwargs))
 
 
 @functools.cache

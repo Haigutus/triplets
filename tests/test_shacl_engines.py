@@ -841,19 +841,99 @@ def test_deactivated_shape_ill_typed_flag(engine_name):
     assert findings(switched_off(breaker("b1"), compiled, engine_name)) == {("b1", "sh:minCount")}
 
 
-@pytest.mark.parametrize("flag", ["cim:Yes", 'true, "1"^^xsd:integer'])
-def test_deactivated_shape_invalid_flag(flag):
-    """A non-literal or a second sh:deactivated value does not load — on pyshacl either."""
-    import rdflib
-    pyshacl = pytest.importorskip("pyshacl")
-    shapes = PREFIX + f"""cim:X a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 ;
-            sh:deactivated {flag} .
-        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:X ."""
-    graph = rdflib.Graph().parse(data=shapes, format="turtle")
-    with pytest.raises(ValueError, match=f"shape {CIM}X"):
-        triplets.validation.compile(graph)
-    with pytest.raises(pyshacl.errors.ShapeLoadError):
-        pyshacl.validate(rdflib.Graph(), shacl_graph=graph)
+# one malformed shape cim:X next to a valid sibling: name missing on X, description on the sibling
+MALFORMED_OWNER = {
+    "property shape": """cim:X a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; {flaw} .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:X ;
+            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .""",
+    "node shape": """cim:X a sh:NodeShape ; sh:targetClass cim:Breaker ; {flaw} ;
+            sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .""",
+}
+
+
+@pytest.mark.parametrize("engine_name", ENGINES)
+@pytest.mark.parametrize("owner", MALFORMED_OWNER)
+@pytest.mark.parametrize("flaw, reason", [
+    ("sh:minCount 1, 2", "two sh:minCount values"),
+    ("sh:datatype xsd:string, xsd:integer", "two sh:datatype values"),
+    ('sh:in ( "a" ), ( "b" )', "two sh:in lists"),
+    ("sh:path cim:IdentifiedObject.aliasName, cim:Conductor.length", "two sh:path values"),
+    ("sh:closed true, false", "two sh:closed values"),
+    ('sh:deactivated true, "1"^^xsd:integer', "two sh:deactivated values"),
+    ("sh:deactivated cim:Yes", f"the sh:deactivated value {CIM}Yes is not a literal"),
+    ("sh:or ( )", "empty sh:or list"),
+    ("sh:and ( )", "empty sh:and list"),
+    ("sh:xone ( )", "empty sh:xone list"),
+    ("sh:ignoredProperties ( rdf:type )", "sh:ignoredProperties without sh:closed"),
+])
+def test_malformed_shape_skipped(engine_name, owner, flaw, reason):
+    """A malformed shape (the compile's load checks): the engines name exactly
+    that shape in skipped_shapes, with the reason, and validate the other shapes."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes(MALFORMED_OWNER[owner].format(flaw=flaw))
+    violations = switched_off(breaker("b1"), compiled, engine_name)
+    assert set(zip(violations["ID"], violations["KEY"])) == {("b1", "IdentifiedObject.description")}
+    assert violations.attrs["validation"]["skipped_shapes"] == [f"{CIM}X: {reason}"]
+
+
+# a malformed shape reached in other ways, next to the valid sibling of MALFORMED_OWNER:
+# shape turtle → the skipped_shapes entries
+MALFORMED_REACHED = {
+    "sh:node target": ("""cim:BreakerShape sh:property cim:C .
+        cim:C sh:path cim:Equipment.EquipmentContainer ; sh:node cim:T .
+        cim:T a sh:NodeShape ; sh:or ( ) ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .""",
+        [f"{CIM}C: sh:node target {CIM}T not evaluated", f"{CIM}T: empty sh:or list"]),
+    "sh:or member": ("""cim:BreakerShape sh:or ( cim:M cim:Named ) .
+        cim:M a sh:NodeShape ; sh:xone ( ) .
+        cim:Named a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .""",
+        [f"{CIM}BreakerShape: sh:or member {CIM}M holds a part that was not evaluated", f"{CIM}M: empty sh:xone list"]),
+    "sh:not member": ("""cim:BreakerShape sh:not cim:M .
+        cim:M a sh:NodeShape ; sh:xone ( ) .""",
+        [f"{CIM}BreakerShape: sh:not member {CIM}M holds a part that was not evaluated", f"{CIM}M: empty sh:xone list"]),
+    "two owners": ("""cim:BreakerShape sh:property cim:P .
+        cim:OtherShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:P .
+        cim:P sh:path cim:IdentifiedObject.name, cim:IdentifiedObject.aliasName ; sh:minCount 1 .""",
+        [f"{CIM}P: two sh:path values"]),
+    "sh:PropertyShape without sh:path": ("""cim:BreakerShape sh:property cim:P .
+        cim:P a sh:PropertyShape ; sh:minCount 1 .""",
+        [f"{CIM}P: sh:PropertyShape without sh:path"]),
+}
+
+
+@pytest.mark.parametrize("engine_name", ENGINES)
+@pytest.mark.parametrize("edge", MALFORMED_REACHED)
+def test_malformed_shape_reached(engine_name, edge):
+    """A malformed sh:node target or logical member: the row over it is not
+    evaluated and named (it would conform, or fire, on every node — bay1 has no
+    name, T's property shape would fire on it); a malformed shape under two
+    owners is one entry; a declared sh:PropertyShape without sh:path is named
+    as such; the sibling is still reported."""
+    pytest.importorskip(engine_name)
+    shapes, skipped = MALFORMED_REACHED[edge]
+    compiled = compiled_shapes("""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .
+        """ + shapes)
+    rows = breaker("b1", ("Equipment.EquipmentContainer", "bay1")) + [("bay1", "Type", "Bay", "eq")]
+    violations = switched_off(rows, compiled, engine_name)
+    assert set(zip(violations["ID"], violations["KEY"])) == {("b1", "IdentifiedObject.description")}
+    assert violations.attrs["validation"]["skipped_shapes"] == skipped
+
+
+@pytest.mark.parametrize("engine_name", ENGINES)
+@pytest.mark.parametrize("flaw, reason", [("sh:minCount 1, 2", "two sh:minCount values"),
+                                          ("sh:path cim:IdentifiedObject.aliasName", "two sh:path values")])
+def test_malformed_deactivated_shape(engine_name, flaw, reason):
+    """A declared sh:deactivated shape that is malformed: switched off (None) it
+    takes its entry along, switched on ([]) it is skipped with the reason."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes(MALFORMED_OWNER["property shape"].format(flaw=f"sh:deactivated true ; {flaw}"))
+    assert compiled.deactivated == {f"{CIM}X"}
+    for shapes, skipped in ((None, []), ([], [f"{CIM}X: {reason}"])):
+        violations = switched_off(breaker("b1"), compiled, engine_name, shapes)
+        assert set(zip(violations["ID"], violations["KEY"])) == {("b1", "IdentifiedObject.description")}
+        assert violations.attrs["validation"]["skipped_shapes"] == skipped
 
 
 @pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
