@@ -67,12 +67,13 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
                                            undefined_namespace=undefined_namespace), data_scope)
     ont_graph = _ontology_graph(ancestors, rdf_map, undefined_namespace) if ancestors else None
 
+    shapes_graph = _switched_off_graph(compiled)
     conforms, report_graph, _report_text = pyshacl_validate(
-        data_graph, shacl_graph=_switched_off_graph(compiled), ont_graph=ont_graph,
+        data_graph, shacl_graph=shapes_graph, ont_graph=ont_graph,
         inference=inference, advanced=advanced, abort_on_first=abort_on_first,
     )
     logger.debug("SHACL conforms=%s", conforms)
-    return report_to_violations(report_graph)
+    return report_to_violations(report_graph, shapes_graph=shapes_graph)
 
 
 def _switched_off_graph(compiled):

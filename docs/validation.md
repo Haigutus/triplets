@@ -283,7 +283,9 @@ already removed; an engine called directly with the full compile validates
 them too.
 
 - **pyshacl** consumes `compiled.graph` (data goes through `_rdflib_loader`);
-  `ancestors` becomes its `ont_graph`.
+  `ancestors` becomes its `ont_graph`. Its report keeps the top-level results and
+  drops the nested `sh:detail` explanations, one row per finding like the vectorized engines.
+  A blank-node `sh:resultPath` (inverse, sequence or alternative path) reads as the KEY it resolves to.
 - **pandas/polars/duckdb** consume `compiled.ir` — they never touch rdflib and
   read the raw string `VALUE`s directly (`rdf_map` decides `sh:nodeKind` and
   types the graph of their sh:sparql and SPARQL target delegation); `ancestors`
