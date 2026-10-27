@@ -296,6 +296,10 @@ CASES = {
                                       TRIO + breaker("b4", (CONT, "sub1"))),
     "prop_node_with_own_property": (prop("sh:path cim:Equipment.EquipmentContainer ; "
                                          "sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]"), TRIO),
+    # bay1 carries a property the closed property shape does not declare
+    "closed_on_property_shape": (prop("sh:path cim:Equipment.EquipmentContainer ; sh:closed true ; "
+                                      "sh:ignoredProperties ( rdf:type ) ; sh:property [ sh:path cim:IdentifiedObject.name ]"),
+                                 TRIO + [("bay1", DESC, "bd", "eq")]),
     # ── deactivation ─────────────────────────────────────────────────────
     "deactivated_node_shape": (deactivated(f"{B} {NAME_MIN}"), TRIO),
     "deactivated_property_shape": (f"{B} sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:deactivated true ] ; "
@@ -433,7 +437,7 @@ XFAIL = {
             "twice_minCount", "twice_datatype", "twice_in", "twice_path"),
     **known("N2 sh:flags not read, issue pending", "pattern_flags"),
     **known("N3 sh:alternativePath reduced to its inverse member, issue pending", "path_alternative_inverse"),
-    **known("N4 sh:property on a property shape reported as sh:node, issue pending", "prop_node_with_own_property"),
+    **known("N6 sh:closed on a property shape reported on the value node, issue pending", "closed_on_property_shape"),
     **known("N7 sh:nodeKind sh:BlankNode not evaluated, draft pending", "nodeKind_blank_node"),
     **known("N8 sh:in compares lexical forms, not typed literals, draft pending", "in_numeric"),
     **known("N9 sh:minLength on an IRI measures the local id, draft pending", "minLength_on_iri"),
