@@ -75,6 +75,9 @@ TRIO = (breaker("b1", (NAME, "B1"), (CONT, "bay1")) + breaker("b2", (DESC, "d"),
         + breaker("b3") + CONTAINERS)
 # breakers referencing each other (the #163 / #166 data)
 RING = breaker("b1", (NAME, "n"), (CONT, "b2")) + breaker("b2", (CONT, "b1")) + breaker("b3", (DESC, "d"))
+# valid, narrower ("1" — the lexicalForm Warning) and invalid xsd:float lengths
+LENGTHS = breaker("b1", (LEN, "10.5")) + breaker("b2", (LEN, "1")) + breaker("b3", (LEN, "abc"))
+FLOAT = "[ sh:datatype xsd:float ]"
 
 NAMED = "cim:Named a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."
 DESCRIBED = "cim:Desc a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ."
@@ -259,6 +262,15 @@ CASES = {
     "prop_or_nested_and_values": (prop('sh:path cim:IdentifiedObject.name ; '
                                        'sh:or ( [ sh:and ( [ sh:minLength 2 ] [ sh:pattern "^A" ] ) ] [ sh:pattern "Z$" ] )'),
                                   breaker("b1", (NAME, "AZ"), (NAME, "xx"), (NAME, "Ax"), (NAME, "A"))),
+    # a nested datatype check decides on the lexical space: "1" satisfies xsd:float
+    "prop_and_datatype": (prop(f"sh:path cim:Conductor.length ; sh:and ( {FLOAT} )"), LENGTHS),
+    "prop_or_datatype": (prop(f"sh:path cim:Conductor.length ; sh:or ( {FLOAT} )"), LENGTHS),
+    "prop_xone_datatype": (prop(f"sh:path cim:Conductor.length ; sh:xone ( {FLOAT} )"), LENGTHS),
+    # node level: under a path pyshacl reports the value as rdflib's canonical "1.0"
+    "node_not_datatype": (f"{B} sh:not [ sh:path cim:Conductor.length ; sh:datatype xsd:float ] .", LENGTHS),
+    "node_node_datatype": (f"{B} sh:node [ sh:property [ sh:path cim:Conductor.length ; sh:datatype xsd:float ] ] .", LENGTHS),
+    "node_and_property_datatype": (f"{B} sh:and ( [ sh:property [ sh:path cim:Conductor.length ; sh:datatype xsd:float ] ] ) .",
+                                   LENGTHS),
     # ── property level, members with their own sh:path ───────────────────
     "prop_or_member_path": (prop("sh:path cim:Equipment.EquipmentContainer ; "
                                  "sh:or ( [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] )"), RING),
