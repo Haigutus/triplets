@@ -54,7 +54,8 @@ class CompiledShapes:
     deactivated: frozenset = frozenset()
     base: object = field(default=None, repr=False)   # the full compile this one was filtered from
     _active: dict = field(default_factory=dict, repr=False, compare=False)   # switched-off set → filtered
-    # what the IR cannot express, as (lineage, text): a switched-off shape takes its entries along
+    # what the IR cannot express, as (lineage, text, drop): a switched-off shape takes its entries
+    # along; drop — what pyshacl's graph loses for a malformed shape (_malformed), else None
     _skipped: frozenset = field(default=frozenset(), repr=False, compare=False)
 
     def active(self, deactivated_shapes=None):
@@ -108,15 +109,17 @@ def compile_shapes(shapes) -> CompiledShapes:
 def _shape_stats(graph, ir, skipped, off=frozenset()):
     """Coverage facts for the report metadata: shape/constraint counts plus
     what the vectorized engines skip (parse_ir's *skipped* entries as data —
-    the pyshacl reference engine covers everything, so validate_shacl() reports
-    these only for vectorized runs). *off*: the shapes switched off."""
+    the pyshacl reference engine covers everything but the malformed shapes, so
+    validate_shacl() reports for it only ``malformed_shapes``: the entries a
+    malformed shape causes). *off*: the shapes switched off."""
     import rdflib
 
     SH = rdflib.Namespace(SH_NS)
     return {
         "node_shapes": sum(1 for shape in graph.subjects(rdflib.RDF.type, SH.NodeShape) if str(shape) not in off),
         "constraints": len(_distinct(ir)),
-        "skipped_shapes": sorted({text for _, text in skipped}),
+        "skipped_shapes": sorted({text for _, text, _ in skipped}),
+        "malformed_shapes": sorted({text for _, text, drop in skipped if drop is not None}),
         "unknown_components": _unknown_components(ir),
     }
 
@@ -347,7 +350,7 @@ def parse_ir(graph, skipped=None) -> pandas.DataFrame:
     that KEY), ``ID`` (sh:targetNode), ``SPARQL`` (sh:target with sh:select: the
     IDs the query projects as ``?this``, resolved per run; ``target_on`` is the
     executable query text). *skipped* collects what the IR cannot express as
-    (lineage, text) entries, for the run metadata.
+    (lineage, text, drop) entries, for the run metadata (see CompiledShapes._skipped).
     """
     import rdflib
 
@@ -370,12 +373,17 @@ def parse_ir(graph, skipped=None) -> pandas.DataFrame:
             if select is None:   # a SPARQLTargetType instance, a JS or custom target — pyshacl only
                 logger.warning("%s: sh:target without sh:select — shape skipped by the vectorized engines; "
                                "use engine=\"pyshacl\"", shape)
-                skipped.add(((str(shape),), f"{shape}: sh:target not walked (no sh:select)"))
+                skipped.add(((str(shape),), f"{shape}: sh:target not walked (no sh:select)", None))
                 continue
             rows.extend(_shape_rows(graph, SH, shape, _prefixes(graph, SH, target) + str(select),
                                     target_by="SPARQL", skipped=skipped))
     # pyshacl (advanced=True) applies SPARQLRule inference; the IR does not
-    skipped |= {((str(subject),), f"{subject}: sh:rule not applied") for subject, _ in graph.subject_objects(SH.rule)}
+    skipped |= {((str(subject),), f"{subject}: sh:rule not applied", None) for subject, _ in graph.subject_objects(SH.rule)}
+    # a malformed shape the walk never reaches still makes pyshacl refuse the whole graph
+    walked = {drop for _, _, drop in skipped}
+    for shape in {subject for subject, predicate in graph.subject_predicates() if predicate in SH} - walked:
+        if reason := _malformed(graph, SH, shape):
+            skipped.add(((str(shape),), f"{shape}: {reason}", shape))
 
     ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
     # identical re-declarations behave like ONE shape (issue #99): the ENTSO-E
@@ -411,7 +419,7 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
     *value_path*: the owning property shape's (path, inverse, via_type) for a
     shape nested in its logical operators — a nested shape without its own
     sh:path constrains that property's value nodes.
-    *skipped* collects what the IR cannot express, as (lineage, text) entries;
+    *skipped* collects what the IR cannot express, as (lineage, text, drop) entries;
     a malformed shape (_malformed) compiles to no rows and one such entry.
     *shapes* is the lineage of the shapes enclosing this one.
     *judged*: the shape is judged for conformance — a sh:node target, a logical
@@ -426,8 +434,8 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
     visited = visited | {str(shape_uri)}
     reason = _malformed(graph, SH, shape_uri)
     if reason:
-        logger.warning("%s: %s — shape skipped (pyshacl does not load the shapes graph)", shape_uri, reason)
-        skipped.add(((*shapes, str(shape_uri)), f"{shape_uri}: {reason}"))
+        logger.warning("%s: %s — shape skipped", shape_uri, reason)
+        skipped.add(((*shapes, str(shape_uri)), f"{shape_uri}: {reason}", shape_uri))
         return []
     path_node = graph.value(shape_uri, SH.path)
     path, inverse, via_type = _resolve_path(graph, SH, path_node)
@@ -438,7 +446,7 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
             "sh:path at %s is a property path the vectorized engines cannot express "
             "as one KEY — property shape skipped; use engine=\"pyshacl\" for coverage",
             shape_uri)
-        skipped.add(((*shapes, str(shape_uri)), f"{shape_uri}: unsupported sh:path form"))
+        skipped.add(((*shapes, str(shape_uri)), f"{shape_uri}: unsupported sh:path form", None))
         return []
     meta = _shape_meta(graph, SH, shape_uri, target_on, path, inverse,
                        target_by=target_by, via_type=via_type, shapes=shapes)
@@ -454,7 +462,7 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
         for value in sorted(graph.objects(shape_uri, term), key=str):
             if path is None:
                 # on a node shape it judges the focus node itself, which no engine reads
-                skipped.add((meta["shapes"], f"{shape_uri}: node-level {component} not evaluated"))
+                skipped.add((meta["shapes"], f"{shape_uri}: node-level {component} not evaluated", None))
             else:
                 rows.append({**meta, "component": component, "params": transform(graph, value)})
     # components no engine implements stay visible as rows: the run metadata
@@ -474,13 +482,16 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
         # the referenced shape expanded at compile time; the engines run its
         # rows against the value nodes (the focus node on a node shape)
         target = _shape_rows(graph, SH, node_shape, **{**walk, "judged": True})
-        if not target and _skipped_under(skipped, (*meta["shapes"], str(node_shape))):
+        under = _under(skipped, (*meta["shapes"], str(node_shape)))
+        if not target and under:
             # a target with nothing left but skipped parts would conform on every
             # node: the row is not evaluated, as a logical operator over a skipped
-            # part (decided at compile time)
+            # part (decided at compile time); pyshacl drops it too when nothing is
+            # left for it either (only malformed parts)
             reason = f"{shape_uri}: sh:node target {node_shape} not evaluated"
-            logger.warning("%s; use engine=\"pyshacl\" for coverage", reason)
-            skipped.add((meta["shapes"], reason))
+            drop = (shape_uri, SH.node, node_shape) if all(entry[2] is not None for entry in under) else None
+            _warn_skipped(reason, drop)
+            skipped.add((meta["shapes"], reason, drop))
             continue
         rows.append({**meta, "component": "sh:node",
                      "params": {"shape": split_iri(node_shape)[1], "rows": target}})
@@ -534,9 +545,13 @@ def _logical_rows(graph, SH, shape, meta, value_path=None, **walk):
                        for item, member in members
                        if (reason := _inexpressible(graph, item, member, (*meta["shapes"], str(item)), walk["skipped"]))]
             if reasons:
+                # a malformed part in any member: pyshacl's graph loses the operator too
+                malformed = any(entry[2] is not None for item, _ in members
+                                for entry in _under(walk["skipped"], (*meta["shapes"], str(item))))
+                drop = (shape, term, head) if malformed else None
                 for reason in reasons:
-                    logger.warning("%s; use engine=\"pyshacl\" for coverage", reason)
-                walk["skipped"].update((meta["shapes"], reason) for reason in reasons)
+                    _warn_skipped(reason, drop)
+                walk["skipped"].update((meta["shapes"], reason, drop) for reason in reasons)
                 continue
             nested = [member for _, member in members]
             rows.append({**meta, "component": component, "params": nested[0] if component == "sh:not" else nested})
@@ -564,14 +579,18 @@ def _inexpressible(graph, item, rows, lineage, skipped):
     unknown = sorted(_components_in(rows) - KNOWN_COMPONENTS)
     if unknown:
         return f"uses {', '.join(unknown)} — not evaluated"
-    if _skipped_under(skipped, lineage):
+    if _under(skipped, lineage):
         return "holds a part that was not evaluated"
     return None
 
 
-def _skipped_under(skipped, lineage):
-    """Whether *skipped* has an entry at or below the shape *lineage*."""
-    return any(shapes[:len(lineage)] == lineage for shapes, _ in skipped)
+def _under(skipped, lineage):
+    """*skipped*'s entries at or below the shape *lineage*."""
+    return [entry for entry in skipped if entry[0][:len(lineage)] == lineage]
+
+
+def _warn_skipped(reason, drop):
+    logger.warning("%s%s", reason, "" if drop else '; use engine="pyshacl" for coverage')
 
 
 def _sparql_rows(graph, SH, shape_uri, meta):

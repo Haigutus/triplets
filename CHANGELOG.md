@@ -304,18 +304,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shape or `sh:pattern` / `sh:class` / `sh:hasValue` value was dropped without a
   warning; each value is now a constraint of its own, as in pyshacl
   ([#163](https://github.com/Haigutus/triplets/issues/163)).
-- **A malformed shape is skipped, the rest validates** on polars, pandas and duckdb:
+- **A malformed shape is skipped, the rest validates** on polars, pandas, duckdb and pyshacl:
   a shape that fails one of these load checks — a parameter taken once (`sh:path`,
   `sh:minCount`, `sh:maxCount`, `sh:datatype`, `sh:nodeKind`, `sh:in`, `sh:minLength`,
   `sh:maxLength`, `sh:closed`, `sh:deactivated`, `sh:uniqueLang`, `sh:languageIn`,
   `sh:qualifiedMinCount`, `sh:qualifiedMaxCount`) given twice, an empty `sh:or` /
   `sh:and` / `sh:xone` list, a non-literal `sh:deactivated`, `sh:ignoredProperties`
   without `sh:closed`, a declared `sh:PropertyShape` without `sh:path` — is named in
-  `skipped_shapes` with the reason and not evaluated; the engines evaluated it
-  (polars merged two `sh:in` lists into one). pyshacl refuses the whole shapes
-  graph for each of these. A logical operator over a malformed shape is dropped
-  and named, as over any skipped part; a `sh:node` row whose target has nothing
-  left but skipped parts is too (it conformed on every node).
+  `skipped_shapes` with the reason (an untargeted one too) and not evaluated; the vectorized engines evaluated
+  it (polars merged two `sh:in` lists into one), pyshacl refused the whole shapes graph.
+  A logical operator over a malformed shape is dropped and named, as over any skipped
+  part; a `sh:node` row whose target has nothing left but skipped parts is too (it
+  conformed on every node).
 - **`sh:closed` allows the properties of every `sh:ignoredProperties` list** on
   polars, pandas and duckdb, as pyshacl; one of two lists was read and the
   properties of the other were reported. A property shape skipped for two
