@@ -201,6 +201,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   at 0.6 s. Regex replaces stay in the flavors — measured 2-8x faster than
   split/list ops in pandas and 1.5-2x in polars; the scalar `local_id` uses a
   prefix loop (faster per call for the python parsers).
+- **`max_workers` threads the sh:sparql constraints on oxigraph and qlever**
+  (pandas / polars / duckdb SHACL engines): the embedded engines release the GIL
+  while evaluating over one shared store, so the queries run on a thread pool
+  instead of sequentially; rdflib keeps the forked process pool. Svedala EQ
+  against the CGMES 3.0 Equipment-AP shapes (92 constraint queries), sh:sparql
+  phase on oxigraph 6.8 s → 2.4 s at 4 workers, 1.8 s at 8 (`validate_shacl`
+  12.6 s → 7.9 s); on qlever 0.84 s → 0.35 s at 4. Same findings as sequential.
 - `read_nquads` / CONSTRUCT decoding shorten per column: `ID` / `INSTANCE_ID`
   via `local_id`, `KEY` via `local_key`, `VALUE` via `local_value` — a
   URI-shaped `INSTANCE_ID` now survives the round trip. A VALUE IRI that is a
@@ -294,6 +301,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`validate_shacl(..., lexical=False)` skips the `triplets:lexicalForm` check on every
+  engine**: pandas, polars and duckdb no longer emit the narrower-form Warnings (nested
+  datatype checks included) — the datatype check skips the second pattern; values outside
+  the lexical space stay `sh:datatype` violations. pyshacl gets no supplement, as before.
 - **pyshacl engine report**: the nested `sh:detail` results of a `sh:node` finding are no
   longer listed as findings of their own; a blank-node `sh:resultPath` (inverse, sequence or
   alternative path) reads as the KEY it resolves to, not the blank-node label; the

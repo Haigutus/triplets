@@ -358,3 +358,59 @@ def test_invalid_constraint_query_reported_not_fixed(no_qlever, svedala):
     assert flags["SEVERITY"].iloc[0] == "Warning"
     assert "oxigraph rejected the query" in flags["MESSAGE"].iloc[0]
     assert (violations["VIOLATION_TYPE"] != "sh:sparql").all()   # rdflib fallback found no hits
+
+
+THREADED_SHAPES = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+
+cim:FuseShape a sh:NodeShape ;
+    sh:targetClass cim:Fuse ;
+    sh:property [ sh:path cim:IdentifiedObject.name ;
+                  sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ] ] .
+
+cim:ACLineSegmentShape a sh:NodeShape ;
+    sh:targetClass cim:ACLineSegment ;
+    sh:property [ sh:path cim:IdentifiedObject.name ;
+                  sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ] ] ;
+    sh:property [ sh:path cim:Conductor.length ;
+                  sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "no-such-length") } GROUP BY $this' ] ] .
+
+cim:TerminalShape a sh:NodeShape ;
+    sh:targetClass cim:Terminal ;
+    sh:property [ sh:path cim:Terminal.ConductingEquipment ;
+                  sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ] ] .
+
+cim:ConnectivityNodeShape a sh:NodeShape ;
+    sh:targetClass cim:ConnectivityNode ;
+    sh:sparql [ sh:select 'SELECT $this WHERE { FILTER NOT EXISTS { ?t <http://iec.ch/TC57/CIM100#Terminal.ConnectivityNode> $this } }' ] .
+"""
+
+
+@pytest.mark.parametrize("sparql_engine", ["oxigraph", "qlever"])
+def test_shacl_sparql_threads_match_sequential(svedala, monkeypatch, sparql_engine):
+    """max_workers runs the embedded engine's sh:sparql queries on threads: the
+    report equals the sequential one — findings, a focus-less target (no Fuse
+    in the data) and the rdflib-fallback note for a query the engine rejects."""
+    import threading
+    from triplets.validation import shacl_pandas
+    if sparql_engine == "qlever":
+        pytest.importorskip("triplets.sparql._qlever", reason="qlever extension not built")
+    monkeypatch.setattr(triplets.sparql._REGISTRY, "auto", [sparql_engine, "rdflib"])
+    rdflib = pytest.importorskip("rdflib")
+    graph = rdflib.Graph()
+    graph.parse(data=THREADED_SHAPES, format="turtle")
+    compiled = triplets.validation.compile(graph)
+    sequential = triplets.validation.validate_shacl(svedala, compiled, engine="pandas")
+
+    threads = set()
+    run_one = shacl_pandas._sparql
+    monkeypatch.setattr(shacl_pandas, "_sparql", lambda context, rule: (
+        threads.add(threading.current_thread() is threading.main_thread()), run_one(context, rule))[1])
+    parallel = triplets.validation.validate_shacl(svedala, compiled, engine="pandas", max_workers=4)
+
+    assert threads == {True, False}                   # first query alone, the rest on the pool
+    key = list(sequential.columns)
+    assert parallel.sort_values(key).reset_index(drop=True).equals(sequential.sort_values(key).reset_index(drop=True))
+    assert (sequential["VIOLATION_TYPE"] == "sh:sparql").sum() > 0
+    assert (sequential["VIOLATION_TYPE"] == "triplets:invalidSparql").sum() == 1

@@ -10,7 +10,8 @@ as simply valid; here it is reported, on two levels:
   → VIOLATION_TYPE sh:datatype, the shape's declared severity
 - value valid but written in a non-canonical / narrower form ("1" for
   xsd:float — integer form; "0" for xsd:boolean)
-  → VIOLATION_TYPE triplets:lexicalForm, severity Warning
+  → VIOLATION_TYPE triplets:lexicalForm, severity Warning (``lexical=False``
+  skips this level)
 
 Structure: one pure function per constraint component
 ``(context, rule) → violations DataFrame``, registered in
@@ -22,11 +23,11 @@ sh:sparql constraints are delegated to triplets.sparql (auto engine — qlever
 when built, else oxigraph, else rdflib): the engine loads the data once
 (content-hash cached), each constraint runs as one SELECT with the focus
 nodes bound via VALUES, and ``max_workers`` runs the constraint queries in
-parallel processes on the rdflib path only (fork — copy-on-write shares the
-dataset; threads don't help GIL-bound rdflib; the embedded engines are
-ms-scale sequentially). SPARQL targets run the same way, each distinct target
-query once per validation (``sparql_targets`` — the polars and duckdb engines
-call it too).
+parallel: forked processes on rdflib (copy-on-write shares the dataset;
+threads don't help GIL-bound rdflib), threads on the embedded engines (they
+release the GIL while evaluating over one read-shared store). SPARQL targets
+run the same way, each distinct target query once per validation
+(``sparql_targets`` — the polars and duckdb engines call it too).
 
 Known limits:
 - sh:nodeKind — triplets store every value as a string, so term kind is decided
@@ -36,9 +37,10 @@ Known limits:
 """
 import re
 import logging
+import threading
 import multiprocessing
 
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from types import SimpleNamespace
 
@@ -83,6 +85,14 @@ DATATYPES = {
     # string / unlisted types: every lexical form is valid — no check
 }
 
+
+def datatype_patterns(datatype, lexical=True):
+    """(valid pattern, warn pattern or None) of an xsd datatype — None when
+    the type is unchecked. ``lexical=False`` drops the triplets:lexicalForm level."""
+    spec = DATATYPES.get(str(datatype).removeprefix("xsd:"))
+    return None if spec is None else (spec[0], spec[1] if lexical else None)
+
+
 _NO_IDS = numpy.array([], dtype=object)
 
 
@@ -93,9 +103,10 @@ class _Context:
     instead of once per rule (the polars/duckdb compilers follow the same shape).
     """
 
-    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS, ancestors=()):
+    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS, ancestors=(), lexical=True):
         self.data = data
         self.rdf_map = rdf_map
+        self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
         self.ancestors = ancestors   # (Type, ancestor) pairs — see schema_scope.ancestor_pairs
         self.undefined_namespace = undefined_namespace
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
@@ -103,6 +114,7 @@ class _Context:
         self._class_ids = None
         self._all_ids = None
         self._dataset = None
+        self._dataset_lock = threading.Lock()   # sh:sparql threads share one rdflib fallback load
         # The data cannot change between the constraint queries of one
         # validation run: after the first sh:sparql query has hashed it, the
         # rest assert data_unchanged and skip the per-query content_hash.
@@ -114,9 +126,10 @@ class _Context:
 
     def dataset(self):
         """rdflib dataset for the sh:sparql constraints — loaded once, reused per query."""
-        if self._dataset is None:
-            from .._rdflib_loader import load_dataset
-            self._dataset = load_dataset(self.data, rdf_map=self.rdf_map, undefined_namespace=self.undefined_namespace)
+        with self._dataset_lock:
+            if self._dataset is None:
+                from .._rdflib_loader import load_dataset
+                self._dataset = load_dataset(self.data, rdf_map=self.rdf_map, undefined_namespace=self.undefined_namespace)
         return self._dataset
 
     def key_rows(self, key):
@@ -249,7 +262,7 @@ def _datatype(context, rule):
     Deviates from pyshacl by design: reports invalid lexical forms as
     sh:datatype and valid-but-non-canonical forms as triplets:lexicalForm.
     """
-    spec = DATATYPES.get(str(rule.params).removeprefix("xsd:"))
+    spec = datatype_patterns(rule.params, context.lexical)
     if spec is None:
         return _empty()
     valid_pattern, warn_pattern = spec
@@ -468,6 +481,9 @@ def _select(context, query_text):
         context.data_hashed = True
         return result, None
     except Exception as error:                            # noqa: BLE001 — engine strictness
+        # the engine hashes the data before loading or querying, and
+        # data_unchanged only reuses a digest stored for this very object
+        context.data_hashed = True
         return sparql.query(context.dataset(), query_text, engine="rdflib", return_type="pandas"), error
 
 
@@ -592,31 +608,36 @@ def _sparql_worker(query_text):
 
 
 def _sparql_parallel(context, rules, max_workers):
-    """Run the sh:sparql constraint queries in parallel processes.
+    """Run the sh:sparql constraint queries in parallel, one task per query.
 
-    rdflib query evaluation is GIL-bound pure Python, so threads don't help;
-    fork gives copy-on-write sharing of the loaded dataset (Linux). One task
-    per constraint query. Only applies to the rdflib engine — the embedded
-    engines (qlever: C++ state must not be forked; oxigraph: Rust store) are
-    orders of magnitude faster and run the queries sequentially. Both release
-    the GIL during queries, so threading them is a recorded future
-    optimization (TODO.md).
+    rdflib query evaluation is GIL-bound pure Python, so it runs in forked
+    processes: fork gives copy-on-write sharing of the loaded dataset (Linux).
+    The embedded engines release the GIL while evaluating (oxigraph: in
+    ``Store.query`` and ``QuerySolutions.serialize``; qlever: ``nogil``) and
+    read-share one loaded store, so they run on threads — qlever's C++ state
+    must not be forked anyway. The first query runs alone: it settles
+    ``context.data_hashed`` and a cold store cache before the pool starts
+    (accepted or rejected), so the threads never hash the data or load the
+    store concurrently. Queries a strict engine rejects fall back to rdflib,
+    which holds the GIL — those fallbacks do not run in parallel.
     """
     from .. import sparql
-    if sparql.get_engine("auto")[0] != "rdflib":
-        logger.debug("sparql auto engine is not rdflib — max_workers ignored (sequential)")
-        return [_sparql(context, rule) for rule in rules]
-
-    global _FORK_DATASET
-    tasks = [(rule, _sparql_query_text(rule, context.focus(rule)))
-             for rule in rules if len(context.focus(rule))]
+    tasks = [rule for rule in rules if len(context.focus(rule))]
     if not tasks:
         return []
+    if sparql.get_engine("auto")[0] != "rdflib":
+        frames = [_sparql(context, tasks[0])]
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            frames += pool.map(lambda rule: _sparql(context, rule), tasks[1:])
+        return frames
+
+    global _FORK_DATASET
     _FORK_DATASET = context.dataset()
     try:
         with ProcessPoolExecutor(max_workers=max_workers,
                                  mp_context=multiprocessing.get_context("fork")) as pool:
-            results = list(pool.map(_sparql_worker, [text for _, text in tasks]))
+            results = list(pool.map(_sparql_worker, [_sparql_query_text(rule, context.focus(rule))
+                                                     for rule in tasks]))
     except (BrokenProcessPool, OSError) as error:
         # fork from a thread-heavy process (polars/duckdb pools, pytest) can kill
         # workers — degrade to sequential instead of failing the validation
@@ -624,7 +645,7 @@ def _sparql_parallel(context, rules, max_workers):
         return [_sparql(context, rule) for rule in rules]
     finally:
         _FORK_DATASET = None
-    return [_sparql_violations(rule, result) for (rule, _), result in zip(tasks, results)]
+    return [_sparql_violations(rule, result) for rule, result in zip(tasks, results)]
 
 
 # ── logical operators (params: nested IR row-dict lists) ────────────────────
@@ -781,7 +802,7 @@ CONSTRAINT_VALIDATORS = {
 
 
 def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
-             undefined_namespace=CIM_NS, ancestors=None, **kwargs):
+             undefined_namespace=CIM_NS, ancestors=None, lexical=True, **kwargs):
     """Validate triplet data against the compiled constraint table.
 
     Parameters
@@ -799,11 +820,15 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         Restrict to a subset (e.g. ``("sh:datatype",)`` for the lexical
         supplement run next to pyshacl). None = everything implemented.
     max_workers : int, optional
-        Run the sh:sparql constraint queries in parallel processes (fork).
+        Run the sh:sparql constraint queries on that many workers: forked
+        processes on the rdflib engine, threads on oxigraph / qlever.
         None = sequential.
     ancestors : dict, optional
         ``schema_scope.class_ancestors`` map: class targets and sh:class also
         match subclass instances. None = exact rdf:type only.
+    lexical : bool, default True
+        sh:datatype also reports valid-but-narrower forms as triplets:lexicalForm
+        Warnings; False checks the lexical space only.
     """
     data = _to_pandas(data)
     if data_scope is not None:
@@ -816,7 +841,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     if skipped:
         logger.debug("pandas engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
 
-    context = _Context(data, rdf_map, undefined_namespace, ancestor_pairs(ancestors))
+    context = _Context(data, rdf_map, undefined_namespace, ancestor_pairs(ancestors), lexical)
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
     context.targets, notes = _sparql_targets(context, [rule for rule in selected if rule.target_by == "SPARQL"])

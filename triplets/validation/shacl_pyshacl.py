@@ -44,7 +44,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         Include dependency instances in the scope (or validate the full
         union, data_scope=None) for cross-instance checks.
     inference, advanced, abort_on_first : passed to pyshacl.validate.
-    **kwargs : other engines' options (components, max_workers, table_name) —
+    **kwargs : other engines' options (components, max_workers, table_name, lexical) —
         accepted and ignored, per the shared engine contract.
     store : str, default "memory"
         rdflib store backend for the data graph (see ``load_dataset``):

@@ -39,7 +39,8 @@ by the vectorized engines (pyshacl evaluates both itself via advanced=True).
 
 One deliberate deviation from pyshacl: the datatype check inspects the raw
 lexical form of VALUE (see shacl_pandas) — with ``lexical=True`` (default)
-those findings are appended to any engine's report.
+every engine's report carries the triplets:lexicalForm Warnings, with
+``lexical=False`` none does.
 """
 from __future__ import annotations
 
@@ -130,8 +131,12 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
         (larger-than-memory) or "pyshacl" (reference). "auto" picks
         polars → pandas → pyshacl; duckdb is always an explicit choice.
     lexical : bool, default True
-        Append the lexical-form datatype findings (the deliberate deviation
-        from pyshacl — see shacl_pandas) to the engine's report.
+        Report valid-but-narrower datatype forms (``"1"`` for xsd:float) as
+        triplets:lexicalForm Warnings — the deliberate deviation from pyshacl,
+        see shacl_pandas. The vectorized engines check them inline, pyshacl
+        gets the pandas datatype check as a supplement. False skips the check
+        on every engine (pyshacl: the pure pyshacl report); values outside the
+        lexical space stay sh:datatype violations.
     undefined_namespace : str, default CIM100
         Namespace for names the schema does not declare (every name without
         an rdf_map) in the graph the sh:sparql constraints and pyshacl see.
@@ -178,11 +183,11 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     return violations
 
 
-def _run(data, compiled, engine_name, engine_mod, rdf_map, data_scope, lexical, undefined_namespace=CIM_NS,
+def _run(data, compiled, engine_name, engine_mod, rdf_map, data_scope, lexical=True, undefined_namespace=CIM_NS,
          ancestors=None, **kwargs):
     """One engine pass, plus the lexical datatype supplement when the engine
     does not emit it itself — raw violations, presentation columns not yet added."""
-    violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, data_scope=data_scope,
+    violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, data_scope=data_scope, lexical=lexical,
                                      undefined_namespace=undefined_namespace, ancestors=ancestors, **kwargs)
     if lexical and engine_name not in _LEXICAL_BUILTIN:
         from . import shacl_pandas
@@ -318,7 +323,7 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
 
     instances = list(data_scope) if data_scope is not None else _instances(data, table_name)
     # one raw engine pass per instance — the presentation pass runs ONCE on the concat
-    frames = [_run(data, compiled, engine_name, engine_mod, None, [instance], False,
+    frames = [_run(data, compiled, engine_name, engine_mod, None, [instance],
                    undefined_namespace=undefined_namespace, **kwargs) for instance in instances]
     violations = (pandas.concat(frames, ignore_index=True) if frames
                   else pandas.DataFrame(columns=VIOLATION_COLUMNS))
@@ -372,7 +377,7 @@ def validate_schema_references(data, rdf_map, data_scope=None, rdf_map_scope=Non
     frames = []
     for instance in sources:
         found = _run(data, compiled, engine_name, engine_mod, None,
-                     [instance, *(target for target in targets if target != instance)], False,
+                     [instance, *(target for target in targets if target != instance)],
                      undefined_namespace=undefined_namespace, **kwargs)
         own = own_triples.get(str(instance), set())
         mask = [triple in own for triple in zip(found["ID"], found["KEY"], found["VALUE"])]
