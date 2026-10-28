@@ -175,6 +175,8 @@ CASES = {
                      breaker("b1", (LEN, "-5.0")) + breaker("b2", (LEN, "1.0")) + breaker("b3", (LEN, "3.0"))),
     "range_non_numeric": (prop("sh:path cim:Conductor.length ; sh:minInclusive 0.0"),
                           breaker("b1", (LEN, "abc")) + breaker("b2", (LEN, "3.0"))),
+    "range_non_numeric_max": (prop("sh:path cim:Conductor.length ; sh:maxInclusive 1.0"),
+                              breaker("b1", (LEN, "abc")) + breaker("b2", (LEN, "3.0")) + breaker("b3", (LEN, "0.5"))),
     "pattern": (prop('sh:path cim:IdentifiedObject.name ; sh:pattern "^B"'),
                 breaker("b1", (NAME, "B1")) + breaker("b2", (NAME, "xB")) + breaker("b3", (NAME, "x"))),
     "pattern_flags": (prop('sh:path cim:IdentifiedObject.name ; sh:pattern "^b" ; sh:flags "i"'),
@@ -448,6 +450,8 @@ XFAIL = {
     **known("N11 sh:deactivated on a sh:sparql constraint ignored, draft pending", "deactivated_sparql_constraint"),
     **known("N12 two sh:message values: the engines report the first declared, pyshacl's reader the first "
             "alphabetically, draft pending", "message_two_values"),
+    **known("N14 a non-numeric value passes every range component on the engines, pyshacl reports it under "
+            "sh:maxInclusive / sh:maxExclusive, draft pending", "range_non_numeric_max"),
 }
 
 
