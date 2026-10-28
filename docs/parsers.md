@@ -280,7 +280,7 @@ DEBUG triplets.parser.cython_pugixml_arrow: [grid_EQ.xml] XML parse: 0:00:00.052
 ## Building the Cython Engine
 
 ```shell
-pixi install -e build
+uv sync --all-extras
 pixi run build-cython-pugixml-arrow
 ```
 

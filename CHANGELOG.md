@@ -485,6 +485,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   CIM100 is only the no-schema fallback. The inverse (`read_nquads`, CONSTRUCT,
   SHACL report) shortens any http(s) `#fragment`, not just CIM100, so CGMES 2.4
   CIM16 round-trips to the same short names as 3.0 (#116).
+- The qlever and cython extensions are built against the uv venv's pyarrow
+  (`uv run --no-sync` inside the pixi task; pixi supplies only the C++
+  toolchain), so one Arrow runtime is loaded. A qlever extension linked against
+  conda's libarrow segfaulted on the first index build under a different wheel
+  pyarrow. The pixi test tasks and the conda pyarrow/test environments are gone:
+  tests run in the uv venv only.
 - Source builds in a conda/pixi environment: the cython extensions link
   `libarrow_python` behind `--no-as-needed`, so the module imports instead of
   failing with undefined `arrow::` symbols (conda toolchains default to

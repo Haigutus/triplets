@@ -12,16 +12,22 @@ submodule first (`setup_cython_parser.py` hard-errors without it):
 git submodule update --init vendor/pugixml
 ```
 
-Then build the cython extension for local development:
+Then build the cython extension for local development. The build runs under
+the uv venv's python and links that venv's pyarrow, so create the venv first
+and rebuild after a pyarrow bump:
 
 ```shell
-# Option 1: pixi (recommended, manages C++ toolchain)
-pixi install -e build
+uv sync --all-extras
+
+# Option 1: pixi (recommended, supplies the C++ toolchain)
 pixi run build-cython-pugixml-arrow
 
-# Option 2: manual (requires Cython, pyarrow, numpy, C++ compiler)
-python setup_cython_parser.py build_ext --inplace
+# Option 2: manual (system C++ compiler)
+uv run --with Cython --with setuptools python setup_cython_parser.py build_ext --inplace
 ```
+
+Tests always run in the uv venv (`uv run pytest -n auto -q`, see
+docs/testing.md); pixi only builds.
 
 Verify:
 ```python
@@ -116,8 +122,8 @@ CPython 3.11–3.14. Arrow shared libraries are NOT bundled — they're provided
 
 The embedded qlever engine (`triplets.sparql._qlever`) ships in **no wheel** — it
 is a local source build only; the pip-installable performance path is the
-`oxigraph` extra. There is no CI for it — verification is the local test task
-below, run before/after any qlever bump.
+`oxigraph` extra. There is no CI for it — verification is the local test run
+below, before/after any qlever bump.
 
 **How the source is pinned.** `vendor/qlever` is a git submodule pointing at the
 fork `https://github.com/Haigutus/qlever.git`, branch `libqlever-parser-injection`
@@ -128,13 +134,16 @@ gitlink; `.gitmodules` carries the fork URL and branch. Re-pin to
 
 **Reproduce the build** (fetch the pinned submodule first; the pixi `qlever`
 environment pins the whole C++ toolchain — compilers, cmake, boost, icu, openssl,
-zstd — via pixi.lock):
+zstd — via pixi.lock). The extension is compiled under the uv venv's python and
+links that venv's pyarrow, so `uv sync` comes first and `build-qlever` is
+re-run after every pyarrow bump:
 
 ```bash
 git submodule update --init vendor/qlever      # checkout the pinned fork commit
+uv sync --all-extras                           # the venv whose pyarrow the extension links
 pixi run -e qlever build-qlever-lib            # one-time qlever static-lib compile (long)
 pixi run -e qlever build-qlever                # build triplets.sparql._qlever
-pixi run -e qlever test-qlever                 # parity tests vs the rdflib engine
+uv run pytest tests/test_sparql_qlever.py tests/test_sparql_qlever_ingest.py -q
 ```
 
 An external checkout can override the source location: resolution order is

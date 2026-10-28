@@ -178,7 +178,7 @@ git submodule update --init vendor/pugixml
 Then build:
 
 ```shell
-pixi install -e build
+uv sync --all-extras
 pixi run build-cython-pugixml-arrow
 ```
 
