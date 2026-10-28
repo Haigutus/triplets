@@ -865,7 +865,7 @@ MALFORMED_OWNER = {
 }
 
 
-@pytest.mark.parametrize("engine_name", ENGINES)
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
 @pytest.mark.parametrize("owner", MALFORMED_OWNER)
 @pytest.mark.parametrize("flaw, reason", [
     ("sh:minCount 1, 2", "two sh:minCount values"),
@@ -904,6 +904,11 @@ MALFORMED_REACHED = {
     "sh:not member": ("""cim:BreakerShape sh:not cim:M .
         cim:M a sh:NodeShape ; sh:xone ( ) .""",
         [f"{CIM}BreakerShape: sh:not member {CIM}M holds a part that was not evaluated", f"{CIM}M: empty sh:xone list"]),
+    "sh:not member below": ("""cim:BreakerShape sh:not cim:M .
+        cim:M a sh:NodeShape ; sh:property cim:P .
+        cim:P sh:path cim:IdentifiedObject.name, cim:IdentifiedObject.aliasName ; sh:minCount 1 .""",
+        [f"{CIM}BreakerShape: sh:not member {CIM}M holds a part that was not evaluated", f"{CIM}P: two sh:path values"]),
+    "untargeted": ("""cim:Orphan a sh:NodeShape ; sh:or ( ) .""", [f"{CIM}Orphan: empty sh:or list"]),
     "two owners": ("""cim:BreakerShape sh:property cim:P .
         cim:OtherShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:P .
         cim:P sh:path cim:IdentifiedObject.name, cim:IdentifiedObject.aliasName ; sh:minCount 1 .""",
@@ -914,14 +919,14 @@ MALFORMED_REACHED = {
 }
 
 
-@pytest.mark.parametrize("engine_name", ENGINES)
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
 @pytest.mark.parametrize("edge", MALFORMED_REACHED)
 def test_malformed_shape_reached(engine_name, edge):
     """A malformed sh:node target or logical member: the row over it is not
     evaluated and named (it would conform, or fire, on every node — bay1 has no
     name, T's property shape would fire on it); a malformed shape under two
     owners is one entry; a declared sh:PropertyShape without sh:path is named
-    as such; the sibling is still reported."""
+    as such, an untargeted malformed shape too; the sibling is still reported."""
     pytest.importorskip(engine_name)
     shapes, skipped = MALFORMED_REACHED[edge]
     compiled = compiled_shapes("""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
@@ -933,7 +938,32 @@ def test_malformed_shape_reached(engine_name, edge):
     assert violations.attrs["validation"]["skipped_shapes"] == skipped
 
 
-@pytest.mark.parametrize("engine_name", ENGINES)
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("path, expressible", [
+    ("cim:IdentifiedObject.name", True),
+    ("[ sh:alternativePath ( cim:IdentifiedObject.name cim:IdentifiedObject.aliasName ) ]", False),
+])
+def test_malformed_part_of_sh_node_target(engine_name, path, expressible):
+    """A sh:node target T with a malformed P and a sibling Q: pyshacl judges T
+    without P (bay1 has no name); so do the vectorized engines when they can
+    express Q, else nothing is left for them and they name the row not evaluated."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes(f"""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ; sh:property cim:C .
+        cim:C sh:path cim:Equipment.EquipmentContainer ; sh:node cim:T .
+        cim:T a sh:NodeShape ; sh:property cim:P, cim:Q .
+        cim:P sh:path cim:IdentifiedObject.name, cim:IdentifiedObject.aliasName ; sh:minCount 1 .
+        cim:Q sh:path {path} ; sh:minCount 1 .""")
+    rows = breaker("b1", ("Equipment.EquipmentContainer", "bay1")) + [("bay1", "Type", "Bay", "eq")]
+    violations = switched_off(rows, compiled, engine_name)
+    evaluated = expressible or engine_name == "pyshacl"
+    node_finding = {("b1", "Equipment.EquipmentContainer")} if evaluated else set()
+    assert set(zip(violations["ID"], violations["KEY"])) == {("b1", "IdentifiedObject.description"), *node_finding}
+    assert violations.attrs["validation"]["skipped_shapes"] == ([f"{CIM}P: two sh:path values"] if evaluated else [
+        f"{CIM}C: sh:node target {CIM}T not evaluated", f"{CIM}P: two sh:path values", f"{CIM}Q: unsupported sh:path form"])
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
 @pytest.mark.parametrize("flaw, reason", [("sh:minCount 1, 2", "two sh:minCount values"),
                                           ("sh:path cim:IdentifiedObject.aliasName", "two sh:path values")])
 def test_malformed_deactivated_shape(engine_name, flaw, reason):

@@ -200,7 +200,14 @@ without sh:path`); the rest compiles and validates. The skip is the malformed
 shape itself: a property shape alone, a node shape with its property shapes; a
 logical operator over it is dropped as over any skipped part, and so is a
 `sh:node` row whose target has nothing left (see below) — both decided at
-compile time. `sh:minInclusive` and the other
+compile time. A malformed shape no targeted shape reaches is listed the same
+way. pyshacl validates a copy of the shapes graph without them: the malformed
+shapes' triples, the references to them, the logical operators the compile
+drops over them and the `sh:node` rows whose target has only malformed parts
+left are removed, and `skipped_shapes` lists the same entries for them as the
+vectorized engines. pyshacl still refuses the graph for a malformed shape
+reached through `sh:qualifiedValueShape` (its owner keeps
+`sh:qualifiedMinCount` / `sh:qualifiedMaxCount` without the shape). `sh:minInclusive` and the other
 range parameters are not in the list: pyshacl evaluates every value.
 
 The logical operators report one row per non-conforming focus node on a node
@@ -260,10 +267,8 @@ and nothing chosen `active()` is the compile itself. Truthiness follows pyshacl
 (`bool(literal.value)`): `true`, a non-empty plain literal — so a plain
 `"false"` deactivates — or a non-zero number; `"false"^^xsd:boolean` and an
 ill-typed literal (no value) do not; a non-literal or a second value makes the
-shape malformed: it is skipped (see above). pyshacl loads a switched-off shape
-with some of the load-check flaws (`sh:deactivated true ; sh:minCount 1, 2`) and
-refuses the graph for others (`sh:deactivated true ; sh:path a, b`); the engines
-skip such a shape with the reason when it is switched on. An id that names no shape in
+shape malformed: it is skipped (see above). A malformed shape switched off is
+not evaluated and not listed; switched on, every engine skips it with the reason. An id that names no shape in
 the graph is logged as a warning. pyshacl validates a copy of the shapes graph
 carrying exactly the chosen set as `sh:deactivated true` when it differs from
 the declared one; the shapes embedded in the SHACL report carry the same flags.
@@ -318,7 +323,7 @@ engines `compiled.active(...)`, the rule set with the switched-off shapes
 already removed; an engine called directly with the full compile validates
 them too.
 
-- **pyshacl** consumes `compiled.graph` (data goes through `_rdflib_loader`);
+- **pyshacl** consumes `compiled.graph` without its malformed shapes (data goes through `_rdflib_loader`);
   `ancestors` becomes its `ont_graph`. Its report keeps the top-level results and
   drops the nested `sh:detail` explanations, one row per finding like the vectorized engines.
   A blank-node `sh:resultPath` (inverse, sequence or alternative path) reads as the KEY it resolves to.
@@ -440,7 +445,7 @@ united, differing values kept as the list of distinct values):
 | `node_shapes` / `constraints` | count of NodeShapes not switched off / distinct constraints of the run's rule set (IR rows that differ only in lineage count once) |
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
 | `inheritance` | whether class inheritance was applied — `validate_shacl`: an rdf_map scope with classes and `inheritance=True`; `validate_schema_references`: the `inheritance` flag |
-| `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); shapes reached only through a `sh:target` without `sh:select`, `sh:rule` shapes (not applied), inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run), logical operators over a member the IR cannot express and `sh:node` rows whose target has nothing left but skipped parts — empty for `engine="pyshacl"` (spec-complete); malformed shapes (the compile's load checks), each with the reason; a shape switched off takes its entries along; association ranges no given profile defines (`validate_schema_references`) |
+| `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); shapes reached only through a `sh:target` without `sh:select`, `sh:rule` shapes (not applied), inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run), logical operators over a member the IR cannot express and `sh:node` rows whose target has nothing left but skipped parts; malformed shapes (the compile's load checks), each with the reason — for `engine="pyshacl"` (spec-complete) only the malformed shapes' entries and the operator / `sh:node` rows dropped over them; a shape switched off takes its entries along; association ranges no given profile defines (`validate_schema_references`) |
 | `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates, and the terms the IR keeps as unimplemented rows (`sh:qualifiedValueShape`, …) |
 

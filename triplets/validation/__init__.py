@@ -467,16 +467,17 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
 
     Coverage (skipped_shapes / skipped_components) is what THIS run did not
     evaluate: the schema merge's skips in *notes* (every engine), compile-level skips
-    plus the engine's own gaps for vectorized engines — none of those for the
-    spec-complete pyshacl reference engine. relaxed_constraints: the merge's
-    loosened checks.
+    plus the engine's own gaps for vectorized engines — only the malformed shapes'
+    entries for the spec-complete pyshacl reference engine. relaxed_constraints: the
+    merge's loosened checks.
     """
     import triplets
 
     finished = datetime.now(timezone.utc)
     notes = notes or {"skipped_shapes": [], "relaxed_constraints": []}
     if engine_name == "pyshacl":
-        skipped_shapes, skipped_components = list(notes["skipped_shapes"]), []
+        skipped_shapes = [*notes["skipped_shapes"], *compiled.stats.get("malformed_shapes", [])]
+        skipped_components = []
     else:
         skipped_shapes = [*notes["skipped_shapes"], *compiled.stats.get("skipped_shapes", [])]
         skipped_components = sorted({*compiled.stats.get("unknown_components", ()),
