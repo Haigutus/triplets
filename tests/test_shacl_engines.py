@@ -315,14 +315,21 @@ def test_sparql_literal_values_keep_leading_underscore(engine):
 
 
 def test_sparql_max_workers_matches_sequential(engine):
-    import rdflib
-    graph = rdflib.Graph()
-    graph.parse(data=PREFIX + SPARQL_SHAPE, format="turtle")
-    data = pandas.DataFrame(breaker("b1", ("Switch.state", "bad")) + breaker("b2", ("Switch.state", "open")),
-                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    sequential = triplets.validation.validate_shacl(data, graph, engine=engine)
-    parallel = triplets.validation.validate_shacl(data, graph, engine=engine, max_workers=2)
-    assert violating(parallel, "sh:sparql") == violating(sequential, "sh:sparql") == {("b1", "bad")}
+    """max_workers runs every sh:sparql rule after the first on the pool (threads
+    for qlever/oxigraph, forked processes for rdflib) with the sequential result."""
+    shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:Switch.state ;
+            sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "bad") }' ] ;
+            sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "broken") }' ] ;
+            sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "stuck") }' ] ;
+        ] ."""
+    rows = (breaker("b1", ("Switch.state", "bad")) + breaker("b2", ("Switch.state", "broken"))
+            + breaker("b3", ("Switch.state", "stuck")) + breaker("b4", ("Switch.state", "open")))
+    sequential = run(rows, shape, engine)
+    parallel = run(rows, shape, engine, max_workers=2)
+    assert (violating(parallel, "sh:sparql") == violating(sequential, "sh:sparql")
+            == {("b1", "bad"), ("b2", "broken"), ("b3", "stuck")})
+    assert "triplets:invalidSparql" not in set(parallel["VIOLATION_TYPE"])
 
 
 NODE_SHAPE = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
