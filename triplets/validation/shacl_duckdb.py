@@ -30,7 +30,7 @@ from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, value_types
 from . import shacl_pandas
-from .shacl_pandas import DATATYPES
+from .shacl_pandas import datatype_patterns
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ def _max_count(rule, table, context):
 
 def _datatype(rule, table, context):
     """Two-level lexical check (same deviation as the other vectorized engines)."""
-    spec = DATATYPES.get(str(rule.params).removeprefix("xsd:"))
+    spec = datatype_patterns(rule.params, context.lexical)
     if spec is None:
         return None
     valid_pattern, warn_pattern = spec
@@ -300,10 +300,12 @@ SQL_BUILDERS = {
 
 
 class _Context:
-    """Schema-driven term-kind decisions (shared with the other vectorized engines)."""
+    """Schema-driven term-kind decisions and the lexical flag (shared with the
+    other vectorized engines)."""
 
-    def __init__(self, rdf_map):
+    def __init__(self, rdf_map, lexical=True):
         self.rdf_map = rdf_map
+        self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
 
 
@@ -334,7 +336,8 @@ def _create_targets_table(connection, targets):
 
 
 def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
-             table=None, schema=None, table_name=None, undefined_namespace=CIM_NS, ancestors=None, **kwargs):
+             table=None, schema=None, table_name=None, undefined_namespace=CIM_NS, ancestors=None, lexical=True,
+             **kwargs):
     """Validate triplet data against the compiled constraint table (DuckDB SQL).
 
     Parameters mirror shacl_pandas.validate, plus:
@@ -366,7 +369,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         targets, notes = shacl_pandas.sparql_targets(frame, sparql_rules, rdf_map=rdf_map,
                                                      undefined_namespace=undefined_namespace)
         _create_targets_table(connection, targets)
-    context = _Context(rdf_map)
+    context = _Context(rdf_map, lexical)
     built = [statement for rule in vectorized
              if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]
 
@@ -393,7 +396,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
                                            max_workers=max_workers, undefined_namespace=undefined_namespace,
-                                           ancestors=ancestors, **kwargs)
+                                           ancestors=ancestors, lexical=lexical, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     # don't leave them on the caller's connection
     connection.execute("DROP TABLE IF EXISTS _shacl_types")

@@ -250,10 +250,12 @@ def test_component_registries_agree():
     assert shacl_ir.FALLBACK_COMPONENTS <= known
     # pyshacl's report vocabulary covers the SHACL components, plus the ones only
     # pyshacl evaluates; triplets:range and triplets:missing are schema-validation-only
-    # (never emitted by pyshacl)
+    # (never emitted by pyshacl), and sh:property findings carry the nested
+    # property shapes' own components
     pyshacl_only = {"sh:qualifiedMinCount", "sh:qualifiedMaxCount", "sh:qualifiedValueShape",
                     "sh:uniqueLang", "sh:languageIn"}
-    assert set(shacl_report._COMPONENT_MAP.values()) - pyshacl_only == known - {"triplets:range", "triplets:missing"}
+    assert set(shacl_report._COMPONENT_MAP.values()) - pyshacl_only == known - {
+        "triplets:range", "triplets:missing", "sh:property"}
 
     if importlib.util.find_spec("polars"):
         from triplets.validation import shacl_polars
@@ -550,16 +552,18 @@ cim:C a sh:NodeShape ; sh:closed true ;
 
 def test_node_level_value_constraints_are_skipped():
     """sh:in / sh:class on a node shape judge the focus node itself: no row, an
-    entry in skipped_shapes, and an operator over such a member is dropped."""
+    entry in skipped_shapes, and an operator over such a member is dropped, as
+    is a sh:node row whose target has nothing else."""
     compiled = compile_shapes(_graph("""
 cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:in ( cim:x ) ;
     sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:T ] ;
     sh:or ( [ sh:class cim:Breaker ] [ sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ] ) .
 cim:T a sh:NodeShape ; sh:class cim:VoltageLevel ."""))
-    assert [(row["component"], row["params"]["rows"]) for row in compiled.ir.to_dict("records")] == [("sh:node", [])]
+    assert compiled.ir.empty
     skipped = compiled.stats["skipped_shapes"]
     assert CIM + "N: node-level sh:in not evaluated" in skipped
     assert CIM + "T: node-level sh:class not evaluated" in skipped
+    assert any(entry.endswith(f": sh:node target {CIM}T not evaluated") for entry in skipped)
     assert any(entry.startswith(CIM + "N: sh:or member ") and "holds a part that was not evaluated" in entry for entry in skipped)
 
 
@@ -591,6 +595,86 @@ def test_xone_compiles_like_or():
     assert compiled.active([CIM + "M"]).ir["params"][0][1] == []     # a switched-off member empties
     assert compiled.stats["skipped_shapes"] == []
 
+
+
+def test_every_parameter_value_compiles_to_a_row():
+    """Each value of a repeatable parameter is a constraint of its own (#163)."""
+    compiled = compile_shapes(_graph("""
+cim:Named a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+cim:Desc a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:node cim:Named, cim:Desc ;
+    sh:or ( cim:Named ), ( cim:Desc ) ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:pattern "^B", "1$" ] ."""))
+    rows = compiled.ir
+    assert sorted(params["shape"] for params in rows.loc[rows["component"] == "sh:node", "params"]) == ["Desc", "Named"]
+    assert sorted(params[0][0]["path"] for params in rows.loc[rows["component"] == "sh:or", "params"]) == [
+        "IdentifiedObject.description", "IdentifiedObject.name"]
+    assert sorted(rows.loc[rows["component"] == "sh:pattern", "params"]) == ["1$", "^B"]
+
+
+@pytest.mark.parametrize("operator", ["or", "and", "xone"])
+def test_empty_member_list_skips_the_node_shape(operator):
+    """An empty sh:or / sh:and / sh:xone list (pyshacl: ShapeLoadError): the node
+    shape holding it is skipped with its property shapes, the others compile."""
+    compiled = compile_shapes(_graph(f"""
+cim:E a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:{operator} ( ) ;
+    sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""))
+    assert {shapes[0] for shapes in compiled.ir["shapes"]} == {CIM + "N"}
+    assert compiled.stats["skipped_shapes"] == [f"{CIM}E: empty sh:{operator} list"]
+
+
+def test_member_with_its_own_path_under_a_path_judges_the_value_nodes():
+    """Under a path, a member with its own sh:path compiles to a sh:node row of
+    the parent path: its rows run on the value nodes (#166)."""
+    compiled = compile_shapes(_graph("""cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:or ( cim:M ) ] .
+        cim:M sh:path cim:IdentifiedObject.name ; sh:minCount 1 ."""))
+    ((wrapper,),) = compiled.ir["params"][0]
+    assert (wrapper["component"], wrapper["path"], wrapper["params"]["shape"]) == (
+        "sh:node", "Equipment.EquipmentContainer", "M")
+    assert [(row["component"], row["path"]) for row in wrapper["params"]["rows"]] == [
+        ("sh:minCount", "IdentifiedObject.name")]
+    assert compiled.active([CIM + "M"]).ir["params"][0] == [[{**wrapper, "params": {"shape": "M", "rows": []}}]]
+
+
+def test_property_on_a_property_shape_compiles_by_context():
+    """sh:property on a property shape: reached from the targeted NodeShape it
+    is a sh:property row (its rows report on the value nodes); below a sh:node
+    target or a logical member it stays a sh:node conformance row."""
+    on_value = "sh:path cim:Equipment.EquipmentContainer ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]"
+    compiled = compile_shapes(_graph(f"""
+cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property [ {on_value} ] ; sh:node cim:X ;
+    sh:or ( [ {on_value} ] ) .
+cim:X a sh:NodeShape ; sh:property [ {on_value} ] ."""))
+    rows = compiled.ir.set_index("component")
+    direct = rows.loc["sh:property"]
+    assert direct["path"] == "Equipment.EquipmentContainer"
+    assert [(row["component"], row["path"]) for row in direct["params"]["rows"]] == [("sh:minCount", "IdentifiedObject.name")]
+    for nested in (rows.loc["sh:node", "params"]["rows"], rows.loc["sh:or", "params"][0]):
+        assert [(row["component"], row["path"]) for row in nested] == [("sh:node", "Equipment.EquipmentContainer")]
+
+
+@pytest.mark.parametrize("term, values", [
+    ("minCount", "1, 2"), ("maxCount", "1, 2"), ("datatype", "xsd:float, xsd:integer"), ("nodeKind", "sh:IRI, sh:Literal"),
+    ("in", '( "a" ), ( "b" )'), ("minLength", "1, 2"), ("maxLength", "1, 2"), ("closed", "true, false"),
+    ("path", "cim:IdentifiedObject.name, cim:IdentifiedObject.description"), ("deactivated", "true, false"),
+    ("uniqueLang", "true, false"), ("languageIn", '( "en" ), ( "de" )'), ("qualifiedMinCount", "1, 2"),
+    ("qualifiedMaxCount", "1, 2"),
+])
+def test_single_value_parameter_given_twice_skips_the_property_shape(term, values):
+    """A parameter pyshacl takes once, given twice (pyshacl: ConstraintLoadError /
+    ShapeLoadError): that property shape is skipped with a reason, the node
+    shape's other property shape compiles."""
+    path = "" if term == "path" else "sh:path cim:IdentifiedObject.name ;"
+    compiled = compile_shapes(_graph(f"""cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property cim:P, [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .
+cim:P {path} sh:{term} {values} ."""))
+    assert list(zip(compiled.ir["component"], compiled.ir["path"])) == [("sh:minCount", "IdentifiedObject.description")]
+    kind = "lists" if term in ("in", "languageIn") else "values"
+    assert compiled.stats["skipped_shapes"] == [f"{CIM}P: two sh:{term} {kind}"]
+    assert compiled.deactivated == frozenset()
 
 CGMES_DY_COMPLEX = CGMES_SHACL_DIR / "61970-302_Dynamics-AP-Con-Complex-SHACL.ttl"
 
