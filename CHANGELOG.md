@@ -101,12 +101,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   declared, `[]` = run everything) before any engine runs (node, property and
   standalone property shapes, `sh:node` targets, logical members; paths stay
   declared under `sh:closed`; truthiness as pyshacl, a plain `"false"`
-  deactivates, an ill-typed literal does not, a non-literal or second value
-  raises ValueError). pyshacl and the SHACL report's embedded shapes receive
-  the same set; the run metadata lists it as `deactivated_shapes` next to the
+  deactivates, an ill-typed literal does not, a shape with a non-literal or
+  second value is skipped as malformed). pyshacl and the SHACL report's embedded
+  shapes receive the same set; the run metadata lists it as `deactivated_shapes` next to the
   shape files' `compiled_hash`. One compiled base serves the NC validation
   aggregates that switch different shapes off.
   IR rows carry their lineage in a `shapes` column.
+- Tests: the CGMES 2.4 Enhanced SHACL shapes come from the new
+  `test_data/application-profiles-library-cgmes-v2-4` submodule
+  (entsoe/application-profiles-library, branch `cgmes-v2-4`). Every file
+  compiles and loads in pyshacl; the RealGrid EQ / SSH / TP / SV instances are
+  validated against them (exact types, `inheritance=False`) with the same
+  findings on pandas, polars, duckdb and pyshacl (pyshacl on SV by default,
+  the rest under `-m performance`).
 
 ### Changed
 - **Breaking — IR columns renamed**: `target_kind` → `target_by` (`"Type"` for
@@ -310,6 +317,39 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   alternative path) reads as the KEY it resolves to, not the blank-node label; the
   qualified-value, `sh:uniqueLang` and `sh:languageIn` components read as `sh:qualifiedMinCount`
   etc.
+- **Every value of a repeatable SHACL parameter is evaluated** on polars, pandas and
+  duckdb: a second `sh:node` shape, `sh:or` / `sh:and` / `sh:xone` list, `sh:not`
+  shape or `sh:pattern` / `sh:class` / `sh:hasValue` value was dropped without a
+  warning; each value is now a constraint of its own, as in pyshacl
+  ([#163](https://github.com/Haigutus/triplets/issues/163)).
+- **A malformed shape is skipped, the rest validates** on polars, pandas, duckdb and pyshacl:
+  a shape that fails one of these load checks — a parameter taken once (`sh:path`,
+  `sh:minCount`, `sh:maxCount`, `sh:datatype`, `sh:nodeKind`, `sh:in`, `sh:minLength`,
+  `sh:maxLength`, `sh:closed`, `sh:deactivated`, `sh:uniqueLang`, `sh:languageIn`,
+  `sh:qualifiedMinCount`, `sh:qualifiedMaxCount`) given twice, an empty `sh:or` /
+  `sh:and` / `sh:xone` list, a non-literal `sh:deactivated`, `sh:ignoredProperties`
+  without `sh:closed`, a declared `sh:PropertyShape` without `sh:path` — is named in
+  `skipped_shapes` with the reason (an untargeted one too) and not evaluated; the vectorized engines evaluated
+  it (polars merged two `sh:in` lists into one), pyshacl refused the whole shapes graph.
+  A logical operator over a malformed shape is dropped and named, as over any skipped
+  part; a `sh:node` row whose target has nothing left but skipped parts is too (it
+  conformed on every node).
+- **`sh:closed` allows the properties of every `sh:ignoredProperties` list** on
+  polars, pandas and duckdb, as pyshacl; one of two lists was read and the
+  properties of the other were reported. A property shape skipped for two
+  `sh:path` values keeps both paths declared.
+- **`sh:and` reports one row per non-conforming focus node** (node shape, no `KEY`)
+  **or value node** (property shape), with the operator's shape, severity and
+  message — it listed every nested finding with the nested `KEY` and shape
+  ([#164](https://github.com/Haigutus/triplets/issues/164)).
+- **A `sh:or` / `sh:and` / `sh:xone` / `sh:not` member with its own `sh:path`
+  inside a property shape is checked on the value nodes**, not on the focus node:
+  the engines flagged the wrong focus ([#166](https://github.com/Haigutus/triplets/issues/166)).
+- **`sh:property` on a property shape reports the inner constraint on the value
+  node** (SHACL §4.7.2), as pyshacl: it was one `sh:node` row on the referring
+  focus. Under a `sh:node` target or a logical member the property shape is still
+  judged as a whole (one `sh:node` row per value node). New IR component
+  `sh:property`.
 - `sh:node` on a node shape is evaluated by the polars, pandas and duckdb engines: one
   `sh:node` finding per non-conforming focus node, as pyshacl
   ([#160](https://github.com/Haigutus/triplets/issues/160)).

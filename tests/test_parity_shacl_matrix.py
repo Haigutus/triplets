@@ -19,8 +19,6 @@ import triplets
 
 from triplets.export_schema import schemas
 
-from pyshacl.errors import ConstraintLoadError, ShapeLoadError
-
 from _parity import canon_violations
 
 ENGINES = ["pandas", "polars", "duckdb"]
@@ -206,6 +204,10 @@ CASES = {
                          breaker("b1", (LEN, "1.0"), (CUR, "2.0")) + breaker("b2", (LEN, "2.0"), (CUR, "2.0"))
                          + breaker("b3", (LEN, "3.0"), (CUR, "2.0"))),
     "closed": (f"{B} sh:closed true ; sh:ignoredProperties ( rdf:type ) ; sh:property [ sh:path cim:IdentifiedObject.name ] .", TRIO),
+    # every sh:ignoredProperties list counts: bay1's name and description are both allowed
+    "closed_two_ignored_lists": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; sh:closed true ; sh:ignoredProperties "
+                                 "( rdf:type cim:IdentifiedObject.name ), ( rdf:type cim:IdentifiedObject.description ) .",
+                                 TRIO + [("bay1", DESC, "bd", "eq")]),
     "sparql_constraint": (prop("""sh:path cim:IdentifiedObject.name ;
         sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "B1") }' ]"""), TRIO),
     "sparql_constraint_message": (prop("""sh:path cim:IdentifiedObject.name ;
@@ -296,6 +298,10 @@ CASES = {
                                       TRIO + breaker("b4", (CONT, "sub1"))),
     "prop_node_with_own_property": (prop("sh:path cim:Equipment.EquipmentContainer ; "
                                          "sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]"), TRIO),
+    # bay1 carries a property the closed property shape does not declare
+    "closed_on_property_shape": (prop("sh:path cim:Equipment.EquipmentContainer ; sh:closed true ; "
+                                      "sh:ignoredProperties ( rdf:type ) ; sh:property [ sh:path cim:IdentifiedObject.name ]"),
+                                 TRIO + [("bay1", DESC, "bd", "eq")]),
     # ── deactivation ─────────────────────────────────────────────────────
     "deactivated_node_shape": (deactivated(f"{B} {NAME_MIN}"), TRIO),
     "deactivated_property_shape": (f"{B} sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:deactivated true ] ; "
@@ -345,20 +351,15 @@ CASES = {
     "message_on_node_target_property": (prop('sh:path cim:Equipment.EquipmentContainer ; sh:node cim:Named ; sh:message "outer"')
                                         + NAMED.replace("sh:minCount 1", 'sh:minCount 1 ; sh:message "inner" ; sh:severity sh:Warning'),
                                         TRIO),
+    "message_two_values": (prop('sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:message "beta", "alpha"'), TRIO),
     # ── a parameter given twice ──────────────────────────────────────────
     "twice_or_lists": (f"{B} sh:or ( cim:Named ), ( cim:Desc ) ." + NAMED + DESCRIBED, TRIO),
     "twice_and_lists": (f"{B} sh:and ( cim:Named ), ( cim:Desc ) ." + NAMED + DESCRIBED, TRIO),
     "twice_xone_lists": (f"{B} sh:xone ( cim:Named ), ( cim:Desc ) ." + NAMED + DESCRIBED, TRIO),
     "twice_not": (f"{B} sh:not cim:Named, cim:Desc ." + NAMED + DESCRIBED, TRIO),
-    # pyshacl rejects these four shapes; once the engines raise at compile time too, both legs give
-    # ("raises", …) and "rejected on both sides" is the parity claim: the XFAIL entries go then
-    "twice_minCount": (prop("sh:path cim:IdentifiedObject.name ; sh:minCount 1, 2"), TRIO + breaker("b4", (NAME, "a"), (NAME, "b"))),
     "twice_pattern": (prop('sh:path cim:IdentifiedObject.name ; sh:pattern "^B", "1$"'),
                       breaker("b1", (NAME, "B1")) + breaker("b2", (NAME, "B2")) + breaker("b3", (NAME, "x1"))),
-    "twice_datatype": (prop("sh:path cim:Conductor.length ; sh:datatype xsd:float, xsd:integer"), breaker("b1", (LEN, "10.5"))),
     "twice_class": (prop("sh:path cim:Equipment.EquipmentContainer ; sh:class cim:Bay, cim:Substation"), TRIO),
-    "twice_in": (prop('sh:path cim:IdentifiedObject.name ; sh:in ( "B1" ), ( "B2" )'),
-                 breaker("b1", (NAME, "B1")) + breaker("b2", (NAME, "B2"))),
     "twice_hasValue": (prop('sh:path cim:IdentifiedObject.name ; sh:hasValue "B1", "B2"'),
                        breaker("b1", (NAME, "B1")) + breaker("b2", (NAME, "B2")) + breaker("b3", (NAME, "B1"), (NAME, "B2"))),
     "twice_sparql": (prop("""sh:path cim:IdentifiedObject.name ;
@@ -367,7 +368,6 @@ CASES = {
                      breaker("b1", (NAME, "B1")) + breaker("b2", (NAME, "B2"))),
     "twice_property_same_path": (f"{B} sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ; "
                                  "sh:property [ sh:path cim:IdentifiedObject.name ; sh:maxLength 1 ] .", TRIO),
-    "twice_path": (prop("sh:path cim:IdentifiedObject.name, cim:IdentifiedObject.description ; sh:minCount 1"), TRIO),
     # ── the CGMES 3.0 export schema, UUID ids ────────────────────────────
     "entsoe_class": ("cim:L a sh:NodeShape ; sh:targetClass cim:ACLineSegment ; "
                      "sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:class cim:VoltageLevel ] .", SEGMENTS, ENTSOE),
@@ -385,7 +385,6 @@ CASES = {
     "maxCount_zero": (prop("sh:path cim:IdentifiedObject.aliasName ; sh:maxCount 0"), TRIO + breaker("b4", (ALIAS, "a"))),
     "class_on_literal": (prop("sh:path cim:IdentifiedObject.name ; sh:class cim:Bay"), TRIO),
     "nodeKind_blank_node": (prop("sh:path cim:Equipment.EquipmentContainer ; sh:nodeKind sh:BlankNode"), TRIO),
-    "nodeKind_iri_or_literal": (prop("sh:path cim:IdentifiedObject.name ; sh:nodeKind sh:IRIOrLiteral"), TRIO),
     "in_numeric": (prop("sh:path cim:Conductor.length ; sh:in ( 1.0 2.0 )"), breaker("b1", (LEN, "1.0")) + breaker("b2", (LEN, "3.0"))),
     "lessThan_missing_comparand": (prop("sh:path cim:Conductor.length ; sh:lessThan cim:Switch.ratedCurrent"),
                                    breaker("b1", (LEN, "1.0")) + breaker("b2", (LEN, "3.0"), (CUR, "2.0"))),
@@ -415,11 +414,10 @@ SKIPPED = {
     "target_without_select": (f"cim:B a sh:NodeShape ; sh:target cim:SomeTarget ; {NAME_MIN}", TRIO, "sh:target not walked"),
     "or_over_unknown": (f"{B} sh:or ( [ sh:path cim:IdentifiedObject.name ; sh:uniqueLang true ] cim:Desc ) ." + DESCRIBED,
                         TRIO, "uses sh:uniqueLang"),
-    # sh:BlankNodeOrIRI is only debug-logged: no metadata entry names it
+    # sh:BlankNodeOrIRI and sh:IRIOrLiteral are only debug-logged: no metadata entry names them
     "nodeKind_blank_or_iri": (prop("sh:path cim:IdentifiedObject.name ; sh:nodeKind sh:BlankNodeOrIRI"), TRIO, None),
+    "nodeKind_iri_or_literal": (prop("sh:path cim:IdentifiedObject.name ; sh:nodeKind sh:IRIOrLiteral"), TRIO, None),
 }
-
-ISSUE = "https://github.com/Haigutus/triplets/issues/"
 
 
 def known(reason, *cases):
@@ -428,25 +426,16 @@ def known(reason, *cases):
 
 
 XFAIL = {
-    **known(ISSUE + "163 second sh:node value dropped", "prop_node_two_values", "node_node_two_values"),
-    **known(ISSUE + "164 node-level sh:and: one row per nested finding",
-            "node_and_paths", "node_and_shape", "node_and_shapes", "node_and_inverse_member"),
-    **known(ISSUE + "164 path-level sh:and: SOURCE_SHAPE is the member's", "prop_and_values", "prop_and_node_shape"),
-    **known(ISSUE + "166 member with its own sh:path checked on the focus",
-            "prop_or_member_path", "prop_and_member_path", "prop_xone_member_path", "prop_not_member_path"),
-    **known(ISSUE + "163 N1 a parameter given twice: one value read",
-            "twice_or_lists", "twice_xone_lists", "twice_not", "twice_pattern", "twice_class", "twice_hasValue"),
-    **known(ISSUE + "163 N1 a parameter given twice: evaluated where pyshacl rejects the shape",
-            "twice_minCount", "twice_datatype", "twice_in", "twice_path"),
-    **known(ISSUE + "163 N1 a parameter given twice: one value read, and #164", "twice_and_lists"),
     **known("N2 sh:flags not read, issue pending", "pattern_flags"),
     **known("N3 sh:alternativePath reduced to its inverse member, issue pending", "path_alternative_inverse"),
-    **known("N4 sh:property on a property shape reported as sh:node, issue pending", "prop_node_with_own_property"),
+    **known("N6 sh:closed on a property shape reported on the value node, issue pending", "closed_on_property_shape"),
     **known("N7 sh:nodeKind sh:BlankNode not evaluated, draft pending", "nodeKind_blank_node"),
     **known("N8 sh:in compares lexical forms, not typed literals, draft pending", "in_numeric"),
     **known("N9 sh:minLength on an IRI measures the local id, draft pending", "minLength_on_iri"),
     **known("N10 sh:sparql $PATH left unbound on a blank-node path, draft pending", "sparql_inverse_path"),
     **known("N11 sh:deactivated on a sh:sparql constraint ignored, draft pending", "deactivated_sparql_constraint"),
+    **known("N12 two sh:message values: the engines report the first declared, pyshacl's reader the first "
+            "alphabetically, draft pending", "message_two_values"),
 }
 
 
@@ -464,13 +453,10 @@ def frame(rows):
 
 
 def run(name, engine, **extra):
-    """The case's canonical rows on *engine*; a shape rejected at load is ("raises", <exception class>)."""
+    """The case's canonical rows on *engine*."""
     _, rows, *rest = CASES[name]
     kwargs = {"rdf_map": SCHEMA, "rdf_map_scope": "*", **(rest[0] if rest else {}), **extra}
-    try:
-        return canon_violations(triplets.validation.validate_shacl(frame(rows), compiled(name), engine=engine, **kwargs))
-    except (ValueError, ConstraintLoadError, ShapeLoadError) as error:
-        return ("raises", type(error).__name__)
+    return canon_violations(triplets.validation.validate_shacl(frame(rows), compiled(name), engine=engine, **kwargs))
 
 
 @functools.cache

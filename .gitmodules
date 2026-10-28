@@ -18,3 +18,7 @@
 [submodule "test_data/CGMES-AP"]
 	path = test_data/CGMES-AP
 	url = https://github.com/entsoe/CGMES-AP
+[submodule "test_data/application-profiles-library-cgmes-v2-4"]
+	path = test_data/application-profiles-library-cgmes-v2-4
+	url = https://github.com/entsoe/application-profiles-library
+	branch = cgmes-v2-4

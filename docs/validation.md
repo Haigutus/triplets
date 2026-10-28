@@ -176,17 +176,48 @@ registries that consume it are internal.
 | `sh:minInclusive` `sh:maxInclusive` `sh:minExclusive` `sh:maxExclusive` | float (integer bounds are coerced) |
 | `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern`, `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str |
 | `sh:in` | list[str] (IRIs shortened to local names) |
-| `sh:closed` | list[str] — the **fully resolved** allowed KEY list: `sh:ignoredProperties` + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included) |
+| `sh:closed` | list[str] — the **fully resolved** allowed KEY list: every `sh:ignoredProperties` list + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included) |
 | `sh:or` / `sh:and` / `sh:xone` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
 | `sh:not` | list[dict] — nested IR row dicts |
-| `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time, run against the value nodes (the focus node on a node shape); also a logical member with its own `sh:property` under a path (its value nodes must conform) |
+| `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time, run against the value nodes (the focus node on a node shape); one finding per non-conforming value node |
+| `sh:property` | `{"shape": local name, "rows": [nested IR row dicts]}` — a property shape's own property shapes (and its `sh:closed`), run against its value nodes; their findings are reported as they are, with the value node as `ID` |
 | `sh:sparql` | `{"select": SELECT text with `$this`/`$PATH` placeholders, "prefixes": resolved `PREFIX` header, "path": full IRI of the owning `sh:path` or None}` |
 
-In a property shape, a nested `sh:or` / `sh:and` / `sh:xone` / `sh:not` shape
-without its own `sh:path` takes the property's path: it judges each value node,
-and `sh:or` / `sh:xone` / `sh:not` report per value (`VALUE` = the value node).
-`sh:xone` holds when exactly one alternative does; an empty (switched-off)
-alternative holds for every node.
+Each value of a parameter is a constraint of its own (SHACL §4.1): two
+`sh:node` shapes, two `sh:or` lists or two `sh:pattern` values compile to two
+rows. One malformed shape does not stop the validation of the others. The
+compile runs these load checks, each one pyshacl refuses the whole shapes graph
+for (`ConstraintLoadError` / `ShapeLoadError`): a parameter taken once
+(`sh:path`, `sh:minCount`, `sh:maxCount`, `sh:datatype`, `sh:nodeKind`,
+`sh:in`, `sh:minLength`, `sh:maxLength`, `sh:closed`, `sh:deactivated`,
+`sh:uniqueLang`, `sh:languageIn`, `sh:qualifiedMinCount`,
+`sh:qualifiedMaxCount`) given twice, an empty `sh:or` / `sh:and` / `sh:xone`
+list, a non-literal `sh:deactivated`, `sh:ignoredProperties` without
+`sh:closed`, a declared `sh:PropertyShape` without `sh:path`. A shape that
+fails one is skipped and named in `skipped_shapes` with the reason (`two
+sh:path values`, `two sh:in lists`, `empty sh:or list`, `sh:PropertyShape
+without sh:path`); the rest compiles and validates. The skip is the malformed
+shape itself: a property shape alone, a node shape with its property shapes; a
+logical operator over it is dropped as over any skipped part, and so is a
+`sh:node` row whose target has nothing left (see below) — both decided at
+compile time. A malformed shape no targeted shape reaches is listed the same
+way. pyshacl validates a copy of the shapes graph without them: the malformed
+shapes' triples, the references to them, the logical operators the compile
+drops over them and the `sh:node` rows whose target has only malformed parts
+left are removed, and `skipped_shapes` lists the same entries for them as the
+vectorized engines. pyshacl still refuses the graph for a malformed shape
+reached through `sh:qualifiedValueShape` (its owner keeps
+`sh:qualifiedMinCount` / `sh:qualifiedMaxCount` without the shape). `sh:minInclusive` and the other
+range parameters are not in the list: pyshacl evaluates every value.
+
+The logical operators report one row per non-conforming focus node on a node
+shape (no `KEY`) and one per non-conforming value node in a property shape
+(`VALUE` = the value node), with the operator's shape, severity and message.
+In a property shape, a member without its own `sh:path` takes the property's
+path; a member with its own `sh:path` is a property shape over the value nodes
+(it compiles to a `sh:node` row of the property's path). `sh:and` holds when
+every member does, `sh:xone` when exactly one alternative does; an empty
+(switched-off) alternative holds for every node.
 
 Compile-time behaviors worth knowing: a NodeShape with several `sh:targetClass`
 (the ENTSO-E profiles do this) emits every row once per target class; shape
@@ -200,7 +231,12 @@ skips the property shape — pyshacl covers it). One walker compiles every shape
 `sh:sparql`, `sh:node` and the logical operators on the NodeShape itself judge
 its focus nodes; a
 member or referenced shape with its own `sh:property` judges the same focus at
-node level and, under a path, the value nodes (a `sh:node`-style row).
+node level. A property shape with its own `sh:property` runs those property
+shapes on its value nodes: below a `sh:node` target or a logical member (a
+shape judged for conformance) as a `sh:node` row — one finding per
+non-conforming value node, on the referring focus (SHACL §4.7.1); reached from
+the targeted NodeShape through `sh:property` only, as a `sh:property` row whose
+property shapes report their own findings on the value nodes (§4.7.2).
 
 Terms no engine implements (`sh:qualifiedValueShape`, `sh:qualifiedMinCount`,
 `sh:qualifiedMaxCount`, `sh:uniqueLang`, `sh:languageIn`) compile to rows with
@@ -212,7 +248,10 @@ evaluated at all (judging the expressible part would fire on every focus
 node): the row is dropped and named in `skipped_shapes`, the shape's other
 constraints still run. A value constraint declared on a node shape itself
 (`sh:class`, `sh:in`, `sh:datatype`, … judging the focus node) is not
-evaluated by the vectorized engines and is named in `skipped_shapes`.
+evaluated by the vectorized engines and is named in `skipped_shapes`. A
+`sh:node` row whose target has nothing left but skipped parts would conform on
+every node: it is dropped and named the same way (`<shape>: sh:node target
+<target> not evaluated`).
 
 Every shape compiles, `sh:deactivated` or not. `compiled.deactivated` lists the
 shapes the graph declares `sh:deactivated`; `compiled.active(deactivated_shapes)`
@@ -227,8 +266,9 @@ the one compile: the compile's `hash`, its own `plans`; with nothing declared
 and nothing chosen `active()` is the compile itself. Truthiness follows pyshacl
 (`bool(literal.value)`): `true`, a non-empty plain literal — so a plain
 `"false"` deactivates — or a non-zero number; `"false"^^xsd:boolean` and an
-ill-typed literal (no value) do not; a non-literal or a second value raises
-ValueError at compile (pyshacl: `ShapeLoadError`). An id that names no shape in
+ill-typed literal (no value) do not; a non-literal or a second value makes the
+shape malformed: it is skipped (see above). A malformed shape switched off is
+not evaluated and not listed; switched on, every engine skips it with the reason. An id that names no shape in
 the graph is logged as a warning. pyshacl validates a copy of the shapes graph
 carrying exactly the chosen set as `sh:deactivated true` when it differs from
 the declared one; the shapes embedded in the SHACL report carry the same flags.
@@ -243,17 +283,17 @@ the same shapes never recompiles anything.
 
 ### Component coverage per engine
 
-The shared contract lives in `shacl_ir`: `KNOWN_COMPONENTS` (all 25 keys) and
-`FALLBACK_COMPONENTS` (`sh:or/and/xone/not/node/sparql` — the nested/query components
+The shared contract lives in `shacl_ir`: `KNOWN_COMPONENTS` (all 26 keys) and
+`FALLBACK_COMPONENTS` (`sh:or/and/xone/not/node/property/sparql` — the nested/query components
 every vectorized engine delegates to the pandas implementations via
 `split_rules`). A test (`test_shacl_ir.py::test_component_registries_agree`)
 pins the registries together:
 
 | engine | registry | coverage |
 |--------|----------|----------|
-| pandas | `CONSTRAINT_VALIDATORS` | all 25 (the fallback target) |
-| polars | `PLAN_BUILDERS` (+ `BATCH_BUILDERS` fast path) | 19 vectorized + 6 delegated |
-| duckdb | `SQL_BUILDERS` | 19 vectorized + 6 delegated |
+| pandas | `CONSTRAINT_VALIDATORS` | all 26 (the fallback target) |
+| polars | `PLAN_BUILDERS` (+ `BATCH_BUILDERS` fast path) | 19 vectorized + 7 delegated |
+| duckdb | `SQL_BUILDERS` | 19 vectorized + 7 delegated |
 | pyshacl | consumes `compiled.graph`, not the IR | full spec; report vocabulary mapped back via `shacl_report._COMPONENT_MAP` |
 
 The compile cache participates in the shared engine-state lifecycle:
@@ -283,7 +323,7 @@ engines `compiled.active(...)`, the rule set with the switched-off shapes
 already removed; an engine called directly with the full compile validates
 them too.
 
-- **pyshacl** consumes `compiled.graph` (data goes through `_rdflib_loader`);
+- **pyshacl** consumes `compiled.graph` without its malformed shapes (data goes through `_rdflib_loader`);
   `ancestors` becomes its `ont_graph`. Its report keeps the top-level results and
   drops the nested `sh:detail` explanations, one row per finding like the vectorized engines.
   A blank-node `sh:resultPath` (inverse, sequence or alternative path) reads as the KEY it resolves to.
@@ -405,7 +445,7 @@ united, differing values kept as the list of distinct values):
 | `node_shapes` / `constraints` | count of NodeShapes not switched off / distinct constraints of the run's rule set (IR rows that differ only in lineage count once) |
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
 | `inheritance` | whether class inheritance was applied — `validate_shacl`: an rdf_map scope with classes and `inheritance=True`; `validate_schema_references`: the `inheritance` flag |
-| `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); shapes reached only through a `sh:target` without `sh:select`, `sh:rule` shapes (not applied), inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run) and logical operators over a member the IR cannot express — empty for `engine="pyshacl"` (spec-complete); a shape switched off takes its entries along; association ranges no given profile defines (`validate_schema_references`) |
+| `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); shapes reached only through a `sh:target` without `sh:select`, `sh:rule` shapes (not applied), inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run), logical operators over a member the IR cannot express and `sh:node` rows whose target has nothing left but skipped parts; malformed shapes (the compile's load checks), each with the reason — for `engine="pyshacl"` (spec-complete) only the malformed shapes' entries and the operator / `sh:node` rows dropped over them; a shape switched off takes its entries along; association ranges no given profile defines (`validate_schema_references`) |
 | `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates, and the terms the IR keeps as unimplemented rows (`sh:qualifiedValueShape`, …) |
 

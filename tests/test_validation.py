@@ -160,13 +160,13 @@ cim:NestedLengthShape a sh:NodeShape ;
 @pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb"])
 def test_lexical_false_nested(lexical_data, tmp_path, engine):
     """lexical=False reaches the nested datatype checks (the pandas fallback of
-    polars/duckdb): only the invalid value fails the sh:and."""
+    polars/duckdb): only the segment holding the invalid value fails the sh:and."""
     if engine != "pandas":
         pytest.importorskip(engine)
     path = tmp_path / "nested.ttl"
     path.write_text(NESTED_DATATYPE_SHAPE)
     violations = triplets.validation.validate_shacl(lexical_data, str(path), engine=engine, lexical=False)
-    assert set(zip(violations["VALUE"], violations["VIOLATION_TYPE"])) == {("abc", "sh:and")}
+    assert set(zip(violations["ID"], violations["VIOLATION_TYPE"])) == {("a3", "sh:and")}
 
 
 def test_lexical_polars_input(lexical_data, shape_file):

@@ -659,17 +659,6 @@ def _run_nested(context, row_dicts, focus_ids=None):
     return pandas.concat(frames, ignore_index=True) if frames else _empty()
 
 
-def _and(context, rule):
-    """sh:and — every nested shape must hold; each nested violation is reported."""
-    focus_ids = getattr(rule, "focus_ids", None)
-    if not rule.params:                              # sh:and ( ) holds for every node
-        return _empty()
-    violations = pandas.concat([_run_nested(context, alternative, focus_ids)
-                                for alternative in rule.params], ignore_index=True)
-    violations["VIOLATION_TYPE"] = "sh:and"
-    return violations
-
-
 def _value_pairs(rows):
     """(focus, value) string pairs of a path_rows frame — the value nodes a
     property-level operator judges."""
@@ -677,8 +666,9 @@ def _value_pairs(rows):
 
 
 def _failed_values(pairs, result):
-    """The *pairs* that *result* violates. A nested finding on another value or
-    with none (a nested shape with its own sh:path) fails every value of that focus."""
+    """The *pairs* that *result* violates: a nested finding on a pair fails that
+    pair; one with no VALUE or a value not under the path (a cardinality member,
+    sh:equals) fails every value of that focus."""
     by_focus = {}
     for focus, value in pairs:
         by_focus.setdefault(focus, set()).add((focus, value))
@@ -706,6 +696,18 @@ def _or(context, rule):
     pairs = _value_pairs(context.path_rows(rule))
     failing = set.intersection(pairs, *(_failed_values(pairs, result) for result in results))
     return _value_frame(rule, failing, "no sh:or alternative is satisfied")
+
+
+def _and(context, rule):
+    """sh:and — violates when ANY member is violated: per focus node in a node
+    shape, per value node in a property shape."""
+    focus_ids = getattr(rule, "focus_ids", None)
+    results = [_run_nested(context, member, focus_ids) for member in rule.params]
+    message = "not every sh:and member is satisfied"
+    if rule.path is None:
+        return _frame(rule, sorted(set().union(*(set(result["ID"]) for result in results))), None, message)
+    pairs = _value_pairs(context.path_rows(rule))
+    return _value_frame(rule, set().union(*(_failed_values(pairs, result) for result in results)), message)
 
 
 def _xone(context, rule):
@@ -746,6 +748,13 @@ def _node(context, rule):
                   f"value does not conform to shape {rule.params['shape']}")
 
 
+def _property(context, rule):
+    """sh:property on a property shape — the nested property shapes judge the value
+    nodes and report their own findings (SHACL §4.7.2), unlike sh:node."""
+    referenced = context.path_rows(rule)["PATH_VALUE"].unique()
+    return _run_nested(context, rule.params["rows"], referenced)
+
+
 def _not(context, rule):
     """sh:not — violates when it SATISFIES the negated shape: per focus node in
     a node shape, per value node in a property shape."""
@@ -763,6 +772,7 @@ def _not(context, rule):
 CONSTRAINT_VALIDATORS = {
     "sh:sparql": _sparql,
     "sh:node": _node,
+    "sh:property": _property,
     "sh:minCount": _min_count,
     "sh:maxCount": _max_count,
     "sh:datatype": _datatype,
