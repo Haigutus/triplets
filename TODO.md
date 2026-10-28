@@ -81,10 +81,11 @@ qlever (auto when built, performance).
 - [x] **qlever packaging — decided (2026-07-13): source build only (local).**
   No wheels, no CI (build-qlever.yml deleted): the pip-installable performance
   path is the `oxigraph` extra; qlever stays the local power path, verified by
-  `pixi run -e qlever test-qlever` before/after qlever bumps (build + pinning
-  documented in docs/building.md). Measured basis (2026-07-06): `_qlever.so`
-  53 MB (37.5 MB stripped, ~10 MB compressed); auditwheel graft closure
-  48.9 MB dominated by `libicudata` 31.6 MB → a qlever-enriched linux wheel
+  `uv run pytest tests/test_sparql_qlever.py` (extension built) before/after
+  qlever bumps (build + pinning documented in docs/building.md). Measured
+  basis (2026-07-06): `_qlever.so` 53 MB (37.5 MB stripped, ~10 MB
+  compressed); auditwheel graft closure 48.9 MB dominated by `libicudata`
+  31.6 MB → a qlever-enriched linux wheel
   ≈ 30–35 MB compressed vs ≈ 3–4 MB today (~10x). Pre-analyzed revisit path
   if demand appears: separate `triplets-qlever` PyPI distribution (wheel =
   just the extension) + extra `qlever = ["triplets-qlever"]`; a filtered ICU

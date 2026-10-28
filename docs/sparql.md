@@ -95,19 +95,11 @@ triplets/sparql/
 '-- sparql_qlever.py           # engine: index cache, conventions, output flavor
 ```
 
-Build (one-time; the pixi `qlever` environment pins the whole toolchain —
-compilers, cmake, boost, icu, openssl, zstd, jemalloc — via pixi.lock):
-
-```bash
-git clone --recursive https://github.com/ad-freiburg/qlever ../qlever
-pixi run -e qlever build-qlever-lib   # compile qlever with PIC (long, once)
-pixi run -e qlever build-qlever       # build triplets.sparql._qlever
-```
+Build: `pixi run -e qlever build-qlever` (the recipe, the pinned fork and the
+`uv sync` prerequisite are in [building.md](building.md)).
 
 Without the extension nothing changes — auto falls back to oxigraph when
-installed, else rdflib. qlever ships in no wheel (source build only, local);
-how the fork/branch is pinned and reproduced is documented in
-[building.md](building.md).
+installed, else rdflib. qlever ships in no wheel (source build only, local).
 
 **Engine state lifecycle.** Flavor-blind by construction — the input (pandas /
 polars DataFrame or DuckDB connection) carries every needed capability as a

@@ -4,9 +4,12 @@ The extension links qlever's official embedding facade (src/libqlever) — the
 purpose-built boundary for using the engine without the HTTP server. The
 supported build path mirrors the pugixml pattern (pinned vendor submodule +
 pixi-provided toolchain): the `qlever` pixi environment carries cmake, ninja,
-compilers and the C++ deps (boost, icu, openssl, zstd) pinned from conda-forge:
+compilers and the C++ deps (boost, icu, openssl, zstd) pinned from conda-forge;
+the extension itself is compiled under the uv venv's python, so it links the
+venv's pyarrow (rebuild it after a pyarrow bump):
 
     git submodule update --init --checkout vendor/qlever   # once (update=none)
+    uv sync --all-extras                    # the venv whose pyarrow the extension links
     pixi run -e qlever build-qlever-lib     # one-time qlever compile (PIC)
     pixi run -e qlever build-qlever         # this extension
 
@@ -16,11 +19,15 @@ the rdflib engine (auto-detection by import).
 """
 import glob
 import os
+import sys
 
 from setuptools import setup, Extension
 from Cython.Build import cythonize
 
 import pyarrow
+
+if sys.platform != "linux":
+    raise RuntimeError("setup_qlever.py builds on Linux (GNU ld) only, see TODO.md")
 
 from setup_qlever_lib import resolve_qlever_dirs
 
@@ -60,6 +67,11 @@ include_dirs = [
     pa_include,
 ] + ([np_include] if np_include else [])
 library_dirs = [lib_dir] + pa_lib_dirs
+arrow_libs = [os.path.join(pa_lib_dirs[0], "libarrow_python.so"),
+              *glob.glob(os.path.join(pa_lib_dirs[0], "libarrow.so.*"))]
+if len(arrow_libs) != 2 or not all(map(os.path.exists, arrow_libs)):
+    raise RuntimeError(f"expected libarrow_python.so + one libarrow.so.NNNN in {pa_lib_dirs[0]}, "
+                       f"got {arrow_libs}")
 # NOTE: no jemalloc here on purpose. qlever links it only as a global malloc
 # replacement (no jemalloc-API symbols in the archives) — inside a Python
 # extension that interposition mixes allocators with the interpreter and
@@ -78,7 +90,13 @@ system_libs = [
 extra_link_args = ["-std=c++20",
                    "-Wl,--start-group", *static_libs, "-Wl,--end-group",
                    *[f"-l{lib}" for lib in system_libs],
-                   "-larrow_python", "-larrow",
+                   # pyarrow's own libarrow/libarrow_python by absolute path (not -l):
+                   # $CONDA_PREFIX/lib comes first on the conda LDFLAGS search path, and
+                   # linking any other libarrow.so.NNNN loads two Arrow runtimes at import
+                   # time (the RecordBatch hand-off then segfaults). --no-as-needed keeps
+                   # the NEEDED entries, so a pyarrow major bump fails the import loudly
+                   # (missing SONAME) instead of crashing in C++.
+                   "-Wl,--no-as-needed", *arrow_libs, "-Wl,--as-needed",
                    *[f"-Wl,-rpath,{d}" for d in pa_lib_dirs]]
 
 # pixi/conda environment: headers, libraries and a runtime rpath so the built

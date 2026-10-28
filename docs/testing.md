@@ -132,20 +132,22 @@ pytest tests/test_benchmarks_realgrid.py -m performance \
   --benchmark-json=tests/performance_results/parsers_performance.json -k "parse"
 ```
 
-## pixi Tasks
+## Local flow
 
-If using pixi:
-
-```shell
-pixi run test                         # all tests
-pixi run build-cython-pugixml-arrow   # build cython extension
-```
-
-Parser-only run:
+Tests run in the uv venv, never inside pixi; pixi only supplies the C++
+toolchain for the optional compiled extensions:
 
 ```shell
-pixi run pytest tests/test_parity_parser.py -q
+uv sync --all-extras
+uv run pytest -n auto -q
+
+# optional compiled extensions (built against the venv's pyarrow)
+pixi run build-cython-pugixml-arrow
+pixi run -e qlever build-qlever       # needs the qlever static libs, see docs/building.md
 ```
+
+The same `uv run pytest` then picks the extensions up: the compiled-engine tests
+stop skipping and `auto` engine selection prefers them.
 
 ## CI Workflows
 
