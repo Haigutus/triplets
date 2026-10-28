@@ -373,11 +373,17 @@ engines see the raw lexical form and can judge it. Two levels:
 | outside the lexical space | `"abc"` | `sh:datatype` | shape's declared severity |
 | valid but narrower/non-canonical form | `"1"` (integer form) | `triplets:lexicalForm` | `Warning` |
 
+A nested datatype check (a member of `sh:and` / `sh:or` / `sh:xone` / `sh:not`,
+a shape referenced through `sh:node`) decides conformance on the lexical space
+only: `"1"` satisfies `xsd:float` there, as in pyshacl, and no Warning is
+reported for it. The `sh:datatype` of a property shape, also one reached through
+`sh:property`, reports the Warning.
+
 The vectorized engines check both levels inline. pyshacl gets the pandas
 datatype check as a supplement (duplicates dropped on
 `[ID, KEY, VALUE, VIOLATION_TYPE, SOURCE_SHAPE, SEVERITY]`).
 `validate_shacl(..., lexical=False)` skips the `triplets:lexicalForm` level on
-every engine (nested datatype checks included) and pyshacl's supplement; values
+every engine and pyshacl's supplement; values
 outside the lexical space stay `sh:datatype` violations on the vectorized engines.
 Parity tests treat `triplets:lexicalForm` rows as documented extras: engines
 must never *lose* a violation pyshacl reports.

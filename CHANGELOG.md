@@ -345,6 +345,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   A logical operator over a malformed shape is dropped and named, as over any skipped
   part; a `sh:node` row whose target has nothing left but skipped parts is too (it
   conformed on every node).
+- **A nested `sh:datatype` decides on the lexical space only** on polars, pandas and
+  duckdb: inside `sh:and` / `sh:or` / `sh:xone` / `sh:not` / `sh:node` a narrower form
+  (`"1"` for `xsd:float`) counted as non-conforming — `sh:and` / `sh:or` / `sh:xone` /
+  `sh:node` reported it, `sh:not` lost the finding pyshacl reports. The `triplets:lexicalForm` Warning
+  stays on a property shape's own `sh:datatype`
+  ([#172](https://github.com/Haigutus/triplets/issues/172)).
 - **`sh:closed` allows the properties of every `sh:ignoredProperties` list** on
   polars, pandas and duckdb, as pyshacl; one of two lists was read and the
   properties of the other were reported. A property shape skipped for two

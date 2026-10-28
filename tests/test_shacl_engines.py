@@ -84,6 +84,20 @@ def test_datatype_two_levels(engine):
     assert violating(v, "triplets:lexicalForm") == {("b2", "5")}
 
 
+def test_datatype_two_levels_under_property(engine):
+    """sh:property on a property shape reports the nested datatype findings as its
+    own, the lexicalForm Warning included, on the value nodes."""
+    rows = [row for n, length in ((1, "10.5"), (2, "1"), (3, "abc"))
+            for row in breaker(f"b{n}", ("Equipment.EquipmentContainer", f"c{n}"))
+            + [(f"c{n}", "Type", "Bay", "eq"), (f"c{n}", "Conductor.length", length, "eq")]]
+    body = ("sh:path cim:Equipment.EquipmentContainer ; "
+            "sh:property [ sh:path cim:Conductor.length ; sh:datatype xsd:float ]")
+    v = run(rows, SHAPE.format(body=body), engine)
+    assert violating(v, "sh:datatype") == {("c3", "abc")}
+    assert violating(v, "triplets:lexicalForm") == {("c2", "1")}
+    assert set(v.loc[v["VIOLATION_TYPE"] == "triplets:lexicalForm", "SEVERITY"]) == {"Warning"}
+
+
 def test_pattern_is_partial_match(engine):
     rows = breaker("b1", ("IdentifiedObject.name", "OK name")) \
         + breaker("b2", ("IdentifiedObject.name", "no digits vs 42"))

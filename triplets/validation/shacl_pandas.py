@@ -650,13 +650,18 @@ def _sparql_parallel(context, rules, max_workers):
 
 # ── logical operators (params: nested IR row-dict lists) ────────────────────
 
-def _run_nested(context, row_dicts, focus_ids=None):
+def _run_nested(context, row_dicts, focus_ids=None, lexical=False):
     """Validate nested IR rows (inheriting the parent's focus override, so shapes
-    nested under sh:node keep judging the referenced value nodes)."""
+    nested under sh:node keep judging the referenced value nodes).
+
+    The operators and sh:node judge conformance on the lexical space: the
+    triplets:lexicalForm Warnings are left out unless *lexical* (sh:property,
+    which reports the nested findings as its own)."""
     rules = [SimpleNamespace(focus_ids=focus_ids, **row) for row in row_dicts]
     frames = [CONSTRAINT_VALIDATORS[rule.component](context, rule)
               for rule in rules if rule.component in CONSTRAINT_VALIDATORS]
-    return pandas.concat(frames, ignore_index=True) if frames else _empty()
+    nested = pandas.concat(frames, ignore_index=True) if frames else _empty()
+    return nested if lexical else nested[nested["VIOLATION_TYPE"] != "triplets:lexicalForm"]
 
 
 def _value_pairs(rows):
@@ -752,7 +757,7 @@ def _property(context, rule):
     """sh:property on a property shape — the nested property shapes judge the value
     nodes and report their own findings (SHACL §4.7.2), unlike sh:node."""
     referenced = context.path_rows(rule)["PATH_VALUE"].unique()
-    return _run_nested(context, rule.params["rows"], referenced)
+    return _run_nested(context, rule.params["rows"], referenced, lexical=True)
 
 
 def _not(context, rule):
