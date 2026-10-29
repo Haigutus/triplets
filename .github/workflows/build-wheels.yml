@@ -47,11 +47,11 @@ jobs:
           - os: ubuntu-latest
             arch: x86_64
             cibw_archs: x86_64
-          # Linux aarch64 — disabled, QEMU-emulated build dominates release time (~30 min)
-          # re-enable when needed or when GitHub arm64 runners are available
-          # - os: ubuntu-latest
-          #   arch: aarch64
-          #   cibw_archs: aarch64
+          # Linux aarch64 on a native arm64 runner (no QEMU); also what Docker
+          # runs on Apple Silicon
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+            cibw_archs: aarch64
           # macOS x86_64 (Intel) — disabled, macos-13 runner rarely available
           # Intel Macs are EOL; users can install from sdist if needed
           # - os: macos-13
@@ -69,12 +69,6 @@ jobs:
         with:
           submodules: true
           fetch-depth: 0
-
-      - name: Set up QEMU
-        if: matrix.arch == 'aarch64'
-        uses: docker/setup-qemu-action@v4
-        with:
-          platforms: arm64
 
       - uses: actions/setup-python@v6
         with:
