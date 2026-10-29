@@ -6,7 +6,24 @@ name: Build and publish wheels
 on:
   release:
     types: [created]      # same trigger as existing python-publish.yml
-  pull_request:           # build on PR to catch build failures (no publish)
+  pull_request:           # build on PRs that touch the build (no publish)
+    paths:
+      - .github/workflows/build-wheels.yml
+      - setup.py
+      - setup.cfg
+      - pyproject.toml
+      - MANIFEST.in
+      - versioneer.py
+      - triplets/_version.py
+      - .gitmodules
+      - vendor/pugixml
+      - "triplets/**/*.pyx"
+      - "triplets/**/*.pxd"
+      - "triplets/**/*.h"
+      - "triplets/**/*.hpp"
+      - "triplets/**/*.cpp"
+      - tests/test_compiled_modules.py
+      - tests/test_parser.py
   workflow_dispatch:      # manual trigger (no publish)
 
 concurrency:
