@@ -1,6 +1,6 @@
 """Raw-pyshacl check of the shapes compiler. pyshacl validates the shapes Turtle as
 rdflib parses it — no triplets.validation.compile, no switch-off, no report reader —
-and its rows are compared with the pandas engine (the matrix shows the engines agree,
+and its rows are compared with the polars engine (the matrix shows the engines agree,
 all of them through the compiler; this leg is the one the compiler cannot touch). The
 compile gets a copy of the same parse, never the graph pyshacl runs on (pyshacl,
 advanced=True, may mutate it); the copy keeps the blank-node labels, so anonymous
@@ -12,7 +12,7 @@ Key: (ID, KEY, VALUE, component, SEVERITY, SOURCE_SHAPE); MESSAGE is the matrix'
 An ours-only row fails. A pyshacl-only row fails unless the run metadata declares it:
 its sh:sourceShape is a skipped_shapes id (for a skipped component of the shape, only
 that component's rows), or its component is a skipped_components entry.
-Known divergences are strict xfails: the matrix XFAIL for pandas, and UNLISTED.
+Known divergences are strict xfails: the matrix XFAIL for polars, and UNLISTED.
 Runtime deactivated_shapes are dropped: both sides run the graph's declared set.
 
 Real data: each CGMES 3.0 Equipment-AP shape file on small relicapgrid EQ instances.
@@ -28,6 +28,7 @@ import pytest
 
 rdflib = pytest.importorskip("rdflib")
 pyshacl = pytest.importorskip("pyshacl")
+pytest.importorskip("polars")
 
 import pandas
 import triplets
@@ -43,9 +44,9 @@ from test_parity_shacl_matrix import B, CASES, CIM, PREFIX, SCHEMA, SKIPPED, TRI
 SH = rdflib.Namespace("http://www.w3.org/ns/shacl#")
 UUID = "urn:uuid:"
 
-# the matrix's pandas divergences; #185 is about MESSAGE, which this key leaves out
+# the matrix's polars divergences; #185 is about MESSAGE, which this key leaves out
 EXPECTED = {case: reason for (case, engine), reason in XFAIL.items()
-            if engine == "pandas" and case != "message_two_values"}
+            if engine == "polars" and case != "message_two_values"}
 # a skip no run metadata names: sh:BlankNodeOrIRI is only debug-logged
 UNLISTED = {"nodeKind_blank_or_iri": "#180 sh:nodeKind sh:BlankNodeOrIRI not evaluated and no skipped_shapes entry"}
 EXPECTED |= UNLISTED
@@ -133,8 +134,8 @@ def pyshacl_rows(data, shapes, ontology):
 
 
 # ── our leg ───────────────────────────────────────────────────────────────────
-def pandas_rows(data, compiled, **kwargs):
-    violations = triplets.validation.validate_shacl(data, compiled, engine="pandas", lexical=False, **kwargs)
+def engine_rows(data, compiled, **kwargs):
+    violations = triplets.validation.validate_shacl(data, compiled, engine="polars", lexical=False, **kwargs)
     found = violations[violations["VIOLATION_TYPE"] != LEXICAL_ALLOWANCE].astype(object)
     rows = {(local(row.ID), "type" if row.KEY == "Type" else row.KEY, row.VALUE, stem(row.VIOLATION_TYPE), row.SEVERITY,
              row.SOURCE_SHAPE) for row in found.where(found.notna(), None).itertuples(index=False)}
@@ -157,7 +158,7 @@ def compare(reference, ours, meta):
 
 
 def synthetic(shape, rows, kwargs):
-    """(pyshacl rows, pandas rows, run metadata) of one shape Turtle on matrix-style rows."""
+    """(pyshacl rows, polars rows, run metadata) of one shape Turtle on matrix-style rows."""
     rdf_map = load_rdf_map(kwargs["rdf_map"])
     dataset = nquads(frame(rows), rdf_map, "*", CIM)
     data = (sum((dataset.get_context(rdflib.URIRef(UUID + instance)) for instance in kwargs["data_scope"]),
@@ -165,7 +166,7 @@ def synthetic(shape, rows, kwargs):
     shapes = rdflib.Graph().parse(data=PREFIX + shape, format="turtle")
     compiled = triplets.validation.compile(clone(shapes))
     ontology = None if kwargs.get("inheritance") is False else subclass_edges(rdf_map)
-    return pyshacl_rows(data, shapes, ontology), *pandas_rows(frame(rows), compiled, **kwargs)
+    return pyshacl_rows(data, shapes, ontology), *engine_rows(frame(rows), compiled, **kwargs)
 
 
 # ── synthetic: every matrix case ──────────────────────────────────────────────
@@ -240,5 +241,5 @@ def test_real_data_raw(shapes_path, data_path, rdf_map, cim, rdfs):
     compiled = triplets.validation.compile(clone(shape_file(shapes_path)))
     shapes = clone(shape_file(shapes_path))
     reference = pyshacl_rows(dataset, shapes, vocabulary(rdfs, cim))
-    ours = pandas_rows(data, compiled, rdf_map=rdf_map, rdf_map_scope=["EQ"])
+    ours = engine_rows(data, compiled, rdf_map=rdf_map, rdf_map_scope=["EQ"])
     assert compare(reference, *ours) == (set(), set())
