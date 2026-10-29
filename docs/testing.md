@@ -155,9 +155,10 @@ Two GitHub Actions workflows run automatically.
 
 ### `tests.yml` — unit tests
 
-Runs on push to `main`, on pull requests, and on manual dispatch. Pure-Python
-engines only (the compiled parser and qlever extensions are covered by
-`build-wheels.yml`).
+Runs on push to `main`, on pull requests, and on manual dispatch. The `pytest`
+matrix runs the pure-Python engines; the `pytest-compiled` job (CPython 3.13)
+builds the cython extensions and runs the suite with `TRIPLETS_REQUIRE_COMPILED=1`.
+The qlever extension has no CI.
 
 - **Matrix:** CPython 3.11, 3.13, 3.14 on `ubuntu-latest`
 - **Checkout:** LFS enabled (RealGrid zips); inits only the
@@ -170,13 +171,20 @@ engines only (the compiled parser and qlever extensions are covered by
 | Trigger | What happens |
 |---------|-------------|
 | **GitHub Release** (pre-release or final) | Build sdist + wheels, publish to PyPI |
-| **Pull Request** | Build sdist + wheels only (no publish) |
+| **Pull Request** touching the build | Build sdist + wheels only (no publish) |
 | **Manual** (workflow_dispatch) | Build sdist + wheels only (no publish) |
 
 Publishing uses PyPI **trusted publishing** (OIDC, no API tokens) via the `pypi`
 environment. To enable it: on [PyPI](https://pypi.org/manage/project/triplets/settings/publishing/)
 add a publisher for GitHub repo `Haigutus/triplets`, workflow `build-wheels.yml`,
 environment `pypi`.
+
+On pull requests the workflow runs only when the diff touches a path in its
+`paths:` filter: the workflow itself, `setup.py`, `setup.cfg`, `pyproject.toml`,
+`MANIFEST.in`, versioneer, `.gitmodules`, the `vendor/pugixml` submodule, cython/C++
+sources under `triplets/` (`*.pyx`, `*.pxd`, `*.h`, `*.hpp`, `*.cpp`) and the two test
+files the wheel job runs. Pure-Python PRs skip it; `pytest-compiled` in `tests.yml`
+still builds the extensions on Linux. Manual dispatch builds wheels for any branch.
 
 Each wheel is tested during the build with `TRIPLETS_REQUIRE_COMPILED=1`, so a
 wheel missing its compiled extensions fails rather than skips.

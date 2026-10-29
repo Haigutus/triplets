@@ -104,7 +104,9 @@ This pulls the manylinux Docker image, builds the wheel inside it, runs auditwhe
 
 ## CI Build Overview
 
-The GitHub Actions workflow (`.github/workflows/build-wheels.yml`) builds wheels using cibuildwheel:
+The GitHub Actions workflow (`.github/workflows/build-wheels.yml`) builds wheels using cibuildwheel
+on every release, on manual dispatch, and on pull requests that touch the build (its `paths:`
+filter, listed in [Testing](testing.md)):
 
 | Platform | Runner | Repair tool | Arrow lib handling |
 |----------|--------|-------------|-------------------|
