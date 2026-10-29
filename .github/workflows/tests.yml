@@ -1,5 +1,6 @@
-# Plain unit-test run (pure-Python engines — the compiled parser and qlever
-# extensions are covered by build-wheels.yml and the local qlever test task).
+# pytest: pure-Python engines on every supported Python.
+# pytest-compiled: the same suite with the cython extensions built (qlever stays
+# a local pixi task — native build too heavy for CI).
 # Performance benchmarks are deselected by default (pyproject addopts).
 name: tests
 
@@ -22,8 +23,8 @@ jobs:
           submodules: false
           lfs: true          # test_data zips (RealGrid) are LFS objects
 
-      - name: Fetch test data (only the data submodule — not vendor/qlever)
-        run: git submodule update --init test_data/relicapgrid
+      - name: Fetch test data (only the data submodules — not vendor/qlever)
+        run: git submodule update --init test_data/relicapgrid test_data/CGMES-AP test_data/application-profiles-library-cgmes-v2-4
 
       - uses: actions/setup-python@v5
         with:
@@ -34,3 +35,26 @@ jobs:
 
       - name: Run tests
         run: pytest -n auto -q
+
+  pytest-compiled:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          lfs: true
+
+      - name: Fetch test data and the pugixml source
+        run: git submodule update --init test_data/relicapgrid test_data/CGMES-AP test_data/application-profiles-library-cgmes-v2-4 vendor/pugixml
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install with test extras (builds the cython extensions)
+        run: pip install -e .[dev,validation,oxigraph,duckdb,excel,networkx]
+
+      - name: Run tests
+        env:
+          TRIPLETS_REQUIRE_COMPILED: "1"
+        run: pytest -n auto -q -rs

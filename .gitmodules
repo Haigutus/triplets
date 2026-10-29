@@ -15,3 +15,10 @@
 	# the local qlever build/test writes index files into the checkout; don't
 	# let that working-tree dirt show as a change in the superproject
 	ignore = dirty
+[submodule "test_data/CGMES-AP"]
+	path = test_data/CGMES-AP
+	url = https://github.com/entsoe/CGMES-AP
+[submodule "test_data/application-profiles-library-cgmes-v2-4"]
+	path = test_data/application-profiles-library-cgmes-v2-4
+	url = https://github.com/entsoe/application-profiles-library
+	branch = cgmes-v2-4

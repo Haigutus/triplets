@@ -47,9 +47,15 @@ def make_context(df: pandas.DataFrame) -> dict:
         "VALUE": ["MultiThing", "first", "second", "MultiThing", "solo"],
         "INSTANCE_ID": ["mi"] * 5,
     })
+    # removed (first 100 rows), changed (every *.r value) and added (NEWID) objects
+    # plain strings while df may be categorical: engines must diff mixed dtypes
+    diff_data = df.iloc[100:].astype(str)
+    diff_data.loc[diff_data["KEY"].str.endswith(".r"), "VALUE"] = "0"
+    diff_data = pandas.concat([diff_data, df.iloc[:2].astype(str).assign(ID="NEWID")], ignore_index=True)
     return {"type": type_name, "key": key, "name": name, "id": reference, "reference": reference,
             "instances": instances, "subset": subset, "update_data": update_data,
-            "new_data": df.iloc[100:], "multi_data": multi_data, "multi_type": "MultiThing"}
+            "new_data": df.iloc[100:], "multi_data": multi_data, "multi_type": "MultiThing",
+            "diff_data": diff_data}
 
 
 # ── engine helpers ────────────────────────────────────────────────────────────
@@ -84,6 +90,15 @@ def _duckdb_wide_table(data, ctx):
 
 def _tv_kwargs(engine):
     return {"string_to_number": False}
+
+
+def _printed(call):
+    """(return value, stdout) of a printing call: the report text must match across engines."""
+    import contextlib
+    import io
+    with contextlib.redirect_stdout(io.StringIO()) as out:
+        result = call()
+    return result, out.getvalue()
 
 
 def _content_hash_spec(engine, data, ctx):
@@ -128,7 +143,7 @@ CALL_SPECS = {
     "get_namespace_map": lambda e, d, c: d.get_namespace_map(),
     "triplets_to_tableviews": lambda e, d, c: d.triplets_to_tableviews(),
     "filter_triplets": lambda e, d, c: d.filter_triplets(KEY="Type", VALUE=c["type"]),
-    "filter_triplets_by_type": lambda e, d, c: d.filter_triplets_by_type(c["type"]),
+    "filter_triplets_by_type": lambda e, d, c: d.filter_triplets_by_type([c["type"], "Terminal"], type_key="Type"),
     "filter_triplets_by_triplets": lambda e, d, c: d.filter_triplets_by_triplets(_to_engine(e, c["subset"])),
     "filter_triplets_by_value": lambda e, d, c: d.filter_triplets_by_value(c["name"]),
     "references_to": lambda e, d, c: d.references_to(c["reference"]),
@@ -140,7 +155,9 @@ CALL_SPECS = {
     "references_all": lambda e, d, c: d.references_all(),
     "diff_triplets": lambda e, d, c: d.diff_triplets(_to_engine(e, c["new_data"])),
     "diff_triplets_by_instance": lambda e, d, c: d.diff_triplets_by_instance(c["instances"][0], c["instances"][1]),
-    "print_triplets_diff": lambda e, d, c: d.print_triplets_diff(_to_engine(e, c["new_data"])),
+    "print_triplets_diff": lambda e, d, c: _printed(lambda: d.print_triplets_diff(
+        _to_engine(e, c["diff_data"]), exclude_objects=["Terminal"], include_objects=[c["type"], "Terminal", "ConnectivityNode"],
+        context_keys=["IdentifiedObject.name"])),
     # tableview_to_triplets operates on a *tableview*, so call it on the tableview object
     # (duckdb has no relation method — it unpivots a wide table by name).
     "tableview_to_triplets": lambda e, d, c: (_duckdb_wide_table(d, c) if e == "duckdb"
@@ -256,6 +273,36 @@ def test_module_dispatch_parity(svedala_pandas, svedala_ctx, func, engine):
     out = run_quiet(spec, engine, build_engine(engine, svedala_pandas), svedala_ctx)
     assert parity(ref, out), f"tools.{func}({engine}) differs from pandas"
 
+
+@pytest.mark.parametrize("engine", ["polars", "duckdb"])
+def test_print_triplets_diff_missing_and_repeated_values(engine):
+    """A missing VALUE and a row repeated on one side match themselves, and exclusion drops a
+    changed object: same report as pandas."""
+    pytest.importorskip(engine)
+    old = pandas.DataFrame({"ID": ["a", "a", "a", "a", "b", "b"],
+                            "KEY": ["Type", "Type", "x", "y", "Type", "x"],
+                            "VALUE": ["Breaker", "Breaker", None, "1", "Line", "2"],
+                            "INSTANCE_ID": ["i1", "i2", "i1", "i1", "i1", "i1"]})
+    new = old.drop(index=[1, 5]).assign(VALUE=lambda data: data["VALUE"].where(data["KEY"] != "y", "2"))
+    for options, count in (({}, 3), ({"exclude_objects": ["Breaker"]}, 1)):  # Breaker "a" changed, not added
+        expected = _printed(lambda: build_engine("pandas", old).print_triplets_diff(new, **options))
+        assert expected[0] == count
+        assert _printed(lambda: build_engine(engine, old).print_triplets_diff(_to_engine(engine, new), **options)) == expected
+    # a missing VALUE on one side only comes back as "" from every engine
+    for name in ("pandas", engine):
+        diff = to_pandas(build_engine(name, old).diff_triplets(_to_engine(name, new.drop(index=2))))
+        assert diff.loc[(diff["ID"] == "a") & (diff["KEY"] == "x"), "VALUE"].tolist() == [""]
+        # missing on one side, "" on the other: no difference
+        diff = to_pandas(build_engine(name, old).diff_triplets(_to_engine(name, new.fillna({"VALUE": ""}))))
+        assert diff.loc[(diff["ID"] == "a") & (diff["KEY"] == "x")].empty
+
+
+def test_polars_tableview_row_order_matches_pandas(svedala_pandas):
+    """Rows come in pandas order on every call: float sums over a view (scale_load) depend on it."""
+    data = build_engine("polars", svedala_pandas)
+    expected = svedala_pandas.type_tableview("ConformLoad").index.tolist()
+    for _ in range(5):
+        assert polars_engine.type_tableview(data, "ConformLoad")["ID"].to_list() == expected
 
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(f, e, id=f"{f}-{e}")

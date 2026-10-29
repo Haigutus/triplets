@@ -8,12 +8,11 @@ import logging
 from triplets.tools import get_namespace_map
 from triplets._engine_detect import flavor
 from triplets._header import (  # noqa: F401 — load_rdf_map re-exported for the cimxml engines
-    PROFILE_KEYS, PROFILE_URL_MAP, load_rdf_map, _profile_identity_index)
+    PROFILE_KEYS, PROFILE_URL_MAP, load_rdf_map, _profile_identity_index, merge_sections, profile_sections)
+from triplets.iri import _sections
 
 logger = logging.getLogger(__name__)
 
-# Namespace for internal/undefined structures when export_undefined=True
-TRIPLETS_NS = "http://triplets#"
 
 
 def _values_for_key(instance_data, key):
@@ -50,11 +49,13 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
     tuple (file_name, namespace_map, instance_rdf_map)
         file_name : from the instance 'label' (source filename) or a new UUID
         namespace_map : given > instance NamespaceMap > schema ProfileNamespaceMap
-        instance_rdf_map : profile section matched by the schema's own identity
-            metadata (section key / keyword / versionIRI / conformsTo) against
-            the instance header (Model.messageType, keyword, Model.profile,
-            conformsTo); legacy URL-substring fallback for 2.4.15-era URLs;
-            schema root when nothing matches
+        instance_rdf_map : every profile section the instance header declares, merged
+            (:func:`triplets._header.merge_sections`; a class concrete in any of them is
+            instantiated, not described) — sections matched by the schema's own
+            identity metadata (section key / keyword / versionIRI / profileVersionIRI /
+            conformsTo) against the header (Model.messageType, keyword, Model.profile,
+            conformsTo); legacy URL-substring fallback for 2.4.15-era URLs; the schema's
+            root entries when nothing matches (warns on a sectioned schema)
     """
     if not namespace_map:
         namespace_map, xml_base = get_namespace_map(instance_data)
@@ -62,29 +63,23 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
     # Filename is kept under label
     file_name = _first_value(instance_data, "label") or f"{uuid.uuid4()}.xml"
 
-    identity_index = _profile_identity_index(rdf_map)
-    instance_section = None
     hints = _instance_profile_hints(instance_data)
-    for hint in hints:
-        if hint in identity_index:
-            instance_section = identity_index[hint]
-            break
-    if instance_section is None:
-        # legacy 2.4.15 profile URLs carry no exact schema identity — substring map
-        for hint in hints:
-            for url_part, section in PROFILE_URL_MAP.items():
-                if url_part in hint:
-                    instance_section = section
-                    break
-            if instance_section:
-                break
-    if instance_section is None and hints:
-        logger.warning("No schema profile matched instance header hints %s — using schema root", hints[:4])
+    sections = profile_sections(hints, rdf_map)
+    if not sections and _sections(rdf_map):
+        logger.warning("%s: header %s matches none of the schema profiles %s — no class or key is defined, "
+                       "nothing is exported unless export_undefined=True", file_name, hints[:4], _sections(rdf_map))
+    instance_rdf_map = merge_sections(rdf_map, sections or None)[0]
 
-    instance_rdf_map = rdf_map.get(instance_section, rdf_map)
+    # A class concrete in any declared profile is instantiated (its rdf:ID / rdf:about form), whatever
+    # the order of the header's profile rows; a Description only when every declared profile describes it.
+    for section in sections:
+        for name, entry in rdf_map[section].items():
+            if (isinstance(entry, dict) and entry.get("type") == "Class" and not entry.get("stereotyped")
+                    and instance_rdf_map[name].get("stereotyped")):
+                instance_rdf_map[name].update(attrib=entry["attrib"], stereotyped=False)
 
-    # No map in function call, nor in instance data, use profile map
-    if not namespace_map and instance_rdf_map:
-        namespace_map = instance_rdf_map.get("ProfileNamespaceMap")
+    # No map in function call, nor in instance data: the first declared profile's map
+    if not namespace_map:
+        namespace_map = (rdf_map[sections[0]] if sections else rdf_map).get("ProfileNamespaceMap")
 
     return file_name, namespace_map, instance_rdf_map

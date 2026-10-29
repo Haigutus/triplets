@@ -10,7 +10,8 @@ as simply valid; here it is reported, on two levels:
   → VIOLATION_TYPE sh:datatype, the shape's declared severity
 - value valid but written in a non-canonical / narrower form ("1" for
   xsd:float — integer form; "0" for xsd:boolean)
-  → VIOLATION_TYPE triplets:lexicalForm, severity Warning
+  → VIOLATION_TYPE triplets:lexicalForm, severity Warning (``lexical=False``
+  skips this level)
 
 Structure: one pure function per constraint component
 ``(context, rule) → violations DataFrame``, registered in
@@ -22,9 +23,11 @@ sh:sparql constraints are delegated to triplets.sparql (auto engine — qlever
 when built, else oxigraph, else rdflib): the engine loads the data once
 (content-hash cached), each constraint runs as one SELECT with the focus
 nodes bound via VALUES, and ``max_workers`` runs the constraint queries in
-parallel processes on the rdflib path only (fork — copy-on-write shares the
-dataset; threads don't help GIL-bound rdflib; the embedded engines are
-ms-scale sequentially).
+parallel: forked processes on rdflib (copy-on-write shares the dataset;
+threads don't help GIL-bound rdflib), threads on the embedded engines (they
+release the GIL while evaluating over one read-shared store). SPARQL targets
+run the same way, each distinct target query once per validation
+(``sparql_targets`` — the polars and duckdb engines call it too).
 
 Known limits:
 - sh:nodeKind — triplets store every value as a string, so term kind is decided
@@ -34,17 +37,19 @@ Known limits:
 """
 import re
 import logging
+import threading
 import multiprocessing
 
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from types import SimpleNamespace
 
 import numpy
 import pandas
 
-from ..export.nquads_utils import CIM_NS, make_subject
-from .shacl_ir import _local
+from ..export.nquads_utils import make_subject
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, split_iri, value_types
+from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -58,6 +63,9 @@ _FLOAT = rf"(?:{_DECIMAL}(?:[eE][+-]?[0-9]+)?|[+-]?INF|NaN)"
 _DATE = r"-?[0-9]{4,}-[0-9]{2}-[0-9]{2}"
 _TIMEZONE = r"(?:Z|[+-][0-9]{2}:[0-9]{2})?"
 _DATETIME = rf"{_DATE}T[0-9]{{2}}:[0-9]{{2}}:[0-9]{{2}}(?:\.[0-9]+)?{_TIMEZONE}"
+# IRI reference (RFC 3987), relative included: no controls, space, DEL or <>"{}|^`\,
+# and "%" only as a %XX escape. Non-ASCII is allowed (IRI, not URI).
+_ANY_URI = r'(?:[^\x00-\x20\x7f<>"{}|^`\\%]|%[0-9A-Fa-f]{2})*'
 
 DATATYPES = {
     "integer": (_INTEGER, None),
@@ -73,56 +81,40 @@ DATATYPES = {
     "boolean": (r"true|false|1|0", r"1|0"),
     "date": (_DATE + _TIMEZONE, None),
     "dateTime": (_DATETIME, None),
-    # string / anyURI / unlisted types: every lexical form is valid — no check
+    "anyURI": (_ANY_URI, None),
+    # string / unlisted types: every lexical form is valid — no check
 }
 
-_UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-_REFERENCE_LIKE = re.compile(rf"(?:{_UUID}|\w+://\S+|urn:\S+|[A-Za-z]\w*\.\w+)$")
+
+def datatype_patterns(datatype, lexical=True):
+    """(valid pattern, warn pattern or None) of an xsd datatype — None when
+    the type is unchecked. ``lexical=False`` drops the triplets:lexicalForm level."""
+    spec = DATATYPES.get(str(datatype).removeprefix("xsd:"))
+    return None if spec is None else (spec[0], spec[1] if lexical else None)
+
 
 _NO_IDS = numpy.array([], dtype=object)
 
 
-class SchemaKind:
-    """Schema-driven term-kind decision, shared by the vectorized engines' contexts.
-
-    Mirrors the N-Quads exporter's classification (build_key_metadata): a key
-    with a schema datatype (incl. xsd:string) holds literals; an enumeration
-    key holds IRIs; anyURI/unknown keys return None (decide by value form).
-    Without rdf_map everything is None.
-    """
-
-    rdf_map = None
-    _key_metadata = None
-
-    def key_kind(self, key):
-        """"literal" / "iri" / None — what the export schema says values at *key* are."""
-        if self.rdf_map is None:
-            return None
-        if self._key_metadata is None:
-            from ..export.nquads_utils import build_key_metadata
-            self._key_metadata = build_key_metadata(self.rdf_map)
-        enum_keys, _namespaces, key_datatypes = self._key_metadata
-        if key in enum_keys:
-            return "iri"
-        if key in key_datatypes:
-            return "literal"
-        return None
-
-
-class _Context(SchemaKind):
+class _Context:
     """Shared per-validation state: data and memoized lookups.
 
     Hundreds of IR rules hit the same per-class indices — build them once here
     instead of once per rule (the polars/duckdb compilers follow the same shape).
     """
 
-    def __init__(self, data, rdf_map=None):
+    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS, ancestors=(), lexical=True):
         self.data = data
         self.rdf_map = rdf_map
+        self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
+        self.ancestors = ancestors   # (Type, ancestor) pairs — see schema_scope.ancestor_pairs
+        self.undefined_namespace = undefined_namespace
+        self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self._by_key = None
         self._class_ids = None
         self._all_ids = None
         self._dataset = None
+        self._dataset_lock = threading.Lock()   # sh:sparql threads share one rdflib fallback load
         # The data cannot change between the constraint queries of one
         # validation run: after the first sh:sparql query has hashed it, the
         # rest assert data_unchanged and skip the per-query content_hash.
@@ -130,12 +122,14 @@ class _Context(SchemaKind):
         # Last engine exception — a cached ingest failure re-raises the same
         # object per rule; _sparql reports it once instead of once per rule.
         self.sparql_engine_error = None
+        self.targets = {}   # SPARQL target query → focus IDs (_sparql_targets)
 
     def dataset(self):
         """rdflib dataset for the sh:sparql constraints — loaded once, reused per query."""
-        if self._dataset is None:
-            from .._rdflib_loader import load_dataset
-            self._dataset = load_dataset(self.data, rdf_map=self.rdf_map)
+        with self._dataset_lock:
+            if self._dataset is None:
+                from .._rdflib_loader import load_dataset
+                self._dataset = load_dataset(self.data, rdf_map=self.rdf_map, undefined_namespace=self.undefined_namespace)
         return self._dataset
 
     def key_rows(self, key):
@@ -145,12 +139,17 @@ class _Context(SchemaKind):
                             in self.data.groupby("KEY", observed=True, sort=False)}
         return self._by_key.get(key, self.data.iloc[0:0])
 
-    def class_ids(self, target_class):
-        """IDs of all instances of *target_class*."""
+    def class_ids(self, class_name):
+        """IDs of all instances of *class_name*, subclasses included (``ancestors``)."""
         if self._class_ids is None:
+            types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype({"VALUE": object})
+            if self.ancestors:
+                pairs = pandas.DataFrame(self.ancestors, columns=["VALUE", "ANCESTOR"], dtype=object)
+                wider = types.merge(pairs, on="VALUE")[["ID", "ANCESTOR"]].rename(columns={"ANCESTOR": "VALUE"})
+                types = pandas.concat([types, wider], ignore_index=True)
             self._class_ids = {value: frame["ID"].unique() for value, frame
-                               in self.key_rows("Type").groupby("VALUE", observed=True, sort=False)}
-        return self._class_ids.get(target_class, _NO_IDS)
+                               in types.groupby("VALUE", sort=False)}
+        return self._class_ids.get(class_name, _NO_IDS)
 
     @property
     def all_ids(self):
@@ -161,14 +160,22 @@ class _Context(SchemaKind):
 
     def focus(self, rule):
         """The rule's focus nodes: an explicit ``focus_ids`` (set by sh:node — the
-        referenced value nodes), the subjects carrying the target property
-        (sh:targetSubjectsOf), or all instances of the rule's target class."""
+        referenced value nodes), else what ``target_by`` names: the IDs having
+        the KEY, the VALUEs under the KEY, the one ID, the SPARQL target's
+        result, or the Type's instances."""
         focus_ids = getattr(rule, "focus_ids", None)
         if focus_ids is not None:
             return focus_ids
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
-            return self.key_rows(rule.target_class)["ID"].unique()
-        return self.class_ids(rule.target_class)
+        by = getattr(rule, "target_by", "Type")
+        if by == "SPARQL":
+            return self.targets[rule.target_on]
+        if by == "KEY":
+            return self.key_rows(rule.target_on)["ID"].unique()
+        if by == "VALUE":
+            return self.key_rows(rule.target_on)["VALUE"].astype(str).unique()
+        if by == "ID":
+            return numpy.array([rule.target_on], dtype=object)
+        return self.class_ids(rule.target_on)
 
     def path_rows(self, rule):
         """The rule's path as (FOCUS, PATH_VALUE) pairs, restricted to the rule's focus.
@@ -192,7 +199,7 @@ class _Context(SchemaKind):
             frame = pandas.DataFrame({"FOCUS": rows["ID"].to_numpy(),
                                       "PATH_VALUE": rows["VALUE"].to_numpy()})
         if getattr(rule, "via_type", False):
-            types = self.key_rows("Type")[["ID", "VALUE"]].astype(str)
+            types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype(str)
             frame = (frame.merge(types, left_on="PATH_VALUE", right_on="ID")
                      [["FOCUS", "VALUE"]].rename(columns={"VALUE": "PATH_VALUE"}))
         return frame
@@ -200,8 +207,8 @@ class _Context(SchemaKind):
     def pair_rows(self, rule, other_path):
         """FOCUS + both paths' values, for the pair constraints (equals/disjoint/lessThan)."""
         left = self.path_rows(rule)
-        other = SimpleNamespace(target_class=rule.target_class,
-                                target_kind=getattr(rule, "target_kind", "class"),
+        other = SimpleNamespace(target_on=rule.target_on,
+                                target_by=getattr(rule, "target_by", "Type"),
                                 path=other_path, inverse=False,
                                 focus_ids=getattr(rule, "focus_ids", None))
         right = self.path_rows(other).rename(columns={"PATH_VALUE": "OTHER_VALUE"})
@@ -255,7 +262,7 @@ def _datatype(context, rule):
     Deviates from pyshacl by design: reports invalid lexical forms as
     sh:datatype and valid-but-non-canonical forms as triplets:lexicalForm.
     """
-    spec = DATATYPES.get(str(rule.params).removeprefix("xsd:"))
+    spec = datatype_patterns(rule.params, context.lexical)
     if spec is None:
         return _empty()
     valid_pattern, warn_pattern = spec
@@ -310,7 +317,7 @@ def _range(comparison, description):
 def _in(context, rule):
     rows = context.path_rows(rule)
     allowed = {str(value) for value in rule.params}
-    local = rows["PATH_VALUE"].astype(str).str.split("#").str[-1].str.split("/").str[-1]
+    local = iri_pandas.local_value(rows["PATH_VALUE"].astype(str))
     bad = ~local.isin(allowed)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not one of {sorted(allowed)}")
@@ -333,15 +340,24 @@ def _class(context, rule):
 
 def _schema_range(context, rule):
     """triplets:range — the referenced object conforms when ANY of its types
-    is in the allowed set (RDF types are cumulative, issue #100); references
-    whose target has no Type row are silent (cross-profile datasets)."""
+    is in the allowed set (RDF types are cumulative, issue #100); a target
+    without a Type row is left to triplets:missing."""
     rows = context.path_rows(rule)
-    typed = context.key_rows("Type")["ID"].astype(str).unique()
+    typed = context.key_rows(TYPE_KEY)["ID"].astype(str).unique()
     allowed = pandas.Index([]).append([pandas.Index(context.class_ids(cls))
                                        for cls in rule.params])
     bad = rows["PATH_VALUE"].isin(typed) & ~rows["PATH_VALUE"].isin(allowed)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"reference target is not one of {rule.params}")
+
+
+def _schema_missing(context, rule):
+    """triplets:missing — the referenced object has no Type row in the validated data."""
+    rows = context.path_rows(rule)
+    typed = context.key_rows(TYPE_KEY)["ID"].astype(str).unique()
+    bad = ~rows["PATH_VALUE"].isin(typed)
+    return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
+                  "referenced object not found in the data")
 
 
 def _node_kind(context, rule):
@@ -355,12 +371,12 @@ def _node_kind(context, rule):
 
     rows = context.path_rows(rule)
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else context.key_kind(rule.path)
+    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types)
     if kind is not None:
         is_iri = pandas.Series(kind == "iri", index=rows.index)
     else:
         values = rows["PATH_VALUE"].astype(str)
-        is_iri = values.str.fullmatch(_REFERENCE_LIKE) | values.isin(context.all_ids)
+        is_iri = values.str.fullmatch(REFERENCE_LIKE) | values.isin(context.all_ids)
     bad = ~is_iri if rule.params == "IRI" else is_iri
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not of node kind sh:{rule.params}")
@@ -408,7 +424,7 @@ def _closed(context, rule):
     paths + ignoredProperties). 'Type' (rdf:type) is always allowed: every
     triplets object carries it by construction.
     """
-    allowed = set(rule.params) | {"Type"}
+    allowed = set(rule.params) | {TYPE_KEY}
     ids = context.focus(rule)
     rows = context.data[context.data["ID"].isin(ids) & ~context.data["KEY"].isin(allowed)]
     frame = _frame(rule, rows["ID"], rows["VALUE"], "property is not allowed on a closed shape")
@@ -436,10 +452,57 @@ def _sparql_violations(rule, result):
     result = result[result["this"].notna()]   # a row without a focus node is no violation
     if len(result) == 0:                      # (rdflib serializes a spurious empty binding
         return _empty()                       #  for some aggregate queries)
-    focus = result["this"].astype(str).str.removeprefix("urn:uuid:")
-    values = (result["value"].astype(str).str.removeprefix("urn:uuid:").str.removeprefix(CIM_NS)
-              if "value" in result.columns else None)
+    focus = _shorten(result["this"].astype(str), iri_pandas.local_id)
+    values = _shorten(result["value"].astype(str), iri_pandas.local_value) if "value" in result.columns else None
     return _frame(rule, focus, values, "sparql constraint violated")
+
+
+def _shorten(terms, rule):
+    """SPARQL result terms → triplet form: IRIs decoded, then the column *rule* (``local_id``
+    for the focus, ``local_value`` for the value), literals verbatim (a literal ``_name`` or a blank node ``_:b0`` must
+    not lose its ``_``)."""
+    return rule(iri_pandas.decode_iri(terms)).where(iri_pandas.is_iri(terms), terms)
+
+
+def _select(context, query_text):
+    """One SELECT over the run's data on the auto SPARQL engine → (result,
+    rejection): a strict engine's rejection is re-run on rdflib and returned as
+    *rejection* (None when the auto engine ran it). Raises when rdflib fails
+    too — the query is defective on every engine."""
+    from .. import sparql
+    # rdflib queries the shared pre-loaded dataset; other engines (qlever,
+    # oxigraph) take the raw frame and manage their own engine-state cache
+    # (one build, content-hashed)
+    if sparql.get_engine("auto")[0] == "rdflib":
+        return sparql.query(context.dataset(), query_text, return_type="pandas"), None
+    try:
+        result = sparql.query(context.data, query_text, rdf_map=context.rdf_map, return_type="pandas",
+                              data_unchanged=context.data_hashed, undefined_namespace=context.undefined_namespace)
+        context.data_hashed = True
+        return result, None
+    except Exception as error:                            # noqa: BLE001 — engine strictness
+        # the engine hashes the data before loading or querying, and
+        # data_unchanged only reuses a digest stored for this very object
+        context.data_hashed = True
+        return sparql.query(context.dataset(), query_text, engine="rdflib", return_type="pandas"), error
+
+
+def _rejected(context, shape_ids, path, what, error):
+    """The Warning notes, one per shape in *shape_ids*, for a query a strict
+    engine rejected and rdflib still ran. A cached ingest failure (data vs
+    schema) re-raises the same exception object for every query — reported
+    once, not once per query; per-query rejections are fresh exceptions and
+    keep their own notes."""
+    from .. import sparql
+    repeated = error is context.sparql_engine_error
+    context.sparql_engine_error = error
+    if repeated:
+        return _empty()
+    logger.warning("%s of %s rejected by %s — evaluated with rdflib and the shape flagged "
+                   "(fix the rule upstream):\n%s", what, ", ".join(shape_ids), sparql.get_engine("auto")[0], error)
+    message = (f"{str(error).splitlines()[0]} — the {what} WAS still evaluated "
+               f"via the rdflib fallback; fix the shape/data upstream")
+    return pandas.concat([_invalid_sparql(shape_id, path, message) for shape_id in shape_ids], ignore_index=True)
 
 
 def _sparql(context, rule):
@@ -450,73 +513,89 @@ def _sparql(context, rule):
     and a ``triplets:invalidSparql`` Warning row flags the defective shape —
     broken rules get reported and fixed upstream, not auto-patched here.
     """
-    from .. import sparql
     focus_ids = context.focus(rule)
     if not len(focus_ids):
         return _empty()
-    # rdflib queries the shared pre-loaded dataset; other engines (qlever,
-    # oxigraph) take the raw frame and manage their own engine-state cache
-    # (one build, content-hashed)
-    query_text = _sparql_query_text(rule, focus_ids)
-    engine_name = sparql.get_engine("auto")[0]
-    if engine_name == "rdflib":
-        try:
-            return _sparql_violations(rule, sparql.query(context.dataset(), query_text))
-        except Exception as error:                        # noqa: BLE001 — defective authored query
-            logger.error("sh:sparql constraint %s fails on rdflib: %s", rule.shape_id, error)
-            return _invalid_sparql(rule, _not_evaluated(rule, error), severity="Violation")
-
     try:
-        result = sparql.query(context.data, query_text, rdf_map=context.rdf_map,
-                              data_unchanged=context.data_hashed)
-        context.data_hashed = True
-        return _sparql_violations(rule, result)
-    except Exception as error:                            # noqa: BLE001 — engine strictness
-        # A cached ingest failure (data vs schema) re-raises the same exception
-        # object for every rule — report it once, not once per rule; per-rule
-        # query rejections are fresh exceptions and keep their own note.
-        repeated = error is getattr(context, "sparql_engine_error", None)
-        context.sparql_engine_error = error
-        if not repeated:
-            logger.warning("sh:sparql constraint %s rejected by %s — evaluating with rdflib "
-                           "and flagging the shape (fix the rule upstream):\n%s",
-                           rule.shape_id, engine_name, error)
-        note = _empty() if repeated else _invalid_sparql(
-            rule, f"{str(error).splitlines()[0]} — the constraint WAS still evaluated "
-                  f"via the rdflib fallback; fix the shape/data upstream")
-        try:
-            violations = _sparql_violations(
-                rule, sparql.query(context.dataset(), query_text, engine="rdflib"))
-        except Exception as rdflib_error:                 # noqa: BLE001 — truly broken query
-            logger.error("sh:sparql constraint %s also fails on rdflib: %s",
-                         rule.shape_id, rdflib_error)
-            return _invalid_sparql(rule, _not_evaluated(rule, rdflib_error), severity="Violation")
-        return pandas.concat([violations, note], ignore_index=True)
+        result, rejection = _select(context, _sparql_query_text(rule, focus_ids))
+    except Exception as error:                            # noqa: BLE001 — defective authored query
+        logger.error("sh:sparql constraint %s fails on every engine: %s", rule.shape_id, error)
+        return _invalid_sparql(rule.shape_id, rule.path, _not_evaluated(rule, error), severity="Violation")
+    violations = _sparql_violations(rule, result)
+    if rejection is None:
+        return violations
+    note = _rejected(context, [rule.shape_id], rule.path, "constraint", rejection)
+    return pandas.concat([violations, note], ignore_index=True)
 
 
 def _not_evaluated(rule, error):
     """The message for a constraint no engine could run: name the shape and
     its target/path (anonymous property shapes only have a blank-node id),
     say plainly that nothing was checked — a shapes bug, not a data finding."""
-    where = f"{rule.target_class}/{rule.path}" if rule.path else rule.target_class
-    return (f"sh:sparql constraint of shape {_local(str(rule.shape_id))} ({where}) was "
+    target = rule.target_on if rule.target_by != "SPARQL" else "sh:target"
+    where = f"{target}/{rule.path}" if rule.path else target
+    return (f"sh:sparql constraint of shape {split_iri(str(rule.shape_id))[1]} ({where}) was "
             f"NOT evaluated — the query is defective on every engine "
             f"(rdflib: {str(error).splitlines()[0]}). "
             f"A shapes bug, not a data finding; this constraint went unchecked.")
 
 
-def _invalid_sparql(rule, message, severity="Warning"):
-    """One report row flagging a constraint query an engine rejected — the
-    caller words the message (rejected-but-evaluated vs not evaluated at all)."""
+def _invalid_sparql(shape_id, path, message, severity="Warning"):
+    """One report row flagging a query an engine rejected — the caller words
+    the message (rejected-but-evaluated vs not evaluated at all)."""
     return pandas.DataFrame({
         "ID": [None],
-        "KEY": rule.path,
+        "KEY": path,
         "VALUE": None,
         "VIOLATION_TYPE": "triplets:invalidSparql",
         "MESSAGE": message,
         "SEVERITY": severity,
-        "SOURCE_SHAPE": rule.shape_id,
+        "SOURCE_SHAPE": shape_id,
     }, columns=VIOLATION_COLUMNS)
+
+
+def _sparql_targets(context, rules):
+    """The focus IDs of the SPARQL-targeted *rules* as {query: IDs} — each
+    distinct target query runs once — plus the note rows, one per NodeShape
+    (``rule.shapes[0]``) the query targets. A target query no engine can run,
+    or one that projects no ``?this``, gives those shapes no focus and a
+    ``triplets:invalidSparql`` Violation each; a strict engine's rejection is
+    evaluated on rdflib and flagged with a Warning, like sh:sparql."""
+    shapes = {}
+    for rule in rules:
+        shapes.setdefault(rule.target_on, set()).add(rule.shapes[0])
+    targets, notes = {}, [_empty()]
+    for query_text, shape_ids in shapes.items():
+        shape_ids = sorted(shape_ids)
+        targets[query_text] = _NO_IDS
+        try:
+            result, rejection = _select(context, query_text)
+        except Exception as error:                        # noqa: BLE001 — defective authored query
+            notes.append(_unchecked_target(
+                shape_ids, f"the query is defective on every engine (rdflib: {str(error).splitlines()[0]})"))
+            continue
+        if "this" not in result.columns:
+            notes.append(_unchecked_target(shape_ids, "the query projects no ?this"))
+            continue
+        targets[query_text] = _shorten(result["this"].dropna().astype(str), iri_pandas.local_id).unique()
+        if rejection is not None:
+            notes.append(_rejected(context, shape_ids, None, "SPARQL target", rejection))
+    return targets, pandas.concat(notes, ignore_index=True)
+
+
+def _unchecked_target(shape_ids, reason):
+    """One Violation per NodeShape whose SPARQL target gave no focus for *reason*."""
+    logger.error("SPARQL target of %s not evaluated: %s", ", ".join(shape_ids), reason)
+    return pandas.concat([_invalid_sparql(shape_id, None, (
+        f"SPARQL target of shape {split_iri(shape_id)[1]} was NOT evaluated — {reason}. "
+        f"A shapes bug, not a data finding; the shape went unchecked."), severity="Violation")
+        for shape_id in shape_ids], ignore_index=True)
+
+
+def sparql_targets(data, rules, rdf_map=None, undefined_namespace=CIM_NS):
+    """Focus IDs of the SPARQL targets among *rules* over *data* (any flavor
+    triplets.sparql accepts) and the note rows — see ``_sparql_targets``."""
+    return _sparql_targets(_Context(data, rdf_map, undefined_namespace), rules)
 
 
 # fork inherits this by copy-on-write — the dataset is never pickled per task
@@ -529,31 +608,36 @@ def _sparql_worker(query_text):
 
 
 def _sparql_parallel(context, rules, max_workers):
-    """Run the sh:sparql constraint queries in parallel processes.
+    """Run the sh:sparql constraint queries in parallel, one task per query.
 
-    rdflib query evaluation is GIL-bound pure Python, so threads don't help;
-    fork gives copy-on-write sharing of the loaded dataset (Linux). One task
-    per constraint query. Only applies to the rdflib engine — the embedded
-    engines (qlever: C++ state must not be forked; oxigraph: Rust store) are
-    orders of magnitude faster and run the queries sequentially. Both release
-    the GIL during queries, so threading them is a recorded future
-    optimization (TODO.md).
+    rdflib query evaluation is GIL-bound pure Python, so it runs in forked
+    processes: fork gives copy-on-write sharing of the loaded dataset (Linux).
+    The embedded engines release the GIL while evaluating (oxigraph: in
+    ``Store.query`` and ``QuerySolutions.serialize``; qlever: ``nogil``) and
+    read-share one loaded store, so they run on threads — qlever's C++ state
+    must not be forked anyway. The first query runs alone: it settles
+    ``context.data_hashed`` and a cold store cache before the pool starts
+    (accepted or rejected), so the threads never hash the data or load the
+    store concurrently. Queries a strict engine rejects fall back to rdflib,
+    which holds the GIL — those fallbacks do not run in parallel.
     """
     from .. import sparql
-    if sparql.get_engine("auto")[0] != "rdflib":
-        logger.debug("sparql auto engine is not rdflib — max_workers ignored (sequential)")
-        return [_sparql(context, rule) for rule in rules]
-
-    global _FORK_DATASET
-    tasks = [(rule, _sparql_query_text(rule, context.focus(rule)))
-             for rule in rules if len(context.focus(rule))]
+    tasks = [rule for rule in rules if len(context.focus(rule))]
     if not tasks:
         return []
+    if sparql.get_engine("auto")[0] != "rdflib":
+        frames = [_sparql(context, tasks[0])]
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            frames += pool.map(lambda rule: _sparql(context, rule), tasks[1:])
+        return frames
+
+    global _FORK_DATASET
     _FORK_DATASET = context.dataset()
     try:
         with ProcessPoolExecutor(max_workers=max_workers,
                                  mp_context=multiprocessing.get_context("fork")) as pool:
-            results = list(pool.map(_sparql_worker, [text for _, text in tasks]))
+            results = list(pool.map(_sparql_worker, [_sparql_query_text(rule, context.focus(rule))
+                                                     for rule in tasks]))
     except (BrokenProcessPool, OSError) as error:
         # fork from a thread-heavy process (polars/duckdb pools, pytest) can kill
         # workers — degrade to sequential instead of failing the validation
@@ -561,45 +645,104 @@ def _sparql_parallel(context, rules, max_workers):
         return [_sparql(context, rule) for rule in rules]
     finally:
         _FORK_DATASET = None
-    return [_sparql_violations(rule, result) for (rule, _), result in zip(tasks, results)]
+    return [_sparql_violations(rule, result) for rule, result in zip(tasks, results)]
 
 
 # ── logical operators (params: nested IR row-dict lists) ────────────────────
 
-def _run_nested(context, row_dicts, focus_ids=None):
+def _run_nested(context, row_dicts, focus_ids=None, lexical=False):
     """Validate nested IR rows (inheriting the parent's focus override, so shapes
-    nested under sh:node keep judging the referenced value nodes)."""
+    nested under sh:node keep judging the referenced value nodes).
+
+    The operators and sh:node judge conformance on the lexical space: the
+    triplets:lexicalForm Warnings are left out unless *lexical* (sh:property,
+    which reports the nested findings as its own)."""
     rules = [SimpleNamespace(focus_ids=focus_ids, **row) for row in row_dicts]
     frames = [CONSTRAINT_VALIDATORS[rule.component](context, rule)
               for rule in rules if rule.component in CONSTRAINT_VALIDATORS]
-    return pandas.concat(frames, ignore_index=True) if frames else _empty()
+    nested = pandas.concat(frames, ignore_index=True) if frames else _empty()
+    return nested if lexical else nested[nested["VIOLATION_TYPE"] != "triplets:lexicalForm"]
 
 
-def _and(context, rule):
-    """sh:and — every nested shape must hold; each nested violation is reported."""
-    focus_ids = getattr(rule, "focus_ids", None)
-    violations = pandas.concat([_run_nested(context, alternative, focus_ids)
-                                for alternative in rule.params], ignore_index=True)
-    violations["VIOLATION_TYPE"] = "sh:and"
-    return violations
+def _value_pairs(rows):
+    """(focus, value) string pairs of a path_rows frame — the value nodes a
+    property-level operator judges."""
+    return set(zip(rows["FOCUS"].astype(str), rows["PATH_VALUE"].astype(str)))
+
+
+def _failed_values(pairs, result):
+    """The *pairs* that *result* violates: a nested finding on a pair fails that
+    pair; one with no VALUE or a value not under the path (a cardinality member,
+    sh:equals) fails every value of that focus."""
+    by_focus = {}
+    for focus, value in pairs:
+        by_focus.setdefault(focus, set()).add((focus, value))
+    failed = set()
+    for focus, value in zip(result["ID"].astype(str), result["VALUE"]):
+        pair = (focus, str(value))
+        failed |= {pair} if not pandas.isna(value) and pair in pairs else by_focus.get(focus, set())
+    return failed
+
+
+def _value_frame(rule, pairs, message):
+    pairs = sorted(pairs)
+    return _frame(rule, [focus for focus, _ in pairs], [value for _, value in pairs], message)
 
 
 def _or(context, rule):
-    """sh:or — a focus node violates only when EVERY alternative is violated."""
+    """sh:or — violates only when EVERY alternative is violated: per focus node
+    in a node shape, per value node in a property shape."""
     focus_ids = getattr(rule, "focus_ids", None)
-    violating_sets = [set(_run_nested(context, alternative, focus_ids)["ID"])
-                      for alternative in rule.params]
-    focus = sorted(set.intersection(*violating_sets)) if violating_sets else []
-    return _frame(rule, focus, None, "no sh:or alternative is satisfied")
+    results = [_run_nested(context, alternative, focus_ids) for alternative in rule.params]
+    if rule.path is None:
+        violating_sets = [set(result["ID"]) for result in results]
+        focus = sorted(set.intersection(*violating_sets)) if violating_sets else []
+        return _frame(rule, focus, None, "no sh:or alternative is satisfied")
+    pairs = _value_pairs(context.path_rows(rule))
+    failing = set.intersection(pairs, *(_failed_values(pairs, result) for result in results))
+    return _value_frame(rule, failing, "no sh:or alternative is satisfied")
+
+
+def _and(context, rule):
+    """sh:and — violates when ANY member is violated: per focus node in a node
+    shape, per value node in a property shape."""
+    focus_ids = getattr(rule, "focus_ids", None)
+    results = [_run_nested(context, member, focus_ids) for member in rule.params]
+    message = "not every sh:and member is satisfied"
+    if rule.path is None:
+        return _frame(rule, sorted(set().union(*(set(result["ID"]) for result in results))), None, message)
+    pairs = _value_pairs(context.path_rows(rule))
+    return _value_frame(rule, set().union(*(_failed_values(pairs, result) for result in results)), message)
+
+
+def _xone(context, rule):
+    """sh:xone — violates unless EXACTLY one alternative is satisfied: per focus
+    node in a node shape, per value node in a property shape. An empty
+    alternative (a switched-off member) is satisfied."""
+    focus_ids = getattr(rule, "focus_ids", None)
+    results = [_run_nested(context, alternative, focus_ids) for alternative in rule.params]
+    message = "not exactly one sh:xone alternative is satisfied"
+    if rule.path is None:
+        violating = [set(result["ID"]) for result in results]
+        focus = [node for node in context.focus(rule) if sum(node not in ids for ids in violating) != 1]
+        return _frame(rule, focus, None, message)
+    pairs = _value_pairs(context.path_rows(rule))
+    failed = [_failed_values(pairs, result) for result in results]
+    return _value_frame(rule, {pair for pair in pairs if sum(pair not in fails for fails in failed) != 1}, message)
 
 
 def _node(context, rule):
-    """sh:node — every value at the path must conform to the referenced shape.
+    """sh:node — every value at the path must conform to the referenced shape;
+    in a node shape, the focus node itself must.
 
     The referenced shape was expanded into nested IR rows at compile time; here
     they run with the referenced value nodes as focus. A value node that
     produces any nested violation makes the referring focus node violate sh:node.
     """
+    if rule.path is None:
+        nested = _run_nested(context, rule.params["rows"], getattr(rule, "focus_ids", None))
+        return _frame(rule, sorted(set(nested["ID"])), None,
+                      f"node does not conform to shape {rule.params['shape']}")
     rows = context.path_rows(rule)
     referenced = rows["PATH_VALUE"].unique()
     if not len(referenced):
@@ -610,12 +753,23 @@ def _node(context, rule):
                   f"value does not conform to shape {rule.params['shape']}")
 
 
+def _property(context, rule):
+    """sh:property on a property shape — the nested property shapes judge the value
+    nodes and report their own findings (SHACL §4.7.2), unlike sh:node."""
+    referenced = context.path_rows(rule)["PATH_VALUE"].unique()
+    return _run_nested(context, rule.params["rows"], referenced, lexical=True)
+
+
 def _not(context, rule):
-    """sh:not — a focus node violates when it SATISFIES the negated shape."""
-    violating = set(_run_nested(context, rule.params, getattr(rule, "focus_ids", None))["ID"])
-    ids = context.focus(rule)
-    conforming = [focus for focus in ids if focus not in violating]
-    return _frame(rule, conforming, None, "node conforms to the negated shape")
+    """sh:not — violates when it SATISFIES the negated shape: per focus node in
+    a node shape, per value node in a property shape."""
+    nested = _run_nested(context, rule.params, getattr(rule, "focus_ids", None))
+    if rule.path is None:
+        violating = set(nested["ID"])
+        conforming = [focus for focus in context.focus(rule) if focus not in violating]
+        return _frame(rule, conforming, None, "node conforms to the negated shape")
+    pairs = _value_pairs(context.path_rows(rule))
+    return _value_frame(rule, pairs - _failed_values(pairs, nested), "value conforms to the negated shape")
 
 
 # component → validator. The polars and duckdb compilers implement this same
@@ -623,6 +777,7 @@ def _not(context, rule):
 CONSTRAINT_VALIDATORS = {
     "sh:sparql": _sparql,
     "sh:node": _node,
+    "sh:property": _property,
     "sh:minCount": _min_count,
     "sh:maxCount": _max_count,
     "sh:datatype": _datatype,
@@ -637,6 +792,7 @@ CONSTRAINT_VALIDATORS = {
     "sh:hasValue": _has_value,
     "sh:class": _class,
     "triplets:range": _schema_range,
+    "triplets:missing": _schema_missing,
     "sh:nodeKind": _node_kind,
     "sh:equals": _equals,
     "sh:disjoint": _disjoint,
@@ -645,11 +801,13 @@ CONSTRAINT_VALIDATORS = {
     "sh:closed": _closed,
     "sh:and": _and,
     "sh:or": _or,
+    "sh:xone": _xone,
     "sh:not": _not,
 }
 
 
-def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None, **kwargs):
+def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
+             undefined_namespace=CIM_NS, ancestors=None, lexical=True, **kwargs):
     """Validate triplet data against the compiled constraint table.
 
     Parameters
@@ -657,21 +815,29 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     data : triplet DataFrame (pandas/polars), arrow, or DuckDB connection
     compiled : CompiledShapes
         From ``triplets.validation.compile`` — this engine executes the IR.
-    rdf_map : dict or str, optional
-        Used only for the sh:sparql constraints (typed literals in the queried
-        graph); every other component reads the raw lexical forms directly.
-    scope : iterable of INSTANCE_ID, optional
+    rdf_map : dict, optional
+        Scoped export schema (``schema_scope.scoped_rdf_map``): typed literals for
+        the sh:sparql graph and the IRI/literal decision for sh:nodeKind. Every
+        other component reads the raw lexical forms.
+    data_scope : iterable of INSTANCE_ID, optional
         Validate only rows of these instances.
     components : iterable of component names, optional
         Restrict to a subset (e.g. ``("sh:datatype",)`` for the lexical
         supplement run next to pyshacl). None = everything implemented.
     max_workers : int, optional
-        Run the sh:sparql constraint queries in parallel processes (fork).
+        Run the sh:sparql constraint queries on that many workers: forked
+        processes on the rdflib engine, threads on oxigraph / qlever.
         None = sequential.
+    ancestors : dict, optional
+        ``schema_scope.class_ancestors`` map: class targets and sh:class also
+        match subclass instances. None = exact rdf:type only.
+    lexical : bool, default True
+        sh:datatype also reports valid-but-narrower forms as triplets:lexicalForm
+        Warnings; False checks the lexical space only.
     """
     data = _to_pandas(data)
-    if scope is not None:
-        data = data[data["INSTANCE_ID"].isin(list(scope))]
+    if data_scope is not None:
+        data = data[data["INSTANCE_ID"].isin(list(data_scope))]
 
     rules = compiled.ir
     if components is not None:
@@ -680,19 +846,18 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     if skipped:
         logger.debug("pandas engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
 
-    context = _Context(data, rdf_map)
+    context = _Context(data, rdf_map, undefined_namespace, ancestor_pairs(ancestors), lexical)
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
+    context.targets, notes = _sparql_targets(context, [rule for rule in selected if rule.target_by == "SPARQL"])
 
-    frames = [CONSTRAINT_VALIDATORS[rule.component](context, rule)
-              for rule in selected if rule.component != "sh:sparql"]
+    frames = [notes, *(CONSTRAINT_VALIDATORS[rule.component](context, rule)
+                       for rule in selected if rule.component != "sh:sparql")]
     if sparql_rules and max_workers:
         frames += _sparql_parallel(context, sparql_rules, max_workers)
     else:
         frames += [_sparql(context, rule) for rule in sparql_rules]
 
-    if not frames:
-        return _empty()
     violations = pandas.concat(frames, ignore_index=True)
     # a defective shape fans out to one rule per sh:targetClass — flag it once
     invalid = violations["VIOLATION_TYPE"] == "triplets:invalidSparql"

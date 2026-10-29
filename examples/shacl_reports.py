@@ -17,14 +17,15 @@ Complex = cross-object sh:sparql rules) using the performance modules: the
 pyarrow-backed parser, the polars SHACL executor (engine="auto") and the
 oxigraph SPARQL engine for the sh:sparql rules.
 
-Pristine Svedala conforms, so three issues are introduced deliberately and the
-validation must find exactly those. Violations stay in the console; the full
+Pristine Svedala has one Violation of its own (a negative
+ActivePowerLimit.normalValue). Three issues are introduced deliberately and the
+validation finds each of them. Violations stay in the console; the full
 report is exported as a standard sh:ValidationReport (turtle + RDF/XML) and as
 SARIF 2.1.0 carrying exact source locations (file + line of the violated element).
 
-The ENTSO-E shapes are taken from $TRIPLETS_CGMES_SHACL (a local clone of
-github.com/entsoe/application-profiles-library) or downloaded once next to
-this script.
+The ENTSO-E shapes are taken from $TRIPLETS_CGMES_SHACL (the CGMES/SHACL folder
+of a github.com/entsoe/CGMES-AP clone), else from the test_data/CGMES-AP
+submodule, else downloaded once next to this script.
 """
 import logging
 import os
@@ -41,9 +42,9 @@ from triplets.export_schema import schemas
 logging.getLogger("triplets.validation").setLevel(logging.ERROR)
 
 HERE = Path(__file__).resolve().parent
-EQ = str(HERE.parent / "test_data/relicapgrid/Instance/Grid/IGM_Svedala/20220615T2230Z__Svedala_EQ_1.xml")
+EQ = str(HERE.parent / "test_data/relicapgrid/Instance/Svedala/Grid/cimxml/20220615T2230Z__Svedala_EQ_1.xml")
 
-UPSTREAM_RAW = "https://raw.githubusercontent.com/entsoe/application-profiles-library/main/CGMES/SHACL"
+UPSTREAM_RAW = "https://raw.githubusercontent.com/entsoe/CGMES-AP/main/CGMES/SHACL"
 SHACL_FILES = [
     "61970-600-2_Equipment-AP-Con-Simple-SHACL.ttl",   # cardinality, datatype, valueType
     "61970-301_Equipment-AP-Con-Complex-SHACL.ttl",    # cross-object sh:sparql rules
@@ -51,12 +52,13 @@ SHACL_FILES = [
 
 
 def entsoe_shapes():
-    """Local application-profiles-library clone if configured, else download once."""
-    shacl_dir = Path(os.environ.get("TRIPLETS_CGMES_SHACL", HERE / "entsoe_shacl"))
+    """Local CGMES-AP SHACL folder if configured or checked out, else download once."""
+    submodule = HERE.parent / "test_data/CGMES-AP/CGMES/SHACL"
+    shacl_dir = Path(os.environ.get("TRIPLETS_CGMES_SHACL", submodule if submodule.is_dir() else HERE / "entsoe_shacl"))
     shacl_dir.mkdir(exist_ok=True)
     for name in SHACL_FILES:
         if not (shacl_dir / name).exists():
-            print(f"downloading {name} from entsoe/application-profiles-library@main")
+            print(f"downloading {name} from entsoe/CGMES-AP@main")
             urllib.request.urlretrieve(f"{UPSTREAM_RAW}/{name}", shacl_dir / name)
     return [str(shacl_dir / name) for name in SHACL_FILES]
 
@@ -67,9 +69,10 @@ shapes = entsoe_shapes()
 data = pandas.read_RDF([EQ])
 print(f"parsed {len(data):,} triples from {Path(EQ).name}")
 
-# >>> pristine data conforms: no Violations, only the lexical-form style
-# >>> Warnings of the documented datatype deviation (integer-form floats)
-pristine = data.shacl.validate(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+# >>> pristine data: one Violation of its own (ActivePowerLimit.normalValue -2500)
+# >>> and the lexical-form Warnings of the documented datatype deviation
+# >>> (integer-form floats)
+pristine = data.shacl.validate_shacl(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope=["EQ"])
 print(f"\npristine: {pristine['SEVERITY'].value_counts().to_dict()}")
 
 # >>> introduce three issues deliberately
@@ -80,16 +83,17 @@ substation = sorted(data.loc[(data["KEY"] == "Type") & (data["VALUE"] == "Substa
 
 # 1: a line loses its name              -> Simple cardinality rule (vectorized)
 broken = data[~((data["ID"] == line) & (data["KEY"] == "IdentifiedObject.name"))].copy()
-# 2: a winding gets a negative ratedU   -> Complex valueRange sh:sparql rule
+# 2: a winding gets a negative ratedU   -> Complex valueRange sh:sparql rule, on its PowerTransformer
 broken.loc[(broken["ID"] == winding) & (broken["KEY"] == "PowerTransformerEnd.ratedU"), "VALUE"] = "-400"
-# 3: a terminal points at a Substation  -> Complex consistency sh:sparql rules
+# 3: a terminal points at a Substation  -> Simple valueType rule + Complex consistency
+#                                          sh:sparql rule on the PowerTransformerEnd using it
 broken.loc[(broken["ID"] == terminal) & (broken["KEY"] == "Terminal.ConductingEquipment"), "VALUE"] = substation
 
 # >>> validate again — engine="auto" is the polars executor, the Complex
 # >>> sh:sparql rules are delegated to the SPARQL engine (oxigraph)
-violations = broken.shacl.validate(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+violations = broken.shacl.validate_shacl(shapes, rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope=["EQ"])
 found = violations[violations["SEVERITY"] == "Violation"]
-print(f"\nafter breaking 3 things: {len(found)} Violations")
+print(f"\nafter breaking 3 things: {len(found)} Violations ({len(found) - (pristine['SEVERITY'] == 'Violation').sum()} new)")
 print(found[["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE"]].to_string(index=False, max_colwidth=60))
 
 # >>> enrich with context (object type/name, source file, shape + schema
@@ -97,7 +101,7 @@ print(found[["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE"]].to_string(index
 # >>> stamps SOURCE_URI / SOURCE_LINE onto every violation —
 # >>> both report exports below reuse the same columns
 enriched = violations.shacl.enrich(data=broken, shapes=shapes,
-                                   rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+                                   rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, rdf_map_scope=["EQ"])
 located = enriched.shacl.locate(sources=[EQ])
 print("\nenriched + located Violations (what/where):")
 print(located.loc[located["SEVERITY"] == "Violation",

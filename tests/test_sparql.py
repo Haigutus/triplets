@@ -70,8 +70,8 @@ def test_scope_restricts_to_named_graph(svedala):
     other = next(i for i in all_instances if i != eq_instance)
 
     q = PREFIXES + "SELECT (COUNT(?s) AS ?n) WHERE { ?s rdf:type cim:ACLineSegment }"
-    in_scope = int(svedala.sparql.query(q, scope=[eq_instance])["n"].iloc[0])
-    out_scope = int(svedala.sparql.query(q, scope=[other])["n"].iloc[0])
+    in_scope = int(svedala.sparql.query(q, data_scope=[eq_instance])["n"].iloc[0])
+    out_scope = int(svedala.sparql.query(q, data_scope=[other])["n"].iloc[0])
     assert in_scope > 0
     assert out_scope == 0
 
@@ -87,7 +87,7 @@ def test_dataset_shared_across_row_order_and_scope(svedala):
     shuffled = svedala.sample(frac=1, random_state=3).reset_index(drop=True)
     triplets.sparql.query(shuffled, q)
     instance = str(svedala["INSTANCE_ID"].astype(str).iloc[0])
-    triplets.sparql.query(shuffled, q, scope=[instance])
+    triplets.sparql.query(shuffled, q, data_scope=[instance])
     assert len(_rdflib_loader._DATASETS) == cached
 
 

@@ -1,13 +1,11 @@
 """Schema-based validation: compile the export schema (rdf_map) into engine
-IR — cardinality, datatypes, enumerations and association ranges validated by
-the same vectorized engines that run SHACL shapes.
+IR — cardinality, datatypes and enumerations (``compile_schema``) and the
+reference types of associations (``compile_references``), validated by the same
+vectorized engines that run SHACL shapes.
 
-The schema JSON is a SET of profiles; ``compile_schema`` compiles every
-contained profile separately — one :class:`CompiledShapes` per section,
-addressable through the profiles' own declared identifiers (versionIRI /
-conformsTo URI, keyword, section key). **Profiles are never merged**: an
-instance file is validated per profile it declares, against that profile's
-own constraints (``validate_schema`` orchestrates this per INSTANCE_ID).
+``compile_schema`` compiles the profiles of an ``rdf_map_scope``, merged into
+one (``triplets.validation.schema_scope``): a CGMES 3.0 EQ file is
+``["EQ", "OP", "SC"]``. One profile = that profile's own rules.
 
 The IR keeps the engines' ``sh:*`` dispatch keys (registries stay shared);
 results present with vocabulary-accurate types instead — schema validation
@@ -15,33 +13,27 @@ does not masquerade as SHACL (constraint language ``"rdfs"``):
 
     sh:minCount → xsd:minOccurs      sh:maxCount → xsd:maxOccurs
     sh:datatype → xsd:type           sh:in       → rdfs:range
-    triplets:range → rdfs:range      sh:closed   → schema:domainIncludes
+    sh:closed   → schema:domainIncludes
+    triplets:range → rdfs:range      triplets:missing (a reference to an object not in the data)
 
 Cardinality comes from the schema's already-resolved ``xsd:minOccours`` /
 ``xsd:maxOccours`` fields, datatypes from ``xsd:type`` (the lexical registry
-consumes that form directly), enumeration membership from ``values``, and
-association targets from ``range`` expanded to concrete subclasses via the
-classes' ``inheritance`` lists — the expansion index spans ALL sections
-(class inheritance is model knowledge, not a profile constraint). A
-referenced object conforms when ANY of its types is in the range set;
-dangling references are silent. No rdflib on this path: ``graph`` is None
-and the pyshacl engine refuses schema-compiled shapes.
+consumes that form directly), enumeration membership from ``values``. Class
+rules never widen to subclasses: each Class entry already lists its inherited
+attributes. No rdflib on this path: ``graph`` is None and the pyshacl engine
+refuses schema-compiled shapes.
 """
-import hashlib
-import json
 import logging
-import os
-
-from dataclasses import dataclass, field
 
 import pandas
 
-from .._header import _profile_identity_index
+from .._header import _PROPERTY_TYPES
+from ..iri import TYPE_KEY, load_schema, local_value
+from .schema_scope import (SCOPE_KEY, _merged_entries, class_ancestors, require_entries,
+                           scope_sections, scoped_rdf_map)
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
 
 logger = logging.getLogger(__name__)
-
-_PROPERTY_TYPES = ("Attribute", "Association", "Enumeration")
 
 # engine dispatch key → presented violation type (vocabulary-accurate)
 PRESENTED = {"sh:minCount": "xsd:minOccurs", "sh:maxCount": "xsd:maxOccurs",
@@ -49,125 +41,146 @@ PRESENTED = {"sh:minCount": "xsd:minOccurs", "sh:maxCount": "xsd:maxOccurs",
              "triplets:range": "rdfs:range", "sh:closed": "schema:domainIncludes"}
 
 
-@dataclass
-class CompiledSchema:
-    """All profiles of one export schema, compiled — never merged.
+def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False) -> CompiledShapes:
+    """Compile the scoped profiles of an export schema (dict or path), merged into one.
 
-    ``profiles`` holds one CompiledShapes per section; ``index`` maps every
-    identifier a profile declares (versionIRI / conformsTo URI, keyword,
-    section key — the same identity the instance headers reference) to its
-    section, so instance-declared profile URIs look up directly.
+    rdf_map_scope : profile identifier or sequence of them
+        Section keys and/or declared profile IRIs; ``"*"`` = every section;
+        None = the root entries. A scope without Class entries raises ValueError.
+    report_undefined_keys : bool, default False
+        False: only the keys the scoped profiles define are checked. True also
+        reports keys on an object that no scoped profile defines for its class
+        (one schema:domainIncludes check per class).
     """
-
-    profiles: dict                # section key → CompiledShapes
-    index: dict                   # declared identifier → section key
-    hash: str
-    sources: tuple = ()
-    stats: dict = field(default_factory=dict)   # {"profiles": [...], "skipped_shapes": [...]}
-
-    def get(self, identifier):
-        """CompiledShapes for a profile URI / keyword / section key, or None."""
-        section = self.index.get(str(identifier))
-        return self.profiles.get(section) if section else None
-
-    def section(self, identifier):
-        """Section key for any declared identifier, or None."""
-        return self.index.get(str(identifier))
-
-
-def compile_schema(rdf_map, closed=False) -> CompiledSchema:
-    """Compile every profile contained in the export schema (dict or path).
-
-    closed=False (default): properties a profile does not define for a class
-    are not reported. closed=True adds one schema:domainIncludes check per
-    class and profile.
-    """
-    schema, digest, source = _load(rdf_map)
-    key = f"schema|closed={closed}|{digest}"
+    schema, digest, source = load_schema(rdf_map)
+    sections = scope_sections(schema, rdf_map_scope)
+    key = f"schema|{digest}|{sections}|undefined={report_undefined_keys}"
     if key in _COMPILE_CACHE:
-        logger.debug("schema compile cache hit: %s", key[:30])
+        logger.debug("schema compile cache hit: %s", key[:40])
         return _COMPILE_CACHE[key]
 
-    concrete = _concrete_index(schema)
-    profiles, skipped = {}, []
-    for section, entries in schema.items():
-        if not isinstance(entries, dict):
-            continue
-        section_skipped = []
-        rows = _section_rows(section, entries, concrete, closed, section_skipped)
-        if not rows:
-            continue
-        skipped.extend(f"{section}: {entry}" for entry in section_skipped)
-        ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
-        ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
-        profiles[section] = CompiledShapes(
-            graph=None, ir=ir, hash=f"{key}|{section}", sources=(source,), language="rdfs",
-            stats={"node_shapes": int(ir["target_class"].nunique()), "constraints": len(ir),
-                   "skipped_shapes": sorted(section_skipped), "unknown_components": []})
-
-    compiled = CompiledSchema(profiles=profiles, index=_profile_identity_index(schema),
-                              hash=key, sources=(source,),
-                              stats={"profiles": sorted(profiles), "skipped_shapes": sorted(skipped)})
+    scoped, notes = scoped_rdf_map(schema, rdf_map_scope)
+    entries = scoped[SCOPE_KEY]
+    require_entries(entries, rdf_map_scope, classes=True)
+    ir = pandas.DataFrame(_class_rows(sections, entries, report_undefined_keys), columns=IR_COLUMNS)
+    ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
+    compiled = CompiledShapes(
+        graph=None, ir=ir, hash=key, sources=(source,), language="rdfs",
+        stats={"node_shapes": int(ir["target_on"].nunique()), "constraints": len(ir),
+               "skipped_shapes": notes["skipped_shapes"],
+               "relaxed_constraints": notes["relaxed_constraints"], "unknown_components": []})
     _COMPILE_CACHE[key] = compiled
-    logger.debug("compiled %d schema profiles: %s", len(profiles), ", ".join(sorted(profiles)))
+    logger.debug("compiled schema %s: %d constraints", sections, len(ir))
     return compiled
 
 
-def _load(rdf_map):
-    """dict or path → (schema dict, content digest, source name)."""
-    if isinstance(rdf_map, dict):
-        digest = hashlib.sha256(
-            json.dumps(rdf_map, sort_keys=True, default=str).encode()).hexdigest()
-        return rdf_map, digest, "rdf_map"
-    with open(rdf_map, "rb") as file:
-        content = file.read()
-    return (json.loads(content), hashlib.sha256(content).hexdigest(),
-            os.path.basename(str(rdf_map)))
+def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_missing_targets=True,
+                       inheritance=True) -> CompiledShapes:
+    """Compile the association reference checks of the scoped (source) profiles, merged.
 
+    A reference conforms when ANY type of the referenced object (RDF types are
+    cumulative — issue #100) is the range class or, with *inheritance*, a class
+    whose :func:`~triplets.validation.schema_scope.class_ancestors` over the source
+    and target profiles reach it. A range class none of those profiles defines
+    cannot be decided: the association is listed in ``skipped_shapes``.
 
-def _concrete_index(schema):
-    """ancestor local name → concrete classes inheriting it, across ALL
-    sections — inheritance is model knowledge, not a profile constraint."""
-    concrete = {}
-    for entries in schema.values():
-        if not isinstance(entries, dict):
+    report_missing_targets : bool, default True
+        Also report references whose object is not in the validated data
+        (``triplets:missing``); False leaves them silent.
+    """
+    schema, digest, source = load_schema(rdf_map)
+    sources = scope_sections(schema, rdf_map_scope)
+    targets = scope_sections(schema, target_rdf_map_scope) if target_rdf_map_scope else []
+    if sources is None and targets:
+        raise ValueError("target_rdf_map_scope names profiles — name the source profiles too")
+    key = (f"references|{digest}|{sources}|{targets}|missing={report_missing_targets}"
+           f"|inheritance={inheritance}")
+    if key in _COMPILE_CACHE:
+        return _COMPILE_CACHE[key]
+
+    entries = _merged_entries(schema, rdf_map_scope)[1]   # the merge's datatype/cardinality notes concern no reference
+    require_entries(entries, rdf_map_scope, classes=True)
+    combined = None if sources is None else list(dict.fromkeys([*sources, *targets]))
+    ancestors = class_ancestors(schema, combined)
+    accepted = {}
+    for name, steps in ancestors.items():
+        accepted.setdefault(name, set()).add(name)
+        for parent in (local_value(step, "class") for step in steps) if inheritance else ():
+            accepted.setdefault(parent, set()).add(name)
+    rows, skipped = [], []
+    for meta, prop, entry in _associations(sources, entries):
+        classes = accepted.get(local_value(entry.get("range", ""), "class"))
+        if not classes:
+            skipped.append(f"{meta['target_on']}.{prop}: association range {entry.get('range')!r} "
+                           "matches no Class entry of the source or target profiles")
             continue
-        for name, entry in entries.items():
-            if isinstance(entry, dict) and entry.get("type") == "Class":
-                for ancestor in entry.get("inheritance", ()):
-                    concrete.setdefault(_local(ancestor), set()).add(name)
-    return concrete
+        rows.append({**meta, "component": "triplets:range", "params": sorted(classes)})
+        if report_missing_targets:
+            rows.append({**meta, "component": "triplets:missing", "params": sorted(classes)})
+    ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
+    ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
+    compiled = CompiledShapes(
+        graph=None, ir=ir, hash=key, sources=(source,), language="rdfs",
+        stats={"node_shapes": int(ir["target_on"].nunique()), "constraints": len(ir),
+               # no cardinality or enumeration rows here: nothing the merge relaxes is checked
+               "skipped_shapes": skipped, "relaxed_constraints": [], "unknown_components": []})
+    _COMPILE_CACHE[key] = compiled
+    return compiled
 
 
-def _section_rows(section, entries, concrete, closed, skipped):
-    """One profile section → IR rows (this profile's constraints only)."""
-    rows = []
+def _associations(sections, entries):
+    """(row meta, property, entry) for every Association parameter of the Class entries."""
+    for meta, entry in _class_meta(sections, entries):
+        for prop in dict.fromkeys(entry.get("parameters", ())):
+            prop_entry = entries.get(prop)
+            if isinstance(prop_entry, dict) and prop_entry.get("type") == "Association":
+                shape_id = f"{meta['shape_id']}.{prop}"
+                yield {**meta, "path": prop, "shape_id": shape_id, "shapes": (*meta["shapes"], shape_id)}, \
+                    prop, prop_entry
+
+
+def _shape_prefix(sections):
+    """Shape-id namespace of a scope: one per scope, so findings of different
+    scopes never share a shape (SARIF groups by shape); the local name is the
+    class (``Breaker`` / ``Breaker.IdentifiedObject.name``)."""
+    return "urn:triplets:schema" + "".join(f":{section}" for section in sections or ()) + "#"
+
+
+def _class_meta(sections, entries):
+    """(IR row meta, entry) per Class entry of the merged profile."""
+    prefix = _shape_prefix(sections)
     for name, entry in entries.items():
-        if not isinstance(entry, dict) or entry.get("type") != "Class":
-            continue
-        meta = {"shape_id": f"urn:triplets:schema#{section}:{name}", "target_class": name,
-                "target_kind": "class", "path": None, "inverse": False, "via_type": False,
-                "component": None, "params": None, "severity": "Violation", "message": None,
-                # no name: the SARIF title synthesizes "RDFS <profile> <Class> <attr>"
-                "name": None, "description": entry.get("description")}
+        if isinstance(entry, dict) and entry.get("type") == "Class":
+            yield {"shape_id": f"{prefix}{name}", "shapes": (f"{prefix}{name}",), "target_on": name,
+                   "target_by": "Type", "path": None, "inverse": False, "via_type": False,
+                   "component": None, "params": None, "severity": "Violation", "message": None,
+                   # no name: the SARIF title synthesizes "RDFS <profile> <Class> <attr>"
+                   "name": None, "description": entry.get("description")}, entry
+
+
+def _class_rows(sections, entries, report_undefined_keys):
+    """The merged profile's Class entries → IR rows."""
+    rows = []
+    for meta, entry in _class_meta(sections, entries):
         parameters = []
         for prop in entry.get("parameters", ()):
             prop_entry = entries.get(prop)
             if isinstance(prop_entry, dict) and prop_entry.get("type") in _PROPERTY_TYPES \
                     and prop not in parameters:
                 parameters.append(prop)
-                rows.extend(_property_rows(meta, prop, prop_entry, concrete, skipped))
-        if closed and parameters:
-            rows.append({**meta, "component": "sh:closed", "params": [*parameters, "Type"]})
+                rows.extend(_property_rows(meta, prop, prop_entry))
+        if report_undefined_keys and parameters:
+            rows.append({**meta, "component": "sh:closed", "params": [*parameters, TYPE_KEY]})
     return rows
 
 
-def _property_rows(meta, prop, entry, concrete, skipped):
+def _property_rows(meta, prop, entry):
     """One property entry → cardinality + value-space IR rows.
 
     Per-property shape_id (like SHACL property shapes): rules and alert
     titles group per (profile, class, property)."""
-    meta = {**meta, "path": prop, "shape_id": f"{meta['shape_id']}.{prop}"}
+    shape_id = f"{meta['shape_id']}.{prop}"
+    meta = {**meta, "path": prop, "shape_id": shape_id, "shapes": (*meta["shapes"], shape_id)}
     rows = []
     low, high = entry.get("xsd:minOccours", ""), entry.get("xsd:maxOccours", "")
     if low.isdigit() and int(low) > 0:
@@ -183,19 +196,4 @@ def _property_rows(meta, prop, entry, concrete, skipped):
         rows.append({**meta, "component": "sh:datatype", "params": entry["xsd:type"]})
     elif kind == "Enumeration" and entry.get("values"):
         rows.append({**meta, "component": "sh:in", "params": list(entry["values"])})
-    elif kind == "Association":
-        targets = concrete.get(_local(entry.get("range", "")), ())
-        if targets:
-            # ANY of the referenced object's types in the expanded range set
-            # conforms (RDF types are cumulative); dangling references are
-            # silent (cross-instance references resolve outside the scope)
-            rows.append({**meta, "component": "triplets:range",
-                         "params": sorted(targets)})
-        else:
-            skipped.append(f"{meta['target_class']}.{prop}: association range "
-                           f"{entry.get('range')!r} names no known class")
     return rows
-
-
-def _local(term):
-    return str(term).lstrip("#").rsplit("#", 1)[-1].rsplit("/", 1)[-1]

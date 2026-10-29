@@ -40,11 +40,11 @@ After installation, the tool can be invoked in three ways:
 
 2. **As a Python module**::
 
-    python -m triplets.tools.cim_spreadsheet_cli -i input_file -o output_file
+    python -m triplets.cli.cim_spreadsheet -i input_file -o output_file
 
 3. **Programmatically** in Python code::
 
-    from triplets.tools.cim_spreadsheet_cli import cim_to_spreadsheet, spreadsheet_to_cim
+    from triplets.cli.cim_spreadsheet import cim_to_spreadsheet, spreadsheet_to_cim
 
     # Convert CIM to Excel
     cim_to_spreadsheet('model.xml', 'output.xlsx')
@@ -100,10 +100,31 @@ Features
 - Raw triplets import from dedicated Excel sheet or CSV file
 - Handles zipped input/output files automatically
 
+Notes
+-----
+- Values are read back as text, so they return as written, except numbers: the
+  spreadsheet export writes them as numbers, so a number can come back in another
+  written form (``500`` -> ``500.0``, ``8e-5`` -> ``8e-05``). Excel keeps 15
+  significant digits, so longer numbers are rounded (``1.0712249999999999`` ->
+  ``1.071225``); CSV keeps them.
+- Excel limits sheet names to 31 characters. Longer class names (e.g.
+  ``SynchronousMachineTimeConstantReactance``) are written as is: openpyxl warns
+  and Excel may refuse or rename the sheet. Use CSV for such models.
+- The spreadsheet leaves out ``NamespaceMap`` and ``Distribution`` by default, so
+  to-cim names each CIM XML ``<uuid>.xml`` in ``-o`` and declares the schema
+  profile's namespaces. With ``--keep-metadata`` to-cim writes each instance to
+  its ``Distribution`` ``label``, the path the model was parsed from: an absolute
+  path overwrites the source XML, a relative one is created under ``-o``. Edit
+  the label in the spreadsheet, or leave the metadata out, to write elsewhere.
+- Without ``--rdf-map`` to-cim warns and writes every class in the triplets
+  namespace instead of a CIM profile.
+
 See Also
 --------
 cim-diff : Tool for comparing CIM XML files
-triplets.rdf_parser : Core module for RDF/CIM data manipulation
+triplets.parse : CIM XML to triplets
+triplets.tools.tableviews_to_triplets : Spreadsheet tables to triplets
+triplets.export.export_to_cimxml : Triplets to CIM XML
 """
 
 import sys
@@ -115,15 +136,19 @@ import pandas
 from io import BytesIO, StringIO
 from uuid import uuid4
 
-from .. import rdf_parser
-from ..export_schema import schemas
+from ..export import export_to_cimxml
+from ..parser import parse
+from ..tools import filter_triplets_by_type, tableviews_to_triplets
+from . import add_common_arguments, excluded_types
 
-def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, multivalue=True):
+
+def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, multivalue=True,
+                       exclude_objects=(), include_objects=()):
     """
     Convert CIM XML to spreadsheet format (Excel or CSV).
 
     Handles all orchestration including file I/O, format detection, zipping,
-    and conversion through the core rdf_parser functions.
+    and conversion through ``triplets.parse``.
 
     Parameters
     ----------
@@ -140,6 +165,11 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
     multivalue : bool, default True
         If True, aggregate duplicate (ID, KEY) pairs into lists in the output.
         Use False to keep duplicate pairs as separate rows.
+    exclude_objects : sequence of str, default ()
+        Class names left out, e.g. ``triplets.cli.METADATA_TYPES`` (what the CLI
+        leaves out by default).
+    include_objects : sequence of str, default ()
+        Only these classes (all if empty); ``exclude_objects`` applies after it.
 
     Raises
     ------
@@ -166,7 +196,10 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
     if zip_output is None:
         zip_output = (format == "csv")
 
-    data = rdf_parser.load_all_to_dataframe(cim_path)
+    data = parse(cim_path)
+    if include_objects:
+        data = filter_triplets_by_type(data, include_objects)
+    data = data[~data["ID"].isin(filter_triplets_by_type(data, exclude_objects)["ID"])]
 
     base_name = os.path.basename(output_path).replace('.zip', '').replace('.xlsx', '').replace('.csv', '')
     if not base_name:
@@ -216,13 +249,13 @@ def cim_to_spreadsheet(cim_path, output_path, format=None, zip_output=None, mult
 
 def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
                        export_type=None, multivalue=True, zip_output=None,
-                       sheets=None, triplets_sheet=None):
+                       sheets=None, triplets_sheet=None, exclude_objects=(), include_objects=()):
     """
     Convert spreadsheet format (Excel or CSV) to CIM XML.
 
     Handles all orchestration including file I/O, format detection, unzipping,
-    sheet selection, raw triplets import, and conversion through core rdf_parser
-    functions.
+    sheet selection, raw triplets import, and conversion through
+    ``triplets.tools.tableviews_to_triplets`` and ``export_to_cimxml``.
 
     Parameters
     ----------
@@ -234,7 +267,8 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
         Input format. If None, auto-detected from input_path extension.
         Defaults to 'excel' if ambiguous.
     rdf_map : str, optional
-        Path to RDF map JSON file for custom mappings during export
+        Path to RDF map JSON file (export schema). Without it every class is
+        written in the triplets namespace, with a warning.
     export_type : {'xml_per_instance', 'xml_per_instance_zip_per_all', 'xml_per_instance_zip_per_xml'}, optional
         How to package the CIM XML output. If None, defaults to
         'xml_per_instance_zip_per_all' if zip_output=True, else 'xml_per_instance'
@@ -252,11 +286,15 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
         to include in the output. For Excel, this is a sheet name. For CSV,
         this is a base filename (without .csv extension).
         This sheet is not processed as tableview data.
+    exclude_objects : sequence of str, default ()
+        Class names left out of the export.
+    include_objects : sequence of str, default ()
+        Only these classes (all if empty); ``exclude_objects`` applies after it.
 
     Returns
     -------
     result
-        Export result from rdf_parser.export_to_cimxml()
+        Export result from triplets.export.export_to_cimxml()
 
     Raises
     ------
@@ -306,12 +344,12 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
                     excel_bytes = BytesIO(zf.read(excel_filename))
 
                     # Read sheets as tableviews
-                    excel_obj = pandas.ExcelFile(excel_bytes)
-                    _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets, triplets_sheet)
+                    with pandas.ExcelFile(excel_bytes) as excel_obj:
+                        _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets, triplets_sheet)
             else:
                 # Read directly from file (including .xlsx files)
-                excel_obj = pandas.ExcelFile(input_path)
-                _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets, triplets_sheet)
+                with pandas.ExcelFile(input_path) as excel_obj:
+                    _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets, triplets_sheet)
         except ImportError as e:
             raise ImportError(
                 "openpyxl is required for Excel import. "
@@ -328,14 +366,14 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
                     if filename.endswith('.csv'):
                         sheet_name = os.path.basename(filename)[:-4]
                         csv_content = zf.read(filename).decode('utf-8')
-                        csv_dataframes[sheet_name] = pandas.read_csv(StringIO(csv_content), index_col=0)
+                        csv_dataframes[sheet_name] = pandas.read_csv(StringIO(csv_content), index_col=0, dtype=str)
         elif os.path.isdir(input_path):
             # Read from directory
             for filename in os.listdir(input_path):
                 if filename.endswith('.csv'):
                     sheet_name = filename[:-4]
                     csv_path = os.path.join(input_path, filename)
-                    csv_dataframes[sheet_name] = pandas.read_csv(csv_path, index_col=0)
+                    csv_dataframes[sheet_name] = pandas.read_csv(csv_path, index_col=0, dtype=str)
         else:
             raise ValueError(f"CSV format requires a directory or ZIP file, got: {input_path}")
 
@@ -352,10 +390,13 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
 
         tableviews.update(csv_dataframes)
 
-    data = rdf_parser.tableviews_to_triplets(tableviews, multivalue=multivalue)
+    data = tableviews_to_triplets(tableviews, multivalue=multivalue)
 
     if raw_triplets:
         data = pandas.concat([data] + raw_triplets, ignore_index=True)
+    if include_objects:
+        data = filter_triplets_by_type(data, include_objects)
+    data = data[~data["ID"].isin(filter_triplets_by_type(data, exclude_objects)["ID"])]
 
     from triplets._version import get_versions
     version = get_versions()['version']
@@ -376,11 +417,14 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
 
     os.makedirs(output_path, exist_ok=True)
 
+    if rdf_map is None:
+        logging.warning("No --rdf-map given: classes are written in the triplets namespace, not a CIM profile")
+
     # Export to CIM XML
-    return rdf_parser.export_to_cimxml(
+    return export_to_cimxml(
         data,
         rdf_map=rdf_map,
-        export_undefined=False,
+        export_undefined=rdf_map is None,
         export_type=export_type,
         export_base_path=output_path,
         debug=False
@@ -439,10 +483,10 @@ def _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets=None, triplet
             logging.warning(f"Sheet '{s}' not found in Excel file, skipping")
 
     if valid_sheets:
-        tableviews.update(pandas.read_excel(excel_obj, sheet_name=valid_sheets, index_col=0))
+        tableviews.update(pandas.read_excel(excel_obj, sheet_name=valid_sheets, index_col=0, dtype=str))
 
     if triplets_sheet and triplets_sheet in excel_obj.sheet_names:
-        triplet_df = pandas.read_excel(excel_obj, sheet_name=triplets_sheet)
+        triplet_df = pandas.read_excel(excel_obj, sheet_name=triplets_sheet, dtype=str)
         _extract_raw_triplets(triplet_df, triplets_sheet, raw_triplets)
 
 
@@ -550,6 +594,8 @@ def main():
         cim-spreadsheet -i data.xlsx -o output/ --sheets Sheet1 Sheet2
         cim-spreadsheet -i data.xlsx -o output/ --triplets-sheet RawData
         cim-spreadsheet -i model.xml -o output.xlsx -z  # force ZIP
+        cim-spreadsheet -i model.xml -o output.xlsx -ex Terminal,ConnectivityNode
+        cim-spreadsheet -i model.xml -o output.xlsx --keep-metadata
 
     Exit Codes
     ----------
@@ -577,6 +623,7 @@ def main():
     parser.add_argument("--zip", "-z", action="store_true", dest="zip_output", help="Zip output")
     parser.add_argument("--no-zip", action="store_false", dest="zip_output", help="Do not zip output")
     parser.set_defaults(zip_output=None)
+    add_common_arguments(parser, "the output")
 
     # Spreadsheet to CIM specific arguments
     parser.add_argument("--rdf-map", "-r", help="Path to RDF map JSON (for to-cim conversion)")
@@ -586,7 +633,7 @@ def main():
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.WARNING)
 
     # Detect conversion direction if not specified
     direction = args.direction
@@ -605,7 +652,9 @@ def main():
                 args.output,
                 format=args.format,
                 zip_output=args.zip_output,
-                multivalue=args.multivalue
+                multivalue=args.multivalue,
+                exclude_objects=excluded_types(args),
+                include_objects=args.include
             )
             print(f"Converted {args.input} → {args.output}")
 
@@ -619,7 +668,9 @@ def main():
                 multivalue=args.multivalue,
                 zip_output=args.zip_output,
                 sheets=args.sheets,
-                triplets_sheet=args.triplets_sheet
+                triplets_sheet=args.triplets_sheet,
+                exclude_objects=excluded_types(args),
+                include_objects=args.include
             )
             print(f"Converted {args.input} → {args.output}")
 

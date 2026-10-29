@@ -43,7 +43,7 @@ cdef extern from "_qlever_wrapper.h" nogil:
         vector[string] names
 
     cdef cppclass TermMapping:
-        unordered_set[string] enumKeys
+        unordered_map[string, string] valueTypes
         unordered_map[string, string] keyNamespaces
         unordered_map[string, string] keyDatatypes
         string defaultNamespace
@@ -101,7 +101,7 @@ def build_index(str input_file, str index_basename, str filetype="nq", int memor
         QleverWrapper.build_index(c_input, c_basename, c_filetype, memory_gb)
 
 
-def build_index_from_arrow(batches, str index_basename, enum_keys, key_namespaces,
+def build_index_from_arrow(batches, str index_basename, value_types, key_namespaces,
                            key_datatypes, str default_namespace, int memory_gb=4):
     """Build an on-disk qlever index directly from triplet Arrow batches
     (columns ID, KEY, VALUE, INSTANCE_ID; zero-copy; term mapping identical
@@ -110,8 +110,8 @@ def build_index_from_arrow(batches, str index_basename, enum_keys, key_namespace
     for batch in batches:
         c_batches.push_back(pyarrow_unwrap_batch(batch))
     cdef TermMapping mapping
-    for key in enum_keys:
-        mapping.enumKeys.insert(<string>key.encode())
+    for key, kind in value_types.items():
+        mapping.valueTypes[<string>key.encode()] = <string>kind.encode()
     for key, namespace in key_namespaces.items():
         mapping.keyNamespaces[<string>key.encode()] = <string>namespace.encode()
     for key, datatype in key_datatypes.items():

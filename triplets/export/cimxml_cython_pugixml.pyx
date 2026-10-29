@@ -155,7 +155,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                             str file_name,
                             str class_KEY="Type",
                             cbool export_undefined=True,
-                            comment=None):
+                            comment=None,
+                            str undefined_namespace="http://triplets#"):
     """Generate CIM RDF/XML bytes directly from Arrow columnar data.
 
     Reads Arrow string arrays at C++ level (zero-copy GetString),
@@ -215,6 +216,10 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             return local_name
         p = uri_to_prefix.get(ns)
         return f"{p}:{local_name}" if p else local_name
+
+    # rdf:about / rdf:Description by the prefix the map binds to the RDF namespace
+    rdf_prefix = uri_to_prefix.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#") or "rdf"
+    cdef string rdf_about_attr = f"{rdf_prefix}:about".encode('utf-8')
 
     def _parse_attrib(full_attrib):
         if full_attrib.startswith("{"):
@@ -290,7 +295,7 @@ def generate_xml_from_arrow(arrow_table_or_batch,
     cdef int cd_idx, td_idx
 
     # Temp C++ strings for reading Arrow data
-    cdef string s_id, s_key, s_value, s_combined
+    cdef string s_id, s_key, s_value, s_combined, s_tag
     cdef string_view sv_id, sv_key, sv_value
     cdef bytes class_key_bytes = class_KEY.encode('utf-8')
     cdef const char* class_key_ptr = class_key_bytes
@@ -321,10 +326,14 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             s_combined.append(s_id)
             obj_node.append_attribute(class_defs_vec[cd_idx].id_attr.c_str()).set_value(s_combined.c_str())
         elif export_undefined:
-            obj_node = rdf_root.append_child(s_value.c_str())
+            # rdf:Description is "no shorthand type", not a class: written back as rdf:Description
+            py_class = s_value.decode('utf-8')      # "Description": mirror of triplets.iri.DESCRIPTION_TYPE
+            s_tag = (f"{rdf_prefix}:Description" if py_class == "Description"
+                     else _make_prefixed(undefined_namespace, py_class)).encode('utf-8')
+            obj_node = rdf_root.append_child(s_tag.c_str())
             s_combined.assign(b"urn:uuid:")
             s_combined.append(s_id)
-            obj_node.append_attribute(b"rdf:about").set_value(s_combined.c_str())
+            obj_node.append_attribute(rdf_about_attr.c_str()).set_value(s_combined.c_str())
         else:
             continue
 
@@ -358,28 +367,31 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         if py_td_idx is not None:
             td_idx = <int>py_td_idx
 
-            attr_node = store.append_child_to(<int>py_store_idx, tag_defs_vec[td_idx].tag.c_str())
-
-            if tag_defs_vec[td_idx].is_ref:
-                if tag_defs_vec[td_idx].needs_enum_lookup:
-                    # Need to look up enum namespace from Python dict
-                    py_val = s_value.decode('utf-8')
-                    enum_def = instance_rdf_map.get(py_val)
-                    if enum_def is not None and isinstance(enum_def, dict):
-                        s_combined = enum_def.get("namespace", "").encode('utf-8')
-                    else:
-                        s_combined.clear()
-                    s_combined.append(s_value)
-                else:
-                    s_combined = tag_defs_vec[td_idx].value_prefix
-                    s_combined.append(s_value)
-                attr_node.append_attribute(tag_defs_vec[td_idx].attr_name.c_str()).set_value(s_combined.c_str())
+            # the value (and whether the row is written at all) is decided BEFORE the
+            # element is appended — an undefined enum value must not leave an empty element
+            if tag_defs_vec[td_idx].is_ref and tag_defs_vec[td_idx].needs_enum_lookup:
+                py_val = s_value.decode('utf-8')
+                enum_def = instance_rdf_map.get(py_val)
+                enum_ns = enum_def.get("namespace") if isinstance(enum_def, dict) else None
+                if not enum_ns:                           # undefined enum value: same switch as undefined classes / keys
+                    if not export_undefined:
+                        continue
+                    enum_ns = undefined_namespace
+                s_combined = enum_ns.encode('utf-8')
+            elif tag_defs_vec[td_idx].is_ref:
+                s_combined = tag_defs_vec[td_idx].value_prefix
             else:
                 s_combined = tag_defs_vec[td_idx].text_prefix
-                s_combined.append(s_value)
+            s_combined.append(s_value)
+
+            attr_node = store.append_child_to(<int>py_store_idx, tag_defs_vec[td_idx].tag.c_str())
+            if tag_defs_vec[td_idx].is_ref:
+                attr_node.append_attribute(tag_defs_vec[td_idx].attr_name.c_str()).set_value(s_combined.c_str())
+            else:
                 attr_node.append_child(node_pcdata).set_value(s_combined.c_str())
         elif export_undefined:
-            attr_node = store.append_child_to(<int>py_store_idx, s_key.c_str())
+            s_tag = _make_prefixed(undefined_namespace, s_key.decode('utf-8')).encode('utf-8')
+            attr_node = store.append_child_to(<int>py_store_idx, s_tag.c_str())
             attr_node.append_child(node_pcdata).set_value(s_value.c_str())
 
     # Serialize

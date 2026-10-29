@@ -15,17 +15,23 @@ SKIP_REASON = "RDFS profile data not available"
 
 @pytest.fixture(scope="module")
 def rdfs_profile():
-    """Load first RDFS profile file."""
+    """Load first RDFS profile file the way the schema generator does (absolute form)."""
     if not RDFS_DIR.exists():
         pytest.skip(SKIP_REASON)
-    files = rdfs_tools.list_of_files(str(RDFS_DIR), ".rdf")
+    files = sorted(rdfs_tools.list_of_files(str(RDFS_DIR), ".rdf"))   # os.walk order differs per machine
     if not files:
         pytest.skip(SKIP_REASON)
-    from triplets.rdf_parser import load_all_to_dataframe
-    return load_all_to_dataframe([files[0]])
+    return rdfs_tools.load_all_to_dataframe([files[0]])
 
 
 # ── Pure utility functions (no data needed) ─────────────────────────────────
+
+def test_get_namespace_and_name_forms():
+    base = "http://iec.ch/TC57/CIM100"
+    assert rdfs_tools.get_namespace_and_name("http://iec.ch/TC57/CIM100#Breaker", base) == ("http://iec.ch/TC57/CIM100#", "Breaker")
+    assert rdfs_tools.get_namespace_and_name("#Breaker", base) == ("http://iec.ch/TC57/CIM100#", "Breaker")
+    assert rdfs_tools.get_namespace_and_name("Breaker", base) == ("http://iec.ch/TC57/CIM100#", "Breaker")   # bare: a fragment, never '/'
+    assert rdfs_tools.get_namespace_and_name("https://schema.org/name", base) == ("https://schema.org/", "name")
 
 class TestParseMultiplicity:
     def test_one_to_one(self):
@@ -143,6 +149,17 @@ class TestCimRdfsToJson:
         assert isinstance(result, dict)
         assert len(result) > 0
 
+    def test_relative_reference_without_default_raises(self):
+        """The generator passes no default namespace: its parse is absolute, so a relative
+        reference is a parse bug, not something to guess a namespace for."""
+        assert rdfs_tools.get_namespace_and_name("http://iec.ch/TC57/CIM100#ACLineSegment") == \
+            ("http://iec.ch/TC57/CIM100#", "ACLineSegment")
+        assert rdfs_tools.get_namespace_and_name("http://purl.org/dc/terms/issued") == ("http://purl.org/dc/terms/", "issued")
+        assert rdfs_tools.get_namespace_and_name("#DiagramStyle", "http://iec.ch/TC57/CIM100") == \
+            ("http://iec.ch/TC57/CIM100#", "DiagramStyle")
+        with pytest.raises(ValueError, match="absolute IRI"):
+            rdfs_tools.get_namespace_and_name("#DiagramStyle")
+
 
 class TestOrphanedAttributes:
     """An attribute with no class binding (no rdfs:domain / schema:domainIncludes)
@@ -175,3 +192,123 @@ class TestOrphanedAttributes:
         assert profile["title"].get("dataType") == "String"     # with its datatype preserved
         assert "title" not in profile["Dataset"]["parameters"]  # but no class references it
         assert any("no class binding" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize("uri", ["foo/Bar", "./Name"])
+def test_get_namespace_and_name_rejects_other_relative_forms(uri):
+    """Only a bare or #name takes the default; any other relative form raises, default or not."""
+    for default in (None, "http://iec.ch/TC57/CIM100"):
+        with pytest.raises(ValueError, match="absolute IRI"):
+            rdfs_tools.get_namespace_and_name(uri, default)
+
+
+def test_get_namespace_and_name_any_scheme_is_absolute():
+    assert rdfs_tools.get_namespace_and_name("urn:uuid:abc") == ("urn:uuid:", "abc")
+    assert rdfs_tools.get_namespace_and_name("urn:uuid:abc", "http://x") == ("urn:uuid:", "abc")   # never rewritten
+
+
+def test_list_of_files_is_sorted(tmp_path):
+    for name in ("b.rdf", "a.rdf", "c.rdf"):
+        (tmp_path / name).write_text("")
+    assert [Path(f).name for f in rdfs_tools.list_of_files(str(tmp_path), ".rdf")] == ["a.rdf", "b.rdf", "c.rdf"]
+
+
+def test_shipped_bundles_first_wins_is_order_independent():
+    """The flat maps merge profile sections first-wins; that is safe only while no name has a
+    conflicting namespace or entry type across sections (primitives DateTime / URI excepted)."""
+    import json
+    import triplets.export_schema
+    for path in sorted(Path(triplets.export_schema.__file__).parent.glob("*.json")):
+        seen, conflicts = {}, set()
+        for section in json.loads(path.read_text()).values():
+            if not isinstance(section, dict):
+                continue
+            for name, entry in section.items():
+                if isinstance(entry, dict) and (entry.get("namespace") or entry.get("type")):
+                    key = (entry.get("namespace"), entry.get("type"))
+                    if seen.setdefault(name, key) != key:
+                        conflicts.add(name)
+        assert conflicts <= {"DateTime", "URI"}, (path.name, sorted(conflicts)[:10])
+
+
+def test_get_namespace_and_name_prefixed_name_is_not_absolute():
+    """A prefixed name (cim:Foo) or a multiplicity (M:1..1) is no IRI — without a default it raises."""
+    for text in ("cim:Foo", "M:1..1"):
+        with pytest.raises(ValueError, match="absolute IRI"):
+            rdfs_tools.get_namespace_and_name(text)
+
+
+_PROF = """<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xmlns:prof="http://www.w3.org/ns/dx/prof/">
+  <rdf:Description rdf:about="{profile}">
+    <owl:versionIRI rdf:resource="{version}"/>
+    <prof:hasResource rdf:resource="{vocabulary}"/>
+    <prof:hasResource rdf:resource="https://ap-con.cim4.eu/DatasetMetadata-Simple/3.0"/>
+  </rdf:Description>
+</rdf:RDF>
+"""
+
+
+def test_profile_version_iris_links_ncp_and_cgmes_shapes(tmp_path):
+    """NCP: the vocabulary resource is the RDFS versionIRI. CGMES: the RDFS versionIRI is
+    the profile's own. A resource two profiles share (constraints) identifies neither."""
+    from triplets.rdfs_tools.cim_rdfs_to_json import profile_version_iris
+    (tmp_path / "ER.rdf").write_text(_PROF.format(
+        profile="https://ap.cim4.eu/EquipmentReliability",
+        version="https://ap.cim4.eu/EquipmentReliability/2.5",
+        vocabulary="https://ap-voc.cim4.eu/EquipmentReliability/2.5"), encoding="utf-8")
+    (tmp_path / "EQ.rdf").write_text(_PROF.format(
+        profile="http://iec.ch/TC57/ns/CIM/CoreEquipment-EU#Ontology",
+        version="http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0",
+        vocabulary="http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0/vocabulary"), encoding="utf-8")
+
+    iris = profile_version_iris(tmp_path)
+
+    assert iris["https://ap-voc.cim4.eu/EquipmentReliability/2.5"] == "https://ap.cim4.eu/EquipmentReliability/2.5"
+    assert iris["http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0"] == "http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0"
+    assert "https://ap-con.cim4.eu/DatasetMetadata-Simple/3.0" not in iris
+    assert profile_version_iris(tmp_path / "missing") == {}
+
+
+@pytest.mark.parametrize("bundle", ["ENTSOE_CGMES_2.4.15", "ENTSOE_CGMES_3.0.0", "ENTSOE_NC_2.4.1", "ENTSOE_NC_2.5.0"])
+def test_shipped_bundles_carry_both_iris(bundle):
+    """Every section has the RDFS versionIRI (CGMES 2.4.15: its entsoeURI) and the
+    profileVersionIRI headers declare (PROF if present, else the versionIRI); CGMES uses
+    one IRI for both, NC two."""
+    import json
+    import triplets.export_schema
+    for serialization in ("552_ED1", "552_ED2"):
+        path = Path(triplets.export_schema.__file__).parent / f"{bundle}_{serialization}.json"
+        sections = {name: section["ProfileMetadata"] for name, section in json.loads(path.read_text()).items()
+                    if isinstance(section, dict) and "ProfileMetadata" in section}
+        missing = [name for name, metadata in sections.items()
+                   if not (metadata.get("versionIRI") and metadata.get("profileVersionIRI"))]
+        assert sections and not missing, (path.name, missing)
+        same = {metadata["versionIRI"] == metadata["profileVersionIRI"] for metadata in sections.values()}
+        assert same == ({True} if bundle.startswith("ENTSOE_CGMES") else {False}), path.name
+
+
+
+def test_xsd_types_from_rdfs():
+    """CIMDatatype .value → XSD range, Primitive or another CIMDatatype; cycles,
+    non-XSD ranges and ordinary classes with a .value resolve to nothing."""
+    from triplets.rdfs_tools.cim_rdfs_to_json import xsd_types_from_rdfs
+    cim, xsd = "http://iec.ch/TC57/CIM100#", "http://www.w3.org/2001/XMLSchema#"
+    datatype = [("stereotype", "CIMDatatype")]
+    classes = {
+        "Area": (datatype, ("dataType", cim + "Float")),                    # Primitive
+        "Money": ([("isCIMDatatype", "True")], ("range", xsd + "decimal")),  # 501 Ed2
+        "Alias": ([("stereotype", "http://iec.ch/TC57/NonStandard/UML#CIMDatatype")],
+                  ("dataType", cim + "Area")),                              # chain
+        "Loop": (datatype, ("dataType", cim + "Loop")),
+        "Text": (datatype, ("range", "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString")),
+        "CurrentLimit": ([], ("dataType", cim + "Float")),                  # not a datatype
+    }
+    rows = []
+    for name, (markers, target) in classes.items():
+        rows += [(cim + name, key, value) for key, value in markers]
+        rows += [(cim + name + ".value", "domain", cim + name), (cim + name + ".value", *target)]
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE"])
+    assert xsd_types_from_rdfs(data) == {"Area": "xsd:float", "Money": "xsd:decimal", "Alias": "xsd:float"}

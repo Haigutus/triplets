@@ -46,8 +46,8 @@ def shapes():
 @pytest.fixture(scope="module")
 def violations(shapes):
     data = frame()
-    return triplets.validation.validate(data, shapes, engine="pandas",
-                                        context=True)   # 8 name + 8 length violations
+    violations = triplets.validation.validate_shacl(data, shapes, engine="pandas")   # 8 name + 8 length violations
+    return triplets.validation.enrich(violations, data=data, shapes=shapes)
 
 
 def test_document_skeleton(violations):
@@ -81,7 +81,8 @@ def test_grouped_default(violations):
 
 def test_small_group_lists_all(shapes):
     data = frame(count=2)
-    violations = triplets.validation.validate(data, shapes, engine="pandas", context=True)
+    violations = triplets.validation.enrich(triplets.validation.validate_shacl(data, shapes, engine="pandas"),
+                                            data=data, shapes=shapes)
     result = build_sarif(violations)["runs"][0]["results"][0]
     assert result["occurrenceCount"] == 2
     assert len(result["locations"]) == 2
@@ -170,7 +171,7 @@ def test_export_paths_and_memory(violations, tmp_path):
 def test_exporter_runs_enrichment(shapes):
     """Passing the sources to export_to_sarif enriches internally."""
     data = frame(count=2)
-    violations = triplets.validation.validate(data, shapes, engine="pandas")   # no context
+    violations = triplets.validation.validate_shacl(data, shapes, engine="pandas")   # no context
     document = build_sarif(violations)
     assert "logicalLocations" in json.dumps(document)    # works without enrichment too
 
@@ -273,7 +274,8 @@ def test_regions_from_sources(shapes, tmp_path):
     xml = tmp_path / "grid EQ.xml"
     xml.write_text(XML, encoding="utf-8")
     data = pandas.read_RDF([str(xml)])
-    violations = triplets.validation.validate(data, shapes, engine="pandas", context=True)
+    violations = triplets.validation.enrich(triplets.validation.validate_shacl(data, shapes, engine="pandas"),
+                                            data=data, shapes=shapes)
 
     run = build_sarif(violations, group=False, sources=[str(xml)])["runs"][0]
     regions = {(result["properties"]["id"], result["properties"]["key"]):
@@ -301,7 +303,8 @@ cim:ShortName a sh:NodeShape ; sh:targetClass cim:ACLineSegment ;
     xml = tmp_path / "grid.xml"
     xml.write_text(XML, encoding="utf-8")
     data = pandas.read_RDF([str(xml)])
-    violations = triplets.validation.validate(data, graph, engine="pandas", context=True)
+    violations = triplets.validation.enrich(triplets.validation.validate_shacl(data, graph, engine="pandas"),
+                                            data=data, shapes=graph)
 
     run = build_sarif(violations, sources=[str(xml)])["runs"][0]
     region = run["results"][0]["locations"][0]["physicalLocation"]["region"]
@@ -319,15 +322,17 @@ def test_regions_schema_and_github_shape(shapes, tmp_path):
     xml = tmp_path / "grid.xml"
     xml.write_text(XML, encoding="utf-8")
     data = pandas.read_RDF([str(xml)])
-    violations = triplets.validation.validate(data, shapes, engine="pandas", context=True)
+    violations = triplets.validation.enrich(triplets.validation.validate_shacl(data, shapes, engine="pandas"),
+                                            data=data, shapes=shapes)
     jsonschema.validate(build_sarif(violations, sources=[str(xml)]), schema)
     jsonschema.validate(build_sarif(violations, group=False, sources=[str(xml)]), schema)
 
 
 def test_sources_absent_ids_fall_back(shapes):
     """IDs not found in the sources keep the enrichment-label location."""
-    violations = triplets.validation.validate(frame(count=2), shapes,
-                                              engine="pandas", context=True)
+    data = frame(count=2)
+    violations = triplets.validation.enrich(triplets.validation.validate_shacl(data, shapes, engine="pandas"),
+                                            data=data, shapes=shapes)
     run = build_sarif(violations, sources=[])["runs"][0]           # nothing locatable
     location = run["results"][0]["locations"][0]
     assert location["physicalLocation"]["artifactLocation"]["uri"] == "Svedala%20EQ.xml"

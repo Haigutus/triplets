@@ -30,15 +30,16 @@ struct ArrowColumns {
   std::vector<std::string> names;
 };
 
-// Flattened export-schema metadata for the Arrow ingest, built by
-// triplets.export.nquads_utils.build_key_metadata on the Python side (the
-// single source of truth for rdf_map interpretation).
+// Flattened export-schema metadata for the Arrow ingest — the triplets.iri
+// flat maps (value_types / namespaces / datatypes) built on the Python side,
+// the single source of truth for rdf_map interpretation.
 struct TermMapping {
-  std::unordered_set<std::string> enumKeys;
+  // KEY → "enum" | "reference" | "literal"; absent = the schema is silent.
+  std::unordered_map<std::string, std::string> valueTypes;
   std::unordered_map<std::string, std::string> keyNamespaces;
   // KEY → full xsd datatype IRI; "" means schema-typed as plain xsd:string.
   std::unordered_map<std::string, std::string> keyDatatypes;
-  // Namespace for bare predicates / Type classes / enum values (CIM_NS).
+  // Fallback namespace when a KEY/class/enum name is not in keyNamespaces.
   std::string defaultNamespace;
 };
 

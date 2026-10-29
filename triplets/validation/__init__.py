@@ -1,4 +1,15 @@
-"""SHACL validation over triplet data.
+"""Validation over triplet data — three generic validations, scoped by the caller:
+
+- ``validate_shacl`` — SHACL shapes;
+- ``validate_schema`` — the export schema's cardinality, datatypes and
+  enumerations, per instance;
+- ``validate_schema_references`` — the reference types of associations, per
+  source instance, against target instances and profiles.
+
+Every input has a scope named after it: ``data`` + ``data_scope`` (INSTANCE_IDs),
+``rdf_map`` + ``rdf_map_scope`` (profiles, merged — ``schema_scope``). Nothing
+here reads instance headers; ``triplets.cgmes_tools.validate_by_header`` does.
+``enrich`` adds the context columns in a separate call.
 
 Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
 - pyshacl — reference, spec-complete, rdflib-based; always available with the
@@ -8,7 +19,7 @@ Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
 - pandas — compiled-IR executor (debugging; same complete registry and
   semantics, eager. sh:sparql delegates to triplets.sparql with optional
   max_workers; sh:node runs the compile-time-expanded referenced shape against
-  the value nodes; sh:nodeKind is decided by the rdf_map schema)
+  the value nodes (on a node shape, the focus node); sh:nodeKind is decided by the rdf_map schema)
 - duckdb — compiled-IR executor for larger-than-memory data (one SQL query
   per constraint against the triplets table, streams/spills via DuckDB;
   explicit engine="duckdb", not in auto — polars owns the in-memory fast path)
@@ -17,16 +28,19 @@ Compile once: ``compile(shapes)`` parses the shapes with rdflib exactly once
 into ``CompiledShapes`` (shapes graph + flat constraint table, cached by
 content hash). Engines receive the compiled object:
 
-    validate(data, compiled, rdf_map=None, scope=None, **kwargs) → violations DataFrame
+    validate(data, compiled, rdf_map=None, data_scope=None, ancestors=None, **kwargs) → violations DataFrame
+
+(``rdf_map`` the scoped schema, ``ancestors`` the ``class_ancestors`` map.)
 
 pyshacl consumes the graph; the vectorized engines consume the IR (and cache
 their own plan per engine in ``CompiledShapes.plans``) — they never touch
-rdflib. sh:sparql IR rows are delegated to triplets.sparql by the vectorized
-engines (pyshacl evaluates them itself via advanced=True).
+rdflib. sh:sparql IR rows and SPARQL targets are delegated to triplets.sparql
+by the vectorized engines (pyshacl evaluates both itself via advanced=True).
 
 One deliberate deviation from pyshacl: the datatype check inspects the raw
 lexical form of VALUE (see shacl_pandas) — with ``lexical=True`` (default)
-those findings are appended to any engine's report.
+every engine's report carries the triplets:lexicalForm Warnings, with
+``lexical=False`` none does.
 """
 from __future__ import annotations
 
@@ -37,13 +51,16 @@ from typing import Any
 import pandas
 
 from .._engine_detect import flavor
-from .._header import PROFILE_KEYS as _HEADER_KEYS
 from .._registry import EngineRegistry
-from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes as compile  # noqa: A001 — public API name
-from .schema_ir import compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
+from ..iri import CIM_NS, load_rdf_map
+from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
+from .shacl_ir import _mark_switched_off, _term
+from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
+from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
+from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
                            violations_to_csv, violations_to_excel)
-from .context import ENRICHMENT_COLUMNS, enrich  # noqa: F401 — public API
+from .context import ENRICHMENT_COLUMNS, concat_violations, enrich  # noqa: F401 — public API
 from .locations import LOCATION_COLUMNS, locate_violations  # noqa: F401 — public API
 from .sarif import export_to_sarif  # noqa: F401 — public API
 
@@ -85,8 +102,8 @@ def get_engine(name: str = "auto"):
     return _REGISTRY.get(name)
 
 
-def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True,
-             context=False, **kwargs):
+def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=None, engine="auto", lexical=True,
+                   undefined_namespace=CIM_NS, inheritance=True, deactivated_shapes=None, **kwargs):
     """Validate triplet data against SHACL shapes; return a violations DataFrame.
 
     Parameters
@@ -96,23 +113,46 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
         SHACL shapes (format auto-detected by extension). Pass the result of
         ``compile(shapes)`` to reuse the parsed shapes across validations.
     rdf_map : dict or str, optional
-        Export schema — xsd-typed literals in the data graph (optional).
-    scope : iterable of INSTANCE_ID, optional
+        Export schema — xsd-typed literals in the data graph, the schema-driven
+        sh:nodeKind decision and the class inheritance (see ``inheritance``),
+        from the profiles in ``rdf_map_scope``.
+    data_scope : iterable of INSTANCE_ID, optional
         Validate only these instances' named graphs — data outside the scope
         is not loaded, so references into unscoped instances count as absent.
         Include dependency instances in the scope (or validate the full
-        union, scope=None) for cross-instance checks.
+        union, data_scope=None) for cross-instance checks.
+    rdf_map_scope : profile identifier or sequence of them, optional
+        The rdf_map profiles the run uses, merged into one: section keys
+        (``"EQ"``) and/or declared profile IRIs; ``"*"`` = every section;
+        None = the rdf_map's root entries. A scope without entries raises
+        ValueError (see ``triplets.validation.schema_scope``).
     engine : str, default "auto"
         "polars" (performance), "pandas" (debugging), "duckdb"
         (larger-than-memory) or "pyshacl" (reference). "auto" picks
         polars → pandas → pyshacl; duckdb is always an explicit choice.
     lexical : bool, default True
-        Append the lexical-form datatype findings (the deliberate deviation
-        from pyshacl — see shacl_pandas) to the engine's report.
-    context : bool, default False
-        Run the slower enrichment pass (triplets.validation.context.enrich):
-        adds instance/file, object type/name, shape name/description and
-        schema definition columns to the report.
+        Report valid-but-narrower datatype forms (``"1"`` for xsd:float) as
+        triplets:lexicalForm Warnings — the deliberate deviation from pyshacl,
+        see shacl_pandas. The vectorized engines check them inline, pyshacl
+        gets the pandas datatype check as a supplement. False skips the check
+        on every engine (pyshacl: the pure pyshacl report); values outside the
+        lexical space stay sh:datatype violations.
+    undefined_namespace : str, default CIM100
+        Namespace for names the schema does not declare (every name without
+        an rdf_map) in the graph the sh:sparql constraints and pyshacl see.
+    inheritance : bool, default True
+        ``sh:targetClass`` and ``sh:class`` also match instances of subclasses,
+        from the scoped profiles' ``inheritance`` lists
+        (:func:`~triplets.validation.schema_scope.class_ancestors`; pyshacl: as
+        ``rdfs:subClassOf`` in ``ont_graph``). False matches the exact
+        ``rdf:type`` only. No effect without an rdf_map.
+    deactivated_shapes : shape IRI or iterable of them, optional
+        The shapes to switch off for this run — replaces the set the graph
+        declares (``compiled.deactivated``): None = the declared set, ``[]`` =
+        every shape runs, the declared ones included; extend or reduce it
+        freely. The NC validation aggregates switch off different shapes of a
+        shared base this way, and one compile serves every aggregate
+        (``CompiledShapes.active``).
 
     The returned frame carries the validation-run metadata in
     ``violations.attrs["validation"]`` (start/end timestamps and duration,
@@ -121,37 +161,51 @@ def validate(data, shapes, rdf_map=None, scope=None, engine="auto", lexical=True
     it, so SARIF, the sh:ValidationReport and the csv/excel exports tell the
     same story.
     """
-    compiled = shapes if isinstance(shapes, CompiledShapes) else compile(shapes)
+    compiled = (shapes if isinstance(shapes, CompiledShapes) else compile(shapes)).active(deactivated_shapes)
+    rdf_map = load_rdf_map(rdf_map)        # dict from here on — the engines and enrich take only dicts
     started = datetime.now(timezone.utc)   # after compile — duration is the run, cache-independent
+    if not rdf_map and rdf_map_scope is not None:
+        raise ValueError("rdf_map_scope names profiles of an rdf_map — pass the rdf_map too")
+    scoped, notes = scoped_rdf_map(rdf_map, rdf_map_scope) if rdf_map else ({}, None)
+    if rdf_map:
+        require_entries(scoped[SCOPE_KEY], rdf_map_scope)
+    ancestors = _class_ancestors(scoped[SCOPE_KEY]) if rdf_map and inheritance else None
     engine_name, engine_mod = get_engine(engine)
     table_ref = _table_ref(data, **kwargs)
-    violations = _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, **kwargs)
-    violations = _present(violations, data, compiled.ir, compiled.language, table_ref)
-    if context:
-        violations = enrich(violations, data=data, shapes=compiled, rdf_map=rdf_map)
+    violations = _run(data, compiled, engine_name, engine_mod, scoped, data_scope, lexical,
+                      undefined_namespace=undefined_namespace, ancestors=ancestors, **kwargs)
+    violations = _present(violations, compiled.ir, compiled.language)
     violations.attrs["validation"] = _report_metadata(
-        violations, data, compiled, engine_name, started, table_name=table_ref)
+        violations, data, compiled, engine_name, started, table_name=table_ref, notes=notes)
+    violations.attrs["validation"]["inheritance"] = bool(ancestors)   # applied: an rdf_map with classes, the flag on
+    violations.attrs["validation"]["profiles"] = (scoped[SCOPE_KEY].get("ProfileMetadata", {}).get("sections")
+                                                  if rdf_map else None)
     return violations
 
 
-def _run(data, compiled, engine_name, engine_mod, rdf_map, scope, lexical, **kwargs):
+def _run(data, compiled, engine_name, engine_mod, rdf_map, data_scope, lexical=True, undefined_namespace=CIM_NS,
+         ancestors=None, **kwargs):
     """One engine pass, plus the lexical datatype supplement when the engine
     does not emit it itself — raw violations, presentation columns not yet added."""
-    violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, scope=scope, **kwargs)
+    violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, data_scope=data_scope, lexical=lexical,
+                                     undefined_namespace=undefined_namespace, ancestors=ancestors, **kwargs)
     if lexical and engine_name not in _LEXICAL_BUILTIN:
         from . import shacl_pandas
-        supplement = shacl_pandas.validate(data, compiled, rdf_map=rdf_map, scope=scope,
-                                           components=("sh:datatype",))
-        violations = (pandas.concat([violations, supplement], ignore_index=True)
-                      .drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
-                                               "SOURCE_SHAPE", "SEVERITY"], ignore_index=True))
-    return violations
+        supplement = shacl_pandas.validate(data, compiled, rdf_map=rdf_map, data_scope=data_scope,
+                                           components=("sh:datatype",), undefined_namespace=undefined_namespace,
+                                           ancestors=ancestors)
+        violations = pandas.concat([violations, supplement], ignore_index=True)
+    # identical findings once: a property shape on a parent and a child node shape
+    # both reach a subclass instance, the same triple sits in two instance files,
+    # the lexical supplement repeats pyshacl
+    return violations.drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
+                                              "SOURCE_SHAPE", "SEVERITY"], ignore_index=True)
 
 
-def _present(violations, data, ir, language, table_name="triplets"):
-    """The shared presentation pass: TARGET / EXPECTED / MESSAGE_SOURCE and
-    the vocabulary-accurate violation types for non-SHACL constraint languages."""
-    violations = _describe_associations(violations, data, ir, table_name=table_name)
+def _present(violations, ir, language):
+    """The shared presentation pass — from the rules alone: EXPECTED /
+    MESSAGE_SOURCE and the vocabulary-accurate violation types for non-SHACL
+    constraint languages. What was found in the data is ``enrich``'s TARGET."""
     violations["EXPECTED"] = _expected(violations, ir)
     violations["MESSAGE_SOURCE"] = _message_sources(violations, ir)
     if language != "shacl":              # present vocabulary-accurate types, not fake SHACL
@@ -173,98 +227,6 @@ def _table_ref(data, **kwargs):
     return kwargs.get("table_name", "triplets")
 
 
-def _describe_associations(violations, data, ir, table_name="triplets"):
-    """Findings get a TARGET entry stating what was actually found in the
-    data — the raw MESSAGE stays verbatim (exporters emit TARGET as its own
-    [context_message] entry), so the error is self-contained:
-
-    - reference checks (``sh:class``/``triplets:range``, VALUE = the ref):
-      the target's id, Type and name — or the fact that it does not exist;
-    - valueType rows (``via_type``): the found type (the id is not carried);
-    - ``sh:maxCount``: the actual duplicate values.
-    One shared pass over the violations frame; no per-engine code.
-    """
-    violations["TARGET"] = pandas.Series(None, index=violations.index, dtype=object)
-    if violations.empty or ir.empty:
-        return violations
-    via_rules = set(zip(ir.loc[ir["via_type"], "shape_id"],
-                        ir.loc[ir["via_type"], "path"]))
-    keys = pandas.Series(list(zip(violations["SOURCE_SHAPE"], violations["KEY"])),
-                         index=violations.index)
-    described = violations["VALUE"].notna()
-    via = described & keys.isin(via_rules)
-    of_class = (described & ~via
-                & violations["VIOLATION_TYPE"].isin(("sh:class", "triplets:range")))
-    over_count = violations["VIOLATION_TYPE"].eq("sh:maxCount") & violations["KEY"].notna()
-    if via.any():
-        violations.loc[via, "TARGET"] = ("association target found, of type "
-                                         + violations.loc[via, "VALUE"].astype(str))
-    if of_class.any():
-        types, names = _type_map(data, table_name), _name_map(data, table_name)
-
-        def describe_reference(ref):
-            found = types.get(ref)
-            if found is None:
-                return f"referenced object {ref} not found in the data"
-            name = names.get(ref)
-            return f'referenced object {ref} found — {found}' + (f' "{name}"' if name else "")
-
-        violations.loc[of_class, "TARGET"] = (
-            violations.loc[of_class, "VALUE"].astype(str).map(describe_reference))
-    if over_count.any():
-        violations.loc[over_count, "TARGET"] = _found_values(
-            violations.loc[over_count, ["ID", "KEY"]], data, table_name)
-    return violations
-
-
-def _name_map(data, table_name="triplets"):
-    """{ID: IdentifiedObject.name} from the data (any input flavor)."""
-    kind = flavor(data)
-    if kind == "duckdb":
-        return dict(data.execute(
-            f"SELECT ID, VALUE FROM {table_name} "
-            f"WHERE KEY = 'IdentifiedObject.name'").fetchall())
-    if kind == "pyarrow":
-        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-        kind = "pandas"
-    if kind == "polars":
-        rows = data.filter(data["KEY"] == "IdentifiedObject.name")
-        return dict(zip(rows["ID"].to_list(), rows["VALUE"].to_list()))
-    rows = data.loc[data["KEY"] == "IdentifiedObject.name"]
-    return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
-
-
-def _found_values(pairs, data, table_name="triplets", cap=5):
-    """Per violated (ID, KEY): "found N values: 'a', 'b', …" — the validator
-    sees WHICH duplicates to remove without opening the instance data."""
-    kind = flavor(data)
-    keys = list(pairs["KEY"].astype(str).unique())
-    if kind == "duckdb":
-        placeholders = ", ".join("?" for _ in keys)
-        rows = pandas.DataFrame(data.execute(
-            f"SELECT ID, KEY, VALUE FROM {table_name} WHERE KEY IN ({placeholders})",
-            keys).fetchall(), columns=["ID", "KEY", "VALUE"])
-    else:
-        if kind == "pyarrow":
-            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-            kind = "pandas"
-        if kind == "polars":
-            rows = data.filter(data["KEY"].is_in(keys)).to_pandas()
-        else:
-            rows = data.loc[data["KEY"].isin(keys)]
-    rows = rows.astype({"ID": str, "KEY": str})
-
-    def describe(values):
-        quoted = [f"'{value}'" for value in values[:cap]]
-        more = f", … ({len(values)} total)" if len(values) > cap else ""
-        return f"found {len(values)} values: {', '.join(quoted)}{more}"
-
-    grouped = (rows.groupby(["ID", "KEY"], observed=True)["VALUE"]
-               .apply(lambda values: describe(list(values))))
-    return pandas.Series(list(zip(pairs["ID"].astype(str), pairs["KEY"].astype(str))),
-                         index=pairs.index).map(grouped)
-
-
 # what a violated constraint requires, worded from its IR parameter — the
 # report states what IS allowed even when the authored message does not
 _EXPECTED = {
@@ -283,10 +245,12 @@ _EXPECTED = {
     "sh:hasValue": "value {}".format,
     "sh:in": lambda params: "one of: " + ", ".join(map(str, params)),
     "triplets:range": lambda params: "a reference to one of: " + ", ".join(map(str, params)),
+    "triplets:missing": lambda params: "a referenced object in the data, one of: " + ", ".join(map(str, params)),
     "sh:equals": "equal to {}".format,
     "sh:disjoint": "different from {}".format,
     "sh:lessThan": "less than {}".format,
     "sh:lessThanOrEquals": "at most {}".format,
+    "sh:xone": lambda params: f"exactly one of {len(params)} alternatives",
 }
 
 
@@ -308,18 +272,14 @@ def _source_shape_graphs(violations, compiled):
     """{shape id: rdflib CBD graph} of the violated shapes — the SHACL report
     embeds these so sh:sourceShape is never an empty node (term identity is
     preserved: the CBD's blank nodes ARE the compiled graph's, so they align
-    with the report's sh:sourceShape labels)."""
-    import rdflib
-
+    with the report's sh:sourceShape labels). sh:deactivated as the run used it."""
     graphs = {}
     if compiled.graph is None:           # schema-compiled IR — no shapes graph to embed
         return graphs
     for shape in set(violations["SOURCE_SHAPE"].dropna().astype(str)):
-        node = (rdflib.URIRef(shape) if "://" in shape or shape.startswith("urn:")
-                else rdflib.BNode(shape))
-        cbd = compiled.graph.cbd(node)
+        cbd = compiled.graph.cbd(_term(shape))
         if len(cbd):
-            graphs[shape] = cbd
+            graphs[shape] = _mark_switched_off(cbd, compiled)
     return graphs
 
 
@@ -333,181 +293,193 @@ def _message_sources(violations, ir):
             for message in violations["MESSAGE"]]
 
 
-def _type_map(data, table_name="triplets"):
-    """{ID: Type} from the data's Type rows (any input flavor)."""
-    kind = flavor(data)
-    if kind == "duckdb":
-        return dict(data.execute(
-            f"SELECT ID, VALUE FROM {table_name} WHERE KEY = 'Type'").fetchall())
-    if kind == "pyarrow":
-        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-        kind = "pandas"
-    if kind == "polars":
-        rows = data.filter(data["KEY"] == "Type")
-        return dict(zip(rows["ID"].to_list(), rows["VALUE"].to_list()))
-    rows = data.loc[data["KEY"] == "Type"]
-    return dict(zip(rows["ID"].astype(str), rows["VALUE"]))
+def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_undefined_keys=False,
+                    engine="auto", undefined_namespace=CIM_NS, **kwargs):
+    """Validate triplet data against the export schema: cardinality, datatypes and
+    enumerations of the scoped profiles, per instance.
 
+    Every instance in *data_scope* is validated on its own (cardinality never
+    counts rows of another instance) against the profiles in *rdf_map_scope*,
+    merged into one (``triplets.validation.schema_scope``). Class rules never
+    widen to subclasses; references are checked by ``validate_schema_references``.
 
-def validate_schema(data, rdf_map, engine="auto", closed=False, profiles=None, **kwargs):
-    """Validate triplet data against the export schema — per instance, per
-    declared profile; profiles are never merged.
+    data_scope : iterable of INSTANCE_ID, optional
+        The instances to validate; None = every instance in *data*.
+    rdf_map_scope : profile identifier or sequence of them
+        Section keys and/or declared profile IRIs (``["EQ", "OP", "SC"]`` for a
+        CGMES 3.0 EQ file); ``"*"`` = every section; None = the root entries.
+        A scope without Class entries raises ValueError.
+    report_undefined_keys : bool, default False
+        Also report keys on an object that no scoped profile defines for its class.
 
-    Every INSTANCE_ID is validated separately (the scope filter), against
-    each profile its own header declares: the header's profile-identity
-    fields (``conformsTo``, ``Model.profile``, ``keyword``,
-    ``Model.messageType``) are matched against the schema profiles' declared
-    identity (versionIRI / conformsTo / keyword / section key; legacy 2.4
-    profile URLs by substring). One instance may declare several profiles —
-    each runs on its own, so per-profile constraints (e.g. mRID 1..1 in
-    every CGMES 3.0 profile) are checked against that instance's rows alone.
-
-    profiles : sequence of profile identifiers, optional
-        Explicit override applied to EVERY instance (section key, keyword or
-        profile URI) — for header-less or legacy data. Unknown identifiers
-        raise ValueError. Default None = resolve from each instance's header;
-        instances resolving to nothing are skipped and reported in the run
-        metadata coverage (``skipped_shapes``).
+    The PROFILE column lists the scoped section keys (``["EQ", "OP", "SC"]``).
     """
-    import triplets
-
     started = datetime.now(timezone.utc)
-    compiled_set = compile_schema(rdf_map, closed=closed)
+    compiled = compile_schema(rdf_map, rdf_map_scope, report_undefined_keys)   # caches on the file digest
+    rdf_map = load_rdf_map(rdf_map)
+    sections = scope_sections(rdf_map, rdf_map_scope)
     table_name = _table_ref(data, **kwargs)
     engine_name, engine_mod = get_engine(engine)
-    lexical = kwargs.pop("lexical", True)
-    context = kwargs.pop("context", False)
 
-    chosen = None
-    if profiles is not None:
-        chosen = []
-        for identifier in profiles:
-            section = compiled_set.section(identifier)
-            if section is None:
-                raise ValueError(f"unknown schema profile {identifier!r}; available: "
-                                 f"{', '.join(sorted(compiled_set.profiles))}")
-            if section not in chosen:
-                chosen.append(section)
-
-    unresolved, runs = [], []
-    for instance, hints in _instance_hints(data, table_name).items():
-        sections = chosen if chosen is not None else _match_profiles(hints, compiled_set)
-        if not sections:
-            unresolved.append(f"instance {instance}: no schema profile matched "
-                              f"(hints: {hints[:4]})")
-            continue
-        runs.extend((instance, section) for section in sections)
-
-    # one raw engine pass per (instance, profile) — the scope filter keeps
-    # counting per instance; describe/expected/enrich run ONCE on the concat
-    frames = []
-    for instance, section in runs:
-        sub = _run(data, compiled_set.profiles[section], engine_name, engine_mod,
-                   rdf_map, [instance], lexical, **kwargs)
-        sub["PROFILE"] = section
-        frames.append(sub)
-
-    used = sorted({section for _, section in runs})
+    instances = list(data_scope) if data_scope is not None else _instances(data, table_name)
+    # one raw engine pass per instance — the presentation pass runs ONCE on the concat
+    frames = [_run(data, compiled, engine_name, engine_mod, None, [instance],
+                   undefined_namespace=undefined_namespace, **kwargs) for instance in instances]
     violations = (pandas.concat(frames, ignore_index=True) if frames
-                  else pandas.DataFrame(columns=VIOLATION_COLUMNS + ["PROFILE"]))
-    ir = (pandas.concat([compiled_set.profiles[section].ir for section in used],
-                        ignore_index=True) if used
-          else pandas.DataFrame(columns=IR_COLUMNS))
-    violations = _present(violations, data, ir, "rdfs", table_name)
-    if context:
-        union = CompiledShapes(graph=None, ir=ir, hash=compiled_set.hash,
-                               sources=compiled_set.sources, language="rdfs")
-        violations = enrich(violations, data=data, shapes=union, rdf_map=rdf_map)
-    skipped = sorted(
-        {f"{section}: {entry}" for section in used
-         for entry in compiled_set.profiles[section].stats["skipped_shapes"]}
-        | set(unresolved))
-    skipped_components = sorted({
-        component for section in used for component in
-        compiled_set.profiles[section].plans.get(engine_name, ((), (), ()))[2]})
+                  else pandas.DataFrame(columns=VIOLATION_COLUMNS))
+    violations["PROFILE"] = _profile_column(violations, sections)
+    violations = _present(violations, compiled.ir, "rdfs")
+    violations.attrs["validation"] = _schema_metadata(compiled, engine_name, started, data, table_name, sections)
+    return violations
+
+
+def validate_schema_references(data, rdf_map, data_scope=None, rdf_map_scope=None, target_data_scope=None,
+                               target_rdf_map_scope=(), report_missing_targets=True, engine="auto",
+                               inheritance=True, undefined_namespace=CIM_NS, **kwargs):
+    """Check the reference types of the source instances' associations.
+
+    Every instance in *data_scope* is checked on its own against the
+    associations of its profiles (*rdf_map_scope*, merged); the referenced
+    objects are looked up in that instance and the *target_data_scope*
+    instances. A reference conforms when ANY type of its object is the range
+    class or, with *inheritance*, one of its subclasses — the classes the source
+    and *target_rdf_map_scope* profiles define. Findings are on source objects only.
+
+    data_scope : iterable of INSTANCE_ID, optional
+        The source instances; None = every instance.
+    rdf_map_scope : profile identifier or sequence of them, optional
+        The source profiles — their associations are checked; None = the root entries.
+    target_data_scope : iterable of INSTANCE_ID, optional
+        Instances holding the referenced objects (e.g. the EQ for an SSH);
+        None = every instance, ``[]`` = none (only the source itself).
+    target_rdf_map_scope : profile identifier or sequence of them, optional
+        Profiles defining the referenced classes. A range class no source or
+        target profile defines cannot be decided: the association is listed in
+        ``skipped_shapes``.
+    report_missing_targets : bool, default True
+        Report references whose object is in neither the source nor the target
+        instances (``triplets:missing``); False leaves them silent.
+    inheritance : bool, default True
+        False accepts the range class itself only.
+    """
+    started = datetime.now(timezone.utc)
+    compiled = compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope, report_missing_targets, inheritance)
+    rdf_map = load_rdf_map(rdf_map)
+    sections = scope_sections(rdf_map, rdf_map_scope)
+    table_name = _table_ref(data, **kwargs)
+    engine_name, engine_mod = get_engine(engine)
+    loaded = _instances(data, table_name) if data_scope is None or target_data_scope is None else None
+    sources = loaded if data_scope is None else list(data_scope)
+    targets = loaded if target_data_scope is None else list(target_data_scope)
+    # the association triple itself must be in the source instance — an object
+    # repeated in a target file (EQ and SSH share IDs) brings the target's own rows
+    own_triples = _instance_triples(data, sources, compiled.ir["path"].dropna().unique().tolist(), table_name)
+    frames = []
+    for instance in sources:
+        found = _run(data, compiled, engine_name, engine_mod, None,
+                     [instance, *(target for target in targets if target != instance)],
+                     undefined_namespace=undefined_namespace, **kwargs)
+        own = own_triples.get(str(instance), set())
+        mask = [triple in own for triple in zip(found["ID"], found["KEY"], found["VALUE"])]
+        frames.append(found.loc[pandas.Series(mask, index=found.index, dtype=bool)])
+    violations = (pandas.concat(frames, ignore_index=True) if frames
+                  else pandas.DataFrame(columns=VIOLATION_COLUMNS))
+    violations["PROFILE"] = _profile_column(violations, sections)
+    violations = _present(violations, compiled.ir, "rdfs")
+    violations.attrs["validation"] = _schema_metadata(compiled, engine_name, started, data, table_name, sections)
+    violations.attrs["validation"]["inheritance"] = inheritance
+    return violations
+
+
+def _schema_metadata(compiled, engine_name, started, data, table_name, sections):
+    """Run metadata of the schema validations (no shapes graph, rdfs language)."""
+    import triplets
+
     finished = datetime.now(timezone.utc)
-    violations.attrs["validation"] = {
+    return {
         "started_at": _iso(started),
         "generated_at": _iso(finished),
         "duration_seconds": round((finished - started).total_seconds(), 3),
         "engine": engine_name,
         "creator": f"triplets {triplets.__version__}",
         "source": _source_labels(data, table_name=table_name),
-        "references": list(compiled_set.sources),
+        "references": list(compiled.sources),
+        "compiled_hash": compiled.hash,
         "language": "rdfs",
-        "profiles": used,
-        "node_shapes": sum(compiled_set.profiles[s].stats["node_shapes"] for s in used),
-        "constraints": sum(compiled_set.profiles[s].stats["constraints"] for s in used),
-        "skipped_shapes": skipped,
-        "skipped_components": skipped_components,
+        "profiles": sections,
+        "node_shapes": compiled.stats["node_shapes"],
+        "constraints": compiled.stats["constraints"],
+        "skipped_shapes": list(compiled.stats["skipped_shapes"]),
+        "relaxed_constraints": list(compiled.stats["relaxed_constraints"]),
+        "skipped_components": sorted(compiled.plans.get(engine_name, ((), (), ()))[2]),
         "source_shapes": {},
     }
-    return violations
 
 
-def _match_profiles(hints, compiled_set):
-    """Sections a header's hints resolve to, in hint-priority order — exact
-    identity first, the legacy 2.4 profile-URL substrings as fallback."""
-    sections = []
-    for hint in hints:
-        section = compiled_set.section(hint)
-        if section and section not in sections:
-            sections.append(section)
-    if not sections:
-        from .._header import PROFILE_URL_MAP
-        for hint in hints:
-            for url_part, section in PROFILE_URL_MAP.items():
-                if url_part in hint and section in compiled_set.profiles \
-                        and section not in sections:
-                    sections.append(section)
-    return sections
-
-
-def _instance_hints(data, table_name="triplets"):
-    """{INSTANCE_ID: [header profile hints, priority-ordered]} — every
-    instance appears, hint-less ones with an empty list (any input flavor)."""
+def _instance_triples(data, instances, keys, table_name="triplets"):
+    """{INSTANCE_ID: {(ID, KEY, VALUE)}} of the *instances*' rows at *keys* — one pass
+    over the data for every source instance (any input flavor)."""
+    instances = [str(instance) for instance in instances]
+    if not instances or not keys:
+        return {}
     kind = flavor(data)
     if kind == "duckdb":
-        placeholders = ", ".join("?" for _ in _HEADER_KEYS)
-        header = pandas.DataFrame(data.execute(
-            f"SELECT INSTANCE_ID, KEY, VALUE FROM {table_name} WHERE KEY IN ({placeholders})",
-            list(_HEADER_KEYS)).fetchall(), columns=["INSTANCE_ID", "KEY", "VALUE"])
-        instances = [row[0] for row in data.execute(
-            f"SELECT DISTINCT INSTANCE_ID FROM {table_name}").fetchall()]
+        rows = pandas.DataFrame(data.execute(
+            f"SELECT INSTANCE_ID, ID, KEY, VALUE FROM {table_name} "
+            f"WHERE INSTANCE_ID IN ({', '.join('?' for _ in instances)}) "
+            f"AND KEY IN ({', '.join('?' for _ in keys)})", [*instances, *keys]).fetchall(),
+            columns=["INSTANCE_ID", "ID", "KEY", "VALUE"])
     else:
         if kind == "pyarrow":
             data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-            kind = "pandas"
         if kind == "polars":
-            header = data.filter(data["KEY"].is_in(list(_HEADER_KEYS))).to_pandas()
-            instances = data["INSTANCE_ID"].unique().to_list()
+            rows = data.filter(data["INSTANCE_ID"].is_in(instances) & data["KEY"].is_in(keys)).to_pandas()
         else:
-            header = data.loc[data["KEY"].isin(_HEADER_KEYS)]
-            instances = data["INSTANCE_ID"].unique().tolist()
-
-    hints = {str(instance): [] for instance in instances}
-    priority = {key: rank for rank, key in enumerate(_HEADER_KEYS)}
-    header = header.sort_values("KEY", key=lambda keys: keys.map(priority), kind="stable")
-    for instance, value in zip(header["INSTANCE_ID"].astype(str), header["VALUE"]):
-        if value is not None and not pandas.isna(value):
-            hints[instance].append(str(value))
-    return hints
+            rows = data.loc[data["KEY"].isin(keys)]
+            rows = rows.loc[rows["INSTANCE_ID"].astype(str).isin(instances)]
+    triples = {}
+    for instance, identifier, key, value in zip(rows["INSTANCE_ID"].astype(str), rows["ID"].astype(str),
+                                                rows["KEY"].astype(str), rows["VALUE"].astype(str)):
+        triples.setdefault(instance, set()).add((identifier, key, value))
+    return triples
 
 
-def _report_metadata(violations, data, compiled, engine_name, started, table_name="triplets"):
+def _profile_column(violations, sections):
+    """PROFILE: the list of scoped section keys on every row (None for the root entries)."""
+    return pandas.Series([None if sections is None else list(sections) for _ in range(len(violations))],
+                         index=violations.index, dtype=object)
+
+
+def _instances(data, table_name="triplets"):
+    """Every INSTANCE_ID in the data, in first-seen order (any input flavor)."""
+    kind = flavor(data)
+    if kind == "duckdb":
+        return [row[0] for row in data.execute(f"SELECT DISTINCT INSTANCE_ID FROM {table_name}").fetchall()]
+    if kind == "pyarrow":
+        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+    if kind == "polars":
+        return data["INSTANCE_ID"].unique(maintain_order=True).to_list()
+    return data["INSTANCE_ID"].unique().tolist()
+
+
+def _report_metadata(violations, data, compiled, engine_name, started, table_name="triplets", notes=None):
     """The validation-run facts every report exporter reads (violations.attrs).
 
     Coverage (skipped_shapes / skipped_components) is what THIS run did not
-    evaluate: compile-level skips plus the engine's own gaps for vectorized
-    engines; empty for the spec-complete pyshacl reference engine.
+    evaluate: the schema merge's skips in *notes* (every engine), compile-level skips
+    plus the engine's own gaps for vectorized engines — only the malformed shapes'
+    entries for the spec-complete pyshacl reference engine. relaxed_constraints: the
+    merge's loosened checks.
     """
     import triplets
 
     finished = datetime.now(timezone.utc)
+    notes = notes or {"skipped_shapes": [], "relaxed_constraints": []}
     if engine_name == "pyshacl":
-        skipped_shapes, skipped_components = [], []
+        skipped_shapes = [*notes["skipped_shapes"], *compiled.stats.get("malformed_shapes", [])]
+        skipped_components = []
     else:
-        skipped_shapes = compiled.stats.get("skipped_shapes", [])
+        skipped_shapes = [*notes["skipped_shapes"], *compiled.stats.get("skipped_shapes", [])]
         skipped_components = sorted({*compiled.stats.get("unknown_components", ()),
                                      *compiled.plans.get(engine_name, ((), (), ()))[2]})
     return {
@@ -518,10 +490,13 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
         "creator": f"triplets {triplets.__version__}",
         "source": _source_labels(data, table_name=table_name),
         "references": list(compiled.sources),
+        "compiled_hash": compiled.hash,
+        "deactivated_shapes": sorted(compiled.deactivated),
         "node_shapes": compiled.stats.get("node_shapes", 0),
         "constraints": compiled.stats.get("constraints", 0),
         "language": compiled.language,
         "skipped_shapes": skipped_shapes,
+        "relaxed_constraints": list(notes["relaxed_constraints"]),
         "skipped_components": skipped_components,
         # rdflib graphs, in-memory only — the SHACL report embeds them;
         # SARIF properties and the csv/excel sidecars skip this key

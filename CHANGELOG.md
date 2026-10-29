@@ -6,23 +6,501 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Start of the 0.3 line.
-
 ### Added
-- **Linux aarch64 wheels** (manylinux), built on GitHub's native arm64 runner;
-  also what Docker runs on Apple Silicon
-  ([#130](https://github.com/Haigutus/triplets/issues/130)).
-- **NCP 2.5-dev export schemas** (`ENTSOE_NC_2.5-dev_552_ED1/ED2.json`) generated
-  from [application-profiles-library](https://github.com/entsoe/application-profiles-library)
-  `main` (`NCP/RDFS`). Named `-dev` until the pin is an `ncp-v2-5-0` release branch.
-  DatasetMetadata header attributes bind again via `schema:domainIncludes`
+- **SPARQL targets in the vectorized engines** (`sh:target [ a sh:SPARQLTarget ; sh:select … ]`,
+  IR `target_by="SPARQL"`): each target query runs once per validation on `triplets.sparql`
+  and its `?this` nodes are the focus. Same findings as pyshacl on pandas, polars and duckdb.
+  A target query no engine can run flags the shape as a `triplets:invalidSparql` Violation;
+  a `sh:target` without `sh:select` stays in `skipped_shapes`
+  ([#161](https://github.com/Haigutus/triplets/issues/161)).
+- **`sh:xone` in the vectorized engines** — exactly one alternative must hold,
+  per focus node on a node shape and per value node under a path (`VALUE` = the
+  value node); an empty (switched-off) alternative holds. pandas implements it,
+  polars and duckdb hand it to pandas like the other logical operators. Same
+  findings as pyshacl.
+- **Vectorized engines walk `sh:targetObjectsOf` and `sh:targetNode`** (IR
+  `target_by="VALUE"` — the VALUEs under the KEY, referenced objects whether
+  described in the data or not — and `target_by="ID"` — one ID, in the data or
+  not, so the ENTSO-E `sh:targetNode cim:IDuniqueness` idiom gives a dataset-wide
+  `sh:sparql` its focus). Same findings as pyshacl on pandas, polars and duckdb.
+  Only `sh:targetClass` and `sh:class` follow the schema inheritance. `sh:rule`
+  shapes are listed in `skipped_shapes` (pyshacl applies rules, the vectorized
+  engines never do).
+- **`cim-diff` report options**: `--stat` (counts per type only), `--include TYPE`
+  (only these classes, also in `cim-spreadsheet`), `--context KEY` (unchanged
+  values of KEY shown in each changed object, e.g. `IdentifiedObject.name`).
+  `print_triplets_diff(include_objects=, context_keys=, stat=)` in every
+  engine, next to `exclude_objects`. `--version` in both CLIs.
+- `filter_triplets_by_type` takes a list or array of types too (all engines);
+  duckdb takes `type_key` like pandas and polars.
+- **Validation API — three generic validations, scoped by the caller:**
+  every input has a scope named after it, `data` + `data_scope` (INSTANCE_IDs;
+  rows outside are not loaded) and `rdf_map` + `rdf_map_scope` (profiles of the
+  export schema: section keys and/or declared profile IRIs, mixed; `"*"` every
+  section; None the root entries; an empty scope raises). Listed
+  profiles are merged for the run (`schema_scope.scoped_rdf_map`): parameter,
+  inheritance and enumeration lists united, cardinality relaxed to the
+  loosest (a missing bound is no bound), a key whose datatype differs (or is
+  missing in one profile) left untyped and unchecked (listed in
+  `skipped_shapes`), the loosened checks listed in `relaxed_constraints`,
+  each note quoting every profile's own value; the merged ProfileMetadata keeps every
+  profile's identity (section keys, each field as a list in scope order).
+  `rdf_map_entries` (and the flat maps on it) skip ProfileMetadata. Nothing in `triplets.validation` reads
+  instance headers.
+  - `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=True)`
+    — SHACL; the scoped profiles give typed literals, nodeKind and class
+    inheritance. The `inheritance` flag stays on `validate_shacl` and
+    `validate_schema_references`; `attrs["validation"]["inheritance"]` says
+    whether it was applied.
+  - `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False)`
+    — cardinality, datatypes and enumerations, each instance on its own,
+    against the merged profiles; PROFILE and `attrs["validation"]["profiles"]`
+    list the scoped section keys (`["EQ", "OP", "SC"]`), the reports format
+    the list for display.
+  - `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope,
+    target_data_scope, target_rdf_map_scope, report_missing_targets=True, inheritance=True)`
+    — the reference types of each source instance's associations, against the
+    objects in the source and target instances (both data scopes default to
+    every instance); valid classes from the source
+    and target profiles; a reference to an object not in the data is
+    `triplets:missing`; a range class no given profile defines is listed in
+    `skipped_shapes`. `compile_references` compiles the checks.
+  - `cgmes_tools.declared_profiles` (header → profiles, legacy 2.4.15 URLs)
+    and `cgmes_tools.validate_by_header` (each instance against its declared
+    profiles, optionally its references against every loaded instance;
+    `data_scope` selects the validated instances only)
+    hold the CIM header logic.
+  - `concat_violations(frames)` joins the frames of several runs, merging their
+    run metadata (shape and constraint counts once per rule set: `compiled_hash`
+    + `deactivated_shapes`).
+- **Class inheritance follows the scoped profiles, the same on every engine:**
+  `schema_scope.class_ancestors(rdf_map, rdf_map_scope)` unions same-named
+  Class entries' `inheritance` lists and closes the relation only through
+  classes with their own entry in the scope. The vectorized engines widen
+  `sh:targetClass` / `sh:class` through one class-membership index built from
+  its pairs (the IR is not fanned out); pyshacl gets the same edges as
+  `rdfs:subClassOf` in `ont_graph` (recorded parent IRIs as is,
+  `https://cim.ucaiug.io/ns#IdentifiedObject` for NC). `inheritance=False`
+  matches the exact `rdf:type`. Schema class rules never widen: each Class
+  entry already lists its inherited attributes. Identical findings are
+  reported once on every engine (a property shape on both a parent and a
+  child node shape, the same triple in two instance files).
+- **Property-level `sh:or` / `sh:not` judge value nodes:** a nested shape
+  without its own `sh:path` now constrains the property's values. Before, it
+  compiled with no path: `sh:or ( [ sh:datatype … ] [ sh:in … ] )` reported
+  nothing and `sh:not [ sh:in (…) ]` flagged every focus node.
+- **NCP 2.5.0 export schemas** (`ENTSOE_NC_2.5.0_552_ED1/ED2.json`,
+  `schemas.ENTSOE_NC_2_5_0_552_ED1/ED2`) generated from
+  [application-profiles-library](https://github.com/entsoe/application-profiles-library)
+  release branch `ncp-v2-5-0` (`NCP/RDFS`, tag `ncp-2.5.0`). DatasetMetadata header attributes bind again via `schema:domainIncludes`
   ([#99](https://github.com/entsoe/application-profiles-library/pull/99) / [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
+- **`sh:deactivated` honoured; `validate_shacl(deactivated_shapes=)`** — every
+  shape compiles once; `compiled.deactivated` lists the shapes the graph
+  declares `sh:deactivated`, and the run's rule set is `compiled.active(...)`:
+  the declared set switched off, or the caller's set instead of it (None =
+  declared, `[]` = run everything) before any engine runs (node, property and
+  standalone property shapes, `sh:node` targets, logical members; paths stay
+  declared under `sh:closed`; truthiness as pyshacl, a plain `"false"`
+  deactivates, an ill-typed literal does not, a shape with a non-literal or
+  second value is skipped as malformed). pyshacl and the SHACL report's embedded
+  shapes receive the same set; the run metadata lists it as `deactivated_shapes` next to the
+  shape files' `compiled_hash`. One compiled base serves the NC validation
+  aggregates that switch different shapes off.
+  IR rows carry their lineage in a `shapes` column.
+- Tests: the CGMES 2.4 Enhanced SHACL shapes come from the new
+  `test_data/application-profiles-library-cgmes-v2-4` submodule
+  (entsoe/application-profiles-library, branch `cgmes-v2-4`). Every file
+  compiles and loads in pyshacl; the RealGrid EQ / SSH / TP / SV instances are
+  validated against them (exact types, `inheritance=False`) with the same
+  findings on pandas, polars, duckdb and pyshacl (pyshacl on SV by default,
+  the rest under `-m performance`).
+
+### Changed
+- **pyshacl engine `data_scope` matches INSTANCE_ID values as given**, like the pandas /
+  polars / duckdb SHACL engines: a `urn:uuid:`-prefixed scope entry no longer matches the
+  bare INSTANCE_ID.
+- **Breaking — IR columns renamed**: `target_kind` → `target_by` (`"Type"` for
+  `sh:targetClass`, `"KEY"` for `sh:targetSubjectsOf`) and `target_class` →
+  `target_on` (the Type name or the KEY). The IR speaks the repo's own
+  vocabulary (ID, KEY, VALUE, Type), not SHACL's.
+- **Breaking — `sparql.query(scope=)` → `data_scope=`**, matching the validations
+  (also `_rdflib_loader.scoped_graph(dataset, data_scope=)`).
+- **Breaking — validation entry points:** `validate` is `validate_shacl` and its
+  `scope` is `data_scope`; `validate_schema` takes `data_scope` /
+  `rdf_map_scope` and `report_undefined_keys` (was `closed`) instead of
+  resolving instance headers (`profiles=` removed — `cgmes_tools.validate_by_header`
+  reads headers); listed profiles are merged instead of run one by one; its
+  `rdfs:range` reference findings move to `validate_schema_references`.
+  `compile_schema(rdf_map, rdf_map_scope, report_undefined_keys)` returns one
+  `CompiledShapes` (`CompiledSchema` removed). The engines take `data_scope`
+  and an `ancestors` map. A sectioned `rdf_map` needs `rdf_map_scope`.
+- **Breaking — enrichment is its own call:** validation adds EXPECTED and
+  MESSAGE_SOURCE (from the rules); TARGET (the referenced object found, or not;
+  the duplicate values of a maximum-count finding) is `enrich`'s first
+  column. `context=True` is removed: call `enrich(violations, data=, shapes=,
+  rdf_map=, rdf_map_scope=, data_scope=)` — `data_scope` reads only the
+  instances the run saw.
+- **NC inheritance:** `AutomationFunction`, `BaseCaseCurrentLimit`,
+  `DirectCurrentEquipmentController` and `PowerTransferCorridor` no longer
+  reach `PowerSystemResource` / `IdentifiedObject` (their own lists stop
+  earlier, and no other class's list is read as their parents). CGMES
+  inheritance is unchanged.
+- **`triplets.iri`** — one public package for the triplet ↔ IRI contract:
+  `local_id` / `local_key(iri, type_key)` / `local_value(iri, kind)` (local forms,
+  all on one split, `split_iri` → namespace + local name; `TYPE_KEY`,
+  `DESCRIPTION_TYPE`),
+  `absolute_id` / `absolute_name` / `absolute_key` / `absolute_value` (absolute IRIs, taking
+  the flat maps `namespaces` / `value_types` / `datatypes` built from `rdf_map` — one
+  comprehension each, no cache), the namespace constants, and
+  `iri_pandas` / `iri_polars` / `iri_duckdb` flavors with the same names. The parsers, N-Quads
+  export/read-back, the qlever ingest bridge, SPARQL result decoding, SHACL
+  reports, SARIF and the validation engines all use it; the six private
+  local-name helpers and the duplicated `"urn:uuid:"` / namespace literals are
+  gone. `tests/test_iri.py` is the case table every flavor is held to.
+- `triplets.parser.clean_ID` → `triplets.parser.local_id` (also
+  `triplets.iri.local_id`). `rdf_parser.clean_ID` stays as a deprecation
+  wrapper. ID prefixes (`urn:uuid:`, `#_`, `_`) are stripped **once**, longest
+  first — the python engines stripped cumulatively (`urn:uuid:_x` → `x`) while
+  the cython engine stripped one (`_x`); every engine now agrees.
+- `export.nquads_utils.build_key_metadata` → `iri.namespaces` / `iri.value_types` /
+  `iri.datatypes`; `make_object` takes them as keyword maps. The pandas N-Quads
+  exporter is vectorized (no per-row `apply`).
+- **The schema entry type decides the serialisation form** (N-Quads, qlever
+  ingest, SHACL `sh:nodeKind`), never `xsd:type` and never the shape of the
+  text. An Attribute value is a literal even when it reads `https://…` or
+  looks like a UUID — `Model.modelingAuthoritySet` is now
+  `"http://…"^^<xsd:anyURI>` and a string attribute holding an IRI stays a
+  string (before, both became IRI nodes and `read_nquads` shortened them). A
+  SPARQL query matching such a value as `<http://…>` must match the literal
+  instead. CIM XML `datatypes=True` annotates anyURI attributes. An
+  Association value is `absolute_id(value)`: an absolute IRI passes through,
+  anything else becomes `urn:uuid:<value>` (before, a non-canonical reference
+  silently became a string literal). The absolute-IRI / canonical-UUID
+  heuristic now applies only to a KEY the schema does not declare. SHACL
+  `sh:nodeKind` follows the same rule both ways: an Association or
+  Enumeration path violates `sh:Literal` on every row and never `sh:IRI`.
+- **IRI-unsafe text in an IRI is percent-encoded**, so a schema reference or
+  enum value stays a real IRI whatever its text: `just some text` under an
+  Association → `<urn:uuid:just%20some%20text>` (controls, space and
+  ``<>"{}|^`\`` — `iri.encode_iri`, in every flavor and the qlever ingest).
+  Before, such a value wrote an invalid N-Quads line that rdflib and oxigraph
+  rejected and qlever accepted. `read_nquads`, CONSTRUCT and SHACL result
+  decoding reverse exactly those escapes (`iri.decode_iri`). Attribute text,
+  `xsd:anyURI` included, stays a verbatim literal.
+- **Undefined names** — a class the schema does not list (abstract CIM classes
+  such as `Equipment` included; conformant data with concrete `Type` values is
+  unchanged), a KEY or an enum value it does not list, and every name when no
+  `rdf_map` is given — are written under `undefined_namespace`, default
+  `http://triplets#`, in N-Quads and both CIM XML engines. Before: CIM100 in
+  N-Quads / qlever / the SHACL report, `http://triplets#` in the pandas CIM XML
+  engine, unprefixed elements in the cython one, a bare value for an unknown
+  enum value. `export_to_nquads` gains `export_undefined` (default `True`:
+  lossless interchange keeps every row) and `undefined_namespace`;
+  `export_to_cimxml` gains `undefined_namespace` (its `export_undefined`
+  default stays `False`; an unknown enum value now follows the same switch
+  instead of being written bare; an `undefined_namespace` the document already
+  binds, such as CIM100, keeps its own prefix instead of adding `triplets:`). Schema-less `export_to_nquads` therefore
+  changes from CIM100 to `http://triplets#`. A schema-less query does not:
+  `sparql.query`, `validate_shacl`, `validate_schema` and `export_to_shacl_report`
+  keep every row and default `undefined_namespace` to CIM100, so `cim:`
+  queries keep working; all of them take the parameter.
+- **Performance** (RealGrid, 1.15M rows): `read_nquads` 12.2 s → 2.9 s (line
+  splitting and graph detection in Arrow compute, slice-based term unwrap;
+  columns come back arrow-backed), pandas `export_to_nquads` 3.9 s → 2.2 s
+  (mask-chain classification, lines joined in Arrow), polars export unchanged
+  at 0.6 s. Regex replaces stay in the flavors — measured 2-8x faster than
+  split/list ops in pandas and 1.5-2x in polars; the scalar `local_id` uses a
+  prefix loop (faster per call for the python parsers).
+- **`max_workers` threads the sh:sparql constraints on oxigraph and qlever**
+  (pandas / polars / duckdb SHACL engines): the embedded engines release the GIL
+  while evaluating over one shared store, so the queries run on a thread pool
+  instead of sequentially; rdflib keeps the forked process pool. Svedala EQ
+  against the CGMES 3.0 Equipment-AP shapes (92 constraint queries), sh:sparql
+  phase on oxigraph 6.8 s → 2.4 s at 4 workers, 1.8 s at 8 (`validate_shacl`
+  12.6 s → 7.9 s); on qlever 0.84 s → 0.35 s at 4. Same findings as sequential.
+- `read_nquads` / CONSTRUCT decoding shorten per column: `ID` / `INSTANCE_ID`
+  via `local_id`, `KEY` via `local_key`, `VALUE` via `local_value` — a
+  URI-shaped `INSTANCE_ID` now survives the round trip. A VALUE IRI that is a
+  subject of the same data shortens like its `ID` (`local_id`), so a reference
+  to `<http://…#b>` still joins the object `http://…#b` instead of becoming `b`.
+  KEY and `Type` VALUE IRIs shorten to the `iri.split_iri` local name — after the last `#`
+  **or `/`** (a URN after its last `:`), as an XML element local name holds neither — so `dcterms:` header
+  keys (552 Ed2, NC) read back as `issued` / `identifier`, the same KEY the CIM
+  XML parser gives (before: the whole `http://purl.org/dc/terms/issued`), and a
+  class in a `/` namespace as its name. References still split on `#` only.
+- **`xsd:anyURI` values are lexically checked** by `sh:datatype` on every engine
+  (pyshacl through the lexical supplement): an RFC 3987 IRI reference, relative
+  and non-ASCII allowed; controls, space, DEL, ``<>"{}|^`\`` and a `%` not
+  followed by two hex digits violate. Before, anyURI was never checked.
+- **`parse(shorten_resources=)` is renamed `local_resources=`**, in the
+  `triplets.iri` local / absolute vocabulary. No alias. `True` (default) is
+  unchanged. `False` is now the absolute form: IDs and references are resolved
+  against the document's declared absolute `xml:base` at parse time — without one
+  against `parse(default_base=…)` (`http://triplets#`), never the file location
+  (the NamespaceMap `xml_base` row, which the schema generator copies to
+  `ProfileXMLBase`, now holds only a declared absolute base on every engine —
+  the cython engine wrote the file name, the python ones the file path) —
+  (`iri.resolve_iri`; `rdf:about="#X"` → `base#X`, `rdf:ID="X"` → `base#X`)
+  instead of `local_id` only, which left `#Name` relative and made `#_x` local.
+  The export schema generator runs on it and takes absolute IRIs only:
+  `rdfs_tools.get_namespace_and_name` is built on `iri.split_iri`: an absolute
+  IRI (any URI scheme) splits as is, only a bare or `#name` takes the
+  `default_namespace`, and every other relative form (or no default) raises
+  instead of guessing. The regenerated bundles hold the same entries, fields and
+  values (checked), only CGMES 2.4 / 3.0 entry and `parameters` order changes —
+  now sorted by absolute IRI, before by how the RDFS text happened to write each
+  reference (`#X` or `http://…#X`).
+- **Schema generation is filesystem-independent:** `rdfs_tools.list_of_files`
+  returns sorted paths. NC 2.5 on `main` had been generated in `os.listdir`
+  order (`SSI, RA, SIS, …`); it is now in file-name order like every other
+  bundle. Each profile section and the `iri` flat maps (namespaces, entry types,
+  value types, datatypes) are unchanged — a test now pins that no name has a
+  conflicting namespace / entry type across sections (primitives `DateTime` /
+  `URI` excepted), so first-wins merging is order-independent where the
+  exporters rely on it. What depended on order was the merged human context.
+- **Violation enrichment reads the schema per profile:** `SCHEMA_DESCRIPTION` /
+  `SCHEMA_MULTIPLICITY` come from the profiles the violation was checked
+  against (the `PROFILE` column, else `enrich(rdf_map_scope=)` — one scope, or
+  one per instance — else the run's recorded profiles), merged like the run;
+  rows without profiles read the root entries, and another profile's text is
+  never borrowed. Before, a multiplicity that differs between profiles (NC 2.5
+  `BaseTimeSeries.timeSeriesKind`: SIS `0..1`, AS `1..1`) showed whichever
+  profile came first.
+- **Importers share two rule sources.** The python XML engines and the legacy
+  `rdf_parser.load_RDF_to_list` run one row loop (`parser.utils.iter_rdf_rows`);
+  the RDF-term readers (`read_nquads`, CONSTRUCT on every engine, `sh:sparql`
+  results, the pyshacl report) decode once, then use `local_id` / `local_key` /
+  `local_value`. `read_nquads` takes `rdf_map=` (reference vs enum VALUE exact from
+  the schema instead of guessed) and `type_key=` (the KEY for `rdf:type`, default
+  `"Type"`). SHACL terms compile with the rule of the column they land on:
+  `sh:path rdf:type` targets the `Type` KEY (was a KEY `type` that never matched),
+  and an `sh:in` / `sh:hasValue` member with a `/`-only IRI stays whole like the
+  data VALUE (was cut to its last segment).
+  Visible changes: the pyshacl report VALUE is shortened like the other engines
+  (an enum outside `sh:in` reports `SwitchKind.x`, not its full IRI);
+  `load_RDF_to_list` gives the tag name for an element without a namespace
+  (was `""`), `""` for a missing ID (was `None`) and for an empty element (was
+  `None`); the cython parser finds `rdf:ID` / `rdf:about` / `rdf:resource` by
+  the prefix the document binds to the RDF namespace, not only `rdf:`.
+- **`Type` = `Description` is `rdf:Description`, not a class:** N-Quads and the
+  qlever ingest state no `rdf:type` for it (was `http://triplets#Description`),
+  and both CIM XML engines write an `rdf:Description` element (was
+  `triplets:Description`). `export_to_cimxml(export_undefined=True)` on an
+  instance without a model header no longer raises on the missing namespace map.
+- Known import / export deviations that stay (CIM XML without percent-encoding,
+  `http(s)` IDs, blank nodes, …) are listed in `docs/parsers.md` → *Known
+  limitations*.
+- `violations_to_report_graph` / `export_to_shacl_report` accept `rdf_map`;
+  `sh:resultPath` then keeps the profile namespace instead of CIM100.
+- SPARQL `scope` / validation `data_scope` build graph IRIs with `absolute_id`: a URI-shaped
+  `INSTANCE_ID` scopes correctly (was silently empty), and an `https:` one is
+  no longer prefixed with `urn:uuid:` by the N-Quads graph term.
+- **Export-schema `xsd:type` comes from the RDFS.** `cim_rdfs_to_json`
+  follows each CIMDatatype `.value` to an XSD `rdfs:range` (IEC 61970-501 Ed2)
+  or to a Primitive (`Area.value` → `Float`); `cgmes_data_types_map` now lists
+  only Primitives. All bundles regenerated and checked against the published
+  SHACL `sh:datatype`; changed types:
+  - `Decimal`, `Money` → `xsd:decimal` (was `xsd:float`)
+  - `MonthDay` → `xsd:gMonthDay` (was `xsd:integer`)
+  - `Area`, `RealEnergy`, `VolumeFlowRate`, `Speed`, `Irradiance`, `Impedance`,
+    `Pressure`, `Hours`, … → `xsd:float`; `Duration`, `Time`, `DateTimeStamp`,
+    `UUID`, `Version`, `StringIRI`, `StringFixedLanguage` typed (were `""`)
+
+  Schema validation in the pandas / polars / duckdb engines is stricter for
+  `xsd:decimal`: `Money` / `Decimal` values in exponent form (`1e3`) or
+  `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **pyshacl engine `data_scope` loads only the scoped rows**: the frame is filtered to the
+  scoped INSTANCE_IDs before the N-Quads export, as the vectorized engines do; before, the
+  whole dataset was exported and parsed and the scoped named graphs copied out of it.
+  CGMES 2.4 RealGrid (1.15M triplets), one SV instance (69k rows): 30.2 s / 3.3 GB peak
+  → 2.6 s / 0.9 GB; the EQ instance (892k rows): 58.8 s / 4.3 GB → 37.2 s / 3.1 GB — the
+  same as validating the pre-filtered frame. A DuckDB connection is filtered SQL-side.
+  Each scope is its own entry in the in-process rdflib dataset cache; with
+  `store="oxigraph"` a scoped run loads its own store of the scoped rows.
+- **`validate_shacl(..., lexical=False)` skips the `triplets:lexicalForm` check on every
+  engine**: pandas, polars and duckdb no longer emit the narrower-form Warnings (nested
+  datatype checks included) — the datatype check skips the second pattern; values outside
+  the lexical space stay `sh:datatype` violations. pyshacl gets no supplement, as before.
+- **pyshacl engine report**: the nested `sh:detail` results of a `sh:node` finding are no
+  longer listed as findings of their own; a blank-node `sh:resultPath` (inverse, sequence or
+  alternative path) reads as the KEY it resolves to, not the blank-node label; the
+  qualified-value, `sh:uniqueLang` and `sh:languageIn` components read as `sh:qualifiedMinCount`
+  etc.
+- **Every value of a repeatable SHACL parameter is evaluated** on polars, pandas and
+  duckdb: a second `sh:node` shape, `sh:or` / `sh:and` / `sh:xone` list, `sh:not`
+  shape or `sh:pattern` / `sh:class` / `sh:hasValue` value was dropped without a
+  warning; each value is now a constraint of its own, as in pyshacl
+  ([#163](https://github.com/Haigutus/triplets/issues/163)).
+- **A malformed shape is skipped, the rest validates** on polars, pandas, duckdb and pyshacl:
+  a shape that fails one of these load checks — a parameter taken once (`sh:path`,
+  `sh:minCount`, `sh:maxCount`, `sh:datatype`, `sh:nodeKind`, `sh:in`, `sh:minLength`,
+  `sh:maxLength`, `sh:closed`, `sh:deactivated`, `sh:uniqueLang`, `sh:languageIn`,
+  `sh:qualifiedMinCount`, `sh:qualifiedMaxCount`) given twice, an empty `sh:or` /
+  `sh:and` / `sh:xone` list, a non-literal `sh:deactivated`, `sh:ignoredProperties`
+  without `sh:closed`, a declared `sh:PropertyShape` without `sh:path` — is named in
+  `skipped_shapes` with the reason (an untargeted one too) and not evaluated; the vectorized engines evaluated
+  it (polars merged two `sh:in` lists into one), pyshacl refused the whole shapes graph.
+  A logical operator over a malformed shape is dropped and named, as over any skipped
+  part; a `sh:node` row whose target has nothing left but skipped parts is too (it
+  conformed on every node).
+- **A nested `sh:datatype` decides on the lexical space only** on polars, pandas and
+  duckdb: inside `sh:and` / `sh:or` / `sh:xone` / `sh:not` / `sh:node` a narrower form
+  (`"1"` for `xsd:float`) counted as non-conforming — `sh:and` / `sh:or` / `sh:xone` /
+  `sh:node` reported it, `sh:not` lost the finding pyshacl reports. The `triplets:lexicalForm` Warning
+  stays on a property shape's own `sh:datatype`
+  ([#172](https://github.com/Haigutus/triplets/issues/172)).
+- **`sh:closed` allows the properties of every `sh:ignoredProperties` list** on
+  polars, pandas and duckdb, as pyshacl; one of two lists was read and the
+  properties of the other were reported. A property shape skipped for two
+  `sh:path` values keeps both paths declared.
+- **`sh:and` reports one row per non-conforming focus node** (node shape, no `KEY`)
+  **or value node** (property shape), with the operator's shape, severity and
+  message — it listed every nested finding with the nested `KEY` and shape
+  ([#164](https://github.com/Haigutus/triplets/issues/164)).
+- **A `sh:or` / `sh:and` / `sh:xone` / `sh:not` member with its own `sh:path`
+  inside a property shape is checked on the value nodes**, not on the focus node:
+  the engines flagged the wrong focus ([#166](https://github.com/Haigutus/triplets/issues/166)).
+- **`sh:property` on a property shape reports the inner constraint on the value
+  node** (SHACL §4.7.2), as pyshacl: it was one `sh:node` row on the referring
+  focus. Under a `sh:node` target or a logical member the property shape is still
+  judged as a whole (one `sh:node` row per value node). New IR component
+  `sh:property`.
+- `sh:node` on a node shape is evaluated by the polars, pandas and duckdb engines: one
+  `sh:node` finding per non-conforming focus node, as pyshacl
+  ([#160](https://github.com/Haigutus/triplets/issues/160)).
+- **CIM XML export uses every profile the instance header declares**
+  ([#128](https://github.com/Haigutus/triplets/issues/128)), merged like `rdf_map_scope`
+  (both engines). A CGMES 3.0 EQ file declaring EQ, OP and SC was exported against EQ
+  only: the OP and SC keys (`ACLineSegment.r0`, …) were dropped, or written as
+  `triplets:` with `export_undefined=True`. A class concrete in any declared profile
+  is instantiated (`rdf:ID` in ED1), whatever the order of the header rows.
+  `resolve_instance_config` returns the merged schema (its `ProfileMetadata` fields are
+  lists). An instance that matches no profile of a sectioned schema now warns, naming the
+  file and the schema's profiles, also without a header (it exported an empty file silently).
+- **A flat schema (entries at the root, no profile sections) fills the IRI maps**
+  ([#128](https://github.com/Haigutus/triplets/issues/128)). `export_to_nquads` wrote
+  every name under `http://triplets#` without datatypes, and `sparql.query`,
+  `read_nquads(rdf_map=)` and the SHACL report got no namespaces. A root dict with a
+  `type` string is an entry, one without is a section; a name both define takes the root entry.
+- **Node-level `sh:or` / `sh:and` / `sh:not` on a NodeShape are compiled** (they
+  were silently skipped, not even listed in `skipped_shapes`); a logical member
+  or `sh:node` shape carrying its own `sh:property` (or `sh:closed`) is
+  expanded instead of compiling to an empty, always-satisfied alternative. One
+  walker now compiles targeted, referenced and member shapes alike.
+- **`sh:qualifiedValueShape` / `sh:qualifiedMinCount` / `sh:qualifiedMaxCount`
+  (and `sh:uniqueLang`, `sh:languageIn`) are reported in `skipped_components`**;
+  a logical operator over such a member, over a bare IRI with no shape, or over
+  a member with a part already skipped (a dropped operator, an inexpressible
+  `sh:path`) is skipped and named in
+  `skipped_shapes` instead of being judged on its expressible part (which fired
+  on every focus node). A value constraint on a node shape itself (`sh:class`,
+  `sh:in`, … judging the focus node) is named in `skipped_shapes`; it was
+  silently ignored. `sh:and ( )` no longer raises.
+- pyshacl findings without a property path leave `VALUE` empty, as the other
+  engines do (pyshacl's `sh:value` there is the focus node, already in `ID`).
+- SHACL report `sh:resultPath` takes the schema namespace with `rdf_map=`:
+  regression test ([#133](https://github.com/Haigutus/triplets/issues/133)).
+- **polars tableviews return rows in a fixed order**, sorted by ID like pandas
+  (`type_tableview`, `key_tableview`, `id_tableview`). Row order changed from call to
+  call, so float sums over a view, such as `scale_load`, differed in the last digits.
+- **DuckDB 2.0 support** (1.5.3 still works). Results are fetched in full before
+  the next call on the connection, `tableview_to_triplets(multivalue=True)` uses
+  `lambda x:` instead of the removed `x ->`, and Arrow exports read relations
+  (no extra copy).
+- **duckdb `references` / `references_simple`:** an object that references
+  itself (e.g. by `IdentifiedObject.mRID`) keeps level 0, like pandas.
+- **NC instances resolve their profile from `dcterms:conformsTo`**, not only from
+  `dcat:keyword` ([#142](https://github.com/Haigutus/triplets/issues/142)). Every
+  bundle section now has `ProfileMetadata.versionIRI` (the RDFS vocabulary IRI; CGMES
+  2.4.15: its ENTSO-E profile URI constant, `entsoeURI` / `entsoeURIcore` / `europeanProfileURI`, was missing) and `profileVersionIRI` (the profile IRI headers
+  declare: from the optional PROF descriptors in `rdfs/<bundle>/PROF/`, else the
+  `versionIRI`), and profile resolution matches both. NC: `https://ap.cim4.eu/<Profile>/<ver>`
+  vs `https://ap-voc.cim4.eu/...`; CGMES: the same IRI. A dataset whose keyword names its content
+  (ReliCapGrid `CommonData`, `FAP`) was exported against no profile and lost all rows.
+- **`scale_load`** works without `NonConformLoad` objects (was `TypeError`).
+- **`get_metadata_from_filename`** parses the file name, not the whole
+  `label` path: a directory with `_` broke the split and
+  `update_FullModel_from_filename` raised `KeyError: 'ID'`.
+- Tests: the CGMES SHACL shapes come from the new `test_data/CGMES-AP`
+  submodule (was a hard-coded local path, so those tests always skipped); CI
+  runs the suite once more with the cython extensions built.
+- **A namespace IRI VALUE is kept whole.** `local_value` (all parsers, `iri_pandas`,
+  `iri_polars`, `iri_duckdb`) turned `<dcterms:conformsTo rdf:resource="http://iec.ch/TC57/CIM100#"/>`
+  into `""`: an `http` IRI with `#` and nothing after it has no local name.
+- Tests use the ReliCapGrid `cgmes-3.0_ncp-2.5_tc-2.0` release (was a February
+  commit); the NC round trip runs against the NCP 2.5.0 bundles. Instances that cannot
+  round-trip yet are strict xfails linked to their issue, not skipped.
+- **`cim-spreadsheet` leaves out the parser metadata** (`NamespaceMap`,
+  `Distribution`, which holds the source path) like `cim-diff`, with the same
+  options from one shared definition in
+  `triplets.cli` ([#132](https://github.com/Haigutus/triplets/issues/132)).
+  Such a spreadsheet converts back to `<uuid>.xml` with the schema profile's
+  namespaces.
+- **Same exclusion options in both CLIs.** `-ex TYPE` leaves out more classes
+  (repeat or comma-separate); `--keep-metadata` keeps `NamespaceMap` and
+  `Distribution`. `--no-default-exclusions` is removed. `cim-spreadsheet` applies `-ex` to
+  to-cim too. `cim_to_spreadsheet()` leaves out nothing by default; pass
+  `exclude_objects=triplets.cli.METADATA_TYPES` for the CLI behaviour.
+- **`cim-diff` exit code**: 0 when equal, 1 when different, 2 on error.
+  `print_triplets_diff` returns the number of differing triplets.
+- **One diff report for all engines.** pandas, polars and duckdb
+  `print_triplets_diff` print the same output (they had three formats; duckdb
+  ignored `exclude_objects`). Hunks and keys are sorted, `-` before `+`.
+  polars `diff_triplets` casts `ID` / `KEY` / `VALUE` to String when one side
+  is Categorical.
+- **CLI logging at WARNING**; `cim-spreadsheet` no longer prints INFO lines.
+- **to-cim without `--rdf-map`** warns and writes the classes in the triplets
+  namespace; it wrote nothing and still reported success.
+- **CIM XML export creates missing folders** for a relative file name (round
+  trip with `--keep-metadata` crashed with `FileNotFoundError`).
+- **`print_triplets_diff` `exclude_objects` leaves out changed objects too**:
+  it matched only removed and added ones. File names are read before
+  filtering. `file_id_object=None` keeps `Distribution` in the diff. The
+  unpackaged `tools/cim-diff.py` script is removed (use `cim-diff`).
+- **Missing VALUE is `""` in `diff_triplets`** (all engines): it matches a
+  missing or `""` VALUE and is returned as `""`. duckdb dropped such rows,
+  polars reported them as removed and added.
+- **`filter_triplets_by_type` returns each row once** (pandas, polars): a type
+  declared in several files repeated its objects' rows. pandas is about 3x
+  faster.
+- **`cim-diff` runs again**: it called `rdf_parser.print_triplets_diff`, which
+  does not exist; it now uses `parse` and `tools.print_triplets_diff`.
+- **`comment=` is written by the `python_lxml` CIM XML exporter** too: it
+  serialized the root element only, so the comment before it was dropped
+  ([#131](https://github.com/Haigutus/triplets/issues/131)).
+- **Export schemas record inheritance and ranges as absolute IRIs.** The
+  generator resolves a relative ``rdf:resource="#Name"`` against the profile's
+  ``xml:base`` (RDF/XML semantics) instead of copying it, so a parent or range
+  in another namespace is stated (`https://cim.ucaiug.io/ns#IdentifiedObject`
+  for an NC class) rather than reconstructed by each consumer from the child's
+  namespace. Enumeration ranges were mangled by a ``replace("#", "")``
+  (`https://cim4.eu/ns/ncBalancingReserveKind`, 107 entries in NC 2.5); all
+  bundles regenerated — only `inheritance` and `range` values change.
+- **`cim-spreadsheet` back to CIM XML** ([#125](https://github.com/Haigutus/triplets/issues/125)):
+  the to-cim direction failed for Excel and CSV (`rdf_parser.tableviews_to_triplets`
+  does not exist); it now uses `triplets.tools.tableviews_to_triplets`. Spreadsheets
+  are read as text, so `false` no longer comes back as `False`.
 - **Exclude pandas 2.3.3**: `pivot()` on ArrowDtype dictionary columns still
   crashes with `'Series' object has no attribute '_pa_array'` (same bug as
   2.2.x, which is already excluded). Constraint is now
   `pandas>=2.0,!=2.2.*,!=2.3.3`. Fixed upstream in pandas 3.0.
+- N-Quads / SPARQL ingest expand class and enum IRIs from the schema namespace
+  when `rdf_map` is passed (`Class.namespace` / `EnumerationValue.namespace`);
+  CIM100 is only the no-schema fallback. The inverse (`read_nquads`, CONSTRUCT,
+  SHACL report) shortens any http(s) `#fragment`, not just CIM100, so CGMES 2.4
+  CIM16 round-trips to the same short names as 3.0 (#116).
+- The qlever and cython extensions are built against the uv venv's pyarrow
+  (`uv run --no-sync` inside the pixi task; pixi supplies only the C++
+  toolchain), so one Arrow runtime is loaded. A qlever extension linked against
+  conda's libarrow segfaulted on the first index build under a different wheel
+  pyarrow. The pixi test tasks and the conda pyarrow/test environments are gone:
+  tests run in the uv venv only.
+- Source builds in a conda/pixi environment: the cython extensions link
+  `libarrow_python` behind `--no-as-needed`, so the module imports instead of
+  failing with undefined `arrow::` symbols (conda toolchains default to
+  `--as-needed`; pip-wheel builds never hit this).
 
 ## [0.2.0] - 2026-08-26
 
@@ -535,6 +1013,9 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   engine for plain `str` dtypes.
 - Triplet values are always strings (or null).
 - `export_to_cimxml` exports schema-defined content only by default.
+- Parse shortens http(s) `#fragment` resource values to the local name
+  (`ControlAreaTypeKind.Interchange`, not the full CIM URI). This landed in
+  0.0.13; filters that compare against the full URI no longer match.
 
 ### Deprecated
 - All `rdf_parser.py` functions now emit `DeprecationWarning` and delegate to the new

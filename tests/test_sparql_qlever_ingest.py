@@ -18,7 +18,7 @@ pytest.importorskip("triplets.sparql._qlever", reason="qlever extension not buil
 import pandas
 import triplets
 from triplets.sparql import _qlever
-from triplets.export.nquads_utils import CIM_NS
+from triplets.iri import CIM_NS
 
 from _parity import SVEDALA_DIR
 
@@ -29,14 +29,15 @@ INSTANCE_2 = "http://example.com/instances/profile2"
 
 # Inline export schema exercising every schema-driven rule.
 RDF_MAP = {"Profile": {
-    "Test.float":    {"xsd:type": "xsd:float"},
-    "Test.integer":  {"xsd:type": "xsd:integer"},
-    "Test.boolean":  {"xsd:type": "xsd:boolean"},
-    "Test.dateTime": {"xsd:type": "xsd:dateTime"},
-    "Test.string":   {"xsd:type": "xsd:string"},
-    "Test.anyURI":   {"xsd:type": "xsd:anyURI"},        # excluded → IRI handling
+    "Test.float":    {"type": "Attribute", "xsd:type": "xsd:float"},
+    "Test.integer":  {"type": "Attribute", "xsd:type": "xsd:integer"},
+    "Test.boolean":  {"type": "Attribute", "xsd:type": "xsd:boolean"},
+    "Test.dateTime": {"type": "Attribute", "xsd:type": "xsd:dateTime"},
+    "Test.string":   {"type": "Attribute", "xsd:type": "xsd:string"},
+    "Test.anyURI":   {"type": "Attribute", "xsd:type": "xsd:anyURI"},   # a literal — the entry type decides, not xsd
     "Test.enum":     {"type": "Enumeration"},
-    "Test.other":    {"namespace": "http://example.com/ns#"},
+    "Test.assoc":    {"type": "Association"},       # reference by schema, whatever the value looks like
+    "Test.other":    {"namespace": "http://example.com/ns#"},           # no type: an undefined KEY with a namespace
 }}
 
 
@@ -48,22 +49,30 @@ def torture_frame():
         ("http://example.com/thing", "Type", "http://example.com/Class", INSTANCE_2),
         (UUID_B, "Type", f"{CIM_NS}Terminal", INSTANCE_1),                  # http class as-is
         ("urn:example:id1", "Type", "urn:example:Class", INSTANCE_1),       # urn passthrough
-        # P2: full-URI KEY
+        ("urn:example:d1", "Type", "Description", INSTANCE_1),             # rdf:Description: no rdf:type
+        # P2: full-URI KEY (http and urn pass through, like iri.absolute_key)
         (UUID_A, "http://example.com/ns#pred", "plain", INSTANCE_1),
+        (UUID_A, "urn:example:pred", "plain", INSTANCE_1),
         # P3 + schema namespace
         (UUID_A, "Test.other", "otherval", INSTANCE_1),
         # O3: URI VALUE under unmapped KEY
         (UUID_A, "SomeRef", "https://example.com/target", INSTANCE_1),
         # O4: enum
         (UUID_A, "Test.enum", "UnitSymbol.A", INSTANCE_1),
+        # O4b: association — schema-typed reference, no UUID look required
+        (UUID_A, "Test.assoc", "_notuuid", INSTANCE_1),
+        (UUID_A, "Test.assoc", UUID_B.upper(), INSTANCE_1),
+        (UUID_A, "Test.assoc", 'has space <and> "quotes"', INSTANCE_1),   # still an IRI: percent-encoded
         # O5: typed literals (incl. one that LOOKS like a UUID — schema beats heuristic)
         (UUID_A, "Test.float", "1.5", INSTANCE_1),
         (UUID_A, "Test.integer", "42", INSTANCE_1),
         (UUID_A, "Test.boolean", "true", INSTANCE_1),
         (UUID_A, "Test.dateTime", "2020-01-02T03:04:05", INSTANCE_1),
         (UUID_A, "Test.string", UUID_B, INSTANCE_1),
-        # O6: anyURI excluded from datatypes → UUID/IRI handling applies
+        # O6: anyURI attribute — a typed literal even when the text looks like an IRI / UUID
         (UUID_A, "Test.anyURI", UUID_B, INSTANCE_1),
+        (UUID_A, "Test.anyURI", "http://example.com/literal", INSTANCE_1),
+        (UUID_A, "Test.string", "https://example.com/also-literal", INSTANCE_1),
         # O7: UUID reference under unmapped KEY (lowercase only)
         (UUID_A, "RefKey", UUID_B, INSTANCE_1),
         (UUID_A, "NotRef", UUID_B.upper(), INSTANCE_1),                     # stays literal
@@ -87,7 +96,8 @@ def quad_dump(index):
 
 
 def build_via_nquads(data, rdf_map, directory):
-    buffer = data.export_to_nquads(rdf_map=rdf_map, export_to_memory=True)
+    # the arrow ingest (a query-side loader) defaults undefined names to CIM100; match it here
+    buffer = data.export_to_nquads(rdf_map=rdf_map, export_to_memory=True, undefined_namespace=CIM_NS)
     source = Path(directory, "data.nq")
     source.write_bytes(buffer.read())
     basename = str(Path(directory, "nq", "index"))
@@ -112,7 +122,7 @@ def test_arrow_ingest_matches_nquads_ingest(rdf_map):
         via_nquads = quad_dump(build_via_nquads(data, rdf_map, directory))
         via_arrow = quad_dump(build_via_arrow(data, rdf_map, directory))
     pandas.testing.assert_frame_equal(via_arrow, via_nquads)
-    assert len(via_arrow) == len(data) - 1        # the null-VALUE row is dropped
+    assert len(via_arrow) == len(data) - 2        # the null-VALUE row and Type Description are dropped
 
 
 def test_characters_beyond_the_escape_set():
@@ -128,14 +138,27 @@ def test_characters_beyond_the_escape_set():
 
 
 def test_null_in_required_column_raises():
-    """Null VALUE rows are dropped (exporter parity); null anywhere else has
-    no defined export — fail loud with the row index."""
+    """Null VALUE rows are dropped (exporter parity); a null ID or KEY has no
+    defined export — fail loud with the row index."""
     data = pandas.DataFrame({
         "ID": [UUID_A, None], "KEY": ["a", "b"], "VALUE": ["1", "2"],
         "INSTANCE_ID": [INSTANCE_1, INSTANCE_1]})
     with tempfile.TemporaryDirectory() as directory:
-        with pytest.raises(RuntimeError, match="null ID/KEY/INSTANCE_ID at row 1"):
+        with pytest.raises(RuntimeError, match="null ID/KEY at row 1"):
             build_via_arrow(data, None, directory)
+
+
+def test_null_instance_id_is_the_default_graph():
+    """A null INSTANCE_ID is an N-Triples line for every engine: the arrow ingest
+    puts it in the default graph, like qlever's own N-Quads parser does."""
+    data = pandas.DataFrame({
+        "ID": [UUID_A, UUID_A], "KEY": ["a", "b"], "VALUE": ["1", "2"],
+        "INSTANCE_ID": [INSTANCE_1, None]})
+    with tempfile.TemporaryDirectory() as directory:
+        index = build_via_arrow(data, None, directory)
+        total = index.select_arrow("SELECT (COUNT(*) AS ?n) WHERE { ?s ?p ?o }").to_pandas()
+        named = index.select_arrow("SELECT (COUNT(*) AS ?n) WHERE { GRAPH ?g { ?s ?p ?o } }").to_pandas()
+    assert int(total["n"].iloc[0]) == 2 and int(named["n"].iloc[0]) == 1
 
 
 def test_flavors_reach_the_same_graph():
@@ -174,7 +197,8 @@ def test_chunked_batches():
         _build_index(chunked, None, basename)
         count = _qlever.QleverIndex(basename).select_arrow(
             "SELECT (COUNT(?s) AS ?n) WHERE { ?s ?p ?o }").to_pandas()
-    assert int(count["n"].iloc[0]) == len(data)
+    descriptions = ((data["KEY"] == "Type") & (data["VALUE"] == "Description")).sum()   # no rdf:type for them
+    assert int(count["n"].iloc[0]) == len(data) - descriptions
 
 
 def test_export_to_arrow():

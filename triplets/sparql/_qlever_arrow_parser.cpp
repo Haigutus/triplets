@@ -27,12 +27,32 @@ constexpr std::string_view RDF_TYPE =
 // Rows per conversion task — same batch size as the RdfParserBase contract.
 constexpr int64_t ROWS_PER_TASK = 100'000;
 
+// Native mirror of triplets.iri.is_iri (URI_PREFIXES).
 bool isUri(std::string_view value) {
   return value.starts_with("http://") || value.starts_with("https://") ||
          value.starts_with("urn:");
 }
 
-// Lowercase-hex 8-4-4-4-12, same as nquads_utils.UUID_RE.
+// Native mirror of triplets.iri.encode_iri: percent-encode what an IRIREF may
+// not hold (controls, space, <>"{}|^`\), so a schema reference stays an IRI.
+std::string encodeIri(std::string_view iri) {
+  constexpr std::string_view unsafe = "<>\"{}|^`\\";
+  constexpr char hex[] = "0123456789ABCDEF";
+  std::string out;
+  out.reserve(iri.size());
+  for (unsigned char ch : iri) {
+    if (ch <= 0x20 || unsafe.find(static_cast<char>(ch)) != std::string_view::npos) {
+      out += '%';
+      out += hex[ch >> 4];
+      out += hex[ch & 0xF];
+    } else {
+      out += static_cast<char>(ch);
+    }
+  }
+  return out;
+}
+
+// Lowercase-hex 8-4-4-4-12, same as triplets.iri.UUID_RE (parity: qlever ingest vs export_to_nquads).
 bool isUuid(std::string_view value) {
   if (value.size() != 36) return false;
   for (size_t i = 0; i < 36; ++i) {
@@ -72,7 +92,7 @@ class RangeConverter {
       : mapping_{mapping}, encodedIriManager_{encodedIriManager} {}
 
   // How the object term of a row is built, resolved once per KEY.
-  enum class ObjectRule { Type, Enum, Typed, PlainString, Default };
+  enum class ObjectRule { Type, Enum, Reference, Typed, PlainString, Default };
   struct KeyInfo {
     TripleComponent predicate;
     ObjectRule rule;
@@ -80,8 +100,17 @@ class RangeConverter {
     std::string name;                              // for ingest error context
   };
 
+  // Mirror of triplets.iri.absolute_name: the schema namespace for a local
+  // name, defaultNamespace (CIM100) when absent.
+  std::string namespaceFor(std::string_view name) const {
+    auto found = mapping_.keyNamespaces.find(std::string{name});
+    return found != mapping_.keyNamespaces.end() ? found->second
+                                                 : mapping_.defaultNamespace;
+  }
+
   TripleComponent iriComponent(std::string_view iri) const {
-    auto component = TripleComponent::Iri::fromIrirefWithoutBrackets(iri);
+    auto component =
+        TripleComponent::Iri::fromIrirefWithoutBrackets(encodeIri(iri));
     // Same folding the text parser applies after building each IRI.
     if (auto id =
             encodedIriManager_.encode(component.toStringRepresentation()))
@@ -99,7 +128,7 @@ class RangeConverter {
       info.predicate = iriComponent(RDF_TYPE);
       info.rule = ObjectRule::Type;
     } else {
-      if (key.starts_with("http://") || key.starts_with("https://")) {
+      if (isUri(key)) {   // mirror of triplets.iri.absolute_key: absolute IRIs pass through
         info.predicate = iriComponent(key);
       } else {
         auto ns = mapping_.keyNamespaces.find(std::string{key});
@@ -108,12 +137,17 @@ class RangeConverter {
                                                : mapping_.defaultNamespace,
             key));
       }
-      // Object rule precedence mirrors the exporter: enum before datatype.
-      if (mapping_.enumKeys.contains(std::string{key})) {
+      // Object rule by schema — mirror of triplets.iri.absolute_value.
+      auto valueType = mapping_.valueTypes.find(std::string{key});
+      std::string_view kind =
+          valueType != mapping_.valueTypes.end() ? valueType->second : "";
+      if (kind == "enum") {
         info.rule = ObjectRule::Enum;
-      } else if (auto datatype = mapping_.keyDatatypes.find(std::string{key});
-                 datatype != mapping_.keyDatatypes.end()) {
-        if (datatype->second.empty()) {
+      } else if (kind == "reference") {
+        info.rule = ObjectRule::Reference;
+      } else if (kind == "literal") {
+        auto datatype = mapping_.keyDatatypes.find(std::string{key});
+        if (datatype == mapping_.keyDatatypes.end() || datatype->second.empty()) {
           info.rule = ObjectRule::PlainString;
         } else {
           info.rule = ObjectRule::Typed;
@@ -135,15 +169,17 @@ class RangeConverter {
         .first->second;
   }
 
+  // Mirror of triplets.iri.absolute_value: the schema entry type decides the
+  // form; the text shape is consulted only for an undefined KEY (Default).
   TripleComponent makeObject(const KeyInfo& key, std::string_view value) const {
-    if (key.rule == ObjectRule::Type) {
-      if (isUri(value)) return iriComponent(value);
-      return iriComponent(absl::StrCat(mapping_.defaultNamespace, value));
-    }
-    if (isUri(value)) return iriComponent(value);
     switch (key.rule) {
+      case ObjectRule::Type:
       case ObjectRule::Enum:
-        return iriComponent(absl::StrCat(mapping_.defaultNamespace, value));
+        if (isUri(value)) return iriComponent(value);
+        return iriComponent(absl::StrCat(namespaceFor(value), value));
+      case ObjectRule::Reference:   // absolute_id: absolute passes, else urn:uuid:
+        if (isUri(value)) return iriComponent(value);
+        return iriComponent(absl::StrCat("urn:uuid:", value));
       case ObjectRule::Typed:
         // qlever's own typed-literal path (identical to the N-Quads parse).
         // Strict by design: an ill-typed value is a data-vs-schema error to be
@@ -163,6 +199,7 @@ class RangeConverter {
       default:
         break;
     }
+    if (isUri(value)) return iriComponent(value);
     if (isUuid(value)) return iriComponent(absl::StrCat("urn:uuid:", value));
     return plainLiteral(value);
   }
@@ -278,13 +315,13 @@ std::vector<TurtleTriple> ArrowTripleParser::convertRange(
   std::vector<TurtleTriple> result;
   result.reserve(range.end - range.begin);
   for (int64_t row = range.begin; row < range.end; ++row) {
-    // Null VALUE rows are dropped — same as the N-Quads exporters. Null in
-    // any other column has no defined export today (the exporters emit
-    // broken lines); fail loud instead of silently diverging.
+    // Null VALUE rows are dropped and a null INSTANCE_ID is an N-Triples line
+    // (the default graph) — same as the N-Quads exporters. A null ID or KEY
+    // has no defined export; fail loud instead of silently diverging.
     if (c.value.is_null(row)) continue;
-    if (c.id.is_null(row) || c.key.is_null(row) || c.instance.is_null(row)) {
+    if (c.id.is_null(row) || c.key.is_null(row)) {
       throw std::runtime_error(absl::StrCat(
-          "arrow ingest: null ID/KEY/INSTANCE_ID at row ", c.firstRow + row));
+          "arrow ingest: null ID/KEY at row ", c.firstRow + row));
     }
 
     TurtleTriple triple;
@@ -298,10 +335,17 @@ std::vector<TurtleTriple> ArrowTripleParser::convertRange(
     } else {
       info = &converter.keyInfo(c.key.value(row));
     }
+    // Type "Description" is an rdf:Description element — no typed-node
+    // shorthand, not a class: no rdf:type (mirror of triplets.iri.DESCRIPTION_TYPE).
+    if (info->rule == RangeConverter::ObjectRule::Type &&
+        c.value.value(row) == "Description")
+      continue;
     triple.predicate_ = info->predicate;
     triple.object_ = converter.makeObject(*info, c.value.value(row));
 
-    if (int64_t code = c.instance.dict_code(row); code >= 0) {
+    if (c.instance.is_null(row)) {
+      // TurtleTriple::graphIri_ defaults to the default graph
+    } else if (int64_t code = c.instance.dict_code(row); code >= 0) {
       const TripleComponent* graph = graphByCode[code];
       if (graph == nullptr)
         graph = graphByCode[code] =

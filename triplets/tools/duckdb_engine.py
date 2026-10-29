@@ -25,6 +25,8 @@ import logging
 
 from weakref import WeakKeyDictionary
 
+from ._diff_report import print_diff
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TABLE = "triplets"
@@ -47,17 +49,17 @@ def _sql_name(schema, table):
 
 
 def _is_read_only(connection):
-    row = connection.execute(
-        "SELECT value FROM duckdb_settings() WHERE name = 'access_mode'").fetchone()
-    return row is not None and str(row[0]).lower() == "read_only"
+    rows = connection.execute(
+        "SELECT value FROM duckdb_settings() WHERE name = 'access_mode'").fetchall()
+    return bool(rows) and str(rows[0][0]).lower() == "read_only"
 
 
 def _load_config(connection):
     """(schema, table) stored in the database, or None when never configured."""
     exists = connection.execute(
         "SELECT 1 FROM duckdb_tables() "
-        "WHERE schema_name = 'main' AND table_name = '_triplets_config'").fetchone()
-    if exists is None:
+        "WHERE schema_name = 'main' AND table_name = '_triplets_config'").fetchall()
+    if not exists:
         return None
     stored = dict(connection.execute(f"SELECT key, value FROM {_CONFIG_TABLE}").fetchall())
     return stored.get("schema"), stored.get("table", _DEFAULT_TABLE)
@@ -107,11 +109,11 @@ def _ord_expr(connection, schema, table):
     ``row_number() OVER ()`` when the target has none (a VIEW or a registered
     frame) — order then follows scan order, so only tie-breaks among duplicate
     (ID, KEY) rows are affected."""
-    row = connection.execute(
+    rows = connection.execute(
         "SELECT 1 FROM duckdb_tables() "
         "WHERE table_name = ? AND schema_name = COALESCE(?, current_schema())",
-        [table, schema]).fetchone()
-    if row is not None:
+        [table, schema]).fetchall()
+    if rows:
         return "rowid"
     logger.debug("%s has no rowid (view/registered frame) — using row_number()", table)
     return "row_number() OVER ()"
@@ -149,8 +151,9 @@ def _lit(value):
 
 
 def _in_list(values):
-    """Comma-separated SQL literal list from an iterable of values."""
-    return ", ".join(_lit(v) for v in values)
+    """Comma-separated SQL literal list from an iterable of values; NULL when
+    empty, so ``IN (...)`` matches nothing instead of failing."""
+    return ", ".join(_lit(v) for v in values) or "NULL"
 
 
 def _materialize(self, data, name):
@@ -251,7 +254,7 @@ def type_tableview(self, type_name, table=None, schema=None, table_name=None, vi
     types = [type_name] if isinstance(type_name, str) else list(type_name)
     sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
     ref = _sql_name(sch, tbl)
-    ids = f"SELECT DISTINCT ID FROM {ref} WHERE KEY = 'Type' AND VALUE IN ({_in_list(types)})" if types else "SELECT NULL AS ID WHERE FALSE"
+    ids = f"SELECT DISTINCT ID FROM {ref} WHERE KEY = 'Type' AND VALUE IN ({_in_list(types)})"
     return _pivot_view(self, view_name or "/".join(types), ids, ref, _ord_expr(self, sch, tbl), sch,
                        multivalue=multivalue)
 
@@ -285,14 +288,15 @@ def filter_triplets(self, ID=None, KEY=None, VALUE=None, INSTANCE_ID=None,
     return self.sql(f"SELECT * FROM {table_name} WHERE {where}")
 
 
-def filter_triplets_by_type(self, type_name, table=None, schema=None, table_name=None):
-    """Filter to only objects of a specific type. Returns DuckDBPyRelation (lazy)."""
+def filter_triplets_by_type(self, type_name, type_key="Type", table=None, schema=None, table_name=None):
+    """Filter to only objects of a specific type (str or list-like of str). Returns DuckDBPyRelation (lazy)."""
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
+    type_names = [type_name] if isinstance(type_name, str) else list(type_name)
     return self.sql(f"""
         SELECT d.* FROM {table_name} d
         WHERE d.ID IN (
             SELECT ID FROM {table_name}
-            WHERE KEY = 'Type' AND VALUE = {_lit(type_name)}
+            WHERE KEY = {_lit(type_key)} AND VALUE IN ({_in_list(type_names)})
         )
     """)
 
@@ -361,12 +365,14 @@ def _refs_from_sql(reference, levels, table_name, ord_expr="rowid"):
 
 def _references_sql(reference, levels, table_name, keep_ord=False, ord_expr="rowid"):
     """references_from + references_to, deduped on (ID,KEY,VALUE,INSTANCE_ID)
-    keeping the FROM side first — matches pandas concat+drop_duplicates. _ord is
+    keeping the FROM side, then the lowest level first — matches pandas
+    concat+drop_duplicates (an object referencing itself, e.g. by mRID, is
+    reached again one level down). _ord is
     the base-table load order (kept only when a downstream pivot needs it)."""
     drop = "_src, _rn" if keep_ord else "_src, _rn, _ord"
     return f"""
         SELECT * EXCLUDE ({drop}) FROM (
-            SELECT *, row_number() OVER (PARTITION BY ID, KEY, VALUE, INSTANCE_ID ORDER BY _src, _ord) AS _rn
+            SELECT *, row_number() OVER (PARTITION BY ID, KEY, VALUE, INSTANCE_ID ORDER BY _src, level, _ord) AS _rn
             FROM (
                 SELECT *, 0 AS _src FROM ({_refs_from_sql(reference, levels, table_name, ord_expr)})
                 UNION ALL
@@ -497,7 +503,7 @@ def references_simple(self, reference, columns=None, levels=1, table=None, schem
     sel = "".join(f', p."{c}"' for c in keep)
     return self.sql(f"""
         WITH refs AS ({refs_sql}),
-        p AS (PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE FROM refs GROUP BY ID, KEY)
+        p AS (PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE FROM ({refs_sql}) GROUP BY ID, KEY)
               ON KEY USING FIRST(VALUE) GROUP BY ID),
         m AS (SELECT ID, ANY_VALUE(level) AS level, ANY_VALUE(ID_FROM) AS ID_FROM,
                      ANY_VALUE(ID_TO) AS ID_TO FROM refs GROUP BY ID)
@@ -618,16 +624,16 @@ def diff_triplets(self, new_data, table=None, schema=None, table_name=None):
     _merge column. Returns DuckDBPyRelation."""
     table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
     _materialize(self, new_data, "_new_data")
+    # a missing VALUE is "" on both sides, as in every engine
+    anti = "ANTI JOIN {} o ON o.ID = d.ID AND o.KEY = d.KEY AND COALESCE(o.VALUE, '') = COALESCE(d.VALUE, '')"
     return self.sql(f"""
-        SELECT ID, KEY, VALUE, INSTANCE_ID AS INSTANCE_ID_OLD, NULL AS INSTANCE_ID_NEW,
+        SELECT ID, KEY, COALESCE(VALUE, '') AS VALUE, INSTANCE_ID AS INSTANCE_ID_OLD, NULL AS INSTANCE_ID_NEW,
                'left_only' AS _merge
-        FROM {table_name}
-        WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _new_data)
+        FROM {table_name} d {anti.format("_new_data")}
         UNION ALL BY NAME
-        SELECT ID, KEY, VALUE, NULL AS INSTANCE_ID_OLD, INSTANCE_ID AS INSTANCE_ID_NEW,
+        SELECT ID, KEY, COALESCE(VALUE, '') AS VALUE, NULL AS INSTANCE_ID_OLD, INSTANCE_ID AS INSTANCE_ID_NEW,
                'right_only' AS _merge
-        FROM _new_data
-        WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM {table_name})
+        FROM _new_data d {anti.format(table_name)}
     """)
 
 
@@ -644,17 +650,27 @@ def diff_triplets_by_instance(self, INSTANCE_ID_1, INSTANCE_ID_2, table=None, sc
     """)
 
 
-def print_triplets_diff(self, new_data, file_id_object="Distribution", file_id_key="label",
-                        exclude_objects=None, table=None, schema=None, table_name=None):
-    """Print a simple removed/added diff of the table against new_data."""
-    diff = diff_triplets(self, new_data, table=table, schema=schema, table_name=table_name).df()
-    removed = diff[diff["_merge"] == "left_only"]
-    added = diff[diff["_merge"] == "right_only"]
-    print(f"--- removed ({len(removed)} triplets) / +++ added ({len(added)} triplets) ---")
-    for _, row in removed.iterrows():
-        print(f"- {row['ID']} {row['KEY']} {row['VALUE']}")
-    for _, row in added.iterrows():
-        print(f"+ {row['ID']} {row['KEY']} {row['VALUE']}")
+def print_triplets_diff(self, new_data, file_id_object="Distribution", file_id_key="label", exclude_objects=None,
+                        include_objects=None, context_keys=None, stat=False, table=None, schema=None, table_name=None):
+    """Print a unified diff of the table against new_data; returns the number of
+    differing triplets. Same output and options as the pandas engine."""
+    table_name = _resolve_table(self, table=table, schema=schema, table_name=table_name)
+    _materialize(self, new_data, "_diff_new_data")
+    labels = [[label for label, in self.sql(f"SELECT VALUE FROM {source} WHERE KEY = {_lit(file_id_key)}").fetchall()]
+              for source in (table_name, "_diff_new_data")]
+    excluded = [*(exclude_objects or []), *([file_id_object] if file_id_object else [])]
+    for view, source in (("_diff_old", table_name), ("_diff_new", "_diff_new_data")):
+        typed = f"SELECT ID FROM {source} WHERE KEY = 'Type' AND VALUE IN "
+        included = f"ID IN ({typed}({_in_list(include_objects)})) AND " if include_objects else ""
+        self.execute(f"CREATE OR REPLACE TEMP VIEW {view} AS SELECT * FROM {source} "
+                     f"WHERE {included}ID NOT IN ({typed}({_in_list(excluded)}))")
+    diff = diff_triplets(self, self.table("_diff_new"), table="_diff_old", schema="temp")
+    self.execute(f"CREATE OR REPLACE TEMP TABLE _diff AS SELECT ID, KEY, VALUE, _merge FROM ({diff.sql_query()})")
+    keys = _in_list(["Type", *(context_keys or [])])
+    related = self.sql(" UNION ALL ".join(
+        f"SELECT ID, KEY, COALESCE(VALUE, ''), '{side}' FROM {source} WHERE KEY IN ({keys}) AND ID IN (SELECT ID FROM _diff)"
+        for side, source in (("old", "_diff_old"), ("new", "_diff_new")))).fetchall()
+    return print_diff(self.sql("SELECT * FROM _diff").fetchall(), related, *labels, context_keys, stat)
 
 
 # ── Transform ────────────────────────────────────────────────────────────────
@@ -683,7 +699,7 @@ def tableview_to_triplets(self, table=None, schema=None, table_name=None, multiv
             SELECT ID, KEY,
                    CASE WHEN trim(VALUE) LIKE '[%' AND trim(VALUE) LIKE '%]'
                         THEN list_transform(string_split(trim(trim(VALUE), ' []'), ','),
-                                            x -> trim(x, ' ''"'))
+                                            lambda x: trim(x, ' ''"'))
                         ELSE [VALUE] END AS vals
             FROM (UNPIVOT {table_name} ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE)
             WHERE VALUE IS NOT NULL)
@@ -717,5 +733,5 @@ def content_hash(self, ignore_types=("Distribution", "NamespaceMap", "FullModel"
         source += (f" WHERE ID NOT IN (SELECT ID FROM {table_name}"
                    f" WHERE KEY = 'Type' AND VALUE IN ({_in_list(ignore_types)}))")
     row = self.execute(f"SELECT count(*), sum(h)::VARCHAR, bit_xor(h)::VARCHAR"
-                       f" FROM ({source})").fetchone()
+                       f" FROM ({source})").fetchall()[0]
     return hashlib.blake2b(repr(row).encode(), digest_size=16).hexdigest()

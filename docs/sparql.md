@@ -12,9 +12,12 @@ The module is new — APIs may still shift. Know these before relying on it:
   dtypes. `rdf_map` still types the *loaded graph* (drives comparisons and
   ORDER BY inside the query), not the returned representation.
 - **oxigraph caveats** (details under "Behavioral caveats" below):
-  a multi-instance `scope` yields one solution per instance for shared
+  a multi-instance `data_scope` yields one solution per instance for shared
   triples (`DISTINCT` dedupes); the CSV SELECT decode nulls empty-string
   literals; its parser accepts some queries qlever rejects (bare `HAVING`).
+- **SELECT returns IRIs as stored** — absolute and percent-encoded
+  (`urn:uuid:a%20b`); CONSTRUCT decodes and shortens them to triplet form. Other
+  import / export deviations: [parsers.md — Known limitations](parsers.md#known-limitations).
 - Engine state caches (indexes, stores, datasets) are unbounded by design —
   long-lived processes over many distinct datasets grow memory/disk. Manage
   the lifecycle explicitly: `triplets.clear_caches()` drops all in-memory
@@ -86,25 +89,17 @@ for data:
 ```
 triplets/sparql/
 |-- _qlever_wrapper.h/.cpp     # shim: build_index_from_arrow(), query(text, media_type,
-|                              #   scope), select_arrow() / construct_arrow() -> Arrow columns
+|                              #   data_scope), select_arrow() / construct_arrow() -> Arrow columns
 |-- _qlever_arrow_parser.h/.cpp# ArrowTripleParser: Arrow batches -> TurtleTriples
 |-- _qlever.pyx                # dumb Cython binding (zero-copy both ways, GIL released)
 '-- sparql_qlever.py           # engine: index cache, conventions, output flavor
 ```
 
-Build (one-time; the pixi `qlever` environment pins the whole toolchain —
-compilers, cmake, boost, icu, openssl, zstd, jemalloc — via pixi.lock):
-
-```bash
-git clone --recursive https://github.com/ad-freiburg/qlever ../qlever
-pixi run -e qlever build-qlever-lib   # compile qlever with PIC (long, once)
-pixi run -e qlever build-qlever       # build triplets.sparql._qlever
-```
+Build: `pixi run -e qlever build-qlever` (the recipe, the pinned fork and the
+`uv sync` prerequisite are in [building.md](building.md)).
 
 Without the extension nothing changes — auto falls back to oxigraph when
-installed, else rdflib. qlever ships in no wheel (source build only, local);
-how the fork/branch is pinned and reproduced is documented in
-[building.md](building.md).
+installed, else rdflib. qlever ships in no wheel (source build only, local).
 
 **Engine state lifecycle.** Flavor-blind by construction — the input (pandas /
 polars DataFrame or DuckDB connection) carries every needed capability as a
@@ -115,7 +110,7 @@ which runs **only on a cache miss**, zero-copy. All three engines share the
 same lifecycle (`triplets._content_key`, engine-neutral so no engine imports
 another's package): the oxigraph engine caches loaded stores and the rdflib
 engine loaded datasets in-process the same way, each under its own salt.
-`scope` is not a data operation and does not key the state — the
+`data_scope` is not a data operation and does not key the state — the
 scoped instances' named graphs travel beside each query as SPARQL-protocol
 dataset clauses (`default-graph-uri`), so the query text is never modified,
 one index serves every scope, and per the protocol the scope takes precedence
@@ -153,10 +148,9 @@ converts arrow/duckdb to pandas before loading. Custom engines register via
 **Parallelism.** rdflib query evaluation is GIL-bound pure Python, so threads
 don't help — batch workloads (the sh:sparql constraints the SHACL engines
 delegate here) use `ProcessPoolExecutor` fork on the rdflib path. The qlever
-binding and pyoxigraph both release the GIL during queries, so plain threads
-parallelize; the SHACL engines skip the fork pool automatically whenever the
-auto engine is not rdflib (both are orders of magnitude faster sequentially
-anyway).
+binding and pyoxigraph both release the GIL during queries and read-share one
+loaded store, so plain threads parallelize: the SHACL engines' `max_workers`
+runs a thread pool whenever the auto engine is not rdflib.
 
 ## Shared Loading (`_rdflib_loader.py`)
 
@@ -166,7 +160,7 @@ validation over the same data see an identical graph:
 | Function | Produces |
 |----------|----------|
 | `load_dataset(data, rdf_map=None, data_unchanged=False, store="memory")` | `rdflib.Dataset` seeing the deduplicated union, one named graph per `INSTANCE_ID` (`urn:uuid:{INSTANCE_ID}`). `store="oxigraph"` backs it with the oxigraph engine's cached store via oxrdflib (`"auto"`: oxigraph when installed) |
-| `scoped_graph(dataset, scope=None)` | full union when `scope is None`; otherwise a concrete `Graph` holding just the scoped instances' named graphs |
+| `scoped_graph(dataset, data_scope=None)` | full union when `data_scope is None`; otherwise a concrete `Graph` holding just the scoped instances' named graphs |
 
 `rdf_map` is optional. Without it, every `VALUE` is an untyped string literal
 (`xsd:string`); with it, the N-Quads export attaches `xsd` datatypes, so numeric
@@ -183,20 +177,20 @@ data.sparql.query(q)
     |
     |-> qlever path (performance)
     |   |-> _index_for: content_key -> cached index | build (export_to_arrow -> ArrowTripleParser)
-    |   |-> scope -> SPARQL-protocol dataset clauses (one index serves every scope)
+    |   |-> data_scope -> SPARQL-protocol dataset clauses (one index serves every scope)
     |   '-> C++ decode -> Arrow columns (GIL released) -> zero-copy wrap
     |
     |-> oxigraph path (portable performance)
     |   |-> _store_for: content_key -> cached store | bulk_load(export_to_nquads)
     |   |   '-> default graph := deduplicated union of the named graphs
-    |   |-> scope -> SPARQL-protocol default graphs (one store serves every scope)
+    |   |-> data_scope -> SPARQL-protocol default graphs (one store serves every scope)
     |   '-> SELECT: SPARQL-CSV -> read_csv | CONSTRUCT: N-Quads -> read_nquads
     |
     |-> rdflib path (reference)
     |   |-> load_dataset(data, rdf_map)        # cached by content_key
     |   |   '-> export_to_nquads(..., export_to_memory=True)
     |   |       '-> rdflib.Dataset.parse(nquads)   # INSTANCE_ID -> named graph
-    |   |-> scoped_graph(dataset, scope)       # union, or just scoped instances
+    |   |-> scoped_graph(dataset, data_scope)  # union, or just scoped instances
     |   '-> graph.query(q)
     |
     '-> result by query form (finalized to return_type)
@@ -213,7 +207,7 @@ The result is shaped by the SPARQL query form:
 |------------|---------|-----------|
 | `SELECT` | DataFrame (see `return_type`) | one column per projected variable (`?name` -> column `name`); IRIs as full strings. **All values are lexical strings in every engine** (triplets are all-string; consumers cast), unbound → null (the rdflib/oxigraph CSV decodes also null empty-string literals — the W3C CSV-results tradeoff; qlever distinguishes) |
 | `ASK` | `bool` | `True` / `False` |
-| `CONSTRUCT` / `DESCRIBE` | triplet DataFrame | `[ID, KEY, VALUE, INSTANCE_ID]`; `urn:uuid:` stripped from `ID`, CIM namespace shortened on `KEY`, `rdf:type` -> `Type`, `INSTANCE_ID` is `None` (constructed graph has no source instance) |
+| `CONSTRUCT` / `DESCRIBE` | triplet DataFrame | `[ID, KEY, VALUE, INSTANCE_ID]`; shortened per column by `triplets.iri` (`local_id` on `ID`, `local_key` on `KEY` — `rdf:type` -> `Type`, `local_value` on `VALUE`: any http(s) `#fragment` namespace dropped, a namespace IRI ending in `#` kept whole), `INSTANCE_ID` is `None` (constructed graph has no source instance) |
 
 `SELECT` keeps full IRIs (raw bindings); `CONSTRUCT`/`DESCRIBE` apply the triplets
 naming conventions so the output drops straight back into the pipeline.
@@ -239,7 +233,7 @@ triplets/
 |-- _content_key.py          # engine-neutral state keying (content_hash + rdf_map + salt,
 |                            #   data_unchanged digest memo with weakref eviction)
 |-- _caches.py               # clear_caches() / cache_scope(): in-process engine-state lifecycle
-|-- _rdflib_loader.py        # shared with validation: load_dataset(), scoped_graph()
+|-- _rdflib_loader.py        # load_dataset() (shared with validation), scoped_graph()
 |-- parser/nquads.py         # read_nquads: N-Quads -> triplets (inverse of the export);
 |                            #   terms_to_triplets shared by the engines' CONSTRUCT decode
 '-- sparql/
@@ -279,10 +273,10 @@ typed = data.sparql.query(
     PREFIXES + "SELECT ?l WHERE { ?s cim:Conductor.length ?l }",
     rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
 
-# scope filters to the named graphs (queried instances) — out-of-scope data
+# data_scope filters to the named graphs (queried instances) — out-of-scope data
 # is not loaded; include dependency instances for cross-instance references
 one_instance = str(data["INSTANCE_ID"].astype(str).iloc[0])
-scoped = data.sparql.query(PREFIXES + "SELECT ?s WHERE { ?s rdf:type cim:ACLineSegment }", scope=[one_instance])
+scoped = data.sparql.query(PREFIXES + "SELECT ?s WHERE { ?s rdf:type cim:ACLineSegment }", data_scope=[one_instance])
 
 # explicit engine selection, and use on any input (e.g. a DuckDB connection)
 data.sparql.query(q, engine="oxigraph")   # or "qlever" / "rdflib"
@@ -310,7 +304,7 @@ run `examples/sparql_backend_benchmark.py`.
 - oxigraph's union-of-named-graphs keeps duplicate solutions — one per graph
   holding the triple (rdflib and qlever dedupe). The `oxigraph` engine
   handles this by projecting the deduplicated union into the store's default
-  graph at load time; the residual is a **multi-instance `scope`** (a
+  graph at load time; the residual is a **multi-instance `data_scope`** (a
   SPARQL-protocol dataset union): a triple present in several scoped
   instances yields one solution per instance — `DISTINCT` dedupes. Pinned in
   `tests/test_sparql_oxigraph.py`.

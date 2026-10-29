@@ -7,15 +7,28 @@ generation is reproducible offline and upstream changes arrive as reviewable dif
 | Directory | Source | Version authority |
 |---|---|---|
 | `ENTSOE_NC_2.4.1/` | [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) release branch `ncp-v2-4-1` — the most recent official NCP publication | branch name + `SOURCE.json` commit pin |
-| `ENTSOE_NC_2.5-dev/` | same repo, `main` / `NCP/RDFS` — unpublished NCP 2.5 draft (`-dev` until an `ncp-v2-5-0` release branch exists) | `SOURCE.json` commit pin |
-| `ENTSOE_CGMES_2.4.15/`, `ENTSOE_CGMES_3.0.0/`, `ENTSOE_FH/` | legacy hand-collected sets (predate the fetch workflow) | version in filenames |
+| `ENTSOE_NC_2.5.0/` | same repo, release branch `ncp-v2-5-0` (tag `ncp-2.5.0`) | branch name + `SOURCE.json` commit pin |
+| `ENTSOE_CGMES_3.0.0/PROF/` | [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) commit `f256fdb` (`main` before CGMES moved out; `cgmes-v3-0` has no PROF) | `PROF/SOURCE.json` commit pin |
+| `ENTSOE_CGMES_2.4.15/`, `ENTSOE_CGMES_3.0.0/`, `ENTSOE_FH/` | legacy hand-collected RDFS sets (predate the fetch workflow) | version in filenames |
 
-NCP 2.4.2 is **not** onboarded (already published; ENTSO-E will not patch it). The 2.5
-draft **is** onboarded as `ENTSOE_NC_2.5-dev` after
-[application-profiles-library#99](https://github.com/entsoe/application-profiles-library/pull/99)
-restored DatasetMetadata class linkage via `schema:domainIncludes` (fixes
-[#92](https://github.com/entsoe/application-profiles-library/issues/92)). Drop the
-`-dev` suffix when `ncp-v2-5-0` is cut.
+NCP 2.4.2 is **not** onboarded (already published; ENTSO-E will not patch it). NCP 2.5.0
+has the DatasetMetadata class linkage restored via `schema:domainIncludes`
+([application-profiles-library#99](https://github.com/entsoe/application-profiles-library/pull/99),
+fixes [#92](https://github.com/entsoe/application-profiles-library/issues/92)).
+
+Every bundle section carries two IRIs in `ProfileMetadata`:
+
+- `versionIRI`: the RDFS vocabulary's own IRI — `owl:versionIRI` of the ontology; for
+  CGMES 2.4.15, which has no ontology header, its `entsoeURI` (EQ / EQBD:
+  `entsoeURIcore`).
+- `profileVersionIRI`: the profile IRI instances declare (`dcterms:conformsTo`,
+  `Model.profile`). Taken from the optional PROF descriptors in `PROF/` — the profile
+  whose own `owl:versionIRI` or one of whose `prof:hasResource` equals the RDFS
+  `versionIRI` — else equal to `versionIRI`.
+
+Profile resolution matches both. They differ only in NCP (`https://ap-voc.cim4.eu/<Profile>/<ver>`
+vocabulary vs `https://ap.cim4.eu/<Profile>/<ver>` profile, which only PROF carries);
+in CGMES they are the same IRI. The NCP and CGMES 3.0 snapshots hold `PROF/`.
 
 Upstream files are versionless by name (git-diff friendly); the release branch is the
 authoritative version — per-profile `owl:versionInfo` inside the files lags the release
@@ -52,10 +65,6 @@ Generation is deterministic: rerunning `cim_rdfs_to_json` must produce no diff
 - Migrate the legacy CGMES snapshots to the fetch workflow (upstream branches
   `cgmes-v3-0` / `cgmes-v2-4`); filenames differ from the local copies, so that is a
   separate migration with its own regeneration diff review.
-- Record the instance-facing `https://ap.cim4.eu/<Profile>/<ver>` IRI in
-  `ProfileMetadata` so export profile resolution can match `conformsTo` directly
-  instead of relying on the `dcat:keyword` hint (instances use `ap.cim4.eu`, schema
-  `versionIRI` uses `ap-voc.cim4.eu`).
 
 ## Known upstream defects (reported)
 
@@ -64,15 +73,13 @@ Generation is deterministic: rerunning `cim_rdfs_to_json` must produce no diff
   `accessRights`, …; upstream commit `489c5c51ac4f`) — they cannot be tied to the
   Dataset class, so a schema from that branch would lack header attributes.
   Reported as [application-profiles-library#92](https://github.com/entsoe/application-profiles-library/issues/92);
-  fixed on `main` (and therefore in `ENTSOE_NC_2.5-dev`) by
+  fixed in NCP 2.5.0 (`ENTSOE_NC_2.5.0`) by
   [PR #99](https://github.com/entsoe/application-profiles-library/pull/99) using
   `schema:domainIncludes` for reused external terms. 2.4.2 stays unpatched.
-- Several ReliCapGrid example instances do not conform to the released NCP 2.4.x
-  profiles (draft-only attributes; `AssociationUsed=No` directions serialized) — the
-  cases for the pinned submodule commit live in `KNOWN_MISMATCH` in
-  `tests/test_roundtrip_nc.py`. Upstream fixed most of them in the 2026-07-15
-  restructure (which also moved instances back to
-  `Instance/<TSO>/NetworkCode/cimxml/`); the surviving cases are reported in
-  [relicapgrid#340](https://github.com/entsoe/relicapgrid/issues/340). Bumping the
-  submodule past that restructure requires updating the data paths in
-  `tests/conftest.py`, `tests/_parity.py` and `tests/test_roundtrip_nc.py`.
+- Several ReliCapGrid example instances (`cgmes-3.0_ncp-2.5_tc-2.0`) do not conform to
+  the released NCP 2.5.0 profiles; each case is listed with its upstream issue in
+  `EXPECTED_FAILURES` / `KNOWN_MISMATCH` in `tests/test_roundtrip_nc.py`
+  ([relicapgrid#30](https://github.com/entsoe/relicapgrid/issues/30),
+  [#340](https://github.com/entsoe/relicapgrid/issues/340),
+  [#399](https://github.com/entsoe/relicapgrid/issues/399),
+  [#400](https://github.com/entsoe/relicapgrid/issues/400)).

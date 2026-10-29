@@ -80,7 +80,7 @@ def to_arrow(data, *, columns=None, table=None, schema=None, table_name=None):
     if kind == "duckdb":
         ref = _duckdb_ref(data, table=table, schema=schema, table_name=table_name)
         select = ", ".join(columns) if columns is not None else "*"
-        return data.execute(f"SELECT {select} FROM {ref}").to_arrow_table()
+        return data.sql(f"SELECT {select} FROM {ref}").to_arrow_table()
     if kind == "pyarrow":
         return data.select(columns) if columns is not None else data
     if kind == "polars":

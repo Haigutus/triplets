@@ -121,13 +121,16 @@ def test_pyarrow_abi_guard(monkeypatch):
     import sys
     import types
 
+    import triplets
     from triplets import _abi
 
-    _abi.check_pyarrow()                                  # source tree — no-op
+    _abi.check_pyarrow()                                  # source tree, or built against this pyarrow
 
     fake = types.ModuleType("triplets._build_info")
     fake.BUILD_PYARROW = "999.0.0"
     monkeypatch.setitem(sys.modules, "triplets._build_info", fake)
+    # a built tree has already imported the real one as a package attribute
+    monkeypatch.setattr(triplets, "_build_info", fake, raising=False)
     with pytest.raises(ImportError, match="built against pyarrow 999.0.0"):
         _abi.check_pyarrow()
 

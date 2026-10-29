@@ -49,7 +49,7 @@ python setup_cython_parser.py build_ext --inplace
 
 | File | What it tests | Needs external data? |
 |------|--------------|----------------------|
-| `test_parser.py` | `parse()`, `clean_ID`, `find_all_xml`, nodeID support, categorical encoding, return types | No (uses `tests/data/minimal_cim.xml`) |
+| `test_parser.py` | `parse()`, `local_id`, `find_all_xml`, nodeID support, categorical encoding, return types | No (uses `tests/data/minimal_cim.xml`) |
 | `test_parity_parser.py` | Cross-engine parser parity, `pandas.read_RDF` registration, all engines produce identical output | No |
 | `test_import.py` | Loading NC and CGMES files, column structure, metadata (Distribution, NamespaceMap) | Yes (relicapgrid submodule) |
 | `test_tools.py` | Data-manipulation tool functions on the Svedala IGM dataset | Yes (relicapgrid submodule) |
@@ -64,7 +64,7 @@ python setup_cython_parser.py build_ext --inplace
 - `tests/data/sarif-schema-2.1.0.json` — official SARIF 2.1.0 schema for the exporter conformance test
 
 **Submodule** (`git submodule update --init test_data/relicapgrid`):
-- `test_data/relicapgrid/` — NC, CGMES, and Svedala IGM files for import and tools tests
+- `test_data/relicapgrid/` — [ReliCapGrid](https://github.com/entsoe/relicapgrid) release `cgmes-3.0_ncp-2.5_tc-2.0`: CGMES 3.0 grids and NCP 2.5 instances for import and tools tests
 
 **Git LFS** (`git lfs pull`):
 - `test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip`
@@ -132,20 +132,22 @@ pytest tests/test_benchmarks_realgrid.py -m performance \
   --benchmark-json=tests/performance_results/parsers_performance.json -k "parse"
 ```
 
-## pixi Tasks
+## Local flow
 
-If using pixi:
-
-```shell
-pixi run test                         # all tests
-pixi run build-cython-pugixml-arrow   # build cython extension
-```
-
-Parser-only run:
+Tests run in the uv venv, never inside pixi; pixi only supplies the C++
+toolchain for the optional compiled extensions:
 
 ```shell
-pixi run pytest tests/test_parity_parser.py -q
+uv sync --all-extras
+uv run pytest -n auto -q
+
+# optional compiled extensions (built against the venv's pyarrow)
+pixi run build-cython-pugixml-arrow
+pixi run -e qlever build-qlever       # needs the qlever static libs, see docs/building.md
 ```
+
+The same `uv run pytest` then picks the extensions up: the compiled-engine tests
+stop skipping and `auto` engine selection prefers them.
 
 ## CI Workflows
 

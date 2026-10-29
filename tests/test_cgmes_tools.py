@@ -10,7 +10,7 @@ from pathlib import Path
 
 from triplets import cgmes_tools
 
-SVEDALA_DIR = Path("test_data/relicapgrid/Instance/Grid/IGM_Svedala")
+SVEDALA_DIR = Path("test_data/relicapgrid/Instance/Svedala/Grid/cimxml")
 SVEDALA_EQ = str(SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml")
 SVEDALA_FILES = [
     str(SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml"),
@@ -21,13 +21,9 @@ SVEDALA_FILES = [
 
 SKIP_REASON = "Svedala test data not available (needs git submodule)"
 
-# New dcat:Dataset-header NC instances + hybrid FullModel example (same submodule)
-NC_DIR = Path("test_data/relicapgrid/Instance/NetworkCode/Svedala/Svedala_instance")
+# dcat:Dataset-header NC instances (same submodule)
+NC_DIR = Path("test_data/relicapgrid/Instance/Svedala/NetworkCode/cimxml")
 SVEDALA_ER = str(NC_DIR / "Svedala_ER.xml")        # Dataset; requires the Svedala EQ FullModel
-SVEDALA_RA = str(NC_DIR / "Svedala_RA.xml")        # Dataset; target of other instances' requires
-SVEDALA_RAS = str(NC_DIR / "Svedala_RAS.xml")      # Dataset; requires Svedala_RA
-HYBRID_FULLMODEL = str(Path("test_data/relicapgrid/Instance/BoundaryConfigurationExamples")
-                       / "TC-Boundary-Header-FullModelExtended" / "20241223T0642Z_ENTSO-E_EQ_BD_1.xml")
 
 
 @pytest.fixture(scope="module")
@@ -199,9 +195,14 @@ class TestGetLoadedProfiles:
         assert er.loc[er["KEY"] == "keyword", "VALUE"].tolist() == ["ER"]
 
     def test_hybrid_fullmodel_extended(self):
-        if not Path(HYBRID_FULLMODEL).exists():
-            pytest.skip(SKIP_REASON)
-        profiles = cgmes_tools.get_loaded_profiles(pandas.read_RDF([HYBRID_FULLMODEL]))
+        # FullModel header extended with the Dataset keys (old ReliCapGrid boundary example)
+        rows = pandas.DataFrame([
+            {"ID": "fm", "KEY": "Type", "VALUE": "FullModel", "INSTANCE_ID": "bd"},
+            {"ID": "fm", "KEY": "Model.profile", "VALUE": "http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0", "INSTANCE_ID": "bd"},
+            {"ID": "fm", "KEY": "conformsTo", "VALUE": "http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0", "INSTANCE_ID": "bd"},
+            {"ID": "fm", "KEY": "keyword", "VALUE": "BD", "INSTANCE_ID": "bd"},
+        ])
+        profiles = cgmes_tools.get_loaded_profiles(rows)
         assert set(profiles["HEADER"]) == {"FullModel"}
         # extended header declares identity through old AND new keys
         assert {"Model.profile", "keyword", "conformsTo"} <= set(profiles["KEY"])

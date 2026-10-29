@@ -15,6 +15,7 @@ import pyarrow
 
 from .cimxml_cython_pugixml import generate_xml_from_arrow
 from .cimxml_utils import load_rdf_map, resolve_instance_config
+from ..iri import TRIPLETS_NS, TYPE_KEY
 from .._engine_detect import to_arrow
 
 logger = logging.getLogger(__name__)
@@ -80,11 +81,12 @@ def _string_batch(instance_data):
 def generate_xml(instance_data,
                  rdf_map=None,
                  namespace_map=None,
-                 class_KEY="Type",
+                 class_KEY=TYPE_KEY,
                  export_undefined=False,
                  comment=None,
                  debug=False,
-                 datatypes=False):
+                 datatypes=False,
+                 undefined_namespace=TRIPLETS_NS):
     """Generate an RDF XML file from a triplet dataset instance.
 
     Same parameters and return value as :func:`cimxml_pandas.generate_xml`;
@@ -107,11 +109,18 @@ def generate_xml(instance_data,
         if not export_undefined:
             logger.warning("File not created for {}".format(file_name))
             return
+        instance_rdf_map = {}           # every name is undefined: written under undefined_namespace
+    namespace_map = namespace_map or {}
+
+    if export_undefined and undefined_namespace not in namespace_map.values():
+        # an undefined_namespace the map already binds (e.g. CIM100) keeps its own prefix
+        namespace_map = {**namespace_map, "triplets": undefined_namespace}
 
     batch = _string_batch(instance_data)
 
     xml = generate_xml_from_arrow(batch, rdf_map, namespace_map, instance_rdf_map, file_name,
-                                  class_KEY=class_KEY, export_undefined=export_undefined, comment=comment)
+                                  class_KEY=class_KEY, export_undefined=export_undefined, comment=comment,
+                                  undefined_namespace=undefined_namespace)
 
     logger.info("Exporting RDF to {}".format(file_name))
 

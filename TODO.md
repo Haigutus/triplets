@@ -9,17 +9,12 @@ qlever (auto when built, performance).
 
 ## Correctness / coverage
 
-- [ ] **Advanced SHACL targets are partially invisible to the vectorized engines.**
-  NodeShapes in the CGMES SHACL library use `sh:target` (SPARQLTarget) or
-  `sh:targetNode` instead of `sh:targetClass`; `shacl_ir.parse_ir` does not walk
-  those. *Compile-time warning shipped 2026-07-13* (names the features and counts,
-  points at engine="pyshacl"; called out in docs/validation.md status section).
-  **`sh:targetSubjectsOf` supported since 2026-07-16** (IR target_kind="subjectsOf",
-  focus = subjects carrying the KEY, all three engines + pyshacl parity tests).
-  Still open: SPARQLTarget can ride on `triplets.sparql` now that qlever/oxigraph
-  make it cheap; `targetNode`/`targetObjectsOf` are similarly small IR additions.
-- [ ] `sh:xone` (2 uses in the library) — not in the IR component table (covered by
-  the same compile warning; pyshacl-only).
+- [x] **SPARQLTarget (`sh:target` with `sh:select`)** — IR `target_by="SPARQL"`, resolved
+  per run on `triplets.sparql` by all three vectorized engines (#161). Open: a custom
+  `sh:target` without `sh:select` (`sh:SPARQLTargetType` instance, JS target) stays
+  pyshacl-only; a compile-time warning + `skipped_shapes` name the affected shapes.
+- [x] `sh:xone` (2 uses in the library) — in the IR; pandas implements it, polars and
+  duckdb delegate it to pandas like the other logical operators.
 - [x] qlever SELECT typing: all values are lexical strings **by design** (arrow decode,
   all-string triplets convention; consumers cast) — rdflib reference stays python-typed.
 - [x] per-query engine-state keying costs a content_hash of the input (~260 ms per
@@ -59,9 +54,6 @@ qlever (auto when built, performance).
   now upgrades those installs to Rust speed (~3x import, 2–5x warm queries vs
   rdflib) and slots between qlever and rdflib in auto order. qlever keeps the
   performance crown and auto priority; measured numbers in docs/sparql.md.
-- [ ] oxigraph engine future optimization: pyoxigraph releases the GIL during
-  queries — the SHACL sh:sparql batch path could thread over constraints
-  (today it runs sequentially; the fork pool stays rdflib-only).
 - [x] Decision recorded (2026-07-12): **pyshacl stays on the Memory store** —
   `load_dataset(store="oxigraph")` (oxrdflib wrapper over the engine's cached
   store, `default_union=False` because the projection is the union) gives
@@ -89,10 +81,11 @@ qlever (auto when built, performance).
 - [x] **qlever packaging — decided (2026-07-13): source build only (local).**
   No wheels, no CI (build-qlever.yml deleted): the pip-installable performance
   path is the `oxigraph` extra; qlever stays the local power path, verified by
-  `pixi run -e qlever test-qlever` before/after qlever bumps (build + pinning
-  documented in docs/building.md). Measured basis (2026-07-06): `_qlever.so`
-  53 MB (37.5 MB stripped, ~10 MB compressed); auditwheel graft closure
-  48.9 MB dominated by `libicudata` 31.6 MB → a qlever-enriched linux wheel
+  `uv run pytest tests/test_sparql_qlever.py` (extension built) before/after
+  qlever bumps (build + pinning documented in docs/building.md). Measured
+  basis (2026-07-06): `_qlever.so` 53 MB (37.5 MB stripped, ~10 MB
+  compressed); auditwheel graft closure 48.9 MB dominated by `libicudata`
+  31.6 MB → a qlever-enriched linux wheel
   ≈ 30–35 MB compressed vs ≈ 3–4 MB today (~10x). Pre-analyzed revisit path
   if demand appears: separate `triplets-qlever` PyPI distribution (wheel =
   just the extension) + extra `qlever = ["triplets-qlever"]`; a filtered ICU

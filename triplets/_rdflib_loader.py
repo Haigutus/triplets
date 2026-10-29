@@ -6,21 +6,23 @@ No temp files: the export is taken in memory as a BytesIO and parsed directly.
 
 Loaded datasets are cached in-process keyed by content (same logic as the
 qlever engine's index cache): the export/parse runs only on a cache miss.
-Consumers must treat the returned dataset as read-only — scope is applied
-after loading (``scoped_graph``), so one cached dataset serves all scopes.
+Consumers must treat the returned dataset as read-only. The SPARQL engine
+applies scope after loading (``scoped_graph``), so one cached dataset serves
+all its scopes; the SHACL engine loads only the scoped rows.
 """
 import logging
 
 from ._caches import register_cache
 from ._content_key import content_key
 from ._engine_detect import as_frame, to_pandas
+from .iri import CIM_NS, absolute_id
 
 logger = logging.getLogger(__name__)
 
 _DATASETS = register_cache({})   # content key → loaded rdflib.Dataset
 
 
-def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory"):
+def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory", undefined_namespace=CIM_NS):
     """Triplet data (any flavor) → rdflib.Dataset with named graphs per INSTANCE_ID.
 
     Parameters
@@ -39,6 +41,9 @@ def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory"):
         wrapped via oxrdflib — Rust N-Quads parse, shared with the oxigraph
         engine so one bulk_load serves both), or "auto" (oxigraph when
         pyoxigraph + oxrdflib are importable, else memory).
+    undefined_namespace : str, default CIM100
+        Namespace for names the schema does not declare (every name without
+        a schema); every row is loaded (``export_undefined=True``).
 
     Returns
     -------
@@ -57,7 +62,7 @@ def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory"):
     if not hasattr(data, "content_hash"):  # pyarrow — no registered methods
         data = to_pandas(data)
     backend = _resolve_store(store)
-    key = backend + ":" + content_key(data, rdf_map, b"triplets-rdflib-1", data_unchanged)
+    key = backend + ":" + content_key(data, rdf_map, b"triplets-rdflib-1" + undefined_namespace.encode(), data_unchanged)
     if key in _DATASETS:
         return _DATASETS[key]
 
@@ -70,11 +75,12 @@ def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory"):
         # each triple once per graph — oxigraph union keeps per-graph
         # solutions). default_union=False exposes exactly the projected
         # union, with the named graphs still reachable for scoped_graph.
-        dataset = rdflib.Dataset(store=OxigraphStore(store=_store_for(data, rdf_map, data_unchanged)),
+        dataset = rdflib.Dataset(store=OxigraphStore(store=_store_for(data, rdf_map, data_unchanged, undefined_namespace)),
                                  default_union=False)
     else:
         # nquads accepts pandas/polars; materialize arrow/duckdb only
-        buffer = export_to_nquads(as_frame(data), rdf_map=rdf_map, export_to_memory=True)
+        buffer = export_to_nquads(as_frame(data), rdf_map=rdf_map, export_to_memory=True,
+                                  undefined_namespace=undefined_namespace)
         buffer.seek(0)
         dataset = rdflib.Dataset(default_union=True)
         dataset.parse(source=buffer, format="nquads")
@@ -93,26 +99,24 @@ def _resolve_store(store):
     return store
 
 
-def scoped_graph(dataset, scope=None):
+def scoped_graph(dataset, data_scope=None):
     """Return the graph to query/validate: full union, or just the scoped instances.
 
     Parameters
     ----------
     dataset : rdflib.Dataset
-    scope : iterable of INSTANCE_ID (str), optional
+    data_scope : iterable of INSTANCE_ID (str), optional
         When given, return a concrete Graph holding the union of those
         instances' named graphs (the quad's graph component does the
-        filtering). A concrete Graph — not a view — is required because
-        pyshacl clones/iterates the data graph and does not read a
-        ReadOnlyGraphAggregate. The copy is only the reduced scope, which is
-        the point of scoping. When None, the full default-union dataset is used.
+        filtering). The copy is only the reduced scope. When None, the full
+        default-union dataset is used.
     """
-    if scope is None:
+    if data_scope is None:
         return dataset
 
     import rdflib
 
     graph = rdflib.Graph()
-    for instance_id in scope:
-        graph += dataset.get_context(rdflib.URIRef(f"urn:uuid:{instance_id}"))
+    for instance_id in data_scope:
+        graph += dataset.get_context(rdflib.URIRef(absolute_id(instance_id)))
     return graph

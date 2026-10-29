@@ -52,11 +52,11 @@ def shapes():
 
 @pytest.fixture()
 def violations(shapes):
-    return triplets.validation.validate(DATA, shapes, engine="pandas")
+    return triplets.validation.validate_shacl(DATA, shapes, engine="pandas")
 
 
 def test_enrich_all_sources(violations, shapes):
-    result = enrich(violations, data=DATA, shapes=shapes, rdf_map=RDF_MAP)
+    result = enrich(violations, data=DATA, shapes=shapes, rdf_map=RDF_MAP, rdf_map_scope="EQ")
     assert len(result) == 1
     row = result.iloc[0]
     assert row["VIOLATION_TYPE"] == "sh:minCount"
@@ -80,14 +80,16 @@ def test_enrich_sources_optional(violations):
     assert only_data["OBJECT_NAME"].iloc[0] == "Line 1"
     assert only_data["SHAPE_NAME"].isna().all()
 
-    only_schema = enrich(violations, rdf_map=RDF_MAP)
+    only_schema = enrich(violations, rdf_map=RDF_MAP, rdf_map_scope="EQ")
     assert only_schema["SCHEMA_MULTIPLICITY"].iloc[0] == "1..1"
+    assert enrich(violations, rdf_map=RDF_MAP)["SCHEMA_MULTIPLICITY"].isna().all()   # no profiles: root, empty here
     assert only_schema["CLASS_DESCRIPTION"].isna().all()   # needs OBJECT_TYPE from data
 
 
-def test_validate_context_flag(shapes):
-    result = triplets.validation.validate(DATA, shapes, engine="pandas",
-                                          rdf_map=RDF_MAP, context=True)
+def test_enrich_after_validate(shapes):
+    violations = triplets.validation.validate_shacl(DATA, shapes, engine="pandas", rdf_map=RDF_MAP, rdf_map_scope="*")
+    assert "TARGET" not in violations.columns                # what was found comes from enrich
+    result = enrich(violations, data=DATA, shapes=shapes, rdf_map=RDF_MAP)   # the run's profiles from attrs
     assert set(ENRICHMENT_COLUMNS) <= set(result.columns)
     assert result["OBJECT_NAME"].iloc[0] == "Line 1"
     assert result["SCHEMA_DESCRIPTION"].iloc[0].startswith("Segment length")
@@ -98,8 +100,7 @@ def test_pyshacl_engine_enrichment_degrades_gracefully(shapes):
     """pyshacl SOURCE_SHAPE joins on the same shape IRIs; anonymous property
     shapes fall back to null shape columns — never an error."""
     pytest.importorskip("pyshacl")
-    violations = triplets.validation.validate(DATA, shapes, engine="pyshacl",
-                                              context=True)
+    violations = enrich(triplets.validation.validate_shacl(DATA, shapes, engine="pyshacl"), data=DATA, shapes=shapes)
     assert set(ENRICHMENT_COLUMNS) <= set(violations.columns)
     assert (violations["OBJECT_TYPE"] == "ACLineSegment").any()
 
@@ -120,3 +121,95 @@ def test_enrich_keeps_messages_verbatim(violations):
     generic = violations.copy()
     generic["MESSAGE"] = "Missing required property (attribute)."
     assert list(enrich(generic)["MESSAGE"]) == ["Missing required property (attribute)."]
+
+
+def test_schema_context_is_looked_up_by_profile():
+    """A KEY whose multiplicity differs between profiles reports the profiles the
+    violation was checked against: the PROFILE column when present, else
+    rdf_map_scope (one scope, or one per instance); a merged PROFILE reports the
+    relaxed multiplicity that was checked."""
+    rdf_map = {
+        "SIS": {"ProfileMetadata": {"keyword": "SIS"},
+                "BaseTimeSeries.timeSeriesKind": {"type": "Enumeration", "multiplicity": "0..1", "description": "sis",
+                                                  "xsd:minOccours": "0", "xsd:maxOccours": "1"}},
+        "AS": {"ProfileMetadata": {"keyword": "AS"},
+               "BaseTimeSeries.timeSeriesKind": {"type": "Enumeration", "multiplicity": "1..1", "description": "as",
+                                                 "xsd:minOccours": "1", "xsd:maxOccours": "1"}},
+    }
+    violations = pandas.DataFrame({"ID": ["t1", "t2"], "KEY": ["BaseTimeSeries.timeSeriesKind"] * 2,
+                                   "VALUE": [None, None], "VIOLATION_TYPE": ["sh:minCount"] * 2,
+                                   "MESSAGE": [""] * 2, "SEVERITY": ["Violation"] * 2, "SOURCE_SHAPE": [None] * 2})
+    by_column = enrich(violations.assign(PROFILE=[["AS"], ["SIS"]]), rdf_map=rdf_map)
+    assert by_column["SCHEMA_MULTIPLICITY"].tolist() == ["1..1", "0..1"]
+    data = pandas.DataFrame([("t1", "Type", "BaseTimeSeries", "i1"), ("t2", "Type", "BaseTimeSeries", "i2")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    by_instance = enrich(violations, data=data, rdf_map=rdf_map, rdf_map_scope={"i1": "AS", "i2": ["SIS"]})
+    assert by_instance["SCHEMA_MULTIPLICITY"].tolist() == ["1..1", "0..1"]
+    assert by_instance["SCHEMA_DESCRIPTION"].tolist() == ["as", "sis"]
+    assert enrich(violations, rdf_map=rdf_map, rdf_map_scope="AS")["SCHEMA_DESCRIPTION"].tolist() == ["as", "as"]
+    merged = enrich(violations.assign(PROFILE=[["AS", "SIS"]] * 2), rdf_map=rdf_map)
+    assert merged["SCHEMA_MULTIPLICITY"].tolist() == ["0..1", "0..1"]
+    unscoped = enrich(violations, rdf_map=rdf_map)                    # no profiles: the (empty) root
+    assert unscoped["SCHEMA_MULTIPLICITY"].isna().all()
+
+
+def test_schema_context_reads_the_merged_scope():
+    """Profiles merged for a run: a KEY only the second defines comes from that
+    profile; another profile's text is never borrowed."""
+    rdf_map = {"EQ": {"ProfileMetadata": {"keyword": "EQ"}, "A.x": {"type": "Attribute", "multiplicity": "0..1"}},
+               "OTHER": {"ProfileMetadata": {"keyword": "OTHER"}, "A.y": {"type": "Attribute", "multiplicity": "0..n"}},
+               "SC": {"ProfileMetadata": {"keyword": "SC"}, "A.y": {"type": "Attribute", "multiplicity": "1..1"}}}
+    violations = pandas.DataFrame({"ID": ["a1"], "KEY": ["A.y"], "VALUE": [None], "VIOLATION_TYPE": ["sh:minCount"],
+                                   "MESSAGE": [""], "SEVERITY": ["Violation"], "SOURCE_SHAPE": [None]})
+    assert enrich(violations, rdf_map=rdf_map, rdf_map_scope="EQ")["SCHEMA_MULTIPLICITY"].tolist() == [None]
+    assert enrich(violations, rdf_map=rdf_map, rdf_map_scope=["EQ", "SC"])["SCHEMA_MULTIPLICITY"].tolist() == ["1..1"]
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars", "duckdb"])
+def test_enrich_data_scope_reads_what_the_run_saw(flavor):
+    """The run sees only i2, so x1 is missing — enrich(data_scope=) agrees; the
+    whole data would find x1 in i1."""
+    cim = "http://iec.ch/TC57/CIM100#"
+    schema = {"EQ": {"ProfileMetadata": {"keyword": "EQ"},
+                     "Breaker": {"type": "Class", "namespace": cim, "inheritance": [cim + "Breaker"],
+                                 "parameters": ["Equipment.EquipmentContainer"]},
+                     "VoltageLevel": {"type": "Class", "namespace": cim, "inheritance": [cim + "VoltageLevel"]},
+                     "Equipment.EquipmentContainer": {"type": "Association", "xsd:minOccours": "0",
+                                                      "xsd:maxOccours": "1", "range": cim + "VoltageLevel"}}}
+    data = pandas.DataFrame([("x1", "Type", "VoltageLevel", "i1"), ("b1", "Type", "Breaker", "i2"),
+                             ("b1", "Equipment.EquipmentContainer", "x1", "i2")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    violations = triplets.validation.validate_schema_references(data, schema, ["i2"], ["EQ"], [], engine="pandas")   # no targets
+    assert violations["VIOLATION_TYPE"].tolist() == ["triplets:missing"]
+    if flavor == "polars":
+        data = pytest.importorskip("polars").from_pandas(data)
+    elif flavor == "duckdb":
+        connection = pytest.importorskip("duckdb").connect()
+        connection.register("_rows", data)
+        connection.execute("CREATE TABLE triplets AS SELECT * FROM _rows")
+        data = connection
+    scoped = enrich(violations, data=data, data_scope=["i2"])
+    assert scoped["TARGET"].tolist() == ["referenced object x1 not found in the data"]
+    assert enrich(violations, data=data)["TARGET"].tolist() == ["referenced object x1 found — VoltageLevel"]
+
+
+def test_concat_violations_merges_run_metadata(shapes):
+    """Two runs of the same shapes: rows concatenated, the run window spans both,
+    shape counts once, data sources united."""
+    from triplets.validation import concat_violations
+    other = DATA.assign(INSTANCE_ID="g2", ID=DATA["ID"].str.replace("1111", "9999"))
+    first = triplets.validation.validate_shacl(DATA, shapes, engine="pandas")
+    second = triplets.validation.validate_shacl(other.assign(VALUE=other["VALUE"].replace(
+        "20220615T2230Z_Svedala_EQ.xml", "other.xml")), shapes, engine="pandas")
+    both = concat_violations([first, second])
+    meta = both.attrs["validation"]
+    assert len(both) == 2
+    assert meta["started_at"] == first.attrs["validation"]["started_at"]
+    assert meta["generated_at"] == second.attrs["validation"]["generated_at"]
+    assert meta["node_shapes"] == first.attrs["validation"]["node_shapes"]
+    assert meta["source"] == ["20220615T2230Z_Svedala_EQ.xml", "other.xml"]
+    assert concat_violations([]).empty and "SOURCE_SHAPE" in concat_violations([]).columns
+    schema_run = first.copy()
+    schema_run.attrs["validation"] = {**first.attrs["validation"], "language": "rdfs"}
+    with pytest.raises(ValueError, match="one constraint language"):
+        concat_violations([first, schema_run])

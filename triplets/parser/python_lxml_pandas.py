@@ -15,16 +15,14 @@ from typing import Union, IO
 import pandas as pd
 from lxml import etree
 
-from .utils import (
-    RDF_NS, RDF_ID, RDF_ABOUT, RDF_NODEID, RDF_RESOURCE,
-    clean_ID, _split_prefixed_name,
-)
+from .utils import document_base, iter_rdf_rows
+from ..iri import TRIPLETS_NS, TYPE_KEY
 
 logger = logging.getLogger(__name__)
 
 
 def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = False,
-                          shorten_resources: bool = True) -> pd.DataFrame:
+                          local_resources: bool = True, default_base: str = TRIPLETS_NS) -> pd.DataFrame:
     """Parse single RDF/XML file to pandas DataFrame using lxml + list-of-tuples.
 
     This is the old proven path: lxml parse → iterate → build Python list → pd.DataFrame.
@@ -48,11 +46,9 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         raise
 
     namespace_map = dict(root.nsmap or {})
-    try:
-        if getattr(root, "base", None):
-            namespace_map["xml_base"] = root.base
-    except Exception:
-        pass
+    declared_base = document_base(root, None)   # a declared absolute xml:base only — never the file location
+    if declared_base:
+        namespace_map["xml_base"] = declared_base
 
     instance_id = str(uuid.uuid4())
     file_name = path_or_fileobject if isinstance(path_or_fileobject, str) else getattr(path_or_fileobject, "name", "")
@@ -61,45 +57,19 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
     dist_id = str(uuid.uuid4())
     nsmap_id = str(uuid.uuid4())
     data_list = [
-        (dist_id, "Type", "Distribution", instance_id),
-        (dist_id, "label", str(file_name), instance_id),
-        (nsmap_id, "Type", "NamespaceMap", instance_id),
+        (dist_id, TYPE_KEY, "Distribution"),
+        (dist_id, "label", str(file_name)),
+        (nsmap_id, TYPE_KEY, "NamespaceMap"),
     ]
 
     for k, v in namespace_map.items():
-        data_list.append((nsmap_id, str(k) if k is not None else "", str(v) if v is not None else "", instance_id))
+        data_list.append((nsmap_id, str(k) if k is not None else "", str(v) if v is not None else ""))
 
-    # RDF objects
-    for rdf_object in root.iterchildren():
-        attribs = rdf_object.attrib
-        obj_id = clean_ID(
-            attribs.get(RDF_ID)
-            or attribs.get(RDF_ABOUT)
-            or attribs.get(RDF_NODEID)
-            or ""
-        )
+    # RDF objects — (ID, KEY, VALUE) rows; one INSTANCE_ID for the whole file
+    data_list.extend(iter_rdf_rows(root.iterchildren(), local_resources, document_base(root, default_base)))
 
-        # Type row
-        type_value = _split_prefixed_name(rdf_object.tag)
-        data_list.append((obj_id, "Type", type_value, instance_id))
-
-        for element in rdf_object.iterchildren():
-            key = _split_prefixed_name(element.tag)
-            value = element.text
-            if value is None and element.attrib:
-                value = clean_ID(
-                    element.attrib.get(RDF_RESOURCE)
-                    or element.attrib.get(RDF_NODEID)
-                    or ""
-                )
-                if shorten_resources and value and value.startswith("http"):
-                    value = value.split("#")[-1] if "#" in value else value
-            # Use empty string instead of None for parity with arrow engines
-            if value is None:
-                value = ""
-            data_list.append((obj_id, key, value, instance_id))
-
-    df = pd.DataFrame(data_list, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    df = pd.DataFrame(data_list, columns=["ID", "KEY", "VALUE"])
+    df["INSTANCE_ID"] = instance_id
 
     if debug:
         logger.debug("python_lxml_pandas produced %d rows for %s", len(df), file_name)

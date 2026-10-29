@@ -5,72 +5,37 @@ description = "RDF/XML toolkit for ENTSO-E/CGMES power grid data (parser focus)"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64"]
 
-[dependencies]
-python = ">=3.11"
-pandas = ">=2.0,!=2.2.*,!=2.3.3"
-lxml = ">=4.9"
-
-[feature.test.dependencies]
-pytest = ">=7.0"
-pytest-xdist = "*"
-
-[feature.arrow.dependencies]
-pyarrow = ">=14.0"
-
-[feature.polars.dependencies]
-polars = ">=1.0"
-pyarrow = ">=14.0"
-
+# pixi supplies only the native build toolchain. The extensions are compiled
+# under the uv venv's python (`uv run --no-sync`), so they link the venv's
+# pyarrow; tests run in the uv venv, never inside pixi. No conda pyarrow in
+# any env: its libarrow on the conda -L/-rpath paths would be linked instead.
 [feature.build.dependencies]
-cython = ">=3.0"
-setuptools = ">=61"
-numpy = "*"  # for pyarrow numpy_interop headers in some builds
 compilers = "*"
-pyarrow = "*"
 
-# C++ toolchain + deps for the embedded qlever SPARQL engine (setup_qlever.py).
-# qlever itself is compiled once from a separate checkout (QLEVER_SRC_DIR)
-# inside this environment, so all libraries share one ABI and pixi.lock pins
-# them. python is pinned to the interpreter ABI the extension is used with.
+[feature.build.tasks]
+build-cython-pugixml-arrow = "uv run --no-sync --with Cython --with setuptools python setup_cython_parser.py build_ext --inplace"
+
+# C++ toolchain + deps for the embedded qlever SPARQL engine. qlever itself is
+# compiled once from a separate checkout (QLEVER_SRC_DIR) inside this
+# environment, so all C++ libraries share one ABI and pixi.lock pins them.
 [feature.qlever.dependencies]
-python = ">=3.13,<3.14"
+python = ">=3.11"  # runs setup_qlever_lib.py (cmake/ninja driver only)
+compilers = "*"
 cmake = ">=3.28"
 ninja = "*"
 libboost-devel = ">=1.81"
 icu = "*"
 openssl = "*"
 zstd = "*"
+zlib = "*"   # zlib + bzip2: -lz / -lbz2 in setup_qlever.py
+bzip2 = "*"
 jemalloc = "*"
-rdflib = ">=7.6"    # sparql extra + parity tests against the rdflib engine
-pyshacl = ">=0.30"  # sh:sparql delegation test
 
 [feature.qlever.tasks]
 # source resolution ($QLEVER_SRC_DIR → vendor/qlever → ../qlever) lives in the scripts
-build-qlever-lib = "python setup_qlever_lib.py"                  # one-time qlever compile (PIC)
-build-qlever = "python setup_qlever.py build_ext --inplace"      # the triplets.sparql._qlever extension
-test-qlever = "pytest tests/test_sparql_qlever.py -q"
-
-# The portable performance SPARQL engine (embedded Rust wheel) + the oxrdflib
-# bridge (oxigraph-backed rdflib store for the pyshacl engine).
-[feature.oxigraph.dependencies]
-pyoxigraph = ">=0.5"
-oxrdflib = ">=0.5"
-rdflib = ">=7.6"    # parity tests against the rdflib engine
-pyshacl = ">=0.30"  # sh:sparql delegation + pyshacl store tests
-
-[feature.oxigraph.tasks]
-test-oxigraph = "pytest tests/test_sparql_oxigraph.py tests/test_parser_nquads.py -q"
+build-qlever-lib = "python setup_qlever_lib.py"  # one-time qlever compile (PIC); cmake/ninja only
+build-qlever = "uv run --no-sync --with Cython --with setuptools python setup_qlever.py build_ext --inplace"  # the triplets.sparql._qlever extension
 
 [environments]
-default = { features = ["test"] }
-arrow = { features = ["test", "arrow"] }
-build = { features = ["build", "test", "arrow", "polars"] }
-dev = { features = ["build", "test", "arrow", "polars"] }
-qlever = { features = ["build", "test", "arrow", "polars", "qlever", "oxigraph"] }
-oxigraph = { features = ["test", "arrow", "polars", "oxigraph"] }
-
-[tasks]
-build-cython-pugixml-arrow = "python setup_cython_parser.py build_ext --inplace"
-test = "pytest -q --tb=no"
-test-parser = "pytest tests/test_parser.py tests/test_parity_parser.py -q --tb=short"
-sync-uv = "uv sync --dev"
+build = { features = ["build"] }
+qlever = { features = ["qlever"] }

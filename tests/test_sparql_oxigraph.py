@@ -145,9 +145,9 @@ def test_scope_parity(svedala):
     other = next(i for i in set(svedala["INSTANCE_ID"].astype(str).unique()) if i != eq_instance)
 
     q = PREFIXES + "SELECT (COUNT(?s) AS ?n) WHERE { ?s rdf:type cim:ACLineSegment }"
-    in_scope = int(triplets.sparql.query(svedala, q, scope=[eq_instance], engine="oxigraph")["n"].iloc[0])
-    out_scope = int(triplets.sparql.query(svedala, q, scope=[other], engine="oxigraph")["n"].iloc[0])
-    reference = int(triplets.sparql.query(svedala, q, scope=[eq_instance], engine="rdflib")["n"].iloc[0])
+    in_scope = int(triplets.sparql.query(svedala, q, data_scope=[eq_instance], engine="oxigraph")["n"].iloc[0])
+    out_scope = int(triplets.sparql.query(svedala, q, data_scope=[other], engine="oxigraph")["n"].iloc[0])
+    reference = int(triplets.sparql.query(svedala, q, data_scope=[eq_instance], engine="rdflib")["n"].iloc[0])
     assert in_scope == reference > 0
     assert out_scope == 0
 
@@ -161,7 +161,7 @@ def test_scope_shares_store(svedala):
     triplets.sparql.query(svedala, q, engine="oxigraph")
     cached = len(sparql_oxigraph._STORES)
     instance = str(svedala["INSTANCE_ID"].astype(str).iloc[0])
-    triplets.sparql.query(svedala, q, scope=[instance], engine="oxigraph")
+    triplets.sparql.query(svedala, q, data_scope=[instance], engine="oxigraph")
     assert len(sparql_oxigraph._STORES) == cached
 
 
@@ -176,7 +176,7 @@ def test_scope_overrides_own_from(svedala):
     q = PREFIXES + (f"SELECT (COUNT(?s) AS ?n) FROM <urn:uuid:{eq_instance}> "
                     "WHERE { ?s rdf:type cim:ACLineSegment }")
     unscoped = int(triplets.sparql.query(svedala, q, engine="oxigraph")["n"].iloc[0])
-    scoped = int(triplets.sparql.query(svedala, q, scope=[other], engine="oxigraph")["n"].iloc[0])
+    scoped = int(triplets.sparql.query(svedala, q, data_scope=[other], engine="oxigraph")["n"].iloc[0])
     assert unscoped > 0        # the query's own FROM sees the EQ instance
     assert scoped == 0         # scope replaces it entirely
 
@@ -240,13 +240,13 @@ def test_multi_instance_scope_duplicates_documented():
     union — a triple present in several scoped instances yields one solution
     per instance (DISTINCT dedupes). Single-instance scope is exact."""
     q = PREFIXES + "SELECT ?name WHERE { ?s cim:IdentifiedObject.name ?name }"
-    multi = triplets.sparql.query(DUPLICATED, q, scope=["g1", "g2"], engine="oxigraph")
+    multi = triplets.sparql.query(DUPLICATED, q, data_scope=["g1", "g2"], engine="oxigraph")
     assert len(multi) == 2                                   # the documented residual
     distinct = triplets.sparql.query(
         DUPLICATED, PREFIXES + "SELECT DISTINCT ?name WHERE { ?s cim:IdentifiedObject.name ?name }",
-        scope=["g1", "g2"], engine="oxigraph")
+        data_scope=["g1", "g2"], engine="oxigraph")
     assert len(distinct) == 1
-    single = triplets.sparql.query(DUPLICATED, q, scope=["g1"], engine="oxigraph")
+    single = triplets.sparql.query(DUPLICATED, q, data_scope=["g1"], engine="oxigraph")
     assert len(single) == 1
 
 
@@ -277,7 +277,7 @@ def test_shacl_sparql_delegation_via_oxigraph(no_qlever, svedala):
     assert triplets.sparql.get_engine("auto")[0] == "oxigraph"
     graph = shape_graph('SELECT $this ?value WHERE { $this $PATH ?value . '
                         'FILTER (str(?value) = "no-such-name") }')
-    violations = triplets.validation.validate(svedala, graph, engine="pandas")
+    violations = triplets.validation.validate_shacl(svedala, graph, engine="pandas")
     assert len(violations.loc[violations["VIOLATION_TYPE"] == "sh:sparql"]) == 0
 
 
@@ -287,12 +287,12 @@ def test_shacl_sparql_positive_violations_parity(no_qlever, svedala):
     pytest.importorskip("pyshacl")
     graph = shape_graph("SELECT $this ?value WHERE { $this $PATH ?value }")
 
-    via_oxigraph = triplets.validation.validate(svedala, graph, engine="pandas")
+    via_oxigraph = triplets.validation.validate_shacl(svedala, graph, engine="pandas")
     import triplets.sparql as sparql_registry
     saved = sparql_registry._REGISTRY.auto
     sparql_registry._REGISTRY.auto = ["rdflib"]
     try:
-        via_rdflib = triplets.validation.validate(svedala, graph, engine="pandas")
+        via_rdflib = triplets.validation.validate_shacl(svedala, graph, engine="pandas")
     finally:
         sparql_registry._REGISTRY.auto = saved
 
@@ -340,7 +340,7 @@ def test_benchmark_shacl_sparql_backend(benchmark, svedala, monkeypatch, sparql_
     graph.parse(data=SPARQL_HEAVY_SHAPE, format="turtle")
     compiled = triplets.validation.compile(graph)
     benchmark.extra_info.update({"sparql_engine": sparql_engine})
-    benchmark(lambda: triplets.validation.validate(svedala, compiled, engine="pandas"))
+    benchmark(lambda: triplets.validation.validate_shacl(svedala, compiled, engine="pandas"))
 
 
 def test_invalid_constraint_query_reported_not_fixed(no_qlever, svedala):
@@ -352,9 +352,65 @@ def test_invalid_constraint_query_reported_not_fixed(no_qlever, svedala):
     pytest.importorskip("pyshacl")
     graph = shape_graph('SELECT $this ?value WHERE { $this $PATH ?value . '
                         'FILTER (str(?value) = "no-such-name") } GROUP BY $this')
-    violations = triplets.validation.validate(svedala, graph, engine="pandas")
+    violations = triplets.validation.validate_shacl(svedala, graph, engine="pandas")
     flags = violations[violations["VIOLATION_TYPE"] == "triplets:invalidSparql"]
     assert len(flags) == 1                                       # flagged once, not per fanout
     assert flags["SEVERITY"].iloc[0] == "Warning"
     assert "oxigraph rejected the query" in flags["MESSAGE"].iloc[0]
     assert (violations["VIOLATION_TYPE"] != "sh:sparql").all()   # rdflib fallback found no hits
+
+
+THREADED_SHAPES = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+
+cim:FuseShape a sh:NodeShape ;
+    sh:targetClass cim:Fuse ;
+    sh:property [ sh:path cim:IdentifiedObject.name ;
+                  sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ] ] .
+
+cim:ACLineSegmentShape a sh:NodeShape ;
+    sh:targetClass cim:ACLineSegment ;
+    sh:property [ sh:path cim:IdentifiedObject.name ;
+                  sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ] ] ;
+    sh:property [ sh:path cim:Conductor.length ;
+                  sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "no-such-length") } GROUP BY $this' ] ] .
+
+cim:TerminalShape a sh:NodeShape ;
+    sh:targetClass cim:Terminal ;
+    sh:property [ sh:path cim:Terminal.ConductingEquipment ;
+                  sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ] ] .
+
+cim:ConnectivityNodeShape a sh:NodeShape ;
+    sh:targetClass cim:ConnectivityNode ;
+    sh:sparql [ sh:select 'SELECT $this WHERE { FILTER NOT EXISTS { ?t <http://iec.ch/TC57/CIM100#Terminal.ConnectivityNode> $this } }' ] .
+"""
+
+
+@pytest.mark.parametrize("sparql_engine", ["oxigraph", "qlever"])
+def test_shacl_sparql_threads_match_sequential(svedala, monkeypatch, sparql_engine):
+    """max_workers runs the embedded engine's sh:sparql queries on threads: the
+    report equals the sequential one — findings, a focus-less target (no Fuse
+    in the data) and the rdflib-fallback note for a query the engine rejects."""
+    import threading
+    from triplets.validation import shacl_pandas
+    if sparql_engine == "qlever":
+        pytest.importorskip("triplets.sparql._qlever", reason="qlever extension not built")
+    monkeypatch.setattr(triplets.sparql._REGISTRY, "auto", [sparql_engine, "rdflib"])
+    rdflib = pytest.importorskip("rdflib")
+    graph = rdflib.Graph()
+    graph.parse(data=THREADED_SHAPES, format="turtle")
+    compiled = triplets.validation.compile(graph)
+    sequential = triplets.validation.validate_shacl(svedala, compiled, engine="pandas")
+
+    threads = set()
+    run_one = shacl_pandas._sparql
+    monkeypatch.setattr(shacl_pandas, "_sparql", lambda context, rule: (
+        threads.add(threading.current_thread() is threading.main_thread()), run_one(context, rule))[1])
+    parallel = triplets.validation.validate_shacl(svedala, compiled, engine="pandas", max_workers=4)
+
+    assert threads == {True, False}                   # first query alone, the rest on the pool
+    key = list(sequential.columns)
+    assert parallel.sort_values(key).reset_index(drop=True).equals(sequential.sort_values(key).reset_index(drop=True))
+    assert (sequential["VIOLATION_TYPE"] == "sh:sparql").sum() > 0
+    assert (sequential["VIOLATION_TYPE"] == "triplets:invalidSparql").sum() == 1

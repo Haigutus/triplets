@@ -74,8 +74,8 @@ bundles (`schemas.ENTSOE_CGMES_2_4_15_552_ED1`,
 `schemas.ENTSOE_CGMES_3_0_0_552_ED1`, …) the versioned **NC (Network Code)**
 profiles are available as `schemas.ENTSOE_NC_2_4_1_552_ED1` /
 `schemas.ENTSOE_NC_2_4_1_552_ED2`. The `_ED1` / `_ED2` suffix selects the
-serialization edition; profile resolution is schema-driven, so the right
-profile section is matched from the instance header.
+serialization edition; profile resolution is schema-driven: every profile
+section the instance header declares is matched and used.
 
 Look into examples folders for more
 
@@ -187,13 +187,20 @@ Validate against SHACL shape files; the result is a violations DataFrame
 (empty = conforms) with the same shape across all engines:
 
 ```python
+import triplets
 from triplets.export_schema import schemas
 
-violations = data.shacl.validate("shapes.ttl", rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
+rdf_map = schemas.ENTSOE_CGMES_3_0_0_552_ED1
+violations = data.shacl.validate_shacl("shapes.ttl", rdf_map=rdf_map, rdf_map_scope=["EQ"])
 
-# slower optional context pass: source file, object type/name,
-# shape sh:name/sh:description, schema attribute/class definitions
-violations = data.shacl.validate(shapes, context=True)
+# schema validation: cardinality / datatypes per instance, reference types
+# against target instances — or by instance header via cgmes_tools
+violations = data.shacl.validate_schema(rdf_map, rdf_map_scope=["EQ"])
+violations = triplets.cgmes_tools.validate_by_header(data, rdf_map, references=True)
+
+# context pass, a separate call: what was found, source file, object
+# type/name, shape sh:name/sh:description, schema attribute/class definitions
+violations = violations.shacl.enrich(data=data, rdf_map=rdf_map)
 
 # SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer — grouped by default
 # (one result per rule with occurrenceCount + sample instances)
@@ -246,10 +253,42 @@ triplets.clear_caches()   # or clear everything manually
 
 ## CLI tools
 
+Install the commands on your PATH with [uv](https://docs.astral.sh/uv/), or run them without installing:
+
 ```shell
-cim-spreadsheet -i model.xml -o output.xlsx
-cim-diff original.xml modified.xml
+uv tool install "triplets[arrow,excel]"        # cim-spreadsheet, cim-diff for the user
+uv tool upgrade triplets
+uvx --from "triplets[arrow,excel]" cim-diff original.xml modified.xml   # one-off run
 ```
+
+`excel` is needed for `.xlsx`; `arrow` makes parsing ~10x faster.
+
+```shell
+cim-spreadsheet -i model.xml -o output.xlsx                  # one sheet per class
+cim-spreadsheet -i output.xlsx -o out/ --rdf-map schema.json  # back to CIM XML
+cim-diff original.xml modified.xml
+cim-diff original.xml modified.xml -ex Terminal,ConnectivityNode   # also leave out these classes
+cim-diff original.xml modified.xml --keep-metadata            # also diff NamespaceMap, Distribution
+cim-diff original.xml modified.xml --include ACLineSegment --context IdentifiedObject.name
+cim-diff original.xml modified.xml --stat                     # counts per type only
+```
+
+Both tools take the same type options. They leave out `NamespaceMap` and `Distribution`
+(parser metadata, source file path) unless `--keep-metadata` or `--include` names them.
+`--include TYPE` keeps only these classes, `-ex TYPE` leaves out more (also from
+`--include`); repeat them or comma-separate names.
+`cim-diff --context KEY` also shows the unchanged values of KEY in each changed object.
+`cim-diff` exits 0 when the models match, 1 when they differ and
+2 on error, as `diff` does.
+
+With `--keep-metadata`, to-cim writes each model back to the path it was parsed
+from (`Distribution` label): an absolute path overwrites the source, a relative one
+is created under `-o`. Without the metadata the files are `<uuid>.xml` in `-o`.
+Without `--rdf-map`, to-cim warns and writes the classes in the triplets namespace.
+
+Spreadsheet values come back as written, except numbers, which can change their
+written form (`500` -> `500.0`). Excel keeps 15 significant digits and sheet names of
+up to 31 characters; use CSV (`-f csv`) to keep longer numbers and class names.
 
 ## Performance (RealGrid, 1.14M rows)
 

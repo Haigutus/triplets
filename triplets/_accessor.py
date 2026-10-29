@@ -145,7 +145,7 @@ if duckdb:
                     # no ORDER BY: every N-Quads line is row-local, so duckdb
                     # streams straight off the table scan (an ORDER BY would
                     # buffer the sort; it is only needed for grouped formats)
-                    reader = cursor.execute(
+                    reader = cursor.sql(
                         f"SELECT ID, KEY, VALUE, INSTANCE_ID FROM {ref}"
                     ).to_arrow_reader(_STREAM_BATCH_ROWS)
                     return function(reader, *args, **kwargs)
@@ -176,7 +176,7 @@ else:
 
 
 # ── SPARQL / SHACL namespaces ────────────────────────────────────────────────
-# Namespace-only (no root monkey-patches): "query" and "validate" are too
+# Namespace-only (no root monkey-patches): "query" and "validate_shacl" are too
 # generic to claim on DataFrame/connection classes. The dispatchers auto-detect
 # the input flavor, so the same function backs all three namespaces.
 from . import sparql, validation
@@ -185,8 +185,9 @@ _QUERY_NAMESPACES = {
     "sparql": ({"query": sparql.query}, "SPARQL queries via the `sparql` namespace."),
     # enrich/locate/to_sarif/to_shacl_report take a *violations* frame (plain pandas) —
     # the namespace is registered on every DataFrame, so violations.shacl.to_sarif() works
-    "shacl": ({"validate": validation.validate,
+    "shacl": ({"validate_shacl": validation.validate_shacl,
                "validate_schema": validation.validate_schema,
+               "validate_schema_references": validation.validate_schema_references,
                "enrich": validation.enrich,
                "locate": validation.locate_violations,
                "to_sarif": validation.export_to_sarif,

@@ -22,8 +22,8 @@ import pandas
 
 from .context import ENRICHMENT_COLUMNS, enrich
 from .locations import LOCATION_COLUMNS, locate_violations
-from .shacl_report import message_prefix
-from .shacl_ir import _local
+from .shacl_report import message_prefix, profile_text
+from ..iri import split_iri
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ def build_sarif(violations, group=True, sources=None):
             "version": getattr(triplets, "__version__", None),
             "rules": rules,
         })},
-        # the validation-run metadata validate() stamps on the frame — the
+        # the validation-run metadata the validation functions stamp on the frame — the
         # same facts the sh:ValidationReport carries as prov/dcterms terms;
         # timestamps go to the invocation, everything else (engine, duration,
         # shape/constraint counts, coverage) to the run property bag
@@ -154,10 +154,8 @@ def _fallback_name(shape, first, language):
     SHACL shapes: "<attr> <violation type>"."""
     key = _value(first["KEY"])
     if language != "shacl":
-        profile = _value(first.get("PROFILE"))
-        cls = None if pandas.isna(shape) else _local(str(shape))
-        if cls and profile and cls.startswith(f"{profile}:"):   # shape id: <profile>:Class.<key>
-            cls = cls[len(profile) + 1:]
+        profile = profile_text(first.get("PROFILE"))
+        cls = None if pandas.isna(shape) else split_iri(str(shape))[1]
         if cls and key and cls.endswith(f".{key}"):             # per-property shape id
             cls = cls[: -len(key) - 1]
         label = (key if key and cls and key.startswith(f"{cls}.")
@@ -172,7 +170,7 @@ def _samples(records):
 
 
 def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shacl"):
-    identifier = f"{_local(str(shape))}/{constraint}" if not pandas.isna(shape) else str(constraint)
+    identifier = f"{split_iri(str(shape))[1]}/{constraint}" if not pandas.isna(shape) else str(constraint)
     if identifier in seen_ids:                       # distinct shapes, same local name
         seen_ids[identifier] += 1
         identifier = f"{identifier}-{seen_ids[identifier]}"
@@ -225,7 +223,7 @@ def _grouped_result(rule_id, rule_index, records, language="shacl"):
         "locations": locations or None,
         "properties": _prune({
             "count": total,
-            "profile": _value(records[0].get("PROFILE")),
+            "profile": profile_text(records[0].get("PROFILE")),
             "key": _value(records[0]["KEY"]),
             "sampleIDs": [record["ID"] for record in samples if not pandas.isna(record["ID"])] or None,
             "sampleValues": sorted({str(record["VALUE"]) for record in samples
@@ -249,7 +247,7 @@ def _result(rule_id, rule_index, record, language="shacl"):
         "locations": [location] if location else None,
         "properties": _prune({
             "id": _value(record["ID"]),
-            "profile": _value(record.get("PROFILE")),
+            "profile": profile_text(record.get("PROFILE")),
             "key": _value(record["KEY"]),
             "value": _value(record["VALUE"]),
             "violationType": _value(record["VIOLATION_TYPE"]),
@@ -273,8 +271,8 @@ def _message_blocks(record, targets=None, language="shacl", value=False):
     physicalLocation, shape description to the rule."""
     blocks = [f"{message_prefix(record['VIOLATION_TYPE'], record.get('MESSAGE_SOURCE'), language)} "
               f"{_message(record)}"]
-    if not pandas.isna(record.get("PROFILE")):
-        blocks.append(f"[{language}_profile] {record['PROFILE']}")
+    if profile_text(record.get("PROFILE")) is not None:
+        blocks.append(f"[{language}_profile] {profile_text(record['PROFILE'])}")
     if not pandas.isna(record["KEY"]):
         blocks.append(f"[{language}_path] {record['KEY']}")
     if value and not pandas.isna(record["VALUE"]):       # grouped: values ride the examples

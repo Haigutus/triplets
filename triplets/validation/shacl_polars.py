@@ -13,6 +13,8 @@ violations schema, same lexical-form datatype deviation — see shacl_pandas).
 The rare nested/query components (sh:or, sh:and, sh:not, sh:node, sh:sparql —
 a handful of rows even in the real profiles) are delegated to the pandas
 implementations, so coverage is complete while the hot path stays lazy.
+SPARQL targets resolve through ``shacl_pandas.sparql_targets`` once per run;
+their rules then plan like any other.
 
 Per-rule plan builders are cached in ``CompiledShapes.plans["polars"]`` — the
 IR is split and normalized once per compiled shapes, then only re-bound to
@@ -26,23 +28,34 @@ import logging
 import pandas
 import polars
 
+from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from .shacl_pandas import DATATYPES, _REFERENCE_LIKE, SchemaKind
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
+from . import shacl_pandas
+from .shacl_pandas import datatype_patterns
 
 logger = logging.getLogger(__name__)
 
 _COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 
 
-class _Context(SchemaKind):
+class _Context:
     """Lazy base + eagerly materialized shared indices (built once per validate)."""
 
-    def __init__(self, frame, rdf_map=None):
+    def __init__(self, frame, rdf_map=None, ancestors=(), targets=None, lexical=True):
         self.base = frame.lazy()
         self.rdf_map = rdf_map
-        type_rows = frame.filter(polars.col("KEY") == "Type").select("VALUE", "ID")
-        # (ID, CLASS) pairs — the class-membership side of the batched joins
+        self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
+        self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
+        type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID")
+        # the objects' own Type rows — what a ( assoc rdf:type ) path yields
+        self.types = type_rows.rename({"VALUE": "CLASS"}).lazy()
+        # class membership: Type rows plus each ancestor class (schema inheritance)
+        if ancestors:
+            pairs = polars.DataFrame(ancestors, schema={"VALUE": polars.String, "ANCESTOR": polars.String}, orient="row")
+            wider = type_rows.join(pairs, on="VALUE").select(polars.col("ANCESTOR").alias("VALUE"), "ID")
+            type_rows = polars.concat([type_rows, wider]).unique()
         self.membership = type_rows.rename({"VALUE": "CLASS"}).lazy()
         self._class_ids = {key[0]: part["ID"] for key, part
                            in type_rows.partition_by("VALUE", as_dict=True).items()}
@@ -52,37 +65,54 @@ class _Context(SchemaKind):
                                     for key, ids in self._class_ids.items()}
         self._all_ids = frame["ID"].unique().implode()
         self._frame = frame
-        self._subjects = {}   # KEY → (ids, imploded) for sh:targetSubjectsOf focus
+        self._subjects = {}   # (column, KEY) → (ids, imploded) for KEY / VALUE targets
+        self._targets = {}    # SPARQL target query → (ids, imploded), from shacl_pandas.sparql_targets
+        for query, ids in (targets or {}).items():
+            ids = polars.Series("ID", list(ids), dtype=polars.Utf8)
+            self._targets[query] = (ids, ids.implode())
 
-    def class_ids(self, target_class):
+    def class_ids(self, class_name):
         """Flat ID Series (plan *data*, e.g. focus_frame)."""
-        return self._class_ids.get(target_class, _NO_IDS)
+        return self._class_ids.get(class_name, _NO_IDS)
 
-    def class_ids_in(self, target_class):
+    def class_ids_in(self, class_name):
         """Imploded ID Series for is_in membership tests."""
-        return self._class_ids_imploded.get(target_class, _NO_IDS_IMPLODED)
+        return self._class_ids_imploded.get(class_name, _NO_IDS_IMPLODED)
 
     @property
     def all_ids(self):
         return self._all_ids
 
-    def _subjects_of(self, key):
-        if key not in self._subjects:
-            ids = self._frame.filter(polars.col("KEY") == key)["ID"].unique()
-            self._subjects[key] = (ids, ids.implode())
-        return self._subjects[key]
+    def _ids_of(self, key, column):
+        """(ids, imploded) of the KEY's rows at *column* — ID (targetSubjectsOf)
+        or VALUE (targetObjectsOf), computed once per KEY."""
+        cache_key = (column, key)
+        if cache_key not in self._subjects:
+            ids = self._frame.filter(polars.col("KEY") == key)[column].unique().rename("ID")
+            self._subjects[cache_key] = (ids, ids.implode())
+        return self._subjects[cache_key]
+
+    def _focus(self, rule):
+        """(flat IDs, imploded IDs) the rule applies to, by ``target_by``."""
+        by = getattr(rule, "target_by", "Type")
+        if by == "SPARQL":
+            return self._targets[rule.target_on]
+        if by == "KEY":
+            return self._ids_of(rule.target_on, "ID")
+        if by == "VALUE":
+            return self._ids_of(rule.target_on, "VALUE")
+        if by == "ID":
+            ids = polars.Series("ID", [rule.target_on], dtype=polars.Utf8)
+            return ids, ids.implode()
+        return self.class_ids(rule.target_on), self.class_ids_in(rule.target_on)
 
     def focus_ids(self, rule):
         """Flat focus ID Series (plan data, e.g. focus_frame)."""
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
-            return self._subjects_of(rule.target_class)[0]
-        return self.class_ids(rule.target_class)
+        return self._focus(rule)[0]
 
     def focus_ids_in(self, rule):
         """Imploded focus IDs for is_in membership tests."""
-        if getattr(rule, "target_kind", "class") == "subjectsOf":
-            return self._subjects_of(rule.target_class)[1]
-        return self.class_ids_in(rule.target_class)
+        return self._focus(rule)[1]
 
     def path_rows(self, rule):
         """The rule's path as a lazy (FOCUS, PATH_VALUE) plan, restricted to the rule's focus."""
@@ -97,7 +127,7 @@ class _Context(SchemaKind):
         if getattr(rule, "via_type", False):
             # ( assoc rdf:type ) sequence path: PATH_VALUE = referenced object's
             # type; a target without a Type row yields no value node (inner join)
-            plan = (plan.join(self.membership, left_on="PATH_VALUE", right_on="ID")
+            plan = (plan.join(self.types, left_on="PATH_VALUE", right_on="ID")
                     .select("FOCUS", polars.col("CLASS").alias("PATH_VALUE")))
         return plan
 
@@ -144,7 +174,7 @@ def _max_count(context, rule):
 def _datatype(context, rule):
     """Two-level lexical check in one plan; VIOLATION_TYPE/SEVERITY/MESSAGE are
     conditional columns (invalid form → sh:datatype, narrower form → Warning)."""
-    spec = DATATYPES.get(str(rule.params).removeprefix("xsd:"))
+    spec = datatype_patterns(rule.params, context.lexical)
     if spec is None:
         return None
     valid_pattern, warn_pattern = spec
@@ -196,8 +226,7 @@ def _range(comparison, description):
 
 
 def _in(context, rule):
-    local = (polars.col("PATH_VALUE").str.split("#").list.last()
-             .str.split("/").list.last())
+    local = iri_polars.local_value("PATH_VALUE")
     allowed = [str(value) for value in rule.params]
     plan = context.path_rows(rule).filter(~local.is_in(allowed))
     return _emit(plan, rule, f"value is not one of {sorted(allowed)}")
@@ -218,14 +247,21 @@ def _class(context, rule):
 
 def _schema_range(context, rule):
     """triplets:range — ANY of the target's types in the allowed set conforms
-    (issue #100); targets without a Type row are silent."""
+    (issue #100); a target without a Type row is left to triplets:missing."""
     allowed = polars.concat([polars.Series(context.class_ids(cls)) for cls in rule.params],
                             rechunk=True).implode()
-    typed = context.membership.select(polars.col("ID")).unique().collect()["ID"].implode()
+    typed = context.types.select(polars.col("ID")).unique().collect()["ID"].implode()
     plan = (context.path_rows(rule)
             .filter(polars.col("PATH_VALUE").is_in(typed)
                     & ~polars.col("PATH_VALUE").is_in(allowed)))
     return _emit(plan, rule, f"reference target is not one of {rule.params}")
+
+
+def _schema_missing(context, rule):
+    """triplets:missing — the referenced object has no Type row in the validated data."""
+    typed = context.types.select(polars.col("ID")).unique().collect()["ID"].implode()
+    plan = context.path_rows(rule).filter(~polars.col("PATH_VALUE").is_in(typed))
+    return _emit(plan, rule, "referenced object not found in the data")
 
 
 def _node_kind(context, rule):
@@ -233,13 +269,13 @@ def _node_kind(context, rule):
         logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)", rule.params, rule.shape_id)
         return None
     # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else context.key_kind(rule.path)
+    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types)
     if kind is not None:                     # schema decides for the whole path
         if (kind == "iri") == (rule.params == "IRI"):
             return None                      # every value conforms — no plan at all
         plan = context.path_rows(rule)       # every value violates
     else:                                    # value-form heuristic
-        is_iri = (polars.col("PATH_VALUE").str.contains(f"^(?:{_REFERENCE_LIKE.pattern})$")
+        is_iri = (polars.col("PATH_VALUE").str.contains(f"^(?:{REFERENCE_LIKE.pattern})$")
                   | polars.col("PATH_VALUE").is_in(context.all_ids))
         plan = context.path_rows(rule).filter(~is_iri if rule.params == "IRI" else is_iri)
     return _emit(plan, rule, f"value is not of node kind sh:{rule.params}")
@@ -283,7 +319,7 @@ def _pair_compare(operator, description):
 
 
 def _closed(context, rule):
-    allowed = list(set(rule.params) | {"Type"})
+    allowed = list(set(rule.params) | {TYPE_KEY})
     plan = (context.base
             .filter(polars.col("ID").is_in(context.focus_ids_in(rule))
                     & ~polars.col("KEY").is_in(allowed))
@@ -315,6 +351,7 @@ PLAN_BUILDERS = {
     "sh:hasValue": _has_value,
     "sh:class": _class,
     "triplets:range": _schema_range,
+    "triplets:missing": _schema_missing,
     "sh:nodeKind": _node_kind,
     "sh:equals": _equals,
     "sh:disjoint": _disjoint,
@@ -339,7 +376,7 @@ def _rules_frame(rules, message, **extra):
     """The rules of one component as plan data (message = default-text builder)."""
     columns = {
         "KEY": [rule.path for rule in rules],
-        "CLASS": [rule.target_class for rule in rules],
+        "CLASS": [rule.target_on for rule in rules],
         "MESSAGE": [rule.message or message(rule) for rule in rules],
         "SEVERITY": [rule.severity for rule in rules],
         "SOURCE_SHAPE": [rule.shape_id for rule in rules],
@@ -388,7 +425,7 @@ def _batch_datatype(context, rules):
     the two-level message/severity/type stay per rule via conditional columns."""
     groups = {}
     for rule in rules:
-        spec = DATATYPES.get(str(rule.params).removeprefix("xsd:"))
+        spec = datatype_patterns(rule.params, context.lexical)
         if spec is not None:
             groups.setdefault(spec, []).append(rule)
     plans = []
@@ -427,7 +464,7 @@ def _batch_node_kind(context, rules):
             logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)",
                          rule.params, rule.shape_id)
             continue
-        kind = context.key_kind(rule.path)
+        kind = node_kind(rule.path, context.value_types)
         if kind is not None:                 # schema decides for the whole path
             if (kind == "iri") == (rule.params == "IRI"):
                 continue                     # every value conforms — no plan at all
@@ -442,7 +479,7 @@ def _batch_node_kind(context, rules):
         group = [rule for rule in heuristic if rule.params == expected]
         if not group:
             continue
-        is_iri = (polars.col("VALUE").str.contains(f"^(?:{_REFERENCE_LIKE.pattern})$")
+        is_iri = (polars.col("VALUE").str.contains(f"^(?:{REFERENCE_LIKE.pattern})$")
                   | polars.col("VALUE").is_in(context.all_ids))
         plan = (_batch_path_rows(context, _rules_frame(group, message))
                 .filter(~is_iri if expected == "IRI" else is_iri))
@@ -457,12 +494,11 @@ def _batch_in(context, rules):
         rules, lambda r: f"value is not one of {sorted(str(v) for v in r.params)}")
     allowed = polars.LazyFrame({
         "KEY": [rule.path for rule in rules for _ in rule.params],
-        "CLASS": [rule.target_class for rule in rules for _ in rule.params],
+        "CLASS": [rule.target_on for rule in rules for _ in rule.params],
         "SOURCE_SHAPE": [rule.shape_id for rule in rules for _ in rule.params],
         "_LOCAL": [str(value) for rule in rules for value in rule.params],
     })
-    local = (polars.col("VALUE").str.split("#").list.last()
-             .str.split("/").list.last())
+    local = iri_polars.local_value("VALUE")
     plan = (_batch_path_rows(context, rules_frame)
             .with_columns(local.alias("_LOCAL"))
             .join(allowed, on=["KEY", "CLASS", "SOURCE_SHAPE", "_LOCAL"], how="anti"))
@@ -478,7 +514,8 @@ BATCH_BUILDERS = {
 }
 
 
-def validate(data, compiled, rdf_map=None, scope=None, components=None, max_workers=None, **kwargs):
+def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
+             undefined_namespace=CIM_NS, ancestors=None, lexical=True, **kwargs):
     """Validate triplet data against the compiled constraint table (lazy polars).
 
     Parameters mirror shacl_pandas.validate. Vectorized components run as one
@@ -487,8 +524,8 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
     so results are identical across both.
     """
     frame = _to_polars(data)
-    if scope is not None:
-        frame = frame.filter(polars.col("INSTANCE_ID").is_in([str(s) for s in scope]))
+    if data_scope is not None:
+        frame = frame.filter(polars.col("INSTANCE_ID").is_in([str(s) for s in data_scope]))
 
     if "polars" not in compiled.plans:   # setdefault would re-split on every call
         compiled.plans["polars"] = split_rules(compiled.ir, PLAN_BUILDERS, FALLBACK_COMPONENTS, "polars")
@@ -497,14 +534,19 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         vectorized = [rule for rule in vectorized if rule.component in components]
         fallback = [rule for rule in fallback if rule.component in components]
 
-    context = _Context(frame, rdf_map)
+    # the pandas fallback resolves the targets of its own rules
+    sparql_rules = [rule for rule in vectorized if rule.target_by == "SPARQL"]
+    targets, notes = (shacl_pandas.sparql_targets(frame, sparql_rules, rdf_map=rdf_map,
+                                                  undefined_namespace=undefined_namespace)
+                      if sparql_rules else ({}, pandas.DataFrame(columns=VIOLATION_COLUMNS)))
+    context = _Context(frame, rdf_map, ancestor_pairs(ancestors), targets, lexical)
     batched, plans = {}, []
     for rule in vectorized:
-        # batching joins on class membership — subjectsOf targets and two-hop
+        # batching joins on class membership — KEY targets and two-hop
         # (via_type) paths take the per-rule path
         if (rule.component in BATCH_BUILDERS and not rule.inverse
                 and not getattr(rule, "via_type", False)
-                and getattr(rule, "target_kind", "class") == "class"):
+                and getattr(rule, "target_by", "Type") == "Type"):
             batched.setdefault(rule.component, []).append(rule)
         elif (plan := PLAN_BUILDERS[rule.component](context, rule)) is not None:
             plans.append(plan)
@@ -519,14 +561,15 @@ def validate(data, compiled, rdf_map=None, scope=None, components=None, max_work
         violations = violations.astype(object).where(violations.notna(), None)
     else:
         violations = pandas.DataFrame(columns=VIOLATION_COLUMNS)
+    violations = pandas.concat([violations, notes], ignore_index=True)
 
     if fallback:
         # pass the already-converted-and-scoped frame — the pandas engine
         # would otherwise redo both from the original input
-        from . import shacl_pandas
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
-                                           max_workers=max_workers)
+                                           max_workers=max_workers, undefined_namespace=undefined_namespace,
+                                           ancestors=ancestors, lexical=lexical, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     return violations
 
