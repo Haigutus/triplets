@@ -116,6 +116,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **pyshacl engine `data_scope` matches INSTANCE_ID values as given**, like the pandas /
+  polars / duckdb SHACL engines: a `urn:uuid:`-prefixed scope entry no longer matches the
+  bare INSTANCE_ID.
 - **Breaking — IR columns renamed**: `target_kind` → `target_by` (`"Type"` for
   `sh:targetClass`, `"KEY"` for `sh:targetSubjectsOf`) and `target_class` →
   `target_on` (the Type name or the KEY). The IR speaks the repo's own
@@ -308,6 +311,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **pyshacl engine `data_scope` loads only the scoped rows**: the frame is filtered to the
+  scoped INSTANCE_IDs before the N-Quads export, as the vectorized engines do; before, the
+  whole dataset was exported and parsed and the scoped named graphs copied out of it.
+  CGMES 2.4 RealGrid (1.15M triplets), one SV instance (69k rows): 30.2 s / 3.3 GB peak
+  → 2.6 s / 0.9 GB; the EQ instance (892k rows): 58.8 s / 4.3 GB → 37.2 s / 3.1 GB — the
+  same as validating the pre-filtered frame. A DuckDB connection is filtered SQL-side.
+  Each scope is its own entry in the in-process rdflib dataset cache; with
+  `store="oxigraph"` a scoped run loads its own store of the scoped rows.
 - **`validate_shacl(..., lexical=False)` skips the `triplets:lexicalForm` check on every
   engine**: pandas, polars and duckdb no longer emit the narrower-form Warnings (nested
   datatype checks included) — the datatype check skips the second pattern; values outside

@@ -604,13 +604,15 @@ header-less data.
 
 ## Shared Loading (`_rdflib_loader.py`)
 
-SHACL and SPARQL reach rdflib through the same two helpers, so a validation and
-a query over the same data see an identical graph:
+SHACL and SPARQL reach rdflib through the same `load_dataset`, so a validation and
+a query over the same data see an identical graph. SPARQL scopes after loading
+(`scoped_graph`); the pyshacl engine filters the rows to `data_scope` before
+loading, so data outside the scope is never exported or parsed:
 
 | Function | Produces |
 |----------|----------|
 | `load_dataset(data, rdf_map=None, store="memory")` | `rdflib.Dataset` seeing the deduplicated union, one named graph per `INSTANCE_ID` (`urn:uuid:{INSTANCE_ID}`). `store="oxigraph"` backs it with the oxigraph SPARQL engine's cached store via oxrdflib (`"auto"`: oxigraph when installed) |
-| `scoped_graph(dataset, scope=None)` | full union when `scope is None`; otherwise a concrete `Graph` holding just the scoped instances' named graphs (`validate_shacl`'s `data_scope`) |
+| `scoped_graph(dataset, scope=None)` | full union when `scope is None`; otherwise a concrete `Graph` holding just the scoped instances' named graphs (`sparql.query`'s `data_scope`, rdflib engine) |
 
 ## Call Sequence
 
@@ -628,7 +630,7 @@ data.shacl.validate_shacl(shapes, rdf_map=..., rdf_map_scope=["EQ"])
     |-> get_engine("auto")                     # polars (first importable)
     |   '-> shacl_polars.validate(data, compiled, scoped, data_scope, ancestors)
     |       # reads raw VALUEs; lexical findings emitted inline (lexical=False: no lexicalForm)
-    |       # (pyshacl path instead: load_dataset -> scoped_graph ->
+    |       # (pyshacl path instead: _scoped(data_scope) -> load_dataset ->
     |       #  pyshacl.validate(compiled.graph, ont_graph=ancestors as
     |       #  rdfs:subClassOf) -> report_to_violations)
     |
@@ -646,7 +648,7 @@ enrich(violations, data=, shapes=, rdf_map=, data_scope=)  # TARGET + context co
 
 ```
 triplets/
-|-- _rdflib_loader.py        # shared with sparql: load_dataset(), scoped_graph()
+|-- _rdflib_loader.py        # shared with sparql: load_dataset()
 '-- validation/
     |-- __init__.py          # validate_shacl / validate_schema / validate_schema_references, engine registry
     |-- schema_scope.py      # rdf_map_scope: profile resolution, merged schema, class_ancestors

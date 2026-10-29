@@ -109,8 +109,8 @@ def test_pyshacl_identical_violations_across_stores():
 
 
 def test_pyshacl_scoped_identical_across_stores():
-    """scope goes through scoped_graph (a concrete Memory copy) for both
-    backends — identical scoped results."""
+    """data_scope filters the rows before either backend loads them —
+    identical scoped results."""
     pytest.importorskip("pyshacl")
     import rdflib
     graph = rdflib.Graph()

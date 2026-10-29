@@ -241,7 +241,7 @@ triplets/
 |-- _content_key.py          # engine-neutral state keying (content_hash + rdf_map + salt,
 |                            #   data_unchanged digest memo with weakref eviction)
 |-- _caches.py               # clear_caches() / cache_scope(): in-process engine-state lifecycle
-|-- _rdflib_loader.py        # shared with validation: load_dataset(), scoped_graph()
+|-- _rdflib_loader.py        # load_dataset() (shared with validation), scoped_graph()
 |-- parser/nquads.py         # read_nquads: N-Quads -> triplets (inverse of the export);
 |                            #   terms_to_triplets shared by the engines' CONSTRUCT decode
 '-- sparql/

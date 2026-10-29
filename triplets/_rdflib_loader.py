@@ -6,8 +6,9 @@ No temp files: the export is taken in memory as a BytesIO and parsed directly.
 
 Loaded datasets are cached in-process keyed by content (same logic as the
 qlever engine's index cache): the export/parse runs only on a cache miss.
-Consumers must treat the returned dataset as read-only — scope is applied
-after loading (``scoped_graph``), so one cached dataset serves all scopes.
+Consumers must treat the returned dataset as read-only. The SPARQL engine
+applies scope after loading (``scoped_graph``), so one cached dataset serves
+all its scopes; the SHACL engine loads only the scoped rows.
 """
 import logging
 
@@ -107,10 +108,8 @@ def scoped_graph(dataset, data_scope=None):
     data_scope : iterable of INSTANCE_ID (str), optional
         When given, return a concrete Graph holding the union of those
         instances' named graphs (the quad's graph component does the
-        filtering). A concrete Graph — not a view — is required because
-        pyshacl clones/iterates the data graph and does not read a
-        ReadOnlyGraphAggregate. The copy is only the reduced scope, which is
-        the point of scoping. When None, the full default-union dataset is used.
+        filtering). The copy is only the reduced scope. When None, the full
+        default-union dataset is used.
     """
     if data_scope is None:
         return dataset
