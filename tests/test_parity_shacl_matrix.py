@@ -440,18 +440,18 @@ def known(reason, *cases):
 
 
 XFAIL = {
-    **known("N2 sh:flags not read, issue pending", "pattern_flags"),
-    **known("N3 sh:alternativePath reduced to its inverse member, issue pending", "path_alternative_inverse"),
-    **known("N6 sh:closed on a property shape reported on the value node, issue pending", "closed_on_property_shape"),
-    **known("N7 sh:nodeKind sh:BlankNode not evaluated, draft pending", "nodeKind_blank_node"),
-    **known("N8 sh:in compares lexical forms, not typed literals, draft pending", "in_numeric"),
-    **known("N9 sh:minLength on an IRI measures the local id, draft pending", "minLength_on_iri"),
-    **known("N10 sh:sparql $PATH left unbound on a blank-node path, draft pending", "sparql_inverse_path"),
-    **known("N11 sh:deactivated on a sh:sparql constraint ignored, draft pending", "deactivated_sparql_constraint"),
-    **known("N12 two sh:message values: the engines report the first declared, pyshacl's reader the first "
-            "alphabetically, draft pending", "message_two_values"),
-    **known("N14 a non-numeric value passes every range component on the engines, pyshacl reports it under "
-            "sh:maxInclusive / sh:maxExclusive, draft pending", "range_non_numeric_max"),
+    **known("#177 sh:flags not read", "pattern_flags"),
+    **known("#178 sh:alternativePath reduced to its inverse member", "path_alternative_inverse"),
+    **known("#179 sh:closed on a property shape reported on the value node", "closed_on_property_shape"),
+    **known("#180 sh:nodeKind sh:BlankNode not evaluated", "nodeKind_blank_node"),
+    **known("#181 sh:in compares lexical forms, not typed literals", "in_numeric"),
+    **known("#182 sh:minLength on an IRI measures the local id", "minLength_on_iri"),
+    **known("#183 sh:sparql $PATH left unbound on a blank-node path", "sparql_inverse_path"),
+    **known("#184 sh:deactivated on a sh:sparql constraint ignored", "deactivated_sparql_constraint"),
+    **known("#185 two sh:message values: the engines report the first declared, pyshacl's reader the first "
+            "alphabetically", "message_two_values"),
+    **known("#186 a non-numeric value passes every range component on the engines, pyshacl reports it under "
+            "sh:maxInclusive / sh:maxExclusive", "range_non_numeric_max"),
 }
 
 
