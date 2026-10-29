@@ -7,6 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Linux aarch64 wheels** (manylinux), built on GitHub's native arm64 runner;
+  also what Docker runs on Apple Silicon
+  ([#130](https://github.com/Haigutus/triplets/issues/130)).
 - **SPARQL targets in the vectorized engines** (`sh:target [ a sh:SPARQLTarget ; sh:select … ]`,
   IR `target_by="SPARQL"`): each target query runs once per validation on `triplets.sparql`
   and its `?this` nodes are the focus. Same findings as pyshacl on pandas, polars and duckdb.
