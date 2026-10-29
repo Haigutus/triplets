@@ -2,7 +2,8 @@
 
 Correctness-first reference; the data is loaded into an in-memory rdflib graph
 via the N-Quads export. Consumes ``CompiledShapes.graph`` (shapes are parsed
-once by the IR compiler); the constraint table is for the vectorized engines.
+once by the IR compiler) without its malformed shapes; the constraint table is
+for the vectorized engines.
 """
 import logging
 
@@ -44,7 +45,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         Include dependency instances in the scope (or validate the full
         union, data_scope=None) for cross-instance checks.
     inference, advanced, abort_on_first : passed to pyshacl.validate.
-    **kwargs : other engines' options (components, max_workers, table_name) —
+    **kwargs : other engines' options (components, max_workers, table_name, lexical) —
         accepted and ignored, per the shared engine contract.
     store : str, default "memory"
         rdflib store backend for the data graph (see ``load_dataset``):
@@ -71,7 +72,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
     data_graph = load_dataset(data, rdf_map=rdf_map, store=store, undefined_namespace=undefined_namespace)
     ont_graph = _ontology_graph(ancestors, rdf_map, undefined_namespace) if ancestors else None
 
-    shapes_graph = _switched_off_graph(compiled)
+    shapes_graph = _shapes_graph(compiled)
     conforms, report_graph, _report_text = pyshacl_validate(
         data_graph, shacl_graph=shapes_graph, ont_graph=ont_graph,
         inference=inference, advanced=advanced, abort_on_first=abort_on_first,
@@ -80,20 +81,29 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
     return report_to_violations(report_graph, shapes_graph=shapes_graph)
 
 
-def _switched_off_graph(compiled):
-    """The shapes graph pyshacl validates with: the compiled graph with exactly
-    the run's switched-off set marked ``sh:deactivated true``. A copy (prefixes
-    included — pyshacl renders its messages with them) only when that set
-    differs from the declared one — pyshacl (advanced=True) may mutate the
-    graph it is given."""
+def _shapes_graph(compiled):
+    """The shapes graph pyshacl validates with: the compiled graph without its
+    malformed shapes (pyshacl would refuse the whole graph) — their triples, the
+    references to them and the rows the compile drops over them — and with
+    exactly the run's switched-off set marked ``sh:deactivated true``. A copy
+    (prefixes included — pyshacl renders its messages with them) only when one
+    of the two changes it — pyshacl (advanced=True) may mutate the graph it is
+    given. Every triple with a malformed shape as object goes, not only the
+    references the compile walked: pyshacl reads a list cell without rdf:first
+    as a list without that member."""
     import rdflib
 
-    if compiled.deactivated == (compiled.base or compiled).deactivated:
+    base = compiled.base or compiled
+    drops = {drop for _, _, drop in base._skipped if drop is not None}
+    if not drops and compiled.deactivated == base.deactivated:
         return compiled.graph
     graph = rdflib.Graph()
     for prefix, namespace in compiled.graph.namespaces():
         graph.bind(prefix, namespace, override=True, replace=True)
     graph += compiled.graph
+    for drop in drops:   # a malformed shape's term (its triples and every reference to it) or a dropped row's triple
+        for triple in [drop] if isinstance(drop, tuple) else [(drop, None, None), (None, None, drop)]:
+            graph.remove(triple)
     return _mark_switched_off(graph, compiled)
 
 

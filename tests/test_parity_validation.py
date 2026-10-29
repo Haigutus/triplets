@@ -14,7 +14,7 @@ import triplets
 
 from pathlib import Path
 
-from _parity import SVEDALA_DIR, SKIP_REASON
+from _parity import SVEDALA_DIR, SKIP_REASON, frames_equal
 
 SVEDALA_EQ = str(SVEDALA_DIR / "20220615T2230Z__Svedala_EQ_1.xml")
 
@@ -296,3 +296,52 @@ def test_sparql_target_on_real_data(svedala_eq, tmp_path):
         found[engine] = set(violations["ID"])
     assert all(ids == found["pyshacl"] for ids in found.values()), {k: len(v) for k, v in found.items()}
     assert len(found["pyshacl"]) == 51
+
+
+# ── CGMES 2.4: RealGrid against the 2.4 Enhanced SHACL ────────────────────────
+# Each RealGrid instance on its own triplets against the Enhanced SHACL of its
+# header's profile, exact types only (inheritance=False: the shapes list concrete
+# classes in sh:in and close each concrete class on its own). Known artefacts:
+# references into the other instances are absent (the TP / SV sh:class findings),
+# and the 2 sh:in Info rows per profile are triplets' parser-metadata rows
+# (NamespaceMap, Distribution) flagged by AllowedClasses-property.
+# pyshacl runs on SV by default; SSH, TP and EQ under -m performance.
+CGMES24_SHACL_DIR = Path("test_data/application-profiles-library-cgmes-v2-4/CGMES/Enhanced/SHACL")
+CGMES24_PROFILES = {   # rdf_map section: (Model.profile of the RealGrid instance, shapes file)
+    "EQ": ("http://entsoe.eu/CIM/EquipmentCore/3/1", "EquipmentCoreShortCircuitProfile.ttl"),
+    "SSH": ("http://entsoe.eu/CIM/SteadyStateHypothesis/1/1", "SteadyStateHypothesisProfile.ttl"),
+    "TP": ("http://entsoe.eu/CIM/Topology/4/1", "TopologyProfile.ttl"),
+    "SV": ("http://entsoe.eu/CIM/StateVariables/4/1", "StateVariablesProfile.ttl"),
+}
+FINDING_COLUMNS = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "SOURCE_SHAPE", "SEVERITY"]
+
+
+def _cgmes24_findings(realgrid_data, profile, engine):
+    if not CGMES24_SHACL_DIR.exists():
+        pytest.skip("application-profiles-library-cgmes-v2-4 submodule not checked out")
+    from triplets.export_schema import schemas
+    header, shapes = CGMES24_PROFILES[profile]
+    instance = realgrid_data.query("KEY == 'Model.profile' and VALUE == @header")["INSTANCE_ID"].iloc[0]
+    violations = triplets.validation.validate_shacl(
+        realgrid_data[realgrid_data["INSTANCE_ID"] == instance], str(CGMES24_SHACL_DIR / shapes), engine=engine,
+        rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1, rdf_map_scope=[profile], inheritance=False)
+    return violations[FINDING_COLUMNS]
+
+
+@pytest.mark.parametrize("profile", sorted(CGMES24_PROFILES))
+def test_cgmes24_engine_parity(realgrid_data, profile):
+    """pandas, polars and duckdb report the same findings on each RealGrid instance."""
+    pytest.importorskip("polars")
+    pytest.importorskip("duckdb")
+    reference = _cgmes24_findings(realgrid_data, profile, "pandas")
+    assert len(reference)
+    for engine in ("polars", "duckdb"):
+        assert frames_equal(reference, _cgmes24_findings(realgrid_data, profile, engine)), engine
+
+
+@pytest.mark.parametrize("profile", [profile if profile == "SV" else pytest.param(profile, marks=pytest.mark.performance)
+                                     for profile in sorted(CGMES24_PROFILES)])
+def test_cgmes24_pyshacl_parity(realgrid_data, profile):
+    """pyshacl and the pandas engine agree (lexicalForm Warnings, a triplets extra, aside)."""
+    theirs, ours = (_cgmes24_findings(realgrid_data, profile, engine) for engine in ("pyshacl", "pandas"))
+    assert frames_equal(*(found[found["VIOLATION_TYPE"] != "triplets:lexicalForm"] for found in (theirs, ours)))

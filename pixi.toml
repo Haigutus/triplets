@@ -48,7 +48,7 @@ pyshacl = ">=0.30"  # sh:sparql delegation test
 # source resolution ($QLEVER_SRC_DIR → vendor/qlever → ../qlever) lives in the scripts
 build-qlever-lib = "python setup_qlever_lib.py"                  # one-time qlever compile (PIC)
 build-qlever = "python setup_qlever.py build_ext --inplace"      # the triplets.sparql._qlever extension
-test-qlever = "pytest tests/test_sparql_qlever.py -q"
+test-qlever = "pytest tests/test_sparql_qlever.py tests/test_shacl_engines.py::test_sparql_max_workers_matches_sequential -q"
 
 # The portable performance SPARQL engine (embedded Rust wheel) + the oxrdflib
 # bridge (oxigraph-backed rdflib store for the pyshacl engine).

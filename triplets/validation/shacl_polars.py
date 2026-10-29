@@ -33,7 +33,7 @@ from .shacl_report import VIOLATION_COLUMNS
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
 from . import shacl_pandas
-from .shacl_pandas import DATATYPES
+from .shacl_pandas import datatype_patterns
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +43,10 @@ _COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 class _Context:
     """Lazy base + eagerly materialized shared indices (built once per validate)."""
 
-    def __init__(self, frame, rdf_map=None, ancestors=(), targets=None):
+    def __init__(self, frame, rdf_map=None, ancestors=(), targets=None, lexical=True):
         self.base = frame.lazy()
         self.rdf_map = rdf_map
+        self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID")
         # the objects' own Type rows — what a ( assoc rdf:type ) path yields
@@ -173,7 +174,7 @@ def _max_count(context, rule):
 def _datatype(context, rule):
     """Two-level lexical check in one plan; VIOLATION_TYPE/SEVERITY/MESSAGE are
     conditional columns (invalid form → sh:datatype, narrower form → Warning)."""
-    spec = DATATYPES.get(str(rule.params).removeprefix("xsd:"))
+    spec = datatype_patterns(rule.params, context.lexical)
     if spec is None:
         return None
     valid_pattern, warn_pattern = spec
@@ -424,7 +425,7 @@ def _batch_datatype(context, rules):
     the two-level message/severity/type stay per rule via conditional columns."""
     groups = {}
     for rule in rules:
-        spec = DATATYPES.get(str(rule.params).removeprefix("xsd:"))
+        spec = datatype_patterns(rule.params, context.lexical)
         if spec is not None:
             groups.setdefault(spec, []).append(rule)
     plans = []
@@ -514,7 +515,7 @@ BATCH_BUILDERS = {
 
 
 def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
-             undefined_namespace=CIM_NS, ancestors=None, **kwargs):
+             undefined_namespace=CIM_NS, ancestors=None, lexical=True, **kwargs):
     """Validate triplet data against the compiled constraint table (lazy polars).
 
     Parameters mirror shacl_pandas.validate. Vectorized components run as one
@@ -538,7 +539,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     targets, notes = (shacl_pandas.sparql_targets(frame, sparql_rules, rdf_map=rdf_map,
                                                   undefined_namespace=undefined_namespace)
                       if sparql_rules else ({}, pandas.DataFrame(columns=VIOLATION_COLUMNS)))
-    context = _Context(frame, rdf_map, ancestor_pairs(ancestors), targets)
+    context = _Context(frame, rdf_map, ancestor_pairs(ancestors), targets, lexical)
     batched, plans = {}, []
     for rule in vectorized:
         # batching joins on class membership — KEY targets and two-hop
@@ -568,7 +569,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
                                            max_workers=max_workers, undefined_namespace=undefined_namespace,
-                                           ancestors=ancestors, **kwargs)
+                                           ancestors=ancestors, lexical=lexical, **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     return violations
 

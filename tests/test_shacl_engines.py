@@ -227,6 +227,18 @@ def test_closed(engine):
     assert set(v.loc[v["VIOLATION_TYPE"] == "sh:closed", "KEY"]) == {"Switch.undeclared"}
 
 
+def test_closed_allows_every_path_of_a_skipped_property_shape(engine):
+    """A property shape with two sh:path values is skipped as malformed; under
+    sh:closed both paths stay declared, whatever the triple order."""
+    rows = breaker("b1", ("IdentifiedObject.name", "n"), ("IdentifiedObject.description", "d"))
+    shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:closed true ; sh:ignoredProperties ( rdf:type ) ; sh:property cim:P .
+        cim:P sh:path cim:IdentifiedObject.name, cim:IdentifiedObject.description ."""
+    v = run(rows, shape, engine)
+    assert v.empty
+    assert v.attrs["validation"]["skipped_shapes"] == [f"{CIM}P: two sh:path values"]
+
+
 def test_or(engine):
     # name OR description must be present
     shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
@@ -303,14 +315,21 @@ def test_sparql_literal_values_keep_leading_underscore(engine):
 
 
 def test_sparql_max_workers_matches_sequential(engine):
-    import rdflib
-    graph = rdflib.Graph()
-    graph.parse(data=PREFIX + SPARQL_SHAPE, format="turtle")
-    data = pandas.DataFrame(breaker("b1", ("Switch.state", "bad")) + breaker("b2", ("Switch.state", "open")),
-                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    sequential = triplets.validation.validate_shacl(data, graph, engine=engine)
-    parallel = triplets.validation.validate_shacl(data, graph, engine=engine, max_workers=2)
-    assert violating(parallel, "sh:sparql") == violating(sequential, "sh:sparql") == {("b1", "bad")}
+    """max_workers runs every sh:sparql rule after the first on the pool (threads
+    for qlever/oxigraph, forked processes for rdflib) with the sequential result."""
+    shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:Switch.state ;
+            sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "bad") }' ] ;
+            sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "broken") }' ] ;
+            sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "stuck") }' ] ;
+        ] ."""
+    rows = (breaker("b1", ("Switch.state", "bad")) + breaker("b2", ("Switch.state", "broken"))
+            + breaker("b3", ("Switch.state", "stuck")) + breaker("b4", ("Switch.state", "open")))
+    sequential = run(rows, shape, engine)
+    parallel = run(rows, shape, engine, max_workers=2)
+    assert (violating(parallel, "sh:sparql") == violating(sequential, "sh:sparql")
+            == {("b1", "bad"), ("b2", "broken"), ("b3", "stuck")})
+    assert "triplets:invalidSparql" not in set(parallel["VIOLATION_TYPE"])
 
 
 NODE_SHAPE = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
@@ -386,7 +405,7 @@ def test_two_severities_read_the_first(engine):
 
 def test_two_messages_read_the_first(engine):
     """Two sh:message values: the first one declared (pyshacl reports both; its report
-    reader keeps the alphabetically first, so the parity matrix has no case for it)."""
+    reader keeps the alphabetically first — the parity matrix's message_two_values xfail)."""
     shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:message "beta", "alpha" ] ."""
     assert list(run(breaker("b1"), shape, engine)["MESSAGE"]) == ["beta"]
@@ -841,19 +860,129 @@ def test_deactivated_shape_ill_typed_flag(engine_name):
     assert findings(switched_off(breaker("b1"), compiled, engine_name)) == {("b1", "sh:minCount")}
 
 
-@pytest.mark.parametrize("flag", ["cim:Yes", 'true, "1"^^xsd:integer'])
-def test_deactivated_shape_invalid_flag(flag):
-    """A non-literal or a second sh:deactivated value does not load — on pyshacl either."""
-    import rdflib
-    pyshacl = pytest.importorskip("pyshacl")
-    shapes = PREFIX + f"""cim:X a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 ;
-            sh:deactivated {flag} .
-        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:X ."""
-    graph = rdflib.Graph().parse(data=shapes, format="turtle")
-    with pytest.raises(ValueError, match=f"shape {CIM}X"):
-        triplets.validation.compile(graph)
-    with pytest.raises(pyshacl.errors.ShapeLoadError):
-        pyshacl.validate(rdflib.Graph(), shacl_graph=graph)
+# one malformed shape cim:X next to a valid sibling: name missing on X, description on the sibling
+MALFORMED_OWNER = {
+    "property shape": """cim:X a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; {flaw} .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:X ;
+            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .""",
+    "node shape": """cim:X a sh:NodeShape ; sh:targetClass cim:Breaker ; {flaw} ;
+            sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .""",
+}
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("owner", MALFORMED_OWNER)
+@pytest.mark.parametrize("flaw, reason", [
+    ("sh:minCount 1, 2", "two sh:minCount values"),
+    ("sh:datatype xsd:string, xsd:integer", "two sh:datatype values"),
+    ('sh:in ( "a" ), ( "b" )', "two sh:in lists"),
+    ("sh:path cim:IdentifiedObject.aliasName, cim:Conductor.length", "two sh:path values"),
+    ("sh:closed true, false", "two sh:closed values"),
+    ('sh:deactivated true, "1"^^xsd:integer', "two sh:deactivated values"),
+    ("sh:deactivated cim:Yes", f"the sh:deactivated value {CIM}Yes is not a literal"),
+    ("sh:or ( )", "empty sh:or list"),
+    ("sh:and ( )", "empty sh:and list"),
+    ("sh:xone ( )", "empty sh:xone list"),
+    ("sh:ignoredProperties ( rdf:type )", "sh:ignoredProperties without sh:closed"),
+])
+def test_malformed_shape_skipped(engine_name, owner, flaw, reason):
+    """A malformed shape (the compile's load checks): the engines name exactly
+    that shape in skipped_shapes, with the reason, and validate the other shapes."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes(MALFORMED_OWNER[owner].format(flaw=flaw))
+    violations = switched_off(breaker("b1"), compiled, engine_name)
+    assert set(zip(violations["ID"], violations["KEY"])) == {("b1", "IdentifiedObject.description")}
+    assert violations.attrs["validation"]["skipped_shapes"] == [f"{CIM}X: {reason}"]
+
+
+# a malformed shape reached in other ways, next to the valid sibling of MALFORMED_OWNER:
+# shape turtle → the skipped_shapes entries
+MALFORMED_REACHED = {
+    "sh:node target": ("""cim:BreakerShape sh:property cim:C .
+        cim:C sh:path cim:Equipment.EquipmentContainer ; sh:node cim:T .
+        cim:T a sh:NodeShape ; sh:or ( ) ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .""",
+        [f"{CIM}C: sh:node target {CIM}T not evaluated", f"{CIM}T: empty sh:or list"]),
+    "sh:or member": ("""cim:BreakerShape sh:or ( cim:M cim:Named ) .
+        cim:M a sh:NodeShape ; sh:xone ( ) .
+        cim:Named a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .""",
+        [f"{CIM}BreakerShape: sh:or member {CIM}M holds a part that was not evaluated", f"{CIM}M: empty sh:xone list"]),
+    "sh:not member": ("""cim:BreakerShape sh:not cim:M .
+        cim:M a sh:NodeShape ; sh:xone ( ) .""",
+        [f"{CIM}BreakerShape: sh:not member {CIM}M holds a part that was not evaluated", f"{CIM}M: empty sh:xone list"]),
+    "sh:not member below": ("""cim:BreakerShape sh:not cim:M .
+        cim:M a sh:NodeShape ; sh:property cim:P .
+        cim:P sh:path cim:IdentifiedObject.name, cim:IdentifiedObject.aliasName ; sh:minCount 1 .""",
+        [f"{CIM}BreakerShape: sh:not member {CIM}M holds a part that was not evaluated", f"{CIM}P: two sh:path values"]),
+    "untargeted": ("""cim:Orphan a sh:NodeShape ; sh:or ( ) .""", [f"{CIM}Orphan: empty sh:or list"]),
+    "two owners": ("""cim:BreakerShape sh:property cim:P .
+        cim:OtherShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:P .
+        cim:P sh:path cim:IdentifiedObject.name, cim:IdentifiedObject.aliasName ; sh:minCount 1 .""",
+        [f"{CIM}P: two sh:path values"]),
+    "sh:PropertyShape without sh:path": ("""cim:BreakerShape sh:property cim:P .
+        cim:P a sh:PropertyShape ; sh:minCount 1 .""",
+        [f"{CIM}P: sh:PropertyShape without sh:path"]),
+}
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("edge", MALFORMED_REACHED)
+def test_malformed_shape_reached(engine_name, edge):
+    """A malformed sh:node target or logical member: the row over it is not
+    evaluated and named (it would conform, or fire, on every node — bay1 has no
+    name, T's property shape would fire on it); a malformed shape under two
+    owners is one entry; a declared sh:PropertyShape without sh:path is named
+    as such, an untargeted malformed shape too; the sibling is still reported."""
+    pytest.importorskip(engine_name)
+    shapes, skipped = MALFORMED_REACHED[edge]
+    compiled = compiled_shapes("""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .
+        """ + shapes)
+    rows = breaker("b1", ("Equipment.EquipmentContainer", "bay1")) + [("bay1", "Type", "Bay", "eq")]
+    violations = switched_off(rows, compiled, engine_name)
+    assert set(zip(violations["ID"], violations["KEY"])) == {("b1", "IdentifiedObject.description")}
+    assert violations.attrs["validation"]["skipped_shapes"] == skipped
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("path, expressible", [
+    ("cim:IdentifiedObject.name", True),
+    ("[ sh:alternativePath ( cim:IdentifiedObject.name cim:IdentifiedObject.aliasName ) ]", False),
+])
+def test_malformed_part_of_sh_node_target(engine_name, path, expressible):
+    """A sh:node target T with a malformed P and a sibling Q: pyshacl judges T
+    without P (bay1 has no name); so do the vectorized engines when they can
+    express Q, else nothing is left for them and they name the row not evaluated."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes(f"""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ; sh:property cim:C .
+        cim:C sh:path cim:Equipment.EquipmentContainer ; sh:node cim:T .
+        cim:T a sh:NodeShape ; sh:property cim:P, cim:Q .
+        cim:P sh:path cim:IdentifiedObject.name, cim:IdentifiedObject.aliasName ; sh:minCount 1 .
+        cim:Q sh:path {path} ; sh:minCount 1 .""")
+    rows = breaker("b1", ("Equipment.EquipmentContainer", "bay1")) + [("bay1", "Type", "Bay", "eq")]
+    violations = switched_off(rows, compiled, engine_name)
+    evaluated = expressible or engine_name == "pyshacl"
+    node_finding = {("b1", "Equipment.EquipmentContainer")} if evaluated else set()
+    assert set(zip(violations["ID"], violations["KEY"])) == {("b1", "IdentifiedObject.description"), *node_finding}
+    assert violations.attrs["validation"]["skipped_shapes"] == ([f"{CIM}P: two sh:path values"] if evaluated else [
+        f"{CIM}C: sh:node target {CIM}T not evaluated", f"{CIM}P: two sh:path values", f"{CIM}Q: unsupported sh:path form"])
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("flaw, reason", [("sh:minCount 1, 2", "two sh:minCount values"),
+                                          ("sh:path cim:IdentifiedObject.aliasName", "two sh:path values")])
+def test_malformed_deactivated_shape(engine_name, flaw, reason):
+    """A declared sh:deactivated shape that is malformed: switched off (None) it
+    takes its entry along, switched on ([]) it is skipped with the reason."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes(MALFORMED_OWNER["property shape"].format(flaw=f"sh:deactivated true ; {flaw}"))
+    assert compiled.deactivated == {f"{CIM}X"}
+    for shapes, skipped in ((None, []), ([], [f"{CIM}X: {reason}"])):
+        violations = switched_off(breaker("b1"), compiled, engine_name, shapes)
+        assert set(zip(violations["ID"], violations["KEY"])) == {("b1", "IdentifiedObject.description")}
+        assert violations.attrs["validation"]["skipped_shapes"] == skipped
 
 
 @pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
@@ -1402,3 +1531,142 @@ def test_sparql_target_deactivated(engine_name):
     violations = switched_off(TRANSFORMER_ROWS, compiled, engine_name, ["TwoWinding"])
     assert len(violations) == 0
     assert violations.attrs["validation"]["deactivated_shapes"] == [CIM + "TwoWinding"]
+
+
+# ── nested semantics ─────────────────────────────────────────────────────────
+
+DESC = "cim:Desc a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ."
+# b1 named → bay1 (named), b2 described → sub1 (bare), b3 bare
+TRIO = (breaker("b1", ("IdentifiedObject.name", "B1"), ("Equipment.EquipmentContainer", "bay1"))
+        + breaker("b2", ("IdentifiedObject.description", "d"), ("Equipment.EquipmentContainer", "sub1"))
+        + breaker("b3")
+        + [("bay1", "Type", "Bay", "eq"), ("bay1", "IdentifiedObject.name", "Bay 1", "eq"),
+           ("sub1", "Type", "Substation", "eq")])
+# breakers referencing each other: b1 (named) → b2, b2 (bare) → b1; b3 described
+RING = (breaker("b1", ("IdentifiedObject.name", "n"), ("Equipment.EquipmentContainer", "b2"))
+        + breaker("b2", ("Equipment.EquipmentContainer", "b1")) + breaker("b3", ("IdentifiedObject.description", "d")))
+NODE_B = "cim:B a sh:NodeShape ; sh:targetClass cim:Breaker ;"
+
+
+def prop(body):
+    return f"{NODE_B} sh:property [ {body} ] ."
+
+
+@pytest.mark.parametrize("shape, rows, component, expected", [
+    (prop("sh:path cim:Equipment.EquipmentContainer ; sh:node cim:Named, cim:Desc") + NAMED + DESC, RING,
+     "sh:node", {("b1", "b2"), ("b2", "b1")}),
+    (f"{NODE_B} sh:node cim:Named, cim:Desc ." + NAMED + DESC, TRIO, "sh:node", {("b1", None), ("b2", None), ("b3", None)}),
+    (f"{NODE_B} sh:or ( cim:Named ), ( cim:Desc ) ." + NAMED + DESC, TRIO, "sh:or", {("b1", None), ("b2", None), ("b3", None)}),
+    (f"{NODE_B} sh:xone ( cim:Named ), ( cim:Desc ) ." + NAMED + DESC, TRIO, "sh:xone", {("b1", None), ("b2", None), ("b3", None)}),
+    (f"{NODE_B} sh:not cim:Named, cim:Desc ." + NAMED + DESC, TRIO, "sh:not", {("b1", None), ("b2", None)}),
+    (prop('sh:path cim:IdentifiedObject.name ; sh:pattern "^B", "1$"'),
+     breaker("b1", ("IdentifiedObject.name", "B1")) + breaker("b2", ("IdentifiedObject.name", "B2"))
+     + breaker("b3", ("IdentifiedObject.name", "x1")), "sh:pattern", {("b2", "B2"), ("b3", "x1")}),
+    (prop("sh:path cim:Equipment.EquipmentContainer ; sh:class cim:Bay, cim:Substation"), TRIO,
+     "sh:class", {("b1", "bay1"), ("b2", "sub1")}),
+    (prop('sh:path cim:IdentifiedObject.name ; sh:hasValue "B1", "B2"'),
+     breaker("b1", ("IdentifiedObject.name", "B1")) + breaker("b2", ("IdentifiedObject.name", "B2"))
+     + breaker("b3", ("IdentifiedObject.name", "B1"), ("IdentifiedObject.name", "B2")),
+     "sh:hasValue", {("b1", None), ("b2", None)}),
+], ids=["prop_node", "node_node", "or", "xone", "not", "pattern", "class", "hasValue"])
+def test_every_value_of_a_parameter_is_a_constraint(engine, shape, rows, component, expected):
+    """A parameter given twice is two constraints (SHACL §4.1), as pyshacl
+    evaluates them: issue #163 for sh:node, the same for the other repeatable ones."""
+    assert violating(run(rows, shape, engine), component) == expected
+
+
+def operator_rows(violations, component):
+    rows = violations[violations["VIOLATION_TYPE"] == component]
+    return sorted(zip(rows["ID"], rows["KEY"].astype(object).where(rows["KEY"].notna(), None),
+                      rows["VALUE"].astype(object).where(rows["VALUE"].notna(), None), rows["SOURCE_SHAPE"]))
+
+
+BOTH = """cim:Both a sh:NodeShape ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ;
+    sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ."""
+
+
+@pytest.mark.parametrize("shape", [
+    f"{NODE_B} sh:and ( cim:Both ) ." + BOTH,
+    f"{NODE_B} sh:and ( cim:Named cim:Desc ) ." + NAMED + DESC,
+    f"{NODE_B} sh:and ( [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] "
+    f"[ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) .",
+    f"{NODE_B} sh:and ( cim:Named ), ( cim:Desc ) ." + NAMED + DESC,
+], ids=["one_shape", "two_shapes", "two_paths", "two_lists"])
+def test_node_level_and_reports_the_focus(engine, shape):
+    """Node-level sh:and: one row per non-conforming focus node with the
+    operator's shape and no KEY, as pyshacl (#164) — not one per nested finding."""
+    rows = (breaker("b1", ("IdentifiedObject.name", "n")) + breaker("b2")
+            + breaker("b3", ("IdentifiedObject.description", "d")) + breaker("b4", ("IdentifiedObject.name", "n"),
+                                                                              ("IdentifiedObject.description", "d")))
+    found = set(operator_rows(run(rows, shape, engine), "sh:and"))
+    assert found == {(focus, None, None, CIM + "B") for focus in ("b1", "b2", "b3")}
+
+
+def test_property_level_and_carries_the_operator_shape(engine):
+    """Path-level sh:and: one row per failing value node, SOURCE_SHAPE the
+    property shape holding the operator (#164)."""
+    shape = f"""{NODE_B} sh:property cim:P .
+        cim:P sh:path cim:IdentifiedObject.name ; sh:and ( [ sh:minLength 2 ] [ sh:maxLength 3 ] ) ."""
+    rows = breaker("b1", ("IdentifiedObject.name", "A"), ("IdentifiedObject.name", "ABCD"), ("IdentifiedObject.name", "AB"))
+    assert operator_rows(run(rows, shape, engine), "sh:and") == [
+        ("b1", "IdentifiedObject.name", "A", CIM + "P"), ("b1", "IdentifiedObject.name", "ABCD", CIM + "P")]
+
+
+MEMBER_NAMED = "[ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]"
+MEMBER_DESCRIBED = "[ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ]"
+
+
+@pytest.mark.parametrize("operator, expected", [
+    (f"sh:or ( {MEMBER_NAMED} )", {("b1", "b2")}),
+    (f"sh:and ( {MEMBER_NAMED} )", {("b1", "b2")}),
+    (f"sh:xone ( {MEMBER_NAMED} {MEMBER_DESCRIBED} )", {("b1", "b2")}),
+    (f"sh:not {MEMBER_NAMED}", {("b2", "b1")}),
+], ids=["or", "and", "xone", "not"])
+def test_member_with_its_own_path_judges_the_value_nodes(engine, operator, expected):
+    """Under a path, a member with its own sh:path is checked on each value node
+    (#166): b1's value b2 has no name, b2's value b1 has one."""
+    shape = prop(f"sh:path cim:Equipment.EquipmentContainer ; {operator}")
+    assert violating(run(RING, shape, engine), operator.split()[0]) == expected
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_switched_off_member_with_its_own_path(engine_name):
+    """A switched-off member with its own path conforms for every value node:
+    sh:or and sh:and hold, sh:xone holds with one alternative, sh:not flags every value."""
+    pytest.importorskip(engine_name)
+    shape = prop("sh:path cim:Equipment.EquipmentContainer ; sh:or ( cim:M ) ; sh:and ( cim:M ) ; "
+                 "sh:xone ( cim:M cim:D ) ; sh:not cim:M") + \
+        "cim:M sh:path cim:IdentifiedObject.name ; sh:minCount 1 . " \
+        "cim:D sh:path cim:IdentifiedObject.description ; sh:minCount 1 ."
+    found = switched_off(RING, compiled_shapes(shape), engine_name, ["M"])
+    assert violating(found, "sh:or") == violating(found, "sh:and") == violating(found, "sh:xone") == set()
+    assert violating(found, "sh:not") == {("b1", "b2"), ("b2", "b1")}
+
+
+ON_VALUE = "sh:path cim:Equipment.EquipmentContainer ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ]"
+
+
+def test_property_on_a_property_shape_reports_on_the_value_node(engine):
+    """sh:property on a property shape: the inner property shape judges each
+    value node and reports its own finding there (SHACL §4.7.2) — no sh:node
+    row on the referring focus."""
+    found = run(TRIO, prop(ON_VALUE), engine)
+    assert [row[:3] for row in operator_rows(found, "sh:minCount")] == [("sub1", "IdentifiedObject.name", None)]
+    assert violating(found, "sh:node") == set()
+
+
+def test_property_on_a_judged_property_shape_stays_a_conformance_check(engine):
+    """Below a sh:node target the same property shape is judged for conformance
+    (§4.7.1): the referring focus gets the sh:node row."""
+    found = run(TRIO, f"{NODE_B} sh:node cim:X . cim:X a sh:NodeShape ; sh:property [ {ON_VALUE} ] .", engine)
+    assert violating(found, "sh:node") == {("b2", None)}
+    assert violating(found, "sh:minCount") == set()
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_property_on_a_property_shape_switched_off(engine_name):
+    pytest.importorskip(engine_name)
+    shape = prop("sh:path cim:Equipment.EquipmentContainer ; sh:property cim:Inner") + \
+        " cim:Inner sh:path cim:IdentifiedObject.name ; sh:minCount 1 ."
+    assert len(switched_off(TRIO, compiled_shapes(shape), engine_name, ["Inner"])) == 0

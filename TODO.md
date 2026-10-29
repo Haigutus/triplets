@@ -54,9 +54,6 @@ qlever (auto when built, performance).
   now upgrades those installs to Rust speed (~3x import, 2–5x warm queries vs
   rdflib) and slots between qlever and rdflib in auto order. qlever keeps the
   performance crown and auto priority; measured numbers in docs/sparql.md.
-- [ ] oxigraph engine future optimization: pyoxigraph releases the GIL during
-  queries — the SHACL sh:sparql batch path could thread over constraints
-  (today it runs sequentially; the fork pool stays rdflib-only).
 - [x] Decision recorded (2026-07-12): **pyshacl stays on the Memory store** —
   `load_dataset(store="oxigraph")` (oxrdflib wrapper over the engine's cached
   store, `default_union=False` because the projection is the union) gives

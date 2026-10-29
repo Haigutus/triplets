@@ -155,6 +155,50 @@ def test_lexical_supplements_pyshacl(lexical_data, shape_file):
     assert not duplicated.any()
 
 
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb", "pyshacl"])
+def test_lexical_false_drops_lexical_form(lexical_data, shape_file, engine):
+    """lexical=False: no triplets:lexicalForm rows, every other finding unchanged."""
+    if engine in ("polars", "duckdb"):
+        pytest.importorskip(engine)
+    from triplets.export_schema import schemas
+
+    def findings(**kwargs):
+        violations = triplets.validation.validate_shacl(lexical_data, shape_file, engine=engine,
+                                                        rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
+                                                        rdf_map_scope="*", **kwargs)
+        columns = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "SOURCE_SHAPE", "SEVERITY"]
+        return set(violations[columns].itertuples(index=False, name=None))
+
+    default, pure = findings(), findings(lexical=False)
+    lexical = {row for row in default if row[3] == "triplets:lexicalForm"}
+    assert {(row[2], row[5]) for row in lexical} == {("1", "Warning")}
+    assert pure == default - lexical
+    assert {row[2] for row in pure if row[3] == "sh:datatype"} == {"abc"}
+
+
+NESTED_DATATYPE_SHAPE = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+cim:NestedLengthShape a sh:NodeShape ;
+    sh:targetClass cim:ACLineSegment ;
+    sh:and ( [ sh:property [ sh:path cim:Conductor.length ; sh:datatype xsd:float ] ] ) .
+"""
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb"])
+def test_lexical_false_nested(lexical_data, tmp_path, engine):
+    """lexical=False reaches the nested datatype checks (the pandas fallback of
+    polars/duckdb): only the segment holding the invalid value fails the sh:and."""
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    path = tmp_path / "nested.ttl"
+    path.write_text(NESTED_DATATYPE_SHAPE)
+    violations = triplets.validation.validate_shacl(lexical_data, str(path), engine=engine, lexical=False)
+    assert set(zip(violations["ID"], violations["VIOLATION_TYPE"])) == {("a3", "sh:and")}
+
+
 def test_lexical_polars_input(lexical_data, shape_file):
     polars = pytest.importorskip("polars")
     violations = triplets.validation.validate_shacl(polars.from_pandas(lexical_data), shape_file,
