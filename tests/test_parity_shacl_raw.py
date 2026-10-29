@@ -43,12 +43,11 @@ from test_parity_shacl_matrix import B, CASES, CIM, PREFIX, SCHEMA, SKIPPED, TRI
 SH = rdflib.Namespace("http://www.w3.org/ns/shacl#")
 UUID = "urn:uuid:"
 
-# the matrix's pandas divergences; N12 is about MESSAGE, which this key leaves out
+# the matrix's pandas divergences; #185 is about MESSAGE, which this key leaves out
 EXPECTED = {case: reason for (case, engine), reason in XFAIL.items()
             if engine == "pandas" and case != "message_two_values"}
 # a skip no run metadata names: sh:BlankNodeOrIRI is only debug-logged
-UNLISTED = {"nodeKind_blank_or_iri": "N13 sh:nodeKind sh:BlankNodeOrIRI not evaluated and no skipped_shapes entry, "
-                                     "draft pending"}
+UNLISTED = {"nodeKind_blank_or_iri": "#180 sh:nodeKind sh:BlankNodeOrIRI not evaluated and no skipped_shapes entry"}
 EXPECTED |= UNLISTED
 # skipped_shapes reasons that name one component of a shape otherwise evaluated
 PART = re.compile(r"(?:node-level (sh:\w+)|(sh:node) target|(sh:(?:and|or|xone|not)) member)")
