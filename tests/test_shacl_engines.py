@@ -346,6 +346,31 @@ def test_sparql_max_workers_matches_sequential(engine):
     assert "triplets:invalidSparql" not in set(parallel["VIOLATION_TYPE"])
 
 
+def test_sparql_bind_exists_first_sees_focus_node(engine):
+    """The focus-node VALUES block opens the WHERE group, ahead of the authored
+    pattern, which stays verbatim; a BIND (EXISTS { $this … }) opening the group
+    is evaluated per focus node."""
+    from types import SimpleNamespace
+    from triplets.export.nquads_utils import make_subject
+    from triplets.validation import shacl_pandas
+    select = ("SELECT $this ?value WHERE { BIND (EXISTS { $this cim:Switch.state ?state } AS ?switched) "
+              "$this cim:IdentifiedObject.name ?value . FILTER (!?switched) }")
+    prefixes = "PREFIX cim: <http://iec.ch/TC57/CIM100#>\n"
+    text = shacl_pandas._sparql_query_text(
+        SimpleNamespace(params={"select": select, "prefixes": prefixes, "path": None}), ["b1"])
+    block = f" VALUES ?this {{ {make_subject('b1')} }} "
+    assert text.index("WHERE {") < text.index(block) < text.index("BIND")
+    assert text.replace(block, "", 1) == prefixes + select
+
+    shape = f"""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:sparql [ sh:prefixes <http://example.org/prefixes> ; sh:select '{select}' ] .
+    <http://example.org/prefixes> sh:declare [ sh:prefix "cim" ; sh:namespace "http://iec.ch/TC57/CIM100#"^^xsd:anyURI ] ."""
+    rows = (breaker("b1", ("IdentifiedObject.name", "B1"), ("Switch.state", "open"))
+            + breaker("b2", ("IdentifiedObject.name", "B2"))
+            + [("d1", "Type", "Disconnector", "eq"), ("d1", "IdentifiedObject.name", "D1", "eq")])
+    assert violating(run(rows, shape, engine), "sh:sparql") == {("b2", "B2")}
+
+
 NODE_SHAPE = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
     sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:node cim:VoltageLevelShape ] .
 
