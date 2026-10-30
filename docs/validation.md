@@ -335,7 +335,8 @@ them too.
   The vectorized engines delegate them to `triplets.sparql` (auto order:
   qlever when built, else oxigraph when installed, else rdflib): the data is
   loaded into one dataset, each constraint runs as a single SELECT with the
-  focus nodes bound via `VALUES ?this {...}` and `$PATH` substituted from
+  focus nodes bound via `VALUES ?this {...}` opening the WHERE group (the
+  authored pattern starts from the focus nodes) and `$PATH` substituted from
   the IR, and `max_workers=N` runs the constraint queries in parallel:
   forked processes on rdflib (copy-on-write sharing of the dataset; threads
   don't help rdflib — it is GIL-bound pure Python), threads on oxigraph and

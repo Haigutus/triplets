@@ -230,6 +230,13 @@ CASES = {
                     sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "B1") }' ]"""), TRIO),
     "sparql_constraint_node_level": (f"{B} sh:sparql [ sh:prefixes cim: ; "
                                      "sh:select 'SELECT $this WHERE { $this cim:IdentifiedObject.name ?n }' ] .", TRIO),
+    # an OPTIONAL / BIND opening the group sees each focus node: b2 and b3 have no name, b1 has
+    "sparql_constraint_optional_first": (f"{B} sh:sparql [ sh:prefixes cim: ; sh:select "
+                                         "'SELECT $this WHERE { OPTIONAL { $this cim:IdentifiedObject.name ?v } "
+                                         "FILTER (!bound(?v)) }' ] .", TRIO),
+    "sparql_constraint_bind_exists_first": (f"{B} sh:sparql [ sh:prefixes cim: ; sh:select "
+                                            "'SELECT $this WHERE { BIND (EXISTS { $this cim:IdentifiedObject.name ?n } "
+                                            "AS ?named) FILTER (!?named) }' ] .", TRIO),
     # ── paths ────────────────────────────────────────────────────────────
     "path_inverse": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay, cim:Substation ; "
                      "sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; sh:minCount 2 ] .", TRIO),
@@ -462,6 +469,10 @@ XFAIL = {
             "alphabetically", "message_two_values"),
     **known("#186 a non-numeric value passes every range component on the engines, pyshacl reports it under "
             "sh:maxInclusive / sh:maxExclusive", "range_non_numeric_max"),
+    # rdflib's evalLeftJoin re-checks an unmatched OPTIONAL without the left side's
+    # variables, which inline VALUES do not declare (_vars), so another node's match drops the row
+    **(known("rdflib SPARQL engine: OPTIONAL after VALUES drops the unmatched focus node",
+             "sparql_constraint_optional_first") if triplets.sparql.get_engine("auto")[0] == "rdflib" else {}),
 }
 
 

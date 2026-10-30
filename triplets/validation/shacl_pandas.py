@@ -437,13 +437,17 @@ def _closed(context, rule):
 
 def _sparql_query_text(rule, focus_ids):
     """Final executable query: prefixes + SELECT with $PATH substituted and the
-    focus nodes bound via VALUES ($this is the SPARQL variable ?this)."""
+    focus nodes bound via VALUES ($this is the SPARQL variable ?this).
+
+    The VALUES block opens the WHERE group: the group joins left to right, so
+    the authored pattern starts from the focus nodes (SHACL's pre-bound $this)."""
     select = rule.params["select"]
     if rule.params["path"]:
         select = select.replace("$PATH", f"<{rule.params['path']}>")
     values = " ".join(make_subject(focus) for focus in focus_ids)
-    closing = select.rfind("}")
-    return rule.params["prefixes"] + f"{select[:closing]} VALUES ?this {{ {values} }} {select[closing:]}"
+    where = re.search(r"\bWHERE\s*\{", select, re.IGNORECASE)
+    opening = where.end() if where else select.find("{") + 1   # the WHERE keyword is optional
+    return rule.params["prefixes"] + f"{select[:opening]} VALUES ?this {{ {values} }} {select[opening:]}"
 
 
 def _sparql_violations(rule, result):

@@ -125,6 +125,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (with inheritance 0.89 s → 0.59 s, 3.8 → 2.2 GB); all four instances (1.15 M rows)
   1.14 s → 0.67 s, 4.0 → 2.8 GB; Svedala EQ 0.42 s → 0.37 s, 0.89 → 0.68 GB. Same
   findings.
+- **sh:sparql binds the focus nodes first**: the `VALUES ?this { … }` block opens the
+  WHERE group instead of closing it, so the engine starts the authored pattern (e.g. a
+  `FILTER NOT EXISTS`) from the focus nodes. Svedala EQ against the CGMES 3.0
+  Equipment-AP shapes on oxigraph, sh:sparql phase 3.5 s → 0.4 s sequential and
+  2.3 s → 0.25 s at 4 workers (`validate_shacl` warm 4.3 s → 1.2 s / 3.1 s → 1.1 s).
+  Same findings on Svedala EQ. Fixes missed violations when the query starts with
+  `BIND (EXISTS { $this … } AS ?x)` (40 shipped NC queries), on every SPARQL engine,
+  or with `OPTIONAL { $this p ?v } FILTER (!bound(?v))`, on oxigraph and qlever
+  (rdflib's left join still drops the unmatched focus node): the pattern ran before
+  `$this` was bound, so one matching node anywhere cleared every focus node. Findings
+  of such queries (e.g. CGMES SV / ShortCircuit, NC) gain those violations. The rdflib
+  SPARQL engine is slower now — it re-runs the authored pattern per focus node
+  (Belgovia 2.2 s → 4.0 s).
 - CI: `build-wheels.yml` runs on a pull request only when it touches the build
   (setup/packaging files, cython/C++ sources, the pugixml submodule, the wheel tests);
   releases and manual dispatch always build.
