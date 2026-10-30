@@ -48,7 +48,9 @@ class _Context:
         self.rdf_map = rdf_map
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
-        type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID")
+        # a set: an ID typed in several instances repeats its Type row, and every
+        # join on these rows (batch path rows, via_type) would count its values again
+        type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID").unique()
         # the objects' own Type rows — what a ( assoc rdf:type ) path yields
         self.types = type_rows.rename({"VALUE": "CLASS"}).lazy()
         # class membership: Type rows plus each ancestor class (schema inheritance)
@@ -386,9 +388,13 @@ def _rules_frame(rules, message, **extra):
 
 
 def _batch_path_rows(context, rules_frame):
-    """Every rule's path rows in one plan: (row × matching rule), focus in class."""
-    return (context.base.join(rules_frame, on="KEY")
-            .join(context.membership, on=["ID", "CLASS"], how="semi"))
+    """Every rule's path rows in one plan: (row × matching rule), focus in class.
+
+    Class membership joins first: a KEY join first would pair each row with
+    every rule on that KEY, whatever the class, before the class filter drops
+    most of them."""
+    return (context.base.join(context.membership, on="ID")
+            .join(rules_frame, on=["KEY", "CLASS"]))
 
 
 def _batch_emit(plan, violation_type, value=True):
