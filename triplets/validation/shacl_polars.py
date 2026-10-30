@@ -266,12 +266,18 @@ def _schema_missing(context, rule):
     return _emit(plan, rule, "referenced object not found in the data")
 
 
+def _value_kind(context, rule):
+    """The node kind ("iri" / "literal") of all the rule's value nodes when the
+    schema decides it, else None; via_type value nodes are the referenced
+    objects' types — always IRIs."""
+    return "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types)
+
+
 def _node_kind(context, rule):
     if rule.params not in ("IRI", "Literal"):
         logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)", rule.params, rule.shape_id)
         return None
-    # via_type value nodes are the referenced objects' types — always IRIs
-    kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types)
+    kind = _value_kind(context, rule)
     if kind is not None:                     # schema decides for the whole path
         if (kind == "iri") == (rule.params == "IRI"):
             return None                      # every value conforms — no plan at all
@@ -369,9 +375,9 @@ PLAN_BUILDERS = {
 # metadata rides along as columns, so the output rows are identical to the
 # per-rule builders'. On the real Equipment profiles this turns ~4,300 plans
 # into a handful (~6x less time in polars, plan construction O(components)).
-# Inverse rules and the tail components keep the per-rule path.
+# Rules not targeted by class and the tail components keep the per-rule path.
 
-_RULE_COLUMNS = ["KEY", "CLASS", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"]
+_RULE_COLUMNS = ["KEY", "CLASS", "INVERSE", "VIA_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"]
 
 
 def _rules_frame(rules, message, **extra):
@@ -379,22 +385,35 @@ def _rules_frame(rules, message, **extra):
     columns = {
         "KEY": [rule.path for rule in rules],
         "CLASS": [rule.target_on for rule in rules],
+        "INVERSE": [bool(rule.inverse) for rule in rules],
+        "VIA_TYPE": [bool(getattr(rule, "via_type", False)) for rule in rules],
         "MESSAGE": [rule.message or message(rule) for rule in rules],
         "SEVERITY": [rule.severity for rule in rules],
         "SOURCE_SHAPE": [rule.shape_id for rule in rules],
     }
     columns |= {name: [fn(rule) for rule in rules] for name, fn in extra.items()}
-    return polars.LazyFrame(columns)
+    return polars.DataFrame(columns)
 
 
 def _batch_path_rows(context, rules_frame):
-    """Every rule's path rows in one plan: (row × matching rule), focus in class.
+    """Every rule's path rows in one plan: (focus ID, KEY, value node VALUE) ×
+    matching rule, focus in class — the batched ``_Context.path_rows``.
 
     Class membership joins first: a KEY join first would pair each row with
     every rule on that KEY, whatever the class, before the class filter drops
-    most of them."""
-    return (context.base.join(context.membership, on="ID")
-            .join(rules_frame, on=["KEY", "CLASS"]))
+    most of them. One branch per path form present (forward, INVERSE,
+    VIA_TYPE), so the forward-only plan stays a pair of joins."""
+    parts = []
+    for (inverse, via_type), rules in rules_frame.partition_by("INVERSE", "VIA_TYPE", as_dict=True).items():
+        rows = context.base
+        if inverse:   # the focus is the VALUE, the value node the ID
+            rows = rows.select(polars.col("VALUE").alias("ID"), "KEY", polars.col("ID").alias("VALUE"), "INSTANCE_ID")
+        plan = rows.join(context.membership, on="ID").join(rules.lazy(), on=["KEY", "CLASS"])
+        if via_type:  # the referenced object's types (no Type row, no value node)
+            types = context.types.select(polars.col("ID").alias("VALUE"), polars.col("CLASS").alias("_TYPE"))
+            plan = plan.join(types, on="VALUE").with_columns(polars.col("_TYPE").alias("VALUE")).drop("_TYPE")
+        parts.append(plan)
+    return polars.concat(parts)
 
 
 def _batch_emit(plan, violation_type, value=True):
@@ -420,7 +439,7 @@ def _batch_min_count(context, rules):
                                PARAM=lambda r: float(r.params))
     keys = ["ID", *_RULE_COLUMNS, "PARAM"]
     counts = _batch_path_rows(context, rules_frame).group_by(keys).len()
-    universe = context.membership.join(rules_frame, on="CLASS")   # every focus × its rules
+    universe = context.membership.join(rules_frame.lazy(), on="CLASS")   # every focus × its rules
     plan = (universe.join(counts, on=keys, how="left")
             .filter(polars.col("len").fill_null(0) < polars.col("PARAM")))
     return [_batch_emit(plan, "sh:minCount", value=False)]
@@ -470,7 +489,7 @@ def _batch_node_kind(context, rules):
             logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)",
                          rule.params, rule.shape_id)
             continue
-        kind = node_kind(rule.path, context.value_types)
+        kind = _value_kind(context, rule)
         if kind is not None:                 # schema decides for the whole path
             if (kind == "iri") == (rule.params == "IRI"):
                 continue                     # every value conforms — no plan at all
@@ -548,11 +567,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     context = _Context(frame, rdf_map, ancestor_pairs(ancestors), targets, lexical)
     batched, plans = {}, []
     for rule in vectorized:
-        # batching joins on class membership — KEY targets and two-hop
-        # (via_type) paths take the per-rule path
-        if (rule.component in BATCH_BUILDERS and not rule.inverse
-                and not getattr(rule, "via_type", False)
-                and getattr(rule, "target_by", "Type") == "Type"):
+        # batching joins on class membership — the other targets take the per-rule path
+        if rule.component in BATCH_BUILDERS and getattr(rule, "target_by", "Type") == "Type":
             batched.setdefault(rule.component, []).append(rule)
         elif (plan := PLAN_BUILDERS[rule.component](context, rule)) is not None:
             plans.append(plan)
