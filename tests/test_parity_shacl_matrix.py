@@ -252,9 +252,11 @@ CASES = {
     # a referenced object without a Type row yields no value node
     "path_via_type_untyped_minCount": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:minCount 1"),
                                        TRIO + breaker("b4", (CONT, "ghost"))),
-    "path_alternative_inverse": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; sh:property [ sh:path [ sh:alternativePath "
-                                 "( cim:Bay.VoltageLevel [ sh:inversePath cim:Equipment.EquipmentContainer ] ) ] ; sh:minCount 2 ] .",
-                                 TRIO + [("bay1", "Bay.VoltageLevel", "sub1", "eq")]),
+    # the ENTSO-E profiles' form: one property in several CIM namespaces is one KEY
+    "path_alternative_same_key": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay, cim:Substation ; sh:property [ sh:path "
+                                  "[ sh:alternativePath ( [ sh:inversePath cim:Equipment.EquipmentContainer ] [ sh:inversePath "
+                                  "<http://iec.ch/TC57/2013/CIM-schema-cim16#Equipment.EquipmentContainer> ] ) ] ; "
+                                  "sh:minCount 2 ] .", TRIO),
     # ── logical operators, node level ────────────────────────────────────
     "node_or_paths": (f"{B} sh:or ( [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] "
                       "[ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ) .", TRIO),
@@ -445,6 +447,10 @@ CASES = {
 SKIPPED = {
     "path_sequence_unsupported": (prop("sh:path ( cim:Equipment.EquipmentContainer cim:IdentifiedObject.name ) ; sh:minCount 1"),
                                   TRIO, "unsupported sh:path form"),
+    # members on different KEYs: a union the IR cannot express
+    "path_alternative_inverse": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; sh:property [ sh:path [ sh:alternativePath "
+                                 "( cim:Bay.VoltageLevel [ sh:inversePath cim:Equipment.EquipmentContainer ] ) ] ; sh:minCount 2 ] .",
+                                 TRIO + [("bay1", "Bay.VoltageLevel", "sub1", "eq")], "unsupported sh:path form"),
     "node_level_in": (f"{B} sh:in ( <urn:uuid:b1> ) .", TRIO, "node-level sh:in not evaluated"),
     "node_level_hasValue": (f"{B} sh:hasValue <urn:uuid:b1> .", TRIO, "node-level sh:hasValue not evaluated"),
     "qualified": (prop('sh:path cim:IdentifiedObject.name ; sh:qualifiedValueShape [ sh:pattern "^B" ] ; sh:qualifiedMinCount 1'),
@@ -466,7 +472,6 @@ def known(reason, *cases):
 
 XFAIL = {
     **known("#177 sh:flags not read", "pattern_flags"),
-    **known("#178 sh:alternativePath reduced to its inverse member", "path_alternative_inverse"),
     **known("#179 sh:closed on a property shape reported on the value node", "closed_on_property_shape"),
     **known("#180 sh:nodeKind sh:BlankNode not evaluated", "nodeKind_blank_node"),
     **known("#181 sh:in compares lexical forms, not typed literals", "in_numeric"),

@@ -224,8 +224,9 @@ Compile-time behaviors worth knowing: a NodeShape with several `sh:targetClass`
 reference cycles through `sh:node` / `sh:or` / `sh:and` / `sh:not` are detected,
 warned about, and dropped; supported `sh:path` forms are a direct IRI,
 `sh:inversePath`, the `( assoc rdf:type )` sequence, and `sh:alternativePath`
-only when one member carries a nested inverse (any other path form warns and
-skips the property shape — pyshacl covers it). One walker compiles every shape
+only when every member resolves to the same one of these forms — one property
+in several namespaces, as the ENTSO-E profiles write it (any other path form
+warns and skips the property shape — pyshacl covers it). One walker compiles every shape
 — the targeted NodeShape, its property shapes, a shape referenced through
 `sh:node`, a member of `sh:or` / `sh:and` / `sh:xone` / `sh:not`: `sh:closed`,
 `sh:sparql`, `sh:node` and the logical operators on the NodeShape itself judge
