@@ -243,7 +243,15 @@ CASES = {
     "path_inverse_class": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; "
                            "sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; sh:class cim:Switch ] .",
                            TRIO + obj("x1", "Bay", (CONT, "bay1"))),
+    # forward and inverse rules on one KEY in one component: the container's count and the breaker's
+    "path_inverse_and_forward_maxCount": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay, cim:Substation ; "
+                                          "sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; "
+                                          "sh:maxCount 1 ] . " + prop("sh:path cim:Equipment.EquipmentContainer ; sh:maxCount 1"),
+                                          TRIO + breaker("b4", (CONT, "bay1"), (CONT, "sub1"))),
     "path_via_type": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:in ( cim:Bay )"), TRIO),
+    # a referenced object without a Type row yields no value node
+    "path_via_type_untyped_minCount": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:minCount 1"),
+                                       TRIO + breaker("b4", (CONT, "ghost"))),
     "path_alternative_inverse": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; sh:property [ sh:path [ sh:alternativePath "
                                  "( cim:Bay.VoltageLevel [ sh:inversePath cim:Equipment.EquipmentContainer ] ) ] ; sh:minCount 2 ] .",
                                  TRIO + [("bay1", "Bay.VoltageLevel", "sub1", "eq")]),

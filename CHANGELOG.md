@@ -138,6 +138,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of such queries (e.g. CGMES SV / ShortCircuit, NC) gain those violations. The rdflib
   SPARQL engine is slower now — it re-runs the authored pattern per focus node
   (Belgovia 2.2 s → 4.0 s).
+- **polars SHACL batch plans take the inverse-path and `( assoc rdf:type )` rules too**
+  (every batched component — `sh:minCount`, `sh:maxCount`, `sh:in`, `sh:datatype`,
+  `sh:nodeKind` — on a class target), instead of one plan per rule: 610 → 163 plans on
+  the CGMES 3.0 EQ shapes, 330 → 250 on the 2.4 EQ shapes. `collect_all`, polars 2.0:
+  Belgovia EQ 0.29 s → 0.06 s, Svedala EQ 0.36 s → 0.08 s, RealGrid 2.4 EQ 0.50 s → 0.40 s
+  (polars 1.44: 0.07 → 0.02 s, 0.18 → 0.06 s, 0.83 → 0.59 s). Same findings.
 - CI: `build-wheels.yml` runs on a pull request only when it touches the build
   (setup/packaging files, cython/C++ sources, the pugixml submodule, the wheel tests);
   releases and manual dispatch always build.
