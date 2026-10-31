@@ -379,6 +379,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shape or `sh:pattern` / `sh:class` / `sh:hasValue` value was dropped without a
   warning; each value is now a constraint of its own, as in pyshacl
   ([#163](https://github.com/Haigutus/triplets/issues/163)).
+- **`sh:deactivated` on a `sh:sparql` constraint** switches it off on polars, pandas and
+  duckdb, as in pyshacl; the constraint node is in the row's lineage, so
+  `deactivated_shapes=` can name it too
+  ([#184](https://github.com/Haigutus/triplets/issues/184)).
 - **A malformed shape is skipped, the rest validates** on polars, pandas, duckdb and pyshacl:
   a shape that fails one of these load checks — a parameter taken once (`sh:path`,
   `sh:minCount`, `sh:maxCount`, `sh:datatype`, `sh:nodeKind`, `sh:in`, `sh:minLength`,

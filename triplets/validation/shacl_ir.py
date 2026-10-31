@@ -610,7 +610,8 @@ def _sparql_rows(graph, SH, shape_uri, meta):
         if select is None:
             continue
         message = graph.value(sparql, SH.message)
-        row = {**meta, "component": "sh:sparql",
+        # the constraint node joins the lineage: its sh:deactivated switches it off
+        row = {**meta, "shapes": (*meta["shapes"], str(sparql)), "component": "sh:sparql",
                "params": {"select": str(select), "prefixes": _prefixes(graph, SH, sparql),
                           # $PATH substitution needs the full IRI; only direct paths qualify
                           "path": str(path) if type(path).__name__ == "URIRef" else None}}
