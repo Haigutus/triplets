@@ -472,7 +472,6 @@ XFAIL = {
     **known("#181 sh:in compares lexical forms, not typed literals", "in_numeric"),
     **known("#182 sh:minLength on an IRI measures the local id", "minLength_on_iri"),
     **known("#183 sh:sparql $PATH left unbound on a blank-node path", "sparql_inverse_path"),
-    **known("#184 sh:deactivated on a sh:sparql constraint ignored", "deactivated_sparql_constraint"),
     **known("#185 two sh:message values: the engines report the first declared, pyshacl's reader the first "
             "alphabetically", "message_two_values"),
     **known("#186 a non-numeric value passes every range component on the engines, pyshacl reports it under "
