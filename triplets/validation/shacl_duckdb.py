@@ -27,7 +27,7 @@ import pandas
 from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .schema_scope import ancestor_pairs
-from .shacl_report import VIOLATION_COLUMNS
+from .shacl_report import VIOLATION_COLUMNS, has_violation
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, value_types
 from . import shacl_pandas
 from .shacl_pandas import datatype_patterns
@@ -337,10 +337,11 @@ def _create_targets_table(connection, targets):
 
 def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
              table=None, schema=None, table_name=None, undefined_namespace=CIM_NS, ancestors=None, lexical=True,
-             **kwargs):
+             abort_on_first=False, **kwargs):
     """Validate triplet data against the compiled constraint table (DuckDB SQL).
 
-    Parameters mirror shacl_pandas.validate, plus:
+    Parameters mirror shacl_pandas.validate (*abort_on_first*: a Violation from
+    the SQL pass skips the pandas-delegated components), plus:
 
     table / schema / table_name
         Triplets relation when *data* is a DuckDB connection (defaults from
@@ -390,13 +391,14 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     violations = violations.astype(object).where(violations.notna(), None)
     violations = pandas.concat([violations, notes], ignore_index=True)
 
-    if fallback:
+    if fallback and not (abort_on_first and has_violation(violations)):
         # nested/query components run on the materialized (already scoped) table —
         # a handful of rows even in real profiles, and sh:sparql needs rdflib anyway
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
                                            max_workers=max_workers, undefined_namespace=undefined_namespace,
-                                           ancestors=ancestors, lexical=lexical, **kwargs)
+                                           ancestors=ancestors, lexical=lexical, abort_on_first=abort_on_first,
+                                           **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     # don't leave them on the caller's connection
     connection.execute("DROP TABLE IF EXISTS _shacl_types")

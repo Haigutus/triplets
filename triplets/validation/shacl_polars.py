@@ -29,7 +29,7 @@ import pandas
 import polars
 
 from .schema_scope import ancestor_pairs
-from .shacl_report import VIOLATION_COLUMNS
+from .shacl_report import VIOLATION_COLUMNS, has_violation
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
 from . import shacl_pandas
@@ -540,13 +540,14 @@ BATCH_BUILDERS = {
 
 
 def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
-             undefined_namespace=CIM_NS, ancestors=None, lexical=True, **kwargs):
+             undefined_namespace=CIM_NS, ancestors=None, lexical=True, abort_on_first=False, **kwargs):
     """Validate triplet data against the compiled constraint table (lazy polars).
 
     Parameters mirror shacl_pandas.validate. Vectorized components run as one
     ``polars.collect_all`` over per-constraint LazyFrame plans; the nested and
     query components (FALLBACK_COMPONENTS) are delegated to the pandas engine
-    so results are identical across both.
+    so results are identical across both. With *abort_on_first*, a Violation
+    from the vectorized pass skips the delegated components.
     """
     frame = _to_polars(data)
     if data_scope is not None:
@@ -585,13 +586,14 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         violations = pandas.DataFrame(columns=VIOLATION_COLUMNS)
     violations = pandas.concat([violations, notes], ignore_index=True)
 
-    if fallback:
+    if fallback and not (abort_on_first and has_violation(violations)):
         # pass the already-converted-and-scoped frame — the pandas engine
         # would otherwise redo both from the original input
         supplement = shacl_pandas.validate(frame, compiled, rdf_map=rdf_map,
                                            components={rule.component for rule in fallback},
                                            max_workers=max_workers, undefined_namespace=undefined_namespace,
-                                           ancestors=ancestors, lexical=lexical, **kwargs)
+                                           ancestors=ancestors, lexical=lexical, abort_on_first=abort_on_first,
+                                           **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
     return violations
 

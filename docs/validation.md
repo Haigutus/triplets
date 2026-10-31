@@ -453,6 +453,7 @@ united, differing values kept as the list of distinct values):
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
 | `inheritance` | whether class inheritance was applied — `validate_shacl`: an rdf_map scope with classes and `inheritance=True`; `validate_schema_references`: the `inheritance` flag |
 | `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); shapes reached only through a `sh:target` without `sh:select`, `sh:rule` shapes (not applied), inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run), logical operators over a member the IR cannot express and `sh:node` rows whose target has nothing left but skipped parts; malformed shapes (the compile's load checks), each with the reason — for `engine="pyshacl"` (spec-complete) only the malformed shapes' entries and the operator / `sh:node` rows dropped over them; a shape switched off takes its entries along; association ranges no given profile defines (`validate_schema_references`) |
+| `aborted` | True when `abort_on_first` met a Violation; the report may then be partial |
 | `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates, and the terms the IR keeps as unimplemented rows (`sh:qualifiedValueShape`, …) |
 
@@ -734,8 +735,10 @@ violations.shacl.to_excel(path="report.xlsx")
 violations = violations.shacl.locate(sources=["grid.zip"])
 ```
 
-pyshacl pass-through options (`inference`, `advanced`, `abort_on_first`,
-`store`) are forwarded as keyword arguments. Runnable end-to-end demos live in
+pyshacl pass-through options (`inference`, `advanced`, `store`) are forwarded
+as keyword arguments. `abort_on_first=True` stops every engine at the first
+Violation (Warnings and `triplets:invalidSparql` never stop it), for a yes/no
+gate rather than a full report. Runnable end-to-end demos live in
 `examples/shacl_validation.py` (engine behavior walkthrough) and
 `examples/shacl_reports.py` (uv-runnable: performance engines + both report
 exports with source locations — `uv run examples/shacl_reports.py`).

@@ -44,7 +44,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         is not loaded, so references into unscoped instances count as absent.
         Include dependency instances in the scope (or validate the full
         union, data_scope=None) for cross-instance checks.
-    inference, advanced, abort_on_first : passed to pyshacl.validate.
+    inference, advanced, abort_on_first : passed to pyshacl.validate;
+        abort_on_first also sets ``allow_warnings``, so only a Violation stops the run.
     **kwargs : other engines' options (components, max_workers, table_name, lexical) —
         accepted and ignored, per the shared engine contract.
     store : str, default "memory"
@@ -76,6 +77,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
     conforms, report_graph, _report_text = pyshacl_validate(
         data_graph, shacl_graph=shapes_graph, ont_graph=ont_graph,
         inference=inference, advanced=advanced, abort_on_first=abort_on_first,
+        allow_warnings=abort_on_first,   # else pyshacl's abort_on_first also stops on a Warning
     )
     logger.debug("SHACL conforms=%s", conforms)
     return report_to_violations(report_graph, shapes_graph=shapes_graph)

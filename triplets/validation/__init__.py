@@ -58,7 +58,7 @@ from .shacl_ir import _mark_switched_off, _term
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
 from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
-from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report,  # noqa: F401 — public API
+from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report, has_violation,  # noqa: F401 — public API
                            violations_to_csv, violations_to_excel)
 from .context import ENRICHMENT_COLUMNS, concat_violations, enrich  # noqa: F401 — public API
 from .locations import LOCATION_COLUMNS, locate_violations  # noqa: F401 — public API
@@ -103,7 +103,8 @@ def get_engine(name: str = "auto"):
 
 
 def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=None, engine="auto", lexical=True,
-                   undefined_namespace=CIM_NS, inheritance=True, deactivated_shapes=None, **kwargs):
+                   undefined_namespace=CIM_NS, inheritance=True, deactivated_shapes=None, abort_on_first=False,
+                   **kwargs):
     """Validate triplet data against SHACL shapes; return a violations DataFrame.
 
     Parameters
@@ -153,11 +154,20 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
         freely. The NC validation aggregates switch off different shapes of a
         shared base this way, and one compile serves every aggregate
         (``CompiledShapes.active``).
+    abort_on_first : bool, default False
+        Stop at the first Violation — for a yes/no gate, not a full report.
+        Warning and Info findings and ``triplets:invalidSparql`` rows never
+        stop the run. The result holds the findings of the work finished
+        before the stop, so engines agree on whether a Violation exists, not
+        on the rows. polars / duckdb stop after the vectorized pass, pandas
+        between rules, pyshacl after its first failing constraint (the lexical
+        supplement is then skipped).
 
     The returned frame carries the validation-run metadata in
     ``violations.attrs["validation"]`` (start/end timestamps and duration,
     engine, tool version, data/shape file names, shape and constraint counts,
-    and any shapes/components the run skipped) — every report exporter reads
+    any shapes/components the run skipped, and ``aborted``: True when
+    ``abort_on_first`` met a Violation) — every report exporter reads
     it, so SARIF, the sh:ValidationReport and the csv/excel exports tell the
     same story.
     """
@@ -173,10 +183,12 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     engine_name, engine_mod = get_engine(engine)
     table_ref = _table_ref(data, **kwargs)
     violations = _run(data, compiled, engine_name, engine_mod, scoped, data_scope, lexical,
-                      undefined_namespace=undefined_namespace, ancestors=ancestors, **kwargs)
+                      undefined_namespace=undefined_namespace, ancestors=ancestors,
+                      abort_on_first=abort_on_first, **kwargs)
     violations = _present(violations, compiled.ir, compiled.language)
     violations.attrs["validation"] = _report_metadata(
         violations, data, compiled, engine_name, started, table_name=table_ref, notes=notes)
+    violations.attrs["validation"]["aborted"] = abort_on_first and has_violation(violations)
     violations.attrs["validation"]["inheritance"] = bool(ancestors)   # applied: an rdf_map with classes, the flag on
     violations.attrs["validation"]["profiles"] = (scoped[SCOPE_KEY].get("ProfileMetadata", {}).get("sections")
                                                   if rdf_map else None)
@@ -184,12 +196,13 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
 
 
 def _run(data, compiled, engine_name, engine_mod, rdf_map, data_scope, lexical=True, undefined_namespace=CIM_NS,
-         ancestors=None, **kwargs):
+         ancestors=None, abort_on_first=False, **kwargs):
     """One engine pass, plus the lexical datatype supplement when the engine
     does not emit it itself — raw violations, presentation columns not yet added."""
     violations = engine_mod.validate(data, compiled, rdf_map=rdf_map, data_scope=data_scope, lexical=lexical,
-                                     undefined_namespace=undefined_namespace, ancestors=ancestors, **kwargs)
-    if lexical and engine_name not in _LEXICAL_BUILTIN:
+                                     undefined_namespace=undefined_namespace, ancestors=ancestors,
+                                     abort_on_first=abort_on_first, **kwargs)
+    if lexical and engine_name not in _LEXICAL_BUILTIN and not (abort_on_first and has_violation(violations)):
         from . import shacl_pandas
         supplement = shacl_pandas.validate(data, compiled, rdf_map=rdf_map, data_scope=data_scope,
                                            components=("sh:datatype",), undefined_namespace=undefined_namespace,

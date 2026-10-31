@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`validate_shacl(..., abort_on_first=False)`** — stop at the first Violation for
+  a yes/no gate (polars / duckdb before the pandas-delegated components, pandas between
+  rules, pyshacl after its first failing constraint); `attrs["validation"]["aborted"]`:
+  True when `abort_on_first` met a Violation (the report may then be partial). Warnings and `triplets:invalidSparql` never stop the run
+  ([#175](https://github.com/Haigutus/triplets/issues/175)).
 - **Linux aarch64 wheels** (manylinux), built on GitHub's native arm64 runner;
   also what Docker runs on Apple Silicon
   ([#130](https://github.com/Haigutus/triplets/issues/130)).
