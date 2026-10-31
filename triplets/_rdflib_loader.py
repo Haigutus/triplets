@@ -50,7 +50,8 @@ def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory", undef
     rdflib.Dataset
         Queries/validation see the deduplicated union across the
         per-INSTANCE_ID named graphs (memory: default_union=True; oxigraph:
-        the store's projected default graph). Treat as read-only (cached,
+        the store's projected default graph, or default_union=True over a
+        single-graph store). Treat as read-only (cached,
         shared — the oxigraph store is also the SPARQL engine's).
     """
     import rdflib
@@ -69,14 +70,15 @@ def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory", undef
     if backend == "oxigraph":
         from oxrdflib import OxigraphStore
         from .sparql.sparql_oxigraph import _store_for
-        # The engine's shared store already carries the deduplicated union of
-        # the named graphs in its *default graph* (the load-time projection),
-        # so the wrapper must NOT union again (default_union=True would count
-        # each triple once per graph — oxigraph union keeps per-graph
-        # solutions). default_union=False exposes exactly the projected
-        # union, with the named graphs still reachable for scoped_graph.
-        dataset = rdflib.Dataset(store=OxigraphStore(store=_store_for(data, rdf_map, data_unchanged, undefined_namespace)),
-                                 default_union=False)
+        # A multi-graph store carries the deduplicated union of the named
+        # graphs in its *default graph* (the load-time projection), so the
+        # wrapper must NOT union again (default_union=True would count each
+        # triple once per graph — oxigraph union keeps per-graph solutions);
+        # default_union=False exposes exactly the projected union, with the
+        # named graphs still reachable for scoped_graph. A single-graph store
+        # has no projection (empty default graph): its union is that graph.
+        ox_store, default_graph = _store_for(data, rdf_map, data_unchanged, undefined_namespace)
+        dataset = rdflib.Dataset(store=OxigraphStore(store=ox_store), default_union=default_graph is not None)
     else:
         # nquads accepts pandas/polars; materialize arrow/duckdb only
         buffer = export_to_nquads(as_frame(data), rdf_map=rdf_map, export_to_memory=True,

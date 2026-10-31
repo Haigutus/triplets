@@ -124,6 +124,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **oxigraph SPARQL engine skips the default-graph copy for a single-instance store**
+  (one named graph, no rows without INSTANCE_ID): unscoped queries run against that
+  instance's graph, which — as with `data_scope` — takes precedence over a FROM in the
+  query. Other stores still get the union copied into the default graph at load.
+  RealGrid 2.4 EQ (892 k rows) cold load + query 3.8 s → 2.5 s, peak RSS ~200 MB less;
+  Svedala EQ 0.22 s → 0.16 s. Per-instance `validate_shacl` runs (sh:sparql) take this
+  path.
 - **polars SHACL batch plans join the class membership before the rules** (on ID, then
   on KEY + class), instead of pairing every row with every rule on its KEY first.
   RealGrid 2.4 EQ (892 k rows), `collect_all` 0.78 s → 0.51 s, peak RSS 3.7 → 2.1 GB
