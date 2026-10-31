@@ -6,10 +6,14 @@ extension) and rdflib (pure-Python reference) in auto preference.
 
 Data is loaded through the N-Quads export (datatype-annotated, INSTANCE_ID as
 named graph) via Store.bulk_load — loaded stores are cached in-process by
-content key, same logic as the qlever engine's index cache. After loading,
-the deduplicated union of the named graphs is projected into the store's
-default graph, so unscoped queries match rdflib's default_union set semantics
-(oxigraph's own union of named graphs keeps one solution per graph).
+content key, same logic as the qlever engine's index cache. Unscoped queries
+match rdflib's default_union set semantics (oxigraph's own union of named
+graphs keeps one solution per graph): a single-graph store (exactly one
+named graph, nothing in its default graph) runs unscoped queries with its
+one graph as the protocol default graph — which, as with data_scope,
+takes precedence over any FROM; other stores run against the projected
+default graph (the deduplicated union of the named graphs, copied in once
+after loading).
 
 Scope is not a data operation: the scoped instances' named graphs are passed
 to Store.query as SPARQL-protocol default graphs, so one store serves every
@@ -35,7 +39,7 @@ import logging
 import pandas
 import pyoxigraph  # ImportError here → the registry falls back to rdflib
 
-from pyoxigraph import NamedNode, QueryResultsFormat, RdfFormat
+from pyoxigraph import DefaultGraph, NamedNode, QueryResultsFormat, RdfFormat
 
 from .._caches import register_cache
 from .._content_key import content_key
@@ -46,7 +50,7 @@ from ..parser.nquads import read_nquads
 
 logger = logging.getLogger(__name__)
 
-_STORES = register_cache({})    # content hash → loaded in-memory pyoxigraph.Store
+_STORES = register_cache({})    # content hash → (in-memory pyoxigraph.Store, unscoped default graph)
 
 
 def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto", data_unchanged=False,
@@ -59,11 +63,13 @@ def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto",
     beside the query as SPARQL-protocol default graphs: the query runs
     against exactly the union of the scoped instances' named graphs on the
     one shared store, and per the protocol these take precedence over any
-    FROM inside the query. None → the store's default graph (the
-    deduplicated union of all named graphs).
+    FROM inside the query. None → the deduplicated union of all named
+    graphs: a single-graph store runs it with its one graph as the protocol
+    default graph — which, as with data_scope, takes precedence over any
+    FROM; other stores run against the projected default graph.
     """
-    store = _store_for(data, rdf_map, data_unchanged, undefined_namespace)
-    graphs = [NamedNode(absolute_id(instance)) for instance in data_scope] if data_scope is not None else None
+    store, default_graph = _store_for(data, rdf_map, data_unchanged, undefined_namespace)
+    graphs = [NamedNode(absolute_id(instance)) for instance in data_scope] if data_scope is not None else default_graph
     if return_type == "auto":
         return_type = "polars" if flavor(data) == "polars" else "pandas"
 
@@ -84,7 +90,10 @@ def _run(store, query_string, default_graph):
 
 
 def _store_for(data, rdf_map, data_unchanged=False, undefined_namespace=CIM_NS):
-    """Load (or build) the engine state for this exact data + schema.
+    """Load (or build) the engine state for this exact data + schema →
+    (store, default_graph): the protocol default graph for unscoped queries
+    — ``[the one named graph]`` for a single-graph store, None (the store's
+    own default graph, holding the projected union) otherwise.
 
     Identity via content_hash, load via the N-Quads export — executed only
     on a cache miss. Scope does not key the state (it travels with each
@@ -110,12 +119,21 @@ def _store_for(data, rdf_map, data_unchanged=False, undefined_namespace=CIM_NS):
         # so every retry would pay the full export+load just to fail again.
         _STORES[key] = error
         raise
-    # default graph := deduplicated union of the named graphs (rdflib
-    # default_union set-semantics parity for unscoped queries)
-    store.update("INSERT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }")
+    graphs = list(store.named_graphs())
+    if len(graphs) == 1 and _default_graph_empty(store):
+        default_graph = graphs
+    else:
+        # default graph := deduplicated union of the named graphs (rdflib
+        # default_union set-semantics parity for unscoped queries)
+        store.update("INSERT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }")
+        default_graph = None
     logger.debug("loaded oxigraph store: %d quads", len(store))
-    _STORES[key] = store
-    return store
+    _STORES[key] = store, default_graph
+    return store, default_graph
+
+
+def _default_graph_empty(store):
+    return next(store.quads_for_pattern(None, None, None, DefaultGraph()), None) is None
 
 
 def _select_frame(csv_bytes, return_type):

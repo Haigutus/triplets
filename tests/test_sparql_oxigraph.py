@@ -250,6 +250,82 @@ def test_multi_instance_scope_duplicates_documented():
     assert len(single) == 1
 
 
+
+def test_single_instance_queries_its_graph_without_projection(svedala):
+    """A single-instance store is queried with its one named graph as the
+    protocol default graph (no default-graph copy): unscoped SELECT, COUNT
+    and CONSTRUCT match rdflib."""
+    from triplets.sparql import sparql_oxigraph
+    instance = svedala["INSTANCE_ID"].astype(str).iloc[0]
+    single = svedala[svedala["INSTANCE_ID"].astype(str) == instance].reset_index(drop=True)
+    store, default_graph = sparql_oxigraph._store_for(single, None)
+    assert [graph.value for graph in default_graph] == [f"urn:uuid:{instance}"]
+    assert len(store) == len(single.drop_duplicates())        # named-graph quads only
+
+    count = PREFIXES + "SELECT (COUNT(*) AS ?n) WHERE { ?s ?p ?o }"
+    assert (triplets.sparql.query(single, count, engine="oxigraph")["n"].tolist()
+            == triplets.sparql.query(single, count, engine="rdflib")["n"].tolist())
+
+    select = PREFIXES + "SELECT ?s ?name WHERE { ?s cim:IdentifiedObject.name ?name }"
+    oxigraph = triplets.sparql.query(single, select, engine="oxigraph")
+    rdflib = triplets.sparql.query(single, select, engine="rdflib")
+    assert len(oxigraph) > 0
+    assert sorted(map(tuple, oxigraph.values.tolist())) == sorted(map(tuple, rdflib.values.tolist()))
+
+    construct = PREFIXES + ("CONSTRUCT { ?s cim:IdentifiedObject.name ?n } "
+                            "WHERE { ?s rdf:type cim:ACLineSegment . ?s cim:IdentifiedObject.name ?n }")
+    order = ["ID", "KEY", "VALUE"]
+    pandas.testing.assert_frame_equal(
+        triplets.sparql.query(single, construct, engine="oxigraph").sort_values(order).reset_index(drop=True),
+        triplets.sparql.query(single, construct, engine="rdflib").sort_values(order).reset_index(drop=True),
+        check_dtype=False)
+
+
+def test_single_instance_graph_overrides_own_from(svedala):
+    """A single-instance store runs unscoped queries with its one graph as
+    the protocol default graph — like a scope, it takes precedence over the
+    query's own FROM; GRAPH patterns still see the named graph."""
+    instance = svedala["INSTANCE_ID"].astype(str).iloc[0]
+    other = next(i for i in svedala["INSTANCE_ID"].astype(str).unique() if i != instance)
+    single = svedala[svedala["INSTANCE_ID"].astype(str) == instance].reset_index(drop=True)
+
+    def rows(query):
+        return sorted(map(tuple, triplets.sparql.query(single, PREFIXES + query, engine="oxigraph").values.tolist()))
+
+    plain = rows("SELECT ?s ?name WHERE { ?s cim:IdentifiedObject.name ?name }")
+    assert len(plain) > 0
+    assert rows(f"SELECT ?s ?name FROM <urn:uuid:{other}> WHERE {{ ?s cim:IdentifiedObject.name ?name }}") == plain
+    assert rows("SELECT ?s ?name WHERE { GRAPH ?g { ?s cim:IdentifiedObject.name ?name } }") == plain
+    assert rows(f"SELECT ?s ?name WHERE {{ GRAPH <urn:uuid:{instance}> "
+                "{ ?s cim:IdentifiedObject.name ?name } }") == plain
+
+
+def test_multi_instance_projects_union():
+    """Several named graphs → the deduplicated union is projected into the
+    store's default graph; a triple present in two instances counts once."""
+    from triplets.sparql import sparql_oxigraph
+    _store, default_graph = sparql_oxigraph._store_for(DUPLICATED, None)
+    assert default_graph is None
+    count = PREFIXES + "SELECT (COUNT(*) AS ?n) WHERE { ?s ?p ?o }"
+    assert (triplets.sparql.query(DUPLICATED, count, engine="oxigraph")["n"].tolist()
+            == triplets.sparql.query(DUPLICATED, count, engine="rdflib")["n"].tolist() == ["3"])
+
+
+def test_default_graph_rows_keep_the_projection():
+    """Rows without INSTANCE_ID load into the default graph: with one named
+    graph beside them the union is still projected, so an unscoped query
+    sees both."""
+    from triplets.sparql import sparql_oxigraph
+    mixed = DUPLICATED[DUPLICATED["INSTANCE_ID"] == "g1"].copy()
+    mixed.loc[len(mixed)] = ["22222222-2222-3333-4444-555555555555", "Type", "Substation", None]
+    _store, default_graph = sparql_oxigraph._store_for(mixed, None)
+    assert default_graph is None
+    q = PREFIXES + "SELECT ?s ?t WHERE { ?s rdf:type ?t }"
+    oxigraph = triplets.sparql.query(mixed, q, engine="oxigraph")
+    rdflib = triplets.sparql.query(mixed, q, engine="rdflib")
+    assert len(oxigraph) == 2
+    assert sorted(map(tuple, oxigraph.values.tolist())) == sorted(map(tuple, rdflib.values.tolist()))
+
 # ── sh:sparql delegation (the SHACL engines ride the auto SPARQL engine) ────
 
 def shape_graph(select):
@@ -280,6 +356,25 @@ def test_shacl_sparql_delegation_via_oxigraph(no_qlever, svedala):
     violations = triplets.validation.validate_shacl(svedala, graph, engine="pandas")
     assert len(violations.loc[violations["VIOLATION_TYPE"] == "sh:sparql"]) == 0
 
+
+def test_shacl_sparql_scoped_validation_uses_single_graph(no_qlever, svedala, monkeypatch):
+    """validate_shacl with a one-instance data_scope hands sh:sparql a frame
+    filtered to that instance — its store is a single-graph store, queried
+    with that instance's graph (no union copy)."""
+    pytest.importorskip("pyshacl")
+    from pyoxigraph import NamedNode
+    from triplets.iri import absolute_id
+    from triplets.sparql import sparql_oxigraph
+    instances = svedala[(svedala["KEY"] == "Type") & (svedala["VALUE"] == "ACLineSegment")]["INSTANCE_ID"]
+    instance = str(instances.astype(str).iloc[0])
+    seen = []
+    store_for = sparql_oxigraph._store_for
+    monkeypatch.setattr(sparql_oxigraph, "_store_for",
+                        lambda *args, **kwargs: seen.append(store_for(*args, **kwargs)) or seen[-1])
+    graph = shape_graph("SELECT $this ?value WHERE { $this $PATH ?value }")
+    violations = triplets.validation.validate_shacl(svedala, graph, engine="pandas", data_scope=[instance])
+    assert (violations["VIOLATION_TYPE"] == "sh:sparql").sum() > 0
+    assert seen and all(default_graph == [NamedNode(absolute_id(instance))] for _store, default_graph in seen)
 
 def test_shacl_sparql_positive_violations_parity(no_qlever, svedala):
     """A rule that *finds* rows: the oxigraph CSV path produces the same

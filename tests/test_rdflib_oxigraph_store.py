@@ -53,6 +53,17 @@ def test_oxigraph_dataset_matches_memory_semantics():
     assert sum(1 for _ in g1.triples((None, None, None))) == 2
 
 
+
+def test_oxigraph_dataset_single_instance():
+    """A single-instance store has no default-graph projection: the wrapped
+    dataset unions its one named graph, same triples as the Memory store."""
+    single = FRAME[FRAME["INSTANCE_ID"] == "g1"].reset_index(drop=True)
+    memory = load_dataset(single, store="memory")
+    oxigraph = load_dataset(single.copy(), store="oxigraph")
+    assert len(list(oxigraph.query(NAME_QUERY))) == len(list(memory.query(NAME_QUERY))) == 1
+    assert (sum(1 for _ in oxigraph.triples((None, None, None)))
+            == sum(1 for _ in memory.triples((None, None, None))) == 2)
+
 def test_backends_cached_separately():
     """Memory and oxigraph datasets for the same frame coexist under
     backend-prefixed cache keys."""
