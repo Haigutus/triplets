@@ -199,7 +199,8 @@ class _Context:
             frame = pandas.DataFrame({"FOCUS": rows["ID"].to_numpy(),
                                       "PATH_VALUE": rows["VALUE"].to_numpy()})
         if getattr(rule, "via_type", False):
-            types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype(str)
+            # a set: an object typed in several instances yields each type once
+            types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype(str).drop_duplicates()
             frame = (frame.merge(types, left_on="PATH_VALUE", right_on="ID")
                      [["FOCUS", "VALUE"]].rename(columns={"VALUE": "PATH_VALUE"}))
         return frame

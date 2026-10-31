@@ -119,6 +119,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **polars SHACL batch plans join the class membership before the rules** (on ID, then
+  on KEY + class), instead of pairing every row with every rule on its KEY first.
+  RealGrid 2.4 EQ (892 k rows), `collect_all` 0.78 s → 0.51 s, peak RSS 3.7 → 2.1 GB
+  (with inheritance 0.89 s → 0.59 s, 3.8 → 2.2 GB); all four instances (1.15 M rows)
+  1.14 s → 0.67 s, 4.0 → 2.8 GB; Svedala EQ 0.42 s → 0.37 s, 0.89 → 0.68 GB. Same
+  findings.
 - **sh:sparql binds the focus nodes first**: the `VALUES ?this { … }` block opens the
   WHERE group instead of closing it, so the engine starts the authored pattern (e.g. a
   `FILTER NOT EXISTS`) from the focus nodes. Svedala EQ against the CGMES 3.0
@@ -330,6 +336,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **An object typed in several instances counts once on an `( assoc rdf:type )` path**
+  (pandas, polars and duckdb SHACL engines): its Type rows are a set, as in pyshacl; before, each
+  instance's Type row added the type again, a false `sh:maxCount`.
 - **pyshacl engine `data_scope` loads only the scoped rows**: the frame is filtered to the
   scoped INSTANCE_IDs before the N-Quads export, as the vectorized engines do; before, the
   whole dataset was exported and parsed and the scoped named graphs copied out of it.

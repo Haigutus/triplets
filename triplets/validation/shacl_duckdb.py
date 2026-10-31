@@ -71,7 +71,7 @@ def _rows_sql(rule, table):
                f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table)})")
     if getattr(rule, "via_type", False):
         sql = (f"SELECT r.FOCUS AS FOCUS, t.VALUE AS PV FROM ({sql}) r "
-               f"JOIN {table} t ON t.ID = r.PV AND t.KEY = '{TYPE_KEY}'")
+               f"JOIN (SELECT DISTINCT ID, VALUE FROM {table} WHERE KEY = '{TYPE_KEY}') t ON t.ID = r.PV")
     return sql, [rule.path, rule.target_on]
 
 

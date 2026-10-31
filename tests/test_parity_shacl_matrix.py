@@ -153,6 +153,16 @@ CASES = {
     "minCount": (prop("sh:path cim:IdentifiedObject.name ; sh:minCount 1"), TRIO),
     "maxCount": (prop("sh:path cim:IdentifiedObject.name ; sh:maxCount 1"),
                  breaker("b1", (NAME, "a"), (NAME, "b")) + breaker("b2", (NAME, "c"))),
+    # an ID typed in two instances is one focus, its one name counted once: guards the
+    # class-membership join, which multiplies the path rows unless the Type rows are a set
+    # (inheritance off: no ancestor rows, the membership is the Type rows alone)
+    "count_typed_in_two_instances": (prop("sh:path cim:IdentifiedObject.name ; sh:minCount 2 ; sh:maxCount 1"),
+                                     breaker("b1", (NAME, "n")) + [("b1", "Type", "Breaker", "other")],
+                                     {"inheritance": False}),
+    # a referenced object typed in two instances yields its type once on a ( assoc rdf:type ) path
+    "via_type_count_typed_in_two_instances": (
+        prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:minCount 2 ; sh:maxCount 1"),
+        breaker("b1", (CONT, "bay1")) + obj("bay1", "Bay") + [("bay1", "Type", "Bay", "other")]),
     # "1" is the lexicalForm allowance
     "datatype_float": (prop("sh:path cim:Conductor.length ; sh:datatype xsd:float"),
                        breaker("b1", (LEN, "10.5")) + breaker("b2", (LEN, "abc")) + breaker("b3", (LEN, "1"))),

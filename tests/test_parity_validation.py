@@ -339,6 +339,26 @@ def test_cgmes24_engine_parity(realgrid_data, profile):
         assert frames_equal(reference, _cgmes24_findings(realgrid_data, profile, engine)), engine
 
 
+@pytest.mark.performance
+def test_cgmes24_multi_instance_parity(realgrid_data):
+    """All four RealGrid instances at once against the EQ shapes: an object typed in
+    EQ and SSH is one focus, so polars and duckdb count its values once, as pandas."""
+    pytest.importorskip("polars")
+    pytest.importorskip("duckdb")
+    if not CGMES24_SHACL_DIR.exists():
+        pytest.skip("application-profiles-library-cgmes-v2-4 submodule not checked out")
+    from triplets.export_schema import schemas
+
+    def findings(engine):
+        return triplets.validation.validate_shacl(
+            realgrid_data, str(CGMES24_SHACL_DIR / CGMES24_PROFILES["EQ"][1]), engine=engine,
+            rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1, rdf_map_scope=["EQ"], inheritance=False)[FINDING_COLUMNS]
+    reference = findings("pandas")
+    assert len(reference)
+    for engine in ("polars", "duckdb"):
+        assert frames_equal(reference, findings(engine)), engine
+
+
 @pytest.mark.parametrize("profile", [profile if profile == "SV" else pytest.param(profile, marks=pytest.mark.performance)
                                      for profile in sorted(CGMES24_PROFILES)])
 def test_cgmes24_pyshacl_parity(realgrid_data, profile):
