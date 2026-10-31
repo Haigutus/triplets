@@ -125,6 +125,9 @@ def pyshacl_rows(data, shapes, ontology):
     for result in set(report.subjects(rdflib.RDF.type, SH.ValidationResult)) - details:
         focus, path, value, component, severity, shape = (report.value(result, SH[term]) for term in (
             "focusNode", "resultPath", "value", "sourceConstraintComponent", "resultSeverity", "sourceShape"))
+        alternative = shapes.value(path, SH.alternativePath) if isinstance(path, rdflib.BNode) else None
+        if alternative is not None:   # the engines compile only alternatives whose members share one KEY
+            path = shapes.value(alternative, rdflib.RDF.first)
         if isinstance(path, rdflib.BNode):   # inverse → its property, sequence → its first step: the engines' KEY
             path = shapes.value(path, SH.inversePath) or shapes.value(path, rdflib.RDF.first) or path
         if path is None and value == focus:   # a node-level result echoes the focus node

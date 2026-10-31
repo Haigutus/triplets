@@ -354,6 +354,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`sh:alternativePath` over different properties is skipped** (pandas, polars and duckdb
+  SHACL engines) with an "unsupported sh:path form" `skipped_shapes` entry; before, it was
+  reduced to its first inverse member and the other alternatives were dropped. Members that
+  name one property in several namespaces still compile to that one KEY
+  ([#178](https://github.com/Haigutus/triplets/issues/178)).
 - **An object typed in several instances counts once on an `( assoc rdf:type )` path**
   (pandas, polars and duckdb SHACL engines): its Type rows are a set, as in pyshacl; before, each
   instance's Type row added the type again, a false `sh:maxCount`.

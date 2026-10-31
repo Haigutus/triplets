@@ -661,7 +661,8 @@ def _shape_meta(graph, SH, shape_uri, target_on, path, inverse, target_by="Type"
 
 def _resolve_path(graph, SH, path_node):
     """Resolve sh:path → (KEY name, inverse, via_type); handles sh:inversePath,
-    sh:alternativePath with a nested inverse, and the two-step sequence
+    sh:alternativePath whose members all resolve to the same result (one
+    property in several namespaces), and the two-step sequence
     ``( assoc rdf:type )`` (the profile "valueType" pattern — the constraint
     applies to the type of the referenced object, via_type=True). Any other
     blank-node path (longer sequences, zeroOrMorePath, ...) spans more than
@@ -678,10 +679,8 @@ def _resolve_path(graph, SH, path_node):
         return local_key(inverse), True, False
     alternative = graph.value(path_node, SH.alternativePath)
     if alternative is not None:
-        for item in _rdf_list(graph, alternative, lambda node: node):
-            nested_inverse = graph.value(item, SH.inversePath)
-            if nested_inverse is not None:
-                return local_key(nested_inverse), True, False
+        members = {_resolve_path(graph, SH, item) for item in _rdf_list(graph, alternative, lambda node: node)}
+        return members.pop() if len(members) == 1 else (None, False, False)
     if graph.value(path_node, rdflib.RDF.first) is not None:   # sequence path
         steps = _rdf_list(graph, path_node, lambda node: node)
         if (len(steps) == 2 and isinstance(steps[0], rdflib.URIRef)
