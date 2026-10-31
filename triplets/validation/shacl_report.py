@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 VIOLATION_COLUMNS = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"]
 
 
+def has_violation(violations):
+    """Whether *violations* holds a data Violation — the ``abort_on_first`` stop.
+    A ``triplets:invalidSparql`` row flags a defective shape, not the data."""
+    return bool(len(violations)) and bool(((violations["SEVERITY"] == "Violation")
+                                           & (violations["VIOLATION_TYPE"] != "triplets:invalidSparql")).any())
+
+
 # path suffix → rdflib serialize format (traversed in order for the reverse,
 # so .xml — the suffix the docs push for RDF/XML — is the default before .rdf)
 _EXT = {".ttl": "turtle", ".xml": "xml", ".rdf": "xml",

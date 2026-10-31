@@ -50,7 +50,7 @@ import pandas
 from ..export.nquads_utils import make_subject
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, split_iri, value_types
 from .schema_scope import ancestor_pairs
-from .shacl_report import VIOLATION_COLUMNS
+from .shacl_report import VIOLATION_COLUMNS, has_violation
 
 logger = logging.getLogger(__name__)
 
@@ -812,7 +812,7 @@ CONSTRAINT_VALIDATORS = {
 
 
 def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max_workers=None,
-             undefined_namespace=CIM_NS, ancestors=None, lexical=True, **kwargs):
+             undefined_namespace=CIM_NS, ancestors=None, lexical=True, abort_on_first=False, **kwargs):
     """Validate triplet data against the compiled constraint table.
 
     Parameters
@@ -839,6 +839,9 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     lexical : bool, default True
         sh:datatype also reports valid-but-narrower forms as triplets:lexicalForm
         Warnings; False checks the lexical space only.
+    abort_on_first : bool, default False
+        Stop after the first rule that finds a Violation (``has_violation``);
+        the sh:sparql phase then does not run.
     """
     data = _to_pandas(data)
     if data_scope is not None:
@@ -856,12 +859,17 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
     context.targets, notes = _sparql_targets(context, [rule for rule in selected if rule.target_by == "SPARQL"])
 
-    frames = [notes, *(CONSTRAINT_VALIDATORS[rule.component](context, rule)
-                       for rule in selected if rule.component != "sh:sparql")]
-    if sparql_rules and max_workers:
-        frames += _sparql_parallel(context, sparql_rules, max_workers)
-    else:
-        frames += [_sparql(context, rule) for rule in sparql_rules]
+    frames = [notes]
+    for rule in selected:
+        if rule.component != "sh:sparql":
+            frames.append(CONSTRAINT_VALIDATORS[rule.component](context, rule))
+            if abort_on_first and has_violation(frames[-1]):
+                break
+    else:   # the sh:sparql phase runs only when no rule stopped the run
+        if sparql_rules and max_workers:
+            frames += _sparql_parallel(context, sparql_rules, max_workers)
+        else:
+            frames += [_sparql(context, rule) for rule in sparql_rules]
 
     violations = pandas.concat(frames, ignore_index=True)
     # a defective shape fans out to one rule per sh:targetClass — flag it once

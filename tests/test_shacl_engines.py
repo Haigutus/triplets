@@ -12,6 +12,8 @@ pytest.importorskip("rdflib")
 import pandas
 import triplets
 
+from triplets.validation.shacl_report import has_violation
+
 ENGINES = ["pandas", "polars", "duckdb"]
 
 
@@ -344,6 +346,47 @@ def test_sparql_max_workers_matches_sequential(engine):
     assert (violating(parallel, "sh:sparql") == violating(sequential, "sh:sparql")
             == {("b1", "bad"), ("b2", "broken"), ("b3", "stuck")})
     assert "triplets:invalidSparql" not in set(parallel["VIOLATION_TYPE"])
+
+
+ABORT_SHAPES = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ;
+    sh:property [ sh:path cim:Switch.state ;
+        sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "bad") }' ] ] .
+cim:DescriptionShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ; sh:severity sh:Warning ] .
+cim:AliasShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.aliasName ; sh:minCount 1 ; sh:severity sh:Warning ] .
+"""
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_abort_on_first(engine_name):
+    """abort_on_first gives the full run's yes/no answer: with a Violation the run
+    stops early (the vectorized engines before their sh:sparql phase) and says so;
+    without one — Warnings only, which never stop it — it is the full run."""
+    pytest.importorskip(engine_name)
+    violated = breaker("b1", ("Switch.state", "bad")) + breaker("b2", ("IdentifiedObject.name", "n"))
+    full = run(violated, ABORT_SHAPES, engine_name)
+    aborted = run(violated, ABORT_SHAPES, engine_name, abort_on_first=True)
+    assert has_violation(full) and has_violation(aborted)
+    assert full.attrs["validation"]["aborted"] is False
+    assert aborted.attrs["validation"]["aborted"] is True
+    if engine_name != "pyshacl":   # pyshacl picks its own shape order
+        assert "sh:sparql" in set(full["VIOLATION_TYPE"]) - set(aborted["VIOLATION_TYPE"])
+
+    # the vectorized pass finds Warnings only, so the delegated sh:sparql still runs
+    late = run(breaker("b1", ("IdentifiedObject.name", "n"), ("Switch.state", "bad")), ABORT_SHAPES,
+               engine_name, abort_on_first=True)
+    assert has_violation(late) and "sh:sparql" in set(late["VIOLATION_TYPE"])
+    assert late.attrs["validation"]["aborted"] is True
+
+    clean = breaker("b1", ("IdentifiedObject.name", "n"), ("Switch.state", "open"))
+    full = run(clean, ABORT_SHAPES, engine_name)
+    complete = run(clean, ABORT_SHAPES, engine_name, abort_on_first=True)
+    assert not has_violation(complete) and complete.attrs["validation"]["aborted"] is False
+    assert len(complete) == 2   # both Warning shapes
+    columns = ["ID", "KEY", "VIOLATION_TYPE", "SEVERITY", "MESSAGE"]   # SOURCE_SHAPE: a fresh blank node per parse
+    assert set(complete[columns].itertuples(index=False)) == set(full[columns].itertuples(index=False))
 
 
 def test_sparql_bind_exists_first_sees_focus_node(engine):
