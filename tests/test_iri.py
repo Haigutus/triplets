@@ -6,6 +6,7 @@ same rows through one adapter each. The cython parser is checked on a parse
 fixture; the qlever C++ ingest in ``test_sparql_qlever_ingest.py``.
 """
 import math
+from pathlib import Path
 
 import pandas
 import pytest
@@ -33,6 +34,11 @@ RDF_MAP = {
         "NcClass": {"type": "Class", "namespace": NC},
         "Float": {"type": "Primitive", "xsd:type": "xsd:float", "namespace": CIM16},   # not a KEY: no value type, no datatype
         "Legacy.untyped": {"xsd:type": "xsd:float", "namespace": CIM16},               # no entry type: an undefined KEY
+        "SvPowerFlow.p": {"type": "Attribute", "xsd:type": "cim:ActivePower", "namespace": CIM16},
+        "SvVoltage.v": {"type": "Attribute", "xsd:type": CIM16 + "Voltage", "namespace": CIM16},
+        "IdentifiedObject.description": {"type": "Attribute", "xsd:type": XSD_NS + "string", "namespace": CIM16},
+        "Model.description": {"type": "Attribute", "xsd:type": "", "namespace": CIM16},     # LangString in a bundle
+        "Model.label": {"type": "Attribute", "xsd:type": "rdf:langString", "namespace": CIM16},
     },
     "SSH": {"Breaker": {"type": "Class", "namespace": NC}},
     "ProfileNamespaceMap": {"cim": CIM16},
@@ -50,7 +56,8 @@ def test_namespaces_first_profile_wins():
                           "IdentifiedObject.mRID": CIM16, "Model.modelingAuthoritySet": CIM16,
                           "Diagram.orientation": CIM16, "OrientationKind.negative": CIM16,
                           "Terminal.ConductingEquipment": CIM16, "NcClass": NC, "Float": CIM16,
-                          "Legacy.untyped": CIM16}
+                          "Legacy.untyped": CIM16, "SvPowerFlow.p": CIM16, "SvVoltage.v": CIM16,
+                          "IdentifiedObject.description": CIM16, "Model.description": CIM16, "Model.label": CIM16}
 
 
 def test_key_types():
@@ -59,16 +66,48 @@ def test_key_types():
 
 
 def test_datatypes_attributes_only_string_is_none():
-    """Annotation for Attribute literals: anyURI included (it is a literal datatype), string → None;
-    Association / Enumeration entries carry xsd:anyURI too but are not literals."""
+    """Annotation for Attribute literals: any prefixed name or IRI, anyURI included (it is a literal
+    datatype); string and langString → None, prefixed or in full; ``""`` → absent. Association /
+    Enumeration entries carry xsd:anyURI too but are not literals."""
     assert DATATYPES == {"ACLineSegment.r": XSD_NS + "float", "IdentifiedObject.name": None,
-                         "IdentifiedObject.mRID": None, "Model.modelingAuthoritySet": XSD_NS + "anyURI"}
+                         "IdentifiedObject.mRID": None, "Model.modelingAuthoritySet": XSD_NS + "anyURI",
+                         "SvPowerFlow.p": CIM16 + "ActivePower", "SvVoltage.v": CIM16 + "Voltage",
+                         "IdentifiedObject.description": None, "Model.label": None}
+
+
+def test_prefixes_first_binding_wins_and_built_ins_fill_gaps():
+    schema = {"EQ": {"ProfileNamespaceMap": {"cim": CIM16, "xsd": "http://example.org/xsd#"}},
+              "SSH": {"ProfileNamespaceMap": {"cim": CIM_NS, "nc": NC}},
+              "ProfileNamespaceMap": {"dcterms": "http://purl.org/dc/terms/"}}
+    assert iri.prefixes(schema) == {"dcterms": "http://purl.org/dc/terms/", "cim": CIM16, "nc": NC,
+                                    "xsd": "http://example.org/xsd#",          # the schema's own binding
+                                    "rdf": iri.RDF_NS, "rdfs": iri.RDFS_NS}
+    assert iri.prefixes(None) == {"xsd": XSD_NS, "rdf": iri.RDF_NS, "rdfs": iri.RDFS_NS}
+
+
+@pytest.mark.parametrize("text, message", [("foo:ActivePower", "'foo:ActivePower' — prefix 'foo' is not bound"),
+                                           ("float", "'float' has no prefix")])
+def test_datatypes_unresolvable_type_raises(text, message):
+    schema = {"SV": {"SvPowerFlow.p": {"type": "Attribute", "xsd:type": text}}}
+    with pytest.raises(ValueError, match=f"SvPowerFlow.p: xsd:type {message}"):
+        iri.datatypes(schema)
+
+
+@pytest.mark.parametrize("path", sorted((Path(triplets.__file__).parent / "export_schema").glob("*.json")),
+                         ids=lambda path: path.stem)
+def test_bundled_schema_datatypes_are_xsd(path):
+    """Every bundle writes xsd:* only and resolves without declaring ``xsd`` (NC 2.5.0 does not)."""
+    built = iri.datatypes(path)
+    assert built and all(datatype.startswith(XSD_NS) for datatype in built.values() if datatype)
 
 
 def test_value_types_by_entry_type_only():
     assert VALUE_TYPES == {"ACLineSegment.r": "literal", "IdentifiedObject.name": "literal",
                            "IdentifiedObject.mRID": "literal", "Model.modelingAuthoritySet": "literal",
-                           "Diagram.orientation": "enum", "Terminal.ConductingEquipment": "reference"}
+                           "Diagram.orientation": "enum", "Terminal.ConductingEquipment": "reference",
+                           "SvPowerFlow.p": "literal", "SvVoltage.v": "literal",
+                           "IdentifiedObject.description": "literal", "Model.description": "literal",
+                           "Model.label": "literal"}
 
 
 def test_flat_maps_without_schema_are_empty():
@@ -90,7 +129,7 @@ def test_flat_schema_gives_the_same_maps_as_sectioned():
     """A root dict with a ``type`` string is an entry, one without is a section."""
     typed = {name: entry for name, entry in RDF_MAP["EQ"].items() if "type" in entry}   # at the root, untyped reads as a section
     flat = {**typed, "ProfileNamespaceMap": {"cim": CIM16}}
-    sectioned = {"EQ": typed}
+    sectioned = {"EQ": typed, "ProfileNamespaceMap": {"cim": CIM16}}
     for build in (iri.namespaces, iri.value_types, iri.datatypes, iri.key_types):
         assert build(flat) == build(sectioned) != {}
 
@@ -110,6 +149,43 @@ def test_nquads_with_flat_schema_writes_schema_namespaces():
     assert f"<urn:uuid:b1> <{RDF_TYPE}> <{CIM_NS}Breaker> <urn:uuid:i> ." in lines
     assert f'<urn:uuid:b1> <{CIM_NS}Switch.normalOpen> "true"^^<{XSD_NS}boolean> <urn:uuid:i> .' in lines
     assert not any(TRIPLETS_NS in line for line in lines)
+
+
+# A bundle with one attribute retyped to its CIM datatype: the type is the schema's choice,
+# written as is by every RDF exporter.
+EQ_PROFILE = "http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0"
+LINE = "11111111-1111-1111-1111-111111111111"
+RESISTANCE = CIM_NS + "Resistance"
+
+
+def custom_type_schema():
+    schema = iri.load_rdf_map(schemas.ENTSOE_CGMES_3_0_0_552_ED2)
+    schema["EQ"]["ACLineSegment.r"]["xsd:type"] = "cim:Resistance"
+    return schema
+
+
+def custom_type_frame():
+    return pandas.DataFrame([("i", "Type", "FullModel", "i"), ("i", "Model.profile", EQ_PROFILE, "i"),
+                             (LINE, "Type", "ACLineSegment", "i"), (LINE, "ACLineSegment.r", "1.5", "i")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars"])
+def test_nquads_custom_datatype_round_trip(engine):
+    pytest.importorskip(engine)
+    buffer = triplets.export.export_to_nquads(custom_type_frame(), rdf_map=custom_type_schema(), engine=engine,
+                                              export_to_memory=True)
+    assert f'<urn:uuid:{LINE}> <{CIM_NS}ACLineSegment.r> "1.5"^^<{RESISTANCE}> <urn:uuid:i> .' \
+        in buffer.read().decode().splitlines()
+    buffer.seek(0)
+    read = pandas.read_nquads(buffer)
+    assert read.query("KEY == 'ACLineSegment.r'").VALUE.tolist() == ["1.5"]
+
+
+def test_cimxml_lxml_writes_custom_datatype():
+    out = custom_type_frame().export_to_cimxml(rdf_map=custom_type_schema(), engine="python_lxml", datatypes=True,
+                                               export_type="xml_per_instance", export_to_memory=True)[0]
+    assert f'rdf:datatype="{RESISTANCE}">1.5<' in out.getvalue().decode()
 
 
 # ── local (schema-free), one row per rule ──────────────────────────────────────

@@ -110,22 +110,30 @@ def merge_sections(rdf_map, sections):
     Every other field comes from the first definition. ``notes`` holds each decision as text,
     quoting every profile's own value: ``skipped_shapes`` (datatype conflicts) and
     ``relaxed_constraints`` (cardinalities, enumerations). The merged ProfileMetadata keeps
-    every profile's identity: ``sections`` and each field as a list, in the same order.
+    every profile's identity: ``sections`` and each field as a list, in the same order; the
+    merged ProfileNamespaceMap holds the root's and every scoped profile's prefixes, bound
+    as :func:`iri.prefixes` binds them over the full schema.
     No logging: the caller decides what to report."""
     if sections is None:
         sources = [(None, _root_entries(rdf_map))]
     else:
         sources = [(section, rdf_map[section]) for section in sections]
+    namespace_maps = [rdf_map.get("ProfileNamespaceMap"),
+                      *(rdf_map[section].get("ProfileNamespaceMap") for section in _sections(rdf_map)
+                        if section in (sections or ()))]
     merged, notes = {}, {"skipped_shapes": [], "relaxed_constraints": []}
     if sections is not None:
         metadata = [rdf_map[section].get("ProfileMetadata", {}) for section in sections]
         fields = dict.fromkeys(field for each in metadata for field in each)
         merged["ProfileMetadata"] = {"sections": list(sections),
                                      **{field: [each.get(field) for each in metadata] for field in fields}}
+    if prefixes := {prefix: namespace for each in reversed(namespace_maps)          # first binding wins
+                    for prefix, namespace in (each or {}).items()}:
+        merged["ProfileNamespaceMap"] = prefixes
     definitions = {}                       # name → [(section, entry)] in scope order
     for section, entries in sources:
         for name, entry in entries.items():
-            if name != "ProfileMetadata":  # merged above, field by field
+            if name not in ("ProfileMetadata", "ProfileNamespaceMap"):  # merged above
                 definitions.setdefault(name, []).append((section, entry))
     for name, found in definitions.items():
         first = found[0][1]

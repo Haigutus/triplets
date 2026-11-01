@@ -46,7 +46,10 @@ relaxed cardinalities and united enumerations (checked, more loosely) in its
 quotes every profile's own value (`cardinality relaxed to 0..2 (DL: 1..1, DY:
 0..1, GL: 1..2)`). The merged `ProfileMetadata` keeps every profile's
 identity: `sections` (the section keys, in scope order) and each field as a
-list in the same order (`keyword: ["EQ", "OP", "SC"]`, `versionIRI: [...]`). A merged run is never stricter than running the
+list in the same order (`keyword: ["EQ", "OP", "SC"]`, `versionIRI: [...]`); the merged
+`ProfileNamespaceMap` holds the root's and every scoped profile's prefixes, bound as
+in the full schema (root first, then the profiles in schema order; first binding
+wins), so a prefixed `xsd:type` expands as in the full schema. A merged run is never stricter than running the
 listed profiles one by one: parameters only add, cardinality only relaxes.
 The shipped bundles merged whole (`"*"`) differ in cardinality for 1–15 keys
 and in datatype only for CGMES 2.4.15 FH `Model.version`.

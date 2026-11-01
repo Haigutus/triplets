@@ -15,7 +15,7 @@ one warning for the relaxed constraints; the notes become the run's
 import logging
 
 from .._header import merge_sections, profile_identifiers
-from ..iri import _sections, absolute_name, is_iri, load_rdf_map, local_value, namespaces
+from ..iri import _SCHEMA_METADATA, _sections, absolute_name, is_iri, load_rdf_map, local_value, namespaces
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ def require_entries(entries, rdf_map_scope, classes=False):
     """ValueError when the scope leaves nothing to validate against: no entries at
     all, or — *classes* — no Class entries (the schema validations' targets)."""
     found = (any(isinstance(entry, dict) and entry.get("type") == "Class" for entry in entries.values())
-             if classes else bool(set(entries) - {"ProfileMetadata"}))
+             if classes else bool(set(entries) - set(_SCHEMA_METADATA)))
     if not found:
         raise ValueError(f"rdf_map_scope {rdf_map_scope!r} selects no {'Class ' if classes else ''}entries — "
                          "name the profiles (section keys / profile IRIs, or '*' for all)")

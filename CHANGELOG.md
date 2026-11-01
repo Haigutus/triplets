@@ -370,6 +370,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`sh:datatype` checks `xsd:dateTimeStamp`, `xsd:duration`, `xsd:time` and `xsd:gMonthDay`**
   (pandas, polars and duckdb SHACL engines): their values were never checked
   ([#149](https://github.com/Haigutus/triplets/issues/149)).
+- **Any `xsd:type` is written as the literal's datatype** (`iri.datatypes`): a prefixed
+  name (`cim:ActivePower`, prefixes from the schema's `ProfileNamespaceMap`, `xsd` / `rdf` /
+  `rdfs` built in) or an absolute IRI is expanded and written by the N-Quads export (pandas,
+  polars, streaming), hence the rdflib / pyshacl loader and the qlever ingest, and by the
+  `python_lxml` CIM XML export with `datatypes=True`; before, only `xsd:*` values were
+  written and any other was silently dropped. A prefix no `ProfileNamespaceMap` binds raises
+  `ValueError` naming the KEY. New flat map `iri.prefixes(rdf_map)` and scalar
+  `iri.absolute_datatype(key, text, prefixes)`; the scoped validation schema keeps the
+  root's and every scoped profile's prefixes, bound as in the full schema
+  ([#158](https://github.com/Haigutus/triplets/issues/158)).
 - **An object typed in several instances counts once on an `( assoc rdf:type )` path**
   (pandas, polars and duckdb SHACL engines): its Type rows are a set, as in pyshacl; before, each
   instance's Type row added the type again, a false `sh:maxCount`.
