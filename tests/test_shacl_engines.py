@@ -200,6 +200,23 @@ def test_datatype_any_uri_lexical(engine):
     assert violating(v, "sh:datatype") == {("b3", "has space"), ("b4", "a%2"), ("b5", "a<b>")}
 
 
+@pytest.mark.parametrize("datatype, valid, invalid", [
+    # rdflib has no converter for these two, so pyshacl never reports them
+    ("dateTimeStamp", ["2026-01-01T00:00:00Z", "2026-01-01T00:00:00.5+02:00"],
+     ["2026-01-01T00:00:00", "2026-01-01", "abc"]),
+    ("gMonthDay", ["--01-31", "--12-01Z", "--06-15-05:00"], ["01-31", "--1-31", "--01-31T"]),
+    # forms rdflib accepts but the XSD lexical space does not
+    ("duration", ["PT0S", "P1M", "PT1M", "P1DT2H"], ["PT", "P1DT", "P1W", "PT1.5H"]),
+    ("time", ["23:59:59Z"], ["12:00", "1200", "T12:00:00"]),
+])
+def test_datatype_lexical(engine, datatype, valid, invalid):
+    values = valid + invalid
+    rows = [row for index, value in enumerate(values) for row in breaker(f"b{index}", ("Switch.value", value))]
+    v = run(rows, SHAPE.format(body=f"sh:path cim:Switch.value ; sh:datatype xsd:{datatype}"), engine)
+    assert violating(v, "sh:datatype") == {(f"b{index}", value) for index, value in enumerate(values)
+                                           if value in invalid}
+
+
 def test_node_kind_iri_on_association_follows_schema(engine):
     """sh:IRI on an Association path never violates with an rdf_map: the exporters write
     every reference as an IRI (unsafe text percent-encoded), so all engines agree."""

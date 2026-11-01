@@ -52,6 +52,8 @@ SCHEMA = {"EQ": {
     "Switch.ratedCurrent": attribute("xsd:float"),
     "TransformerEnd.endNumber": attribute("xsd:integer"),
     "Switch.normalOpen": attribute("xsd:boolean"),
+    "Switch.switchOnDuration": attribute("xsd:duration"),
+    "Switch.switchOnTime": attribute("xsd:time"),
     "Equipment.EquipmentContainer": {"type": "Association"},
     "Bay.VoltageLevel": {"type": "Association"},
     "Switch.kind": {"type": "Enumeration", "xsd:type": "xsd:anyURI", "namespace": CIM},
@@ -172,6 +174,14 @@ CASES = {
     "datatype_boolean": (prop("sh:path cim:Switch.normalOpen ; sh:datatype xsd:boolean"),
                          breaker("b1", ("Switch.normalOpen", "true")) + breaker("b2", ("Switch.normalOpen", "false"))
                          + breaker("b3", ("Switch.normalOpen", "1"))),
+    # kept out: rdflib accepts "PT", "P1DT", "P1W", "12:00", "T12:00:00" (the engines reject them)
+    # and rejects "25:00:00" (the engines check the form, not the field ranges, as for dateTime)
+    "datatype_duration": (prop("sh:path cim:Switch.switchOnDuration ; sh:datatype xsd:duration"),
+                          [row for n, value in enumerate(("PT15M", "-P1D", "P1Y2M3DT4H5M6.5S", "15M", "P", "PT.5S"))
+                           for row in breaker(f"b{n}", ("Switch.switchOnDuration", value))]),
+    "datatype_time": (prop("sh:path cim:Switch.switchOnTime ; sh:datatype xsd:time"),
+                      [row for n, value in enumerate(("12:00:00", "12:00:00.5", "12:00:00+02:00", "abc", "12:00:00."))
+                       for row in breaker(f"b{n}", ("Switch.switchOnTime", value))]),
     "class": (prop("sh:path cim:Equipment.EquipmentContainer ; sh:class cim:Bay"), TRIO),
     "class_inherited": (prop("sh:path cim:Equipment.EquipmentContainer ; sh:class cim:EquipmentContainer"),
                         TRIO + breaker("b4", (CONT, "b1"))),
