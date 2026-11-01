@@ -607,7 +607,8 @@ def _sparql_rows(graph, SH, shape_uri, meta):
          "prefixes": resolved "PREFIX ..." header lines (sh:prefixes → sh:declare),
          "path":     full IRI of the owning shape's sh:path, or None}
 
-    The sparql node's own sh:message overrides the shape's.
+    The sparql node's own sh:message overrides the shape's; of several, the first
+    alphabetically (as pyshacl's report reader picks).
     """
     rows = []
     path = graph.value(shape_uri, SH.path)
@@ -615,14 +616,14 @@ def _sparql_rows(graph, SH, shape_uri, meta):
         select = graph.value(sparql, SH.select)
         if select is None:
             continue
-        message = graph.value(sparql, SH.message)
+        message = min(map(str, graph.objects(sparql, SH.message)), default=None)
         # the constraint node joins the lineage: its sh:deactivated switches it off
         row = {**meta, "shapes": (*meta["shapes"], str(sparql)), "component": "sh:sparql",
                "params": {"select": str(select), "prefixes": _prefixes(graph, SH, sparql),
                           # $PATH substitution needs the full IRI; only direct paths qualify
                           "path": str(path) if type(path).__name__ == "URIRef" else None}}
         if message is not None:
-            row["message"] = str(message)
+            row["message"] = message
         rows.append(row)
     return rows
 
@@ -641,7 +642,7 @@ def _prefixes(graph, SH, node):
 def _shape_meta(graph, SH, shape_uri, target_on, path, inverse, target_by="Type",
                 via_type=False, shapes=()):
     severity = graph.value(shape_uri, SH.severity)
-    message = graph.value(shape_uri, SH.message)
+    message = min(map(str, graph.objects(shape_uri, SH.message)), default=None)
     name = graph.value(shape_uri, SH.name)
     description = graph.value(shape_uri, SH.description)
     return {
@@ -659,7 +660,7 @@ def _shape_meta(graph, SH, shape_uri, target_on, path, inverse, target_by="Type"
         # the types of the referenced objects, not the association values
         "via_type": via_type,
         "severity": split_iri(severity)[1] if severity is not None else "Violation",
-        "message": str(message) if message is not None else None,
+        "message": message,
         "name": str(name) if name is not None else None,
         "description": str(description) if description is not None else None,
     }
