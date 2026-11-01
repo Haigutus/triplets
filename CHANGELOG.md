@@ -367,6 +367,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   newline, in the pandas, polars and duckdb SHACL engines and in pyshacl results; before,
   the engines reported one of them
   ([#185](https://github.com/Haigutus/triplets/issues/185)).
+- **`sh:datatype` checks `xsd:dateTimeStamp`, `xsd:duration`, `xsd:time` and `xsd:gMonthDay`**
+  (pandas, polars and duckdb SHACL engines): their values were never checked
+  ([#149](https://github.com/Haigutus/triplets/issues/149)).
 - **An object typed in several instances counts once on an `( assoc rdf:type )` path**
   (pandas, polars and duckdb SHACL engines): its Type rows are a set, as in pyshacl; before, each
   instance's Type row added the type again, a false `sh:maxCount`.

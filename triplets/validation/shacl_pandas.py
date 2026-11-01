@@ -61,8 +61,15 @@ _INTEGER = r"[+-]?[0-9]+"
 _DECIMAL = rf"(?:{_INTEGER}|[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+))"
 _FLOAT = rf"(?:{_DECIMAL}(?:[eE][+-]?[0-9]+)?|[+-]?INF|NaN)"
 _DATE = r"-?[0-9]{4,}-[0-9]{2}-[0-9]{2}"
-_TIMEZONE = r"(?:Z|[+-][0-9]{2}:[0-9]{2})?"
-_DATETIME = rf"{_DATE}T[0-9]{{2}}:[0-9]{{2}}:[0-9]{{2}}(?:\.[0-9]+)?{_TIMEZONE}"
+_ZONE = r"(?:Z|[+-][0-9]{2}:[0-9]{2})"
+_TIMEZONE = rf"{_ZONE}?"
+_TIME = r"[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?"
+_DATETIME = rf"{_DATE}T{_TIME}{_TIMEZONE}"
+# PnYnMnDTnHnMnS: at least one component, no empty T — alternations, no lookahead
+_SECONDS = r"[0-9]+(?:\.[0-9]+)?S"
+_DURATION_TIME = rf"T(?:[0-9]+H(?:[0-9]+M)?(?:{_SECONDS})?|[0-9]+M(?:{_SECONDS})?|{_SECONDS})"
+_DURATION_DATE = r"(?:[0-9]+Y(?:[0-9]+M)?(?:[0-9]+D)?|[0-9]+M(?:[0-9]+D)?|[0-9]+D)"
+_DURATION = rf"-?P(?:{_DURATION_DATE}(?:{_DURATION_TIME})?|{_DURATION_TIME})"
 # IRI reference (RFC 3987), relative included: no controls, space, DEL or <>"{}|^`\,
 # and "%" only as a %XX escape. Non-ASCII is allowed (IRI, not URI).
 _ANY_URI = r'(?:[^\x00-\x20\x7f<>"{}|^`\\%]|%[0-9A-Fa-f]{2})*'
@@ -81,6 +88,10 @@ DATATYPES = {
     "boolean": (r"true|false|1|0", r"1|0"),
     "date": (_DATE + _TIMEZONE, None),
     "dateTime": (_DATETIME, None),
+    "dateTimeStamp": (rf"{_DATE}T{_TIME}{_ZONE}", None),
+    "time": (_TIME + _TIMEZONE, None),
+    "gMonthDay": (r"--[0-9]{2}-[0-9]{2}" + _TIMEZONE, None),
+    "duration": (_DURATION, None),
     "anyURI": (_ANY_URI, None),
     # string / unlisted types: every lexical form is valid — no check
 }
