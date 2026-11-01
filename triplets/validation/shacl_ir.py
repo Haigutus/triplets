@@ -22,6 +22,7 @@ compiles, and ``CompiledShapes.active()`` filters the switched-off ones.
 import hashlib
 import logging
 import os
+import re
 
 from dataclasses import dataclass, field
 
@@ -448,6 +449,11 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
             shape_uri)
         skipped.add(((*shapes, str(shape_uri)), f"{shape_uri}: unsupported sh:path form", None))
         return []
+    flags = graph.value(shape_uri, SH.flags)
+    if flags is not None and set(str(flags)) - set("imsq"):
+        logger.warning("%s: sh:flags \"%s\" beyond i m s q — shape skipped", shape_uri, flags)
+        skipped.add(((*shapes, str(shape_uri)), f'{shape_uri}: sh:flags "{flags}" not supported', None))
+        return []
     meta = _shape_meta(graph, SH, shape_uri, target_on, path, inverse,
                        target_by=target_by, via_type=via_type, shapes=shapes)
     if parent is not None:
@@ -458,7 +464,7 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
     rows = []
 
     # each value of a parameter is a constraint of its own (SHACL §4.1)
-    for term, component, transform in _components(SH):
+    for term, component, transform in _components(SH, shape_uri):
         for value in sorted(graph.objects(shape_uri, term), key=str):
             if path is None:
                 # on a node shape it judges the focus node itself, which no engine reads
@@ -692,7 +698,7 @@ def _resolve_path(graph, SH, path_node):
 # SHACL term → (component short name, params transform). Short names match the
 # VIOLATION_TYPE values in shacl_report._COMPONENT_MAP so IR rows, engine
 # output and pyshacl output all speak the same vocabulary.
-def _components(SH):
+def _components(SH, shape):
     return [
         (SH.minCount, "sh:minCount", lambda g, v: int(v)),
         (SH.maxCount, "sh:maxCount", lambda g, v: int(v)),
@@ -702,7 +708,7 @@ def _components(SH):
         (SH.maxInclusive, "sh:maxInclusive", lambda g, v: float(v)),
         (SH.minExclusive, "sh:minExclusive", lambda g, v: float(v)),
         (SH.maxExclusive, "sh:maxExclusive", lambda g, v: float(v)),
-        (SH.pattern, "sh:pattern", lambda g, v: str(v)),
+        (SH.pattern, "sh:pattern", lambda g, v: _regex(v, g.value(shape, SH.flags))),
         (SH.minLength, "sh:minLength", lambda g, v: int(v)),
         (SH.maxLength, "sh:maxLength", lambda g, v: int(v)),
         (SH.nodeKind, "sh:nodeKind", lambda g, v: split_iri(v)[1]),
@@ -713,6 +719,15 @@ def _components(SH):
         (SH.lessThan, "sh:lessThan", lambda g, v: local_key(v)),
         (SH.lessThanOrEquals, "sh:lessThanOrEquals", lambda g, v: local_key(v)),
     ]
+
+
+def _regex(pattern, flags):
+    """sh:pattern + sh:flags → one regex text: q quotes the pattern, i m s become
+    an inline (?ims) prefix (Python re, Rust regex and RE2 all read it)."""
+    flags = str(flags or "")
+    pattern = re.escape(str(pattern)) if "q" in flags else str(pattern)
+    inline = "".join(flag for flag in "ims" if flag in flags)
+    return f"(?{inline}){pattern}" if inline else pattern
 
 
 def _malformed(graph, SH, shape):
