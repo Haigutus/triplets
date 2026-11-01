@@ -85,14 +85,22 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   map, each a single comprehension over `rdf_map_entries` (the root entries
   of a flat schema, then every profile section; first occurrence wins): `namespaces` (name → namespace IRI),
   `key_types` (name → schema entry type), `value_types` (KEY → `literal` /
-  `reference` / `enum`, by entry type only), `datatypes` (Attribute KEY → xsd
-  IRI, `None` = string; anyURI included). No cache: each is ~2 ms on a 2.8 MB
-  schema. Public entry points (`validate_shacl`,
+  `reference` / `enum`, by entry type only), `datatypes` (Attribute KEY →
+  datatype IRI, `None` = `xsd:string` / `rdf:langString`; anyURI included),
+  and `prefixes` (prefix → namespace; the one map read from the
+  `ProfileNamespaceMap`s instead of the entries, first binding wins; `xsd`,
+  `rdf`, `rdfs` built in where no map binds them). No cache: each is ~2 ms
+  on a 2.8 MB schema. Public entry points (`validate_shacl`,
   `validate_schema`, `export_to_*`, the qlever ingest) call `load_rdf_map`
   once; below them only dicts flow, so a path is parsed once per call. The
   validations hand the engines the scoped, merged schema
   (`validation.schema_scope.scoped_rdf_map`), so first-wins never decides
   between profiles there.
+- `xsd:type` is any prefixed name or absolute IRI, expanded by `prefixes`
+  (`absolute_datatype`); N-Quads and `python_lxml` CIM XML write it as is
+  (`cim:ActivePower` → `^^<…#ActivePower>`). A prefix no `ProfileNamespaceMap`
+  binds raises `ValueError` naming the KEY when the map is built — in every
+  entry point that builds `datatypes`, whether or not the KEY occurs in the data.
 - **The schema entry type decides the serialisation form, never `xsd:type`**
   and never the shape of the text: an Attribute value is a literal even when
   it reads `https://…` or looks like a UUID (`xsd:type` only annotates it), an

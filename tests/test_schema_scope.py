@@ -3,9 +3,9 @@ import pytest
 
 from triplets._header import profile_identifiers
 from triplets.export_schema import schemas
-from triplets.iri import TRIPLETS_NS, datatypes, load_rdf_map
+from triplets.iri import TRIPLETS_NS, datatypes, load_rdf_map, prefixes
 from triplets.validation.schema_scope import (SCOPE_KEY, ancestor_pairs, ancestor_triples, class_ancestors,
-                                              scope_sections, scoped_rdf_map)
+                                              require_entries, scope_sections, scoped_rdf_map)
 
 CIM, NC, CIM_NC = "http://iec.ch/TC57/CIM100#", "https://cim4.eu/ns/nc#", "https://cim.ucaiug.io/ns#"
 
@@ -73,6 +73,60 @@ def test_merge_rules():
     # merge order does not change the relaxed cardinality
     other = scoped_rdf_map(SCHEMA, ["OP", "EQ"])[0][SCOPE_KEY]["IdentifiedObject.name"]
     assert (other["xsd:minOccours"], other["xsd:maxOccours"]) == ("0", "n")
+
+
+POWER = {"type": "Attribute", "xsd:type": "cim:ActivePower"}
+PREFIXED = {"ProfileNamespaceMap": {"cim": CIM},                              # root binding wins
+            "OP": {"ProfileNamespaceMap": {"nc": NC, "cim": CIM_NC, "dm": CIM_NC}, "OP.x": POWER},
+            "SV": {"ProfileNamespaceMap": {"dm": NC, "eu": NC}, "SvPowerFlow.p": POWER}}
+
+
+FULL_BINDINGS = {"cim": CIM, "nc": NC, "dm": CIM_NC, "eu": NC}
+
+
+@pytest.mark.parametrize("rdf_map_scope, bound", [
+    (["SV", "OP"], FULL_BINDINGS), ("*", FULL_BINDINGS), (["SV"], {"cim": CIM, "dm": NC, "eu": NC})])
+def test_merged_schema_binds_prefixes_as_the_full_schema(rdf_map_scope, bound):
+    """Root first, then the scoped profiles in schema order (not scope order), first binding
+    wins — the precedence of iri.prefixes over the full schema."""
+    scoped = scoped_rdf_map(PREFIXED, rdf_map_scope)[0]
+    assert scoped[SCOPE_KEY]["ProfileNamespaceMap"] == bound
+    assert prefixes(scoped) == prefixes({"ProfileNamespaceMap": bound})
+    assert set(datatypes(scoped).values()) == {CIM + "ActivePower"} == set(datatypes(PREFIXED).values())
+
+
+def test_flat_schema_keeps_its_prefixes():
+    flat = {"ProfileNamespaceMap": {"cim": CIM}, "SvPowerFlow.p": POWER}
+    assert datatypes(scoped_rdf_map(flat)[0]) == datatypes(flat) == {"SvPowerFlow.p": CIM + "ActivePower"}
+
+
+def test_metadata_only_scope_selects_no_entries():
+    """The merged ProfileMetadata / ProfileNamespaceMap are not entries."""
+    with pytest.raises(ValueError, match="selects no entries"):
+        require_entries(scoped_rdf_map(SCHEMA | {"ProfileNamespaceMap": {"cim": CIM}}, ["SC"])[0][SCOPE_KEY], ["SC"])
+
+
+def test_validate_shacl_rdflib_loads_custom_datatype():
+    """Root-only ProfileNamespaceMap on a sectioned schema: the scoped map the pyshacl engine
+    loads expands cim:ActivePower, and the literal carries it."""
+    pytest.importorskip("pyshacl")
+    import pandas
+    import rdflib
+    from triplets.validation import validate_shacl
+    shapes = rdflib.Graph().parse(format="turtle", data=f"""
+        @prefix sh: <http://www.w3.org/ns/shacl#> . @prefix cim: <{CIM}> .
+        @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+        cim:Typed a sh:NodeShape ; sh:targetClass cim:SvPowerFlow ;
+            sh:property [ sh:path cim:SvPowerFlow.p ; sh:datatype cim:ActivePower ] .
+        cim:Float a sh:NodeShape ; sh:targetClass cim:SvPowerFlow ;
+            sh:property [ sh:path cim:SvPowerFlow.p ; sh:datatype xsd:float ] .""")
+    schema = {"ProfileNamespaceMap": {"cim": CIM},
+              "SV": {"SvPowerFlow": {"type": "Class", "namespace": CIM},
+                     "SvPowerFlow.p": {**POWER, "namespace": CIM}}}
+    data = pandas.DataFrame([("f", "Type", "SvPowerFlow", "i"), ("f", "SvPowerFlow.p", "1.5", "i")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    report = validate_shacl(data, shapes, rdf_map=schema, rdf_map_scope="SV", engine="pyshacl", lexical=False)
+    assert report[["VIOLATION_TYPE", "EXPECTED"]].values.tolist() == [["sh:datatype", "a xsd:float value"]]
 
 
 def attribute(low, high, datatype="xsd:string"):

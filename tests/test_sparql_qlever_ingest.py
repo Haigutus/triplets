@@ -38,6 +38,8 @@ RDF_MAP = {"Profile": {
     "Test.enum":     {"type": "Enumeration"},
     "Test.assoc":    {"type": "Association"},       # reference by schema, whatever the value looks like
     "Test.other":    {"namespace": "http://example.com/ns#"},           # no type: an undefined KEY with a namespace
+    "Test.custom":   {"type": "Attribute", "xsd:type": "ex:Custom"},    # any datatype IRI, prefix from the map
+    "ProfileNamespaceMap": {"ex": "http://example.com/ns#"},
 }}
 
 
@@ -69,6 +71,7 @@ def torture_frame():
         (UUID_A, "Test.boolean", "true", INSTANCE_1),
         (UUID_A, "Test.dateTime", "2020-01-02T03:04:05", INSTANCE_1),
         (UUID_A, "Test.string", UUID_B, INSTANCE_1),
+        (UUID_A, "Test.custom", "1.5", INSTANCE_1),                         # typed, but not numeric to qlever
         # O6: anyURI attribute — a typed literal even when the text looks like an IRI / UUID
         (UUID_A, "Test.anyURI", UUID_B, INSTANCE_1),
         (UUID_A, "Test.anyURI", "http://example.com/literal", INSTANCE_1),
@@ -123,6 +126,15 @@ def test_arrow_ingest_matches_nquads_ingest(rdf_map):
         via_arrow = quad_dump(build_via_arrow(data, rdf_map, directory))
     pandas.testing.assert_frame_equal(via_arrow, via_nquads)
     assert len(via_arrow) == len(data) - 2        # the null-VALUE row and Type Description are dropped
+
+
+def test_custom_datatype_reaches_the_index():
+    """The quad dump shows lexical forms only; the datatype itself is checked here, on both paths."""
+    query = f"SELECT (DATATYPE(?o) AS ?datatype) WHERE {{ ?s <{CIM_NS}Test.custom> ?o }}"
+    with tempfile.TemporaryDirectory() as directory:
+        for build in (build_via_nquads, build_via_arrow):
+            result = build(torture_frame(), RDF_MAP, directory).select_arrow(query).to_pandas()
+            assert result["datatype"].tolist() == ["http://example.com/ns#Custom"]
 
 
 def test_characters_beyond_the_escape_set():

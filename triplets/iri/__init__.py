@@ -25,9 +25,10 @@ working on imported data; where local names collide (``type`` is both
 
 Local rules are schema-free (a parse has no schema). Absolute rules take the
 flat maps built from the export schema — :func:`namespaces`, :func:`value_types`,
-:func:`datatypes`, one dict each, only the ones a call site needs. The schema
+:func:`datatypes`, :func:`prefixes`, one dict each, only the ones a call site needs. The schema
 entry type decides the serialisation form (Attribute → literal, Association →
-reference, Enumeration → enum IRI); ``xsd:type`` only annotates literals. A name
+reference, Enumeration → enum IRI); ``xsd:type`` only annotates literals —
+any prefixed name or IRI, expanded by the schema's ``ProfileNamespaceMap``. A name
 the schema does not declare — every name without a schema — takes
 ``undefined_namespace`` (``http://triplets#`` unless the caller says otherwise).
 
@@ -254,17 +255,48 @@ def key_types(rdf_map):
     return {name: entry["type"] for name, entry in rdf_map_entries(rdf_map) if entry.get("type")}
 
 
-def _xsd(entry):
-    """Entry's xsd datatype name (``float``, ``string``, ``anyURI``, …) or None."""
-    xsd = str(entry.get("xsd:type", ""))
-    return xsd.removeprefix("xsd:") if xsd.startswith("xsd:") else None
+def prefixes(rdf_map):
+    """prefix → namespace IRI from every ``ProfileNamespaceMap`` (the root's, then each profile
+    section's in schema order; first binding wins); ``xsd``, ``rdf`` and ``rdfs`` are built in
+    where no map binds them — a bundle need not declare ``xsd``."""
+    rdf_map = load_rdf_map(rdf_map)
+    bound = {}
+    for namespace_map in [rdf_map.get("ProfileNamespaceMap"), *(rdf_map[name].get("ProfileNamespaceMap")
+                                                                for name in _sections(rdf_map))]:
+        for prefix, namespace in (namespace_map or {}).items():
+            bound.setdefault(prefix, namespace)
+    return {"xsd": XSD_NS, "rdf": RDF_NS, "rdfs": RDFS_NS} | bound
+
+
+def absolute_datatype(key, text, prefixes):
+    """*key*'s ``xsd:type`` text → datatype IRI: an absolute IRI passes through, ``prefix:local``
+    → the prefix's namespace + local. A text without a prefix, or with one *prefixes* does not
+    bind, raises ValueError naming *key* — the schema is configuration, so a typo fails
+    loudly instead of leaving the key untyped."""
+    if is_iri(text):
+        return text
+    prefix, colon, local = text.partition(":")
+    if not colon:
+        raise ValueError(f"{key}: xsd:type {text!r} has no prefix — write a prefixed name or an absolute IRI")
+    if prefix not in prefixes:
+        raise ValueError(f"{key}: xsd:type {text!r} — prefix {prefix!r} is not bound in ProfileNamespaceMap")
+    return prefixes[prefix] + local
+
+
+_PLAIN_DATATYPES = (XSD_NS + "string", RDF_NS + "langString")
+"""No annotation: ``xsd:string`` is the RDF 1.1 default; ``rdf:langString`` needs a language tag."""
 
 
 def datatypes(rdf_map):
-    """KEY → xsd datatype IRI for Attribute entries; ``None`` = ``xsd:string`` (no annotation).
+    """KEY → datatype IRI for Attribute entries with an ``xsd:type`` (any prefixed name or IRI,
+    expanded by :func:`prefixes`); ``None`` = plain literal (``xsd:string``, ``rdf:langString``).
     Annotation / validation only — it never decides whether a value is a literal or an IRI."""
-    return {name: None if xsd == "string" else XSD_NS + xsd for name, entry in rdf_map_entries(rdf_map)
-            if entry.get("type") == "Attribute" and (xsd := _xsd(entry))}
+    rdf_map = load_rdf_map(rdf_map)
+    bound = prefixes(rdf_map)
+    return {name: None if datatype in _PLAIN_DATATYPES else datatype
+            for name, entry in rdf_map_entries(rdf_map)
+            if entry.get("type") == "Attribute" and entry.get("xsd:type")
+            and (datatype := absolute_datatype(name, str(entry["xsd:type"]), bound))}
 
 
 _VALUE_TYPES = {"Attribute": "literal", "Association": "reference", "Enumeration": "enum"}
@@ -309,7 +341,7 @@ def defined(key, value, namespaces=None, value_types=None):
 
 
 def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS):
-    """VALUE → ``("iri", iri)`` or ``("literal", xsd_datatype_or_None)``.
+    """VALUE → ``("iri", iri)`` or ``("literal", datatype_iri_or_None)``.
 
     Type → class IRI. Otherwise the schema entry type of the KEY decides, never
     the shape of the text: enum → enum IRI, reference → :func:`absolute_id` of

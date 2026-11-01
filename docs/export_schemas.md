@@ -72,7 +72,10 @@ A bundle is a dict of profile sections keyed by profile keyword
                             "namespace": ..., "parameters": [...]}
     "<Class.attribute>":   {"type": "Attribute", "dataType": ..., "xsd:type": ...,
                             "multiplicity": ..., "namespace": ...}
-                            # xsd:type "" when the type resolves to no XSD (e.g. rdf:langString)
+                            # xsd:type: any prefixed name (prefixes from ProfileNamespaceMap;
+                            # xsd, rdf, rdfs built in) or absolute IRI, written as is as
+                            # rdf:datatype / ^^<…>; xsd:string, rdf:langString and "" (no XSD,
+                            # e.g. LangString) write a plain literal; an unbound prefix raises
     "<Class.Association>": {"type": "Association", "range": ..., "attrib": {...}}
     "<Class.enumAttr>":    {"type": "Enumeration", "range": ..., "values": [...]}
     "<Datatype|EnumValue>": supporting definitions referenced by the entries above
