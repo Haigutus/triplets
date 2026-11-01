@@ -44,9 +44,8 @@ from test_parity_shacl_matrix import B, CASES, CIM, PREFIX, SCHEMA, SKIPPED, TRI
 SH = rdflib.Namespace("http://www.w3.org/ns/shacl#")
 UUID = "urn:uuid:"
 
-# the matrix's polars divergences; #185 is about MESSAGE, which this key leaves out
-EXPECTED = {case: reason for (case, engine), reason in XFAIL.items()
-            if engine == "polars" and case != "message_two_values"}
+# the matrix's polars divergences
+EXPECTED = {case: reason for (case, engine), reason in XFAIL.items() if engine == "polars"}
 # a skip no run metadata names: sh:BlankNodeOrIRI is only debug-logged
 UNLISTED = {"nodeKind_blank_or_iri": "#180 sh:nodeKind sh:BlankNodeOrIRI not evaluated and no skipped_shapes entry"}
 EXPECTED |= UNLISTED
