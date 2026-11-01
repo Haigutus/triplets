@@ -613,6 +613,22 @@ cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
     assert sorted(rows.loc[rows["component"] == "sh:pattern", "params"]) == ["1$", "^B"]
 
 
+@pytest.mark.parametrize("flags, regex", [("i", "(?i)a.b"), ("sm", "(?ms)a.b"), ("q", r"a\.b"), ("iq", r"(?i)a\.b")])
+def test_pattern_flags_compile_into_the_regex(flags, regex):
+    """sh:flags folds into the sh:pattern text: q quotes it, i m s are an inline prefix (#177)."""
+    compiled = compile_shapes(_graph(f"""cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:pattern "a.b" ; sh:flags "{flags}" ] ."""))
+    assert list(compiled.ir["params"]) == [regex]
+
+
+def test_unsupported_pattern_flag_skips_the_shape():
+    compiled = compile_shapes(_graph("""cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property cim:P, [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .
+cim:P sh:path cim:IdentifiedObject.name ; sh:pattern "a b" ; sh:flags "x" ."""))
+    assert list(compiled.ir["component"]) == ["sh:minCount"]
+    assert compiled.stats["skipped_shapes"] == [f'{CIM}P: sh:flags "x" not supported']
+
+
 @pytest.mark.parametrize("operator", ["or", "and", "xone"])
 def test_empty_member_list_skips_the_node_shape(operator):
     """An empty sh:or / sh:and / sh:xone list (pyshacl: ShapeLoadError): the node

@@ -359,6 +359,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   reduced to its first inverse member and the other alternatives were dropped. Members that
   name one property in several namespaces still compile to that one KEY
   ([#178](https://github.com/Haigutus/triplets/issues/178)).
+- **`sh:flags` on `sh:pattern` in the pandas, polars and duckdb SHACL engines**: the flags
+  fold into the compiled regex (`q` quotes the pattern, `i` `m` `s` an inline prefix); a flag
+  outside `i m s q` skips the shape (`skipped_shapes`). Before, the flags were ignored
+  ([#177](https://github.com/Haigutus/triplets/issues/177)).
 - **An object typed in several instances counts once on an `( assoc rdf:type )` path**
   (pandas, polars and duckdb SHACL engines): its Type rows are a set, as in pyshacl; before, each
   instance's Type row added the type again, a false `sh:maxCount`.

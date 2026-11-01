@@ -471,7 +471,6 @@ def known(reason, *cases):
 
 
 XFAIL = {
-    **known("#177 sh:flags not read", "pattern_flags"),
     **known("#179 sh:closed on a property shape reported on the value node", "closed_on_property_shape"),
     **known("#180 sh:nodeKind sh:BlankNode not evaluated", "nodeKind_blank_node"),
     **known("#181 sh:in compares lexical forms, not typed literals", "in_numeric"),
