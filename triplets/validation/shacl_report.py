@@ -115,13 +115,13 @@ def report_to_violations(report_graph, shapes_graph=None):
 def _constraint_message(messages):
     """The constraint's own message among a result's prefixed set — the
     [shacl_message]/[engine_message] entry with the prefix stripped (inverse of _messages);
-    first alphabetically for reports written by other tools."""
+    for reports written by other tools, every message sorted and joined by a newline."""
     texts = sorted(str(message) for message in messages)
     for text in texts:
         for prefix in ("[shacl_message] ", "[rdfs_message] ", "[engine_message] "):
             if text.startswith(prefix):
                 return text[len(prefix):]
-    return texts[0] if texts else None
+    return "\n".join(texts) if texts else None
 
 
 def _term_value(term, is_type=False):

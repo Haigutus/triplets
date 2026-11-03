@@ -607,8 +607,7 @@ def _sparql_rows(graph, SH, shape_uri, meta):
          "prefixes": resolved "PREFIX ..." header lines (sh:prefixes → sh:declare),
          "path":     full IRI of the owning shape's sh:path, or None}
 
-    The sparql node's own sh:message overrides the shape's; of several, the first
-    alphabetically (as pyshacl's report reader picks).
+    The sparql node's own sh:message overrides the shape's.
     """
     rows = []
     path = graph.value(shape_uri, SH.path)
@@ -616,7 +615,7 @@ def _sparql_rows(graph, SH, shape_uri, meta):
         select = graph.value(sparql, SH.select)
         if select is None:
             continue
-        message = min(map(str, graph.objects(sparql, SH.message)), default=None)
+        message = _message(graph, SH, sparql)
         # the constraint node joins the lineage: its sh:deactivated switches it off
         row = {**meta, "shapes": (*meta["shapes"], str(sparql)), "component": "sh:sparql",
                "params": {"select": str(select), "prefixes": _prefixes(graph, SH, sparql),
@@ -626,6 +625,13 @@ def _sparql_rows(graph, SH, shape_uri, meta):
             row["message"] = message
         rows.append(row)
     return rows
+
+
+def _message(graph, SH, node):
+    """Every sh:message of *node*, sorted and joined by a newline (pyshacl reports
+    each one); None when it has none."""
+    texts = sorted(map(str, graph.objects(node, SH.message)))
+    return "\n".join(texts) if texts else None
 
 
 def _prefixes(graph, SH, node):
@@ -642,7 +648,7 @@ def _prefixes(graph, SH, node):
 def _shape_meta(graph, SH, shape_uri, target_on, path, inverse, target_by="Type",
                 via_type=False, shapes=()):
     severity = graph.value(shape_uri, SH.severity)
-    message = min(map(str, graph.objects(shape_uri, SH.message)), default=None)
+    message = _message(graph, SH, shape_uri)
     name = graph.value(shape_uri, SH.name)
     description = graph.value(shape_uri, SH.description)
     return {

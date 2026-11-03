@@ -485,11 +485,11 @@ def test_two_severities_read_the_first(engine):
     assert list(run(breaker("b1"), shape, engine)["SEVERITY"]) == ["Warning"]
 
 
-def test_two_messages_read_the_first_alphabetically(engine):
-    """Two sh:message values: the first alphabetically, as pyshacl's report reader keeps."""
+def test_two_messages_read_both_sorted(engine):
+    """Two sh:message values: both, sorted and joined by a newline, as pyshacl reports them."""
     shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:message "beta", "alpha" ] ."""
-    assert list(run(breaker("b1"), shape, engine)["MESSAGE"]) == ["alpha"]
+    assert list(run(breaker("b1"), shape, engine)["MESSAGE"]) == ["alpha\nbeta"]
 
 
 def test_target_subjects_of(engine):
