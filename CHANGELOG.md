@@ -363,8 +363,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fold into the compiled regex (`q` quotes the pattern, `i` `m` `s` an inline prefix); a flag
   outside `i m s q` skips the shape (`skipped_shapes`). Before, the flags were ignored
   ([#177](https://github.com/Haigutus/triplets/issues/177)).
-- **Two `sh:message` values: the engines report the first alphabetically**, as pyshacl's
-  report reader does; before, the first declared
+- **Several `sh:message` values: MESSAGE carries all of them**, sorted and joined by a
+  newline, in the pandas, polars and duckdb SHACL engines and in pyshacl results; before,
+  the engines reported one of them
   ([#185](https://github.com/Haigutus/triplets/issues/185)).
 - **An object typed in several instances counts once on an `( assoc rdf:type )` path**
   (pandas, polars and duckdb SHACL engines): its Type rows are a set, as in pyshacl; before, each
