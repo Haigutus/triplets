@@ -17,8 +17,11 @@ does not masquerade as SHACL (constraint language ``"rdfs"``):
     triplets:range → rdfs:range      triplets:missing (a reference to an object not in the data)
 
 Cardinality comes from the schema's already-resolved ``xsd:minOccours`` /
-``xsd:maxOccours`` fields, datatypes from ``xsd:type`` (the lexical registry
-consumes that form directly), enumeration membership from ``values``. Class
+``xsd:maxOccours`` fields, datatypes from ``xsd:type`` expanded by the schema's
+prefixes: an XSD type is checked as such; any other (``cim:ActivePower``) by the
+XSD type of its own datatype entry (``dataType``, else the IRI's local name — the
+CIMDatatype entry a bundle carries); a type without one is listed in
+``skipped_shapes``, not checked. Enumeration membership comes from ``values``. Class
 rules never widen to subclasses: each Class entry already lists its inherited
 attributes. No rdflib on this path: ``graph`` is None and the pyshacl engine
 refuses schema-compiled shapes.
@@ -28,7 +31,8 @@ import logging
 import pandas
 
 from .._header import _PROPERTY_TYPES
-from ..iri import TYPE_KEY, load_schema, local_value
+from ..iri import (_PLAIN_DATATYPES, TYPE_KEY, XSD_NS, absolute_datatype, load_schema, local_value, prefixes,
+                   split_iri)
 from .schema_scope import (SCOPE_KEY, _merged_entries, class_ancestors, require_entries,
                            scope_sections, scoped_rdf_map)
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
@@ -62,7 +66,8 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False) -> 
     scoped, notes = scoped_rdf_map(schema, rdf_map_scope)
     entries = scoped[SCOPE_KEY]
     require_entries(entries, rdf_map_scope, classes=True)
-    ir = pandas.DataFrame(_class_rows(sections, entries, report_undefined_keys), columns=IR_COLUMNS)
+    bases = _xsd_bases(entries, prefixes(scoped), notes["skipped_shapes"])
+    ir = pandas.DataFrame(_class_rows(sections, entries, bases, report_undefined_keys), columns=IR_COLUMNS)
     ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
     compiled = CompiledShapes(
         graph=None, ir=ir, hash=key, sources=(source,), language="rdfs",
@@ -158,7 +163,30 @@ def _class_meta(sections, entries):
                    "name": None, "description": entry.get("description")}, entry
 
 
-def _class_rows(sections, entries, report_undefined_keys):
+def _xsd_bases(entries, prefixes, skipped):
+    """Attribute KEY → its ``sh:datatype`` params ``xsd:<local>``: the expanded ``xsd:type``
+    when it is an XSD type, else the XSD type of the datatype entry it names (``dataType``,
+    else the IRI's local name). A plain literal type or base (``xsd:string``,
+    ``rdf:langString``) has nothing to check; a KEY with no XSD type is noted in *skipped*, once."""
+    bases = {}
+    for name, entry in entries.items():
+        if isinstance(entry, dict) and entry.get("type") == "Attribute" and entry.get("xsd:type"):
+            declared = str(entry["xsd:type"])
+            datatype = absolute_datatype(name, declared, prefixes)
+            if datatype not in _PLAIN_DATATYPES and not datatype.startswith(XSD_NS):
+                support = entries.get(entry.get("dataType")) or entries.get(split_iri(datatype)[1])
+                base = support.get("xsd:type") if isinstance(support, dict) else None
+                datatype = absolute_datatype(name, str(base), prefixes) if base else ""
+            if datatype in _PLAIN_DATATYPES:
+                continue
+            if datatype.startswith(XSD_NS):
+                bases[name] = "xsd:" + datatype.removeprefix(XSD_NS)
+            else:
+                skipped.append(f"{name}: datatype {declared} has no xsd base type — not checked")
+    return bases
+
+
+def _class_rows(sections, entries, bases, report_undefined_keys):
     """The merged profile's Class entries → IR rows."""
     rows = []
     for meta, entry in _class_meta(sections, entries):
@@ -168,14 +196,14 @@ def _class_rows(sections, entries, report_undefined_keys):
             if isinstance(prop_entry, dict) and prop_entry.get("type") in _PROPERTY_TYPES \
                     and prop not in parameters:
                 parameters.append(prop)
-                rows.extend(_property_rows(meta, prop, prop_entry))
+                rows.extend(_property_rows(meta, prop, prop_entry, bases.get(prop)))
         if report_undefined_keys and parameters:
             rows.append({**meta, "component": "sh:closed", "params": [*parameters, TYPE_KEY]})
     return rows
 
 
-def _property_rows(meta, prop, entry):
-    """One property entry → cardinality + value-space IR rows.
+def _property_rows(meta, prop, entry, datatype):
+    """One property entry (*datatype*: its xsd base type, if any) → cardinality + value-space IR rows.
 
     Per-property shape_id (like SHACL property shapes): rules and alert
     titles group per (profile, class, property)."""
@@ -192,8 +220,8 @@ def _property_rows(meta, prop, entry):
         rows.append({**meta, "component": "sh:maxCount", "params": int(high)})
 
     kind = entry.get("type")
-    if kind == "Attribute" and entry.get("xsd:type"):
-        rows.append({**meta, "component": "sh:datatype", "params": entry["xsd:type"]})
+    if kind == "Attribute" and datatype:
+        rows.append({**meta, "component": "sh:datatype", "params": datatype})
     elif kind == "Enumeration" and entry.get("values"):
         rows.append({**meta, "component": "sh:in", "params": list(entry["values"])})
     return rows

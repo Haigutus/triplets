@@ -37,11 +37,20 @@ Operation and ShortCircuit as published. Same-named entries combine:
   an error. `validate_schema` does not check its datatype. Under
   `validate_shacl` its literals stay plain: pyshacl then reports an
   `sh:datatype` shape on such a key for every value, while the vectorized
-  engines' lexical check judges the text.
+  engines' lexical check judges the text. The types compare expanded by the
+  merged prefixes: `xsd:float` and `http://www.w3.org/2001/XMLSchema#float` agree.
 - Enumeration `values`: union.
 
-Datatype conflicts (not checked) are listed in the run's `skipped_shapes`;
-relaxed cardinalities and united enumerations (checked, more loosely) in its
+An `xsd:type` outside the XSD namespace (`cim:ActivePower`) is checked by
+`validate_schema` as its base type: the `xsd:type` of the schema's own entry
+for that datatype (named by the Attribute's `dataType`, else the IRI's local
+name — the `CIMDatatype` entry a bundle carries). Without one it is listed in
+`skipped_shapes` (`SvPowerFlow.p: datatype cim:ActivePower has no xsd base
+type — not checked`). A plain-literal type or base (`xsd:string`,
+`rdf:langString`) has nothing to check: no rule, no note.
+
+Datatype conflicts and types without an xsd base (not checked) are listed in
+the run's `skipped_shapes`; relaxed cardinalities and united enumerations (checked, more loosely) in its
 `relaxed_constraints`, with one warning per run naming their count; each note
 quotes every profile's own value (`cardinality relaxed to 0..2 (DL: 1..1, DY:
 0..1, GL: 1..2)`). The merged `ProfileMetadata` keeps every profile's

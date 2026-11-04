@@ -12,6 +12,7 @@ from triplets.validation import compile_schema, enrich, validate_schema
 
 ENGINES = ["pandas", "polars", "duckdb"]
 CIM = "http://iec.ch/TC57/CIM100#"
+XSD = "http://www.w3.org/2001/XMLSchema#"
 
 
 @pytest.fixture(params=ENGINES)
@@ -148,12 +149,57 @@ def test_listed_profiles_are_merged(engine):
     assert v.attrs["validation"]["skipped_shapes"] == []
 
 
-def test_datatype_conflict_is_not_checked(engine):
-    schema = {"EQ": EQ, "XX": {"Switch.retained": attribute("0", "1", "xsd:integer")}}
+@pytest.mark.parametrize("other, conflict", [("xsd:integer", True), (XSD + "boolean", False)])
+def test_datatype_conflict_is_not_checked(engine, other, conflict):
+    """Types compare expanded: the full IRI of xsd:boolean is the same type, still checked."""
+    schema = {"EQ": EQ, "XX": {"Switch.retained": attribute("0", "1", other)}}
     v = validate_schema(frame(breaker("b1", *OK, ("Switch.retained", "maybe"))), schema,
                         rdf_map_scope=["EQ", "XX"], engine=engine)
-    assert violating(v, "xsd:type") == set()
-    assert any("Switch.retained: datatype conflict" in entry for entry in v.attrs["validation"]["skipped_shapes"])
+    assert violating(v, "xsd:type") == (set() if conflict else {("b1", "maybe")})
+    assert any("Switch.retained: datatype conflict" in entry
+               for entry in v.attrs["validation"]["skipped_shapes"]) == conflict
+
+
+FLOAT = {"type": "CIMDatatype", "xsd:type": "xsd:float", "namespace": CIM}
+
+
+def typed(entries, *properties):
+    """Breaker b1 against EQ with *entries* replaced / added; cim bound at the root."""
+    schema = {"ProfileNamespaceMap": {"cim": CIM}, "EQ": {**EQ, **entries}}
+    return frame(breaker("b1", *properties)), schema
+
+
+@pytest.mark.parametrize("retained, support", [
+    (attribute("0", "1", "xsd:float"), {}),
+    (attribute("0", "1", XSD + "float"), {}),
+    (attribute("0", "1", "cim:ActivePower"), {"ActivePower": FLOAT}),                       # the IRI's local name
+    ({**attribute("0", "1", CIM + "ActivePower"), "dataType": "Power"}, {"Power": FLOAT}),  # dataType names it
+    ({**attribute("0", "1", "cim:ActivePower"), "dataType": "Missing"}, {"ActivePower": FLOAT}),
+])
+def test_datatype_checked_by_xsd_base_type(engine, retained, support):
+    data, schema = typed({"Switch.retained": retained, **support}, *OK, ("Switch.retained", "not-a-number"))
+    v = validate_schema(data, schema, rdf_map_scope="EQ", engine=engine)
+    assert violating(v, "xsd:type") == {("b1", "not-a-number")}
+    assert v.attrs["validation"]["skipped_shapes"] == []
+
+
+@pytest.mark.parametrize("datatype, skipped", [
+    ("cim:ActivePower", ["IdentifiedObject.mRID: datatype cim:ActivePower has no xsd base type — not checked"]),
+    ("rdf:langString", []),                                                    # a plain literal: nothing to check
+])
+def test_datatype_without_xsd_base_is_not_checked(engine, datatype, skipped):
+    """mRID is a parameter of Breaker and Switch: at most one note per key."""
+    data, schema = typed({"IdentifiedObject.mRID": attribute("1", "1", datatype)},
+                         ("IdentifiedObject.mRID", "not-a-number"), ("IdentifiedObject.name", "B"))
+    v = validate_schema(data, schema, rdf_map_scope="EQ", engine=engine)
+    assert len(v) == 0 and v.attrs["validation"]["skipped_shapes"] == skipped
+    ir = compile_schema(schema, "EQ").ir
+    assert "IdentifiedObject.mRID" not in set(ir.loc[ir["component"] == "sh:datatype", "path"])
+
+
+def test_datatype_unbound_prefix_raises():
+    with pytest.raises(ValueError, match="prefix 'foo' is not bound"):
+        compile_schema(typed({"Switch.retained": attribute("0", "1", "foo:ActivePower")})[1], "EQ")
 
 
 def test_scope_by_profile_iri():
