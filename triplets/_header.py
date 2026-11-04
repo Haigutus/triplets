@@ -17,7 +17,8 @@ identity. So does the merge of several profiles into one schema
 rdf_map_scope. Import-light on purpose: stdlib only.
 """
 
-from .iri import _root_entries, _sections, load_rdf_map  # noqa: F401 — load_rdf_map re-exported for the export engines
+from .iri import _root_entries, _sections, absolute_datatype, prefixes
+from .iri import load_rdf_map  # noqa: F401 — re-exported for the export engines
 
 # Profile identity a header may declare, in priority order: old FullModel
 # header messageType, new dcat:Dataset keyword, then the URI fields
@@ -103,8 +104,9 @@ def merge_sections(rdf_map, sections):
     - Class: ``parameters`` and ``inheritance`` lists union.
     - Property cardinality: lowest ``xsd:minOccours``, highest ``xsd:maxOccours``
       (``n`` = unbounded; a missing bound is no bound).
-    - Attribute ``xsd:type``: on a difference (a definition without a type counts) the
-      intended type is unknown, so the key is left untyped (no datatype check, plain literal).
+    - Attribute ``xsd:type``: on a difference (compared expanded by the merged prefixes; a
+      definition without a type counts) the intended type is unknown, so the key is left
+      untyped (no datatype check, plain literal).
     - Enumeration ``values``: union.
 
     Every other field comes from the first definition. ``notes`` holds each decision as text,
@@ -127,9 +129,10 @@ def merge_sections(rdf_map, sections):
         fields = dict.fromkeys(field for each in metadata for field in each)
         merged["ProfileMetadata"] = {"sections": list(sections),
                                      **{field: [each.get(field) for each in metadata] for field in fields}}
-    if prefixes := {prefix: namespace for each in reversed(namespace_maps)          # first binding wins
+    if bindings := {prefix: namespace for each in reversed(namespace_maps)          # first binding wins
                     for prefix, namespace in (each or {}).items()}:
-        merged["ProfileNamespaceMap"] = prefixes
+        merged["ProfileNamespaceMap"] = bindings
+    bound = prefixes(merged)
     definitions = {}                       # name → [(section, entry)] in scope order
     for section, entries in sources:
         for name, entry in entries.items():
@@ -140,13 +143,14 @@ def merge_sections(rdf_map, sections):
         merged[name] = dict(first) if isinstance(first, dict) else first
         if len(found) > 1 and isinstance(first, dict):
             _merge_entry(name, merged[name], [(section, entry) for section, entry in found
-                                              if isinstance(entry, dict)], notes)
+                                              if isinstance(entry, dict)], notes, bound)
     return merged, notes
 
 
-def _merge_entry(name, merged, found, notes):
+def _merge_entry(name, merged, found, notes, bound):
     """Combine every profile's definition of *name* (``found``: ``[(section, entry)]``)
-    into *merged*; notes quote each profile's own value."""
+    into *merged*; notes quote each profile's own value. ``xsd:type`` values compare
+    expanded by *bound* prefixes (``xsd:float`` and its full IRI are one type)."""
     kind = merged.get("type")
     if kind == "Class":
         for field in ("parameters", "inheritance"):
@@ -166,7 +170,8 @@ def _merge_entry(name, merged, found, notes):
         each = ", ".join(f"{section}: {lower}..{upper}" for (section, _), lower, upper in zip(found, low, high))
         notes["relaxed_constraints"].append(f"{name}: cardinality relaxed to {merged['multiplicity']} ({each})")
     types = [entry.get("xsd:type") for _, entry in found]
-    if kind == "Attribute" and len(set(types)) > 1:
+    if kind == "Attribute" and len({absolute_datatype(name, str(datatype), bound) if datatype else None
+                                    for datatype in types}) > 1:
         merged.pop("xsd:type", None)
         each = ", ".join(f"{section}: {datatype or 'untyped'}" for (section, _), datatype in zip(found, types))
         notes["skipped_shapes"].append(f"{name}: datatype conflict ({each}) — not typed or checked by the schema")

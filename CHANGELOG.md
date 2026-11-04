@@ -380,6 +380,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `iri.absolute_datatype(key, text, prefixes)`; the scoped validation schema keeps the
   root's and every scoped profile's prefixes, bound as in the full schema
   ([#158](https://github.com/Haigutus/triplets/issues/158)).
+- **`validate_schema` checks a non-xsd `xsd:type` by its xsd base type**: `cim:ActivePower`
+  or a full IRI (an XSD one too) was compiled as is and checked nothing. The type is now
+  expanded by the schema's prefixes; a non-XSD one takes the `xsd:type` of the schema's own
+  datatype entry (`dataType`, else the IRI's local name), and without one is listed in
+  `skipped_shapes`; a plain-literal type (`rdf:langString`) is neither checked nor listed.
+  Profile merges compare the expanded types, so `xsd:float` and its full IRI are no
+  conflict, nor are `""` and a missing `xsd:type`
+  ([#158](https://github.com/Haigutus/triplets/issues/158)).
 - **An object typed in several instances counts once on an `( assoc rdf:type )` path**
   (pandas, polars and duckdb SHACL engines): its Type rows are a set, as in pyshacl; before, each
   instance's Type row added the type again, a false `sh:maxCount`.
