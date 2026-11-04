@@ -184,8 +184,8 @@ def set_engine(**engines_by_kind) -> None:
     Per-call ``engine=`` still wins over this. Process-global and intended for
     startup configuration; loads the engine eagerly so a bad name or missing
     dependency fails here, not at first use. Note per-call capability
-    constraints still apply (e.g. cimxml ``datatypes=True`` requires the
-    python_lxml engine regardless of the override).
+    constraints still apply (e.g. a streaming N-Quads export of a
+    ``RecordBatchReader`` requires the polars engine regardless of the override).
     """
     unknown = set(engines_by_kind) - set(REGISTRIES)
     if unknown:

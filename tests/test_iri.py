@@ -182,10 +182,18 @@ def test_nquads_custom_datatype_round_trip(engine):
     assert read.query("KEY == 'ACLineSegment.r'").VALUE.tolist() == ["1.5"]
 
 
-def test_cimxml_lxml_writes_custom_datatype():
-    out = custom_type_frame().export_to_cimxml(rdf_map=custom_type_schema(), engine="python_lxml", datatypes=True,
-                                               export_type="xml_per_instance", export_to_memory=True)[0]
+@pytest.mark.parametrize("engine", ["python_lxml", "cython_pugixml"])
+def test_cimxml_writes_custom_datatype(engine):
+    if engine == "cython_pugixml":
+        pytest.importorskip("triplets.export.cimxml_cython_pugixml")
+    kwargs = dict(rdf_map=custom_type_schema(), engine=engine, datatypes=True,
+                  export_type="xml_per_instance", export_to_memory=True)
+    frame = custom_type_frame()
+    out = frame.export_to_cimxml(**kwargs)[0]
     assert f'rdf:datatype="{RESISTANCE}">1.5<' in out.getvalue().decode()
+    # no profile resolved: the KEY is written as undefined, still typed (the map spans every profile)
+    undefined = frame[frame.KEY != "Model.profile"].export_to_cimxml(export_undefined=True, **kwargs)[0]
+    assert f'<triplets:ACLineSegment.r rdf:datatype="{RESISTANCE}">1.5<' in undefined.getvalue().decode()
 
 
 # ── local (schema-free), one row per rule ──────────────────────────────────────

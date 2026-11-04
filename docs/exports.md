@@ -32,8 +32,7 @@ Input flavor: the cython engine consumes polars input directly — per-instance
 frames stay polars and reach the extension as Arrow `large_string` /
 dictionary columns through the shared accessor (`triplets/_arrow/
 string_column.h`), no pandas hop. The python_lxml engine is pandas-only, so
-polars input converts first; `datatypes=True` implies python_lxml under
-`engine="auto"`.
+polars input converts first.
 
 DuckDB notes: `con.read_rdf(paths)` streams one Arrow batch per XML file into
 the table (`append=True` adds instead of replacing) — see
@@ -54,8 +53,7 @@ Engine aliases: `performance` / `pugixml` -> `cython_pugixml`, `lxml` / `pandas`
 
 `export_to_cimxml(..., datatypes=True)` annotates literal elements with
 `rdf:datatype` from the schema's `xsd:type` (like N-Quads; `xsd:string` stays
-plain). Supported by `python_lxml` only — passing `datatypes=True` with
-`engine="auto"` forces the `python_lxml` engine.
+plain). Both engines write the same attributes.
 
 ## Call Sequence (CIM XML)
 
@@ -145,7 +143,7 @@ files = data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine
 # CIM XML / RDF-XML concern, not N-Quads). ED2 shown for consistency.
 data.export_to_nquads("grid.nq", rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED2)
 
-# CIM XML with rdf:datatype annotations (python_lxml only; forces that engine)
+# CIM XML with rdf:datatype annotations
 files = data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, datatypes=True)
 
 # Arrow — columnar interchange (ID, KEY, VALUE, INSTANCE_ID) for qlever's Arrow ingest

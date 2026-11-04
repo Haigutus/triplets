@@ -261,7 +261,7 @@ def export_to_cimxml(data,
     datatypes : bool, default False
         If True, annotate literal elements with rdf:datatype from the schema's
         xsd:type, like the N-Quads export ("44.84" → rdf:datatype xsd#float;
-        xsd:string stays plain). Currently python_lxml only — "auto" picks it.
+        xsd:string stays plain). Both engines.
 
     Returns
     -------
@@ -295,9 +295,6 @@ def export_to_cimxml(data,
     _check_columns(data)
     if _flavor(data) == "pyarrow":
         data = _to_pandas(data)          # arrow-backed dtypes — near zero-copy
-    if datatypes and engine == "auto":
-        logger.debug("cimxml engine set: python_lxml (datatypes=True not yet in cython engine)")
-        engine = "python_lxml"
     engine_name, engine_module = get_cimxml_engine(engine)
     generate = engine_module.generate_xml
 

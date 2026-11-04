@@ -53,9 +53,9 @@ sparql=..., ...)` overrides it globally (loads eagerly, fails fast).
 Precedence: per-call `engine=` > `set_engine()` > auto probe order.
 `set_engine` is process-global startup configuration, not a per-thread
 control — concurrent code passes `engine=` per call. Per-call capability
-constraints still apply regardless of overrides (cimxml `datatypes=True`
-requires python_lxml; validation keeps duckdb out of auto because it is the
-explicit larger-than-memory choice).
+constraints still apply regardless of overrides (a streaming N-Quads export
+of a `RecordBatchReader` requires polars; validation keeps duckdb out of auto
+because it is the explicit larger-than-memory choice).
 
 ## IRI contract (`triplets.iri`)
 
@@ -97,7 +97,7 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   (`validation.schema_scope.scoped_rdf_map`), so first-wins never decides
   between profiles there.
 - `xsd:type` is any prefixed name or absolute IRI, expanded by `prefixes`
-  (`absolute_datatype`); N-Quads and `python_lxml` CIM XML write it as is
+  (`absolute_datatype`); N-Quads and both CIM XML engines write it as is
   (`cim:ActivePower` → `^^<…#ActivePower>`). A prefix no `ProfileNamespaceMap`
   binds raises `ValueError` naming the KEY when the map is built — in every
   entry point that builds `datatypes`, whether or not the KEY occurs in the data.
