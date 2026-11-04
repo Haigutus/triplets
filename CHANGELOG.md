@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`cython_pugixml` CIM XML export writes `rdf:datatype`** with `datatypes=True`: the
+  same attributes as `python_lxml`, from the same `iri.datatypes(rdf_map)` map, undefined
+  keys (`export_undefined=True`) included; polars input stays on the cython engine. Before,
+  the engine raised `NotImplementedError` and `engine="auto"` switched to `python_lxml`
+  ([#158](https://github.com/Haigutus/triplets/issues/158)).
 - **`validate_shacl(..., abort_on_first=False)`** — stop at the first Violation for
   a yes/no gate (polars / duckdb before the pandas-delegated components, pandas between
   rules, pyshacl after its first failing constraint); `attrs["validation"]["aborted"]`:

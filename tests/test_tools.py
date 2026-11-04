@@ -669,7 +669,7 @@ class TestExportToCimxml:
             rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1,
             export_type="xml_per_instance",
             export_to_memory=True,
-            datatypes=True,  # engine=auto must steer to python_lxml
+            datatypes=True,
         )
         xml = result[0].getvalue().decode()
         assert 'rdf:datatype="http://www.w3.org/2001/XMLSchema#float"' in xml
@@ -681,17 +681,31 @@ class TestExportToCimxml:
         reimported = pandas.read_RDF([result[0]])
         assert reimported.get_types_count()["ACLineSegment"] == svedala_eq.get_types_count()["ACLineSegment"]
 
-    def test_datatypes_unsupported_on_cython(self, svedala_eq):
+    def test_engines_identical_with_datatypes(self, svedala_eq):
+        """datatypes=True: both engines write the same rdf:datatype attributes, and rdflib
+        reads each ED2 output as the graph of the N-Quads export (typed literals included)."""
         require_cimxml_engine("cython_pugixml")
+        import collections
+        import re
+        rdflib = pytest.importorskip("rdflib")
+        from rdflib.compare import isomorphic
         from triplets.export_schema import schemas
-        with pytest.raises(NotImplementedError, match="python_lxml"):
-            svedala_eq.export_to_cimxml(
-                rdf_map=schemas.ENTSOE_CGMES_2_4_15_552_ED1,
-                export_type="xml_per_instance",
-                export_to_memory=True,
-                engine="cython_pugixml",
-                datatypes=True,
-            )
+        rdf_map = schemas.ENTSOE_CGMES_3_0_0_552_ED2
+        dataset = rdflib.Dataset()
+        dataset.parse(triplets.export.export_to_nquads(svedala_eq, rdf_map=rdf_map, export_undefined=False,
+                                                       export_to_memory=True), format="nquads")
+        expected = rdflib.Graph()
+        for subject, predicate, value, _ in dataset.quads((None, None, None, None)):
+            expected.add((subject, predicate, value))
+
+        attributes = {}
+        for engine in CIMXML_ENGINES:
+            xml = svedala_eq.export_to_cimxml(rdf_map=rdf_map, export_type="xml_per_instance",
+                                              export_to_memory=True, engine=engine, datatypes=True)[0].getvalue()
+            attributes[engine] = collections.Counter(re.findall(rb'rdf:datatype="([^"]+)"', xml))
+            assert isomorphic(rdflib.Graph().parse(data=xml, format="xml"), expected), engine
+        assert attributes["python_lxml"] == attributes["cython_pugixml"]
+        assert attributes["cython_pugixml"][b"http://www.w3.org/2001/XMLSchema#float"] > 0
 
     def test_engines_produce_identical_output(self, svedala_eq):
         require_cimxml_engine("cython_pugixml")

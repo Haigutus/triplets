@@ -89,9 +89,11 @@ FORMATS = {
             # shared accessor), python_lxml converts to pandas — both must match
             "cython_pugixml_polars_input": lambda d: export.export_to_cimxml(_polars(d), rdf_map=RDF_MAP, engine="cython_pugixml", export_to_memory=True),
             "python_lxml_polars_input": lambda d: export.export_to_cimxml(_polars(d), rdf_map=RDF_MAP, engine="python_lxml", export_to_memory=True),
+            "cython_pugixml_datatypes": lambda d: export.export_to_cimxml(d, rdf_map=RDF_MAP, engine="cython_pugixml", datatypes=True, export_to_memory=True),
             "arrow_input": lambda d: export.export_to_cimxml(_arrow(d), rdf_map=RDF_MAP, export_to_memory=True),
         },
         "needs": {"cython_pugixml": ["pyarrow", "triplets.export.cimxml_cython_pugixml"],
+                  "cython_pugixml_datatypes": ["pyarrow", "triplets.export.cimxml_cython_pugixml"],
                   "cython_pugixml_polars_input": ["polars", "pyarrow", "triplets.export.cimxml_cython_pugixml"],
                   "arrow_input": ["pyarrow"],
                   "python_lxml_polars_input": ["polars"]},
@@ -212,16 +214,19 @@ def test_cimxml_cython_byte_identical_across_input_flavors(svedala_pandas):
     from_polars = export.export_to_cimxml(_polars(svedala_pandas), **kwargs)
     assert len(from_pandas) == len(from_polars)
     by_name = {f.name: f.getvalue() for f in from_pandas}
+    assert all(b"rdf:datatype" not in xml for xml in by_name.values())     # datatypes=False writes none
     for f in from_polars:
         assert f.getvalue() == by_name[f.name]
 
 
-def test_cimxml_datatypes_polars_routes_to_lxml(svedala_pandas):
-    """datatypes=True on polars input auto-picks python_lxml and still works."""
-    pytest.importorskip("polars")
-    out = export.export_to_cimxml(_polars(svedala_pandas), rdf_map=RDF_MAP, datatypes=True,
-                                  export_type="xml_per_instance", export_to_memory=True)
-    assert out and b"rdf:datatype" in out[0].getvalue()
+def test_cimxml_datatypes_polars_stays_on_cython(svedala_pandas):
+    """datatypes=True on polars input: engine="auto" writes the cython engine's bytes, typed."""
+    _require(FORMATS["cimxml"], "cython_pugixml_polars_input")
+    kwargs = dict(rdf_map=RDF_MAP, datatypes=True, export_type="xml_per_instance", export_to_memory=True)
+    auto = export.export_to_cimxml(_polars(svedala_pandas), **kwargs)
+    cython = {f.name: f.getvalue() for f in export.export_to_cimxml(_polars(svedala_pandas), engine="cython_pugixml", **kwargs)}
+    assert {f.name: f.getvalue() for f in auto} == cython
+    assert all(b"rdf:datatype" in xml for xml in cython.values())
 
 
 def test_cimxml_polars_input_parallel(svedala_pandas):

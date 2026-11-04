@@ -15,6 +15,7 @@ import pyarrow
 
 from .cimxml_cython_pugixml import generate_xml_from_arrow
 from .cimxml_utils import load_rdf_map, resolve_instance_config
+from .. import iri
 from ..iri import TRIPLETS_NS, TYPE_KEY
 from .._engine_detect import to_arrow
 
@@ -97,12 +98,9 @@ def generate_xml(instance_data,
     dict
         {'filename': str, 'file': bytes (UTF-8 XML)}
     """
-    if datatypes:
-        raise NotImplementedError(
-            "rdf:datatype annotations are not implemented in the cython_pugixml engine yet — "
-            "use engine='python_lxml' (engine='auto' picks it automatically when datatypes=True)")
     rdf_map = load_rdf_map(rdf_map)
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
+    key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))
@@ -120,7 +118,7 @@ def generate_xml(instance_data,
 
     xml = generate_xml_from_arrow(batch, rdf_map, namespace_map, instance_rdf_map, file_name,
                                   class_KEY=class_KEY, export_undefined=export_undefined, comment=comment,
-                                  undefined_namespace=undefined_namespace)
+                                  undefined_namespace=undefined_namespace, key_datatypes=key_datatypes)
 
     logger.info("Exporting RDF to {}".format(file_name))
 
