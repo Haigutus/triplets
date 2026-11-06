@@ -43,9 +43,10 @@ logger = logging.getLogger(__name__)
 PRESENTED = {"sh:minCount": "xsd:minOccurs", "sh:maxCount": "xsd:maxOccurs",
              "sh:datatype": "xsd:type", "sh:in": "rdfs:range",
              "triplets:range": "rdfs:range", "sh:closed": "schema:domainIncludes"}
+_SEVERITIES = ("Violation", "Warning", "Info")
 
 
-def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False) -> CompiledShapes:
+def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False, severity="Violation") -> CompiledShapes:
     """Compile the scoped profiles of an export schema (dict or path), merged into one.
 
     rdf_map_scope : profile identifier or sequence of them
@@ -55,10 +56,13 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False) -> 
         False: only the keys the scoped profiles define are checked. True also
         reports keys on an object that no scoped profile defines for its class
         (one schema:domainIncludes check per class).
+    severity : {"Violation", "Warning", "Info"}, default "Violation"
+        The severity of every rule.
     """
+    _require_severity(severity)
     schema, digest, source = load_schema(rdf_map)
     sections = scope_sections(schema, rdf_map_scope)
-    key = f"schema|{digest}|{sections}|undefined={report_undefined_keys}"
+    key = f"schema|{digest}|{sections}|undefined={report_undefined_keys}|severity={severity}"
     if key in _COMPILE_CACHE:
         logger.debug("schema compile cache hit: %s", key[:40])
         return _COMPILE_CACHE[key]
@@ -69,6 +73,7 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False) -> 
     bases = _xsd_bases(entries, prefixes(scoped), notes["skipped_shapes"])
     ir = pandas.DataFrame(_class_rows(sections, entries, bases, report_undefined_keys), columns=IR_COLUMNS)
     ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
+    ir["severity"] = severity
     compiled = CompiledShapes(
         graph=None, ir=ir, hash=key, sources=(source,), language="rdfs",
         stats={"node_shapes": int(ir["target_on"].nunique()), "constraints": len(ir),
@@ -80,7 +85,7 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False) -> 
 
 
 def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_missing_targets=True,
-                       inheritance=True) -> CompiledShapes:
+                       inheritance=True, severity="Violation") -> CompiledShapes:
     """Compile the association reference checks of the scoped (source) profiles, merged.
 
     A reference conforms when ANY type of the referenced object (RDF types are
@@ -92,14 +97,17 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
     report_missing_targets : bool, default True
         Also report references whose object is not in the validated data
         (``triplets:missing``); False leaves them silent.
+    severity : {"Violation", "Warning", "Info"}, default "Violation"
+        The severity of every rule.
     """
+    _require_severity(severity)
     schema, digest, source = load_schema(rdf_map)
     sources = scope_sections(schema, rdf_map_scope)
     targets = scope_sections(schema, target_rdf_map_scope) if target_rdf_map_scope else []
     if sources is None and targets:
         raise ValueError("target_rdf_map_scope names profiles — name the source profiles too")
     key = (f"references|{digest}|{sources}|{targets}|missing={report_missing_targets}"
-           f"|inheritance={inheritance}")
+           f"|inheritance={inheritance}|severity={severity}")
     if key in _COMPILE_CACHE:
         return _COMPILE_CACHE[key]
 
@@ -124,6 +132,7 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
             rows.append({**meta, "component": "triplets:missing", "params": sorted(classes)})
     ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
     ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
+    ir["severity"] = severity
     compiled = CompiledShapes(
         graph=None, ir=ir, hash=key, sources=(source,), language="rdfs",
         stats={"node_shapes": int(ir["target_on"].nunique()), "constraints": len(ir),
@@ -131,6 +140,11 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
                "skipped_shapes": skipped, "relaxed_constraints": [], "unknown_components": []})
     _COMPILE_CACHE[key] = compiled
     return compiled
+
+
+def _require_severity(severity):
+    if severity not in _SEVERITIES:
+        raise ValueError(f"severity must be one of {_SEVERITIES}, not {severity!r}")
 
 
 def _associations(sections, entries):
@@ -158,7 +172,7 @@ def _class_meta(sections, entries):
         if isinstance(entry, dict) and entry.get("type") == "Class":
             yield {"shape_id": f"{prefix}{name}", "shapes": (f"{prefix}{name}",), "target_on": name,
                    "target_by": "Type", "path": None, "inverse": False, "via_type": False,
-                   "component": None, "params": None, "severity": "Violation", "message": None,
+                   "component": None, "params": None, "message": None,
                    # no name: the SARIF title synthesizes "RDFS <profile> <Class> <attr>"
                    "name": None, "description": entry.get("description")}, entry
 

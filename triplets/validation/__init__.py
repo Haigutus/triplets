@@ -307,7 +307,7 @@ def _message_sources(violations, ir):
 
 
 def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_undefined_keys=False,
-                    engine="auto", undefined_namespace=CIM_NS, **kwargs):
+                    engine="auto", undefined_namespace=CIM_NS, severity="Violation", **kwargs):
     """Validate triplet data against the export schema: cardinality, datatypes and
     enumerations of the scoped profiles, per instance.
 
@@ -324,11 +324,13 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
         A scope without Class entries raises ValueError.
     report_undefined_keys : bool, default False
         Also report keys on an object that no scoped profile defines for its class.
+    severity : {"Violation", "Warning", "Info"}, default "Violation"
+        The SEVERITY of every finding (``triplets:lexicalForm`` stays Warning).
 
     The PROFILE column lists the scoped section keys (``["EQ", "OP", "SC"]``).
     """
     started = datetime.now(timezone.utc)
-    compiled = compile_schema(rdf_map, rdf_map_scope, report_undefined_keys)   # caches on the file digest
+    compiled = compile_schema(rdf_map, rdf_map_scope, report_undefined_keys, severity)   # caches on the file digest
     rdf_map = load_rdf_map(rdf_map)
     sections = scope_sections(rdf_map, rdf_map_scope)
     table_name = _table_ref(data, **kwargs)
@@ -348,7 +350,7 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
 
 def validate_schema_references(data, rdf_map, data_scope=None, rdf_map_scope=None, target_data_scope=None,
                                target_rdf_map_scope=(), report_missing_targets=True, engine="auto",
-                               inheritance=True, undefined_namespace=CIM_NS, **kwargs):
+                               inheritance=True, undefined_namespace=CIM_NS, severity="Violation", **kwargs):
     """Check the reference types of the source instances' associations.
 
     Every instance in *data_scope* is checked on its own against the
@@ -374,9 +376,12 @@ def validate_schema_references(data, rdf_map, data_scope=None, rdf_map_scope=Non
         instances (``triplets:missing``); False leaves them silent.
     inheritance : bool, default True
         False accepts the range class itself only.
+    severity : {"Violation", "Warning", "Info"}, default "Violation"
+        The SEVERITY of every finding.
     """
     started = datetime.now(timezone.utc)
-    compiled = compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope, report_missing_targets, inheritance)
+    compiled = compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope, report_missing_targets, inheritance,
+                                  severity)
     rdf_map = load_rdf_map(rdf_map)
     sections = scope_sections(rdf_map, rdf_map_scope)
     table_name = _table_ref(data, **kwargs)
