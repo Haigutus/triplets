@@ -811,6 +811,17 @@ enrichment pass first (an already-enriched frame is used as-is).
   shapes, `RDFS <profiles> <Class> <attr>` for schema runs, `(N×)` appended
   when grouped; `MESSAGE` falls back to a generated text (message is
   mandatory in SARIF).
+- Every rule carries `help` (text + markdown, the panel GitHub shows under
+  an alert), built from the group's first finding and the run metadata:
+  *What this checks* — the shape's own `sh:message`, the path and the
+  `EXPECTED` statement (verbatim, long value lists included); *Schema
+  context* when enriched with the `rdf_map` — the property description with
+  its multiplicity and the class description; *Source* — the shape IRI
+  (`http…` shapes; also `helpUri`), the profiles of a schema run, the shapes
+  file when the run used exactly one, and a link to the constraint's
+  definition (the SHACL spec section for `sh:*`, this page for
+  `triplets:*`, the term IRI for `xsd:`/`rdfs:`/`schema:`). Lines without
+  data are left out.
 - RDF objects carry no text coordinates through the triplets frame:
   results always point at the model via `logicalLocations` (`Type/ID` +
   object name). Passing `sources=` (the original CIM/XML files — paths,

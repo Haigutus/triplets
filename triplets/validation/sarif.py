@@ -22,7 +22,7 @@ import pandas
 
 from .context import ENRICHMENT_COLUMNS, enrich
 from .locations import LOCATION_COLUMNS, locate_violations
-from .shacl_report import message_prefix, profile_text
+from .shacl_report import _expand, message_prefix, profile_text
 from ..iri import split_iri
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 _SCHEMA = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"
 _LEVELS = {"Violation": "error", "Warning": "warning", "Info": "note"}
 _SAMPLES = 3   # per end: grouped results carry the first 3 and last 3 instances
+# violation-type prefix → where the constraint is defined (the term IRI otherwise)
+_CONSTRAINT_DOCS = {"sh": "https://www.w3.org/TR/shacl/#{local}",
+                    "triplets": "https://github.com/Haigutus/triplets/blob/main/docs/validation.md"}
 
 
 def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True,
@@ -88,15 +91,16 @@ def build_sarif(violations, group=True, sources=None):
         if column not in frame.columns:
             frame[column] = pandas.NA
 
-    language = violations.attrs.get("validation", {}).get("language", "shacl")
+    meta = violations.attrs.get("validation", {})
+    language = meta.get("language", "shacl")
     groups = [(key, rows.to_dict("records")) for key, rows
               in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False)]
 
     rules, results = [], []
     seen_ids = {}
     for (shape, constraint), records in groups:
-        rule = _rule(shape, constraint, records, seen_ids,
-                     occurrences=len(records) if group else None, language=language)
+        rule = _rule(shape, constraint, records, seen_ids, occurrences=len(records) if group else None,
+                     language=language, references=meta.get("references"))
         rule_index = len(rules)
         rules.append(rule)
         if group:
@@ -106,7 +110,6 @@ def build_sarif(violations, group=True, sources=None):
                            for record in records)
 
     import triplets
-    meta = violations.attrs.get("validation", {})
     # GitHub displays a result only if it has a location: rows with neither a
     # focus ID nor stamped source columns fall back to a whole-file artifact —
     # the shapes file for tool findings (triplets:*), else the first data file
@@ -169,7 +172,7 @@ def _samples(records):
     return records if len(records) <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
 
 
-def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shacl"):
+def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shacl", references=None):
     identifier = f"{split_iri(str(shape))[1]}/{constraint}" if not pandas.isna(shape) else str(constraint)
     if identifier in seen_ids:                       # distinct shapes, same local name
         seen_ids[identifier] += 1
@@ -185,15 +188,70 @@ def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shac
     name = f"{language.upper()} {name}" if name else None
     if name and occurrences:
         name = f"{name} ({occurrences}×)"
+    uri = str(shape) if not pandas.isna(shape) and str(shape).startswith("http") else None
     return _prune({
         "id": identifier,
         "name": name,
         "shortDescription": {"text": name} if name else None,
         "fullDescription": _text(first["SHAPE_DESCRIPTION"]),
-        "helpUri": str(shape) if not pandas.isna(shape) and str(shape).startswith("http") else None,
+        "helpUri": uri,
+        "help": _help(first, uri, constraint, references),
         "defaultConfiguration": {"level": _LEVELS.get(_value(first["SEVERITY"]), "warning")},
         "properties": _prune({"sourceShape": _value(shape), "constraint": str(constraint)}),
     })
+
+
+def _help(record, shape_iri, constraint, references=None):
+    """Rule help (text + markdown) — the panel under a GitHub alert: what the
+    constraint checks (the shape's own sh:message, path, expected value), the
+    schema context (when enriched with the rdf_map) and the source (shape IRI,
+    profiles, the single shapes file, the constraint's definition). Lines
+    without data are left out, sections without lines dropped."""
+    path, constraint = _value(record["KEY"]), _value(constraint)
+    message = _value(record["MESSAGE"]) if _value(record.get("MESSAGE_SOURCE")) == "shacl" else None
+    multiplicity = _value(record["SCHEMA_MULTIPLICITY"])
+    schema = " ".join(filter(None, (_value(record["SCHEMA_DESCRIPTION"]),
+                                    multiplicity and f"[{multiplicity}]")))
+    files = [name for name in references or () if name != "rdf_map"]   # a dict schema loads as "rdf_map"
+    link = _constraint_link(constraint) if constraint else None
+    sections = {
+        "What this checks": [_line(None, message and " ".join(message.split())),   # one list item
+                             _line("Path", path, f"`{path}`"),
+                             _line("Expected", _value(record.get("EXPECTED")))],
+        "Schema context": [_line(None, schema),
+                           _line("Class", _value(record["CLASS_DESCRIPTION"]))],
+        "Source": [_line("Shape", shape_iri),
+                   _line("Profile", profile_text(record.get("PROFILE"))),
+                   _line("File", files[0] if len(files) == 1 else None),
+                   _line("Constraint", link and f"{constraint} — {link}", f"[{constraint}]({link})")],
+    }
+    sections = [(heading, [line for line in lines if line]) for heading, lines in sections.items()]
+    sections = [(heading, lines) for heading, lines in sections if lines]
+    if not sections:
+        return None
+    return {
+        "text": "\n\n".join("\n".join([heading, *(text for text, _ in lines)])
+                             for heading, lines in sections),
+        # one list item per line: a single newline is a soft break in markdown
+        "markdown": "\n\n".join("\n".join([f"### {heading}", *(f"- {markdown}" for _, markdown in lines)])
+                                 for heading, lines in sections),
+    }
+
+
+def _line(label, value, markdown=None):
+    """One help line as (text, markdown); None without a value."""
+    if not value:
+        return None
+    prefix = f"{label}: " if label else ""
+    return f"{prefix}{value}", f"{prefix}{markdown or value}"
+
+
+def _constraint_link(constraint):
+    """The definition of a violation type: the SHACL spec section of an sh:*
+    component, the triplets docs for a tool finding, else the term IRI itself."""
+    uri = _expand(constraint)
+    template = _CONSTRAINT_DOCS.get(constraint.partition(":")[0], "{uri}")
+    return template.format(uri=uri, local=split_iri(uri)[1])
 
 
 def _grouped_result(rule_id, rule_index, records, language="shacl"):
