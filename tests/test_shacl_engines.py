@@ -129,6 +129,19 @@ def test_ranges(engine):
     assert violating(v, "sh:maxExclusive") == {("b4", "101")}
 
 
+def test_ranges_not_a_number(engine):
+    """A value that is not a number fails every range component (#186); " 5.0" is a number, no value is no check."""
+    rows = breaker("b1", ("Switch.ratedCurrent", "abc")) \
+        + breaker("b2", ("Switch.ratedCurrent", "NaN")) \
+        + breaker("b3", ("Switch.ratedCurrent", "")) \
+        + breaker("b4", ("Switch.ratedCurrent", " 5.0")) \
+        + breaker("b5", ("Switch.ratedCurrent", None))
+    body = "sh:path cim:Switch.ratedCurrent ; sh:minInclusive 0 ; sh:maxInclusive 100 ; sh:minExclusive -1 ; sh:maxExclusive 101"
+    v = run(rows, SHAPE.format(body=body), engine)
+    for component in ("sh:minInclusive", "sh:maxInclusive", "sh:minExclusive", "sh:maxExclusive"):
+        assert violating(v, component) == {("b1", "abc"), ("b2", "NaN"), ("b3", "")}
+
+
 def test_in(engine):
     rows = breaker("b1", ("Switch.state", "open")) + breaker("b2", ("Switch.state", "broken"))
     v = run(rows, SHAPE.format(body='sh:path cim:Switch.state ; sh:in ( "open" "closed" )'), engine)

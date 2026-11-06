@@ -316,11 +316,12 @@ def _max_length(context, rule):
 
 
 def _range(comparison, description):
-    """Numeric range validator factory (non-numeric values are the datatype check's job)."""
+    """Numeric range validator factory; a value that is not a number (no cast, or NaN)
+    fails every range component (SHACL: the comparison is not true)."""
     def validator(context, rule):
         rows = context.path_rows(rule)
         numeric = pandas.to_numeric(rows["PATH_VALUE"], errors="coerce")
-        bad = comparison(numeric, rule.params)   # NaN comparisons are False → skipped
+        bad = (comparison(numeric, rule.params) | numeric.isna()) & rows["PATH_VALUE"].notna()
         return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                       f"value is {description} {rule.params}")
     return validator

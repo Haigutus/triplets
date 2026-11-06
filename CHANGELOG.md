@@ -372,6 +372,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **A value that is not a number fails every range component** (`sh:minInclusive`,
+  `sh:maxInclusive`, `sh:minExclusive`, `sh:maxExclusive`) in the pandas, polars and duckdb
+  SHACL engines: a value that does not cast to a double (`"abc"`, `"1,5"`, `""`) or is `NaN`
+  is reported, as SHACL's comparison is not true; before, it passed unless the shape also
+  declared `sh:datatype`. The polars engine strips surrounding whitespace before the cast
+  (`" 5.0"` is a number), like pandas and duckdb
+  ([#186](https://github.com/Haigutus/triplets/issues/186)).
 - **`sh:alternativePath` over different properties is skipped** (pandas, polars and duckdb
   SHACL engines) with an "unsupported sh:path form" `skipped_shapes` entry; before, it was
   reduced to its first inverse member and the other alternatives were dropped. Members that
