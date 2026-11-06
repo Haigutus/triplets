@@ -6,6 +6,7 @@ same rows through one adapter each. The cython parser is checked on a parse
 fixture; the qlever C++ ingest in ``test_sparql_qlever_ingest.py``.
 """
 import math
+import re
 from pathlib import Path
 
 import pandas
@@ -99,6 +100,7 @@ def test_bundled_schema_datatypes_are_xsd(path):
     """Every bundle writes xsd:* only and resolves without declaring ``xsd`` (NC 2.5.0 does not)."""
     built = iri.datatypes(path)
     assert built and all(datatype.startswith(XSD_NS) for datatype in built.values() if datatype)
+    assert iri.languages(path) == {}                     # no bundled entry is tagged: exports unchanged
 
 
 def test_value_types_by_entry_type_only():
@@ -195,6 +197,115 @@ def test_cimxml_writes_custom_datatype(engine):
     undefined = frame[frame.KEY != "Model.profile"].export_to_cimxml(export_undefined=True, **kwargs)[0]
     assert f'<triplets:ACLineSegment.r rdf:datatype="{RESISTANCE}">1.5<' in undefined.getvalue().decode()
 
+
+
+# ── fixed language tag (schema ``language``) ───────────────────────────────────
+
+@pytest.mark.parametrize("declared", ["", "xsd:string", XSD_NS + "string", "rdf:langString"])
+def test_languages_tag_plain_literal_types(declared):
+    """``language`` on an untyped or plain-literal Attribute → the tag; it is never also a datatype."""
+    schema = {"EQ": {"IdentifiedObject.description": {"type": "Attribute", "xsd:type": declared, "language": "en-GB"},
+                     "IdentifiedObject.name": {"type": "Attribute", "xsd:type": "xsd:string"},
+                     "Legacy.tagged": {"language": "en"}}}                    # no entry type: not a KEY
+    assert iri.languages(schema) == {"IdentifiedObject.description": "en-GB"}
+    assert iri.datatypes(schema).get("IdentifiedObject.description") is None
+
+
+FLOAT_ATTRIBUTE = {"type": "Attribute", "xsd:type": "xsd:float"}
+
+
+@pytest.mark.parametrize("schema, message", [
+    ({"EQ": {"ACLineSegment.r": {**FLOAT_ATTRIBUTE, "language": "en"}}}, "language 'en' with xsd:type 'xsd:float'"),
+    # the KEY's type is its first entry's, as datatypes() resolves it — not the tagging entry's own
+    ({"EQ": {"ACLineSegment.r": FLOAT_ATTRIBUTE}, "SSH": {"ACLineSegment.r": {"type": "Attribute", "language": "en"}}},
+     "language 'en' with xsd:type 'xsd:float'"),
+    ({"EQ": {"ACLineSegment.r": {"type": "Attribute", "language": "en_GB"}}},
+     "language 'en_GB' is not a BCP 47 language tag")])
+def test_languages_invalid_raises(schema, message):
+    """Both maps raise: an entry point that builds only ``datatypes`` (qlever ingest) fails too."""
+    for build in (iri.languages, iri.datatypes):
+        with pytest.raises(ValueError, match=re.escape(f"ACLineSegment.r: {message}")):
+            build(schema)
+
+
+DESCRIPTION = "IdentifiedObject.description"
+
+
+def language_schema():
+    schema = iri.load_rdf_map(schemas.ENTSOE_CGMES_3_0_0_552_ED2)
+    schema["EQ"][DESCRIPTION]["language"] = "en"
+    return schema
+
+
+def language_frame():
+    return pandas.concat([custom_type_frame(), pandas.DataFrame([(LINE, DESCRIPTION, "english", "i")],
+                                                                columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])],
+                         ignore_index=True)
+
+
+def test_make_object_language():
+    maps = dict(value_types={DESCRIPTION: "literal"}, languages={DESCRIPTION: "en"})
+    from triplets.export.nquads_utils import make_object
+    assert make_object(DESCRIPTION, 'say "hi"', **maps) == '"say \\"hi\\""@en'
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars"])
+def test_nquads_language_round_trip(engine):
+    """``"text"@tag`` with no ``^^``; read_nquads keeps the value and drops the tag."""
+    pytest.importorskip(engine)
+    buffer = triplets.export.export_to_nquads(language_frame(), rdf_map=language_schema(), engine=engine,
+                                              export_to_memory=True)
+    lines = buffer.read().decode().splitlines()
+    assert f'<urn:uuid:{LINE}> <{CIM_NS}{DESCRIPTION}> "english"@en <urn:uuid:i> .' in lines
+    assert f'<urn:uuid:{LINE}> <{CIM_NS}ACLineSegment.r> "1.5"^^<{XSD_NS}float> <urn:uuid:i> .' in lines
+    buffer.seek(0)
+    assert pandas.read_nquads(buffer).query(f"KEY == '{DESCRIPTION}'").VALUE.tolist() == ["english"]
+
+
+@pytest.mark.parametrize("datatypes", [False, True])
+@pytest.mark.parametrize("engine", ["python_lxml", "cython_pugixml"])
+def test_cimxml_writes_language(engine, datatypes):
+    """``xml:lang`` on the literal element (no ``rdf:datatype`` there), whatever ``datatypes`` says;
+    with ``datatypes=True`` rdflib reads the ED2 output as the graph of the N-Quads export."""
+    if engine == "cython_pugixml":
+        pytest.importorskip("triplets.export.cimxml_cython_pugixml")
+    rdflib = pytest.importorskip("rdflib")
+    from rdflib.compare import isomorphic
+    frame, schema = language_frame(), language_schema()
+    kwargs = dict(rdf_map=schema, engine=engine, datatypes=datatypes, export_type="xml_per_instance",
+                  export_to_memory=True)
+    out = frame.export_to_cimxml(**kwargs)[0]
+    assert f'<cim:{DESCRIPTION} xml:lang="en">english</cim:{DESCRIPTION}>' in out.getvalue().decode()
+    assert pandas.read_RDF([out]).query(f"KEY == '{DESCRIPTION}'").VALUE.tolist() == ["english"]   # tag dropped
+    if datatypes:
+        dataset = rdflib.Dataset()
+        dataset.parse(triplets.export.export_to_nquads(frame, rdf_map=schema, export_undefined=False,
+                                                       export_to_memory=True), format="nquads")
+        expected = rdflib.Graph()
+        for subject, predicate, value, _ in dataset.quads((None, None, None, None)):
+            expected.add((subject, predicate, value))
+        assert rdflib.Literal("english", lang="en") in set(expected.objects())
+        assert isomorphic(rdflib.Graph().parse(data=out.getvalue(), format="xml"), expected)
+    # no profile resolved: the KEY is written as undefined, still tagged (the map spans every profile)
+    undefined = frame[frame.KEY != "Model.profile"].export_to_cimxml(export_undefined=True, **kwargs)[0]
+    assert f'<triplets:{DESCRIPTION} xml:lang="en">english<' in undefined.getvalue().decode()
+
+
+@pytest.mark.parametrize("engine", ["python_lxml", "cython_pugixml"])
+def test_cimxml_nc_header_language(engine):
+    """A loaded NC bundle tagged at runtime writes the header description as the NC files carry it
+    (``<dcterms:description xml:lang="en">`` in relicapgrid's Belgovia_SIS.xml)."""
+    if engine == "cython_pugixml":
+        pytest.importorskip("triplets.export.cimxml_cython_pugixml")
+    schema = iri.load_rdf_map(schemas.ENTSOE_NC_2_5_0_552_ED2)
+    schema["CO"]["description"]["language"] = "en"
+    dataset = "b2d1215a-a124-4b6e-9df5-85ecdce9793b"
+    frame = pandas.DataFrame([(dataset, "Type", "Dataset", dataset), (dataset, "keyword", "CO", dataset),
+                              (dataset, "description", "Contingencies of Belgovia.", dataset)],
+                             columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    out = frame.export_to_cimxml(rdf_map=schema, engine=engine, export_type="xml_per_instance",
+                                 export_to_memory=True)[0].getvalue().decode()
+    assert '<dcterms:description xml:lang="en">Contingencies of Belgovia.</dcterms:description>' in out
 
 # ── local (schema-free), one row per rule ──────────────────────────────────────
 

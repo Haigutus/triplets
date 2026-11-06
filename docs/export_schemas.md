@@ -76,6 +76,7 @@ A bundle is a dict of profile sections keyed by profile keyword
                             # xsd, rdf, rdfs built in) or absolute IRI, written as is as
                             # rdf:datatype / ^^<…>; xsd:string, rdf:langString and "" (no XSD,
                             # e.g. LangString) write a plain literal; an unbound prefix raises
+                            # optional "language": a fixed tag ("en"), see below
     "<Class.Association>": {"type": "Association", "range": ..., "attrib": {...}}
     "<Class.enumAttr>":    {"type": "Enumeration", "range": ..., "values": [...]}
     "<Datatype|EnumValue>": supporting definitions referenced by the entries above
@@ -96,6 +97,32 @@ Two class flavors matter for export:
   profile and referenced with `rdf:about` — e.g. NC profiles attaching
   associations to EQ equipment, or CGMES SSH updating `RegulatingCondEq`.
   `"stereotyped": true` marks them.
+
+### Fixed language tag (`language`)
+
+An Attribute entry with `"language": "<tag>"` writes every value of that KEY
+language-tagged: `"text"@en` in N-Quads (pandas, polars, streaming; hence the rdflib /
+pyshacl loader; the qlever SPARQL ingest writes a plain literal) and `xml:lang="en"` on
+the literal element in both CIM XML engines, with or without `datatypes=`. Like
+`xsd:type` the tag is read from the whole schema: the first entry of the KEY that
+carries a `language` tags it in every profile. A tagged literal has no datatype
+annotation, so the KEY's `xsd:type` (its first entry with one) must be `""`,
+`xsd:string` or `rdf:langString`; any other type, or a tag that is not a well-formed
+BCP 47 tag (`en`, `en-GB`), raises `ValueError` naming the KEY — in the exports and in
+`validate_schema`, which checks no datatype on a tagged KEY. The parsers drop the tag
+([parsers.md](parsers.md)).
+
+The shipped bundles carry no `language` (the RDFS fixes none; `ProfileMetadata.language`
+is the vocabulary's own). Set it in a downstream schema JSON, or on the loaded bundle:
+
+```python
+from triplets.export_schema import schemas
+from triplets.iri import load_rdf_map
+
+rdf_map = load_rdf_map(schemas.ENTSOE_NC_2_5_0_552_ED2)      # a fresh dict per call
+rdf_map["CO"]["description"]["language"] = "en"
+files = data.export_to_cimxml(rdf_map=rdf_map)   # <dcterms:description xml:lang="en">…
+```
 
 ## How Exporters Pick a Section
 

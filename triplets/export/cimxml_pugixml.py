@@ -101,6 +101,7 @@ def generate_xml(instance_data,
     rdf_map = load_rdf_map(rdf_map)
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
     key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
+    key_languages = iri.languages(rdf_map)          # written whatever datatypes says
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))
@@ -118,7 +119,8 @@ def generate_xml(instance_data,
 
     xml = generate_xml_from_arrow(batch, rdf_map, namespace_map, instance_rdf_map, file_name,
                                   class_KEY=class_KEY, export_undefined=export_undefined, comment=comment,
-                                  undefined_namespace=undefined_namespace, key_datatypes=key_datatypes)
+                                  undefined_namespace=undefined_namespace, key_datatypes=key_datatypes,
+                                  key_languages=key_languages)
 
     logger.info("Exporting RDF to {}".format(file_name))
 

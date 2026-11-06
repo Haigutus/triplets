@@ -47,7 +47,10 @@ for that datatype (named by the Attribute's `dataType`, else the IRI's local
 name — the `CIMDatatype` entry a bundle carries). Without one it is listed in
 `skipped_shapes` (`SvPowerFlow.p: datatype cim:ActivePower has no xsd base
 type — not checked`). A plain-literal type or base (`xsd:string`,
-`rdf:langString`) has nothing to check: no rule, no note.
+`rdf:langString`) has nothing to check: no rule, no note. Neither has a
+language-tagged key (`language`, see [export_schemas.md](export_schemas.md)); a
+malformed tag, or a tag on a key with any other `xsd:type`, raises `ValueError`
+as in the export.
 
 Datatype conflicts and types without an xsd base (not checked) are listed in
 the run's `skipped_shapes`; relaxed cardinalities and united enumerations (checked, more loosely) in its

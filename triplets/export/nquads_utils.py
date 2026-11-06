@@ -2,7 +2,7 @@
 
 The IRI rules (what becomes a subject IRI, which namespace a KEY or enum
 takes, what is a literal) live in ``triplets.iri``; this module only wraps the
-results in ``<>`` / ``"..."^^<datatype>``. ``nquads_pandas`` / ``nquads_polars``
+results in ``<>`` / ``"..."^^<datatype>`` / ``"..."@tag``. ``nquads_pandas`` / ``nquads_polars``
 do the same vectorized through ``iri_pandas`` / ``iri_polars``.
 """
 from ..iri import absolute_id, absolute_value, rdf_map_entries
@@ -18,13 +18,17 @@ def make_subject(id_val):
     return f"<{absolute_id(id_val)}>"
 
 
-def make_object(key, value, namespaces=None, value_types=None, datatypes=None):
-    """VALUE → ``<iri>`` or ``"literal"[^^<datatype>]`` per :func:`triplets.iri.absolute_value`."""
+def make_object(key, value, namespaces=None, value_types=None, datatypes=None, languages=None):
+    """VALUE → ``<iri>`` or ``"literal"[^^<datatype> | @tag]`` per :func:`triplets.iri.absolute_value`
+    and :func:`triplets.iri.languages`."""
     kind, payload = absolute_value(key, value, namespaces, value_types, datatypes)
     if kind == "iri":
         return f"<{payload}>"
     escaped = escape_literal(value)
-    return f'"{escaped}"^^<{payload}>' if payload else f'"{escaped}"'
+    if payload:
+        return f'"{escaped}"^^<{payload}>'
+    tag = (languages or {}).get(key)
+    return f'"{escaped}"@{tag}' if tag else f'"{escaped}"'
 
 
 def flatten_schema(rdf_map):

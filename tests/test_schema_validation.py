@@ -5,6 +5,8 @@ rdfs:/xsd:/schema: types, not fake SHACL.
 
 Semantics under test: every instance is validated on its own against the
 profiles the caller scopes, merged into one; nothing reads instance headers."""
+import re
+
 import pandas
 import pytest
 
@@ -200,6 +202,23 @@ def test_datatype_without_xsd_base_is_not_checked(engine, datatype, skipped):
 def test_datatype_unbound_prefix_raises():
     with pytest.raises(ValueError, match="prefix 'foo' is not bound"):
         compile_schema(typed({"Switch.retained": attribute("0", "1", "foo:ActivePower")})[1], "EQ")
+
+
+@pytest.mark.parametrize("retained, message", [
+    ({**attribute("0", "1", "xsd:float"), "language": "en"}, "language 'en' with xsd:type 'xsd:float'"),
+    ({**attribute("0", "1"), "language": "en_GB"}, "language 'en_GB' is not a BCP 47 language tag"),
+    ({**attribute("0", "1"), "language": "en"}, None),
+])
+def test_language_tagged_key(retained, message):
+    """A tagged key raises as the export does; a valid tag gets no datatype rule and no note."""
+    schema = typed({"Switch.retained": retained})[1]
+    if message:
+        with pytest.raises(ValueError, match=re.escape(f"Switch.retained: {message}")):
+            compile_schema(schema, "EQ")
+        return
+    compiled = compile_schema(schema, "EQ")
+    assert "Switch.retained" not in set(compiled.ir.loc[compiled.ir["component"] == "sh:datatype", "path"])
+    assert compiled.stats["skipped_shapes"] == []
 
 
 def test_scope_by_profile_iri():

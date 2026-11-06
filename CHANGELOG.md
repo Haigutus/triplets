@@ -7,6 +7,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Fixed language tag per schema entry** — `"language": "en"` on an Attribute entry writes
+  `"text"@en` in N-Quads (pandas, polars, streaming; hence the rdflib / pyshacl loader) and
+  `xml:lang="en"` on the literal element in both CIM XML engines, with or without
+  `datatypes=`; the tagged literal gets no datatype annotation. `language` on a KEY whose
+  `xsd:type` is other than `""` / `xsd:string` / `rdf:langString`, or a tag that is not
+  well-formed BCP 47, raises `ValueError` naming the KEY, in the exports and in
+  `validate_schema` (which checks no datatype on a tagged KEY). New flat map
+  `iri.languages(rdf_map)`, scalar `iri.language_tag(key, tag, declared, prefixes)` and
+  constant `iri.XML_NS`. The shipped bundles carry no tag: set
+  it on a downstream schema or the loaded dict
+  (`rdf_map["CO"]["description"]["language"] = "en"`, see `docs/export_schemas.md`)
+  ([#146](https://github.com/Haigutus/triplets/issues/146)).
 - **`cython_pugixml` CIM XML export writes `rdf:datatype`** with `datatypes=True`: the
   same attributes as `python_lxml`, from the same `iri.datatypes(rdf_map)` map, undefined
   keys (`export_undefined=True`) included; polars input stays on the cython engine. Before,

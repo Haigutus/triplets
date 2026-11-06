@@ -94,6 +94,7 @@ cdef extern from *:
         std::string value_prefix;// "#_" or ""
         std::string text_prefix; // "" usually
         std::string datatype;    // rdf:datatype IRI of a literal, or ""
+        std::string language;    // xml:lang tag of a literal, or ""
         bool is_ref;             // true if has attrib (resource/ID)
         bool needs_enum_lookup;  // true if value_prefix was empty on a ref
     };
@@ -120,6 +121,7 @@ cdef extern from *:
         string value_prefix
         string text_prefix
         string datatype
+        string language
         cbool is_ref
         cbool needs_enum_lookup
 
@@ -159,7 +161,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                             cbool export_undefined=True,
                             comment=None,
                             str undefined_namespace="http://triplets#",
-                            dict key_datatypes=None):
+                            dict key_datatypes=None,
+                            dict key_languages=None):
     """Generate CIM RDF/XML bytes directly from Arrow columnar data.
 
     Reads Arrow string arrays at C++ level (zero-copy GetString),
@@ -179,6 +182,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
     comment : str or None
     key_datatypes : dict or None
         KEY → rdf:datatype IRI written on literal elements (None / missing: none)
+    key_languages : dict or None
+        KEY → xml:lang tag written on literal elements (missing: none)
 
     Returns
     -------
@@ -227,6 +232,7 @@ def generate_xml_from_arrow(arrow_table_or_batch,
     cdef string rdf_about_attr = f"{rdf_prefix}:about".encode('utf-8')
     cdef string rdf_datatype_attr = f"{rdf_prefix}:datatype".encode('utf-8')
     key_datatypes = key_datatypes or {}
+    key_languages = key_languages or {}
 
     def _parse_attrib(full_attrib):
         if full_attrib.startswith("{"):
@@ -262,6 +268,7 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             attrib = defn.get("attrib")
             td.text_prefix = defn.get("text", "").encode('utf-8')
             td.datatype = (key_datatypes.get(key) or "").encode('utf-8')
+            td.language = key_languages.get(key, "").encode('utf-8')
             if attrib:
                 td.is_ref = True
                 td.attr_name = _parse_attrib(attrib["attribute"]).encode('utf-8')
@@ -279,7 +286,7 @@ def generate_xml_from_arrow(arrow_table_or_batch,
     # Build pugixml document
     cdef xml_document doc
     cdef xml_node decl_node, rdf_root, obj_node, attr_node
-    cdef bytes uri_bytes, datatype_bytes
+    cdef bytes uri_bytes, datatype_bytes, language_bytes
 
     decl_node = doc.append_child(node_declaration)
     decl_node.append_attribute(b"version").set_value(b"1.0")
@@ -399,15 +406,21 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                 attr_node.append_child(node_pcdata).set_value(s_combined.c_str())
                 if not tag_defs_vec[td_idx].datatype.empty():
                     attr_node.append_attribute(rdf_datatype_attr.c_str()).set_value(tag_defs_vec[td_idx].datatype.c_str())
+                if not tag_defs_vec[td_idx].language.empty():
+                    attr_node.append_attribute(b"xml:lang").set_value(tag_defs_vec[td_idx].language.c_str())
         elif export_undefined:
             s_tag = _make_prefixed(undefined_namespace, py_key).encode('utf-8')
             attr_node = store.append_child_to(<int>py_store_idx, s_tag.c_str())
             attr_node.append_child(node_pcdata).set_value(s_value.c_str())
-            # key_datatypes spans all schema profiles: an undefined KEY of this instance can still be typed
+            # key_datatypes / key_languages span all schema profiles: an undefined KEY of this instance can still be annotated
             py_datatype = key_datatypes.get(py_key)
             if py_datatype:
                 datatype_bytes = py_datatype.encode('utf-8')
                 attr_node.append_attribute(rdf_datatype_attr.c_str()).set_value(<const char*>datatype_bytes)
+            py_language = key_languages.get(py_key)
+            if py_language:
+                language_bytes = py_language.encode('utf-8')
+                attr_node.append_attribute(b"xml:lang").set_value(<const char*>language_bytes)
 
     # Serialize
     cdef string_writer writer

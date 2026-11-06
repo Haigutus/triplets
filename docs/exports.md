@@ -55,6 +55,11 @@ Engine aliases: `performance` / `pugixml` -> `cython_pugixml`, `lxml` / `pandas`
 `rdf:datatype` from the schema's `xsd:type` (like N-Quads; `xsd:string` stays
 plain). Both engines write the same attributes.
 
+A schema `language` ([export_schemas.md](export_schemas.md#fixed-language-tag-language))
+writes `xml:lang="<tag>"` on the literal element in both engines, with or without
+`datatypes=` — the tag is part of the value; that element carries no `rdf:datatype`.
+`export_to_nquads` writes the same KEY as `"text"@<tag>`.
+
 ## Call Sequence (CIM XML)
 
 ```
