@@ -141,6 +141,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **SARIF rule titles name the constraint language**: `SHACL …` / `RDFS …` on every
+  rule, `sh:name` titles included (`SHACL Line completeness (8×)`)
+  ([#150](https://github.com/Haigutus/triplets/issues/150)).
 - **oxigraph SPARQL engine skips the default-graph copy for a single-instance store**
   (one named graph, no rows without INSTANCE_ID): unscoped queries run against that
   instance's graph, which — as with `data_scope` — takes precedence over a FROM in the
