@@ -153,11 +153,14 @@ def _max_length(rule, table, context):
 
 
 def _range(operator, description):
-    """Numeric range builder factory; non-castable values are the datatype check's job."""
+    """Numeric range builder factory; a value that is not a number (no cast, or NaN)
+    fails every range component (SHACL: the comparison is not true)."""
     def builder(rule, table, context):
         rows, rows_params = _rows_sql(rule, table)
-        return _wrap(rule, f"value is {description} {rule.params}",
-                     rows, rows_params, f"TRY_CAST(PV AS DOUBLE) {operator} ?", [rule.params])
+        numeric = "TRY_CAST(PV AS DOUBLE)"
+        return _wrap(rule, f"value is {description} {rule.params}", rows, rows_params,
+                     f"PV IS NOT NULL AND ({numeric} {operator} ? OR {numeric} IS NULL OR isnan({numeric}))",
+                     [rule.params])
     return builder
 
 

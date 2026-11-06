@@ -219,10 +219,13 @@ def _max_length(context, rule):
 
 
 def _range(comparison, description):
-    """Numeric range builder factory; non-castable values are the datatype check's job."""
+    """Numeric range builder factory; a value that is not a number (no cast, or NaN)
+    fails every range component (SHACL: the comparison is not true)."""
     def builder(context, rule):
-        numeric = polars.col("PATH_VALUE").cast(polars.Float64, strict=False)
-        plan = context.path_rows(rule).filter(comparison(numeric, rule.params))  # null → dropped
+        numeric = polars.col("PATH_VALUE").str.strip_chars().cast(polars.Float64, strict=False)
+        # NaN sorts above every number in polars, so it is caught explicitly for min*
+        bad = comparison(numeric, rule.params) | numeric.is_null() | numeric.is_nan()
+        plan = context.path_rows(rule).filter(polars.col("PATH_VALUE").is_not_null() & bad)
         return _emit(plan, rule, f"value is {description} {rule.params}")
     return builder
 
