@@ -123,6 +123,42 @@ def test_rules_metadata(violations):
         assert rule["properties"]["constraint"] == "sh:minCount"
 
 
+def test_rule_help(violations):
+    """Every rule carries help (text + markdown): the authored sh:message, path,
+    expected value and a link to the constraint's SHACL spec section; no schema
+    context without the rdf_map, no Shape line for an anonymous property shape."""
+    rules = build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"]
+    helps = {rule["defaultConfiguration"]["level"]: rule["help"] for rule in rules}
+    assert all(set(rule_help) == {"text", "markdown"} for rule_help in helps.values())
+    markdown = helps["error"]["markdown"]
+    for line in ("- every line needs a name", "- Path: `IdentifiedObject.name`",
+                 "- Expected: at least 1 value(s)",
+                 "- Constraint: [sh:minCount](https://www.w3.org/TR/shacl/#MinCountConstraintComponent)"):
+        assert line in markdown
+    assert "Constraint: sh:minCount — https://www.w3.org/TR/shacl/#MinCountConstraintComponent" \
+        in helps["error"]["text"]
+    assert "fewer than" not in helps["warning"]["text"]           # engine wording is per result
+    assert all("Schema context" not in rule_help["text"] and "Shape:" not in rule_help["text"]
+               for rule_help in helps.values())
+
+
+def test_rule_help_source_and_tool_link():
+    """Bare frame: an authored multi-line message stays one list item; an http
+    shape IRI and the single shapes file name the source; triplets:* findings
+    link the triplets docs."""
+    violations = pandas.DataFrame(
+        [[None, None, None, "triplets:invalidSparql", "first line\n  second line", "Warning",
+          "http://iec.ch/TC57/CIM100#NameShape", "shacl"]],
+        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE",
+                 "MESSAGE_SOURCE"])
+    violations.attrs["validation"] = {"references": ["shapes.ttl"]}
+    markdown = build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"][0]["help"]["markdown"]
+    assert markdown.split("\n") == [
+        "### What this checks", "- first line second line", "",
+        "### Source", "- Shape: http://iec.ch/TC57/CIM100#NameShape", "- File: shapes.ttl",
+        "- Constraint: [triplets:invalidSparql](https://github.com/Haigutus/triplets/blob/main/docs/validation.md)"]
+
+
 def test_unenriched_frame_and_null_id():
     violations = pandas.DataFrame(
         [[None, "IdentifiedObject.name", None, "triplets:invalidSparql",
@@ -224,7 +260,9 @@ def test_official_schema_conformance(violations):
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads((Path(__file__).parent / "data" / "sarif-schema-2.1.0.json")
                         .read_text(encoding="utf-8"))
-    jsonschema.validate(build_sarif(violations), schema)               # grouped, enriched
+    document = build_sarif(violations)
+    assert all("help" in rule for rule in document["runs"][0]["tool"]["driver"]["rules"])
+    jsonschema.validate(document, schema)                              # grouped, enriched
     jsonschema.validate(build_sarif(violations, group=False), schema)  # per-violation
 
     minimal = pandas.DataFrame(                                        # unenriched, null ID
@@ -244,6 +282,7 @@ def test_github_code_scanning_requirements(violations):
     assert run["tool"]["driver"]["name"]
     rule_ids = [rule["id"] for rule in run["tool"]["driver"]["rules"]]
     assert len(rule_ids) == len(set(rule_ids))
+    assert all(rule["help"]["text"].strip() for rule in run["tool"]["driver"]["rules"])
     assert len(run["results"]) <= 25_000
     for result in run["results"]:
         assert result["message"]["text"].strip()

@@ -354,6 +354,27 @@ def test_sarif_title_grouping_is_per_profile_property():
     assert {"RDFS EQ Breaker IdentifiedObject.name (2×)", "RDFS EQ Breaker IdentifiedObject.mRID (2×)"} <= names
 
 
+def test_sarif_rule_help():
+    """Schema rule help: profile and the xsd term; the attribute and class
+    descriptions only when enriched with the rdf_map; no shapes file for a dict."""
+    from triplets.validation.sarif import build_sarif
+
+    rows = breaker("b1", ("IdentifiedObject.mRID", "b1"))
+    rule_help = build_sarif(run(rows, "pandas"))["runs"][0]["tool"]["driver"]["rules"][0]["help"]
+    assert "- Profile: EQ" in rule_help["markdown"]
+    assert "- Constraint: [xsd:minOccurs](http://www.w3.org/2001/XMLSchema#minOccurs)" in rule_help["markdown"]
+    assert "Schema context" not in rule_help["text"] and "File:" not in rule_help["text"]
+
+    enriched = enrich(run(rows, "pandas"), data=frame(rows), rdf_map=SCHEMA)
+    markdown = build_sarif(enriched)["runs"][0]["tool"]["driver"]["rules"][0]["help"]["markdown"]
+    assert "### Schema context\n- An attribute. [1..1]\n- Class: A breaker." in markdown
+
+    rows = breaker("b1", *OK, ("Breaker.kind", "BreakerKind.oil"))      # enum entry: no description
+    enriched = enrich(run(rows, "pandas"), data=frame(rows), rdf_map=SCHEMA)
+    markdown = build_sarif(enriched)["runs"][0]["tool"]["driver"]["rules"][0]["help"]["markdown"]
+    assert "### Schema context\n- [0..1]\n- Class: A breaker." in markdown
+
+
 def test_pyshacl_engine_refused():
     pytest.importorskip("pyshacl")
     with pytest.raises(ValueError, match="pyshacl engine cannot run"):

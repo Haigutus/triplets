@@ -12,6 +12,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of `"Violation"` (SARIF `warning` / `note`, `sh:resultSeverity`); other values raise
   `ValueError`, `triplets:lexicalForm` findings stay `Warning`; `validate_by_header` forwards it
   ([#150](https://github.com/Haigutus/triplets/issues/150)).
+- **SARIF `rules[].help`** (text + markdown) — the rule help GitHub shows under an alert:
+  the shape's `sh:message`, path and expected value, the schema description with
+  multiplicity and the class description (frames enriched with the `rdf_map`), and the
+  source: shape IRI or profiles, the shapes file, a link to the constraint's
+  definition (SHACL spec section for `sh:*`)
+  ([#113](https://github.com/Haigutus/triplets/issues/113),
+  [#150](https://github.com/Haigutus/triplets/issues/150)).
 - **Fixed language tag per schema entry** — `"language": "en"` on an Attribute entry writes
   `"text"@en` in N-Quads (pandas, polars, streaming; hence the rdflib / pyshacl loader) and
   `xml:lang="en"` on the literal element in both CIM XML engines, with or without
