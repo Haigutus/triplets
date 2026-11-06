@@ -87,7 +87,9 @@ def generate_xml(instance_data,
                  comment=None,
                  debug=False,
                  datatypes=False,
-                 undefined_namespace=TRIPLETS_NS):
+                 undefined_namespace=TRIPLETS_NS,
+                 key_datatypes=None,
+                 key_languages=None):
     """Generate an RDF XML file from a triplet dataset instance.
 
     Same parameters and return value as :func:`cimxml_pandas.generate_xml`;
@@ -100,8 +102,10 @@ def generate_xml(instance_data,
     """
     rdf_map = load_rdf_map(rdf_map)
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
-    key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
-    key_languages = iri.languages(rdf_map)          # written whatever datatypes says
+    if key_datatypes is None:
+        key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
+    if key_languages is None:
+        key_languages = iri.languages(rdf_map)      # written whatever datatypes says
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))

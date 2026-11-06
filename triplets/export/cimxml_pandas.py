@@ -83,7 +83,9 @@ def generate_xml(instance_data,
                  comment=None,
                  debug=False,
                  datatypes=False,
-                 undefined_namespace=TRIPLETS_NS):
+                 undefined_namespace=TRIPLETS_NS,
+                 key_datatypes=None,
+                 key_languages=None):
     """
         Generate an RDF XML file from a triplet dataset instance.
 
@@ -115,6 +117,13 @@ def generate_xml(instance_data,
             If True, annotate literal elements with rdf:datatype from the schema's
             xsd:type (like the N-Quads export); xsd:string stays unannotated.
             A schema ``language`` writes ``xml:lang`` either way.
+        key_datatypes : dict, optional
+            KEY → datatype IRI to annotate, as ``iri.datatypes(rdf_map)`` builds it
+            (``{}`` writes none). If ``None``, built from ``rdf_map`` per ``datatypes``.
+        key_languages : dict, optional
+            KEY → ``xml:lang`` tag, as ``iri.languages(rdf_map)`` builds it. If ``None``,
+            built from ``rdf_map``. :func:`triplets.export.export_to_cimxml` builds both
+            once per export and passes them to every instance.
         debug : bool, default False
             If True, log detailed timing and debug information during processing.
 
@@ -160,9 +169,11 @@ def generate_xml(instance_data,
     file_name, namespace_map, instance_rdf_map = resolve_instance_config(instance_data, rdf_map, namespace_map)
 
     # KEY → xsd datatype IRI as the N-Quads export annotates it (Attributes only; string → None)
-    key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
+    if key_datatypes is None:
+        key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
     # KEY → xml:lang tag, written whatever datatypes says (part of the value, not an annotation)
-    key_languages = iri.languages(rdf_map)
+    if key_languages is None:
+        key_languages = iri.languages(rdf_map)
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))
