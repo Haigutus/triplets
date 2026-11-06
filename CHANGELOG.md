@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`validate_schema(..., severity=)` / `validate_schema_references(..., severity=)`** (and
+  `compile_schema` / `compile_references`) — report schema findings as `"Warning"` or `"Info"`
+  instead of `"Violation"` (SARIF `warning` / `note`, `sh:resultSeverity`); other values raise
+  `ValueError`, `triplets:lexicalForm` findings stay `Warning`; `validate_by_header` forwards it
+  ([#150](https://github.com/Haigutus/triplets/issues/150)).
 - **Fixed language tag per schema entry** — `"language": "en"` on an Attribute entry writes
   `"text"@en` in N-Quads (pandas, polars, streaming; hence the rdflib / pyshacl loader) and
   `xml:lang="en"` on the literal element in both CIM XML engines, with or without

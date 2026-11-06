@@ -130,6 +130,12 @@ def test_without_inheritance(engine):
     assert v.attrs["validation"]["inheritance"] is False
 
 
+def test_severity(engine):
+    rows = breaker("b1", "sub1") + breaker("b2", "ghost") + CONTAINERS
+    v = validate_schema_references(frame(rows), SCHEMA, ["eq"], ["EQ"], engine=engine, severity="Warning")
+    assert set(v["VIOLATION_TYPE"]) == {"rdfs:range", "triplets:missing"} and set(v["SEVERITY"]) == {"Warning"}
+
+
 def test_duckdb_connection_keeps_source_rows_only():
     """The source-row filter on a DuckDB connection (the SQL branch)."""
     duckdb = pytest.importorskip("duckdb")
@@ -161,6 +167,9 @@ def test_compiled_references_cache():
     compiled = compile_references(SCHEMA, ["SV"], ["TP"])
     assert compiled is compile_references(SCHEMA, ["SV"], ["TP"])
     assert compiled is not compile_references(SCHEMA, ["SV"], ["TP"], report_missing_targets=False)
+    assert compiled is not compile_references(SCHEMA, ["SV"], ["TP"], severity="Warning")
+    with pytest.raises(ValueError, match="severity"):
+        compile_references(SCHEMA, ["SV"], ["TP"], severity="Error")
     assert set(compiled.ir["component"]) == {"triplets:range", "triplets:missing"}
     assert compiled.ir["params"].iloc[0] == ["TopologicalNode"]
 

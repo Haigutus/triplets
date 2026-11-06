@@ -10,7 +10,7 @@ import re
 import pandas
 import pytest
 
-from triplets.validation import compile_schema, enrich, validate_schema
+from triplets.validation import compile_schema, enrich, has_violation, validate_schema
 
 ENGINES = ["pandas", "polars", "duckdb"]
 CIM = "http://iec.ch/TC57/CIM100#"
@@ -104,6 +104,20 @@ def test_datatype_lexical_two_levels(engine):
     assert violating(v, "xsd:type") == {("b1", "maybe")}
     assert violating(v, "triplets:lexicalForm") == {("b2", "1")}
     assert (v.loc[v["VIOLATION_TYPE"] == "triplets:lexicalForm", "SEVERITY"] == "Warning").all()
+
+
+@pytest.mark.parametrize("severity", ["Warning", "Info"])
+def test_severity(engine, severity):
+    """severity= sets every finding's SEVERITY; triplets:lexicalForm stays Warning."""
+    v = run(breaker("b1", ("Switch.retained", "1")), engine, severity=severity)   # mRID, name missing
+    lexical = v["VIOLATION_TYPE"] == "triplets:lexicalForm"
+    assert lexical.any() and (v.loc[lexical, "SEVERITY"] == "Warning").all()
+    assert set(v.loc[~lexical, "SEVERITY"]) == {severity} and not has_violation(v)
+
+
+def test_severity_must_be_a_shacl_severity():
+    with pytest.raises(ValueError, match="severity"):
+        compile_schema(SCHEMA, "EQ", severity="Error")
 
 
 def test_enumeration_membership(engine):
@@ -247,6 +261,8 @@ def test_compile_schema_is_one_cached_shapes_object():
     assert compiled is compile_schema(SCHEMA, ["EQ", "OP"])
     assert compiled is not compile_schema(SCHEMA, ["EQ"])
     assert compiled is not compile_schema(SCHEMA, ["EQ", "OP"], report_undefined_keys=True)
+    warning = compile_schema(SCHEMA, ["EQ", "OP"], severity="Warning")
+    assert compiled is not warning and set(warning.ir["severity"]) == {"Warning"}
     assert compiled.language == "rdfs" and compiled.graph is None
     assert compiled.stats["node_shapes"] == 2                  # Breaker and Switch carry constraints
     assert compiled.ir["shape_id"].str.startswith("urn:triplets:schema:EQ:OP#").all()
@@ -282,6 +298,27 @@ def test_reports_carry_rdfs_tags_and_profile(engine):
         str(c) for c in graph.objects(None, sh.sourceConstraintComponent)}
     csv_text = v.shacl.to_csv(export_to_memory=True)[0].getvalue().decode()
     assert ",EQ" in csv_text and "['EQ']" not in csv_text      # the list is formatted for display
+
+
+def test_info_severity_reaches_the_reports():
+    """Info → SARIF note (schema-valid document) and sh:resultSeverity sh:Info."""
+    import json
+    from pathlib import Path
+
+    jsonschema = pytest.importorskip("jsonschema")
+    rdflib = pytest.importorskip("rdflib")
+    from triplets.validation.sarif import build_sarif
+    from triplets.validation.shacl_report import violations_to_report_graph
+
+    v = run(breaker("b1"), "pandas", severity="Info")
+    document = build_sarif(v)
+    jsonschema.validate(document, json.loads((Path(__file__).parent / "data" / "sarif-schema-2.1.0.json")
+                                             .read_text(encoding="utf-8")))
+    run_sarif = document["runs"][0]
+    assert {result["level"] for result in run_sarif["results"]} == {"note"}
+    assert {rule["defaultConfiguration"]["level"] for rule in run_sarif["tool"]["driver"]["rules"]} == {"note"}
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    assert set(violations_to_report_graph(v).objects(None, sh.resultSeverity)) == {sh.Info}
 
 
 def test_undefined_key_type_roundtrips_through_report():

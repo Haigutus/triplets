@@ -124,6 +124,13 @@ def test_references_against_the_other_loaded_instances(engine):
     assert set(zip(v["ID"], v["VIOLATION_TYPE"], v["VALUE"])) == {("b2", "rdfs:range", "b1")}
 
 
+def test_severity_reaches_both_runs(engine):
+    rows = [("h1", "keyword", "EQ", "eq")] + breaker("b1", ("IdentifiedObject.mRID", "b1"),
+                                                     ("Equipment.EquipmentContainer", "ghost"))
+    v = cgmes_tools.validate_by_header(frame(rows), SCHEMA, references=True, engine=engine, severity="Warning")
+    assert set(v["VIOLATION_TYPE"]) == {"xsd:minOccurs", "triplets:missing"} and set(v["SEVERITY"]) == {"Warning"}
+
+
 def test_data_scope_selects_sources_but_references_see_every_instance(engine):
     """data_scope=["ssh"]: only the SSH instance is validated, its reference into
     the EQ instance resolves there — no false triplets:missing."""

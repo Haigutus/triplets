@@ -14,8 +14,8 @@ any RDF loaded as triplets, CIM or not. Every input has a scope named after it:
 | Function | Checks | Runs |
 |----------|--------|------|
 | `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=True, deactivated_shapes=None)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision and class inheritance | once over the scoped data |
-| `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False)` | cardinality, datatypes and enumerations of the scoped profiles (merged); `report_undefined_keys` also reports keys no scoped profile defines for the object's class | per instance in `data_scope` — cardinality never counts another instance's rows |
-| `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_data_scope, target_rdf_map_scope=(), report_missing_targets=True, inheritance=True)` — `target_data_scope=None` = every instance | the reference type of each association of the source profiles (merged, or a union of several): valid classes from the source and target profiles, referenced objects from the source and target instances | per source instance; findings on source objects only |
+| `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False, severity="Violation")` | cardinality, datatypes and enumerations of the scoped profiles (merged); `report_undefined_keys` also reports keys no scoped profile defines for the object's class | per instance in `data_scope` — cardinality never counts another instance's rows |
+| `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_data_scope, target_rdf_map_scope=(), report_missing_targets=True, inheritance=True, severity="Violation")` — `target_data_scope=None` = every instance | the reference type of each association of the source profiles (merged, or a union of several): valid classes from the source and target profiles, referenced objects from the source and target instances | per source instance; findings on source objects only |
 
 The CIM header logic lives outside the core, in `triplets.cgmes_tools`:
 `declared_profiles(data, rdf_map)` maps each instance to the profiles its
@@ -593,6 +593,13 @@ association is listed in `skipped_shapes`. With `report_missing_targets=True`
 instances is a `triplets:missing` finding. Only associations stored in the
 source instance are reported — EQ and SSH share object IDs, so a target file
 re-declaring an object does not bring its rows into the source's report.
+
+**`severity=`** (both schema validations) sets the `SEVERITY` of every
+finding: `"Violation"` (default), `"Warning"` or `"Info"` — SARIF
+`error` / `warning` / `note`, `sh:resultSeverity` in the SHACL report;
+`has_violation` is False for a `"Warning"` or `"Info"` run. Any other value
+raises `ValueError`. `triplets:lexicalForm` findings are always `Warning`.
+`validate_by_header` forwards it to both runs.
 
 The applied profiles land in `attrs["validation"]["profiles"]`, each
 violation carries them as a list in the `PROFILE` column, reports carry
