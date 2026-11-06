@@ -28,7 +28,8 @@ from concurrent.futures import ProcessPoolExecutor
 import pandas
 
 from .excel_pandas import export_to_excel as _export_to_excel
-from ..iri import TRIPLETS_NS, TYPE_KEY
+from .. import iri
+from ..iri import TRIPLETS_NS, TYPE_KEY, load_rdf_map
 from .cimxml_pandas import generate_xml, _get_qname
 from .networkx_pandas import export_to_networkx as _export_to_networkx
 
@@ -315,6 +316,7 @@ def export_to_cimxml(data,
         # polars is incompatible with fork (its rayon thread-pool locks are held
         # in the forked child) — spawn fresh workers when the frames are polars
         mp_context = multiprocessing.get_context("spawn") if _flavor(data) == "polars" else None
+        # each worker loads the schema itself: a path pickles cheaper than the loaded dict
         with ProcessPoolExecutor(max_workers=max_workers, mp_context=mp_context) as executor:
             futures = [executor.submit(generate, instance, rdf_map, namespace_map,
                                        class_KEY=class_KEY, export_undefined=export_undefined,
@@ -323,10 +325,15 @@ def export_to_cimxml(data,
                        for instance in instances]
             xml_documents = [future.result() for future in futures]
     else:
+        # the schema and its KEY maps serve every instance; the header config stays per instance
+        rdf_map = load_rdf_map(rdf_map)
+        key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
+        key_languages = iri.languages(rdf_map)
         xml_documents = [generate(instance, rdf_map, namespace_map,
                                   class_KEY=class_KEY, export_undefined=export_undefined,
                                   comment=comment, debug=debug, datatypes=datatypes,
-                                  undefined_namespace=undefined_namespace)
+                                  undefined_namespace=undefined_namespace,
+                                  key_datatypes=key_datatypes, key_languages=key_languages)
                          for instance in instances]
 
     # generate returns None for instances skipped due to missing mapping
