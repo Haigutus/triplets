@@ -148,10 +148,10 @@ def build_sarif(violations, group=True, sources=None):
 
 
 def _fallback_name(shape, first, language):
-    """Alert title when the shape carries no sh:name — GitHub otherwise shows
-    the raw multi-line message text as the title. Schema runs:
-    "RDFS <Class> <attr>" (the class is the shape's local name); unnamed
-    SHACL shapes: "<attr> <violation type>"."""
+    """Alert label when the shape carries no sh:name — GitHub otherwise shows
+    the raw multi-line message text as the title; the title carries it after
+    the language prefix. Schema runs: "<profiles> <Class> <attr>" (the class
+    is the shape's local name); unnamed SHACL shapes: "<attr> <violation type>"."""
     key = _value(first["KEY"])
     if language != "shacl":
         profile = profile_text(first.get("PROFILE"))
@@ -160,7 +160,7 @@ def _fallback_name(shape, first, language):
             cls = cls[: -len(key) - 1]
         label = (key if key and cls and key.startswith(f"{cls}.")
                  else " ".join(filter(None, (cls, key))))
-        return " ".join(filter(None, (language.upper(), profile, label)))
+        return " ".join(filter(None, (profile, label)))
     return " ".join(filter(None, (key, _value(first["VIOLATION_TYPE"])))) or None
 
 
@@ -178,9 +178,11 @@ def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shac
         seen_ids[identifier] = 1
 
     first = records[0]
-    # grouped runs put the occurrence count in the rule title — what GitHub
-    # shows as the alert name (the ruleId stays stable, so alerts still match)
+    # the rule title — what GitHub shows as the alert name — names the
+    # constraint language; grouped runs add the occurrence count (the ruleId
+    # stays stable, so alerts still match)
     name = _value(first["SHAPE_NAME"]) or _fallback_name(shape, first, language)
+    name = f"{language.upper()} {name}" if name else None
     if name and occurrences:
         name = f"{name} ({occurrences}×)"
     return _prune({

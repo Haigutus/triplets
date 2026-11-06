@@ -538,7 +538,7 @@ the run properties. The SHACL report carries the tagged entries as separate
 violation — merging them would break sh:ValidationReport semantics); SARIF
 carries them as newline-separated blocks in one `message.text`, adds
 `[count]` / `[examples]` blocks for grouped results, and puts the occurrence
-count in the rule title (`Line completeness (8×)` — the ruleId stays stable,
+count in the rule title (`SHACL Line completeness (8×)` — the ruleId stays stable,
 so GitHub alert matching is unaffected).
 
 `enrich` and `locate` preserve the attrs. On `to_shacl_report`, explicit
@@ -799,8 +799,11 @@ enrichment pass first (an already-enriched frame is used as-is).
   `occurrenceCount` and the first-3 + last-3 sample instances (all listed
   when ≤ 6). `group=False` emits one result per violation row.
 - Severity maps `Violation/Warning/Info` → `error/warning/note`; rules carry
-  the shape's `sh:name`/`sh:description`; `MESSAGE` falls back to a generated
-  text (message is mandatory in SARIF).
+  the shape's `sh:description`, and the rule title names the constraint
+  language: `SHACL <sh:name>`, `SHACL <attr> <violation type>` for unnamed
+  shapes, `RDFS <profiles> <Class> <attr>` for schema runs, `(N×)` appended
+  when grouped; `MESSAGE` falls back to a generated text (message is
+  mandatory in SARIF).
 - RDF objects carry no text coordinates through the triplets frame:
   results always point at the model via `logicalLocations` (`Type/ID` +
   object name). Passing `sources=` (the original CIM/XML files — paths,

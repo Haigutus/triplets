@@ -118,7 +118,7 @@ def test_rules_metadata(violations):
     assert len(rules) == 2
     for rule in rules:
         assert rule["id"].endswith("/sh:minCount")
-        assert rule["shortDescription"]["text"] == "Line completeness (8×)"  # sh:name + grouped count
+        assert rule["shortDescription"]["text"] == "SHACL Line completeness (8×)"  # sh:name + grouped count
         assert rule["fullDescription"]["text"] == "Lines carry a name and a length."
         assert rule["properties"]["constraint"] == "sh:minCount"
 
@@ -135,14 +135,14 @@ def test_unenriched_frame_and_null_id():
 
 
 def test_rule_title_fallback_for_unnamed_shapes():
-    """Unnamed SHACL shapes get "<attr> <violation type>" as the alert title
+    """Unnamed SHACL shapes get "SHACL <attr> <violation type>" as the alert title
     instead of GitHub dumping the raw message text."""
     violations = pandas.DataFrame(
         [["id1", "EnergyConsumer.q", "1", "triplets:lexicalForm", "narrower form",
           "Warning", "n0f320cdb3"]],
         columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
     rule = build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"][0]
-    assert rule["name"] == "EnergyConsumer.q triplets:lexicalForm (1×)"
+    assert rule["name"] == "SHACL EnergyConsumer.q triplets:lexicalForm (1×)"
 
 
 def test_message_fallback_generated():
@@ -178,7 +178,7 @@ def test_exporter_runs_enrichment(shapes):
     buffer = export_to_sarif(violations, data=data, shapes=shapes, export_to_memory=True)
     document = json.loads(buffer.read().decode("utf-8"))
     rule = document["runs"][0]["tool"]["driver"]["rules"][0]
-    assert rule["shortDescription"]["text"] == "Line completeness (2×)"
+    assert rule["shortDescription"]["text"] == "SHACL Line completeness (2×)"
     uri = document["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
     assert uri == "Svedala%20EQ.xml"
 
