@@ -122,6 +122,11 @@ Known engine gaps (each reported in the run's coverage metadata,
   of values; with `lexical=True` (the default) a valid but narrower form is a
   `triplets:lexicalForm` Warning — see the dedicated section below.
   `engine="reference"` always gives the pure pyshacl view.
+- **`sh:in` compares text**: the value's lexical form (for an IRI, its local
+  id) is compared with each member's text, so the datatype is ignored —
+  `"1.0"^^xsd:float` matches the member `1.0` (`xsd:decimal`). pyshacl
+  compares typed RDF terms and reports a violation. CGMES `sh:in` lists hold IRIs
+  (enumeration values), where both agree.
 - `sh:nodeKind` BlankNode(+combo) cases are intentionally not implemented in
   the vectorized engines (triplets data has no blank nodes).
 - `sh:nodeKind` follows the export schema: an Association / Enumeration path is
@@ -381,7 +386,7 @@ them too.
 
 ## The Lexical-Form Datatype Deviation
 
-The one deliberate divergence from pyshacl. rdflib compares a literal's
+A deliberate divergence from pyshacl. rdflib compares a literal's
 *declared* datatype, so `"1"^^xsd:float` is simply valid — the vectorized
 engines see the raw lexical form and can judge it. Two levels:
 

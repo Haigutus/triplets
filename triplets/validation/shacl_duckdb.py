@@ -165,6 +165,7 @@ def _range(operator, description):
 
 
 def _in(rule, table, context):
+    """Value's lexical form (an IRI's local id) against each member's text; the datatype is ignored."""
     rows, rows_params = _rows_sql(rule, table)
     allowed = [str(value) for value in rule.params]
     local = iri_duckdb.local_value("PV")
