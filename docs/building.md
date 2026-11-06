@@ -112,7 +112,7 @@ filter, listed in [Testing](testing.md)):
 |----------|--------|-------------|-------------------|
 | Linux x86_64 | ubuntu-latest (Docker) | auditwheel | `--exclude 'libarrow*.so*'` |
 | Linux aarch64 | ubuntu-24.04-arm (Docker) | auditwheel | `--exclude 'libarrow*.so*'` |
-| macOS arm64 | macos-14 | skipped | macosx_* tags accepted by PyPI |
+| macOS arm64 | macos-15 | skipped | macosx_* tags accepted by PyPI |
 | Windows AMD64 | windows-latest | delvewheel | `--no-dll arrow*.dll` |
 
 macOS x86_64 (macos-13) is commented out in the matrix.

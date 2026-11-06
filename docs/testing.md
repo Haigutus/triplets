@@ -197,7 +197,7 @@ Wheels are built only for the active runner targets:
 |----------|--------|-------------|
 | Linux (manylinux) | `ubuntu-latest` | x86_64 |
 | Linux (manylinux) | `ubuntu-24.04-arm` | aarch64 |
-| macOS (Apple Silicon) | `macos-14` | arm64 |
+| macOS (Apple Silicon) | `macos-15` | arm64 |
 | Windows | `windows-latest` | AMD64 |
 
 CPython 3.11–3.14 (`requires-python >=3.11`). Each wheel includes the compiled

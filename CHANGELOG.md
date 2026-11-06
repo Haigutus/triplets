@@ -176,6 +176,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - CI: `build-wheels.yml` runs on a pull request only when it touches the build
   (setup/packaging files, cython/C++ sources, the pugixml submodule, the wheel tests);
   releases and manual dispatch always build.
+- CI: macOS arm64 wheels build on `macos-15` (GitHub retired the `macos-14` runner image).
 - **pyshacl engine `data_scope` matches INSTANCE_ID values as given**, like the pandas /
   polars / duckdb SHACL engines: a `urn:uuid:`-prefixed scope entry no longer matches the
   bare INSTANCE_ID.
