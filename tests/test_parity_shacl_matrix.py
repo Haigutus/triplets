@@ -483,7 +483,7 @@ def known(reason, *cases):
 XFAIL = {
     **known("#179 sh:closed on a property shape reported on the value node", "closed_on_property_shape"),
     **known("#180 sh:nodeKind sh:BlankNode not evaluated", "nodeKind_blank_node"),
-    **known("#181 sh:in compares lexical forms, not typed literals", "in_numeric"),
+    **known("#181 accepted: sh:in compares lexical forms, not typed literals", "in_numeric"),
     **known("#182 sh:minLength on an IRI measures the local id", "minLength_on_iri"),
     **known("#183 sh:sparql $PATH left unbound on a blank-node path", "sparql_inverse_path"),
     **known("#186 pyshacl compares non-numeric values as text (accepted literal divergence)", "range_non_numeric"),

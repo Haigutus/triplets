@@ -231,6 +231,7 @@ def _range(comparison, description):
 
 
 def _in(context, rule):
+    """Value's lexical form (an IRI's local id) against each member's text; the datatype is ignored."""
     local = iri_polars.local_value("PATH_VALUE")
     allowed = [str(value) for value in rule.params]
     plan = context.path_rows(rule).filter(~local.is_in(allowed))

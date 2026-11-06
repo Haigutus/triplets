@@ -328,6 +328,7 @@ def _range(comparison, description):
 
 
 def _in(context, rule):
+    """Value's lexical form (an IRI's local id) against each member's text; the datatype is ignored."""
     rows = context.path_rows(rule)
     allowed = {str(value) for value in rule.params}
     local = iri_pandas.local_value(rows["PATH_VALUE"].astype(str))
