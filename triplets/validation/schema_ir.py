@@ -31,8 +31,8 @@ import logging
 import pandas
 
 from .._header import _PROPERTY_TYPES
-from ..iri import (_PLAIN_DATATYPES, TYPE_KEY, XSD_NS, absolute_datatype, load_schema, local_value, prefixes,
-                   split_iri)
+from ..iri import (_PLAIN_DATATYPES, TYPE_KEY, XSD_NS, absolute_datatype, language_tag, load_schema, local_value,
+                   prefixes, split_iri)
 from .schema_scope import (SCOPE_KEY, _merged_entries, class_ancestors, require_entries,
                            scope_sections, scoped_rdf_map)
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
@@ -167,10 +167,14 @@ def _xsd_bases(entries, prefixes, skipped):
     """Attribute KEY → its ``sh:datatype`` params ``xsd:<local>``: the expanded ``xsd:type``
     when it is an XSD type, else the XSD type of the datatype entry it names (``dataType``,
     else the IRI's local name). A plain literal type or base (``xsd:string``,
-    ``rdf:langString``) has nothing to check; a KEY with no XSD type is noted in *skipped*, once."""
+    ``rdf:langString``) has nothing to check, nor has a tagged KEY (``language``: its tag and type
+    raise as in the export, :func:`~triplets.iri.language_tag`); a KEY with no XSD type is noted
+    in *skipped*, once."""
     bases = {}
     for name, entry in entries.items():
-        if isinstance(entry, dict) and entry.get("type") == "Attribute" and entry.get("xsd:type"):
+        if isinstance(entry, dict) and entry.get("type") == "Attribute" and entry.get("language"):
+            language_tag(name, entry["language"], entry.get("xsd:type"), prefixes)
+        elif isinstance(entry, dict) and entry.get("type") == "Attribute" and entry.get("xsd:type"):
             declared = str(entry["xsd:type"])
             datatype = absolute_datatype(name, declared, prefixes)
             if datatype not in _PLAIN_DATATYPES and not datatype.startswith(XSD_NS):

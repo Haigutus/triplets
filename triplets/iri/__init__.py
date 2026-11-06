@@ -25,10 +25,11 @@ working on imported data; where local names collide (``type`` is both
 
 Local rules are schema-free (a parse has no schema). Absolute rules take the
 flat maps built from the export schema — :func:`namespaces`, :func:`value_types`,
-:func:`datatypes`, :func:`prefixes`, one dict each, only the ones a call site needs. The schema
-entry type decides the serialisation form (Attribute → literal, Association →
-reference, Enumeration → enum IRI); ``xsd:type`` only annotates literals —
-any prefixed name or IRI, expanded by the schema's ``ProfileNamespaceMap``. A name
+:func:`datatypes`, :func:`languages`, :func:`prefixes`, one dict each, only the ones a call
+site needs. The schema entry type decides the serialisation form (Attribute → literal,
+Association → reference, Enumeration → enum IRI); ``xsd:type`` only annotates literals —
+any prefixed name or IRI, expanded by the schema's ``ProfileNamespaceMap`` — and
+``language`` tags them instead (a tagged literal has no datatype annotation). A name
 the schema does not declare — every name without a schema — takes
 ``undefined_namespace`` (``http://triplets#`` unless the caller says otherwise).
 
@@ -53,6 +54,7 @@ RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 RDF_TYPE = RDF_NS + "type"
 RDFS_NS = "http://www.w3.org/2000/01/rdf-schema#"
 XSD_NS = "http://www.w3.org/2001/XMLSchema#"
+XML_NS = "http://www.w3.org/XML/1998/namespace"
 SH_NS = "http://www.w3.org/ns/shacl#"
 PROV_NS = "http://www.w3.org/ns/prov#"
 DCTERMS_NS = "http://purl.org/dc/terms/"
@@ -82,6 +84,9 @@ REFERENCE_LIKE = re.compile(
     r"|\w+://\S+|urn:\S+|[A-Za-z]\w*\.\w+)$")
 """Loose "looks like a reference" heuristic for SHACL nodeKind when the schema
 says nothing about a key. Not the RDF term rule — :func:`absolute_value` uses :data:`UUID_RE`."""
+
+LANGUAGE_TAG_RE = re.compile(r"^[A-Za-z]{1,8}(?:-[A-Za-z0-9]{1,8})*$")
+"""BCP 47 language tag well-formedness (``en``, ``en-GB``) — the shape :func:`languages` accepts."""
 
 IRI_UNSAFE = "".join(map(chr, range(0x21))) + '<>"{}|^`\\'
 """Characters an N-Triples / SPARQL IRIREF may not hold (controls, space, ``<>"{}|^`\\``)."""
@@ -289,14 +294,44 @@ _PLAIN_DATATYPES = (XSD_NS + "string", RDF_NS + "langString")
 
 def datatypes(rdf_map):
     """KEY → datatype IRI for Attribute entries with an ``xsd:type`` (any prefixed name or IRI,
-    expanded by :func:`prefixes`); ``None`` = plain literal (``xsd:string``, ``rdf:langString``).
-    Annotation / validation only — it never decides whether a value is a literal or an IRI."""
+    expanded by :func:`prefixes`); ``None`` = plain literal (``xsd:string``, ``rdf:langString``,
+    hence every KEY :func:`languages` tags — built here too, so its ValueError fires wherever this
+    map is built). Annotation / validation only — it never decides whether a value is a literal or an IRI."""
     rdf_map = load_rdf_map(rdf_map)
     bound = prefixes(rdf_map)
+    languages(rdf_map)
     return {name: None if datatype in _PLAIN_DATATYPES else datatype
             for name, entry in rdf_map_entries(rdf_map)
             if entry.get("type") == "Attribute" and entry.get("xsd:type")
             and (datatype := absolute_datatype(name, str(entry["xsd:type"]), bound))}
+
+
+def language_tag(key, tag, declared, prefixes):
+    """*key*'s ``language`` → the tag: a well-formed BCP 47 tag on a KEY whose ``xsd:type``
+    *declared* is empty or a plain literal (``xsd:string``, ``rdf:langString``), else ValueError
+    naming *key* — a language-tagged literal has no other datatype."""
+    tag = str(tag)
+    if not LANGUAGE_TAG_RE.fullmatch(tag):
+        raise ValueError(f"{key}: language {tag!r} is not a BCP 47 language tag (e.g. 'en', 'en-GB')")
+    if declared and absolute_datatype(key, str(declared), prefixes) not in _PLAIN_DATATYPES:
+        raise ValueError(f"{key}: language {tag!r} with xsd:type {declared!r} — a language-tagged literal "
+                         f"has no other datatype; drop xsd:type or use xsd:string")
+    return tag
+
+
+def languages(rdf_map):
+    """KEY → language tag, from the first Attribute entry of the KEY that carries a ``language``;
+    checked by :func:`language_tag` against the KEY's ``xsd:type`` as :func:`datatypes` resolves
+    it (first entry with one). The literal is written ``"text"@tag`` (N-Quads) /
+    ``xml:lang="tag"`` (CIM XML), with no datatype annotation."""
+    rdf_map = load_rdf_map(rdf_map)
+    entries = rdf_map_entries(rdf_map)
+    tags = {name: entry["language"] for name, entry in entries
+            if entry.get("type") == "Attribute" and entry.get("language")}
+    declared = {name: entry["xsd:type"] for name, entry in entries
+                if name in tags and entry.get("type") == "Attribute" and entry.get("xsd:type")}
+    bound = prefixes(rdf_map)
+    return {name: language_tag(name, tag, declared.get(name), bound) for name, tag in tags.items()}
 
 
 _VALUE_TYPES = {"Attribute": "literal", "Association": "reference", "Enumeration": "enum"}

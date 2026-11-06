@@ -5,12 +5,13 @@ from io import BytesIO
 
 import polars as pl
 
-from ..iri import DESCRIPTION_TYPE, TRIPLETS_NS, TYPE_KEY, datatypes, iri_polars, load_rdf_map, namespaces, value_types
+from ..iri import (DESCRIPTION_TYPE, TRIPLETS_NS, TYPE_KEY, datatypes, iri_polars, languages, load_rdf_map, namespaces,
+                   value_types)
 
 logger = logging.getLogger(__name__)
 
 
-def _quads(data, maps, export_undefined=True, undefined_namespace=TRIPLETS_NS):
+def _quads(data, maps, tags, export_undefined=True, undefined_namespace=TRIPLETS_NS):
     """Triplets frame → collected quads frame [s, p, o, g, end].
 
     The shared formatting core: the whole-frame export and the per-batch
@@ -24,6 +25,9 @@ def _quads(data, maps, export_undefined=True, undefined_namespace=TRIPLETS_NS):
                .str.replace_all("\n", "\\n", literal=True)
                .str.replace_all("\r", "\\r", literal=True))
     plain_literal = pl.format('"{}"', escaped)
+    if tags:                                             # a tagged KEY has no datatype: only plain literals carry @tag
+        tag = pl.col("KEY").replace_strict(tags, default=None, return_dtype=pl.Utf8)
+        plain_literal = pl.when(tag.is_not_null()).then(pl.format('"{}"@{}', escaped, tag)).otherwise(plain_literal)
 
     kind, payload = iri_polars.absolute_value("KEY", "VALUE", undefined_namespace=undefined_namespace, **maps)
     subject = pl.format("<{}>", iri_polars.absolute_id("ID"))
@@ -57,9 +61,11 @@ def _quads(data, maps, export_undefined=True, undefined_namespace=TRIPLETS_NS):
 
 
 def _maps(rdf_map):
-    """The three flat schema maps the term rules take, built once per export."""
+    """The three flat schema maps the term rules take, and the language tags the literal
+    quoting takes, built once per export."""
     rdf_map = load_rdf_map(rdf_map)
-    return dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map))
+    return (dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map)),
+            languages(rdf_map))
 
 
 def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, export_undefined=True,
@@ -74,7 +80,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
         Output file path (.nq). Ignored when export_to_memory=True.
     rdf_map : dict or str, optional
         Export schema for proper enum/association detection and literal
-        datatype annotations ("400"^^<...XMLSchema#float>).
+        datatype annotations ("400"^^<...XMLSchema#float>) and language tags ("text"@en).
     export_to_memory : bool, default False
         If True, return an in-memory BytesIO (with .name) instead of writing to disk.
     export_undefined : bool, default True
@@ -83,7 +89,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
     undefined_namespace : str, default "http://triplets#"
         Namespace those names are written in.
     """
-    quads = _quads(data, _maps(rdf_map), export_undefined, undefined_namespace)
+    quads = _quads(data, *_maps(rdf_map), export_undefined, undefined_namespace)
 
     # write straight from Rust with a space separator — the CSV writer joins
     # the columns into "<s> <p> <o> <g> ." per row. No Python string
@@ -107,7 +113,7 @@ def write_nquads_batches(reader, handle, rdf_map=None, export_undefined=True, un
     a single batch regardless of the total size — the out-of-core export
     counterpart of ``parse_batches``. The schema metadata is resolved once.
     """
-    maps = _maps(rdf_map)
+    maps, tags = _maps(rdf_map)
     for batch in reader:
-        _quads(pl.from_arrow(batch), maps, export_undefined, undefined_namespace).write_csv(
+        _quads(pl.from_arrow(batch), maps, tags, export_undefined, undefined_namespace).write_csv(
             handle, include_header=False, quote_style="never", separator=" ")

@@ -127,8 +127,8 @@ def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_mem
         Output file path (.nq); defaults to "export.nq" in the current
         directory. Ignored when export_to_memory=True.
     rdf_map : dict or str, optional
-        Export schema for proper enum detection and literal datatype
-        annotations. If None, enums exported as literals.
+        Export schema for proper enum detection, literal datatype
+        annotations and language tags. If None, enums exported as literals.
     engine : str, default "auto"
         "polars" (lazy expression plan, ~4x faster) or "pandas".
         "auto" picks polars when installed, converting pandas input
@@ -261,7 +261,8 @@ def export_to_cimxml(data,
     datatypes : bool, default False
         If True, annotate literal elements with rdf:datatype from the schema's
         xsd:type, like the N-Quads export ("44.84" → rdf:datatype xsd#float;
-        xsd:string stays plain). Both engines.
+        xsd:string stays plain). Both engines. A schema ``language`` writes
+        ``xml:lang`` either way.
 
     Returns
     -------

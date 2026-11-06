@@ -86,8 +86,9 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   of a flat schema, then every profile section; first occurrence wins): `namespaces` (name → namespace IRI),
   `key_types` (name → schema entry type), `value_types` (KEY → `literal` /
   `reference` / `enum`, by entry type only), `datatypes` (Attribute KEY →
-  datatype IRI, `None` = `xsd:string` / `rdf:langString`; anyURI included),
-  and `prefixes` (prefix → namespace; the one map read from the
+  datatype IRI, `None` = `xsd:string` / `rdf:langString` / a tagged KEY; anyURI
+  included), `languages` (Attribute KEY → fixed language tag, written `"text"@tag` /
+  `xml:lang`), and `prefixes` (prefix → namespace; the one map read from the
   `ProfileNamespaceMap`s instead of the entries, first binding wins; `xsd`,
   `rdf`, `rdfs` built in where no map binds them). No cache: each is ~2 ms
   on a 2.8 MB schema. Public entry points (`validate_shacl`,

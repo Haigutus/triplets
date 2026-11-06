@@ -2,7 +2,8 @@
 
 from io import BytesIO
 
-from ..iri import DESCRIPTION_TYPE, TRIPLETS_NS, TYPE_KEY, datatypes, iri_pandas, load_rdf_map, namespaces, value_types
+from ..iri import (DESCRIPTION_TYPE, TRIPLETS_NS, TYPE_KEY, datatypes, iri_pandas, languages, load_rdf_map, namespaces,
+                   value_types)
 
 
 def _escape(series):
@@ -24,8 +25,8 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
         Output file path (.nq). Ignored when export_to_memory=True.
     rdf_map : dict or str, optional
         Export schema for proper enum/association detection and literal
-        datatype annotations ("400"^^<...XMLSchema#float>). If None,
-        enumerations won't get namespace and literals stay untyped.
+        datatype annotations ("400"^^<...XMLSchema#float>) and language tags
+        ("text"@en). If None, enumerations won't get namespace and literals stay untyped.
     export_to_memory : bool, default False
         If True, return an in-memory BytesIO (with .name) instead of writing to disk.
     export_undefined : bool, default True
@@ -36,6 +37,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
     """
     rdf_map = load_rdf_map(rdf_map)
     maps = dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map))
+    tags = languages(rdf_map)
 
     data = data[data["VALUE"].notna()]  # no object to state (parity with the polars engine)
     # Type "Description" is an rdf:Description element — not a class, so no rdf:type
@@ -54,6 +56,10 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
     typed = payload.notna().to_numpy() & ~is_iri
     objects = '"' + _escape(values) + '"'                     # plain literal by default
     objects[typed] = objects[typed] + "^^<" + payload[typed] + ">"
+    if tags:                                                  # a tagged KEY has no datatype: disjoint from typed
+        tag = keys.map(tags)
+        tagged = tag.notna().to_numpy() & ~is_iri
+        objects[tagged] = objects[tagged] + "@" + tag[tagged]
     objects[is_iri] = "<" + payload[is_iri] + ">"
 
     graphs = ("<" + iri_pandas.by_distinct(instances, iri_pandas.absolute_id) + ">").where(instances.notna(), ".")

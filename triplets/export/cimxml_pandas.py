@@ -12,7 +12,7 @@ from lxml.builder import ElementMaker
 from lxml.etree import QName
 
 from .. import iri
-from ..iri import DESCRIPTION_TYPE, RDF_NS, TRIPLETS_NS, TYPE_KEY, UUID_PREFIX
+from ..iri import DESCRIPTION_TYPE, RDF_NS, TRIPLETS_NS, TYPE_KEY, UUID_PREFIX, XML_NS
 from .cimxml_utils import load_rdf_map, resolve_instance_config
 
 logger = logging.getLogger(__name__)
@@ -67,6 +67,14 @@ def _get_qname(namespace, tag=None):
     return qname
 
 
+def _annotate(tag, datatype, language):
+    """Literal element → its ``rdf:datatype`` or ``xml:lang`` (a tagged KEY has no datatype)."""
+    if datatype:
+        tag.attrib[_get_qname(RDF_NS, "datatype")] = datatype
+    if language:
+        tag.attrib[_get_qname(XML_NS, "lang")] = language
+
+
 def generate_xml(instance_data,
                  rdf_map=None,
                  namespace_map=None,
@@ -106,6 +114,7 @@ def generate_xml(instance_data,
         datatypes : bool, default False
             If True, annotate literal elements with rdf:datatype from the schema's
             xsd:type (like the N-Quads export); xsd:string stays unannotated.
+            A schema ``language`` writes ``xml:lang`` either way.
         debug : bool, default False
             If True, log detailed timing and debug information during processing.
 
@@ -152,6 +161,8 @@ def generate_xml(instance_data,
 
     # KEY → xsd datatype IRI as the N-Quads export annotates it (Attributes only; string → None)
     key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
+    # KEY → xml:lang tag, written whatever datatypes says (part of the value, not an annotation)
+    key_languages = iri.languages(rdf_map)
 
     if instance_rdf_map is None:
         logger.warning("No rdf mapping available for {}".format(file_name))
@@ -262,9 +273,7 @@ def generate_xml(instance_data,
                     tag.attrib[_get_qname(attrib["attribute"])] = f"{value_prefix}{VALUE}"
                 else:
                     tag.text = f"{text_prefix}{VALUE}"
-                    datatype = key_datatypes.get(KEY)
-                    if datatype:
-                        tag.attrib[_get_qname(RDF_NS, "datatype")] = datatype
+                    _annotate(tag, key_datatypes.get(KEY), key_languages.get(KEY))
 
                 _object.append(tag)
 
@@ -274,11 +283,9 @@ def generate_xml(instance_data,
                 if export_undefined:
                     tag = E(_get_qname(undefined_namespace, KEY))
                     tag.text = str(VALUE)
-                    # key_datatypes spans all schema profiles, so annotation works
-                    # even when instance profile resolution fell through
-                    datatype = key_datatypes.get(KEY)
-                    if datatype:
-                        tag.attrib[_get_qname(RDF_NS, "datatype")] = datatype
+                    # key_datatypes / key_languages span all schema profiles, so annotation
+                    # works even when instance profile resolution fell through
+                    _annotate(tag, key_datatypes.get(KEY), key_languages.get(KEY))
 
                     _object.append(tag)
 
