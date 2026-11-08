@@ -41,11 +41,12 @@ streams batch-by-batch through duckdb's record-batch reader (bounded memory —
 works larger-than-RAM; needs the polars engine). The remaining formats fetch
 the table through duckdb's native arrow result path (~4x cheaper than a
 pandas materialization) but hold the whole table in memory during the export;
-streaming cimxml is the recorded TODO follow-up.
+CIM XML export from a DuckDB connection is not streamed.
 
 Both engines expose the same interface:
-`generate_xml(instance_data, rdf_map, namespace_map, class_KEY, export_undefined, comment, debug, datatypes, undefined_namespace)`
-returning `{"filename": str, "file": bytes}` for one instance. They produce
+`generate_xml(instance_data, rdf_map, namespace_map, class_KEY, export_undefined, comment, debug, datatypes, undefined_namespace, key_datatypes, key_languages)`
+returning `{"filename": str, "file": bytes}` for one instance — the dispatcher loads the
+schema once and passes the `iri.datatypes` / `iri.languages` maps to every instance. They produce
 data-identical XML (verified by an engine-equivalence test); only whitespace
 formatting differs.
 
@@ -103,7 +104,7 @@ data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
 ```
 triplets/export/
 |-- __init__.py                # dispatchers: export_to_cimxml() + engine registry,
-|                              # export_to_csv(), export_to_nquads(), ExportType
+|                              # export_to_csv(), export_to_nquads(), export_to_arrow(), ExportType
 |-- cimxml_utils.py            # shared per-instance config resolution (both cimxml engines)
 |-- cimxml_pandas.py           # generate_xml() via lxml (default)
 |-- cimxml_pugixml.py          # generate_xml() via compiled extension

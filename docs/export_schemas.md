@@ -126,25 +126,26 @@ files = data.export_to_cimxml(rdf_map=rdf_map)   # <dcterms:description xml:lang
 
 ## How Exporters Pick a Section
 
-`export/cimxml_utils.py` matches each instance against the schema's own
-identity metadata — there is no hardcoded per-release knowledge:
+`export/cimxml_utils.resolve_instance_config` resolves the header through
+`triplets/_header.py` — one rule shared with `cgmes_tools.declared_profiles` —
+against the schema's own identity metadata; there is no hardcoded per-release knowledge:
 
 ```
 resolve_instance_config(instance_data, rdf_map)
-|
-|-> _profile_identity_index(rdf_map)
-|   every section registers: section key, ProfileMetadata.keyword,
-|   versionIRI, profileVersionIRI, conformsTo -> section name
 |
 |-> _instance_profile_hints(instance_data)
 |   header fields in priority order:
 |   Model.messageType > keyword > Model.profile > conformsTo
 |
-|-> every hint found in the index, in hint order (EQ, OP, SC for a CGMES 3.0 EQ file)
-|-> fallback: legacy 2.4.15 Model.profile URL substrings (PROFILE_URL_MAP)
+|-> _header.profile_sections(hints, rdf_map)
+|   |-> _profile_identity_index(rdf_map)
+|   |   every section registers: section key, ProfileMetadata.keyword,
+|   |   versionIRI, profileVersionIRI, conformsTo -> section name
+|   |-> every hint found in the index, in hint order (EQ, OP, SC for a CGMES 3.0 EQ file)
+|   '-> fallback: legacy 2.4.15 Model.profile URL substrings (PROFILE_URL_MAP)
 |-> fallback: the schema's root entries (a flat schema; warns on a sectioned one)
 |
-'-> merge_sections(): the matched sections as one schema, merged like
+'-> _header.merge_sections(): the matched sections as one schema, merged like
     validation's rdf_map_scope; then a class concrete in any matched section is
     instantiated (rdf:ID in ED1), described (rdf:about) only when every matched
     section describes it; the first matched section gives the ProfileNamespaceMap
@@ -235,8 +236,9 @@ uv run pytest tests/test_roundtrip_nc.py -q
 
 The roundtrip suite (`tests/test_roundtrip_nc.py`) parses every ReliCapGrid
 (TSO, profile) example instance, exports it through the bundle, re-parses and
-requires exact row-set equality — deviations are named per case in a
-`KNOWN_MISMATCH` registry with reasons, never tolerated fuzzily.
+requires exact row-set equality — deviations are named per case in
+`EXPECTED_FAILURES` (strict xfail, linked to the upstream issue) and `KNOWN_MISMATCH`,
+never tolerated fuzzily.
 
 ## File Layout
 
