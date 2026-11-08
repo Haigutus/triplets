@@ -16,6 +16,7 @@ import pytest
 import triplets  # noqa: F401
 from triplets import export
 from triplets.export_schema import schemas
+from triplets.iri import load_rdf_map
 
 from _parity import (
     REALGRID_SKIP_REASON, REALGRID_ZIP, SKIP_REASON, SVEDALA_DIR, SVEDALA_FILES,
@@ -236,6 +237,21 @@ def test_cimxml_polars_input_parallel(svedala_pandas):
                                   engine="cython_pugixml", max_workers=2,
                                   export_type="xml_per_instance", export_to_memory=True)
     assert len(out) == svedala_pandas["INSTANCE_ID"].nunique()
+
+
+@pytest.mark.parametrize("engine, variant, to_input", [
+    ("python_lxml", "python_lxml", lambda d: d),                       # fork workers
+    ("cython_pugixml", "cython_pugixml_polars_input", _polars),        # spawn workers
+])
+def test_cimxml_parallel_dict_rdf_map_matches_sequential(svedala_pandas, engine, variant, to_input):
+    """max_workers with an in-memory rdf_map dict → the sequential bytes."""
+    _require(FORMATS["cimxml"], variant)
+    data = to_input(svedala_pandas)
+    kwargs = dict(rdf_map=load_rdf_map(RDF_MAP), engine=engine, datatypes=True,
+                  export_type="xml_per_instance", export_to_memory=True)
+    sequential = {f.name: f.getvalue() for f in export.export_to_cimxml(data, **kwargs)}
+    parallel = {f.name: f.getvalue() for f in export.export_to_cimxml(data, max_workers=2, **kwargs)}
+    assert parallel == sequential and len(sequential) == svedala_pandas["INSTANCE_ID"].nunique()
 
 
 def test_split_instances_skips_phantom_dictionary_groups(tmp_path):
