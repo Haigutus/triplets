@@ -4,14 +4,6 @@ triplets.rdfs\_tools package
 Submodules
 ----------
 
-triplets.rdfs\_tools.RDFS\_to\_AzureDTDL\_V2 module
----------------------------------------------------
-
-.. automodule:: triplets.rdfs_tools.RDFS_to_AzureDTDL_V2
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
 triplets.rdfs\_tools.cim\_rdfs\_to\_html module
 -----------------------------------------------
 
@@ -28,10 +20,10 @@ triplets.rdfs\_tools.cim\_rdfs\_to\_json module
    :show-inheritance:
    :undoc-members:
 
-triplets.rdfs\_tools.cim\_rdfs\_to\_json\_deprecated module
------------------------------------------------------------
+triplets.rdfs\_tools.fetch\_profiles module
+-------------------------------------------
 
-.. automodule:: triplets.rdfs_tools.cim_rdfs_to_json_deprecated
+.. automodule:: triplets.rdfs_tools.fetch_profiles
    :members:
    :show-inheritance:
    :undoc-members:

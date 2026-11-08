@@ -8,7 +8,7 @@ import triplets
 # -- Project information -------------------------------------------------------
 
 project = 'triplets'
-copyright = '2025, Kristjan Vilgo'
+copyright = '2025-2026, Kristjan Vilgo'
 author = 'Kristjan Vilgo'
 release = triplets.__version__
 

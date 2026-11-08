@@ -20,12 +20,11 @@ pytest tests/test_parser.py tests/test_parity_parser.py -v
 pip install -e ".[dev]"
 ```
 
-The `dev` extra pulls in every test dependency (pytest, pytest-xdist,
-pytest-benchmark, polars, pyarrow, networkx, openpyxl, rdflib, pyshacl,
-pyoxigraph, oxrdflib, and `jsonschema>=4.0` — used by the SARIF
+The `dev` extra pulls in the test tooling and most engine dependencies (pytest,
+pytest-xdist, pytest-benchmark, polars, pyarrow, networkx, openpyxl, rdflib,
+pyshacl, pyoxigraph, oxrdflib, and `jsonschema>=4.0` for the SARIF
 schema-conformance test against `tests/data/sarif-schema-2.1.0.json`).
-
-The CI test job installs a narrower set of feature extras:
+`duckdb` comes from its own extra. CI installs `dev` plus the feature extras:
 
 ```shell
 pip install -e ".[dev,validation,oxigraph,duckdb,excel,networkx]"
@@ -39,23 +38,25 @@ pip install -e ".[dev,validation,oxigraph,duckdb,excel,networkx]"
 | `excel` | `openpyxl` — Excel import/export |
 | `networkx` | `networkx` — graph tools |
 
-For the compiled cython engine tests, build the extension first:
-
-```shell
-python setup_cython_parser.py build_ext --inplace
-```
+For the compiled cython engine tests, build the extension first — see
+[Building](building.md) (`pixi run build-cython-pugixml-arrow`).
 
 ## Test Files
 
-| File | What it tests | Needs external data? |
-|------|--------------|----------------------|
-| `test_parser.py` | `parse()`, `local_id`, `find_all_xml`, nodeID support, categorical encoding, return types | No (uses `tests/data/minimal_cim.xml`) |
-| `test_parity_parser.py` | Cross-engine parser parity, `pandas.read_RDF` registration, all engines produce identical output | No |
-| `test_import.py` | Loading NC and CGMES files, column structure, metadata (Distribution, NamespaceMap) | Yes (relicapgrid submodule) |
-| `test_tools.py` | Data-manipulation tool functions on the Svedala IGM dataset | Yes (relicapgrid submodule) |
-| `test_parity_tools.py` | Cross-engine tool parity (pandas/polars/duckdb), including `type_tableview` / pivot correctness | Yes (relicapgrid submodule) |
-| `test_benchmarks_realgrid.py` | Performance benchmarks for parsing and tools across all engines | Yes (RealGrid LFS zip) |
-| `test_compiled_modules.py` | Compiled-extension import guard (see below) | No |
+Grouped by family; each module docstring describes its tests.
+
+| Family | Files | Needs external data |
+|---|---|---|
+| Parser | `test_parser.py` (incl. `pandas.read_RDF` registration), `test_parser_nquads.py`, `test_path_handling.py`, `test_compiled_modules.py` (guard, see below) | committed `tests/data`; RealGrid when present |
+| Import / tools / CGMES tools | `test_import.py`, `test_tools.py`, `test_cgmes_tools.py`, `test_duckdb_table.py`, `test_api_surface.py` | relicapgrid |
+| Cross-engine parity (`test_parity_*.py`, shared `tests/_parity.py`) | `test_parity_parser.py`, `test_parity_tools.py`, `test_parity_export.py`, `test_parity_cgmes_tools.py`, `test_parity_validation.py`, `test_parity_shacl_matrix.py`, `test_parity_shacl_raw.py` | relicapgrid; RealGrid LFS + CGMES-AP + APL cgmes-v2-4 for the `-m performance` parts |
+| Engine registry / flavors / caches | `test_engines_api.py`, `test_engine_state.py`, `test_engine_detect.py` | none |
+| IRI contract | `test_iri.py` | none |
+| Export | `test_export_comment.py`, `test_export_profiles.py`, `test_export_undefined.py`, `test_roundtrip_nc.py`, `test_cim_spreadsheet.py` | relicapgrid |
+| SPARQL | `test_sparql.py` (rdflib), `test_sparql_oxigraph.py`, `test_sparql_qlever.py`, `test_sparql_qlever_ingest.py`, `test_rdflib_oxigraph_store.py` | relicapgrid; qlever files skip unless the extension is built |
+| Validation | `test_validation.py`, `test_shacl_ir.py`, `test_shacl_engines.py`, `test_shacl_report.py`, `test_schema_validation.py`, `test_schema_references.py`, `test_schema_scope.py`, `test_cgmes_validation.py`, `test_validation_context.py`, `test_locations.py`, `test_sarif.py` | relicapgrid, CGMES-AP; APL cgmes-v2-4 for the CGMES 2.4 shapes in `test_shacl_ir.py` |
+| RDFS tools | `test_rdfs_tools.py` | `rdfs/` snapshots in the repo |
+| Benchmarks (`-m performance`) | `test_benchmarks_realgrid.py` | RealGrid LFS |
 
 ## Test Data
 
@@ -63,8 +64,10 @@ python setup_cython_parser.py build_ext --inplace
 - `tests/data/minimal_cim.xml` — 5 RDF objects, covers Substation, VoltageLevel, BaseVoltage, ConnectivityNode (with `rdf:nodeID`)
 - `tests/data/sarif-schema-2.1.0.json` — official SARIF 2.1.0 schema for the exporter conformance test
 
-**Submodule** (`git submodule update --init test_data/relicapgrid`):
+**Submodules** (`git submodule update --init test_data/relicapgrid test_data/CGMES-AP test_data/application-profiles-library-cgmes-v2-4`):
 - `test_data/relicapgrid/` — [ReliCapGrid](https://github.com/entsoe/relicapgrid) release `cgmes-3.0_ncp-2.5_tc-2.0`: CGMES 3.0 grids and NCP 2.5 instances for import and tools tests
+- `test_data/CGMES-AP/` — [CGMES-AP](https://github.com/entsoe/CGMES-AP): CGMES 3.0 SHACL shapes for the validation tests
+- `test_data/application-profiles-library-cgmes-v2-4/` — [application-profiles-library](https://github.com/entsoe/application-profiles-library) branch `cgmes-v2-4`: CGMES 2.4 Enhanced SHACL shapes (RealGrid parity tests)
 
 **Git LFS** (`git lfs pull`):
 - `test_data/TestConfigurations_packageCASv2.0/RealGrid/CGMES_v2.4.15_RealGridTestConfiguration_v2.zip`
@@ -161,10 +164,12 @@ builds the cython extensions and runs the suite with `TRIPLETS_REQUIRE_COMPILED=
 The qlever extension has no CI.
 
 - **Matrix:** CPython 3.11, 3.13, 3.14 on `ubuntu-latest`
-- **Checkout:** LFS enabled (RealGrid zips); inits only the
-  `test_data/relicapgrid` submodule (not `vendor/qlever`)
+- **Checkout:** LFS enabled (RealGrid zips); inits the three test-data submodules
+  `test_data/relicapgrid`, `test_data/CGMES-AP`,
+  `test_data/application-profiles-library-cgmes-v2-4` (never `vendor/qlever`);
+  `pytest-compiled` also inits `vendor/pugixml`
 - **Install:** `pip install -e .[dev,validation,oxigraph,duckdb,excel,networkx]`
-- **Run:** `pytest -n auto -q`
+- **Run:** `pytest -n auto -q` (`pytest-compiled`: `pytest -n auto -q -rs`)
 
 ### `build-wheels.yml` — wheels + publish
 
@@ -211,8 +216,8 @@ Tags use bare numbers (matching existing releases like `0.0.17`).
 
 1. Tag the release:
    ```shell
-   git tag 0.2.0a2       # pre-release
-   git push origin 0.2.0a2
+   git tag 0.3.0rc1      # pre-release
+   git push origin 0.3.0rc1
    ```
 2. Create a GitHub Release from the tag (mark pre-releases as such).
 3. `build-wheels.yml` builds the sdist + wheels and publishes to PyPI.
@@ -221,7 +226,7 @@ Install:
 
 ```shell
 pip install --pre triplets       # latest pre-release
-pip install triplets==0.2.0a2    # pin an exact pre-release
+pip install triplets==0.3.0rc1   # pin an exact pre-release
 pip install triplets             # latest stable
 ```
 
@@ -230,9 +235,9 @@ they are installed only when `--pre` is passed or a specific version is pinned.
 
 | Tag | PyPI version | pip install |
 |-----|-------------|-------------|
-| `0.2.0a2` | `0.2.0a2` (pre-release) | `pip install --pre triplets` |
-| `0.2.0rc1` | `0.2.0rc1` (pre-release) | `pip install --pre triplets` |
-| `0.2.0` | `0.2.0` (stable) | `pip install triplets` |
+| `0.3.0a1` | `0.3.0a1` (pre-release) | `pip install --pre triplets` |
+| `0.3.0rc1` | `0.3.0rc1` (pre-release) | `pip install --pre triplets` |
+| `0.3.0` | `0.3.0` (stable) | `pip install triplets` |
 
 ### Verifying the Cython Engine in a Wheel
 
@@ -254,10 +259,10 @@ print("cython engine available")
 
 The suite runs **warning-free** and must stay that way: `pyproject.toml`
 `filterwarnings` enables `always::ResourceWarning` (so unclosed handles fail
-review even though Python hides them by default) and ignores exactly two
-rdflib 7.6.0 self-deprecations (its own internals call its own deprecated
-`Dataset.default_context`/`Dataset.identifier`; drop the ignores when rdflib
-migrates). A test that legitimately exercises a deprecated triplets alias
+review even though Python hides them by default) and ignores two rdflib 7.6.0
+self-deprecations (rdflib's own internals call its deprecated
+`Dataset.default_context`/`Dataset.identifier`), each filtered for the `rdflib`
+and the `pyshacl` module; drop the ignores when rdflib migrates. A test that legitimately exercises a deprecated triplets alias
 should assert it with `pytest.warns` or carry a scoped
 `pytest.mark.filterwarnings`, not leak it into the summary.
 
