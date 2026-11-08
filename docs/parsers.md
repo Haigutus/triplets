@@ -11,12 +11,13 @@ Three parser engines with automatic fallback (fastest available):
 |--------|------|----------|-------|------------------------|
 | `python_lxml_pandas` | `parser/python_lxml_pandas.py` | lxml + pandas (core) | 1x baseline, **always works** | 314 MB |
 | `python_lxml_arrow` | `parser/python_lxml_arrow.py` | + pyarrow (`pip install triplets[arrow]`) | ~1x parse, better interop | 145 MB |
-| `cython_pugixml_arrow` | `parser/cython_pugixml_arrow.pyx` | + C++ build + pyarrow | 9.8x | 145 MB |
+| `cython_pugixml_arrow` | `parser/cython_pugixml_arrow.pyx` | + C++ build + pyarrow | ~11x | 145 MB |
 
 Fallback order: `cython_pugixml_arrow` -> `python_lxml_arrow` -> `python_lxml_pandas`
 
-All three engines expose the same interface: `load_rdf_to_dataframe(path_or_fileobject, debug=False)`
-(the cython engine additionally accepts `string_type`, see below).
+Every engine exposes `load_rdf_to_dataframe(path_or_fileobject, debug=False, …)`: the python
+engines add `local_resources` / `default_base`, the cython engine adds `string_type` (see below)
+and supports the local form only.
 
 Engine aliases: `performance` / `pugixml` -> `cython_pugixml_arrow`, `native` -> `python_lxml_pandas`
 
@@ -45,16 +46,14 @@ stay dictionary-encoded regardless — consumers use the indices.
 The cython engine builds the requested layout natively (a layout-selecting
 `StringColBuilder` — zero measured cost on the hot loop); `python_lxml_arrow`
 gets a single cast on the combined table at finalize. Measured on RealGrid
-(1.14M rows): parse→arrow identical across layouts; parse→polars ~2-4% faster
-with string_view — the polars import is currently bounded by the
-dictionary→Categorical conversion of KEY/INSTANCE_ID (~11 ms/column), not the
-plain string columns, so the zero-copy adoption win is small until that
-bottleneck moves.
+(1.14M rows): parse to arrow is identical across layouts; parse to polars is
+~2-4% faster with string_view (the polars import is dominated by the
+dictionary→Categorical conversion of KEY/INSTANCE_ID, ~11 ms/column).
 
 ## Call Sequence
 
 ```
-pd.read_RDF([paths])
+pandas.read_RDF([paths])
 |
 '-> parser.parse(paths, engine="auto")
     |
@@ -101,8 +100,9 @@ pd.read_RDF([paths])
 
 ```
 triplets/parser/
-|-- __init__.py              # parse() dispatcher, get_engine(), find_all_xml re-export
-|-- utils.py                 # find_all_xml, _split_prefixed_name, RDF constants (ID/VALUE shortening: triplets.iri)
+|-- __init__.py              # parse() / parse_batches() dispatchers, get_engine(), read_rdf
+|-- utils.py                 # iter_all_xml / find_all_xml, iter_rdf_rows (shared python row loop), RDF constants (ID/VALUE shortening: triplets.iri)
+|-- nquads.py                # read_nquads (N-Quads / N-Triples -> triplets)
 |-- python_lxml_pandas.py    # lxml -> list of tuples -> pd.DataFrame (default)
 |-- python_lxml_arrow.py     # lxml -> Arrow StringBuilders -> pa.RecordBatch
 '-- cython_pugixml_arrow.pyx # pugixml C++ -> Arrow C++ builders -> pa.RecordBatch
@@ -231,7 +231,8 @@ Deviations between the importers and exporters that are known and not planned:
 
 ## Options
 
-`parse()` / `read_RDF` accept (see `triplets/parser/__init__.py`):
+`parse()` / `read_RDF` accept (full signature: `parse()` in `triplets/parser/__init__.py`;
+`string_type` is covered above):
 
 - `local_resources` (default `True`) — resource values in local form
   (`iri.local_value`: ID prefix stripped, http(s) IRIs with `#` cut to their local name,
@@ -272,16 +273,17 @@ logging.basicConfig(level=logging.DEBUG)
 data = pandas.read_RDF(["grid_EQ.xml"])  # debug output because logger is at DEBUG
 ```
 
-Engine selection is logged at DEBUG level:
+An explicit `engine=` is logged as `DEBUG triplets._registry: parser_cimxml engine: python_lxml_pandas`;
+per-file timings come from the engine module:
 
 ```
-DEBUG triplets.parser: auto - test engine availability: cython_pugixml_arrow
 DEBUG triplets.parser.cython_pugixml_arrow: [grid_EQ.xml] XML parse: 0:00:00.052368
 ```
 
 ## Building the Cython Engine
 
 ```shell
+git submodule update --init vendor/pugixml   # setup_cython_parser.py needs the vendored sources
 uv sync --all-extras
 pixi run build-cython-pugixml-arrow
 ```

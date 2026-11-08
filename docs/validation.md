@@ -13,7 +13,7 @@ any RDF loaded as triplets, CIM or not. Every input has a scope named after it:
 
 | Function | Checks | Runs |
 |----------|--------|------|
-| `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=True, deactivated_shapes=None)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision and class inheritance | once over the scoped data |
+| `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, lexical=True, inheritance=True, deactivated_shapes=None, abort_on_first=False)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision and class inheritance | once over the scoped data |
 | `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False, severity="Violation")` | cardinality, datatypes and enumerations of the scoped profiles (merged); `report_undefined_keys` also reports keys no scoped profile defines for the object's class | per instance in `data_scope` — cardinality never counts another instance's rows |
 | `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_data_scope, target_rdf_map_scope=(), report_missing_targets=True, inheritance=True, severity="Violation")` — `target_data_scope=None` = every instance | the reference type of each association of the source profiles (merged, or a union of several): valid classes from the source and target profiles, referenced objects from the source and target instances | per source instance; findings on source objects only |
 
@@ -63,8 +63,9 @@ list in the same order (`keyword: ["EQ", "OP", "SC"]`, `versionIRI: [...]`); the
 in the full schema (root first, then the profiles in schema order; first binding
 wins), so a prefixed `xsd:type` expands as in the full schema. A merged run is never stricter than running the
 listed profiles one by one: parameters only add, cardinality only relaxes.
-The shipped bundles merged whole (`"*"`) differ in cardinality for 1–15 keys
-and in datatype only for CGMES 2.4.15 FH `Model.version`.
+The shipped bundles merged whole (`"*"`) differ in cardinality for 1–15 keys,
+in datatype only for CGMES 2.4.15 FH `Model.version`, and in enumeration values
+for 1–2 keys (NC).
 
 ### Class inheritance (`schema_scope.class_ancestors`)
 
@@ -99,7 +100,7 @@ child node shape, the same triple in two instance files).
 
 ## Status & known limitations
 
-Known engine gaps (each reported in the run's coverage metadata,
+Known engine gaps (those a run can detect land in its coverage metadata,
 `skipped_shapes` / `skipped_components`):
 
 - **Vectorized engines walk `sh:targetClass`, `sh:targetSubjectsOf`,
@@ -127,6 +128,20 @@ Known engine gaps (each reported in the run's coverage metadata,
   `"1.0"^^xsd:float` matches the member `1.0` (`xsd:decimal`). pyshacl
   compares typed RDF terms and reports a violation. CGMES `sh:in` lists hold IRIs
   (enumeration values), where both agree.
+- **Numeric comparisons only**: `sh:minInclusive` … `sh:maxExclusive`,
+  `sh:lessThan` and `sh:lessThanOrEquals` compare values as numbers; a value
+  (or pair) that is not a number — a date, a string — is reported as
+  violating. pyshacl compares typed literals, so date/string comparisons agree
+  only on `engine="pyshacl"`
+  ([#216](https://github.com/Haigutus/triplets/issues/216)).
+- **A non-numeric range bound fails the compile**: `sh:minInclusive
+  "2020-01-01"^^xsd:date` (any range bound that is not a number) raises
+  `ValueError` in `compile()`, so no shape is validated
+  ([#215](https://github.com/Haigutus/triplets/issues/215)).
+- **`sh:closed` always allows `Type`**: every triplets object carries
+  `rdf:type` by construction, so the vectorized engines never report it on a
+  closed shape; pyshacl reports it unless the shape lists `rdf:type` in
+  `sh:ignoredProperties`. A deliberate divergence.
 - `sh:nodeKind` BlankNode(+combo) cases are intentionally not implemented in
   the vectorized engines (triplets data has no blank nodes).
 - `sh:nodeKind` follows the export schema: an Association / Enumeration path is
@@ -185,7 +200,7 @@ registries that consume it are internal.
 | `component` | str | the dispatch key (`"sh:minCount"`, …) — see the matrix below |
 | `params` | object | component parameter, shape varies (next table) |
 | `severity` | str | local name of `sh:severity`, default `"Violation"` applied at compile time |
-| `message` | str \| None | `sh:message`; engines substitute their own default text when None |
+| `message` | str \| None | `sh:message` (several: sorted, newline-joined); engines substitute their own default text when None |
 | `name`, `description` | str \| None | `sh:name`/`sh:description` with parent-NodeShape inheritance — read only by `context.enrich`, never by engines |
 
 `params` per component:
@@ -193,10 +208,10 @@ registries that consume it are internal.
 | components | `params` shape |
 |------------|----------------|
 | `sh:minCount` `sh:maxCount` `sh:minLength` `sh:maxLength` | int |
-| `sh:minInclusive` `sh:maxInclusive` `sh:minExclusive` `sh:maxExclusive` | float (integer bounds are coerced) |
+| `sh:minInclusive` `sh:maxInclusive` `sh:minExclusive` `sh:maxExclusive` | float (integer bounds are coerced; a non-numeric bound such as `xsd:date` is not supported) |
 | `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern` (`sh:flags` folded in: `q` quotes the pattern, `i` `m` `s` an inline `(?ims)` prefix; any other flag skips the shape), `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str |
 | `sh:in` | list[str] (IRIs shortened to local names) |
-| `sh:closed` | list[str] — the **fully resolved** allowed KEY list: every `sh:ignoredProperties` list + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included) |
+| `sh:closed` | list[str] — the **fully resolved** allowed KEY list: every `sh:ignoredProperties` list + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included); the vectorized engines always allow `Type` (rdf:type) on top |
 | `sh:or` / `sh:and` / `sh:xone` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
 | `sh:not` | list[dict] — nested IR row dicts |
 | `sh:node` | `{"shape": local name, "rows": [nested IR row dicts]}` — the referenced shape expanded at compile time, run against the value nodes (the focus node on a node shape); one finding per non-conforming value node |
@@ -205,7 +220,8 @@ registries that consume it are internal.
 
 Each value of a parameter is a constraint of its own (SHACL §4.1): two
 `sh:node` shapes, two `sh:or` lists or two `sh:pattern` values compile to two
-rows. One malformed shape does not stop the validation of the others. The
+rows. One malformed shape does not stop the validation of the others (a
+non-numeric range bound does — see Known engine gaps). The
 compile runs these load checks, each one pyshacl refuses the whole shapes graph
 for (`ConstraintLoadError` / `ShapeLoadError`): a parameter taken once
 (`sh:path`, `sh:minCount`, `sh:maxCount`, `sh:datatype`, `sh:nodeKind`,
@@ -304,7 +320,7 @@ the same shapes never recompiles anything.
 
 ### Component coverage per engine
 
-The shared contract lives in `shacl_ir`: `KNOWN_COMPONENTS` (all 26 keys) and
+The shared contract lives in `shacl_ir`: `KNOWN_COMPONENTS` (all 28 keys) and
 `FALLBACK_COMPONENTS` (`sh:or/and/xone/not/node/property/sparql` — the nested/query components
 every vectorized engine delegates to the pandas implementations via
 `split_rules`). A test (`test_shacl_ir.py::test_component_registries_agree`)
@@ -312,9 +328,9 @@ pins the registries together:
 
 | engine | registry | coverage |
 |--------|----------|----------|
-| pandas | `CONSTRAINT_VALIDATORS` | all 26 (the fallback target) |
-| polars | `PLAN_BUILDERS` (+ `BATCH_BUILDERS` fast path) | 19 vectorized + 7 delegated |
-| duckdb | `SQL_BUILDERS` | 19 vectorized + 7 delegated |
+| pandas | `CONSTRAINT_VALIDATORS` | all 28 (the fallback target) |
+| polars | `PLAN_BUILDERS` (+ `BATCH_BUILDERS` fast path) | 21 vectorized + 7 delegated |
+| duckdb | `SQL_BUILDERS` | 21 vectorized + 7 delegated |
 | pyshacl | consumes `compiled.graph`, not the IR | full spec; report vocabulary mapped back via `shacl_report._COMPONENT_MAP` |
 
 The compile cache participates in the shared engine-state lifecycle:
@@ -417,7 +433,8 @@ relative and non-ASCII allowed) — no controls, space, DEL or ``<>"{}|^`\``, an
 violation on every engine; `xsd:string` stays unchecked.
 
 `rdf_map` + `rdf_map_scope` matter for the pyshacl path: without them every
-`VALUE` is an untyped string, so `sh:datatype xsd:float` trips on everything;
+literal `VALUE` is an untyped string (references that look like a UUID or
+absolute IRI stay IRIs), so `sh:datatype xsd:float` trips on everything;
 with them the N-Quads export attaches the scoped profiles' `xsd` types and only
 genuinely broken values fail.
 
@@ -447,7 +464,7 @@ as a standard `sh:ValidationReport` (`violations.shacl.to_shacl_report(...)` —
 exact inverse of the pyshacl report mapping in `shacl_report.py`) or as SARIF 2.1.0
 (`violations.shacl.to_sarif(...)`, see below). Source positions come from one shared
 pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS`
-(`SOURCE_URI`, `SOURCE_LINE`) onto the frame; both exports run it
+(`SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET`) onto the frame; both exports run it
 automatically when given `sources=`, or reuse the columns when already present.
 
 The SHACL report serializes via rdflib: `format=None` (default) derives the format
@@ -463,7 +480,7 @@ united, differing values kept as the list of distinct values):
 
 | key | meaning |
 |-----|---------|
-| `started_at` / `generated_at` / `duration_seconds` | validation start/end (UTC, Zulu form) and wall-clock duration of the engine run (shapes compilation excluded — cache-independent) |
+| `started_at` / `generated_at` / `duration_seconds` | validation start/end (UTC, Zulu form) and wall-clock duration of the run — `validate_shacl` excludes the shapes compilation (cache-independent); the schema validations include `compile_schema` / `compile_references` |
 | `engine` | the engine that produced the report |
 | `creator` | tool + version |
 | `source` | data file names (from the data's Distribution label meta rows) |
@@ -485,7 +502,7 @@ a blank-valued row.
 
 | exporter | carries the metadata as |
 |----------|-------------------------|
-| `to_shacl_report` | `prov:generatedAtTime`, `dcterms:creator` (tool + version + engine, e.g. `"triplets 0.2.0 (engine: polars)"`) / `source` / `references` on the report node (standard vocabulary only — counts/coverage stay in the tabular/SARIF forms) |
+| `to_shacl_report` | `prov:generatedAtTime`, `dcterms:creator` (tool + version + engine, e.g. `"triplets <version> (engine: polars)"`) / `source` / `references` on the report node (standard vocabulary only — counts/coverage stay in the tabular/SARIF forms) |
 | `to_sarif` | `invocations[].startTimeUtc`/`endTimeUtc` + the full run `properties` bag (engine, duration, counts, coverage) |
 | `to_csv` | a `<name>_meta.<ext>` sidecar file with KEY,VALUE rows |
 | `to_excel` | a second `metadata` sheet |
@@ -504,6 +521,7 @@ the constraint text has one author:
 |-----|---------|
 | `[shacl_message]` | the shape's own `sh:message`, verbatim |
 | `[engine_message]` | engine-worded constraint text (default messages, `triplets:*` tool findings) |
+| `[shacl_profile]` / `[rdfs_profile]` | the scoped profiles the finding was checked against — the `PROFILE` column (schema validations) |
 | `[shacl_expected]` | what the constraint requires, worded from the IR parameter (`one of: Bay, VoltageLevel`) — the `EXPECTED` column, stamped by the validation, no extra input needed |
 | `[context_value]` | the offending value itself (the bad literal, or the reference) — self-contained errors, no need to open the instance data |
 | `[context_message]` | what was actually found — reference targets (id, Type, name / dangling), duplicate values on maxCount — the `TARGET` column (context.enrich with `data=`) |
@@ -531,13 +549,11 @@ post-validate/context/locate passes — the engine hot path is untouched.
 
 The validation stamps the message/engine distinction as a `MESSAGE_SOURCE`
 column (authored messages are known from the compiled IR); bare frames fall
-back to the violation-type namespace. The SHACL report's `dcterms:creator`
-names the engine (`"triplets 0.2.0 (engine: polars)"`); SARIF carries it in
-the run properties. The SHACL report carries the tagged entries as separate
-`sh:resultMessage`s (results stay one per
+back to the violation-type namespace. The SHACL report carries the tagged
+entries as separate `sh:resultMessage`s (results stay one per
 violation — merging them would break sh:ValidationReport semantics); SARIF
 carries them as newline-separated blocks in one `message.text`, adds
-`[count]` / `[examples]` blocks for grouped results, and puts the occurrence
+`[context_count]` / `[context_examples]` blocks for grouped results, and puts the occurrence
 count in the rule title (`SHACL Line completeness (8×)` — the ruleId stays stable,
 so GitHub alert matching is unaffected).
 
@@ -647,8 +663,8 @@ loading, so data outside the scope is never exported or parsed:
 
 | Function | Produces |
 |----------|----------|
-| `load_dataset(data, rdf_map=None, store="memory")` | `rdflib.Dataset` seeing the deduplicated union, one named graph per `INSTANCE_ID` (`urn:uuid:{INSTANCE_ID}`). `store="oxigraph"` backs it with the oxigraph SPARQL engine's cached store via oxrdflib (`"auto"`: oxigraph when installed) |
-| `scoped_graph(dataset, scope=None)` | full union when `scope is None`; otherwise a concrete `Graph` holding just the scoped instances' named graphs (`sparql.query`'s `data_scope`, rdflib engine) |
+| `load_dataset(data, rdf_map=None, data_unchanged=False, store="memory", undefined_namespace=CIM_NS)` | `rdflib.Dataset` seeing the deduplicated union, one named graph per `INSTANCE_ID` (`urn:uuid:{INSTANCE_ID}`). `store="oxigraph"` backs it with the oxigraph SPARQL engine's cached store via oxrdflib (`"auto"`: oxigraph when installed) |
+| `scoped_graph(dataset, data_scope=None)` | full union when `data_scope is None`; otherwise a concrete `Graph` holding just the scoped instances' named graphs (`sparql.query`'s `data_scope`, rdflib engine) |
 
 ## Call Sequence
 
@@ -677,7 +693,7 @@ validation.validate_schema(data, rdf_map, data_scope, rdf_map_scope)
 |-> compile_schema(rdf_map, rdf_map_scope)     # merged, cached
 '-> one engine pass per instance (data_scope=[instance]), PROFILE = the scoped section keys
 
-enrich(violations, data=, shapes=, rdf_map=, data_scope=)  # TARGET + context columns, a separate call
+enrich(violations, data=, shapes=, rdf_map=, rdf_map_scope=, data_scope=)  # TARGET + context columns, a separate call
 ```
 
 ## File Layout
@@ -752,19 +768,26 @@ violations.shacl.to_sarif(path="report.sarif")
 # with report_source=/report_references=
 violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"])
 violations.shacl.to_shacl_report(path="report.xml")  # RDF/XML via .xml
+# rdf_map= expands sh:resultPath KEYs to their profile namespace
+# (undefined_namespace for KEYs it lacks)
+violations.shacl.to_shacl_report(path="report.ttl", rdf_map=rdf_map)
 
 # tabular exports with the same metadata: CSV writes a report_meta.csv
 # sidecar, Excel a second "metadata" sheet
 violations.shacl.to_csv(path="report.csv")
 violations.shacl.to_excel(path="report.xlsx")
 
-# the location pass standalone — SOURCE_URI/LINE/COLUMN/COLUMN_END columns,
+# the location pass standalone — SOURCE_URI / SOURCE_LINE / SOURCE_SNIPPET columns,
 # reused by both report exports
 violations = violations.shacl.locate(sources=["grid.zip"])
 ```
 
 pyshacl pass-through options (`inference`, `advanced`, `store`) are forwarded
-as keyword arguments. `abort_on_first=True` stops every engine at the first
+as keyword arguments. Names the schema does not declare (every name without an
+`rdf_map`) are written under `undefined_namespace=` (default CIM100, so
+schema-less `cim:` shapes keep working; the same parameter on
+`validate_schema` / `validate_schema_references` / `to_shacl_report`); every
+row is loaded. `abort_on_first=True` stops every engine at the first
 Violation (Warnings and `triplets:invalidSparql` never stop it), for a yes/no
 gate rather than a full report. Runnable end-to-end demos live in
 `examples/shacl_validation.py` (engine behavior walkthrough) and
@@ -834,9 +857,9 @@ enrichment pass first (an already-enriched frame is used as-is).
   A frame already carrying `LOCATION_COLUMNS` (from
   `violations.shacl.locate(sources=...)`) is used as-is. Without either,
   `artifactLocation.uri` falls back to the enrichment-traced file label,
-  region-less. Columns are 1-based UTF-16 code units (SARIF's unit) — a
-  start-only region cannot be displayed by GitHub, so regions always carry
-  their end.
+  region-less. Positions are whole lines (1-based): RDF serializations put
+  one statement per line, and a start-only region cannot be displayed by
+  GitHub, so regions always carry `startLine` and `endLine`.
 - Everything domain-specific (triplet coordinates, schema descriptions,
   sample IDs) rides in the `properties` bags.
 

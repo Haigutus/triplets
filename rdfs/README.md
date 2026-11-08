@@ -6,7 +6,7 @@ generation is reproducible offline and upstream changes arrive as reviewable dif
 
 | Directory | Source | Version authority |
 |---|---|---|
-| `ENTSOE_NC_2.4.1/` | [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) release branch `ncp-v2-4-1` — the most recent official NCP publication | branch name + `SOURCE.json` commit pin |
+| `ENTSOE_NC_2.4.1/` | [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) release branch `ncp-v2-4-1` | branch name + `SOURCE.json` commit pin |
 | `ENTSOE_NC_2.5.0/` | same repo, release branch `ncp-v2-5-0` (tag `ncp-2.5.0`) | branch name + `SOURCE.json` commit pin |
 | `ENTSOE_CGMES_3.0.0/PROF/` | [entsoe/application-profiles-library](https://github.com/entsoe/application-profiles-library) commit `f256fdb` (`main` before CGMES moved out; `cgmes-v3-0` has no PROF) | `PROF/SOURCE.json` commit pin |
 | `ENTSOE_CGMES_2.4.15/`, `ENTSOE_CGMES_3.0.0/`, `ENTSOE_FH/` | legacy hand-collected RDFS sets (predate the fetch workflow) | version in filenames |
@@ -32,7 +32,7 @@ in CGMES they are the same IRI. The NCP and CGMES 3.0 snapshots hold `PROF/`.
 
 Upstream files are versionless by name (git-diff friendly); the release branch is the
 authoritative version — per-profile `owl:versionInfo` inside the files lags the release
-(e.g. the AE profile still says 2.4.0 on `ncp-v2-4-1`). Each fetched snapshot carries a
+(e.g. the AE profile says 2.4.0 on `ncp-v2-4-1`). Each fetched snapshot carries a
 `SOURCE.json` with `{repo, ref, commit, path, fetched}`.
 
 ## Onboarding a new release
@@ -60,8 +60,8 @@ Generation is deterministic: rerunning `cim_rdfs_to_json` must produce no diff
 - CI reproducibility guard: regenerate schemas and `git diff --exit-code
   triplets/export_schema` to prevent hand-edited JSON drift.
 - Automate the fetch of the upstream `SHACL/*.ttl` snapshots with the same fetch
-  spec (SHACL validation itself ships in 0.2 via `triplets.validation`; only the
-  fetch of the upstream shape files is still manual).
+  spec (the shape files the tests use are the `test_data/CGMES-AP` and
+  `test_data/application-profiles-library-cgmes-v2-4` git submodules, not fetched snapshots).
 - Migrate the legacy CGMES snapshots to the fetch workflow (upstream branches
   `cgmes-v3-0` / `cgmes-v2-4`); filenames differ from the local copies, so that is a
   separate migration with its own regeneration diff review.

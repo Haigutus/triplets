@@ -16,7 +16,7 @@ Upgrading from 0.0.x? See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0
 # Core (python_lxml_pandas engine, no extra deps)
 pip install triplets
 
-# With pyarrow (enables python_lxml_arrow + cython_pugixml_arrow engines, ~10x faster)
+# With pyarrow (enables python_lxml_arrow + cython_pugixml_arrow engines, ~11x faster)
 pip install triplets[arrow]
 ```
 
@@ -24,7 +24,7 @@ Install extras by feature:
 
 | Extra | Enables |
 |-------|---------|
-| `arrow` | compiled Arrow parser engines (~10x faster parsing) |
+| `arrow` | compiled Arrow parser engines (~11x faster parsing) |
 | `polars` | polars DataFrames (`polars.read_rdf`, `.triplets` namespace) |
 | `duckdb` | DuckDB connections (`con.read_rdf`, SQL over triplets) |
 | `sparql` | SPARQL queries (rdflib reference engine) |
@@ -72,8 +72,8 @@ data.export_to_cimxml(
 Export schemas are versioned and shipped per profile. Alongside the CGMES
 bundles (`schemas.ENTSOE_CGMES_2_4_15_552_ED1`,
 `schemas.ENTSOE_CGMES_3_0_0_552_ED1`, …) the versioned **NC (Network Code)**
-profiles are available as `schemas.ENTSOE_NC_2_4_1_552_ED1` /
-`schemas.ENTSOE_NC_2_4_1_552_ED2`. The `_ED1` / `_ED2` suffix selects the
+profiles are available as `schemas.ENTSOE_NC_2_4_1_552_ED1` / `_ED2` (NCP 2.4.1)
+and `schemas.ENTSOE_NC_2_5_0_552_ED1` / `_ED2` (NCP 2.5.0). The `_ED1` / `_ED2` suffix selects the
 serialization edition; profile resolution is schema-driven: every profile
 section the instance header declares is matched and used.
 
@@ -87,7 +87,7 @@ Three parser engines with automatic fallback (fastest available):
 |--------|---------|-------|
 | `python_lxml_pandas` | `pip install triplets` | 1x baseline, **always works** |
 | `python_lxml_arrow` | `pip install triplets[arrow]` | ~1x, better interop |
-| `cython_pugixml_arrow` | `pip install triplets[arrow]` (included in wheels) | **~10x faster** |
+| `cython_pugixml_arrow` | `pip install triplets[arrow]` (included in wheels) | **~11x faster** |
 
 The `cython_pugixml_arrow` engine is a compiled C++ extension included in published wheels.
 It requires pyarrow at runtime, so install with `triplets[arrow]` to enable it.
@@ -214,7 +214,7 @@ violations.shacl.to_shacl_report(path="report.xml", report_source="model.xml",
 
 Engines: `polars` (auto, real profiles in ~2 s) → `pandas` → `pyshacl`
 (reference); `duckdb` for larger-than-memory data. `sh:sparql` constraints
-ride the SPARQL engine above (minutes → milliseconds with oxigraph/qlever).
+ride the SPARQL engine above (milliseconds on oxigraph/qlever, minutes on rdflib).
 Details: [docs/validation.md](docs/validation.md).
 
 ## Accessor namespace
@@ -233,8 +233,8 @@ con.triplets.tableview_by_type("ACLineSegment").df()
 con.triplets.get_types_count()
 ```
 
-Root-level methods (`df.type_tableview(...)`, `con.filter_triplets(...)`) still
-work for backwards compatibility.
+Root-level methods (`df.type_tableview(...)`, `con.filter_triplets(...)`) are the
+same functions bound directly on the class.
 
 ## Cache lifecycle
 
@@ -261,7 +261,7 @@ uv tool upgrade triplets
 uvx --from "triplets[arrow,excel]" cim-diff original.xml modified.xml   # one-off run
 ```
 
-`excel` is needed for `.xlsx`; `arrow` makes parsing ~10x faster.
+`excel` is needed for `.xlsx`; `arrow` makes parsing ~11x faster.
 
 ```shell
 cim-spreadsheet -i model.xml -o output.xlsx                  # one sheet per class
@@ -293,15 +293,15 @@ up to 31 characters; use CSV (`-f csv`) to keep longer numbers and class names.
 ## Performance (RealGrid, 1.14M rows)
 
 Committed benchmark results live in `tests/performance_results/`; re-run with
-`pytest -m performance`. Representative numbers (cython parse 1.47s → 0.157s
-vs the lxml engine = ~9.4x):
+`pytest -m performance`. Representative numbers (2026-11-09; parse to pandas:
+lxml engine 1.44 s, cython engine 0.127 s, ~11x):
 
 | Operation | pandas | polars | DuckDB |
 |-----------|--------|--------|--------|
-| Parse (cython engine) | 157ms | 180ms | streams (see duckdb section) |
-| tableview_by_type | 72ms | **15ms** | 53ms |
-| filter_triplets_by_type | 103ms | **9ms** | 50ms |
-| get_types_count | 21ms | **11ms** | 18ms |
+| Parse (cython engine) | 127ms | 151ms | 262ms (streamed `read_rdf`) |
+| tableview_by_type | 67ms | **19ms** | 43ms |
+| filter_triplets_by_type | 33ms | **9ms** | 45ms |
+| get_types_count | 35ms | **8ms** | 8ms |
 
-The old `rdf_parser.py` functions still work but emit deprecation warnings.
-See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for renames and breaking changes.
+`rdf_parser` functions emit `DeprecationWarning`; their replacements are listed in
+[docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md).

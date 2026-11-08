@@ -2,7 +2,7 @@
 vectorized engine family).
 
 Operates directly on the triplet DataFrame's raw string VALUEs — no rdflib,
-no rdf_map. That enables the one deliberate deviation from pyshacl: the
+no rdf_map. That enables a deliberate deviation from pyshacl: the
 datatype check judges the actual lexical form. rdflib reads ``"1"^^xsd:float``
 as simply valid; here it is reported, on two levels:
 

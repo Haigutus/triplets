@@ -37,7 +37,7 @@ their own plan per engine in ``CompiledShapes.plans``) — they never touch
 rdflib. sh:sparql IR rows and SPARQL targets are delegated to triplets.sparql
 by the vectorized engines (pyshacl evaluates both itself via advanced=True).
 
-One deliberate deviation from pyshacl: the datatype check inspects the raw
+A deliberate deviation from pyshacl: the datatype check inspects the raw
 lexical form of VALUE (see shacl_pandas) — with ``lexical=True`` (default)
 every engine's report carries the triplets:lexicalForm Warnings, with
 ``lexical=False`` none does.
@@ -133,7 +133,7 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
         polars → pandas → pyshacl; duckdb is always an explicit choice.
     lexical : bool, default True
         Report valid-but-narrower datatype forms (``"1"`` for xsd:float) as
-        triplets:lexicalForm Warnings — the deliberate deviation from pyshacl,
+        triplets:lexicalForm Warnings — a deliberate deviation from pyshacl,
         see shacl_pandas. The vectorized engines check them inline, pyshacl
         gets the pandas datatype check as a supplement. False skips the check
         on every engine (pyshacl: the pure pyshacl report); values outside the
