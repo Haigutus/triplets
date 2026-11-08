@@ -194,6 +194,21 @@ def _split_instances(data):
     return (frame for _, frame in data.groupby("INSTANCE_ID", observed=True) if len(frame))
 
 
+_worker_schema = None   # (rdf_map, key_datatypes, key_languages) of this export worker
+
+
+def _set_schema(*schema):
+    """ProcessPoolExecutor initializer: keep the loaded schema for every instance of this worker."""
+    global _worker_schema
+    _worker_schema = schema
+
+
+def _generate_in_worker(generate, instance, namespace_map, schema, **kwargs):
+    rdf_map, key_datatypes, key_languages = schema or _worker_schema
+    return generate(instance, rdf_map, namespace_map,
+                    key_datatypes=key_datatypes, key_languages=key_languages, **kwargs)
+
+
 class ExportType(StrEnum):
     XML_PER_INSTANCE = "xml_per_instance"
     XML_PER_INSTANCE_ZIP_PER_ALL = "xml_per_instance_zip_per_all"
@@ -311,24 +326,30 @@ def export_to_cimxml(data,
     if debug:
         _, start_time = _print_duration("All file instance ID-s identified", start_time)
 
+    # the schema and its KEY maps serve every instance; the header config stays per instance
+    rdf_map = load_rdf_map(rdf_map)
+    key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
+    key_languages = iri.languages(rdf_map)
+
     # Generate one XML document per instance
     if max_workers:
         # polars is incompatible with fork (its rayon thread-pool locks are held
         # in the forked child) — spawn fresh workers when the frames are polars
         mp_context = multiprocessing.get_context("spawn") if _flavor(data) == "polars" else None
-        # each worker loads the schema itself: a path pickles cheaper than the loaded dict
-        with ProcessPoolExecutor(max_workers=max_workers, mp_context=mp_context) as executor:
-            futures = [executor.submit(generate, instance, rdf_map, namespace_map,
+        # forked workers inherit the schema through the initializer; spawned workers take it with
+        # every instance, as a large initializer payload makes them start one after another
+        forked = mp_context is None
+        schema = (rdf_map, key_datatypes, key_languages)
+        with ProcessPoolExecutor(max_workers=max_workers, mp_context=mp_context, initializer=_set_schema,
+                                 initargs=schema if forked else ()) as executor:
+            futures = [executor.submit(_generate_in_worker, generate, instance, namespace_map,
+                                       None if forked else schema,
                                        class_KEY=class_KEY, export_undefined=export_undefined,
                                        comment=comment, debug=debug, datatypes=datatypes,
                                        undefined_namespace=undefined_namespace)
                        for instance in instances]
             xml_documents = [future.result() for future in futures]
     else:
-        # the schema and its KEY maps serve every instance; the header config stays per instance
-        rdf_map = load_rdf_map(rdf_map)
-        key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
-        key_languages = iri.languages(rdf_map)
         xml_documents = [generate(instance, rdf_map, namespace_map,
                                   class_KEY=class_KEY, export_undefined=export_undefined,
                                   comment=comment, debug=debug, datatypes=datatypes,
