@@ -41,7 +41,7 @@ print(engine_name)  # "cython_pugixml_arrow" if built
 Build a wheel (includes cython extension if build deps are available):
 
 ```shell
-python setup.py bdist_wheel --dist-dir dist/
+python -m build --wheel --outdir dist/
 ```
 
 The wheel will have a `linux_x86_64` (or platform-specific) tag. This is fine for local testing but PyPI requires `manylinux` tags for Linux wheels.
@@ -53,10 +53,10 @@ The wheel will have a `linux_x86_64` (or platform-specific) tag. This is fine fo
 PyPI rejects `linux_*` tags — wheels must have `manylinux_*` tags. `auditwheel` applies these tags and optionally bundles shared libraries.
 
 ```shell
-pip install auditwheel patchelf
+pip install build auditwheel patchelf
 
 # Build the wheel
-python setup.py bdist_wheel --dist-dir dist/
+python -m build --wheel --outdir dist/
 
 # Inspect dependencies
 auditwheel show dist/triplets-*.whl
@@ -95,7 +95,7 @@ pip install cibuildwheel
 # Build one Python version on Linux (fast test)
 CIBW_BUILD="cp313-manylinux_x86_64" \
 CIBW_REPAIR_WHEEL_COMMAND_LINUX="LD_LIBRARY_PATH=\$(python -c 'import pyarrow; print(pyarrow.get_library_dirs()[0])') auditwheel repair -w {dest_dir} {wheel} --exclude 'libarrow_python.so*' --exclude 'libarrow.so*'" \
-CIBW_TEST_REQUIRES="pytest pyarrow>=14.0" \
+CIBW_TEST_REQUIRES="pytest pyarrow==25.0.1" \
 CIBW_TEST_COMMAND='pytest {project}/tests/test_parser.py {project}/tests/test_compiled_modules.py -q --tb=short -k "not realgrid"' \
 cibuildwheel --platform linux --output-dir dist/
 ```
@@ -140,10 +140,10 @@ links that venv's pyarrow, so `uv sync` comes first and `build-qlever` is
 re-run after every pyarrow bump:
 
 ```bash
-git submodule update --init vendor/qlever      # checkout the pinned fork commit
-uv sync --all-extras                           # the venv whose pyarrow the extension links
-pixi run -e qlever build-qlever-lib            # one-time qlever static-lib compile (long)
-pixi run -e qlever build-qlever                # build triplets.sparql._qlever
+git submodule update --init --checkout vendor/qlever   # update=none in .gitmodules: --checkout required
+uv sync --all-extras                                   # the venv whose pyarrow the extension links
+pixi run -e qlever build-qlever-lib                    # one-time qlever static-lib compile (long)
+pixi run -e qlever build-qlever                        # build triplets.sparql._qlever
 uv run pytest tests/test_sparql_qlever.py tests/test_sparql_qlever_ingest.py -q
 ```
 
@@ -170,5 +170,6 @@ when `CIBW_ENVIRONMENT` is evaluated — set `LD_LIBRARY_PATH` inline in the rep
 `triplets/_arrow/string_column.h` is a build input for all three compiled
 extensions (parser, CIM XML export, qlever): the include dir is added in
 `setup.py`, `setup_cython_parser.py` and `setup_qlever.py`, and the header
-ships in the sdist (`MANIFEST.in`). Editing it triggers rebuilds via the
-extensions' `depends=`.
+ships in the sdist (`MANIFEST.in`). `setup_cython_parser.py` lists it in
+`depends=`, so editing it rebuilds the parser extension; `setup.py` and
+`setup_qlever.py` do not — rebuild those by hand after editing the header.

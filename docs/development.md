@@ -12,8 +12,7 @@ The one rule that decides where automatic engine selection is allowed:
 > **Auto-selection of the fastest available engine applies only to operations
 > whose result is flavor-independent** (parsed files, exported bytes/XML, query
 > results, violation reports). **Frame-in → frame-out operations always run in
-> the input object's engine** — never auto-hop pandas → polars (measured: the
-> round-trip conversion ≈16 ms/1M rows exceeds typical op savings ≈8 ms).
+> the input object's engine** — never auto-hop pandas → polars.
 
 All engine dispatch goes through **`triplets._registry.EngineRegistry`** — do
 not hand-roll module maps or local try-import blocks. Registries are
@@ -90,8 +89,8 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   included), `languages` (Attribute KEY → fixed language tag, written `"text"@tag` /
   `xml:lang`), and `prefixes` (prefix → namespace; the one map read from the
   `ProfileNamespaceMap`s instead of the entries, first binding wins; `xsd`,
-  `rdf`, `rdfs` built in where no map binds them). No cache: each is ~2 ms
-  on a 2.8 MB schema. Public entry points (`validate_shacl`,
+  `rdf`, `rdfs` built in where no map binds them). No cache: each is built on
+  demand. Public entry points (`validate_shacl`,
   `validate_schema`, `export_to_*`, the qlever ingest) call `load_rdf_map`
   once; below them only dicts flow, so a path is parsed once per call. The
   validations hand the engines the scoped, merged schema
