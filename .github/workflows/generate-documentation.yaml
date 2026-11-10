@@ -18,6 +18,8 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          # latest/ is always main; PRs build their own commit. Each tag is built by the loop below.
+          ref: ${{ github.event_name != 'pull_request' && 'main' || '' }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -43,7 +45,8 @@ jobs:
         continue-on-error: true
         run: |
           VERSIONS_JSON='[]'
-          for tag in $(git tag --sort=-version:refname); do
+          # PEP 440 order, newest first: 0.2.0 > 0.2.0rc6 > 0.2.0b1 > 0.2.0a1
+          for tag in $(git -c versionsort.suffix=a -c versionsort.suffix=b -c versionsort.suffix=rc tag --sort=-version:refname); do
             if git show "$tag:docs/source/conf.py" >/dev/null 2>&1; then
               echo "Building docs for $tag..."
 
@@ -88,18 +91,21 @@ jobs:
           echo "Built versions: $VERSIONS_JSON"
           echo "$VERSIONS_JSON" > docs/_site/versions.json
 
-      # Create index.html that redirects to latest
+      # Create index.html that redirects to the newest final release (stable), else latest
       - name: Create version index
         run: |
-          cat > docs/_site/index.html << 'HEREDOC'
+          STABLE=$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' docs/_site/versions.json 2>/dev/null | head -n 1 | tr -d '"')
+          TARGET="${STABLE:-latest}/"
+          echo "Stable docs version: ${STABLE:-none}, root redirects to $TARGET"
+          cat > docs/_site/index.html << HEREDOC
           <!DOCTYPE html>
           <html>
           <head>
-            <meta http-equiv="refresh" content="0; url=latest/">
-            <title>Redirecting to latest docs...</title>
+            <meta http-equiv="refresh" content="0; url=$TARGET">
+            <title>Redirecting to triplets docs...</title>
           </head>
           <body>
-            <p>Redirecting to <a href="latest/">latest documentation</a>...</p>
+            <p>Redirecting to <a href="$TARGET">the documentation</a>...</p>
           </body>
           </html>
           HEREDOC
