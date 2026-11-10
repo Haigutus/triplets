@@ -1,7 +1,7 @@
 """DuckDB SQL-based implementation of triplet tools.
 
 Functions are monkey-patched onto duckdb.DuckDBPyConnection.
-The *_tableview helpers create a named SQL view and return a relation over it
+The ``*_tableview`` helpers create a named SQL view and return a relation over it
 (named/re-queryable, still lazy); other query/reference helpers return a
 DuckDBPyRelation; types_dict and get_namespace_map return python values;
 triplets_to_tableviews returns a dict.

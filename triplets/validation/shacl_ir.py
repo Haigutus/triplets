@@ -8,9 +8,11 @@ and each engine caches its own compiled artifact (LazyFrame plan builders,
 SQL) in ``CompiledShapes.plans`` — re-validating new data against the same
 shapes never recompiles anything.
 
-IR: one row per shape x target x path x constraint component.
+IR: one row per shape x target x path x constraint component::
+
     shape_id, shapes, target_on, target_by, path, inverse, via_type,
     component, params, severity, message, name, description
+
 ``params`` holds the component's parameter: a scalar (sh:minCount), a list
 (sh:in), or nested row-dict lists (sh:or / sh:and / sh:xone / sh:not, and the
 ``rows`` of sh:node / sh:property). Unknown

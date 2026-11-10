@@ -2,7 +2,8 @@
 and the inverse: export a violations DataFrame as a standard sh:ValidationReport.
 
 Canonical violations schema (identical across all current and future SHACL
-engines, so the later vectorized engines can produce it natively):
+engines, so the later vectorized engines can produce it natively)::
+
     [ID, KEY, VALUE, VIOLATION_TYPE, MESSAGE, SEVERITY, SOURCE_SHAPE]
 """
 import io
@@ -156,11 +157,11 @@ _COMPONENT_URI = {short: f"{SH_NS}{suffix}" for suffix, short in _COMPONENT_MAP.
 
 def violations_to_report_graph(violations, report_source=None, report_references=None,
                                rdf_map=None, undefined_namespace=CIM_NS):
-    """Violations DataFrame → sh:ValidationReport rdflib graph (inverse of
+    r"""Violations DataFrame → sh:ValidationReport rdflib graph (inverse of
     report_to_violations; KEYs expand through the export schema namespaces —
     ``rdf_map`` — ``undefined_namespace`` for names it lacks, unless already URIs).
 
-    A result carries several plain-text ``sh:resultMessage``s when the frame
+    A result carries several plain-text ``sh:resultMessage``\ s when the frame
     has the context/location columns: the engine message, the shape and
     schema descriptions (context.enrich) and the source position
     (locations.locate_violations) — SHACL has no location vocabulary, so a
@@ -349,13 +350,13 @@ def _default_path(fmt):
 def export_to_shacl_report(violations, sources=None, path=None, export_to_memory=False,
                            format=None, report_source=None, report_references=None,
                            rdf_map=None, undefined_namespace=CIM_NS):
-    """Violations frame → standard sh:ValidationReport (any rdflib format).
+    r"""Violations frame → standard sh:ValidationReport (any rdflib format).
 
     Parameters
     ----------
     violations : DataFrame in VIOLATION_COLUMNS (any engine's output).
         Enrichment/location columns, when present, become additional
-        ``sh:resultMessage``s (Description/Schema/Source).
+        ``sh:resultMessage``\ s (Description/Schema/Source).
     sources : optional
         The original CIM/XML files — runs the locate_violations pass so each
         result carries a "Source: file line N" message (a frame

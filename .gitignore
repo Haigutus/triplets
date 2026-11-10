@@ -25,5 +25,3 @@ examples/*.ttl
 examples/*.xml
 examples/*.sarif
 examples/entsoe_shacl/
-# sphinx-apidoc regenerates this each build; not tracked
-/docs/source/modules.rst

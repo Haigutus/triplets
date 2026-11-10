@@ -1,6 +1,7 @@
 """SPARQL querying over triplet data.
 
 Engines (registry dispatch, mirroring triplets.parser):
+
 - qlever   — performance (embedded C++ via the official libqlever facade; needs
   the compiled extension, see setup_qlever.py; takes auto priority when built)
 - oxigraph — portable performance (embedded Rust via the pyoxigraph wheel,

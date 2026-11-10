@@ -12,6 +12,7 @@ here reads instance headers; ``triplets.cgmes_tools.validate_by_header`` does.
 ``enrich`` adds the context columns in a separate call.
 
 Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
+
 - pyshacl — reference, spec-complete, rdflib-based; always available with the
   `validation` extra
 - polars — compiled-IR executor (performance; one lazy plan per constraint,
@@ -26,7 +27,7 @@ Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
 
 Compile once: ``compile(shapes)`` parses the shapes with rdflib exactly once
 into ``CompiledShapes`` (shapes graph + flat constraint table, cached by
-content hash). Engines receive the compiled object:
+content hash). Engines receive the compiled object::
 
     validate(data, compiled, rdf_map=None, data_scope=None, ancestors=None, **kwargs) → violations DataFrame
 
@@ -163,6 +164,8 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
         between rules, pyshacl after its first failing constraint (the lexical
         supplement is then skipped).
 
+    Notes
+    -----
     The returned frame carries the validation-run metadata in
     ``violations.attrs["validation"]`` (start/end timestamps and duration,
     engine, tool version, data/shape file names, shape and constraint counts,
