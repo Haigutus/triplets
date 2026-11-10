@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.sparql package" href="triplets.sparql.html"><link rel="prev" title="triplets.tools" href="triplets.tools.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.export - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.export - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -338,7 +334,7 @@ Fallback: cython_pugixml → python_lxml</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.export.export_to_cimxml">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">export_to_cimxml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">ExportType.XML_PER_INSTANCE_ZIP_PER_XML</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_zip_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Export.zip'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_base_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export.html#export_to_cimxml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.export_to_cimxml" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">export_to_cimxml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">ExportType.XML_PER_INSTANCE_ZIP_PER_XML</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_zip_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Export.zip'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_base_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export.html#export_to_cimxml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.export_to_cimxml" title="Link to this definition">¶</a></dt>
 <dd><p>Export a full triplet dataset to CIM RDF XML files or ZIP archives.</p>
 <p>Processes all instances (grouped by <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>) and exports them according to the
 specified <code class="docutils literal notranslate"><span class="pre">export_type</span></code>. Supports parallel processing and in-memory or disk output.</p>
@@ -349,10 +345,12 @@ specified <code class="docutils literal notranslate"><span class="pre">export_ty
 <li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – RDF mapping configuration (see <a class="reference internal" href="#triplets.export.generate_xml" title="triplets.export.generate_xml"><code class="xref py py-func docutils literal notranslate"><span class="pre">generate_xml()</span></code></a>).</p></li>
 <li><p><strong>namespace_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Namespace prefix-to-URI mapping (see <a class="reference internal" href="#triplets.export.generate_xml" title="triplets.export.generate_xml"><code class="xref py py-func docutils literal notranslate"><span class="pre">generate_xml()</span></code></a>).</p></li>
 <li><p><strong>class_KEY</strong> (<em>str</em><em>, </em><em>default &quot;Type&quot;</em>) – Key identifying object types in triplet data.</p></li>
-<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, also export classes/attributes without a schema definition
-(internal structures like Distribution/NamespaceMap) under the
-<a class="reference external" href="http:/">http:/</a>/triplets# namespace. Normal exports carry only schema-defined
-content. (The cython engine emits undefined elements un-namespaced.)</p></li>
+<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, also export classes, attributes and enum values without a
+schema definition (internal structures like Distribution/NamespaceMap)
+under <code class="docutils literal notranslate"><span class="pre">undefined_namespace</span></code>. Normal exports carry only schema-defined
+content. Both engines agree.</p></li>
+<li><p><strong>undefined_namespace</strong> (str, default “<a class="reference external" href="http:/">http:/</a>/triplets#”) – Namespace for the undefined names <code class="docutils literal notranslate"><span class="pre">export_undefined</span></code> writes; the
+<code class="docutils literal notranslate"><span class="pre">triplets</span></code> xmlns prefix is kept for a custom URI.</p></li>
 <li><p><strong>export_type</strong> (<a class="reference internal" href="#triplets.export.ExportType" title="triplets.export.ExportType"><em>ExportType</em></a><em> or </em><em>str</em><em>, </em><em>default ExportType.XML_PER_INSTANCE_ZIP_PER_XML</em>) – Export format:
 - <code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE</span></code>: One XML file per instance.
 - <code class="docutils literal notranslate"><span class="pre">XML_PER_INSTANCE_ZIP_PER_ALL</span></code>: All XMLs in a single ZIP.
@@ -368,7 +366,8 @@ Options: “python_lxml” (lxml, always available), “cython_pugixml” (compi
 Aliases: “performance”/”pugixml” → cython_pugixml, “lxml”/”pandas” → python_lxml.</p></li>
 <li><p><strong>datatypes</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, annotate literal elements with rdf:datatype from the schema’s
 xsd:type, like the N-Quads export (“44.84” → rdf:datatype xsd#float;
-xsd:string stays plain). Currently python_lxml only — “auto” picks it.</p></li>
+xsd:string stays plain). Both engines. A schema <code class="docutils literal notranslate"><span class="pre">language</span></code> writes
+<code class="docutils literal notranslate"><span class="pre">xml:lang</span></code> either way.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -405,20 +404,25 @@ xsd:string stays plain). Currently python_lxml only — “auto” picks it.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.export.export_to_nquads">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">export_to_nquads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export.html#export_to_nquads"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.export_to_nquads" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">export_to_nquads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export.html#export_to_nquads"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.export_to_nquads" title="Link to this definition">¶</a></dt>
 <dd><p>Export triplet DataFrame to N-Quads file.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>path</strong> (<em>str</em><em> or </em><em>Path</em><em>, </em><em>optional</em>) – Output file path (.nq); defaults to “export.nq” in the current
 directory. Ignored when export_to_memory=True.</p></li>
-<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema for proper enum detection and literal datatype
-annotations. If None, enums exported as literals.</p></li>
+<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema for proper enum detection, literal datatype
+annotations and language tags. If None, enums exported as literals.</p></li>
 <li><p><strong>engine</strong> (<em>str</em><em>, </em><em>default &quot;auto&quot;</em>) – “polars” (lazy expression plan, ~4x faster) or “pandas”.
 “auto” picks polars when installed, converting pandas input
 (~17 ms per million rows); falls back to pandas otherwise.</p></li>
 <li><p><strong>export_to_memory</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, return an in-memory BytesIO (with .name) instead of
 writing to disk — same convention as export_to_csv / export_to_cimxml.</p></li>
+<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>default True</em>) – Keep rows the schema does not account for: an unknown class, KEY or
+enum value — every row when no rdf_map is given. False drops them
+(the CIM XML default). N-Quads is lossless interchange, so it keeps them.</p></li>
+<li><p><strong>undefined_namespace</strong> (str, default “<a class="reference external" href="http:/">http:/</a>/triplets#”) – Namespace those names are written in. <code class="docutils literal notranslate"><span class="pre">sparql.query</span></code> / <code class="docutils literal notranslate"><span class="pre">validate</span></code>
+load with CIM100 here so schema-less data answers <code class="docutils literal notranslate"><span class="pre">cim:</span></code> queries.</p></li>
 </ul>
 </dd>
 </dl>
@@ -451,7 +455,7 @@ writing to disk — same convention as export_to_csv / export_to_cimxml.</p></li
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.export.generate_xml">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">generate_xml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pandas.html#generate_xml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.generate_xml" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.export.</span></span><span class="sig-name descname"><span class="pre">generate_xml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key_datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key_languages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pandas.html#generate_xml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.generate_xml" title="Link to this definition">¶</a></dt>
 <dd><p>Generate an RDF XML file from a triplet dataset instance.</p>
 <p>This function processes a single instance (grouped by <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>) from a triplet
 dataset and exports it as an RDF/XML document using provided or inferred mapping rules.</p>
@@ -472,7 +476,13 @@ Must include <code class="docutils literal notranslate"><span class="pre">&quot;
 only schema-defined content.</p></li>
 <li><p><strong>comment</strong> (<em>str</em><em>, </em><em>optional</em>) – Optional comment to insert at the top of the XML output (as XML comment).</p></li>
 <li><p><strong>datatypes</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, annotate literal elements with rdf:datatype from the schema’s
-xsd:type (like the N-Quads export); xsd:string stays unannotated.</p></li>
+xsd:type (like the N-Quads export); xsd:string stays unannotated.
+A schema <code class="docutils literal notranslate"><span class="pre">language</span></code> writes <code class="docutils literal notranslate"><span class="pre">xml:lang</span></code> either way.</p></li>
+<li><p><strong>key_datatypes</strong> (<em>dict</em><em>, </em><em>optional</em>) – KEY → datatype IRI to annotate, as <code class="docutils literal notranslate"><span class="pre">iri.datatypes(rdf_map)</span></code> builds it
+(<code class="docutils literal notranslate"><span class="pre">{}</span></code> writes none). If <code class="docutils literal notranslate"><span class="pre">None</span></code>, built from <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> per <code class="docutils literal notranslate"><span class="pre">datatypes</span></code>.</p></li>
+<li><p><strong>key_languages</strong> (<em>dict</em><em>, </em><em>optional</em>) – KEY → <code class="docutils literal notranslate"><span class="pre">xml:lang</span></code> tag, as <code class="docutils literal notranslate"><span class="pre">iri.languages(rdf_map)</span></code> builds it. If <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+built from <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code>. <a class="reference internal" href="#triplets.export.export_to_cimxml" title="triplets.export.export_to_cimxml"><code class="xref py py-func docutils literal notranslate"><span class="pre">triplets.export.export_to_cimxml()</span></code></a> builds both
+once per export and passes them to every instance.</p></li>
 <li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, log detailed timing and debug information during processing.</p></li>
 </ul>
 </dd>
@@ -505,7 +515,9 @@ xsd:type (like the N-Quads export); xsd:string stays unannotated.</p></li>
 </div>
 <p class="rubric">Notes</p>
 <ul class="simple">
-<li><p>Supports profile-based mapping (e.g., “EQ”, “SSH”) via <code class="docutils literal notranslate"><span class="pre">Model.profile</span></code> or <code class="docutils literal notranslate"><span class="pre">Model.messageType</span></code>.</p></li>
+<li><p>Exports against every profile the instance header declares (<code class="docutils literal notranslate"><span class="pre">Model.profile</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Model.messageType</span></code>, <code class="docutils literal notranslate"><span class="pre">keyword</span></code>, <code class="docutils literal notranslate"><span class="pre">conformsTo</span></code>), merged: a CGMES 3.0 EQ file
+declaring EQ, OP and SC writes the keys of all three.</p></li>
 <li><p>Uses <code class="docutils literal notranslate"><span class="pre">lxml.etree</span></code> with <code class="docutils literal notranslate"><span class="pre">ElementMaker</span></code> for XML construction.</p></li>
 <li><p>Undefined classes are exported with <code class="docutils literal notranslate"><span class="pre">rdf:about=&quot;urn:uuid:&lt;ID&gt;&quot;</span></code> when <code class="docutils literal notranslate"><span class="pre">export_undefined=True</span></code>.</p></li>
 </ul>
@@ -542,7 +554,7 @@ xsd:type (like the N-Quads export); xsd:string stays unannotated.</p></li>
 <span id="triplets-export-cimxml-pandas"></span><h2>triplets.export.cimxml_pandas<a class="headerlink" href="#module-triplets.export.cimxml_pandas" title="Link to this heading">¶</a></h2>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.export.cimxml_pandas.generate_xml">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.cimxml_pandas.</span></span><span class="sig-name descname"><span class="pre">generate_xml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pandas.html#generate_xml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.cimxml_pandas.generate_xml" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.export.cimxml_pandas.</span></span><span class="sig-name descname"><span class="pre">generate_xml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key_datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key_languages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pandas.html#generate_xml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.cimxml_pandas.generate_xml" title="Link to this definition">¶</a></dt>
 <dd><p>Generate an RDF XML file from a triplet dataset instance.</p>
 <p>This function processes a single instance (grouped by <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>) from a triplet
 dataset and exports it as an RDF/XML document using provided or inferred mapping rules.</p>
@@ -563,7 +575,13 @@ Must include <code class="docutils literal notranslate"><span class="pre">&quot;
 only schema-defined content.</p></li>
 <li><p><strong>comment</strong> (<em>str</em><em>, </em><em>optional</em>) – Optional comment to insert at the top of the XML output (as XML comment).</p></li>
 <li><p><strong>datatypes</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, annotate literal elements with rdf:datatype from the schema’s
-xsd:type (like the N-Quads export); xsd:string stays unannotated.</p></li>
+xsd:type (like the N-Quads export); xsd:string stays unannotated.
+A schema <code class="docutils literal notranslate"><span class="pre">language</span></code> writes <code class="docutils literal notranslate"><span class="pre">xml:lang</span></code> either way.</p></li>
+<li><p><strong>key_datatypes</strong> (<em>dict</em><em>, </em><em>optional</em>) – KEY → datatype IRI to annotate, as <code class="docutils literal notranslate"><span class="pre">iri.datatypes(rdf_map)</span></code> builds it
+(<code class="docutils literal notranslate"><span class="pre">{}</span></code> writes none). If <code class="docutils literal notranslate"><span class="pre">None</span></code>, built from <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> per <code class="docutils literal notranslate"><span class="pre">datatypes</span></code>.</p></li>
+<li><p><strong>key_languages</strong> (<em>dict</em><em>, </em><em>optional</em>) – KEY → <code class="docutils literal notranslate"><span class="pre">xml:lang</span></code> tag, as <code class="docutils literal notranslate"><span class="pre">iri.languages(rdf_map)</span></code> builds it. If <code class="docutils literal notranslate"><span class="pre">None</span></code>,
+built from <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code>. <a class="reference internal" href="#triplets.export.export_to_cimxml" title="triplets.export.export_to_cimxml"><code class="xref py py-func docutils literal notranslate"><span class="pre">triplets.export.export_to_cimxml()</span></code></a> builds both
+once per export and passes them to every instance.</p></li>
 <li><p><strong>debug</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, log detailed timing and debug information during processing.</p></li>
 </ul>
 </dd>
@@ -596,7 +614,9 @@ xsd:type (like the N-Quads export); xsd:string stays unannotated.</p></li>
 </div>
 <p class="rubric">Notes</p>
 <ul class="simple">
-<li><p>Supports profile-based mapping (e.g., “EQ”, “SSH”) via <code class="docutils literal notranslate"><span class="pre">Model.profile</span></code> or <code class="docutils literal notranslate"><span class="pre">Model.messageType</span></code>.</p></li>
+<li><p>Exports against every profile the instance header declares (<code class="docutils literal notranslate"><span class="pre">Model.profile</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Model.messageType</span></code>, <code class="docutils literal notranslate"><span class="pre">keyword</span></code>, <code class="docutils literal notranslate"><span class="pre">conformsTo</span></code>), merged: a CGMES 3.0 EQ file
+declaring EQ, OP and SC writes the keys of all three.</p></li>
 <li><p>Uses <code class="docutils literal notranslate"><span class="pre">lxml.etree</span></code> with <code class="docutils literal notranslate"><span class="pre">ElementMaker</span></code> for XML construction.</p></li>
 <li><p>Undefined classes are exported with <code class="docutils literal notranslate"><span class="pre">rdf:about=&quot;urn:uuid:&lt;ID&gt;&quot;</span></code> when <code class="docutils literal notranslate"><span class="pre">export_undefined=True</span></code>.</p></li>
 </ul>
@@ -677,10 +697,10 @@ xsd:type (like the N-Quads export); xsd:string stays unannotated.</p></li>
 </section>
 <section id="module-triplets.export.nquads_pandas">
 <span id="triplets-export-nquads-pandas"></span><h2>triplets.export.nquads_pandas<a class="headerlink" href="#module-triplets.export.nquads_pandas" title="Link to this heading">¶</a></h2>
-<p>N-Quads export using pandas — schema-aware value classification.</p>
+<p>N-Quads export using pandas — vectorized over the <code class="docutils literal notranslate"><span class="pre">triplets.iri</span></code> pandas flavor.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.export.nquads_pandas.export_to_nquads">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_pandas.</span></span><span class="sig-name descname"><span class="pre">export_to_nquads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_pandas.html#export_to_nquads"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_pandas.export_to_nquads" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_pandas.</span></span><span class="sig-name descname"><span class="pre">export_to_nquads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_pandas.html#export_to_nquads"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_pandas.export_to_nquads" title="Link to this definition">¶</a></dt>
 <dd><p>Export triplet DataFrame to N-Quads file.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -688,9 +708,12 @@ xsd:type (like the N-Quads export); xsd:string stays unannotated.</p></li>
 <li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].</p></li>
 <li><p><strong>path</strong> (<em>str</em><em>, </em><em>optional</em>) – Output file path (.nq). Ignored when export_to_memory=True.</p></li>
 <li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema for proper enum/association detection and literal
-datatype annotations (“400”^^&lt;…XMLSchema#float&gt;). If None,
-enumerations won’t get namespace and literals stay untyped.</p></li>
+datatype annotations (“400”^^&lt;…XMLSchema#float&gt;) and language tags
+(“text”&#64;en). If None, enumerations won’t get namespace and literals stay untyped.</p></li>
 <li><p><strong>export_to_memory</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, return an in-memory BytesIO (with .name) instead of writing to disk.</p></li>
+<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>default True</em>) – Keep rows the schema does not account for (unknown class, KEY or enum
+value — every row without a schema); False drops them.</p></li>
+<li><p><strong>undefined_namespace</strong> (str, default “<a class="reference external" href="http:/">http:/</a>/triplets#”) – Namespace those names are written in.</p></li>
 </ul>
 </dd>
 </dl>
@@ -702,7 +725,7 @@ enumerations won’t get namespace and literals stay untyped.</p></li>
 <p>N-Quads export using polars — lazy expression plan, fully vectorized.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.export.nquads_polars.export_to_nquads">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_polars.</span></span><span class="sig-name descname"><span class="pre">export_to_nquads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_polars.html#export_to_nquads"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_polars.export_to_nquads" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_polars.</span></span><span class="sig-name descname"><span class="pre">export_to_nquads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_polars.html#export_to_nquads"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_polars.export_to_nquads" title="Link to this definition">¶</a></dt>
 <dd><p>Export triplet DataFrame to N-Quads file.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -710,8 +733,11 @@ enumerations won’t get namespace and literals stay untyped.</p></li>
 <li><p><strong>data</strong> (<em>polars.DataFrame</em>) – Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].</p></li>
 <li><p><strong>path</strong> (<em>str</em><em>, </em><em>optional</em>) – Output file path (.nq). Ignored when export_to_memory=True.</p></li>
 <li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema for proper enum/association detection and literal
-datatype annotations (“400”^^&lt;…XMLSchema#float&gt;).</p></li>
+datatype annotations (“400”^^&lt;…XMLSchema#float&gt;) and language tags (“text”&#64;en).</p></li>
 <li><p><strong>export_to_memory</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, return an in-memory BytesIO (with .name) instead of writing to disk.</p></li>
+<li><p><strong>export_undefined</strong> (<em>bool</em><em>, </em><em>default True</em>) – Keep rows the schema does not account for (unknown class, KEY or enum
+value — every row without a schema); False drops them.</p></li>
+<li><p><strong>undefined_namespace</strong> (str, default “<a class="reference external" href="http:/">http:/</a>/triplets#”) – Namespace those names are written in.</p></li>
 </ul>
 </dd>
 </dl>
@@ -719,7 +745,7 @@ datatype annotations (“400”^^&lt;…XMLSchema#float&gt;).</p></li>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.export.nquads_polars.write_nquads_batches">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_polars.</span></span><span class="sig-name descname"><span class="pre">write_nquads_batches</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reader</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">handle</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_polars.html#write_nquads_batches"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_polars.write_nquads_batches" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_polars.</span></span><span class="sig-name descname"><span class="pre">write_nquads_batches</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reader</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">handle</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_polars.html#write_nquads_batches"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_polars.write_nquads_batches" title="Link to this definition">¶</a></dt>
 <dd><p>Stream a <code class="docutils literal notranslate"><span class="pre">pyarrow.RecordBatchReader</span></code> into an open binary handle.</p>
 <p>One batch is formatted and written at a time, so memory stays bounded by
 a single batch regardless of the total size — the out-of-core export
@@ -763,7 +789,7 @@ compiled extension (Arrow string arrays → pugixml DOM → bytes) instead of lx
 ~Identical output, much faster on large instances.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.export.cimxml_pugixml.generate_xml">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.cimxml_pugixml.</span></span><span class="sig-name descname"><span class="pre">generate_xml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pugixml.html#generate_xml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.cimxml_pugixml.generate_xml" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.export.cimxml_pugixml.</span></span><span class="sig-name descname"><span class="pre">generate_xml</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespace_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">class_KEY</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_undefined</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key_datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key_languages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/cimxml_pugixml.html#generate_xml"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.cimxml_pugixml.generate_xml" title="Link to this definition">¶</a></dt>
 <dd><p>Generate an RDF XML file from a triplet dataset instance.</p>
 <p>Same parameters and return value as <code class="xref py py-func docutils literal notranslate"><span class="pre">cimxml_pandas.generate_xml()</span></code>;
 see there for full documentation.</p>
@@ -786,15 +812,17 @@ see there for full documentation.</p>
 <dd><p>Resolve per-instance export config shared by all cimxml engines.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p><p>file_name : from the instance ‘label’ (source filename) or a new UUID
-namespace_map : given &gt; instance NamespaceMap &gt; schema ProfileNamespaceMap
-instance_rdf_map : profile section matched by the schema’s own identity</p>
-<blockquote>
-<div><p>metadata (section key / keyword / versionIRI / conformsTo) against
-the instance header (Model.messageType, keyword, Model.profile,
-conformsTo); legacy URL-substring fallback for 2.4.15-era URLs;
-schema root when nothing matches</p>
-</div></blockquote>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>file_name : from the instance ‘label’ (source filename) or a new UUID</p></li>
+<li><p>namespace_map : given &gt; instance NamespaceMap &gt; schema ProfileNamespaceMap</p></li>
+<li><p>instance_rdf_map : every profile section the instance header declares, merged
+(<code class="xref py py-func docutils literal notranslate"><span class="pre">triplets._header.merge_sections()</span></code>; a class concrete in any of them is
+instantiated, not described) — sections matched by the schema’s own
+identity metadata (section key / keyword / versionIRI / profileVersionIRI /
+conformsTo) against the header (Model.messageType, keyword, Model.profile,
+conformsTo); legacy URL-substring fallback for 2.4.15-era URLs; the schema’s
+root entries when nothing matches (warns on a sectioned schema)</p></li>
+</ul>
 </p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -806,28 +834,28 @@ schema root when nothing matches</p>
 </section>
 <section id="module-triplets.export.nquads_utils">
 <span id="triplets-export-nquads-utils"></span><h2>triplets.export.nquads_utils<a class="headerlink" href="#module-triplets.export.nquads_utils" title="Link to this heading">¶</a></h2>
-<p>Shared N-Quads logic — schema parsing and value classification.</p>
-<p>Used by nquads_pandas.py and nquads_polars.py.</p>
+<p>N-Quads serialization — term quoting on top of the <a class="reference internal" href="triplets.iri.html#module-triplets.iri" title="triplets.iri"><code class="xref py py-mod docutils literal notranslate"><span class="pre">triplets.iri</span></code></a> absolute rules.</p>
+<p>The IRI rules (what becomes a subject IRI, which namespace a KEY or enum
+takes, what is a literal) live in <code class="docutils literal notranslate"><span class="pre">triplets.iri</span></code>; this module only wraps the
+results in <code class="docutils literal notranslate"><span class="pre">&lt;&gt;</span></code> / <code class="docutils literal notranslate"><span class="pre">&quot;...&quot;^^&lt;datatype&gt;</span></code> / <code class="docutils literal notranslate"><span class="pre">&quot;...&quot;&#64;tag</span></code>. <code class="docutils literal notranslate"><span class="pre">nquads_pandas</span></code> / <code class="docutils literal notranslate"><span class="pre">nquads_polars</span></code>
+do the same vectorized through <code class="docutils literal notranslate"><span class="pre">iri_pandas</span></code> / <code class="docutils literal notranslate"><span class="pre">iri_polars</span></code>.</p>
 <dl class="py function">
-<dt class="sig sig-object py" id="triplets.export.nquads_utils.build_key_metadata">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_utils.</span></span><span class="sig-name descname"><span class="pre">build_key_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_utils.html#build_key_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_utils.build_key_metadata" title="Link to this definition">¶</a></dt>
-<dd><p>Extract enum keys, key→namespace, and key→datatype mappings from export schema.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em>) – Export schema (loaded JSON dict or path to JSON file).</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><ul class="simple">
-<li><p><strong>enum_keys</strong> (<em>set</em>) – KEY names whose values are enumerations (need namespace on VALUE).</p></li>
-<li><p><strong>key_namespaces</strong> (<em>dict</em>) – KEY name → namespace URI for predicate construction.</p></li>
-<li><p><strong>key_datatypes</strong> (<em>dict</em>) – KEY name → full xsd datatype URI (from the schema’s “xsd:type”,
-e.g. “xsd:float” → “http://www.w3.org/2001/XMLSchema#float”).
-A key present here is a literal attribute by schema. xsd:string
-keys map to None: literal, but no annotation (RDF 1.1 default).</p></li>
-</ul>
-</p>
-</dd>
-</dl>
+<dt class="sig sig-object py" id="triplets.export.nquads_utils.escape_literal">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_utils.</span></span><span class="sig-name descname"><span class="pre">escape_literal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_utils.html#escape_literal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_utils.escape_literal" title="Link to this definition">¶</a></dt>
+<dd><p>N-Triples string escaping (backslash, quote, newline, carriage return).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.nquads_utils.make_subject">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_utils.</span></span><span class="sig-name descname"><span class="pre">make_subject</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id_val</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_utils.html#make_subject"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_utils.make_subject" title="Link to this definition">¶</a></dt>
+<dd><p>ID → <code class="docutils literal notranslate"><span class="pre">&lt;urn:uuid:…&gt;</span></code> (an absolute IRI passes through).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.export.nquads_utils.make_object">
+<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_utils.</span></span><span class="sig-name descname"><span class="pre">make_object</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">namespaces</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value_types</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">languages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_utils.html#make_object"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_utils.make_object" title="Link to this definition">¶</a></dt>
+<dd><p>VALUE → <code class="docutils literal notranslate"><span class="pre">&lt;iri&gt;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;literal&quot;[^^&lt;datatype&gt;</span> <span class="pre">|</span> <span class="pre">&#64;tag]</span></code> per <a class="reference internal" href="triplets.iri.html#triplets.iri.absolute_value" title="triplets.iri.absolute_value"><code class="xref py py-func docutils literal notranslate"><span class="pre">triplets.iri.absolute_value()</span></code></a>
+and <a class="reference internal" href="triplets.iri.html#triplets.iri.languages" title="triplets.iri.languages"><code class="xref py py-func docutils literal notranslate"><span class="pre">triplets.iri.languages()</span></code></a>.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -835,8 +863,8 @@ keys map to None: literal, but no annotation (RDF 1.1 default).</p></li>
 <span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_utils.</span></span><span class="sig-name descname"><span class="pre">flatten_schema</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_utils.html#flatten_schema"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_utils.flatten_schema" title="Link to this definition">¶</a></dt>
 <dd><p>Flatten the export schema across profiles for human-context lookups.</p>
 <p>The same class/property key repeats per profile with essentially the same
-definition — the first occurrence wins. Complements build_key_metadata
-(which extracts the machine fields); this pulls the human ones.</p>
+definition — the first occurrence wins. Complements the <code class="docutils literal notranslate"><span class="pre">triplets.iri</span></code>
+flat maps (the machine fields); this pulls the human ones.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><p><ul class="simple">
@@ -847,43 +875,6 @@ definition — the first occurrence wins. Complements build_key_metadata
 </p>
 </dd>
 </dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="triplets.export.nquads_utils.make_subject">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_utils.</span></span><span class="sig-name descname"><span class="pre">make_subject</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id_val</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_utils.html#make_subject"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_utils.make_subject" title="Link to this definition">¶</a></dt>
-<dd><p>Convert ID to subject URI.</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="triplets.export.nquads_utils.make_predicate">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_utils.</span></span><span class="sig-name descname"><span class="pre">make_predicate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key_namespaces</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_utils.html#make_predicate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_utils.make_predicate" title="Link to this definition">¶</a></dt>
-<dd><p>Convert KEY to predicate URI.</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="triplets.export.nquads_utils.make_object">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_utils.</span></span><span class="sig-name descname"><span class="pre">make_object</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enum_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key_datatypes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_utils.html#make_object"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_utils.make_object" title="Link to this definition">¶</a></dt>
-<dd><p>Convert VALUE to object (URI or literal).</p>
-<p>Rules:
-- Type row → &lt;namespace#ClassName&gt;
-- Already starts with http/https/urn → &lt;value&gt; (pass through)
-- Enum KEY → &lt;namespace#EnumValue&gt;
-- KEY with schema datatype → “literal”^^&lt;xsd type&gt; (plain for xsd:string);</p>
-<blockquote>
-<div><p>takes precedence over the UUID heuristic (e.g. IdentifiedObject.mRID is
-a string attribute, not a reference)</p>
-</div></blockquote>
-<ul class="simple">
-<li><p>UUID pattern → &lt;<a class="reference external" href="urn:uuid:value">urn:uuid:value</a>&gt;</p></li>
-<li><p>Everything else → “literal” (with escaping)</p></li>
-</ul>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="triplets.export.nquads_utils.make_graph">
-<span class="sig-prename descclassname"><span class="pre">triplets.export.nquads_utils.</span></span><span class="sig-name descname"><span class="pre">make_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instance_id</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/export/nquads_utils.html#make_graph"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.export.nquads_utils.make_graph" title="Link to this definition">¶</a></dt>
-<dd><p>Convert INSTANCE_ID to graph URI.</p>
 </dd></dl>
 
 </section>
@@ -918,7 +909,7 @@ a string attribute, not a reference)</p>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -996,12 +987,10 @@ a string attribute, not a reference)</p>
 </ul>
 </li>
 <li><a class="reference internal" href="#module-triplets.export.nquads_utils">triplets.export.nquads_utils</a><ul>
-<li><a class="reference internal" href="#triplets.export.nquads_utils.build_key_metadata"><code class="docutils literal notranslate"><span class="pre">build_key_metadata()</span></code></a></li>
-<li><a class="reference internal" href="#triplets.export.nquads_utils.flatten_schema"><code class="docutils literal notranslate"><span class="pre">flatten_schema()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.nquads_utils.escape_literal"><code class="docutils literal notranslate"><span class="pre">escape_literal()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.export.nquads_utils.make_subject"><code class="docutils literal notranslate"><span class="pre">make_subject()</span></code></a></li>
-<li><a class="reference internal" href="#triplets.export.nquads_utils.make_predicate"><code class="docutils literal notranslate"><span class="pre">make_predicate()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.export.nquads_utils.make_object"><code class="docutils literal notranslate"><span class="pre">make_object()</span></code></a></li>
-<li><a class="reference internal" href="#triplets.export.nquads_utils.make_graph"><code class="docutils literal notranslate"><span class="pre">make_graph()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.export.nquads_utils.flatten_schema"><code class="docutils literal notranslate"><span class="pre">flatten_schema()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -1015,7 +1004,7 @@ a string attribute, not a reference)</p>
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

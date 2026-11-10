@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Testing" href="testing.html"><link rel="prev" title="SHACL Validation Architecture" href="validation.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Building - triplets 0.2.0a1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
@@ -439,15 +439,15 @@ to oxigraph, then rdflib (see docs/sparql.md).</p>
 <section id="troubleshooting">
 <h2>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">¶</a></h2>
 <section id="unsupported-platform-tag-linux-aarch64">
-<h3><code class="docutils literal notranslate"><span class="pre">unsupported</span> <span class="pre">platform</span> <span class="pre">tag</span> <span class="pre">'linux_aarch64'</span></code><a class="headerlink" href="#unsupported-platform-tag-linux-aarch64" title="Link to this heading">¶</a></h3>
+<span id="unsupported-platform-tag-linux_aarch64"></span><h3><code class="docutils literal notranslate"><span class="pre">unsupported</span> <span class="pre">platform</span> <span class="pre">tag</span> <span class="pre">'linux_aarch64'</span></code><a class="headerlink" href="#unsupported-platform-tag-linux-aarch64" title="Link to this heading">¶</a></h3>
 <p>PyPI requires manylinux tags. Run <code class="docutils literal notranslate"><span class="pre">auditwheel</span> <span class="pre">repair</span></code> on the wheel (see above).</p>
 </section>
 <section id="filenotfounderror-unable-to-find-library-arrow-dll">
-<h3><code class="docutils literal notranslate"><span class="pre">FileNotFoundError:</span> <span class="pre">Unable</span> <span class="pre">to</span> <span class="pre">find</span> <span class="pre">library:</span> <span class="pre">arrow.dll</span></code><a class="headerlink" href="#filenotfounderror-unable-to-find-library-arrow-dll" title="Link to this heading">¶</a></h3>
+<span id="filenotfounderror-unable-to-find-library-arrowdll"></span><h3><code class="docutils literal notranslate"><span class="pre">FileNotFoundError:</span> <span class="pre">Unable</span> <span class="pre">to</span> <span class="pre">find</span> <span class="pre">library:</span> <span class="pre">arrow.dll</span></code><a class="headerlink" href="#filenotfounderror-unable-to-find-library-arrow-dll" title="Link to this heading">¶</a></h3>
 <p>Windows <code class="docutils literal notranslate"><span class="pre">delvewheel</span></code> can’t find arrow DLLs. Add <code class="docutils literal notranslate"><span class="pre">--no-dll</span> <span class="pre">arrow.dll</span> <span class="pre">--no-dll</span> <span class="pre">arrow_python.dll</span></code> to exclude them.</p>
 </section>
 <section id="unicodeencodeerror-charmap-codec-can-t-encode">
-<h3><code class="docutils literal notranslate"><span class="pre">UnicodeEncodeError:</span> <span class="pre">'charmap'</span> <span class="pre">codec</span> <span class="pre">can't</span> <span class="pre">encode</span></code><a class="headerlink" href="#unicodeencodeerror-charmap-codec-can-t-encode" title="Link to this heading">¶</a></h3>
+<span id="unicodeencodeerror-charmap-codec-cant-encode"></span><h3><code class="docutils literal notranslate"><span class="pre">UnicodeEncodeError:</span> <span class="pre">'charmap'</span> <span class="pre">codec</span> <span class="pre">can't</span> <span class="pre">encode</span></code><a class="headerlink" href="#unicodeencodeerror-charmap-codec-can-t-encode" title="Link to this heading">¶</a></h3>
 <p>Windows cp1252 encoding issue with versioneer. Set <code class="docutils literal notranslate"><span class="pre">PYTHONUTF8=1</span></code> environment variable.</p>
 </section>
 <section id="could-not-find-all-dependencies-delocate-on-macos">
@@ -455,11 +455,11 @@ to oxigraph, then rdflib (see docs/sparql.md).</p>
 <p>delocate can’t find arrow dylibs. Skip delocate — macOS wheel tags are accepted by PyPI without repair.</p>
 </section>
 <section id="modulenotfounderror-no-module-named-pyarrow-in-cibw-environment">
-<h3><code class="docutils literal notranslate"><span class="pre">ModuleNotFoundError:</span> <span class="pre">No</span> <span class="pre">module</span> <span class="pre">named</span> <span class="pre">'pyarrow'</span></code> in <code class="docutils literal notranslate"><span class="pre">CIBW_ENVIRONMENT</span></code><a class="headerlink" href="#modulenotfounderror-no-module-named-pyarrow-in-cibw-environment" title="Link to this heading">¶</a></h3>
+<span id="modulenotfounderror-no-module-named-pyarrow-in-cibw_environment"></span><h3><code class="docutils literal notranslate"><span class="pre">ModuleNotFoundError:</span> <span class="pre">No</span> <span class="pre">module</span> <span class="pre">named</span> <span class="pre">'pyarrow'</span></code> in <code class="docutils literal notranslate"><span class="pre">CIBW_ENVIRONMENT</span></code><a class="headerlink" href="#modulenotfounderror-no-module-named-pyarrow-in-cibw-environment" title="Link to this heading">¶</a></h3>
 <p>pyarrow isn’t installed when <code class="docutils literal notranslate"><span class="pre">CIBW_ENVIRONMENT</span></code> is evaluated. Set <code class="docutils literal notranslate"><span class="pre">LD_LIBRARY_PATH</span></code> inline in <code class="docutils literal notranslate"><span class="pre">CIBW_REPAIR_WHEEL_COMMAND</span></code> instead.</p>
 </section>
 <section id="importerror-cannot-import-name-version-from-triplets-version">
-<h3><code class="docutils literal notranslate"><span class="pre">ImportError:</span> <span class="pre">cannot</span> <span class="pre">import</span> <span class="pre">name</span> <span class="pre">'__version__'</span> <span class="pre">from</span> <span class="pre">'triplets._version'</span></code><a class="headerlink" href="#importerror-cannot-import-name-version-from-triplets-version" title="Link to this heading">¶</a></h3>
+<span id="importerror-cannot-import-name-__version__-from-triplets_version"></span><h3><code class="docutils literal notranslate"><span class="pre">ImportError:</span> <span class="pre">cannot</span> <span class="pre">import</span> <span class="pre">name</span> <span class="pre">'__version__'</span> <span class="pre">from</span> <span class="pre">'triplets._version'</span></code><a class="headerlink" href="#importerror-cannot-import-name-version-from-triplets-version" title="Link to this heading">¶</a></h3>
 <p>versioneer generates a different <code class="docutils literal notranslate"><span class="pre">_version.py</span></code> in wheels. Use <code class="docutils literal notranslate"><span class="pre">get_versions()['version']</span></code> in <code class="docutils literal notranslate"><span class="pre">__init__.py</span></code>, not <code class="docutils literal notranslate"><span class="pre">_version.__version__</span></code>.</p>
 </section>
 </section>

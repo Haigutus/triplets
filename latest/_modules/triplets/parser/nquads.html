@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.parser.nquads - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.parser.nquads - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -289,11 +285,13 @@
 
 <span class="sd">read_nquads turns N-Quads / N-Triples text (path, bytes, or file-like) back</span>
 <span class="sd">into a triplet DataFrame [ID, KEY, VALUE, INSTANCE_ID], applying the inverse</span>
-<span class="sd">of the export conventions (triplets.export.nquads_utils): urn:uuid: stripped,</span>
-<span class="sd">CIM namespace shortened, rdf:type → 'Type', datatype / language annotations</span>
+<span class="sd">of the export conventions (triplets.iri): ID / INSTANCE_ID via local_id,</span>
+<span class="sd">KEY via local_key (rdf:type → 'Type'), VALUE via local_value (urn:uuid: and any</span>
+<span class="sd">http(s) #fragment namespace shortened, a namespace IRI ending in # kept whole), datatype / language annotations</span>
 <span class="sd">dropped (values keep their lexical form), graph → INSTANCE_ID (absent → None).</span>
 
-<span class="sd">Everything is vectorized pandas string ops. terms_to_triplets is the shared</span>
+<span class="sd">Line splitting runs in Arrow compute, term conversion in vectorized pandas</span>
+<span class="sd">string ops on arrow-backed columns. terms_to_triplets is the shared</span>
 <span class="sd">term-level conversion, also used by the SPARQL engines to decode</span>
 <span class="sd">CONSTRUCT/DESCRIBE results: the qlever engine feeds it Arrow-decoded term</span>
 <span class="sd">columns, the oxigraph engine feeds read_nquads its serialized result bytes.</span>
@@ -305,14 +303,8 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._engine_detect</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_return_type</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..export.nquads_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">CIM_NS</span><span class="p">,</span> <span class="n">RDF_TYPE</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_KEY</span><span class="p">,</span> <span class="n">iri_pandas</span><span class="p">,</span> <span class="n">load_rdf_map</span><span class="p">,</span> <span class="n">value_types</span>
 
-<span class="n">_UUID_PREFIX</span> <span class="o">=</span> <span class="s2">"urn:uuid:"</span>
-
-<span class="c1"># subject predicate object [graph] . — subject/predicate are space-free terms,</span>
-<span class="c1"># the object may contain spaces inside a quoted literal, the graph is an IRI</span>
-<span class="c1"># or a blank-node label.</span>
-<span class="n">_QUAD_PATTERN</span> <span class="o">=</span> <span class="sa">r</span><span class="s1">'^\s*(\S+)\s+(\S+)\s+(.+?)(?:\s+(&lt;[^&gt;]*&gt;|_:[^\s"&lt;]+))?\s*\.\s*$'</span>
 
 <span class="c1"># N-Triples string escapes: \uXXXX / \UXXXXXXXX and single-char (\n \t \" \\ ...)</span>
 <span class="n">_ESCAPE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">'</span><span class="se">\\</span><span class="s1">u([0-9A-Fa-f]</span><span class="si">{4}</span><span class="s1">)|</span><span class="se">\\</span><span class="s1">U([0-9A-Fa-f]</span><span class="si">{8}</span><span class="s1">)|</span><span class="se">\\</span><span class="s1">(.)'</span><span class="p">)</span>
@@ -321,7 +313,7 @@
 
 <div class="viewcode-block" id="read_nquads">
 <a class="viewcode-back" href="../../../triplets.parser.html#triplets.parser.nquads.read_nquads">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">read_nquads</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"pandas"</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">read_nquads</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"pandas"</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="n">TYPE_KEY</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Parse N-Quads (or N-Triples) into a triplet DataFrame.</span>
 
 <span class="sd">    Parameters</span>
@@ -331,6 +323,13 @@
 <span class="sd">        open file object (text or binary).</span>
 <span class="sd">    return_type : str, default "pandas"</span>
 <span class="sd">        "pandas", "polars", or "arrow".</span>
+<span class="sd">    rdf_map : dict or str, optional</span>
+<span class="sd">        Export schema. With it every VALUE IRI is shortened by its KEY's schema entry</span>
+<span class="sd">        (Association → node rule, Enumeration → name rule) instead of the schema-free guess.</span>
+<span class="sd">    type_key : str, default "Type"</span>
+<span class="sd">        KEY for ``rdf:type`` triples. N-Quads has no typed-node shorthand, so every type is</span>
+<span class="sd">        an ``rdf:type`` triple: ``"Type"`` for CIM data (one type per object), another key</span>
+<span class="sd">        (e.g. ``"type"``) to read every type as an ordinary statement.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -339,22 +338,67 @@
 <span class="sd">    the triplets convention: everything is a string). Lines without a graph</span>
 <span class="sd">    term (N-Triples) get INSTANCE_ID null.</span>
 <span class="sd">    """</span>
-    <span class="n">lines</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">_read_text</span><span class="p">(</span><span class="n">source</span><span class="p">)</span><span class="o">.</span><span class="n">splitlines</span><span class="p">(),</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">"object"</span><span class="p">)</span>
-    <span class="n">lines</span> <span class="o">=</span> <span class="n">lines</span><span class="p">[</span><span class="n">lines</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">ne</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">lines</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">lstrip</span><span class="p">()</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"#"</span><span class="p">)]</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow.compute</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pc</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">utf8_trim_whitespace</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">_read_text</span><span class="p">(</span><span class="n">source</span><span class="p">)</span><span class="o">.</span><span class="n">splitlines</span><span class="p">(),</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">()))</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="n">lines</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">and_</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">not_equal</span><span class="p">(</span><span class="n">lines</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span> <span class="n">pc</span><span class="o">.</span><span class="n">invert</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">starts_with</span><span class="p">(</span><span class="n">lines</span><span class="p">,</span> <span class="s2">"#"</span><span class="p">))))</span>
+    <span class="n">kinds</span> <span class="o">=</span> <span class="n">value_types</span><span class="p">(</span><span class="n">load_rdf_map</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">))</span> <span class="k">if</span> <span class="n">rdf_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="n">to_return_type</span><span class="p">(</span><span class="n">terms_to_triplets</span><span class="p">(</span><span class="n">_split_terms</span><span class="p">(</span><span class="n">lines</span><span class="p">),</span> <span class="n">kinds</span><span class="p">,</span> <span class="n">type_key</span><span class="p">),</span> <span class="n">return_type</span><span class="p">)</span></div>
 
-    <span class="n">terms</span> <span class="o">=</span> <span class="n">lines</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">extract</span><span class="p">(</span><span class="n">_QUAD_PATTERN</span><span class="p">)</span>
-    <span class="n">terms</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"INSTANCE_ID"</span><span class="p">]</span>
-    <span class="n">bad</span> <span class="o">=</span> <span class="n">terms</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">bad</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"not N-Quads: </span><span class="si">{</span><span class="n">lines</span><span class="p">[</span><span class="n">bad</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][:</span><span class="mi">200</span><span class="p">]</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">to_return_type</span><span class="p">(</span><span class="n">terms_to_triplets</span><span class="p">(</span><span class="n">terms</span><span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">return_type</span><span class="p">)</span></div>
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_split_terms</span><span class="p">(</span><span class="n">lines</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""``subject predicate object [graph] .`` lines → term frame [ID, KEY, VALUE, INSTANCE_ID].</span>
+
+<span class="sd">    Subject and predicate are whitespace-free, so the first two splits are</span>
+<span class="sd">    safe; the object may contain spaces inside a quoted literal, so the graph</span>
+<span class="sd">    is recognised from the right: a trailing whitespace-free ``&lt;iri&gt;`` /</span>
+<span class="sd">    ``_:bnode`` term preceded by something. All Arrow compute.</span>
+<span class="sd">    """</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow.compute</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pc</span>
+    <span class="n">_STRING</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">ArrowDtype</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">())</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>                                   <span class="c1"># comment-only / blank buffer</span>
+        <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="n">column</span><span class="p">:</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">([],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">_STRING</span><span class="p">)</span> <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"INSTANCE_ID"</span><span class="p">)})</span>
+    <span class="n">ends</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">ends_with</span><span class="p">(</span><span class="n">lines</span><span class="p">,</span> <span class="s2">"."</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">pc</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">ends</span><span class="p">)</span><span class="o">.</span><span class="n">as_py</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"not N-Quads: </span><span class="si">{</span><span class="n">lines</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">invert</span><span class="p">(</span><span class="n">ends</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">as_py</span><span class="p">()[:</span><span class="mi">200</span><span class="p">]</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">body</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">utf8_rtrim_whitespace</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">utf8_slice_codeunits</span><span class="p">(</span><span class="n">lines</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">parts</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">split_pattern_regex</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="sa">r</span><span class="s2">"\s+"</span><span class="p">,</span> <span class="n">max_splits</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">complete</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">list_value_length</span><span class="p">(</span><span class="n">parts</span><span class="p">),</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">pc</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">complete</span><span class="p">)</span><span class="o">.</span><span class="n">as_py</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"not N-Quads: </span><span class="si">{</span><span class="n">lines</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">invert</span><span class="p">(</span><span class="n">complete</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">as_py</span><span class="p">()[:</span><span class="mi">200</span><span class="p">]</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">subject</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">rest</span> <span class="o">=</span> <span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">list_element</span><span class="p">(</span><span class="n">parts</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">pc</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">match_substring</span><span class="p">(</span><span class="n">rest</span><span class="p">,</span> <span class="s2">"</span><span class="se">\t</span><span class="s2">"</span><span class="p">))</span><span class="o">.</span><span class="n">as_py</span><span class="p">():</span>   <span class="c1"># tab separators are legal but rare: regex path</span>
+        <span class="n">tail</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">extract_regex</span><span class="p">(</span><span class="n">rest</span><span class="p">,</span> <span class="sa">r</span><span class="s2">"(?P&lt;tail&gt;\S+)$"</span><span class="p">)</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="s2">"tail"</span><span class="p">)</span>
+        <span class="n">head</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">replace_substring_regex</span><span class="p">(</span><span class="n">rest</span><span class="p">,</span> <span class="sa">r</span><span class="s2">"\s+\S+$"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>                                                 <span class="c1"># rsplit on the last space (a leading " " keeps it two-part)</span>
+        <span class="n">split</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">split_pattern</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">binary_join_element_wise</span><span class="p">(</span><span class="s2">" "</span><span class="p">,</span> <span class="n">rest</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span> <span class="s2">" "</span><span class="p">,</span> <span class="n">max_splits</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">head</span><span class="p">,</span> <span class="n">tail</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">list_element</span><span class="p">(</span><span class="n">split</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">pc</span><span class="o">.</span><span class="n">list_element</span><span class="p">(</span><span class="n">split</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">head</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">utf8_trim_whitespace</span><span class="p">(</span><span class="n">head</span><span class="p">)</span>
+    <span class="n">graph_shaped</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">and_</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">or_</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">and_</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">starts_with</span><span class="p">(</span><span class="n">tail</span><span class="p">,</span> <span class="s2">"&lt;"</span><span class="p">),</span> <span class="n">pc</span><span class="o">.</span><span class="n">ends_with</span><span class="p">(</span><span class="n">tail</span><span class="p">,</span> <span class="s2">"&gt;"</span><span class="p">)),</span>
+                                  <span class="n">pc</span><span class="o">.</span><span class="n">starts_with</span><span class="p">(</span><span class="n">tail</span><span class="p">,</span> <span class="s2">"_:"</span><span class="p">)),</span>
+                           <span class="n">pc</span><span class="o">.</span><span class="n">invert</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">match_substring</span><span class="p">(</span><span class="n">tail</span><span class="p">,</span> <span class="s1">'"'</span><span class="p">)))</span>
+    <span class="c1"># the split is only a graph when what precedes it is a complete object term: a</span>
+    <span class="c1"># quoted literal must be closed (`"…"`, `"…"^^&lt;dt&gt;`, `"…"@lang`) — otherwise the</span>
+    <span class="c1"># "graph" is the tail of a literal containing whitespace ("hello _:world")</span>
+    <span class="n">literal_closed</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">or_</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">or_</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">ends_with</span><span class="p">(</span><span class="n">head</span><span class="p">,</span> <span class="s1">'"'</span><span class="p">),</span> <span class="n">pc</span><span class="o">.</span><span class="n">ends_with</span><span class="p">(</span><span class="n">head</span><span class="p">,</span> <span class="s2">"&gt;"</span><span class="p">)),</span>
+                            <span class="n">pc</span><span class="o">.</span><span class="n">match_substring_regex</span><span class="p">(</span><span class="n">head</span><span class="p">,</span> <span class="sa">r</span><span class="s1">'"@[A-Za-z0-9-]+$'</span><span class="p">))</span>
+    <span class="n">object_complete</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">or_</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">invert</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">starts_with</span><span class="p">(</span><span class="n">head</span><span class="p">,</span> <span class="s1">'"'</span><span class="p">)),</span> <span class="n">literal_closed</span><span class="p">)</span>
+    <span class="n">has_graph</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">and_</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">and_</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">not_equal</span><span class="p">(</span><span class="n">head</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span> <span class="n">graph_shaped</span><span class="p">),</span> <span class="n">object_complete</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
+        <span class="s2">"ID"</span><span class="p">:</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">subject</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">_STRING</span><span class="p">),</span>
+        <span class="s2">"KEY"</span><span class="p">:</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">predicate</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">_STRING</span><span class="p">),</span>
+        <span class="s2">"VALUE"</span><span class="p">:</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">if_else</span><span class="p">(</span><span class="n">has_graph</span><span class="p">,</span> <span class="n">head</span><span class="p">,</span> <span class="n">rest</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">_STRING</span><span class="p">),</span>
+        <span class="s2">"INSTANCE_ID"</span><span class="p">:</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">pc</span><span class="o">.</span><span class="n">if_else</span><span class="p">(</span><span class="n">has_graph</span><span class="p">,</span> <span class="n">tail</span><span class="p">,</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">scalar</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">())),</span>
+                                     <span class="n">dtype</span><span class="o">=</span><span class="n">_STRING</span><span class="p">),</span>
+    <span class="p">})</span>
 
 
 <div class="viewcode-block" id="terms_to_triplets">
 <a class="viewcode-back" href="../../../triplets.parser.html#triplets.parser.nquads.terms_to_triplets">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">terms_to_triplets</span><span class="p">(</span><span class="n">frame</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">terms_to_triplets</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">kinds</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="n">TYPE_KEY</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""N-Triples-form term columns → triplet values, converted in place.</span>
 
 <span class="sd">    frame carries columns [ID, KEY, VALUE] and optionally INSTANCE_ID (the</span>
@@ -362,29 +406,65 @@
 <span class="sd">    instance). Term shapes: ``&lt;iri&gt;``, ``_:bnode``, ``"literal"`` (optionally</span>
 <span class="sd">    with a ``^^&lt;datatype&gt;`` / ``@lang`` suffix — dropped, the value keeps its</span>
 <span class="sd">    lexical form; string escapes decoded), or bare turtle-shorthand</span>
-<span class="sd">    numbers/booleans. IRIs lose urn:uuid: and the CIM namespace,</span>
-<span class="sd">    rdf:type → 'Type'.</span>
+<span class="sd">    numbers/booleans. IRI escapes the exporter wrote (``%20``) are decoded once,</span>
+<span class="sd">    then the triplets.iri column rules apply: ``local_id`` for ID / INSTANCE_ID,</span>
+<span class="sd">    ``local_key`` for KEY (``rdf:type`` → *type_key*), ``local_value`` for VALUE —</span>
+<span class="sd">    kind ``class`` on type rows, else by *kinds* (``iri.value_types`` of a schema).</span>
+<span class="sd">    A guessed VALUE (no schema, or a KEY the schema does not declare) that is a</span>
+<span class="sd">    subject of the same frame shortens like its ID, so the reference still joins it.</span>
 <span class="sd">    """</span>
-    <span class="n">rdf_type</span> <span class="o">=</span> <span class="n">frame</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">==</span> <span class="sa">f</span><span class="s2">"&lt;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&gt;"</span>
-    <span class="n">frame</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_iri</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">])</span>
-    <span class="n">frame</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_iri</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">])</span><span class="o">.</span><span class="n">mask</span><span class="p">(</span><span class="n">rdf_type</span><span class="p">,</span> <span class="s2">"Type"</span><span class="p">)</span>
-    <span class="n">unquoted</span> <span class="o">=</span> <span class="n">_unescape</span><span class="p">(</span>
-        <span class="n">frame</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="sa">r</span><span class="s1">'(?s)^"(.*)"(\^\^&lt;[^&gt;]*&gt;|@[\w-]+)?$'</span><span class="p">,</span> <span class="sa">r</span><span class="s2">"\1"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-    <span class="n">frame</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span> <span class="o">=</span> <span class="n">unquoted</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">'"'</span><span class="p">),</span> <span class="n">_iri</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]))</span>
-    <span class="n">graphs</span> <span class="o">=</span> <span class="n">_iri</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">])</span> <span class="k">if</span> <span class="s2">"INSTANCE_ID"</span> <span class="ow">in</span> <span class="n">frame</span><span class="o">.</span><span class="n">columns</span> <span class="k">else</span> <span class="kc">None</span>
-    <span class="n">frame</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span> <span class="o">=</span> <span class="n">graphs</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">graphs</span><span class="o">.</span><span class="n">notna</span><span class="p">(),</span> <span class="kc">None</span><span class="p">)</span> <span class="k">if</span> <span class="n">graphs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">subjects</span> <span class="o">=</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">decode_iri</span><span class="p">(</span><span class="n">_term</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]))</span>
+    <span class="n">frame</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span> <span class="o">=</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">local_id</span><span class="p">(</span><span class="n">subjects</span><span class="p">)</span>
+    <span class="n">frame</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">=</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">by_distinct</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">],</span> <span class="k">lambda</span> <span class="n">keys</span><span class="p">:</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">local_key</span><span class="p">(</span>
+        <span class="n">iri_pandas</span><span class="o">.</span><span class="n">decode_iri</span><span class="p">(</span><span class="n">_term</span><span class="p">(</span><span class="n">keys</span><span class="p">)),</span> <span class="n">type_key</span><span class="p">))</span>
+    <span class="n">value</span> <span class="o">=</span> <span class="n">frame</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span>
+    <span class="n">quoted</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">'"'</span><span class="p">,</span> <span class="n">na</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">bool</span><span class="p">)</span>
+    <span class="c1"># drop a ^^&lt;datatype&gt; / @lang suffix, then slice the quotes off — cheaper</span>
+    <span class="c1"># than one back-reference regex over the whole literal</span>
+    <span class="n">unquoted</span> <span class="o">=</span> <span class="n">_unescape</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="sa">r</span><span class="s1">'"(\^\^&lt;[^&gt;]*&gt;|@[\w-]+)?$'</span><span class="p">,</span> <span class="s1">'"'</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">slice</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">objects</span> <span class="o">=</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">decode_iri</span><span class="p">(</span><span class="n">_term</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="o">~</span><span class="n">quoted</span><span class="p">))</span>
+    <span class="n">kind</span> <span class="o">=</span> <span class="n">frame</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">({</span><span class="n">key</span><span class="p">:</span> <span class="n">kind</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">kind</span> <span class="ow">in</span> <span class="p">(</span><span class="n">kinds</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">kind</span> <span class="o">!=</span> <span class="s2">"literal"</span><span class="p">})</span>
+    <span class="n">kind</span> <span class="o">=</span> <span class="n">kind</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">object</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">!=</span> <span class="n">type_key</span><span class="p">,</span> <span class="s2">"class"</span><span class="p">)</span>
+    <span class="n">local</span> <span class="o">=</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">local_value</span><span class="p">(</span><span class="n">objects</span><span class="p">,</span> <span class="n">kind</span><span class="p">)</span>
+    <span class="c1"># the guess cannot tell an enum from a reference to an http#… object</span>
+    <span class="n">local</span> <span class="o">=</span> <span class="n">local</span><span class="o">.</span><span class="n">mask</span><span class="p">(</span><span class="n">_subject_references</span><span class="p">(</span><span class="n">objects</span><span class="p">,</span> <span class="n">subjects</span><span class="p">,</span> <span class="n">kind</span><span class="p">),</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">local_id</span><span class="p">(</span><span class="n">objects</span><span class="p">))</span>
+    <span class="n">frame</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span> <span class="o">=</span> <span class="n">unquoted</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">quoted</span><span class="p">,</span> <span class="n">local</span><span class="p">)</span>
+    <span class="n">graphs</span> <span class="o">=</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">by_distinct</span><span class="p">(</span><span class="n">frame</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">],</span> <span class="k">lambda</span> <span class="n">graphs</span><span class="p">:</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">local_id</span><span class="p">(</span>
+        <span class="n">iri_pandas</span><span class="o">.</span><span class="n">decode_iri</span><span class="p">(</span><span class="n">_term</span><span class="p">(</span><span class="n">graphs</span><span class="p">))))</span> <span class="k">if</span> <span class="s2">"INSTANCE_ID"</span> <span class="ow">in</span> <span class="n">frame</span><span class="o">.</span><span class="n">columns</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="c1"># no graph term anywhere (N-Triples, CONSTRUCT results) → plain None column,</span>
+    <span class="c1"># the same shape every SPARQL engine returns for a constructed graph</span>
+    <span class="n">frame</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span> <span class="o">=</span> <span class="n">graphs</span> <span class="k">if</span> <span class="n">graphs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">graphs</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
     <span class="k">return</span> <span class="n">frame</span></div>
 
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_iri</span><span class="p">(</span><span class="n">column</span><span class="p">):</span>
-    <span class="k">return</span> <span class="p">(</span><span class="n">column</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="sa">r</span><span class="s2">"^&lt;(.*)&gt;$"</span><span class="p">,</span> <span class="sa">r</span><span class="s2">"\1"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-            <span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">"_:"</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="n">_UUID_PREFIX</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="n">CIM_NS</span><span class="p">))</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_subject_references</span><span class="p">(</span><span class="n">objects</span><span class="p">,</span> <span class="n">subjects</span><span class="p">,</span> <span class="n">kind</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Guessed rows the guess took as a name (http + "#") yet are a subject of this frame —</span>
+<span class="sd">    looked up in Arrow only on those rows (pandas ``isin`` on arrow strings is slow)."""</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow.compute</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pc</span>
+    <span class="n">candidates</span> <span class="o">=</span> <span class="p">(</span><span class="n">kind</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">objects</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"http"</span><span class="p">,</span> <span class="n">na</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                  <span class="o">&amp;</span> <span class="n">objects</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="s2">"#"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">na</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">bool</span><span class="p">)</span>
+    <span class="n">hit</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">objects</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">candidates</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="n">pc</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">objects</span><span class="p">[</span><span class="n">candidates</span><span class="p">],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">()),</span>
+                         <span class="n">value_set</span><span class="o">=</span><span class="n">pc</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">subjects</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">())))</span>
+        <span class="n">hit</span><span class="p">[</span><span class="n">candidates</span><span class="p">]</span> <span class="o">=</span> <span class="n">found</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">zero_copy_only</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">hit</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_term</span><span class="p">(</span><span class="n">column</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""``&lt;iri&gt;`` / ``_:bnode`` → bare text as read; decoding and shortening are per column (triplets.iri).</span>
+
+<span class="sd">    Slice + mask, not ``^&lt;(.*)&gt;$`` → ``\1``: the back-reference regex is slow on</span>
+<span class="sd">    arrow-backed strings."""</span>
+    <span class="n">wrapped</span> <span class="o">=</span> <span class="p">(</span><span class="n">column</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"&lt;"</span><span class="p">,</span> <span class="n">na</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">column</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">"&gt;"</span><span class="p">,</span> <span class="n">na</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">bool</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">column</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">slice</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">wrapped</span><span class="p">,</span> <span class="n">column</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">"_:"</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_unescape</span><span class="p">(</span><span class="n">column</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Decode N-Triples string escapes — only rows that carry a backslash."""</span>
-    <span class="n">escaped</span> <span class="o">=</span> <span class="n">column</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="s2">"</span><span class="se">\\</span><span class="s2">"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">escaped</span> <span class="o">=</span> <span class="n">column</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">contains</span><span class="p">(</span><span class="s2">"</span><span class="se">\\</span><span class="s2">"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">na</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">escaped</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
         <span class="k">return</span> <span class="n">column</span>
     <span class="n">column</span> <span class="o">=</span> <span class="n">column</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
@@ -403,7 +483,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_read_text</span><span class="p">(</span><span class="n">source</span><span class="p">):</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">source</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span> <span class="ow">in</span> <span class="n">source</span> <span class="ow">or</span> <span class="n">source</span><span class="o">.</span><span class="n">lstrip</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">((</span><span class="s2">"&lt;"</span><span class="p">,</span> <span class="s2">"_:"</span><span class="p">,</span> <span class="s2">"#"</span><span class="p">))):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">source</span> <span class="o">==</span> <span class="s2">""</span> <span class="ow">or</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span> <span class="ow">in</span> <span class="n">source</span> <span class="ow">or</span> <span class="n">source</span><span class="o">.</span><span class="n">lstrip</span><span class="p">()</span><span class="o">.</span><span class="n">startswith</span><span class="p">((</span><span class="s2">"&lt;"</span><span class="p">,</span> <span class="s2">"_:"</span><span class="p">,</span> <span class="s2">"#"</span><span class="p">))):</span>
         <span class="k">return</span> <span class="n">source</span>  <span class="c1"># serialized content, not a path</span>
     <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="s2">"read"</span><span class="p">):</span>
         <span class="n">content</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
@@ -421,7 +501,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -441,7 +521,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

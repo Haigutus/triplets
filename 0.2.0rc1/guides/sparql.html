@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="SHACL Validation Architecture" href="validation.html"><link rel="prev" title="Export Schemas" href="export_schemas.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>SPARQL Architecture - triplets 0.2.0rc1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
@@ -293,7 +293,7 @@
           <section id="sparql-architecture">
 <h1>SPARQL Architecture<a class="headerlink" href="#sparql-architecture" title="Link to this heading">¶</a></h1>
 <section id="status-known-limitations-alpha">
-<h2>Status &amp; known limitations (alpha)<a class="headerlink" href="#status-known-limitations-alpha" title="Link to this heading">¶</a></h2>
+<span id="status--known-limitations-alpha"></span><h2>Status &amp; known limitations (alpha)<a class="headerlink" href="#status-known-limitations-alpha" title="Link to this heading">¶</a></h2>
 <p>The module is new — APIs may still shift. Know these before relying on it:</p>
 <ul class="simple">
 <li><p><strong>qlever is a local source build</strong> (no wheel, no CI — see
@@ -464,7 +464,7 @@ auto engine is not rdflib (both are orders of magnitude faster sequentially
 anyway).</p>
 </section>
 <section id="shared-loading-rdflib-loader-py">
-<h2>Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)<a class="headerlink" href="#shared-loading-rdflib-loader-py" title="Link to this heading">¶</a></h2>
+<span id="shared-loading-_rdflib_loaderpy"></span><h2>Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)<a class="headerlink" href="#shared-loading-rdflib-loader-py" title="Link to this heading">¶</a></h2>
 <p>SPARQL and SHACL reach rdflib through the same two helpers, so a query and a
 validation over the same data see an identical graph:</p>
 <div class="table-wrapper colwidths-auto docutils container">

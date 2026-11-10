@@ -3,8 +3,9 @@ triplets
 
 RDF/XML toolkit for ENTSO-E/CGMES power grid data.
 
-Parses CIM RDF/XML to pandas/polars DataFrames, provides query/filter/diff tools,
-and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.
+Parse, query and export CIM RDF/XML power-grid data as triplet DataFrames (pandas,
+polars, DuckDB): SPARQL, SHACL and schema validation, Excel/CSV/CIM XML/N-Quads/NetworkX
+exports.
 
 .. toctree::
    :maxdepth: 1
@@ -32,6 +33,7 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.
 
    Package (engines, parse, caches) <triplets>
    Parser <triplets.parser>
+   IRI contract <triplets.iri>
    Tools <triplets.tools>
    Export <triplets.export>
    SPARQL <triplets.sparql>

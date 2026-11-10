@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.validation.shacl_pandas - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.validation.shacl_pandas - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -289,7 +285,7 @@
 <span class="sd">vectorized engine family).</span>
 
 <span class="sd">Operates directly on the triplet DataFrame's raw string VALUEs — no rdflib,</span>
-<span class="sd">no rdf_map. That enables the one deliberate deviation from pyshacl: the</span>
+<span class="sd">no rdf_map. That enables a deliberate deviation from pyshacl: the</span>
 <span class="sd">datatype check judges the actual lexical form. rdflib reads ``"1"^^xsd:float``</span>
 <span class="sd">as simply valid; here it is reported, on two levels:</span>
 
@@ -297,7 +293,8 @@
 <span class="sd">  → VIOLATION_TYPE sh:datatype, the shape's declared severity</span>
 <span class="sd">- value valid but written in a non-canonical / narrower form ("1" for</span>
 <span class="sd">  xsd:float — integer form; "0" for xsd:boolean)</span>
-<span class="sd">  → VIOLATION_TYPE triplets:lexicalForm, severity Warning</span>
+<span class="sd">  → VIOLATION_TYPE triplets:lexicalForm, severity Warning (``lexical=False``</span>
+<span class="sd">  skips this level)</span>
 
 <span class="sd">Structure: one pure function per constraint component</span>
 <span class="sd">``(context, rule) → violations DataFrame``, registered in</span>
@@ -309,11 +306,14 @@
 <span class="sd">when built, else oxigraph, else rdflib): the engine loads the data once</span>
 <span class="sd">(content-hash cached), each constraint runs as one SELECT with the focus</span>
 <span class="sd">nodes bound via VALUES, and ``max_workers`` runs the constraint queries in</span>
-<span class="sd">parallel processes on the rdflib path only (fork — copy-on-write shares the</span>
-<span class="sd">dataset; threads don't help GIL-bound rdflib; the embedded engines are</span>
-<span class="sd">ms-scale sequentially).</span>
+<span class="sd">parallel: forked processes on rdflib (copy-on-write shares the dataset;</span>
+<span class="sd">threads don't help GIL-bound rdflib), threads on the embedded engines (they</span>
+<span class="sd">release the GIL while evaluating over one read-shared store). SPARQL targets</span>
+<span class="sd">run the same way, each distinct target query once per validation</span>
+<span class="sd">(``sparql_targets`` — the polars and duckdb engines call it too).</span>
 
 <span class="sd">Known limits:</span>
+
 <span class="sd">- sh:nodeKind — triplets store every value as a string, so term kind is decided</span>
 <span class="sd">  like the N-Quads exporter decides it: by the schema when rdf_map names the</span>
 <span class="sd">  path (a datatype key is Literal even when its values look like UUIDs), by</span>
@@ -321,18 +321,20 @@
 <span class="sd">"""</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">multiprocessing</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProcessPoolExecutor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProcessPoolExecutor</span><span class="p">,</span> <span class="n">ThreadPoolExecutor</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures.process</span><span class="w"> </span><span class="kn">import</span> <span class="n">BrokenProcessPool</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">types</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimpleNamespace</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">..export.nquads_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">CIM_NS</span><span class="p">,</span> <span class="n">make_subject</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">_local</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_report</span><span class="w"> </span><span class="kn">import</span> <span class="n">VIOLATION_COLUMNS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..export.nquads_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_subject</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">CIM_NS</span><span class="p">,</span> <span class="n">REFERENCE_LIKE</span><span class="p">,</span> <span class="n">TYPE_KEY</span><span class="p">,</span> <span class="n">iri_pandas</span><span class="p">,</span> <span class="n">node_kind</span><span class="p">,</span> <span class="n">split_iri</span><span class="p">,</span> <span class="n">value_types</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.schema_scope</span><span class="w"> </span><span class="kn">import</span> <span class="n">ancestor_pairs</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_report</span><span class="w"> </span><span class="kn">import</span> <span class="n">VIOLATION_COLUMNS</span><span class="p">,</span> <span class="n">has_violation</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -343,8 +345,18 @@
 <span class="n">_DECIMAL</span> <span class="o">=</span> <span class="sa">rf</span><span class="s2">"(?:</span><span class="si">{</span><span class="n">_INTEGER</span><span class="si">}</span><span class="s2">|[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+))"</span>
 <span class="n">_FLOAT</span> <span class="o">=</span> <span class="sa">rf</span><span class="s2">"(?:</span><span class="si">{</span><span class="n">_DECIMAL</span><span class="si">}</span><span class="s2">(?:[eE][+-]?[0-9]+)?|[+-]?INF|NaN)"</span>
 <span class="n">_DATE</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">"-?[0-9]{4,}-[0-9]</span><span class="si">{2}</span><span class="s2">-[0-9]</span><span class="si">{2}</span><span class="s2">"</span>
-<span class="n">_TIMEZONE</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">"(?:Z|[+-][0-9]</span><span class="si">{2}</span><span class="s2">:[0-9]</span><span class="si">{2}</span><span class="s2">)?"</span>
-<span class="n">_DATETIME</span> <span class="o">=</span> <span class="sa">rf</span><span class="s2">"</span><span class="si">{</span><span class="n">_DATE</span><span class="si">}</span><span class="s2">T[0-9]</span><span class="se">{{</span><span class="s2">2</span><span class="se">}}</span><span class="s2">:[0-9]</span><span class="se">{{</span><span class="s2">2</span><span class="se">}}</span><span class="s2">:[0-9]</span><span class="se">{{</span><span class="s2">2</span><span class="se">}}</span><span class="s2">(?:\.[0-9]+)?</span><span class="si">{</span><span class="n">_TIMEZONE</span><span class="si">}</span><span class="s2">"</span>
+<span class="n">_ZONE</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">"(?:Z|[+-][0-9]</span><span class="si">{2}</span><span class="s2">:[0-9]</span><span class="si">{2}</span><span class="s2">)"</span>
+<span class="n">_TIMEZONE</span> <span class="o">=</span> <span class="sa">rf</span><span class="s2">"</span><span class="si">{</span><span class="n">_ZONE</span><span class="si">}</span><span class="s2">?"</span>
+<span class="n">_TIME</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">"[0-9]</span><span class="si">{2}</span><span class="s2">:[0-9]</span><span class="si">{2}</span><span class="s2">:[0-9]</span><span class="si">{2}</span><span class="s2">(?:\.[0-9]+)?"</span>
+<span class="n">_DATETIME</span> <span class="o">=</span> <span class="sa">rf</span><span class="s2">"</span><span class="si">{</span><span class="n">_DATE</span><span class="si">}</span><span class="s2">T</span><span class="si">{</span><span class="n">_TIME</span><span class="si">}{</span><span class="n">_TIMEZONE</span><span class="si">}</span><span class="s2">"</span>
+<span class="c1"># PnYnMnDTnHnMnS: at least one component, no empty T — alternations, no lookahead</span>
+<span class="n">_SECONDS</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">"[0-9]+(?:\.[0-9]+)?S"</span>
+<span class="n">_DURATION_TIME</span> <span class="o">=</span> <span class="sa">rf</span><span class="s2">"T(?:[0-9]+H(?:[0-9]+M)?(?:</span><span class="si">{</span><span class="n">_SECONDS</span><span class="si">}</span><span class="s2">)?|[0-9]+M(?:</span><span class="si">{</span><span class="n">_SECONDS</span><span class="si">}</span><span class="s2">)?|</span><span class="si">{</span><span class="n">_SECONDS</span><span class="si">}</span><span class="s2">)"</span>
+<span class="n">_DURATION_DATE</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">"(?:[0-9]+Y(?:[0-9]+M)?(?:[0-9]+D)?|[0-9]+M(?:[0-9]+D)?|[0-9]+D)"</span>
+<span class="n">_DURATION</span> <span class="o">=</span> <span class="sa">rf</span><span class="s2">"-?P(?:</span><span class="si">{</span><span class="n">_DURATION_DATE</span><span class="si">}</span><span class="s2">(?:</span><span class="si">{</span><span class="n">_DURATION_TIME</span><span class="si">}</span><span class="s2">)?|</span><span class="si">{</span><span class="n">_DURATION_TIME</span><span class="si">}</span><span class="s2">)"</span>
+<span class="c1"># IRI reference (RFC 3987), relative included: no controls, space, DEL or &lt;&gt;"{}|^`\,</span>
+<span class="c1"># and "%" only as a %XX escape. Non-ASCII is allowed (IRI, not URI).</span>
+<span class="n">_ANY_URI</span> <span class="o">=</span> <span class="sa">r</span><span class="s1">'(?:[^\x00-\x20\x7f&lt;&gt;"</span><span class="si">{}</span><span class="s1">|^`</span><span class="se">\\</span><span class="s1">%]|%[0-9A-Fa-f]</span><span class="si">{2}</span><span class="s1">)*'</span>
 
 <span class="n">DATATYPES</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s2">"integer"</span><span class="p">:</span> <span class="p">(</span><span class="n">_INTEGER</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
@@ -360,62 +372,47 @@
     <span class="s2">"boolean"</span><span class="p">:</span> <span class="p">(</span><span class="sa">r</span><span class="s2">"true|false|1|0"</span><span class="p">,</span> <span class="sa">r</span><span class="s2">"1|0"</span><span class="p">),</span>
     <span class="s2">"date"</span><span class="p">:</span> <span class="p">(</span><span class="n">_DATE</span> <span class="o">+</span> <span class="n">_TIMEZONE</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
     <span class="s2">"dateTime"</span><span class="p">:</span> <span class="p">(</span><span class="n">_DATETIME</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
-    <span class="c1"># string / anyURI / unlisted types: every lexical form is valid — no check</span>
+    <span class="s2">"dateTimeStamp"</span><span class="p">:</span> <span class="p">(</span><span class="sa">rf</span><span class="s2">"</span><span class="si">{</span><span class="n">_DATE</span><span class="si">}</span><span class="s2">T</span><span class="si">{</span><span class="n">_TIME</span><span class="si">}{</span><span class="n">_ZONE</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="s2">"time"</span><span class="p">:</span> <span class="p">(</span><span class="n">_TIME</span> <span class="o">+</span> <span class="n">_TIMEZONE</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="s2">"gMonthDay"</span><span class="p">:</span> <span class="p">(</span><span class="sa">r</span><span class="s2">"--[0-9]</span><span class="si">{2}</span><span class="s2">-[0-9]</span><span class="si">{2}</span><span class="s2">"</span> <span class="o">+</span> <span class="n">_TIMEZONE</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="s2">"duration"</span><span class="p">:</span> <span class="p">(</span><span class="n">_DURATION</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="s2">"anyURI"</span><span class="p">:</span> <span class="p">(</span><span class="n">_ANY_URI</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="c1"># string / unlisted types: every lexical form is valid — no check</span>
 <span class="p">}</span>
 
-<span class="n">_UUID</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">"[0-9a-fA-F]</span><span class="si">{8}</span><span class="s2">-[0-9a-fA-F]</span><span class="si">{4}</span><span class="s2">-[0-9a-fA-F]</span><span class="si">{4}</span><span class="s2">-[0-9a-fA-F]</span><span class="si">{4}</span><span class="s2">-[0-9a-fA-F]</span><span class="si">{12}</span><span class="s2">"</span>
-<span class="n">_REFERENCE_LIKE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">rf</span><span class="s2">"(?:</span><span class="si">{</span><span class="n">_UUID</span><span class="si">}</span><span class="s2">|\w+://\S+|urn:\S+|[A-Za-z]\w*\.\w+)$"</span><span class="p">)</span>
+
+<div class="viewcode-block" id="datatype_patterns">
+<a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_pandas.datatype_patterns">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">datatype_patterns</span><span class="p">(</span><span class="n">datatype</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""(valid pattern, warn pattern or None) of an xsd datatype — None when</span>
+<span class="sd">    the type is unchecked. ``lexical=False`` drops the triplets:lexicalForm level."""</span>
+    <span class="n">spec</span> <span class="o">=</span> <span class="n">DATATYPES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">datatype</span><span class="p">)</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">"xsd:"</span><span class="p">))</span>
+    <span class="k">return</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">spec</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="n">spec</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">spec</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">lexical</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span></div>
+
+
 
 <span class="n">_NO_IDS</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
 
 
-<div class="viewcode-block" id="SchemaKind">
-<a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_pandas.SchemaKind">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">SchemaKind</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""Schema-driven term-kind decision, shared by the vectorized engines' contexts.</span>
-
-<span class="sd">    Mirrors the N-Quads exporter's classification (build_key_metadata): a key</span>
-<span class="sd">    with a schema datatype (incl. xsd:string) holds literals; an enumeration</span>
-<span class="sd">    key holds IRIs; anyURI/unknown keys return None (decide by value form).</span>
-<span class="sd">    Without rdf_map everything is None.</span>
-<span class="sd">    """</span>
-
-    <span class="n">rdf_map</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="n">_key_metadata</span> <span class="o">=</span> <span class="kc">None</span>
-
-<div class="viewcode-block" id="SchemaKind.key_kind">
-<a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_pandas.SchemaKind.key_kind">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">key_kind</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">""""literal" / "iri" / None — what the export schema says values at *key* are."""</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">rdf_map</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_key_metadata</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">..export.nquads_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_key_metadata</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_key_metadata</span> <span class="o">=</span> <span class="n">build_key_metadata</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">rdf_map</span><span class="p">)</span>
-        <span class="n">enum_keys</span><span class="p">,</span> <span class="n">_namespaces</span><span class="p">,</span> <span class="n">key_datatypes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_key_metadata</span>
-        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">enum_keys</span><span class="p">:</span>
-            <span class="k">return</span> <span class="s2">"iri"</span>
-        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">key_datatypes</span><span class="p">:</span>
-            <span class="k">return</span> <span class="s2">"literal"</span>
-        <span class="k">return</span> <span class="kc">None</span></div>
-</div>
-
-
-
-<span class="k">class</span><span class="w"> </span><span class="nc">_Context</span><span class="p">(</span><span class="n">SchemaKind</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_Context</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Shared per-validation state: data and memoized lookups.</span>
 
 <span class="sd">    Hundreds of IR rules hit the same per-class indices — build them once here</span>
 <span class="sd">    instead of once per rule (the polars/duckdb compilers follow the same shape).</span>
 <span class="sd">    """</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">,</span> <span class="n">ancestors</span><span class="o">=</span><span class="p">(),</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">data</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">rdf_map</span> <span class="o">=</span> <span class="n">rdf_map</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lexical</span> <span class="o">=</span> <span class="n">lexical</span>       <span class="c1"># sh:datatype also reports triplets:lexicalForm</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ancestors</span> <span class="o">=</span> <span class="n">ancestors</span>   <span class="c1"># (Type, ancestor) pairs — see schema_scope.ancestor_pairs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">undefined_namespace</span> <span class="o">=</span> <span class="n">undefined_namespace</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value_types</span> <span class="o">=</span> <span class="n">value_types</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span>   <span class="c1"># sh:nodeKind: schema-driven IRI/literal decision</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_by_key</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_class_ids</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_all_ids</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_dataset</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dataset_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>   <span class="c1"># sh:sparql threads share one rdflib fallback load</span>
         <span class="c1"># The data cannot change between the constraint queries of one</span>
         <span class="c1"># validation run: after the first sh:sparql query has hashed it, the</span>
         <span class="c1"># rest assert data_unchanged and skip the per-query content_hash.</span>
@@ -423,12 +420,14 @@
         <span class="c1"># Last engine exception — a cached ingest failure re-raises the same</span>
         <span class="c1"># object per rule; _sparql reports it once instead of once per rule.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">sparql_engine_error</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">targets</span> <span class="o">=</span> <span class="p">{}</span>   <span class="c1"># SPARQL target query → focus IDs (_sparql_targets)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""rdflib dataset for the sh:sparql constraints — loaded once, reused per query."""</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dataset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">.._rdflib_loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataset</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_dataset</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">rdf_map</span><span class="p">)</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dataset_lock</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dataset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">.._rdflib_loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataset</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_dataset</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">undefined_namespace</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dataset</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">key_rows</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
@@ -438,12 +437,17 @@
                             <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"KEY"</span><span class="p">,</span> <span class="n">observed</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">)}</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">0</span><span class="p">])</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">class_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target_class</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">"""IDs of all instances of *target_class*."""</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">class_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">class_name</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""IDs of all instances of *class_name*, subclasses included (``ancestors``)."""</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_ids</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">types</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_rows</span><span class="p">(</span><span class="n">TYPE_KEY</span><span class="p">)[[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span><span class="o">.</span><span class="n">astype</span><span class="p">({</span><span class="s2">"VALUE"</span><span class="p">:</span> <span class="nb">object</span><span class="p">})</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ancestors</span><span class="p">:</span>
+                <span class="n">pairs</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ancestors</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"ANCESTOR"</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+                <span class="n">wider</span> <span class="o">=</span> <span class="n">types</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="s2">"VALUE"</span><span class="p">)[[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"ANCESTOR"</span><span class="p">]]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">"ANCESTOR"</span><span class="p">:</span> <span class="s2">"VALUE"</span><span class="p">})</span>
+                <span class="n">types</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">types</span><span class="p">,</span> <span class="n">wider</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_class_ids</span> <span class="o">=</span> <span class="p">{</span><span class="n">value</span><span class="p">:</span> <span class="n">frame</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span> <span class="k">for</span> <span class="n">value</span><span class="p">,</span> <span class="n">frame</span>
-                               <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_rows</span><span class="p">(</span><span class="s2">"Type"</span><span class="p">)</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"VALUE"</span><span class="p">,</span> <span class="n">observed</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">)}</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_ids</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">target_class</span><span class="p">,</span> <span class="n">_NO_IDS</span><span class="p">)</span>
+                               <span class="ow">in</span> <span class="n">types</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"VALUE"</span><span class="p">,</span> <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">)}</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_ids</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">class_name</span><span class="p">,</span> <span class="n">_NO_IDS</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">all_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -454,14 +458,22 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">focus</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""The rule's focus nodes: an explicit ``focus_ids`` (set by sh:node — the</span>
-<span class="sd">        referenced value nodes), the subjects carrying the target property</span>
-<span class="sd">        (sh:targetSubjectsOf), or all instances of the rule's target class."""</span>
+<span class="sd">        referenced value nodes), else what ``target_by`` names: the IDs having</span>
+<span class="sd">        the KEY, the VALUEs under the KEY, the one ID, the SPARQL target's</span>
+<span class="sd">        result, or the Type's instances."""</span>
         <span class="n">focus_ids</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"focus_ids"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">focus_ids</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">focus_ids</span>
-        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"target_kind"</span><span class="p">,</span> <span class="s2">"class"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"subjectsOf"</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_rows</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">)[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_ids</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">)</span>
+        <span class="n">by</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"target_by"</span><span class="p">,</span> <span class="s2">"Type"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">by</span> <span class="o">==</span> <span class="s2">"SPARQL"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">targets</span><span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">by</span> <span class="o">==</span> <span class="s2">"KEY"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_rows</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">)[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">by</span> <span class="o">==</span> <span class="s2">"VALUE"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_rows</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">)[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">by</span> <span class="o">==</span> <span class="s2">"ID"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">class_ids</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">path_rows</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""The rule's path as (FOCUS, PATH_VALUE) pairs, restricted to the rule's focus.</span>
@@ -485,7 +497,8 @@
             <span class="n">frame</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">"FOCUS"</span><span class="p">:</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(),</span>
                                       <span class="s2">"PATH_VALUE"</span><span class="p">:</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()})</span>
         <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"via_type"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-            <span class="n">types</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_rows</span><span class="p">(</span><span class="s2">"Type"</span><span class="p">)[[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+            <span class="c1"># a set: an object typed in several instances yields each type once</span>
+            <span class="n">types</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">key_rows</span><span class="p">(</span><span class="n">TYPE_KEY</span><span class="p">)[[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span>
             <span class="n">frame</span> <span class="o">=</span> <span class="p">(</span><span class="n">frame</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">types</span><span class="p">,</span> <span class="n">left_on</span><span class="o">=</span><span class="s2">"PATH_VALUE"</span><span class="p">,</span> <span class="n">right_on</span><span class="o">=</span><span class="s2">"ID"</span><span class="p">)</span>
                      <span class="p">[[</span><span class="s2">"FOCUS"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">"VALUE"</span><span class="p">:</span> <span class="s2">"PATH_VALUE"</span><span class="p">}))</span>
         <span class="k">return</span> <span class="n">frame</span>
@@ -493,8 +506,8 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">pair_rows</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">other_path</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""FOCUS + both paths' values, for the pair constraints (equals/disjoint/lessThan)."""</span>
         <span class="n">left</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
-        <span class="n">other</span> <span class="o">=</span> <span class="n">SimpleNamespace</span><span class="p">(</span><span class="n">target_class</span><span class="o">=</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">,</span>
-                                <span class="n">target_kind</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"target_kind"</span><span class="p">,</span> <span class="s2">"class"</span><span class="p">),</span>
+        <span class="n">other</span> <span class="o">=</span> <span class="n">SimpleNamespace</span><span class="p">(</span><span class="n">target_on</span><span class="o">=</span><span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">,</span>
+                                <span class="n">target_by</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"target_by"</span><span class="p">,</span> <span class="s2">"Type"</span><span class="p">),</span>
                                 <span class="n">path</span><span class="o">=</span><span class="n">other_path</span><span class="p">,</span> <span class="n">inverse</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                                 <span class="n">focus_ids</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"focus_ids"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
         <span class="n">right</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">other</span><span class="p">)</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s2">"PATH_VALUE"</span><span class="p">:</span> <span class="s2">"OTHER_VALUE"</span><span class="p">})</span>
@@ -548,7 +561,7 @@
 <span class="sd">    Deviates from pyshacl by design: reports invalid lexical forms as</span>
 <span class="sd">    sh:datatype and valid-but-non-canonical forms as triplets:lexicalForm.</span>
 <span class="sd">    """</span>
-    <span class="n">spec</span> <span class="o">=</span> <span class="n">DATATYPES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">"xsd:"</span><span class="p">))</span>
+    <span class="n">spec</span> <span class="o">=</span> <span class="n">datatype_patterns</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">lexical</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">spec</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">_empty</span><span class="p">()</span>
     <span class="n">valid_pattern</span><span class="p">,</span> <span class="n">warn_pattern</span> <span class="o">=</span> <span class="n">spec</span>
@@ -590,20 +603,22 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_range</span><span class="p">(</span><span class="n">comparison</span><span class="p">,</span> <span class="n">description</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Numeric range validator factory (non-numeric values are the datatype check's job)."""</span>
+<span class="w">    </span><span class="sd">"""Numeric range validator factory; a value that is not a number (no cast, or NaN)</span>
+<span class="sd">    fails every range component (SHACL: the comparison is not true)."""</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">validator</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
         <span class="n">rows</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
         <span class="n">numeric</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">to_numeric</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="s2">"PATH_VALUE"</span><span class="p">],</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"coerce"</span><span class="p">)</span>
-        <span class="n">bad</span> <span class="o">=</span> <span class="n">comparison</span><span class="p">(</span><span class="n">numeric</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>   <span class="c1"># NaN comparisons are False → skipped</span>
+        <span class="n">bad</span> <span class="o">=</span> <span class="p">(</span><span class="n">comparison</span><span class="p">(</span><span class="n">numeric</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span> <span class="o">|</span> <span class="n">numeric</span><span class="o">.</span><span class="n">isna</span><span class="p">())</span> <span class="o">&amp;</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"PATH_VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">rows</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s2">"FOCUS"</span><span class="p">],</span> <span class="n">rows</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s2">"PATH_VALUE"</span><span class="p">],</span>
                       <span class="sa">f</span><span class="s2">"value is </span><span class="si">{</span><span class="n">description</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">validator</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_in</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Value's lexical form (an IRI's local id) against each member's text; the datatype is ignored."""</span>
     <span class="n">rows</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
     <span class="n">allowed</span> <span class="o">=</span> <span class="p">{</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">}</span>
-    <span class="n">local</span> <span class="o">=</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"PATH_VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"#"</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"/"</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">local</span> <span class="o">=</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">local_value</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="s2">"PATH_VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">))</span>
     <span class="n">bad</span> <span class="o">=</span> <span class="o">~</span><span class="n">local</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">allowed</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">rows</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s2">"FOCUS"</span><span class="p">],</span> <span class="n">rows</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s2">"PATH_VALUE"</span><span class="p">],</span>
                   <span class="sa">f</span><span class="s2">"value is not one of </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">allowed</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
@@ -626,15 +641,24 @@
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_schema_range</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""triplets:range — the referenced object conforms when ANY of its types</span>
-<span class="sd">    is in the allowed set (RDF types are cumulative, issue #100); references</span>
-<span class="sd">    whose target has no Type row are silent (cross-profile datasets)."""</span>
+<span class="sd">    is in the allowed set (RDF types are cumulative, issue #100); a target</span>
+<span class="sd">    without a Type row is left to triplets:missing."""</span>
     <span class="n">rows</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
-    <span class="n">typed</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">key_rows</span><span class="p">(</span><span class="s2">"Type"</span><span class="p">)[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span>
+    <span class="n">typed</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">key_rows</span><span class="p">(</span><span class="n">TYPE_KEY</span><span class="p">)[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span>
     <span class="n">allowed</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Index</span><span class="p">([])</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">pandas</span><span class="o">.</span><span class="n">Index</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">class_ids</span><span class="p">(</span><span class="bp">cls</span><span class="p">))</span>
                                        <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">])</span>
     <span class="n">bad</span> <span class="o">=</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"PATH_VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">typed</span><span class="p">)</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">rows</span><span class="p">[</span><span class="s2">"PATH_VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">allowed</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">rows</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s2">"FOCUS"</span><span class="p">],</span> <span class="n">rows</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s2">"PATH_VALUE"</span><span class="p">],</span>
                   <span class="sa">f</span><span class="s2">"reference target is not one of </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_schema_missing</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""triplets:missing — the referenced object has no Type row in the validated data."""</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+    <span class="n">typed</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">key_rows</span><span class="p">(</span><span class="n">TYPE_KEY</span><span class="p">)[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span>
+    <span class="n">bad</span> <span class="o">=</span> <span class="o">~</span><span class="n">rows</span><span class="p">[</span><span class="s2">"PATH_VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">typed</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">rows</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s2">"FOCUS"</span><span class="p">],</span> <span class="n">rows</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s2">"PATH_VALUE"</span><span class="p">],</span>
+                  <span class="s2">"referenced object not found in the data"</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_node_kind</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
@@ -648,12 +672,12 @@
 
     <span class="n">rows</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
     <span class="c1"># via_type value nodes are the referenced objects' types — always IRIs</span>
-    <span class="n">kind</span> <span class="o">=</span> <span class="s2">"iri"</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"via_type"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="k">else</span> <span class="n">context</span><span class="o">.</span><span class="n">key_kind</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">kind</span> <span class="o">=</span> <span class="s2">"iri"</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"via_type"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="k">else</span> <span class="n">node_kind</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">value_types</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">kind</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">is_iri</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">"iri"</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">rows</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">values</span> <span class="o">=</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"PATH_VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
-        <span class="n">is_iri</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="n">_REFERENCE_LIKE</span><span class="p">)</span> <span class="o">|</span> <span class="n">values</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">all_ids</span><span class="p">)</span>
+        <span class="n">is_iri</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="n">REFERENCE_LIKE</span><span class="p">)</span> <span class="o">|</span> <span class="n">values</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">all_ids</span><span class="p">)</span>
     <span class="n">bad</span> <span class="o">=</span> <span class="o">~</span><span class="n">is_iri</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span> <span class="o">==</span> <span class="s2">"IRI"</span> <span class="k">else</span> <span class="n">is_iri</span>
     <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">rows</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s2">"FOCUS"</span><span class="p">],</span> <span class="n">rows</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bad</span><span class="p">,</span> <span class="s2">"PATH_VALUE"</span><span class="p">],</span>
                   <span class="sa">f</span><span class="s2">"value is not of node kind sh:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
@@ -701,7 +725,7 @@
 <span class="sd">    paths + ignoredProperties). 'Type' (rdf:type) is always allowed: every</span>
 <span class="sd">    triplets object carries it by construction.</span>
 <span class="sd">    """</span>
-    <span class="n">allowed</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span> <span class="o">|</span> <span class="p">{</span><span class="s2">"Type"</span><span class="p">}</span>
+    <span class="n">allowed</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span> <span class="o">|</span> <span class="p">{</span><span class="n">TYPE_KEY</span><span class="p">}</span>
     <span class="n">ids</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">focus</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
     <span class="n">rows</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">context</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">context</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">allowed</span><span class="p">)]</span>
     <span class="n">frame</span> <span class="o">=</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">],</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">],</span> <span class="s2">"property is not allowed on a closed shape"</span><span class="p">)</span>
@@ -713,13 +737,17 @@
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_sparql_query_text</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">focus_ids</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Final executable query: prefixes + SELECT with $PATH substituted and the</span>
-<span class="sd">    focus nodes bound via VALUES ($this is the SPARQL variable ?this)."""</span>
+<span class="sd">    focus nodes bound via VALUES ($this is the SPARQL variable ?this).</span>
+
+<span class="sd">    The VALUES block opens the WHERE group: the group joins left to right, so</span>
+<span class="sd">    the authored pattern starts from the focus nodes (SHACL's pre-bound $this)."""</span>
     <span class="n">select</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">"select"</span><span class="p">]</span>
     <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">"path"</span><span class="p">]:</span>
         <span class="n">select</span> <span class="o">=</span> <span class="n">select</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"$PATH"</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"&lt;</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">'path'</span><span class="p">]</span><span class="si">}</span><span class="s2">&gt;"</span><span class="p">)</span>
     <span class="n">values</span> <span class="o">=</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">make_subject</span><span class="p">(</span><span class="n">focus</span><span class="p">)</span> <span class="k">for</span> <span class="n">focus</span> <span class="ow">in</span> <span class="n">focus_ids</span><span class="p">)</span>
-    <span class="n">closing</span> <span class="o">=</span> <span class="n">select</span><span class="o">.</span><span class="n">rfind</span><span class="p">(</span><span class="s2">"}"</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">"prefixes"</span><span class="p">]</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">select</span><span class="p">[:</span><span class="n">closing</span><span class="p">]</span><span class="si">}</span><span class="s2"> VALUES ?this </span><span class="se">{{</span><span class="s2"> </span><span class="si">{</span><span class="n">values</span><span class="si">}</span><span class="s2"> </span><span class="se">}}</span><span class="s2"> </span><span class="si">{</span><span class="n">select</span><span class="p">[</span><span class="n">closing</span><span class="p">:]</span><span class="si">}</span><span class="s2">"</span>
+    <span class="n">where</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">"\bWHERE\s*\{"</span><span class="p">,</span> <span class="n">select</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span>
+    <span class="n">opening</span> <span class="o">=</span> <span class="n">where</span><span class="o">.</span><span class="n">end</span><span class="p">()</span> <span class="k">if</span> <span class="n">where</span> <span class="k">else</span> <span class="n">select</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">"{"</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>   <span class="c1"># the WHERE keyword is optional</span>
+    <span class="k">return</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">"prefixes"</span><span class="p">]</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">select</span><span class="p">[:</span><span class="n">opening</span><span class="p">]</span><span class="si">}</span><span class="s2"> VALUES ?this </span><span class="se">{{</span><span class="s2"> </span><span class="si">{</span><span class="n">values</span><span class="si">}</span><span class="s2"> </span><span class="se">}}</span><span class="s2"> </span><span class="si">{</span><span class="n">select</span><span class="p">[</span><span class="n">opening</span><span class="p">:]</span><span class="si">}</span><span class="s2">"</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_sparql_violations</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
@@ -729,10 +757,57 @@
     <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="n">result</span><span class="p">[</span><span class="s2">"this"</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()]</span>   <span class="c1"># a row without a focus node is no violation</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>                      <span class="c1"># (rdflib serializes a spurious empty binding</span>
         <span class="k">return</span> <span class="n">_empty</span><span class="p">()</span>                       <span class="c1">#  for some aggregate queries)</span>
-    <span class="n">focus</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">"this"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">"urn:uuid:"</span><span class="p">)</span>
-    <span class="n">values</span> <span class="o">=</span> <span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"value"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">"urn:uuid:"</span><span class="p">)</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="n">CIM_NS</span><span class="p">)</span>
-              <span class="k">if</span> <span class="s2">"value"</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">columns</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">focus</span> <span class="o">=</span> <span class="n">_shorten</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"this"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">local_id</span><span class="p">)</span>
+    <span class="n">values</span> <span class="o">=</span> <span class="n">_shorten</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"value"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">local_value</span><span class="p">)</span> <span class="k">if</span> <span class="s2">"value"</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">columns</span> <span class="k">else</span> <span class="kc">None</span>
     <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">focus</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="s2">"sparql constraint violated"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_shorten</span><span class="p">(</span><span class="n">terms</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""SPARQL result terms → triplet form: IRIs decoded, then the column *rule* (``local_id``</span>
+<span class="sd">    for the focus, ``local_value`` for the value), literals verbatim (a literal ``_name`` or a blank node ``_:b0`` must</span>
+<span class="sd">    not lose its ``_``)."""</span>
+    <span class="k">return</span> <span class="n">rule</span><span class="p">(</span><span class="n">iri_pandas</span><span class="o">.</span><span class="n">decode_iri</span><span class="p">(</span><span class="n">terms</span><span class="p">))</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">iri_pandas</span><span class="o">.</span><span class="n">is_iri</span><span class="p">(</span><span class="n">terms</span><span class="p">),</span> <span class="n">terms</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_select</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">query_text</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""One SELECT over the run's data on the auto SPARQL engine → (result,</span>
+<span class="sd">    rejection): a strict engine's rejection is re-run on rdflib and returned as</span>
+<span class="sd">    *rejection* (None when the auto engine ran it). Raises when rdflib fails</span>
+<span class="sd">    too — the query is defective on every engine."""</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">..</span><span class="w"> </span><span class="kn">import</span> <span class="n">sparql</span>
+    <span class="c1"># rdflib queries the shared pre-loaded dataset; other engines (qlever,</span>
+    <span class="c1"># oxigraph) take the raw frame and manage their own engine-state cache</span>
+    <span class="c1"># (one build, content-hashed)</span>
+    <span class="k">if</span> <span class="n">sparql</span><span class="o">.</span><span class="n">get_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"rdflib"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">dataset</span><span class="p">(),</span> <span class="n">query_text</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"pandas"</span><span class="p">),</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">query_text</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">context</span><span class="o">.</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"pandas"</span><span class="p">,</span>
+                              <span class="n">data_unchanged</span><span class="o">=</span><span class="n">context</span><span class="o">.</span><span class="n">data_hashed</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">context</span><span class="o">.</span><span class="n">undefined_namespace</span><span class="p">)</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">data_hashed</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">result</span><span class="p">,</span> <span class="kc">None</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>                            <span class="c1"># noqa: BLE001 — engine strictness</span>
+        <span class="c1"># the engine hashes the data before loading or querying, and</span>
+        <span class="c1"># data_unchanged only reuses a digest stored for this very object</span>
+        <span class="n">context</span><span class="o">.</span><span class="n">data_hashed</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">dataset</span><span class="p">(),</span> <span class="n">query_text</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"rdflib"</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"pandas"</span><span class="p">),</span> <span class="n">error</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_rejected</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">shape_ids</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">what</span><span class="p">,</span> <span class="n">error</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""The Warning notes, one per shape in *shape_ids*, for a query a strict</span>
+<span class="sd">    engine rejected and rdflib still ran. A cached ingest failure (data vs</span>
+<span class="sd">    schema) re-raises the same exception object for every query — reported</span>
+<span class="sd">    once, not once per query; per-query rejections are fresh exceptions and</span>
+<span class="sd">    keep their own notes."""</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">..</span><span class="w"> </span><span class="kn">import</span> <span class="n">sparql</span>
+    <span class="n">repeated</span> <span class="o">=</span> <span class="n">error</span> <span class="ow">is</span> <span class="n">context</span><span class="o">.</span><span class="n">sparql_engine_error</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">sparql_engine_error</span> <span class="o">=</span> <span class="n">error</span>
+    <span class="k">if</span> <span class="n">repeated</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_empty</span><span class="p">()</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> of </span><span class="si">%s</span><span class="s2"> rejected by </span><span class="si">%s</span><span class="s2"> — evaluated with rdflib and the shape flagged "</span>
+                   <span class="s2">"(fix the rule upstream):</span><span class="se">\n</span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">what</span><span class="p">,</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">shape_ids</span><span class="p">),</span> <span class="n">sparql</span><span class="o">.</span><span class="n">get_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span> <span class="n">error</span><span class="p">)</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">)</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> — the </span><span class="si">{</span><span class="n">what</span><span class="si">}</span><span class="s2"> WAS still evaluated "</span>
+               <span class="sa">f</span><span class="s2">"via the rdflib fallback; fix the shape/data upstream"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">_invalid_sparql</span><span class="p">(</span><span class="n">shape_id</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span> <span class="k">for</span> <span class="n">shape_id</span> <span class="ow">in</span> <span class="n">shape_ids</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_sparql</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
@@ -743,73 +818,92 @@
 <span class="sd">    and a ``triplets:invalidSparql`` Warning row flags the defective shape —</span>
 <span class="sd">    broken rules get reported and fixed upstream, not auto-patched here.</span>
 <span class="sd">    """</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">..</span><span class="w"> </span><span class="kn">import</span> <span class="n">sparql</span>
     <span class="n">focus_ids</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">focus</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">focus_ids</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">_empty</span><span class="p">()</span>
-    <span class="c1"># rdflib queries the shared pre-loaded dataset; other engines (qlever,</span>
-    <span class="c1"># oxigraph) take the raw frame and manage their own engine-state cache</span>
-    <span class="c1"># (one build, content-hashed)</span>
-    <span class="n">query_text</span> <span class="o">=</span> <span class="n">_sparql_query_text</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">focus_ids</span><span class="p">)</span>
-    <span class="n">engine_name</span> <span class="o">=</span> <span class="n">sparql</span><span class="o">.</span><span class="n">get_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-    <span class="k">if</span> <span class="n">engine_name</span> <span class="o">==</span> <span class="s2">"rdflib"</span><span class="p">:</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">_sparql_violations</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">dataset</span><span class="p">(),</span> <span class="n">query_text</span><span class="p">))</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>                        <span class="c1"># noqa: BLE001 — defective authored query</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"sh:sparql constraint </span><span class="si">%s</span><span class="s2"> fails on rdflib: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">_invalid_sparql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">_not_evaluated</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">error</span><span class="p">),</span> <span class="n">severity</span><span class="o">=</span><span class="s2">"Violation"</span><span class="p">)</span>
-
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">result</span> <span class="o">=</span> <span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="n">query_text</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">context</span><span class="o">.</span><span class="n">rdf_map</span><span class="p">,</span>
-                              <span class="n">data_unchanged</span><span class="o">=</span><span class="n">context</span><span class="o">.</span><span class="n">data_hashed</span><span class="p">)</span>
-        <span class="n">context</span><span class="o">.</span><span class="n">data_hashed</span> <span class="o">=</span> <span class="kc">True</span>
-        <span class="k">return</span> <span class="n">_sparql_violations</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
-    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>                            <span class="c1"># noqa: BLE001 — engine strictness</span>
-        <span class="c1"># A cached ingest failure (data vs schema) re-raises the same exception</span>
-        <span class="c1"># object for every rule — report it once, not once per rule; per-rule</span>
-        <span class="c1"># query rejections are fresh exceptions and keep their own note.</span>
-        <span class="n">repeated</span> <span class="o">=</span> <span class="n">error</span> <span class="ow">is</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="s2">"sparql_engine_error"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="n">context</span><span class="o">.</span><span class="n">sparql_engine_error</span> <span class="o">=</span> <span class="n">error</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">repeated</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"sh:sparql constraint </span><span class="si">%s</span><span class="s2"> rejected by </span><span class="si">%s</span><span class="s2"> — evaluating with rdflib "</span>
-                           <span class="s2">"and flagging the shape (fix the rule upstream):</span><span class="se">\n</span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
-                           <span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
-        <span class="n">note</span> <span class="o">=</span> <span class="n">_empty</span><span class="p">()</span> <span class="k">if</span> <span class="n">repeated</span> <span class="k">else</span> <span class="n">_invalid_sparql</span><span class="p">(</span>
-            <span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">)</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> — the constraint WAS still evaluated "</span>
-                  <span class="sa">f</span><span class="s2">"via the rdflib fallback; fix the shape/data upstream"</span><span class="p">)</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">violations</span> <span class="o">=</span> <span class="n">_sparql_violations</span><span class="p">(</span>
-                <span class="n">rule</span><span class="p">,</span> <span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">dataset</span><span class="p">(),</span> <span class="n">query_text</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"rdflib"</span><span class="p">))</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">rdflib_error</span><span class="p">:</span>                 <span class="c1"># noqa: BLE001 — truly broken query</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"sh:sparql constraint </span><span class="si">%s</span><span class="s2"> also fails on rdflib: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
-                         <span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">,</span> <span class="n">rdflib_error</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">_invalid_sparql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">_not_evaluated</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">rdflib_error</span><span class="p">),</span> <span class="n">severity</span><span class="o">=</span><span class="s2">"Violation"</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">violations</span><span class="p">,</span> <span class="n">note</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">result</span><span class="p">,</span> <span class="n">rejection</span> <span class="o">=</span> <span class="n">_select</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">_sparql_query_text</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">focus_ids</span><span class="p">))</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>                            <span class="c1"># noqa: BLE001 — defective authored query</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"sh:sparql constraint </span><span class="si">%s</span><span class="s2"> fails on every engine: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">,</span> <span class="n">error</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">_invalid_sparql</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">_not_evaluated</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">error</span><span class="p">),</span> <span class="n">severity</span><span class="o">=</span><span class="s2">"Violation"</span><span class="p">)</span>
+    <span class="n">violations</span> <span class="o">=</span> <span class="n">_sparql_violations</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">rejection</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">violations</span>
+    <span class="n">note</span> <span class="o">=</span> <span class="n">_rejected</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">],</span> <span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="s2">"constraint"</span><span class="p">,</span> <span class="n">rejection</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">violations</span><span class="p">,</span> <span class="n">note</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_not_evaluated</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">error</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""The message for a constraint no engine could run: name the shape and</span>
 <span class="sd">    its target/path (anonymous property shapes only have a blank-node id),</span>
 <span class="sd">    say plainly that nothing was checked — a shapes bug, not a data finding."""</span>
-    <span class="n">where</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2">"</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">path</span> <span class="k">else</span> <span class="n">rule</span><span class="o">.</span><span class="n">target_class</span>
-    <span class="k">return</span> <span class="p">(</span><span class="sa">f</span><span class="s2">"sh:sparql constraint of shape </span><span class="si">{</span><span class="n">_local</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">))</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">where</span><span class="si">}</span><span class="s2">) was "</span>
+    <span class="n">target</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">target_on</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">target_by</span> <span class="o">!=</span> <span class="s2">"SPARQL"</span> <span class="k">else</span> <span class="s2">"sh:target"</span>
+    <span class="n">where</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">target</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2">"</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">path</span> <span class="k">else</span> <span class="n">target</span>
+    <span class="k">return</span> <span class="p">(</span><span class="sa">f</span><span class="s2">"sh:sparql constraint of shape </span><span class="si">{</span><span class="n">split_iri</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">))[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">where</span><span class="si">}</span><span class="s2">) was "</span>
             <span class="sa">f</span><span class="s2">"NOT evaluated — the query is defective on every engine "</span>
             <span class="sa">f</span><span class="s2">"(rdflib: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">)</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">). "</span>
             <span class="sa">f</span><span class="s2">"A shapes bug, not a data finding; this constraint went unchecked."</span><span class="p">)</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_invalid_sparql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">severity</span><span class="o">=</span><span class="s2">"Warning"</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""One report row flagging a constraint query an engine rejected — the</span>
-<span class="sd">    caller words the message (rejected-but-evaluated vs not evaluated at all)."""</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_invalid_sparql</span><span class="p">(</span><span class="n">shape_id</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">severity</span><span class="o">=</span><span class="s2">"Warning"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""One report row flagging a query an engine rejected — the caller words</span>
+<span class="sd">    the message (rejected-but-evaluated vs not evaluated at all)."""</span>
     <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
         <span class="s2">"ID"</span><span class="p">:</span> <span class="p">[</span><span class="kc">None</span><span class="p">],</span>
-        <span class="s2">"KEY"</span><span class="p">:</span> <span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">,</span>
+        <span class="s2">"KEY"</span><span class="p">:</span> <span class="n">path</span><span class="p">,</span>
         <span class="s2">"VALUE"</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
         <span class="s2">"VIOLATION_TYPE"</span><span class="p">:</span> <span class="s2">"triplets:invalidSparql"</span><span class="p">,</span>
         <span class="s2">"MESSAGE"</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
         <span class="s2">"SEVERITY"</span><span class="p">:</span> <span class="n">severity</span><span class="p">,</span>
-        <span class="s2">"SOURCE_SHAPE"</span><span class="p">:</span> <span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">,</span>
+        <span class="s2">"SOURCE_SHAPE"</span><span class="p">:</span> <span class="n">shape_id</span><span class="p">,</span>
     <span class="p">},</span> <span class="n">columns</span><span class="o">=</span><span class="n">VIOLATION_COLUMNS</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_sparql_targets</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""The focus IDs of the SPARQL-targeted *rules* as {query: IDs} — each</span>
+<span class="sd">    distinct target query runs once — plus the note rows, one per NodeShape</span>
+<span class="sd">    (``rule.shapes[0]``) the query targets. A target query no engine can run,</span>
+<span class="sd">    or one that projects no ``?this``, gives those shapes no focus and a</span>
+<span class="sd">    ``triplets:invalidSparql`` Violation each; a strict engine's rejection is</span>
+<span class="sd">    evaluated on rdflib and flagged with a Warning, like sh:sparql."""</span>
+    <span class="n">shapes</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">:</span>
+        <span class="n">shapes</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">shapes</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">targets</span><span class="p">,</span> <span class="n">notes</span> <span class="o">=</span> <span class="p">{},</span> <span class="p">[</span><span class="n">_empty</span><span class="p">()]</span>
+    <span class="k">for</span> <span class="n">query_text</span><span class="p">,</span> <span class="n">shape_ids</span> <span class="ow">in</span> <span class="n">shapes</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">shape_ids</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">shape_ids</span><span class="p">)</span>
+        <span class="n">targets</span><span class="p">[</span><span class="n">query_text</span><span class="p">]</span> <span class="o">=</span> <span class="n">_NO_IDS</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span><span class="p">,</span> <span class="n">rejection</span> <span class="o">=</span> <span class="n">_select</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">query_text</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>                        <span class="c1"># noqa: BLE001 — defective authored query</span>
+            <span class="n">notes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_unchecked_target</span><span class="p">(</span>
+                <span class="n">shape_ids</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"the query is defective on every engine (rdflib: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">)</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">)"</span><span class="p">))</span>
+            <span class="k">continue</span>
+        <span class="k">if</span> <span class="s2">"this"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="n">notes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_unchecked_target</span><span class="p">(</span><span class="n">shape_ids</span><span class="p">,</span> <span class="s2">"the query projects no ?this"</span><span class="p">))</span>
+            <span class="k">continue</span>
+        <span class="n">targets</span><span class="p">[</span><span class="n">query_text</span><span class="p">]</span> <span class="o">=</span> <span class="n">_shorten</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"this"</span><span class="p">]</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">local_id</span><span class="p">)</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">rejection</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">notes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_rejected</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">shape_ids</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">"SPARQL target"</span><span class="p">,</span> <span class="n">rejection</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">targets</span><span class="p">,</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">notes</span><span class="p">,</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_unchecked_target</span><span class="p">(</span><span class="n">shape_ids</span><span class="p">,</span> <span class="n">reason</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""One Violation per NodeShape whose SPARQL target gave no focus for *reason*."""</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">"SPARQL target of </span><span class="si">%s</span><span class="s2"> not evaluated: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">shape_ids</span><span class="p">),</span> <span class="n">reason</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">_invalid_sparql</span><span class="p">(</span><span class="n">shape_id</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">"SPARQL target of shape </span><span class="si">{</span><span class="n">split_iri</span><span class="p">(</span><span class="n">shape_id</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> was NOT evaluated — </span><span class="si">{</span><span class="n">reason</span><span class="si">}</span><span class="s2">. "</span>
+        <span class="sa">f</span><span class="s2">"A shapes bug, not a data finding; the shape went unchecked."</span><span class="p">),</span> <span class="n">severity</span><span class="o">=</span><span class="s2">"Violation"</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">shape_id</span> <span class="ow">in</span> <span class="n">shape_ids</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="sparql_targets">
+<a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_pandas.sparql_targets">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sparql_targets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rules</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Focus IDs of the SPARQL targets among *rules* over *data* (any flavor</span>
+<span class="sd">    triplets.sparql accepts) and the note rows — see ``_sparql_targets``."""</span>
+    <span class="k">return</span> <span class="n">_sparql_targets</span><span class="p">(</span><span class="n">_Context</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="p">),</span> <span class="n">rules</span><span class="p">)</span></div>
+
 
 
 <span class="c1"># fork inherits this by copy-on-write — the dataset is never pickled per task</span>
@@ -822,31 +916,36 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_sparql_parallel</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rules</span><span class="p">,</span> <span class="n">max_workers</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Run the sh:sparql constraint queries in parallel processes.</span>
+<span class="w">    </span><span class="sd">"""Run the sh:sparql constraint queries in parallel, one task per query.</span>
 
-<span class="sd">    rdflib query evaluation is GIL-bound pure Python, so threads don't help;</span>
-<span class="sd">    fork gives copy-on-write sharing of the loaded dataset (Linux). One task</span>
-<span class="sd">    per constraint query. Only applies to the rdflib engine — the embedded</span>
-<span class="sd">    engines (qlever: C++ state must not be forked; oxigraph: Rust store) are</span>
-<span class="sd">    orders of magnitude faster and run the queries sequentially. Both release</span>
-<span class="sd">    the GIL during queries, so threading them is a recorded future</span>
-<span class="sd">    optimization (TODO.md).</span>
+<span class="sd">    rdflib query evaluation is GIL-bound pure Python, so it runs in forked</span>
+<span class="sd">    processes: fork gives copy-on-write sharing of the loaded dataset (Linux).</span>
+<span class="sd">    The embedded engines release the GIL while evaluating (oxigraph: in</span>
+<span class="sd">    ``Store.query`` and ``QuerySolutions.serialize``; qlever: ``nogil``) and</span>
+<span class="sd">    read-share one loaded store, so they run on threads — qlever's C++ state</span>
+<span class="sd">    must not be forked anyway. The first query runs alone: it settles</span>
+<span class="sd">    ``context.data_hashed`` and a cold store cache before the pool starts</span>
+<span class="sd">    (accepted or rejected), so the threads never hash the data or load the</span>
+<span class="sd">    store concurrently. Queries a strict engine rejects fall back to rdflib,</span>
+<span class="sd">    which holds the GIL — those fallbacks do not run in parallel.</span>
 <span class="sd">    """</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">..</span><span class="w"> </span><span class="kn">import</span> <span class="n">sparql</span>
-    <span class="k">if</span> <span class="n">sparql</span><span class="o">.</span><span class="n">get_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"rdflib"</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"sparql auto engine is not rdflib — max_workers ignored (sequential)"</span><span class="p">)</span>
-        <span class="k">return</span> <span class="p">[</span><span class="n">_sparql</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">)</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">]</span>
-
-    <span class="k">global</span> <span class="n">_FORK_DATASET</span>
-    <span class="n">tasks</span> <span class="o">=</span> <span class="p">[(</span><span class="n">rule</span><span class="p">,</span> <span class="n">_sparql_query_text</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">focus</span><span class="p">(</span><span class="n">rule</span><span class="p">)))</span>
-             <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">focus</span><span class="p">(</span><span class="n">rule</span><span class="p">))]</span>
+    <span class="n">tasks</span> <span class="o">=</span> <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">focus</span><span class="p">(</span><span class="n">rule</span><span class="p">))]</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">tasks</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">sparql</span><span class="o">.</span><span class="n">get_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"rdflib"</span><span class="p">:</span>
+        <span class="n">frames</span> <span class="o">=</span> <span class="p">[</span><span class="n">_sparql</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">tasks</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
+        <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">max_workers</span><span class="p">)</span> <span class="k">as</span> <span class="n">pool</span><span class="p">:</span>
+            <span class="n">frames</span> <span class="o">+=</span> <span class="n">pool</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">rule</span><span class="p">:</span> <span class="n">_sparql</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">),</span> <span class="n">tasks</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+        <span class="k">return</span> <span class="n">frames</span>
+
+    <span class="k">global</span> <span class="n">_FORK_DATASET</span>
     <span class="n">_FORK_DATASET</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">dataset</span><span class="p">()</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="k">with</span> <span class="n">ProcessPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">max_workers</span><span class="p">,</span>
                                  <span class="n">mp_context</span><span class="o">=</span><span class="n">multiprocessing</span><span class="o">.</span><span class="n">get_context</span><span class="p">(</span><span class="s2">"fork"</span><span class="p">))</span> <span class="k">as</span> <span class="n">pool</span><span class="p">:</span>
-            <span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">pool</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_sparql_worker</span><span class="p">,</span> <span class="p">[</span><span class="n">text</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">]))</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">pool</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">_sparql_worker</span><span class="p">,</span> <span class="p">[</span><span class="n">_sparql_query_text</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">focus</span><span class="p">(</span><span class="n">rule</span><span class="p">))</span>
+                                                     <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">tasks</span><span class="p">]))</span>
     <span class="k">except</span> <span class="p">(</span><span class="n">BrokenProcessPool</span><span class="p">,</span> <span class="ne">OSError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
         <span class="c1"># fork from a thread-heavy process (polars/duckdb pools, pytest) can kill</span>
         <span class="c1"># workers — degrade to sequential instead of failing the validation</span>
@@ -854,45 +953,104 @@
         <span class="k">return</span> <span class="p">[</span><span class="n">_sparql</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">)</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="p">]</span>
     <span class="k">finally</span><span class="p">:</span>
         <span class="n">_FORK_DATASET</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="k">return</span> <span class="p">[</span><span class="n">_sparql_violations</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span> <span class="k">for</span> <span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">_</span><span class="p">),</span> <span class="n">result</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">tasks</span><span class="p">,</span> <span class="n">results</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">_sparql_violations</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span> <span class="k">for</span> <span class="n">rule</span><span class="p">,</span> <span class="n">result</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">tasks</span><span class="p">,</span> <span class="n">results</span><span class="p">)]</span>
 
 
 <span class="c1"># ── logical operators (params: nested IR row-dict lists) ────────────────────</span>
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_run_nested</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">row_dicts</span><span class="p">,</span> <span class="n">focus_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_run_nested</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">row_dicts</span><span class="p">,</span> <span class="n">focus_ids</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Validate nested IR rows (inheriting the parent's focus override, so shapes</span>
-<span class="sd">    nested under sh:node keep judging the referenced value nodes)."""</span>
+<span class="sd">    nested under sh:node keep judging the referenced value nodes).</span>
+
+<span class="sd">    The operators and sh:node judge conformance on the lexical space: the</span>
+<span class="sd">    triplets:lexicalForm Warnings are left out unless *lexical* (sh:property,</span>
+<span class="sd">    which reports the nested findings as its own)."""</span>
     <span class="n">rules</span> <span class="o">=</span> <span class="p">[</span><span class="n">SimpleNamespace</span><span class="p">(</span><span class="n">focus_ids</span><span class="o">=</span><span class="n">focus_ids</span><span class="p">,</span> <span class="o">**</span><span class="n">row</span><span class="p">)</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">row_dicts</span><span class="p">]</span>
     <span class="n">frames</span> <span class="o">=</span> <span class="p">[</span><span class="n">CONSTRAINT_VALIDATORS</span><span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">component</span><span class="p">](</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">)</span>
               <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="ow">in</span> <span class="n">CONSTRAINT_VALIDATORS</span><span class="p">]</span>
-    <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">if</span> <span class="n">frames</span> <span class="k">else</span> <span class="n">_empty</span><span class="p">()</span>
+    <span class="n">nested</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">if</span> <span class="n">frames</span> <span class="k">else</span> <span class="n">_empty</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">nested</span> <span class="k">if</span> <span class="n">lexical</span> <span class="k">else</span> <span class="n">nested</span><span class="p">[</span><span class="n">nested</span><span class="p">[</span><span class="s2">"VIOLATION_TYPE"</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">"triplets:lexicalForm"</span><span class="p">]</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_and</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""sh:and — every nested shape must hold; each nested violation is reported."""</span>
-    <span class="n">focus_ids</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"focus_ids"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-    <span class="n">violations</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">_run_nested</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">alternative</span><span class="p">,</span> <span class="n">focus_ids</span><span class="p">)</span>
-                                <span class="k">for</span> <span class="n">alternative</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">violations</span><span class="p">[</span><span class="s2">"VIOLATION_TYPE"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"sh:and"</span>
-    <span class="k">return</span> <span class="n">violations</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_value_pairs</span><span class="p">(</span><span class="n">rows</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""(focus, value) string pairs of a path_rows frame — the value nodes a</span>
+<span class="sd">    property-level operator judges."""</span>
+    <span class="k">return</span> <span class="nb">set</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="s2">"FOCUS"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"PATH_VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_failed_values</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""The *pairs* that *result* violates: a nested finding on a pair fails that</span>
+<span class="sd">    pair; one with no VALUE or a value not under the path (a cardinality member,</span>
+<span class="sd">    sh:equals) fails every value of that focus."""</span>
+    <span class="n">by_focus</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">focus</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">:</span>
+        <span class="n">by_focus</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">focus</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">focus</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+    <span class="n">failed</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">focus</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">result</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]):</span>
+        <span class="n">pair</span> <span class="o">=</span> <span class="p">(</span><span class="n">focus</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
+        <span class="n">failed</span> <span class="o">|=</span> <span class="p">{</span><span class="n">pair</span><span class="p">}</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="ow">and</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">pairs</span> <span class="k">else</span> <span class="n">by_focus</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">focus</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">failed</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_value_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">pairs</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="n">pairs</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="p">[</span><span class="n">focus</span> <span class="k">for</span> <span class="n">focus</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">],</span> <span class="p">[</span><span class="n">value</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">],</span> <span class="n">message</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_or</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""sh:or — a focus node violates only when EVERY alternative is violated."""</span>
+<span class="w">    </span><span class="sd">"""sh:or — violates only when EVERY alternative is violated: per focus node</span>
+<span class="sd">    in a node shape, per value node in a property shape."""</span>
     <span class="n">focus_ids</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"focus_ids"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-    <span class="n">violating_sets</span> <span class="o">=</span> <span class="p">[</span><span class="nb">set</span><span class="p">(</span><span class="n">_run_nested</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">alternative</span><span class="p">,</span> <span class="n">focus_ids</span><span class="p">)[</span><span class="s2">"ID"</span><span class="p">])</span>
-                      <span class="k">for</span> <span class="n">alternative</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">]</span>
-    <span class="n">focus</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="o">*</span><span class="n">violating_sets</span><span class="p">))</span> <span class="k">if</span> <span class="n">violating_sets</span> <span class="k">else</span> <span class="p">[]</span>
-    <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">focus</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">"no sh:or alternative is satisfied"</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">_run_nested</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">alternative</span><span class="p">,</span> <span class="n">focus_ids</span><span class="p">)</span> <span class="k">for</span> <span class="n">alternative</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">violating_sets</span> <span class="o">=</span> <span class="p">[</span><span class="nb">set</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">])</span> <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span>
+        <span class="n">focus</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="o">*</span><span class="n">violating_sets</span><span class="p">))</span> <span class="k">if</span> <span class="n">violating_sets</span> <span class="k">else</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">focus</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">"no sh:or alternative is satisfied"</span><span class="p">)</span>
+    <span class="n">pairs</span> <span class="o">=</span> <span class="n">_value_pairs</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">))</span>
+    <span class="n">failing</span> <span class="o">=</span> <span class="nb">set</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="n">_failed_values</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span> <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">_value_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">failing</span><span class="p">,</span> <span class="s2">"no sh:or alternative is satisfied"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_and</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""sh:and — violates when ANY member is violated: per focus node in a node</span>
+<span class="sd">    shape, per value node in a property shape."""</span>
+    <span class="n">focus_ids</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"focus_ids"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">_run_nested</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">member</span><span class="p">,</span> <span class="n">focus_ids</span><span class="p">)</span> <span class="k">for</span> <span class="n">member</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">]</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="s2">"not every sh:and member is satisfied"</span>
+    <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">()</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">])</span> <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">))),</span> <span class="kc">None</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+    <span class="n">pairs</span> <span class="o">=</span> <span class="n">_value_pairs</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">_value_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="nb">set</span><span class="p">()</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="n">_failed_values</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span> <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">)),</span> <span class="n">message</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_xone</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""sh:xone — violates unless EXACTLY one alternative is satisfied: per focus</span>
+<span class="sd">    node in a node shape, per value node in a property shape. An empty</span>
+<span class="sd">    alternative (a switched-off member) is satisfied."""</span>
+    <span class="n">focus_ids</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"focus_ids"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">_run_nested</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">alternative</span><span class="p">,</span> <span class="n">focus_ids</span><span class="p">)</span> <span class="k">for</span> <span class="n">alternative</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">]</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="s2">"not exactly one sh:xone alternative is satisfied"</span>
+    <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">violating</span> <span class="o">=</span> <span class="p">[</span><span class="nb">set</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">])</span> <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span>
+        <span class="n">focus</span> <span class="o">=</span> <span class="p">[</span><span class="n">node</span> <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">context</span><span class="o">.</span><span class="n">focus</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span> <span class="k">if</span> <span class="nb">sum</span><span class="p">(</span><span class="n">node</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ids</span> <span class="k">for</span> <span class="n">ids</span> <span class="ow">in</span> <span class="n">violating</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">focus</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">message</span><span class="p">)</span>
+    <span class="n">pairs</span> <span class="o">=</span> <span class="n">_value_pairs</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">))</span>
+    <span class="n">failed</span> <span class="o">=</span> <span class="p">[</span><span class="n">_failed_values</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span> <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">_value_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="p">{</span><span class="n">pair</span> <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">pairs</span> <span class="k">if</span> <span class="nb">sum</span><span class="p">(</span><span class="n">pair</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">fails</span> <span class="k">for</span> <span class="n">fails</span> <span class="ow">in</span> <span class="n">failed</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">},</span> <span class="n">message</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_node</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""sh:node — every value at the path must conform to the referenced shape.</span>
+<span class="w">    </span><span class="sd">"""sh:node — every value at the path must conform to the referenced shape;</span>
+<span class="sd">    in a node shape, the focus node itself must.</span>
 
 <span class="sd">    The referenced shape was expanded into nested IR rows at compile time; here</span>
 <span class="sd">    they run with the referenced value nodes as focus. A value node that</span>
 <span class="sd">    produces any nested violation makes the referring focus node violate sh:node.</span>
 <span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">nested</span> <span class="o">=</span> <span class="n">_run_nested</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">"rows"</span><span class="p">],</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"focus_ids"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">nested</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">])),</span> <span class="kc">None</span><span class="p">,</span>
+                      <span class="sa">f</span><span class="s2">"node does not conform to shape </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">'shape'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="n">rows</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
     <span class="n">referenced</span> <span class="o">=</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"PATH_VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">len</span><span class="p">(</span><span class="n">referenced</span><span class="p">):</span>
@@ -903,12 +1061,23 @@
                   <span class="sa">f</span><span class="s2">"value does not conform to shape </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">'shape'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_property</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""sh:property on a property shape — the nested property shapes judge the value</span>
+<span class="sd">    nodes and report their own findings (SHACL §4.7.2), unlike sh:node."""</span>
+    <span class="n">referenced</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">)[</span><span class="s2">"PATH_VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">_run_nested</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">"rows"</span><span class="p">],</span> <span class="n">referenced</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_not</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""sh:not — a focus node violates when it SATISFIES the negated shape."""</span>
-    <span class="n">violating</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">_run_nested</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"focus_ids"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))[</span><span class="s2">"ID"</span><span class="p">])</span>
-    <span class="n">ids</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">focus</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
-    <span class="n">conforming</span> <span class="o">=</span> <span class="p">[</span><span class="n">focus</span> <span class="k">for</span> <span class="n">focus</span> <span class="ow">in</span> <span class="n">ids</span> <span class="k">if</span> <span class="n">focus</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">violating</span><span class="p">]</span>
-    <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">conforming</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">"node conforms to the negated shape"</span><span class="p">)</span>
+<span class="w">    </span><span class="sd">"""sh:not — violates when it SATISFIES the negated shape: per focus node in</span>
+<span class="sd">    a node shape, per value node in a property shape."""</span>
+    <span class="n">nested</span> <span class="o">=</span> <span class="n">_run_nested</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"focus_ids"</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">violating</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">nested</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">])</span>
+        <span class="n">conforming</span> <span class="o">=</span> <span class="p">[</span><span class="n">focus</span> <span class="k">for</span> <span class="n">focus</span> <span class="ow">in</span> <span class="n">context</span><span class="o">.</span><span class="n">focus</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span> <span class="k">if</span> <span class="n">focus</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">violating</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">conforming</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">"node conforms to the negated shape"</span><span class="p">)</span>
+    <span class="n">pairs</span> <span class="o">=</span> <span class="n">_value_pairs</span><span class="p">(</span><span class="n">context</span><span class="o">.</span><span class="n">path_rows</span><span class="p">(</span><span class="n">rule</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">_value_frame</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">pairs</span> <span class="o">-</span> <span class="n">_failed_values</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">nested</span><span class="p">),</span> <span class="s2">"value conforms to the negated shape"</span><span class="p">)</span>
 
 
 <span class="c1"># component → validator. The polars and duckdb compilers implement this same</span>
@@ -916,6 +1085,7 @@
 <span class="n">CONSTRAINT_VALIDATORS</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s2">"sh:sparql"</span><span class="p">:</span> <span class="n">_sparql</span><span class="p">,</span>
     <span class="s2">"sh:node"</span><span class="p">:</span> <span class="n">_node</span><span class="p">,</span>
+    <span class="s2">"sh:property"</span><span class="p">:</span> <span class="n">_property</span><span class="p">,</span>
     <span class="s2">"sh:minCount"</span><span class="p">:</span> <span class="n">_min_count</span><span class="p">,</span>
     <span class="s2">"sh:maxCount"</span><span class="p">:</span> <span class="n">_max_count</span><span class="p">,</span>
     <span class="s2">"sh:datatype"</span><span class="p">:</span> <span class="n">_datatype</span><span class="p">,</span>
@@ -930,6 +1100,7 @@
     <span class="s2">"sh:hasValue"</span><span class="p">:</span> <span class="n">_has_value</span><span class="p">,</span>
     <span class="s2">"sh:class"</span><span class="p">:</span> <span class="n">_class</span><span class="p">,</span>
     <span class="s2">"triplets:range"</span><span class="p">:</span> <span class="n">_schema_range</span><span class="p">,</span>
+    <span class="s2">"triplets:missing"</span><span class="p">:</span> <span class="n">_schema_missing</span><span class="p">,</span>
     <span class="s2">"sh:nodeKind"</span><span class="p">:</span> <span class="n">_node_kind</span><span class="p">,</span>
     <span class="s2">"sh:equals"</span><span class="p">:</span> <span class="n">_equals</span><span class="p">,</span>
     <span class="s2">"sh:disjoint"</span><span class="p">:</span> <span class="n">_disjoint</span><span class="p">,</span>
@@ -938,13 +1109,15 @@
     <span class="s2">"sh:closed"</span><span class="p">:</span> <span class="n">_closed</span><span class="p">,</span>
     <span class="s2">"sh:and"</span><span class="p">:</span> <span class="n">_and</span><span class="p">,</span>
     <span class="s2">"sh:or"</span><span class="p">:</span> <span class="n">_or</span><span class="p">,</span>
+    <span class="s2">"sh:xone"</span><span class="p">:</span> <span class="n">_xone</span><span class="p">,</span>
     <span class="s2">"sh:not"</span><span class="p">:</span> <span class="n">_not</span><span class="p">,</span>
 <span class="p">}</span>
 
 
 <div class="viewcode-block" id="validate">
 <a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_pandas.validate">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_workers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_workers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+             <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">,</span> <span class="n">ancestors</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">abort_on_first</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Validate triplet data against the compiled constraint table.</span>
 
 <span class="sd">    Parameters</span>
@@ -952,21 +1125,32 @@
 <span class="sd">    data : triplet DataFrame (pandas/polars), arrow, or DuckDB connection</span>
 <span class="sd">    compiled : CompiledShapes</span>
 <span class="sd">        From ``triplets.validation.compile`` — this engine executes the IR.</span>
-<span class="sd">    rdf_map : dict or str, optional</span>
-<span class="sd">        Used only for the sh:sparql constraints (typed literals in the queried</span>
-<span class="sd">        graph); every other component reads the raw lexical forms directly.</span>
-<span class="sd">    scope : iterable of INSTANCE_ID, optional</span>
+<span class="sd">    rdf_map : dict, optional</span>
+<span class="sd">        Scoped export schema (``schema_scope.scoped_rdf_map``): typed literals for</span>
+<span class="sd">        the sh:sparql graph and the IRI/literal decision for sh:nodeKind. Every</span>
+<span class="sd">        other component reads the raw lexical forms.</span>
+<span class="sd">    data_scope : iterable of INSTANCE_ID, optional</span>
 <span class="sd">        Validate only rows of these instances.</span>
 <span class="sd">    components : iterable of component names, optional</span>
 <span class="sd">        Restrict to a subset (e.g. ``("sh:datatype",)`` for the lexical</span>
 <span class="sd">        supplement run next to pyshacl). None = everything implemented.</span>
 <span class="sd">    max_workers : int, optional</span>
-<span class="sd">        Run the sh:sparql constraint queries in parallel processes (fork).</span>
+<span class="sd">        Run the sh:sparql constraint queries on that many workers: forked</span>
+<span class="sd">        processes on the rdflib engine, threads on oxigraph / qlever.</span>
 <span class="sd">        None = sequential.</span>
+<span class="sd">    ancestors : dict, optional</span>
+<span class="sd">        ``schema_scope.class_ancestors`` map: class targets and sh:class also</span>
+<span class="sd">        match subclass instances. None = exact rdf:type only.</span>
+<span class="sd">    lexical : bool, default True</span>
+<span class="sd">        sh:datatype also reports valid-but-narrower forms as triplets:lexicalForm</span>
+<span class="sd">        Warnings; False checks the lexical space only.</span>
+<span class="sd">    abort_on_first : bool, default False</span>
+<span class="sd">        Stop after the first rule that finds a Violation (``has_violation``);</span>
+<span class="sd">        the sh:sparql phase then does not run.</span>
 <span class="sd">    """</span>
     <span class="n">data</span> <span class="o">=</span> <span class="n">_to_pandas</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">scope</span><span class="p">))]</span>
+    <span class="k">if</span> <span class="n">data_scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">data_scope</span><span class="p">))]</span>
 
     <span class="n">rules</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">ir</span>
     <span class="k">if</span> <span class="n">components</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -975,19 +1159,23 @@
     <span class="k">if</span> <span class="n">skipped</span><span class="p">:</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"pandas engine skips components: </span><span class="si">%s</span><span class="s2"> (pyshacl covers them)"</span><span class="p">,</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">skipped</span><span class="p">)))</span>
 
-    <span class="n">context</span> <span class="o">=</span> <span class="n">_Context</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">)</span>
+    <span class="n">context</span> <span class="o">=</span> <span class="n">_Context</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="p">,</span> <span class="n">ancestor_pairs</span><span class="p">(</span><span class="n">ancestors</span><span class="p">),</span> <span class="n">lexical</span><span class="p">)</span>
     <span class="n">selected</span> <span class="o">=</span> <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">rules</span><span class="o">.</span><span class="n">itertuples</span><span class="p">()</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="ow">in</span> <span class="n">CONSTRAINT_VALIDATORS</span><span class="p">]</span>
     <span class="n">sparql_rules</span> <span class="o">=</span> <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">selected</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="o">==</span> <span class="s2">"sh:sparql"</span><span class="p">]</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">targets</span><span class="p">,</span> <span class="n">notes</span> <span class="o">=</span> <span class="n">_sparql_targets</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">selected</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">target_by</span> <span class="o">==</span> <span class="s2">"SPARQL"</span><span class="p">])</span>
 
-    <span class="n">frames</span> <span class="o">=</span> <span class="p">[</span><span class="n">CONSTRAINT_VALIDATORS</span><span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">component</span><span class="p">](</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">)</span>
-              <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">selected</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="o">!=</span> <span class="s2">"sh:sparql"</span><span class="p">]</span>
-    <span class="k">if</span> <span class="n">sparql_rules</span> <span class="ow">and</span> <span class="n">max_workers</span><span class="p">:</span>
-        <span class="n">frames</span> <span class="o">+=</span> <span class="n">_sparql_parallel</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">sparql_rules</span><span class="p">,</span> <span class="n">max_workers</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">frames</span> <span class="o">+=</span> <span class="p">[</span><span class="n">_sparql</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">)</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">sparql_rules</span><span class="p">]</span>
+    <span class="n">frames</span> <span class="o">=</span> <span class="p">[</span><span class="n">notes</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">selected</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="o">!=</span> <span class="s2">"sh:sparql"</span><span class="p">:</span>
+            <span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CONSTRAINT_VALIDATORS</span><span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">component</span><span class="p">](</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">abort_on_first</span> <span class="ow">and</span> <span class="n">has_violation</span><span class="p">(</span><span class="n">frames</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+                <span class="k">break</span>
+    <span class="k">else</span><span class="p">:</span>   <span class="c1"># the sh:sparql phase runs only when no rule stopped the run</span>
+        <span class="k">if</span> <span class="n">sparql_rules</span> <span class="ow">and</span> <span class="n">max_workers</span><span class="p">:</span>
+            <span class="n">frames</span> <span class="o">+=</span> <span class="n">_sparql_parallel</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">sparql_rules</span><span class="p">,</span> <span class="n">max_workers</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">frames</span> <span class="o">+=</span> <span class="p">[</span><span class="n">_sparql</span><span class="p">(</span><span class="n">context</span><span class="p">,</span> <span class="n">rule</span><span class="p">)</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">sparql_rules</span><span class="p">]</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">frames</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">_empty</span><span class="p">()</span>
     <span class="n">violations</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="c1"># a defective shape fans out to one rule per sh:targetClass — flag it once</span>
     <span class="n">invalid</span> <span class="o">=</span> <span class="n">violations</span><span class="p">[</span><span class="s2">"VIOLATION_TYPE"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"triplets:invalidSparql"</span>
@@ -1014,7 +1202,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -1034,7 +1222,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

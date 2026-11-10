@@ -28,6 +28,22 @@ triplets.validation.sarif module
    :show-inheritance:
    :undoc-members:
 
+triplets.validation.schema\_ir module
+-------------------------------------
+
+.. automodule:: triplets.validation.schema_ir
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+triplets.validation.schema\_scope module
+----------------------------------------
+
+.. automodule:: triplets.validation.schema_scope
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 triplets.validation.shacl\_duckdb module
 ----------------------------------------
 

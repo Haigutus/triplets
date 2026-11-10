@@ -3,10 +3,10 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.tools" href="triplets.tools.html"><link rel="prev" title="triplets package" href="triplets.html">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.iri package" href="triplets.iri.html"><link rel="prev" title="triplets package" href="triplets.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.parser - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.parser - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -319,7 +315,7 @@ table = parse(path, return_type=”arrow”)</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.parser.parse">
-<span class="sig-prename descclassname"><span class="pre">triplets.parser.</span></span><span class="sig-name descname"><span class="pre">parse</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">list_of_paths_to_zip_globalzip_xml</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'pandas'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">categorical_columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">('INSTANCE_ID',</span> <span class="pre">'KEY')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shorten_resources</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">string_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="reference internal" href="_modules/triplets/parser.html#parse"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.parse" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.parser.</span></span><span class="sig-name descname"><span class="pre">parse</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">list_of_paths_to_zip_globalzip_xml</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'pandas'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">categorical_columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">('INSTANCE_ID',</span> <span class="pre">'KEY')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_resources</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">string_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_base</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="reference internal" href="_modules/triplets/parser.html#parse"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.parse" title="Link to this definition">¶</a></dt>
 <dd><p>Main entry: parse CIM RDF/XML (or zips) using chosen engine.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -331,8 +327,13 @@ getLogger(“triplets.parser”).setLevel(logging.DEBUG)), debug output is auto-
 Options: “python_lxml_pandas”, “python_lxml_arrow”, “cython_pugixml_arrow”.</p></li>
 <li><p><strong>return_type</strong> (<em>str</em><em>, </em><em>default &quot;pandas&quot;</em>) – Output format: “pandas”, “arrow”, or “polars”.</p></li>
 <li><p><strong>categorical_columns</strong> (<em>tuple</em><em> or </em><em>None</em><em>, </em><em>default</em><em> (</em><em>&quot;INSTANCE_ID&quot;</em><em>, </em><em>&quot;KEY&quot;</em><em>)</em>) – Columns to dictionary-encode for memory savings. Pass None to disable.</p></li>
-<li><p><strong>shorten_resources</strong> (<em>bool</em><em>, </em><em>default True</em>) – Shorten http(s) resource values to their #fragment (CIM instance data convention).
-Pass False for lossless URIs (e.g. RDFS schema parsing); only the python engines
+<li><p><strong>local_resources</strong> (<em>bool</em><em>, </em><em>default True</em>) – Resource (<code class="docutils literal notranslate"><span class="pre">rdf:resource</span></code> / <code class="docutils literal notranslate"><span class="pre">rdf:nodeID</span></code>) values in local form,
+<code class="docutils literal notranslate"><span class="pre">triplets.iri.local_value</span></code>: the ID prefix stripped and http(s) IRIs cut to their
+<code class="docutils literal notranslate"><span class="pre">#fragment</span></code> (CIM instance data convention; a namespace IRI ending in <code class="docutils literal notranslate"><span class="pre">#</span></code> stays whole) — enumerations are stored as
+<code class="docutils literal notranslate"><span class="pre">ControlAreaTypeKind.Interchange</span></code>; filters against the full CIM URI will not match.
+False is the absolute form: IDs and resource references are resolved against the
+document’s declared absolute <code class="docutils literal notranslate"><span class="pre">xml:base</span></code> at parse time, <code class="docutils literal notranslate"><span class="pre">triplets.iri.resolve_iri</span></code>
+(<code class="docutils literal notranslate"><span class="pre">rdf:ID=&quot;X&quot;</span></code> → <code class="docutils literal notranslate"><span class="pre">base#X</span></code>; e.g. RDFS schema parsing); only the python engines
 support this.</p></li>
 <li><p><strong>string_type</strong> (<em>str</em><em>, </em><em>default &quot;auto&quot;</em>) – Arrow layout of the ID and VALUE string columns (arrow/polars output,
 and pandas via ArrowDtype): “utf8” (32-bit offsets), “large_utf8”
@@ -341,6 +342,8 @@ needs pyarrow &gt;= 16). “auto” picks the layout the return_type adopts
 zero-copy: string_view for polars, utf8 otherwise. Dictionary-encoded
 columns are unaffected (consumers use the indices). Ignored by the
 pandas engine (python_lxml_pandas).</p></li>
+<li><p><strong>default_base</strong> (str, default “<a class="reference external" href="http:/">http:/</a>/triplets#”) – Base for <code class="docutils literal notranslate"><span class="pre">local_resources=False</span></code> when the document declares no absolute <code class="docutils literal notranslate"><span class="pre">xml:base</span></code>
+(the file location is never used as a base).</p></li>
 </ul>
 </dd>
 </dl>
@@ -348,7 +351,7 @@ pandas engine (python_lxml_pandas).</p></li>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.parser.parse_batches">
-<span class="sig-prename descclassname"><span class="pre">triplets.parser.</span></span><span class="sig-name descname"><span class="pre">parse_batches</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">list_of_paths_to_zip_globalzip_xml</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shorten_resources</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="reference internal" href="_modules/triplets/parser.html#parse_batches"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.parse_batches" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.parser.</span></span><span class="sig-name descname"><span class="pre">parse_batches</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">list_of_paths_to_zip_globalzip_xml</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_resources</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_base</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="reference internal" href="_modules/triplets/parser.html#parse_batches"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.parse_batches" title="Link to this definition">¶</a></dt>
 <dd><p>Parse CIM RDF/XML lazily into a <code class="docutils literal notranslate"><span class="pre">pyarrow.RecordBatchReader</span></code>.</p>
 <p>One RecordBatch per XML file, produced as the reader is consumed — the
 dataset is never materialized in Python (out-of-core ingest, e.g. the
@@ -380,7 +383,7 @@ Restored from the original rdf_parser.py load_RDF_to_list logic with fixes:
 - Namespace map None key → “” (lxml uses None for default namespace)</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.parser.python_lxml_pandas.load_rdf_to_dataframe">
-<span class="sig-prename descclassname"><span class="pre">triplets.parser.python_lxml_pandas.</span></span><span class="sig-name descname"><span class="pre">load_rdf_to_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_or_fileobject</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">IO</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shorten_resources</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="reference internal" href="_modules/triplets/parser/python_lxml_pandas.html#load_rdf_to_dataframe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.python_lxml_pandas.load_rdf_to_dataframe" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.parser.python_lxml_pandas.</span></span><span class="sig-name descname"><span class="pre">load_rdf_to_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_or_fileobject</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">IO</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_resources</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_base</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="reference internal" href="_modules/triplets/parser/python_lxml_pandas.html#load_rdf_to_dataframe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.python_lxml_pandas.load_rdf_to_dataframe" title="Link to this definition">¶</a></dt>
 <dd><p>Parse single RDF/XML file to pandas DataFrame using lxml + list-of-tuples.</p>
 <p>This is the old proven path: lxml parse → iterate → build Python list → pd.DataFrame.
 No pyarrow dependency.</p>
@@ -395,7 +398,7 @@ instead of Python lists, producing pa.RecordBatch. Better for polars interop
 and dictionary-encoding (categorical columns). Requires pyarrow.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.parser.python_lxml_arrow.load_rdf_to_dataframe">
-<span class="sig-prename descclassname"><span class="pre">triplets.parser.python_lxml_arrow.</span></span><span class="sig-name descname"><span class="pre">load_rdf_to_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_or_fileobject</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">IO</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shorten_resources</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyarrow.RecordBatch</span></span></span><a class="reference internal" href="_modules/triplets/parser/python_lxml_arrow.html#load_rdf_to_dataframe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.python_lxml_arrow.load_rdf_to_dataframe" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.parser.python_lxml_arrow.</span></span><span class="sig-name descname"><span class="pre">load_rdf_to_dataframe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_or_fileobject</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">IO</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_resources</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_base</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyarrow.RecordBatch</span></span></span><a class="reference internal" href="_modules/triplets/parser/python_lxml_arrow.html#load_rdf_to_dataframe"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.python_lxml_arrow.load_rdf_to_dataframe" title="Link to this definition">¶</a></dt>
 <dd><p>Parse single RDF/XML (path or fileobj) to pyarrow RecordBatch using lxml + lists.</p>
 <p>Streaming in the sense of column-wise collection then direct Arrow (no 4-tuple list).</p>
 </dd></dl>
@@ -406,9 +409,30 @@ and dictionary-encoding (categorical columns). Requires pyarrow.</p>
 <p>Shared utilities for CIM/RDF XML parsers (python_lxml and cython_pugixml).</p>
 <p>Extracted/adapted from rdf_parser.py and rdf_parser_lxml_arrow.py cues.</p>
 <dl class="py function">
-<dt class="sig sig-object py" id="triplets.parser.utils.clean_ID">
-<span class="sig-prename descclassname"><span class="pre">triplets.parser.utils.</span></span><span class="sig-name descname"><span class="pre">clean_ID</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ID</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="_modules/triplets/parser/utils.html#clean_ID"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.utils.clean_ID" title="Link to this definition">¶</a></dt>
-<dd><p>Removes ID prefixes used in CIM - <a class="reference external" href="urn:uuid">urn:uuid</a>:, #_, _ .</p>
+<dt class="sig sig-object py" id="triplets.parser.utils.document_base">
+<span class="sig-prename descclassname"><span class="pre">triplets.parser.utils.</span></span><span class="sig-name descname"><span class="pre">document_base</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">root</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://triplets#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/parser/utils.html#document_base"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.utils.document_base" title="Link to this definition">¶</a></dt>
+<dd><p>Base for the absolute form: the root’s declared <code class="docutils literal notranslate"><span class="pre">xml:base</span></code> when it is absolute
+(<a class="reference internal" href="triplets.iri.html#triplets.iri.is_absolute" title="triplets.iri.is_absolute"><code class="xref py py-func docutils literal notranslate"><span class="pre">is_absolute()</span></code></a>), else <em>default_base</em> (None: no base). The document’s own location (file path, zip entry) is never used —
+it is not an identity and would differ per machine.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.parser.utils.iter_rdf_rows">
+<span class="sig-prename descclassname"><span class="pre">triplets.parser.utils.</span></span><span class="sig-name descname"><span class="pre">iter_rdf_rows</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdf_objects</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_resources</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/parser/utils.html#iter_rdf_rows"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.utils.iter_rdf_rows" title="Link to this definition">¶</a></dt>
+<dd><p>RDF/XML object elements (lxml) → <code class="docutils literal notranslate"><span class="pre">(ID,</span> <span class="pre">KEY,</span> <span class="pre">VALUE)</span></code> rows, the one python copy of the
+XML → triplet rules (the cython engine mirrors the local form in C++).</p>
+<p>KEY and Type VALUE: the element local name. VALUE: element text, else the
+<code class="docutils literal notranslate"><span class="pre">rdf:resource</span></code> / <code class="docutils literal notranslate"><span class="pre">rdf:nodeID</span></code> reference; <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code> when there is neither. The ID
+(<code class="docutils literal notranslate"><span class="pre">rdf:ID</span></code> &gt; <code class="docutils literal notranslate"><span class="pre">rdf:about</span></code> &gt; <code class="docutils literal notranslate"><span class="pre">rdf:nodeID</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code> when none) and references are:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">local_resources=True</span></code> — local: <a class="reference internal" href="triplets.iri.html#triplets.iri.local_id" title="triplets.iri.local_id"><code class="xref py py-func docutils literal notranslate"><span class="pre">local_id()</span></code></a> for the ID,
+<a class="reference internal" href="triplets.iri.html#triplets.iri.local_value" title="triplets.iri.local_value"><code class="xref py py-func docutils literal notranslate"><span class="pre">local_value()</span></code></a> for references (the CIM instance convention).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">local_resources=False</span></code> — absolute: resolved against <em>base</em> (<a class="reference internal" href="#triplets.parser.utils.document_base" title="triplets.parser.utils.document_base"><code class="xref py py-func docutils literal notranslate"><span class="pre">document_base()</span></code></a>:
+the declared absolute <code class="docutils literal notranslate"><span class="pre">xml:base</span></code>, else <code class="docutils literal notranslate"><span class="pre">default_base</span></code>) with
+<a class="reference internal" href="triplets.iri.html#triplets.iri.resolve_iri" title="triplets.iri.resolve_iri"><code class="xref py py-func docutils literal notranslate"><span class="pre">resolve_iri()</span></code></a>, so nothing downstream needs the base again.
+<code class="docutils literal notranslate"><span class="pre">rdf:ID=&quot;X&quot;</span></code> is <code class="docutils literal notranslate"><span class="pre">base#X</span></code>. <code class="docutils literal notranslate"><span class="pre">rdf:nodeID</span></code> labels stay as written (blank nodes are
+not supported).</p></li>
+</ul>
 </dd></dl>
 
 <dl class="py function">
@@ -443,16 +467,18 @@ closed after their archive is exhausted.</p>
 <p>N-Quads reader — the inverse of the N-Quads export.</p>
 <p>read_nquads turns N-Quads / N-Triples text (path, bytes, or file-like) back
 into a triplet DataFrame [ID, KEY, VALUE, INSTANCE_ID], applying the inverse
-of the export conventions (triplets.export.nquads_utils): <a class="reference external" href="urn:uuid">urn:uuid</a>: stripped,
-CIM namespace shortened, rdf:type → ‘Type’, datatype / language annotations
+of the export conventions (triplets.iri): ID / INSTANCE_ID via local_id,
+KEY via local_key (rdf:type → ‘Type’), VALUE via local_value (urn:uuid: and any
+http(s) #fragment namespace shortened, a namespace IRI ending in # kept whole), datatype / language annotations
 dropped (values keep their lexical form), graph → INSTANCE_ID (absent → None).</p>
-<p>Everything is vectorized pandas string ops. terms_to_triplets is the shared
+<p>Line splitting runs in Arrow compute, term conversion in vectorized pandas
+string ops on arrow-backed columns. terms_to_triplets is the shared
 term-level conversion, also used by the SPARQL engines to decode
 CONSTRUCT/DESCRIBE results: the qlever engine feeds it Arrow-decoded term
 columns, the oxigraph engine feeds read_nquads its serialized result bytes.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.parser.nquads.read_nquads">
-<span class="sig-prename descclassname"><span class="pre">triplets.parser.nquads.</span></span><span class="sig-name descname"><span class="pre">read_nquads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'pandas'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/parser/nquads.html#read_nquads"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.nquads.read_nquads" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.parser.nquads.</span></span><span class="sig-name descname"><span class="pre">read_nquads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'pandas'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/parser/nquads.html#read_nquads"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.nquads.read_nquads" title="Link to this definition">¶</a></dt>
 <dd><p>Parse N-Quads (or N-Triples) into a triplet DataFrame.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -460,6 +486,11 @@ columns, the oxigraph engine feeds read_nquads its serialized result bytes.</p>
 <li><p><strong>source</strong> (<em>str/Path</em><em>, </em><em>bytes</em><em>, or </em><em>file-like</em>) – Path to a .nq/.nt file, the serialized content as bytes/str, or an
 open file object (text or binary).</p></li>
 <li><p><strong>return_type</strong> (<em>str</em><em>, </em><em>default &quot;pandas&quot;</em>) – “pandas”, “polars”, or “arrow”.</p></li>
+<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema. With it every VALUE IRI is shortened by its KEY’s schema entry
+(Association → node rule, Enumeration → name rule) instead of the schema-free guess.</p></li>
+<li><p><strong>type_key</strong> (<em>str</em><em>, </em><em>default &quot;Type&quot;</em>) – KEY for <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> triples. N-Quads has no typed-node shorthand, so every type is
+an <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> triple: <code class="docutils literal notranslate"><span class="pre">&quot;Type&quot;</span></code> for CIM data (one type per object), another key
+(e.g. <code class="docutils literal notranslate"><span class="pre">&quot;type&quot;</span></code>) to read every type as an ordinary statement.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -476,15 +507,19 @@ open file object (text or binary).</p></li>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.parser.nquads.terms_to_triplets">
-<span class="sig-prename descclassname"><span class="pre">triplets.parser.nquads.</span></span><span class="sig-name descname"><span class="pre">terms_to_triplets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">frame</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/parser/nquads.html#terms_to_triplets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.nquads.terms_to_triplets" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.parser.nquads.</span></span><span class="sig-name descname"><span class="pre">terms_to_triplets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">frame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kinds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/parser/nquads.html#terms_to_triplets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.parser.nquads.terms_to_triplets" title="Link to this definition">¶</a></dt>
 <dd><p>N-Triples-form term columns → triplet values, converted in place.</p>
 <p>frame carries columns [ID, KEY, VALUE] and optionally INSTANCE_ID (the
 graph term; a missing column → None, a constructed graph has no source
 instance). Term shapes: <code class="docutils literal notranslate"><span class="pre">&lt;iri&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">_:bnode</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;literal&quot;</span></code> (optionally
 with a <code class="docutils literal notranslate"><span class="pre">^^&lt;datatype&gt;</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;lang</span></code> suffix — dropped, the value keeps its
 lexical form; string escapes decoded), or bare turtle-shorthand
-numbers/booleans. IRIs lose <a class="reference external" href="urn:uuid">urn:uuid</a>: and the CIM namespace,
-rdf:type → ‘Type’.</p>
+numbers/booleans. IRI escapes the exporter wrote (<code class="docutils literal notranslate"><span class="pre">%20</span></code>) are decoded once,
+then the triplets.iri column rules apply: <code class="docutils literal notranslate"><span class="pre">local_id</span></code> for ID / INSTANCE_ID,
+<code class="docutils literal notranslate"><span class="pre">local_key</span></code> for KEY (<code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> → <em>type_key</em>), <code class="docutils literal notranslate"><span class="pre">local_value</span></code> for VALUE —
+kind <code class="docutils literal notranslate"><span class="pre">class</span></code> on type rows, else by <em>kinds</em> (<code class="docutils literal notranslate"><span class="pre">iri.value_types</span></code> of a schema).
+A guessed VALUE (no schema, or a KEY the schema does not declare) that is a
+subject of the same frame shortens like its ID, so the reference still joins it.</p>
 </dd></dl>
 
 </section>
@@ -495,12 +530,12 @@ rdf:type → ‘Type’.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="triplets.tools.html">
+          <a class="next-page" href="triplets.iri.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">triplets.tools</div>
+                <div class="title">triplets.iri package</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -519,7 +554,7 @@ rdf:type → ‘Type’.</p>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -560,7 +595,8 @@ rdf:type → ‘Type’.</p>
 </ul>
 </li>
 <li><a class="reference internal" href="#module-triplets.parser.utils">triplets.parser.utils</a><ul>
-<li><a class="reference internal" href="#triplets.parser.utils.clean_ID"><code class="docutils literal notranslate"><span class="pre">clean_ID()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.parser.utils.document_base"><code class="docutils literal notranslate"><span class="pre">document_base()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.parser.utils.iter_rdf_rows"><code class="docutils literal notranslate"><span class="pre">iter_rdf_rows()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.parser.utils.iter_all_xml"><code class="docutils literal notranslate"><span class="pre">iter_all_xml()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.parser.utils.find_all_xml"><code class="docutils literal notranslate"><span class="pre">find_all_xml()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.parser.utils.get_namespace_map_from_root"><code class="docutils literal notranslate"><span class="pre">get_namespace_map_from_root()</span></code></a></li>
@@ -582,7 +618,7 @@ rdf:type → ‘Type’.</p>
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

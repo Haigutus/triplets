@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.validation - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.validation - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -285,9 +281,21 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.validation</h1><div class="highlight"><pre>
-<span></span><span class="sd">"""SHACL validation over triplet data.</span>
+<span></span><span class="sd">"""Validation over triplet data — three generic validations, scoped by the caller:</span>
+
+<span class="sd">- ``validate_shacl`` — SHACL shapes;</span>
+<span class="sd">- ``validate_schema`` — the export schema's cardinality, datatypes and</span>
+<span class="sd">  enumerations, per instance;</span>
+<span class="sd">- ``validate_schema_references`` — the reference types of associations, per</span>
+<span class="sd">  source instance, against target instances and profiles.</span>
+
+<span class="sd">Every input has a scope named after it: ``data`` + ``data_scope`` (INSTANCE_IDs),</span>
+<span class="sd">``rdf_map`` + ``rdf_map_scope`` (profiles, merged — ``schema_scope``). Nothing</span>
+<span class="sd">here reads instance headers; ``triplets.cgmes_tools.validate_by_header`` does.</span>
+<span class="sd">``enrich`` adds the context columns in a separate call.</span>
 
 <span class="sd">Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):</span>
+
 <span class="sd">- pyshacl — reference, spec-complete, rdflib-based; always available with the</span>
 <span class="sd">  `validation` extra</span>
 <span class="sd">- polars — compiled-IR executor (performance; one lazy plan per constraint,</span>
@@ -295,25 +303,28 @@
 <span class="sd">- pandas — compiled-IR executor (debugging; same complete registry and</span>
 <span class="sd">  semantics, eager. sh:sparql delegates to triplets.sparql with optional</span>
 <span class="sd">  max_workers; sh:node runs the compile-time-expanded referenced shape against</span>
-<span class="sd">  the value nodes; sh:nodeKind is decided by the rdf_map schema)</span>
+<span class="sd">  the value nodes (on a node shape, the focus node); sh:nodeKind is decided by the rdf_map schema)</span>
 <span class="sd">- duckdb — compiled-IR executor for larger-than-memory data (one SQL query</span>
 <span class="sd">  per constraint against the triplets table, streams/spills via DuckDB;</span>
 <span class="sd">  explicit engine="duckdb", not in auto — polars owns the in-memory fast path)</span>
 
 <span class="sd">Compile once: ``compile(shapes)`` parses the shapes with rdflib exactly once</span>
 <span class="sd">into ``CompiledShapes`` (shapes graph + flat constraint table, cached by</span>
-<span class="sd">content hash). Engines receive the compiled object:</span>
+<span class="sd">content hash). Engines receive the compiled object::</span>
 
-<span class="sd">    validate(data, compiled, rdf_map=None, scope=None, **kwargs) → violations DataFrame</span>
+<span class="sd">    validate(data, compiled, rdf_map=None, data_scope=None, ancestors=None, **kwargs) → violations DataFrame</span>
+
+<span class="sd">(``rdf_map`` the scoped schema, ``ancestors`` the ``class_ancestors`` map.)</span>
 
 <span class="sd">pyshacl consumes the graph; the vectorized engines consume the IR (and cache</span>
 <span class="sd">their own plan per engine in ``CompiledShapes.plans``) — they never touch</span>
-<span class="sd">rdflib. sh:sparql IR rows are delegated to triplets.sparql by the vectorized</span>
-<span class="sd">engines (pyshacl evaluates them itself via advanced=True).</span>
+<span class="sd">rdflib. sh:sparql IR rows and SPARQL targets are delegated to triplets.sparql</span>
+<span class="sd">by the vectorized engines (pyshacl evaluates both itself via advanced=True).</span>
 
-<span class="sd">One deliberate deviation from pyshacl: the datatype check inspects the raw</span>
+<span class="sd">A deliberate deviation from pyshacl: the datatype check inspects the raw</span>
 <span class="sd">lexical form of VALUE (see shacl_pandas) — with ``lexical=True`` (default)</span>
-<span class="sd">those findings are appended to any engine's report.</span>
+<span class="sd">every engine's report carries the triplets:lexicalForm Warnings, with</span>
+<span class="sd">``lexical=False`` none does.</span>
 <span class="sd">"""</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -324,13 +335,16 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._engine_detect</span><span class="w"> </span><span class="kn">import</span> <span class="n">flavor</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.._header</span><span class="w"> </span><span class="kn">import</span> <span class="n">PROFILE_KEYS</span> <span class="k">as</span> <span class="n">_HEADER_KEYS</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">EngineRegistry</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledShapes</span><span class="p">,</span> <span class="n">IR_COLUMNS</span><span class="p">,</span> <span class="n">compile_shapes</span> <span class="k">as</span> <span class="nb">compile</span>  <span class="c1"># noqa: A001 — public API name</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.schema_ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">compile_schema</span><span class="p">,</span> <span class="n">PRESENTED</span> <span class="k">as</span> <span class="n">_PRESENTED</span>  <span class="c1"># noqa: F401 — public API</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_report</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span><span class="n">VIOLATION_COLUMNS</span><span class="p">,</span> <span class="n">export_to_shacl_report</span><span class="p">,</span>  <span class="c1"># noqa: F401 — public API</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">CIM_NS</span><span class="p">,</span> <span class="n">load_rdf_map</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledShapes</span><span class="p">,</span> <span class="n">compile_shapes</span> <span class="k">as</span> <span class="nb">compile</span>  <span class="c1"># noqa: A001 — public API name</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">_mark_switched_off</span><span class="p">,</span> <span class="n">_term</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.schema_ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">compile_references</span><span class="p">,</span> <span class="n">compile_schema</span><span class="p">,</span> <span class="n">PRESENTED</span> <span class="k">as</span> <span class="n">_PRESENTED</span>  <span class="c1"># noqa: F401 — public API</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.schema_scope</span><span class="w"> </span><span class="kn">import</span> <span class="n">SCOPE_KEY</span><span class="p">,</span> <span class="n">_class_ancestors</span><span class="p">,</span> <span class="n">require_entries</span><span class="p">,</span> <span class="n">scope_sections</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.schema_scope</span><span class="w"> </span><span class="kn">import</span> <span class="n">class_ancestors</span><span class="p">,</span> <span class="n">scoped_rdf_map</span>  <span class="c1"># noqa: F401 — public API</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_report</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span><span class="n">VIOLATION_COLUMNS</span><span class="p">,</span> <span class="n">export_to_shacl_report</span><span class="p">,</span> <span class="n">has_violation</span><span class="p">,</span>  <span class="c1"># noqa: F401 — public API</span>
                            <span class="n">violations_to_csv</span><span class="p">,</span> <span class="n">violations_to_excel</span><span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">ENRICHMENT_COLUMNS</span><span class="p">,</span> <span class="n">enrich</span>  <span class="c1"># noqa: F401 — public API</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">ENRICHMENT_COLUMNS</span><span class="p">,</span> <span class="n">concat_violations</span><span class="p">,</span> <span class="n">enrich</span>  <span class="c1"># noqa: F401 — public API</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.locations</span><span class="w"> </span><span class="kn">import</span> <span class="n">LOCATION_COLUMNS</span><span class="p">,</span> <span class="n">locate_violations</span>  <span class="c1"># noqa: F401 — public API</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.sarif</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_to_sarif</span>  <span class="c1"># noqa: F401 — public API</span>
 
@@ -378,10 +392,11 @@
 
 
 
-<div class="viewcode-block" id="validate">
-<a class="viewcode-back" href="../../triplets.validation.html#triplets.validation.validate">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">shapes</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-             <span class="n">context</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<div class="viewcode-block" id="validate_shacl">
+<a class="viewcode-back" href="../../triplets.validation.html#triplets.validation.validate_shacl">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_shacl</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">shapes</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                   <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">,</span> <span class="n">inheritance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">deactivated_shapes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">abort_on_first</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                   <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Validate triplet data against SHACL shapes; return a violations DataFrame.</span>
 
 <span class="sd">    Parameters</span>
@@ -391,63 +406,114 @@
 <span class="sd">        SHACL shapes (format auto-detected by extension). Pass the result of</span>
 <span class="sd">        ``compile(shapes)`` to reuse the parsed shapes across validations.</span>
 <span class="sd">    rdf_map : dict or str, optional</span>
-<span class="sd">        Export schema — xsd-typed literals in the data graph (optional).</span>
-<span class="sd">    scope : iterable of INSTANCE_ID, optional</span>
+<span class="sd">        Export schema — xsd-typed literals in the data graph, the schema-driven</span>
+<span class="sd">        sh:nodeKind decision and the class inheritance (see ``inheritance``),</span>
+<span class="sd">        from the profiles in ``rdf_map_scope``.</span>
+<span class="sd">    data_scope : iterable of INSTANCE_ID, optional</span>
 <span class="sd">        Validate only these instances' named graphs — data outside the scope</span>
 <span class="sd">        is not loaded, so references into unscoped instances count as absent.</span>
 <span class="sd">        Include dependency instances in the scope (or validate the full</span>
-<span class="sd">        union, scope=None) for cross-instance checks.</span>
+<span class="sd">        union, data_scope=None) for cross-instance checks.</span>
+<span class="sd">    rdf_map_scope : profile identifier or sequence of them, optional</span>
+<span class="sd">        The rdf_map profiles the run uses, merged into one: section keys</span>
+<span class="sd">        (``"EQ"``) and/or declared profile IRIs; ``"*"`` = every section;</span>
+<span class="sd">        None = the rdf_map's root entries. A scope without entries raises</span>
+<span class="sd">        ValueError (see ``triplets.validation.schema_scope``).</span>
 <span class="sd">    engine : str, default "auto"</span>
 <span class="sd">        "polars" (performance), "pandas" (debugging), "duckdb"</span>
 <span class="sd">        (larger-than-memory) or "pyshacl" (reference). "auto" picks</span>
 <span class="sd">        polars → pandas → pyshacl; duckdb is always an explicit choice.</span>
 <span class="sd">    lexical : bool, default True</span>
-<span class="sd">        Append the lexical-form datatype findings (the deliberate deviation</span>
-<span class="sd">        from pyshacl — see shacl_pandas) to the engine's report.</span>
-<span class="sd">    context : bool, default False</span>
-<span class="sd">        Run the slower enrichment pass (triplets.validation.context.enrich):</span>
-<span class="sd">        adds instance/file, object type/name, shape name/description and</span>
-<span class="sd">        schema definition columns to the report.</span>
+<span class="sd">        Report valid-but-narrower datatype forms (``"1"`` for xsd:float) as</span>
+<span class="sd">        triplets:lexicalForm Warnings — a deliberate deviation from pyshacl,</span>
+<span class="sd">        see shacl_pandas. The vectorized engines check them inline, pyshacl</span>
+<span class="sd">        gets the pandas datatype check as a supplement. False skips the check</span>
+<span class="sd">        on every engine (pyshacl: the pure pyshacl report); values outside the</span>
+<span class="sd">        lexical space stay sh:datatype violations.</span>
+<span class="sd">    undefined_namespace : str, default CIM100</span>
+<span class="sd">        Namespace for names the schema does not declare (every name without</span>
+<span class="sd">        an rdf_map) in the graph the sh:sparql constraints and pyshacl see.</span>
+<span class="sd">    inheritance : bool, default True</span>
+<span class="sd">        ``sh:targetClass`` and ``sh:class`` also match instances of subclasses,</span>
+<span class="sd">        from the scoped profiles' ``inheritance`` lists</span>
+<span class="sd">        (:func:`~triplets.validation.schema_scope.class_ancestors`; pyshacl: as</span>
+<span class="sd">        ``rdfs:subClassOf`` in ``ont_graph``). False matches the exact</span>
+<span class="sd">        ``rdf:type`` only. No effect without an rdf_map.</span>
+<span class="sd">    deactivated_shapes : shape IRI or iterable of them, optional</span>
+<span class="sd">        The shapes to switch off for this run — replaces the set the graph</span>
+<span class="sd">        declares (``compiled.deactivated``): None = the declared set, ``[]`` =</span>
+<span class="sd">        every shape runs, the declared ones included; extend or reduce it</span>
+<span class="sd">        freely. The NC validation aggregates switch off different shapes of a</span>
+<span class="sd">        shared base this way, and one compile serves every aggregate</span>
+<span class="sd">        (``CompiledShapes.active``).</span>
+<span class="sd">    abort_on_first : bool, default False</span>
+<span class="sd">        Stop at the first Violation — for a yes/no gate, not a full report.</span>
+<span class="sd">        Warning and Info findings and ``triplets:invalidSparql`` rows never</span>
+<span class="sd">        stop the run. The result holds the findings of the work finished</span>
+<span class="sd">        before the stop, so engines agree on whether a Violation exists, not</span>
+<span class="sd">        on the rows. polars / duckdb stop after the vectorized pass, pandas</span>
+<span class="sd">        between rules, pyshacl after its first failing constraint (the lexical</span>
+<span class="sd">        supplement is then skipped).</span>
 
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
 <span class="sd">    The returned frame carries the validation-run metadata in</span>
 <span class="sd">    ``violations.attrs["validation"]`` (start/end timestamps and duration,</span>
 <span class="sd">    engine, tool version, data/shape file names, shape and constraint counts,</span>
-<span class="sd">    and any shapes/components the run skipped) — every report exporter reads</span>
+<span class="sd">    any shapes/components the run skipped, and ``aborted``: True when</span>
+<span class="sd">    ``abort_on_first`` met a Violation) — every report exporter reads</span>
 <span class="sd">    it, so SARIF, the sh:ValidationReport and the csv/excel exports tell the</span>
 <span class="sd">    same story.</span>
 <span class="sd">    """</span>
-    <span class="n">compiled</span> <span class="o">=</span> <span class="n">shapes</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shapes</span><span class="p">,</span> <span class="n">CompiledShapes</span><span class="p">)</span> <span class="k">else</span> <span class="nb">compile</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span>
+    <span class="n">compiled</span> <span class="o">=</span> <span class="p">(</span><span class="n">shapes</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shapes</span><span class="p">,</span> <span class="n">CompiledShapes</span><span class="p">)</span> <span class="k">else</span> <span class="nb">compile</span><span class="p">(</span><span class="n">shapes</span><span class="p">))</span><span class="o">.</span><span class="n">active</span><span class="p">(</span><span class="n">deactivated_shapes</span><span class="p">)</span>
+    <span class="n">rdf_map</span> <span class="o">=</span> <span class="n">load_rdf_map</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span>        <span class="c1"># dict from here on — the engines and enrich take only dicts</span>
     <span class="n">started</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>   <span class="c1"># after compile — duration is the run, cache-independent</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">rdf_map</span> <span class="ow">and</span> <span class="n">rdf_map_scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"rdf_map_scope names profiles of an rdf_map — pass the rdf_map too"</span><span class="p">)</span>
+    <span class="n">scoped</span><span class="p">,</span> <span class="n">notes</span> <span class="o">=</span> <span class="n">scoped_rdf_map</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="p">)</span> <span class="k">if</span> <span class="n">rdf_map</span> <span class="k">else</span> <span class="p">({},</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">rdf_map</span><span class="p">:</span>
+        <span class="n">require_entries</span><span class="p">(</span><span class="n">scoped</span><span class="p">[</span><span class="n">SCOPE_KEY</span><span class="p">],</span> <span class="n">rdf_map_scope</span><span class="p">)</span>
+    <span class="n">ancestors</span> <span class="o">=</span> <span class="n">_class_ancestors</span><span class="p">(</span><span class="n">scoped</span><span class="p">[</span><span class="n">SCOPE_KEY</span><span class="p">])</span> <span class="k">if</span> <span class="n">rdf_map</span> <span class="ow">and</span> <span class="n">inheritance</span> <span class="k">else</span> <span class="kc">None</span>
     <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span> <span class="o">=</span> <span class="n">get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
     <span class="n">table_ref</span> <span class="o">=</span> <span class="n">_table_ref</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-    <span class="n">violations</span> <span class="o">=</span> <span class="n">_run</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">scope</span><span class="p">,</span> <span class="n">lexical</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-    <span class="n">violations</span> <span class="o">=</span> <span class="n">_present</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="o">.</span><span class="n">ir</span><span class="p">,</span> <span class="n">compiled</span><span class="o">.</span><span class="n">language</span><span class="p">,</span> <span class="n">table_ref</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">context</span><span class="p">:</span>
-        <span class="n">violations</span> <span class="o">=</span> <span class="n">enrich</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">shapes</span><span class="o">=</span><span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">)</span>
+    <span class="n">violations</span> <span class="o">=</span> <span class="n">_run</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span><span class="p">,</span> <span class="n">scoped</span><span class="p">,</span> <span class="n">data_scope</span><span class="p">,</span> <span class="n">lexical</span><span class="p">,</span>
+                      <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">,</span> <span class="n">ancestors</span><span class="o">=</span><span class="n">ancestors</span><span class="p">,</span>
+                      <span class="n">abort_on_first</span><span class="o">=</span><span class="n">abort_on_first</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">violations</span> <span class="o">=</span> <span class="n">_present</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">compiled</span><span class="o">.</span><span class="n">ir</span><span class="p">,</span> <span class="n">compiled</span><span class="o">.</span><span class="n">language</span><span class="p">)</span>
     <span class="n">violations</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">"validation"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_report_metadata</span><span class="p">(</span>
-        <span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">started</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_ref</span><span class="p">)</span>
+        <span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">started</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_ref</span><span class="p">,</span> <span class="n">notes</span><span class="o">=</span><span class="n">notes</span><span class="p">)</span>
+    <span class="n">violations</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">"validation"</span><span class="p">][</span><span class="s2">"aborted"</span><span class="p">]</span> <span class="o">=</span> <span class="n">abort_on_first</span> <span class="ow">and</span> <span class="n">has_violation</span><span class="p">(</span><span class="n">violations</span><span class="p">)</span>
+    <span class="n">violations</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">"validation"</span><span class="p">][</span><span class="s2">"inheritance"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">ancestors</span><span class="p">)</span>   <span class="c1"># applied: an rdf_map with classes, the flag on</span>
+    <span class="n">violations</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">"validation"</span><span class="p">][</span><span class="s2">"profiles"</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">scoped</span><span class="p">[</span><span class="n">SCOPE_KEY</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ProfileMetadata"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"sections"</span><span class="p">)</span>
+                                                  <span class="k">if</span> <span class="n">rdf_map</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">violations</span></div>
 
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_run</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">scope</span><span class="p">,</span> <span class="n">lexical</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_run</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_scope</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">,</span>
+         <span class="n">ancestors</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">abort_on_first</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""One engine pass, plus the lexical datatype supplement when the engine</span>
 <span class="sd">    does not emit it itself — raw violations, presentation columns not yet added."""</span>
-    <span class="n">violations</span> <span class="o">=</span> <span class="n">engine_mod</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="n">scope</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">lexical</span> <span class="ow">and</span> <span class="n">engine_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_LEXICAL_BUILTIN</span><span class="p">:</span>
+    <span class="n">violations</span> <span class="o">=</span> <span class="n">engine_mod</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="n">data_scope</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="n">lexical</span><span class="p">,</span>
+                                     <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">,</span> <span class="n">ancestors</span><span class="o">=</span><span class="n">ancestors</span><span class="p">,</span>
+                                     <span class="n">abort_on_first</span><span class="o">=</span><span class="n">abort_on_first</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">lexical</span> <span class="ow">and</span> <span class="n">engine_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_LEXICAL_BUILTIN</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">abort_on_first</span> <span class="ow">and</span> <span class="n">has_violation</span><span class="p">(</span><span class="n">violations</span><span class="p">)):</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">shacl_pandas</span>
-        <span class="n">supplement</span> <span class="o">=</span> <span class="n">shacl_pandas</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="n">scope</span><span class="p">,</span>
-                                           <span class="n">components</span><span class="o">=</span><span class="p">(</span><span class="s2">"sh:datatype"</span><span class="p">,))</span>
-        <span class="n">violations</span> <span class="o">=</span> <span class="p">(</span><span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">violations</span><span class="p">,</span> <span class="n">supplement</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-                      <span class="o">.</span><span class="n">drop_duplicates</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"VIOLATION_TYPE"</span><span class="p">,</span>
-                                               <span class="s2">"SOURCE_SHAPE"</span><span class="p">,</span> <span class="s2">"SEVERITY"</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">violations</span>
+        <span class="n">supplement</span> <span class="o">=</span> <span class="n">shacl_pandas</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="n">data_scope</span><span class="p">,</span>
+                                           <span class="n">components</span><span class="o">=</span><span class="p">(</span><span class="s2">"sh:datatype"</span><span class="p">,),</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">,</span>
+                                           <span class="n">ancestors</span><span class="o">=</span><span class="n">ancestors</span><span class="p">)</span>
+        <span class="n">violations</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">violations</span><span class="p">,</span> <span class="n">supplement</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="c1"># identical findings once: a property shape on a parent and a child node shape</span>
+    <span class="c1"># both reach a subclass instance, the same triple sits in two instance files,</span>
+    <span class="c1"># the lexical supplement repeats pyshacl</span>
+    <span class="k">return</span> <span class="n">violations</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"VIOLATION_TYPE"</span><span class="p">,</span>
+                                              <span class="s2">"SOURCE_SHAPE"</span><span class="p">,</span> <span class="s2">"SEVERITY"</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_present</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">ir</span><span class="p">,</span> <span class="n">language</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">"triplets"</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""The shared presentation pass: TARGET / EXPECTED / MESSAGE_SOURCE and</span>
-<span class="sd">    the vocabulary-accurate violation types for non-SHACL constraint languages."""</span>
-    <span class="n">violations</span> <span class="o">=</span> <span class="n">_describe_associations</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">ir</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_present</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">ir</span><span class="p">,</span> <span class="n">language</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""The shared presentation pass — from the rules alone: EXPECTED /</span>
+<span class="sd">    MESSAGE_SOURCE and the vocabulary-accurate violation types for non-SHACL</span>
+<span class="sd">    constraint languages. What was found in the data is ``enrich``'s TARGET."""</span>
     <span class="n">violations</span><span class="p">[</span><span class="s2">"EXPECTED"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_expected</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">ir</span><span class="p">)</span>
     <span class="n">violations</span><span class="p">[</span><span class="s2">"MESSAGE_SOURCE"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_message_sources</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">ir</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">language</span> <span class="o">!=</span> <span class="s2">"shacl"</span><span class="p">:</span>              <span class="c1"># present vocabulary-accurate types, not fake SHACL</span>
@@ -469,98 +535,6 @@
     <span class="k">return</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"table_name"</span><span class="p">,</span> <span class="s2">"triplets"</span><span class="p">)</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_describe_associations</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">ir</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">"triplets"</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Findings get a TARGET entry stating what was actually found in the</span>
-<span class="sd">    data — the raw MESSAGE stays verbatim (exporters emit TARGET as its own</span>
-<span class="sd">    [context_message] entry), so the error is self-contained:</span>
-
-<span class="sd">    - reference checks (``sh:class``/``triplets:range``, VALUE = the ref):</span>
-<span class="sd">      the target's id, Type and name — or the fact that it does not exist;</span>
-<span class="sd">    - valueType rows (``via_type``): the found type (the id is not carried);</span>
-<span class="sd">    - ``sh:maxCount``: the actual duplicate values.</span>
-<span class="sd">    One shared pass over the violations frame; no per-engine code.</span>
-<span class="sd">    """</span>
-    <span class="n">violations</span><span class="p">[</span><span class="s2">"TARGET"</span><span class="p">]</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">violations</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">violations</span><span class="o">.</span><span class="n">empty</span> <span class="ow">or</span> <span class="n">ir</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">violations</span>
-    <span class="n">via_rules</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">ir</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ir</span><span class="p">[</span><span class="s2">"via_type"</span><span class="p">],</span> <span class="s2">"shape_id"</span><span class="p">],</span>
-                        <span class="n">ir</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">ir</span><span class="p">[</span><span class="s2">"via_type"</span><span class="p">],</span> <span class="s2">"path"</span><span class="p">]))</span>
-    <span class="n">keys</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">violations</span><span class="p">[</span><span class="s2">"SOURCE_SHAPE"</span><span class="p">],</span> <span class="n">violations</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">])),</span>
-                         <span class="n">index</span><span class="o">=</span><span class="n">violations</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
-    <span class="n">described</span> <span class="o">=</span> <span class="n">violations</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span>
-    <span class="n">via</span> <span class="o">=</span> <span class="n">described</span> <span class="o">&amp;</span> <span class="n">keys</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">via_rules</span><span class="p">)</span>
-    <span class="n">of_class</span> <span class="o">=</span> <span class="p">(</span><span class="n">described</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">via</span>
-                <span class="o">&amp;</span> <span class="n">violations</span><span class="p">[</span><span class="s2">"VIOLATION_TYPE"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">((</span><span class="s2">"sh:class"</span><span class="p">,</span> <span class="s2">"triplets:range"</span><span class="p">)))</span>
-    <span class="n">over_count</span> <span class="o">=</span> <span class="n">violations</span><span class="p">[</span><span class="s2">"VIOLATION_TYPE"</span><span class="p">]</span><span class="o">.</span><span class="n">eq</span><span class="p">(</span><span class="s2">"sh:maxCount"</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">violations</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">via</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
-        <span class="n">violations</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">via</span><span class="p">,</span> <span class="s2">"TARGET"</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"association target found, of type "</span>
-                                         <span class="o">+</span> <span class="n">violations</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">via</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">))</span>
-    <span class="k">if</span> <span class="n">of_class</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
-        <span class="n">types</span><span class="p">,</span> <span class="n">names</span> <span class="o">=</span> <span class="n">_type_map</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="p">),</span> <span class="n">_name_map</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
-
-        <span class="k">def</span><span class="w"> </span><span class="nf">describe_reference</span><span class="p">(</span><span class="n">ref</span><span class="p">):</span>
-            <span class="n">found</span> <span class="o">=</span> <span class="n">types</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">ref</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">found</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="k">return</span> <span class="sa">f</span><span class="s2">"referenced object </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2"> not found in the data"</span>
-            <span class="n">name</span> <span class="o">=</span> <span class="n">names</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">ref</span><span class="p">)</span>
-            <span class="k">return</span> <span class="sa">f</span><span class="s1">'referenced object </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s1"> found — </span><span class="si">{</span><span class="n">found</span><span class="si">}</span><span class="s1">'</span> <span class="o">+</span> <span class="p">(</span><span class="sa">f</span><span class="s1">' "</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">"'</span> <span class="k">if</span> <span class="n">name</span> <span class="k">else</span> <span class="s2">""</span><span class="p">)</span>
-
-        <span class="n">violations</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">of_class</span><span class="p">,</span> <span class="s2">"TARGET"</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">violations</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">of_class</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">describe_reference</span><span class="p">))</span>
-    <span class="k">if</span> <span class="n">over_count</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
-        <span class="n">violations</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">over_count</span><span class="p">,</span> <span class="s2">"TARGET"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_found_values</span><span class="p">(</span>
-            <span class="n">violations</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">over_count</span><span class="p">,</span> <span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">]],</span> <span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">violations</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_name_map</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">"triplets"</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""{ID: IdentifiedObject.name} from the data (any input flavor)."""</span>
-    <span class="n">kind</span> <span class="o">=</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"duckdb"</span><span class="p">:</span>
-        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">"SELECT ID, VALUE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> "</span>
-            <span class="sa">f</span><span class="s2">"WHERE KEY = 'IdentifiedObject.name'"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
-    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"pyarrow"</span><span class="p">:</span>
-        <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">(</span><span class="n">types_mapper</span><span class="o">=</span><span class="n">pandas</span><span class="o">.</span><span class="n">ArrowDtype</span><span class="p">)</span>
-        <span class="n">kind</span> <span class="o">=</span> <span class="s2">"pandas"</span>
-    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
-        <span class="n">rows</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"IdentifiedObject.name"</span><span class="p">)</span>
-        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">to_list</span><span class="p">(),</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">to_list</span><span class="p">()))</span>
-    <span class="n">rows</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"IdentifiedObject.name"</span><span class="p">]</span>
-    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]))</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_found_values</span><span class="p">(</span><span class="n">pairs</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">"triplets"</span><span class="p">,</span> <span class="n">cap</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Per violated (ID, KEY): "found N values: 'a', 'b', …" — the validator</span>
-<span class="sd">    sees WHICH duplicates to remove without opening the instance data."""</span>
-    <span class="n">kind</span> <span class="o">=</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-    <span class="n">keys</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">pairs</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">unique</span><span class="p">())</span>
-    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"duckdb"</span><span class="p">:</span>
-        <span class="n">placeholders</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">"?"</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">)</span>
-        <span class="n">rows</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">"SELECT ID, KEY, VALUE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE KEY IN (</span><span class="si">{</span><span class="n">placeholders</span><span class="si">}</span><span class="s2">)"</span><span class="p">,</span>
-            <span class="n">keys</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">(),</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">])</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"pyarrow"</span><span class="p">:</span>
-            <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">(</span><span class="n">types_mapper</span><span class="o">=</span><span class="n">pandas</span><span class="o">.</span><span class="n">ArrowDtype</span><span class="p">)</span>
-            <span class="n">kind</span> <span class="o">=</span> <span class="s2">"pandas"</span>
-        <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
-            <span class="n">rows</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">keys</span><span class="p">))</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">rows</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">keys</span><span class="p">)]</span>
-    <span class="n">rows</span> <span class="o">=</span> <span class="n">rows</span><span class="o">.</span><span class="n">astype</span><span class="p">({</span><span class="s2">"ID"</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">:</span> <span class="nb">str</span><span class="p">})</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">describe</span><span class="p">(</span><span class="n">values</span><span class="p">):</span>
-        <span class="n">quoted</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">"'</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">'"</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">[:</span><span class="n">cap</span><span class="p">]]</span>
-        <span class="n">more</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">", … (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2"> total)"</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">cap</span> <span class="k">else</span> <span class="s2">""</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">"found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2"> values: </span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">quoted</span><span class="p">)</span><span class="si">}{</span><span class="n">more</span><span class="si">}</span><span class="s2">"</span>
-
-    <span class="n">grouped</span> <span class="o">=</span> <span class="p">(</span><span class="n">rows</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">],</span> <span class="n">observed</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="s2">"VALUE"</span><span class="p">]</span>
-               <span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">values</span><span class="p">:</span> <span class="n">describe</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">values</span><span class="p">))))</span>
-    <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">pairs</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">pairs</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">))),</span>
-                         <span class="n">index</span><span class="o">=</span><span class="n">pairs</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">grouped</span><span class="p">)</span>
-
-
 <span class="c1"># what a violated constraint requires, worded from its IR parameter — the</span>
 <span class="c1"># report states what IS allowed even when the authored message does not</span>
 <span class="n">_EXPECTED</span> <span class="o">=</span> <span class="p">{</span>
@@ -579,10 +553,12 @@
     <span class="s2">"sh:hasValue"</span><span class="p">:</span> <span class="s2">"value </span><span class="si">{}</span><span class="s2">"</span><span class="o">.</span><span class="n">format</span><span class="p">,</span>
     <span class="s2">"sh:in"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">params</span><span class="p">:</span> <span class="s2">"one of: "</span> <span class="o">+</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">)),</span>
     <span class="s2">"triplets:range"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">params</span><span class="p">:</span> <span class="s2">"a reference to one of: "</span> <span class="o">+</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">)),</span>
+    <span class="s2">"triplets:missing"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">params</span><span class="p">:</span> <span class="s2">"a referenced object in the data, one of: "</span> <span class="o">+</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">params</span><span class="p">)),</span>
     <span class="s2">"sh:equals"</span><span class="p">:</span> <span class="s2">"equal to </span><span class="si">{}</span><span class="s2">"</span><span class="o">.</span><span class="n">format</span><span class="p">,</span>
     <span class="s2">"sh:disjoint"</span><span class="p">:</span> <span class="s2">"different from </span><span class="si">{}</span><span class="s2">"</span><span class="o">.</span><span class="n">format</span><span class="p">,</span>
     <span class="s2">"sh:lessThan"</span><span class="p">:</span> <span class="s2">"less than </span><span class="si">{}</span><span class="s2">"</span><span class="o">.</span><span class="n">format</span><span class="p">,</span>
     <span class="s2">"sh:lessThanOrEquals"</span><span class="p">:</span> <span class="s2">"at most </span><span class="si">{}</span><span class="s2">"</span><span class="o">.</span><span class="n">format</span><span class="p">,</span>
+    <span class="s2">"sh:xone"</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">params</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"exactly one of </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">params</span><span class="p">)</span><span class="si">}</span><span class="s2"> alternatives"</span><span class="p">,</span>
 <span class="p">}</span>
 
 
@@ -604,18 +580,14 @@
 <span class="w">    </span><span class="sd">"""{shape id: rdflib CBD graph} of the violated shapes — the SHACL report</span>
 <span class="sd">    embeds these so sh:sourceShape is never an empty node (term identity is</span>
 <span class="sd">    preserved: the CBD's blank nodes ARE the compiled graph's, so they align</span>
-<span class="sd">    with the report's sh:sourceShape labels)."""</span>
-    <span class="kn">import</span><span class="w"> </span><span class="nn">rdflib</span>
-
+<span class="sd">    with the report's sh:sourceShape labels). sh:deactivated as the run used it."""</span>
     <span class="n">graphs</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">if</span> <span class="n">compiled</span><span class="o">.</span><span class="n">graph</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>           <span class="c1"># schema-compiled IR — no shapes graph to embed</span>
         <span class="k">return</span> <span class="n">graphs</span>
     <span class="k">for</span> <span class="n">shape</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="n">violations</span><span class="p">[</span><span class="s2">"SOURCE_SHAPE"</span><span class="p">]</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)):</span>
-        <span class="n">node</span> <span class="o">=</span> <span class="p">(</span><span class="n">rdflib</span><span class="o">.</span><span class="n">URIRef</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="k">if</span> <span class="s2">"://"</span> <span class="ow">in</span> <span class="n">shape</span> <span class="ow">or</span> <span class="n">shape</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"urn:"</span><span class="p">)</span>
-                <span class="k">else</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">BNode</span><span class="p">(</span><span class="n">shape</span><span class="p">))</span>
-        <span class="n">cbd</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">cbd</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="n">cbd</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">cbd</span><span class="p">(</span><span class="n">_term</span><span class="p">(</span><span class="n">shape</span><span class="p">))</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cbd</span><span class="p">):</span>
-            <span class="n">graphs</span><span class="p">[</span><span class="n">shape</span><span class="p">]</span> <span class="o">=</span> <span class="n">cbd</span>
+            <span class="n">graphs</span><span class="p">[</span><span class="n">shape</span><span class="p">]</span> <span class="o">=</span> <span class="n">_mark_switched_off</span><span class="p">(</span><span class="n">cbd</span><span class="p">,</span> <span class="n">compiled</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">graphs</span>
 
 
@@ -629,184 +601,204 @@
             <span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">violations</span><span class="p">[</span><span class="s2">"MESSAGE"</span><span class="p">]]</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_type_map</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">"triplets"</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""{ID: Type} from the data's Type rows (any input flavor)."""</span>
-    <span class="n">kind</span> <span class="o">=</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"duckdb"</span><span class="p">:</span>
-        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">"SELECT ID, VALUE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE KEY = 'Type'"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
-    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"pyarrow"</span><span class="p">:</span>
-        <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">(</span><span class="n">types_mapper</span><span class="o">=</span><span class="n">pandas</span><span class="o">.</span><span class="n">ArrowDtype</span><span class="p">)</span>
-        <span class="n">kind</span> <span class="o">=</span> <span class="s2">"pandas"</span>
-    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
-        <span class="n">rows</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"Type"</span><span class="p">)</span>
-        <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">to_list</span><span class="p">(),</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">to_list</span><span class="p">()))</span>
-    <span class="n">rows</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"Type"</span><span class="p">]</span>
-    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]))</span>
-
-
 <div class="viewcode-block" id="validate_schema">
 <a class="viewcode-back" href="../../triplets.validation.html#triplets.validation.validate_schema">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">validate_schema</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">closed</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">profiles</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Validate triplet data against the export schema — per instance, per</span>
-<span class="sd">    declared profile; profiles are never merged.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_schema</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">report_undefined_keys</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                    <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">,</span> <span class="n">severity</span><span class="o">=</span><span class="s2">"Violation"</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Validate triplet data against the export schema: cardinality, datatypes and</span>
+<span class="sd">    enumerations of the scoped profiles, per instance.</span>
 
-<span class="sd">    Every INSTANCE_ID is validated separately (the scope filter), against</span>
-<span class="sd">    each profile its own header declares: the header's profile-identity</span>
-<span class="sd">    fields (``conformsTo``, ``Model.profile``, ``keyword``,</span>
-<span class="sd">    ``Model.messageType``) are matched against the schema profiles' declared</span>
-<span class="sd">    identity (versionIRI / conformsTo / keyword / section key; legacy 2.4</span>
-<span class="sd">    profile URLs by substring). One instance may declare several profiles —</span>
-<span class="sd">    each runs on its own, so per-profile constraints (e.g. mRID 1..1 in</span>
-<span class="sd">    every CGMES 3.0 profile) are checked against that instance's rows alone.</span>
+<span class="sd">    Every instance in *data_scope* is validated on its own (cardinality never</span>
+<span class="sd">    counts rows of another instance) against the profiles in *rdf_map_scope*,</span>
+<span class="sd">    merged into one (``triplets.validation.schema_scope``). Class rules never</span>
+<span class="sd">    widen to subclasses; references are checked by ``validate_schema_references``.</span>
 
-<span class="sd">    profiles : sequence of profile identifiers, optional</span>
-<span class="sd">        Explicit override applied to EVERY instance (section key, keyword or</span>
-<span class="sd">        profile URI) — for header-less or legacy data. Unknown identifiers</span>
-<span class="sd">        raise ValueError. Default None = resolve from each instance's header;</span>
-<span class="sd">        instances resolving to nothing are skipped and reported in the run</span>
-<span class="sd">        metadata coverage (``skipped_shapes``).</span>
+<span class="sd">    data_scope : iterable of INSTANCE_ID, optional</span>
+<span class="sd">        The instances to validate; None = every instance in *data*.</span>
+<span class="sd">    rdf_map_scope : profile identifier or sequence of them</span>
+<span class="sd">        Section keys and/or declared profile IRIs (``["EQ", "OP", "SC"]`` for a</span>
+<span class="sd">        CGMES 3.0 EQ file); ``"*"`` = every section; None = the root entries.</span>
+<span class="sd">        A scope without Class entries raises ValueError.</span>
+<span class="sd">    report_undefined_keys : bool, default False</span>
+<span class="sd">        Also report keys on an object that no scoped profile defines for its class.</span>
+<span class="sd">    severity : {"Violation", "Warning", "Info"}, default "Violation"</span>
+<span class="sd">        The SEVERITY of every finding (``triplets:lexicalForm`` stays Warning).</span>
+
+<span class="sd">    The PROFILE column lists the scoped section keys (``["EQ", "OP", "SC"]``).</span>
 <span class="sd">    """</span>
-    <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
-
     <span class="n">started</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
-    <span class="n">compiled_set</span> <span class="o">=</span> <span class="n">compile_schema</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">closed</span><span class="o">=</span><span class="n">closed</span><span class="p">)</span>
+    <span class="n">compiled</span> <span class="o">=</span> <span class="n">compile_schema</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="p">,</span> <span class="n">report_undefined_keys</span><span class="p">,</span> <span class="n">severity</span><span class="p">)</span>   <span class="c1"># caches on the file digest</span>
+    <span class="n">rdf_map</span> <span class="o">=</span> <span class="n">load_rdf_map</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span>
+    <span class="n">sections</span> <span class="o">=</span> <span class="n">scope_sections</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="p">)</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_table_ref</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
     <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span> <span class="o">=</span> <span class="n">get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
-    <span class="n">lexical</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"lexical"</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
-    <span class="n">context</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"context"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
 
-    <span class="n">chosen</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="k">if</span> <span class="n">profiles</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">chosen</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">identifier</span> <span class="ow">in</span> <span class="n">profiles</span><span class="p">:</span>
-            <span class="n">section</span> <span class="o">=</span> <span class="n">compiled_set</span><span class="o">.</span><span class="n">section</span><span class="p">(</span><span class="n">identifier</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">section</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"unknown schema profile </span><span class="si">{</span><span class="n">identifier</span><span class="si">!r}</span><span class="s2">; available: "</span>
-                                 <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">compiled_set</span><span class="o">.</span><span class="n">profiles</span><span class="p">))</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">section</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">chosen</span><span class="p">:</span>
-                <span class="n">chosen</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">section</span><span class="p">)</span>
-
-    <span class="n">unresolved</span><span class="p">,</span> <span class="n">runs</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">instance</span><span class="p">,</span> <span class="n">hints</span> <span class="ow">in</span> <span class="n">_instance_hints</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="n">sections</span> <span class="o">=</span> <span class="n">chosen</span> <span class="k">if</span> <span class="n">chosen</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">_match_profiles</span><span class="p">(</span><span class="n">hints</span><span class="p">,</span> <span class="n">compiled_set</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">sections</span><span class="p">:</span>
-            <span class="n">unresolved</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"instance </span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2">: no schema profile matched "</span>
-                              <span class="sa">f</span><span class="s2">"(hints: </span><span class="si">{</span><span class="n">hints</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
-            <span class="k">continue</span>
-        <span class="n">runs</span><span class="o">.</span><span class="n">extend</span><span class="p">((</span><span class="n">instance</span><span class="p">,</span> <span class="n">section</span><span class="p">)</span> <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">sections</span><span class="p">)</span>
-
-    <span class="c1"># one raw engine pass per (instance, profile) — the scope filter keeps</span>
-    <span class="c1"># counting per instance; describe/expected/enrich run ONCE on the concat</span>
-    <span class="n">frames</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">instance</span><span class="p">,</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">runs</span><span class="p">:</span>
-        <span class="n">sub</span> <span class="o">=</span> <span class="n">_run</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled_set</span><span class="o">.</span><span class="n">profiles</span><span class="p">[</span><span class="n">section</span><span class="p">],</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span><span class="p">,</span>
-                   <span class="n">rdf_map</span><span class="p">,</span> <span class="p">[</span><span class="n">instance</span><span class="p">],</span> <span class="n">lexical</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-        <span class="n">sub</span><span class="p">[</span><span class="s2">"PROFILE"</span><span class="p">]</span> <span class="o">=</span> <span class="n">section</span>
-        <span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sub</span><span class="p">)</span>
-
-    <span class="n">used</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">({</span><span class="n">section</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">runs</span><span class="p">})</span>
+    <span class="n">instances</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">data_scope</span><span class="p">)</span> <span class="k">if</span> <span class="n">data_scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">_instances</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
+    <span class="c1"># one raw engine pass per instance — the presentation pass runs ONCE on the concat</span>
+    <span class="n">frames</span> <span class="o">=</span> <span class="p">[</span><span class="n">_run</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">[</span><span class="n">instance</span><span class="p">],</span>
+                   <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">]</span>
     <span class="n">violations</span> <span class="o">=</span> <span class="p">(</span><span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">if</span> <span class="n">frames</span>
-                  <span class="k">else</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">VIOLATION_COLUMNS</span> <span class="o">+</span> <span class="p">[</span><span class="s2">"PROFILE"</span><span class="p">]))</span>
-    <span class="n">ir</span> <span class="o">=</span> <span class="p">(</span><span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">compiled_set</span><span class="o">.</span><span class="n">profiles</span><span class="p">[</span><span class="n">section</span><span class="p">]</span><span class="o">.</span><span class="n">ir</span> <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">used</span><span class="p">],</span>
-                        <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">if</span> <span class="n">used</span>
-          <span class="k">else</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">IR_COLUMNS</span><span class="p">))</span>
-    <span class="n">violations</span> <span class="o">=</span> <span class="n">_present</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">ir</span><span class="p">,</span> <span class="s2">"rdfs"</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">context</span><span class="p">:</span>
-        <span class="n">union</span> <span class="o">=</span> <span class="n">CompiledShapes</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ir</span><span class="o">=</span><span class="n">ir</span><span class="p">,</span> <span class="nb">hash</span><span class="o">=</span><span class="n">compiled_set</span><span class="o">.</span><span class="n">hash</span><span class="p">,</span>
-                               <span class="n">sources</span><span class="o">=</span><span class="n">compiled_set</span><span class="o">.</span><span class="n">sources</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="s2">"rdfs"</span><span class="p">)</span>
-        <span class="n">violations</span> <span class="o">=</span> <span class="n">enrich</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">shapes</span><span class="o">=</span><span class="n">union</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">)</span>
-    <span class="n">skipped</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span>
-        <span class="p">{</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">section</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">entry</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">used</span>
-         <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">compiled_set</span><span class="o">.</span><span class="n">profiles</span><span class="p">[</span><span class="n">section</span><span class="p">]</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">"skipped_shapes"</span><span class="p">]}</span>
-        <span class="o">|</span> <span class="nb">set</span><span class="p">(</span><span class="n">unresolved</span><span class="p">))</span>
-    <span class="n">skipped_components</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">({</span>
-        <span class="n">component</span> <span class="k">for</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">used</span> <span class="k">for</span> <span class="n">component</span> <span class="ow">in</span>
-        <span class="n">compiled_set</span><span class="o">.</span><span class="n">profiles</span><span class="p">[</span><span class="n">section</span><span class="p">]</span><span class="o">.</span><span class="n">plans</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">engine_name</span><span class="p">,</span> <span class="p">((),</span> <span class="p">(),</span> <span class="p">()))[</span><span class="mi">2</span><span class="p">]})</span>
+                  <span class="k">else</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">VIOLATION_COLUMNS</span><span class="p">))</span>
+    <span class="n">violations</span><span class="p">[</span><span class="s2">"PROFILE"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_profile_column</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">sections</span><span class="p">)</span>
+    <span class="n">violations</span> <span class="o">=</span> <span class="n">_present</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">compiled</span><span class="o">.</span><span class="n">ir</span><span class="p">,</span> <span class="s2">"rdfs"</span><span class="p">)</span>
+    <span class="n">violations</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">"validation"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_schema_metadata</span><span class="p">(</span><span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">started</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">sections</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">violations</span></div>
+
+
+
+<div class="viewcode-block" id="validate_schema_references">
+<a class="viewcode-back" href="../../triplets.validation.html#triplets.validation.validate_schema_references">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_schema_references</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">target_data_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                               <span class="n">target_rdf_map_scope</span><span class="o">=</span><span class="p">(),</span> <span class="n">report_missing_targets</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span>
+                               <span class="n">inheritance</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">,</span> <span class="n">severity</span><span class="o">=</span><span class="s2">"Violation"</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Check the reference types of the source instances' associations.</span>
+
+<span class="sd">    Every instance in *data_scope* is checked on its own against the</span>
+<span class="sd">    associations of its profiles (*rdf_map_scope*, merged); the referenced</span>
+<span class="sd">    objects are looked up in that instance and the *target_data_scope*</span>
+<span class="sd">    instances. A reference conforms when ANY type of its object is the range</span>
+<span class="sd">    class or, with *inheritance*, one of its subclasses — the classes the source</span>
+<span class="sd">    and *target_rdf_map_scope* profiles define. Findings are on source objects only.</span>
+
+<span class="sd">    data_scope : iterable of INSTANCE_ID, optional</span>
+<span class="sd">        The source instances; None = every instance.</span>
+<span class="sd">    rdf_map_scope : profile identifier or sequence of them, optional</span>
+<span class="sd">        The source profiles — their associations are checked; None = the root entries.</span>
+<span class="sd">    target_data_scope : iterable of INSTANCE_ID, optional</span>
+<span class="sd">        Instances holding the referenced objects (e.g. the EQ for an SSH);</span>
+<span class="sd">        None = every instance, ``[]`` = none (only the source itself).</span>
+<span class="sd">    target_rdf_map_scope : profile identifier or sequence of them, optional</span>
+<span class="sd">        Profiles defining the referenced classes. A range class no source or</span>
+<span class="sd">        target profile defines cannot be decided: the association is listed in</span>
+<span class="sd">        ``skipped_shapes``.</span>
+<span class="sd">    report_missing_targets : bool, default True</span>
+<span class="sd">        Report references whose object is in neither the source nor the target</span>
+<span class="sd">        instances (``triplets:missing``); False leaves them silent.</span>
+<span class="sd">    inheritance : bool, default True</span>
+<span class="sd">        False accepts the range class itself only.</span>
+<span class="sd">    severity : {"Violation", "Warning", "Info"}, default "Violation"</span>
+<span class="sd">        The SEVERITY of every finding.</span>
+<span class="sd">    """</span>
+    <span class="n">started</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+    <span class="n">compiled</span> <span class="o">=</span> <span class="n">compile_references</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="p">,</span> <span class="n">target_rdf_map_scope</span><span class="p">,</span> <span class="n">report_missing_targets</span><span class="p">,</span> <span class="n">inheritance</span><span class="p">,</span>
+                                  <span class="n">severity</span><span class="p">)</span>
+    <span class="n">rdf_map</span> <span class="o">=</span> <span class="n">load_rdf_map</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span>
+    <span class="n">sections</span> <span class="o">=</span> <span class="n">scope_sections</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="p">)</span>
+    <span class="n">table_name</span> <span class="o">=</span> <span class="n">_table_ref</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span> <span class="o">=</span> <span class="n">get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
+    <span class="n">loaded</span> <span class="o">=</span> <span class="n">_instances</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="p">)</span> <span class="k">if</span> <span class="n">data_scope</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">target_data_scope</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">sources</span> <span class="o">=</span> <span class="n">loaded</span> <span class="k">if</span> <span class="n">data_scope</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">data_scope</span><span class="p">)</span>
+    <span class="n">targets</span> <span class="o">=</span> <span class="n">loaded</span> <span class="k">if</span> <span class="n">target_data_scope</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">target_data_scope</span><span class="p">)</span>
+    <span class="c1"># the association triple itself must be in the source instance — an object</span>
+    <span class="c1"># repeated in a target file (EQ and SSH share IDs) brings the target's own rows</span>
+    <span class="n">own_triples</span> <span class="o">=</span> <span class="n">_instance_triples</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">sources</span><span class="p">,</span> <span class="n">compiled</span><span class="o">.</span><span class="n">ir</span><span class="p">[</span><span class="s2">"path"</span><span class="p">]</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="n">table_name</span><span class="p">)</span>
+    <span class="n">frames</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">sources</span><span class="p">:</span>
+        <span class="n">found</span> <span class="o">=</span> <span class="n">_run</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span>
+                     <span class="p">[</span><span class="n">instance</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="n">target</span> <span class="k">for</span> <span class="n">target</span> <span class="ow">in</span> <span class="n">targets</span> <span class="k">if</span> <span class="n">target</span> <span class="o">!=</span> <span class="n">instance</span><span class="p">)],</span>
+                     <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">own</span> <span class="o">=</span> <span class="n">own_triples</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">instance</span><span class="p">),</span> <span class="nb">set</span><span class="p">())</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="p">[</span><span class="n">triple</span> <span class="ow">in</span> <span class="n">own</span> <span class="k">for</span> <span class="n">triple</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">found</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">],</span> <span class="n">found</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">],</span> <span class="n">found</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">])]</span>
+        <span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">found</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">found</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)])</span>
+    <span class="n">violations</span> <span class="o">=</span> <span class="p">(</span><span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">if</span> <span class="n">frames</span>
+                  <span class="k">else</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">VIOLATION_COLUMNS</span><span class="p">))</span>
+    <span class="n">violations</span><span class="p">[</span><span class="s2">"PROFILE"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_profile_column</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">sections</span><span class="p">)</span>
+    <span class="n">violations</span> <span class="o">=</span> <span class="n">_present</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">compiled</span><span class="o">.</span><span class="n">ir</span><span class="p">,</span> <span class="s2">"rdfs"</span><span class="p">)</span>
+    <span class="n">violations</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">"validation"</span><span class="p">]</span> <span class="o">=</span> <span class="n">_schema_metadata</span><span class="p">(</span><span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">started</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">sections</span><span class="p">)</span>
+    <span class="n">violations</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">"validation"</span><span class="p">][</span><span class="s2">"inheritance"</span><span class="p">]</span> <span class="o">=</span> <span class="n">inheritance</span>
+    <span class="k">return</span> <span class="n">violations</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_schema_metadata</span><span class="p">(</span><span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">started</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">sections</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Run metadata of the schema validations (no shapes graph, rdfs language)."""</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
+
     <span class="n">finished</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
-    <span class="n">violations</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">"validation"</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="p">{</span>
         <span class="s2">"started_at"</span><span class="p">:</span> <span class="n">_iso</span><span class="p">(</span><span class="n">started</span><span class="p">),</span>
         <span class="s2">"generated_at"</span><span class="p">:</span> <span class="n">_iso</span><span class="p">(</span><span class="n">finished</span><span class="p">),</span>
         <span class="s2">"duration_seconds"</span><span class="p">:</span> <span class="nb">round</span><span class="p">((</span><span class="n">finished</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">(),</span> <span class="mi">3</span><span class="p">),</span>
         <span class="s2">"engine"</span><span class="p">:</span> <span class="n">engine_name</span><span class="p">,</span>
         <span class="s2">"creator"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"triplets </span><span class="si">{</span><span class="n">triplets</span><span class="o">.</span><span class="n">__version__</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
         <span class="s2">"source"</span><span class="p">:</span> <span class="n">_source_labels</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">),</span>
-        <span class="s2">"references"</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">compiled_set</span><span class="o">.</span><span class="n">sources</span><span class="p">),</span>
+        <span class="s2">"references"</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">compiled</span><span class="o">.</span><span class="n">sources</span><span class="p">),</span>
+        <span class="s2">"compiled_hash"</span><span class="p">:</span> <span class="n">compiled</span><span class="o">.</span><span class="n">hash</span><span class="p">,</span>
         <span class="s2">"language"</span><span class="p">:</span> <span class="s2">"rdfs"</span><span class="p">,</span>
-        <span class="s2">"profiles"</span><span class="p">:</span> <span class="n">used</span><span class="p">,</span>
-        <span class="s2">"node_shapes"</span><span class="p">:</span> <span class="nb">sum</span><span class="p">(</span><span class="n">compiled_set</span><span class="o">.</span><span class="n">profiles</span><span class="p">[</span><span class="n">s</span><span class="p">]</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">"node_shapes"</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">used</span><span class="p">),</span>
-        <span class="s2">"constraints"</span><span class="p">:</span> <span class="nb">sum</span><span class="p">(</span><span class="n">compiled_set</span><span class="o">.</span><span class="n">profiles</span><span class="p">[</span><span class="n">s</span><span class="p">]</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">"constraints"</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">used</span><span class="p">),</span>
-        <span class="s2">"skipped_shapes"</span><span class="p">:</span> <span class="n">skipped</span><span class="p">,</span>
-        <span class="s2">"skipped_components"</span><span class="p">:</span> <span class="n">skipped_components</span><span class="p">,</span>
+        <span class="s2">"profiles"</span><span class="p">:</span> <span class="n">sections</span><span class="p">,</span>
+        <span class="s2">"node_shapes"</span><span class="p">:</span> <span class="n">compiled</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">"node_shapes"</span><span class="p">],</span>
+        <span class="s2">"constraints"</span><span class="p">:</span> <span class="n">compiled</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">"constraints"</span><span class="p">],</span>
+        <span class="s2">"skipped_shapes"</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">compiled</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">"skipped_shapes"</span><span class="p">]),</span>
+        <span class="s2">"relaxed_constraints"</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">compiled</span><span class="o">.</span><span class="n">stats</span><span class="p">[</span><span class="s2">"relaxed_constraints"</span><span class="p">]),</span>
+        <span class="s2">"skipped_components"</span><span class="p">:</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">compiled</span><span class="o">.</span><span class="n">plans</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">engine_name</span><span class="p">,</span> <span class="p">((),</span> <span class="p">(),</span> <span class="p">()))[</span><span class="mi">2</span><span class="p">]),</span>
         <span class="s2">"source_shapes"</span><span class="p">:</span> <span class="p">{},</span>
     <span class="p">}</span>
-    <span class="k">return</span> <span class="n">violations</span></div>
 
 
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_match_profiles</span><span class="p">(</span><span class="n">hints</span><span class="p">,</span> <span class="n">compiled_set</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Sections a header's hints resolve to, in hint-priority order — exact</span>
-<span class="sd">    identity first, the legacy 2.4 profile-URL substrings as fallback."""</span>
-    <span class="n">sections</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">for</span> <span class="n">hint</span> <span class="ow">in</span> <span class="n">hints</span><span class="p">:</span>
-        <span class="n">section</span> <span class="o">=</span> <span class="n">compiled_set</span><span class="o">.</span><span class="n">section</span><span class="p">(</span><span class="n">hint</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">section</span> <span class="ow">and</span> <span class="n">section</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sections</span><span class="p">:</span>
-            <span class="n">sections</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">section</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">sections</span><span class="p">:</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">.._header</span><span class="w"> </span><span class="kn">import</span> <span class="n">PROFILE_URL_MAP</span>
-        <span class="k">for</span> <span class="n">hint</span> <span class="ow">in</span> <span class="n">hints</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">url_part</span><span class="p">,</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">PROFILE_URL_MAP</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-                <span class="k">if</span> <span class="n">url_part</span> <span class="ow">in</span> <span class="n">hint</span> <span class="ow">and</span> <span class="n">section</span> <span class="ow">in</span> <span class="n">compiled_set</span><span class="o">.</span><span class="n">profiles</span> \
-                        <span class="ow">and</span> <span class="n">section</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sections</span><span class="p">:</span>
-                    <span class="n">sections</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">section</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">sections</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_instance_hints</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">"triplets"</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""{INSTANCE_ID: [header profile hints, priority-ordered]} — every</span>
-<span class="sd">    instance appears, hint-less ones with an empty list (any input flavor)."""</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_instance_triples</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">instances</span><span class="p">,</span> <span class="n">keys</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">"triplets"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""{INSTANCE_ID: {(ID, KEY, VALUE)}} of the *instances*' rows at *keys* — one pass</span>
+<span class="sd">    over the data for every source instance (any input flavor)."""</span>
+    <span class="n">instances</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">instances</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">keys</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
     <span class="n">kind</span> <span class="o">=</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"duckdb"</span><span class="p">:</span>
-        <span class="n">placeholders</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">"?"</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">_HEADER_KEYS</span><span class="p">)</span>
-        <span class="n">header</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">"SELECT INSTANCE_ID, KEY, VALUE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> WHERE KEY IN (</span><span class="si">{</span><span class="n">placeholders</span><span class="si">}</span><span class="s2">)"</span><span class="p">,</span>
-            <span class="nb">list</span><span class="p">(</span><span class="n">_HEADER_KEYS</span><span class="p">))</span><span class="o">.</span><span class="n">fetchall</span><span class="p">(),</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">])</span>
-        <span class="n">instances</span> <span class="o">=</span> <span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">"SELECT DISTINCT INSTANCE_ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()]</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"SELECT INSTANCE_ID, ID, KEY, VALUE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> "</span>
+            <span class="sa">f</span><span class="s2">"WHERE INSTANCE_ID IN (</span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s1">'?'</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">instances</span><span class="p">)</span><span class="si">}</span><span class="s2">) "</span>
+            <span class="sa">f</span><span class="s2">"AND KEY IN (</span><span class="si">{</span><span class="s1">', '</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s1">'?'</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">_</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">keys</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span><span class="p">,</span> <span class="p">[</span><span class="o">*</span><span class="n">instances</span><span class="p">,</span> <span class="o">*</span><span class="n">keys</span><span class="p">])</span><span class="o">.</span><span class="n">fetchall</span><span class="p">(),</span>
+            <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">,</span> <span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">])</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"pyarrow"</span><span class="p">:</span>
             <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">(</span><span class="n">types_mapper</span><span class="o">=</span><span class="n">pandas</span><span class="o">.</span><span class="n">ArrowDtype</span><span class="p">)</span>
-            <span class="n">kind</span> <span class="o">=</span> <span class="s2">"pandas"</span>
         <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
-            <span class="n">header</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">_HEADER_KEYS</span><span class="p">)))</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
-            <span class="n">instances</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">instances</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">is_in</span><span class="p">(</span><span class="n">keys</span><span class="p">))</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">header</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">_HEADER_KEYS</span><span class="p">)]</span>
-            <span class="n">instances</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
-
-    <span class="n">hints</span> <span class="o">=</span> <span class="p">{</span><span class="nb">str</span><span class="p">(</span><span class="n">instance</span><span class="p">):</span> <span class="p">[]</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">instances</span><span class="p">}</span>
-    <span class="n">priority</span> <span class="o">=</span> <span class="p">{</span><span class="n">key</span><span class="p">:</span> <span class="n">rank</span> <span class="k">for</span> <span class="n">rank</span><span class="p">,</span> <span class="n">key</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">_HEADER_KEYS</span><span class="p">)}</span>
-    <span class="n">header</span> <span class="o">=</span> <span class="n">header</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s2">"KEY"</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">keys</span><span class="p">:</span> <span class="n">keys</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">priority</span><span class="p">),</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"stable"</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">instance</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">header</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">header</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]):</span>
-        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-            <span class="n">hints</span><span class="p">[</span><span class="n">instance</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">hints</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">keys</span><span class="p">)]</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="n">rows</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">rows</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">instances</span><span class="p">)]</span>
+    <span class="n">triples</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">instance</span><span class="p">,</span> <span class="n">identifier</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span>
+                                                <span class="n">rows</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">rows</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)):</span>
+        <span class="n">triples</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">identifier</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">triples</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_report_metadata</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">started</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">"triplets"</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_profile_column</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">sections</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""PROFILE: the list of scoped section keys on every row (None for the root entries)."""</span>
+    <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">([</span><span class="kc">None</span> <span class="k">if</span> <span class="n">sections</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">sections</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">violations</span><span class="p">))],</span>
+                         <span class="n">index</span><span class="o">=</span><span class="n">violations</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_instances</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">"triplets"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Every INSTANCE_ID in the data, in first-seen order (any input flavor)."""</span>
+    <span class="n">kind</span> <span class="o">=</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"duckdb"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT DISTINCT INSTANCE_ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()]</span>
+    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"pyarrow"</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">(</span><span class="n">types_mapper</span><span class="o">=</span><span class="n">pandas</span><span class="o">.</span><span class="n">ArrowDtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"polars"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">maintain_order</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_report_metadata</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">engine_name</span><span class="p">,</span> <span class="n">started</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="s2">"triplets"</span><span class="p">,</span> <span class="n">notes</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""The validation-run facts every report exporter reads (violations.attrs).</span>
 
 <span class="sd">    Coverage (skipped_shapes / skipped_components) is what THIS run did not</span>
-<span class="sd">    evaluate: compile-level skips plus the engine's own gaps for vectorized</span>
-<span class="sd">    engines; empty for the spec-complete pyshacl reference engine.</span>
+<span class="sd">    evaluate: the schema merge's skips in *notes* (every engine), compile-level skips</span>
+<span class="sd">    plus the engine's own gaps for vectorized engines — only the malformed shapes'</span>
+<span class="sd">    entries for the spec-complete pyshacl reference engine. relaxed_constraints: the</span>
+<span class="sd">    merge's loosened checks.</span>
 <span class="sd">    """</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
 
     <span class="n">finished</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+    <span class="n">notes</span> <span class="o">=</span> <span class="n">notes</span> <span class="ow">or</span> <span class="p">{</span><span class="s2">"skipped_shapes"</span><span class="p">:</span> <span class="p">[],</span> <span class="s2">"relaxed_constraints"</span><span class="p">:</span> <span class="p">[]}</span>
     <span class="k">if</span> <span class="n">engine_name</span> <span class="o">==</span> <span class="s2">"pyshacl"</span><span class="p">:</span>
-        <span class="n">skipped_shapes</span><span class="p">,</span> <span class="n">skipped_components</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+        <span class="n">skipped_shapes</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="n">notes</span><span class="p">[</span><span class="s2">"skipped_shapes"</span><span class="p">],</span> <span class="o">*</span><span class="n">compiled</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"malformed_shapes"</span><span class="p">,</span> <span class="p">[])]</span>
+        <span class="n">skipped_components</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">skipped_shapes</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"skipped_shapes"</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="n">skipped_shapes</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="n">notes</span><span class="p">[</span><span class="s2">"skipped_shapes"</span><span class="p">],</span> <span class="o">*</span><span class="n">compiled</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"skipped_shapes"</span><span class="p">,</span> <span class="p">[])]</span>
         <span class="n">skipped_components</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">({</span><span class="o">*</span><span class="n">compiled</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"unknown_components"</span><span class="p">,</span> <span class="p">()),</span>
                                      <span class="o">*</span><span class="n">compiled</span><span class="o">.</span><span class="n">plans</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">engine_name</span><span class="p">,</span> <span class="p">((),</span> <span class="p">(),</span> <span class="p">()))[</span><span class="mi">2</span><span class="p">]})</span>
     <span class="k">return</span> <span class="p">{</span>
@@ -817,10 +809,13 @@
         <span class="s2">"creator"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"triplets </span><span class="si">{</span><span class="n">triplets</span><span class="o">.</span><span class="n">__version__</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
         <span class="s2">"source"</span><span class="p">:</span> <span class="n">_source_labels</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">),</span>
         <span class="s2">"references"</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">compiled</span><span class="o">.</span><span class="n">sources</span><span class="p">),</span>
+        <span class="s2">"compiled_hash"</span><span class="p">:</span> <span class="n">compiled</span><span class="o">.</span><span class="n">hash</span><span class="p">,</span>
+        <span class="s2">"deactivated_shapes"</span><span class="p">:</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">compiled</span><span class="o">.</span><span class="n">deactivated</span><span class="p">),</span>
         <span class="s2">"node_shapes"</span><span class="p">:</span> <span class="n">compiled</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"node_shapes"</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
         <span class="s2">"constraints"</span><span class="p">:</span> <span class="n">compiled</span><span class="o">.</span><span class="n">stats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"constraints"</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
         <span class="s2">"language"</span><span class="p">:</span> <span class="n">compiled</span><span class="o">.</span><span class="n">language</span><span class="p">,</span>
         <span class="s2">"skipped_shapes"</span><span class="p">:</span> <span class="n">skipped_shapes</span><span class="p">,</span>
+        <span class="s2">"relaxed_constraints"</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">notes</span><span class="p">[</span><span class="s2">"relaxed_constraints"</span><span class="p">]),</span>
         <span class="s2">"skipped_components"</span><span class="p">:</span> <span class="n">skipped_components</span><span class="p">,</span>
         <span class="c1"># rdflib graphs, in-memory only — the SHACL report embeds them;</span>
         <span class="c1"># SARIF properties and the csv/excel sidecars skip this key</span>
@@ -859,7 +854,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -879,7 +874,7 @@
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>

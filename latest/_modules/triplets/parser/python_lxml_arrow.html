@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.parser.python_lxml_arrow - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.parser.python_lxml_arrow - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -300,10 +296,8 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">lxml</span><span class="w"> </span><span class="kn">import</span> <span class="n">etree</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pa</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">RDF_NS</span><span class="p">,</span> <span class="n">RDF_ID</span><span class="p">,</span> <span class="n">RDF_ABOUT</span><span class="p">,</span> <span class="n">RDF_NODEID</span><span class="p">,</span> <span class="n">RDF_RESOURCE</span><span class="p">,</span>
-    <span class="n">clean_ID</span><span class="p">,</span> <span class="n">_split_prefixed_name</span><span class="p">,</span>
-<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">document_base</span><span class="p">,</span> <span class="n">iter_rdf_rows</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">TRIPLETS_NS</span><span class="p">,</span> <span class="n">TYPE_KEY</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -311,7 +305,7 @@
 <div class="viewcode-block" id="load_rdf_to_dataframe">
 <a class="viewcode-back" href="../../../triplets.parser.html#triplets.parser.python_lxml_arrow.load_rdf_to_dataframe">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">load_rdf_to_dataframe</span><span class="p">(</span><span class="n">path_or_fileobject</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">IO</span><span class="p">],</span> <span class="n">debug</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-                          <span class="n">shorten_resources</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pa</span><span class="o">.</span><span class="n">RecordBatch</span><span class="p">:</span>
+                          <span class="n">local_resources</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">default_base</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">TRIPLETS_NS</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pa</span><span class="o">.</span><span class="n">RecordBatch</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Parse single RDF/XML (path or fileobj) to pyarrow RecordBatch using lxml + lists.</span>
 
 <span class="sd">    Streaming in the sense of column-wise collection then direct Arrow (no 4-tuple list).</span>
@@ -335,11 +329,9 @@
         <span class="k">raise</span>
 
     <span class="n">namespace_map</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">root</span><span class="o">.</span><span class="n">nsmap</span> <span class="ow">or</span> <span class="p">{})</span>
-    <span class="k">try</span><span class="p">:</span>
-        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="s2">"base"</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
-            <span class="n">namespace_map</span><span class="p">[</span><span class="s2">"xml_base"</span><span class="p">]</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">base</span>
-    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-        <span class="k">pass</span>
+    <span class="n">declared_base</span> <span class="o">=</span> <span class="n">document_base</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>   <span class="c1"># a declared absolute xml:base only — never the file location</span>
+    <span class="k">if</span> <span class="n">declared_base</span><span class="p">:</span>
+        <span class="n">namespace_map</span><span class="p">[</span><span class="s2">"xml_base"</span><span class="p">]</span> <span class="o">=</span> <span class="n">declared_base</span>
 
     <span class="n">instance_id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span>
     <span class="n">file_name</span> <span class="o">=</span> <span class="n">path_or_fileobject</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">path_or_fileobject</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">path_or_fileobject</span><span class="p">,</span> <span class="s2">"name"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
@@ -355,9 +347,9 @@
     <span class="c1"># Meta: Distribution + NamespaceMap (matches legacy)</span>
     <span class="n">dist_id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span>
     <span class="n">nsmap_id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span>
-    <span class="n">id_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dist_id</span><span class="p">);</span> <span class="n">key_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"Type"</span><span class="p">);</span> <span class="n">val_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"Distribution"</span><span class="p">);</span> <span class="n">inst_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span>
+    <span class="n">id_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dist_id</span><span class="p">);</span> <span class="n">key_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">TYPE_KEY</span><span class="p">);</span> <span class="n">val_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"Distribution"</span><span class="p">);</span> <span class="n">inst_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span>
     <span class="n">id_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dist_id</span><span class="p">);</span> <span class="n">key_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"label"</span><span class="p">);</span> <span class="n">val_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">file_name</span><span class="p">));</span> <span class="n">inst_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span>
-    <span class="n">id_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">nsmap_id</span><span class="p">);</span> <span class="n">key_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"Type"</span><span class="p">);</span> <span class="n">val_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"NamespaceMap"</span><span class="p">);</span> <span class="n">inst_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span>
+    <span class="n">id_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">nsmap_id</span><span class="p">);</span> <span class="n">key_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">TYPE_KEY</span><span class="p">);</span> <span class="n">val_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"NamespaceMap"</span><span class="p">);</span> <span class="n">inst_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span>
 
     <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">namespace_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
         <span class="n">id_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">nsmap_id</span><span class="p">)</span>
@@ -366,35 +358,8 @@
         <span class="n">inst_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span>
 
     <span class="c1"># RDF objects</span>
-    <span class="k">for</span> <span class="n">rdf_object</span> <span class="ow">in</span> <span class="n">root</span><span class="o">.</span><span class="n">iterchildren</span><span class="p">():</span>
-        <span class="n">attribs</span> <span class="o">=</span> <span class="n">rdf_object</span><span class="o">.</span><span class="n">attrib</span>
-        <span class="n">obj_id</span> <span class="o">=</span> <span class="n">clean_ID</span><span class="p">(</span>
-            <span class="n">attribs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_ID</span><span class="p">)</span>
-            <span class="ow">or</span> <span class="n">attribs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_ABOUT</span><span class="p">)</span>
-            <span class="ow">or</span> <span class="n">attribs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_NODEID</span><span class="p">)</span>
-            <span class="ow">or</span> <span class="s2">""</span>
-        <span class="p">)</span>
-
-        <span class="c1"># Type</span>
-        <span class="n">tag</span> <span class="o">=</span> <span class="n">rdf_object</span><span class="o">.</span><span class="n">tag</span>
-        <span class="n">type_value</span> <span class="o">=</span> <span class="n">_split_prefixed_name</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>
-        <span class="n">id_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">obj_id</span><span class="p">);</span> <span class="n">key_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"Type"</span><span class="p">);</span> <span class="n">val_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">type_value</span><span class="p">);</span> <span class="n">inst_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span>
-
-        <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">rdf_object</span><span class="o">.</span><span class="n">iterchildren</span><span class="p">():</span>
-            <span class="n">key</span> <span class="o">=</span> <span class="n">_split_prefixed_name</span><span class="p">(</span><span class="n">element</span><span class="o">.</span><span class="n">tag</span><span class="p">)</span>
-            <span class="n">value</span> <span class="o">=</span> <span class="n">element</span><span class="o">.</span><span class="n">text</span>
-            <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">element</span><span class="o">.</span><span class="n">attrib</span><span class="p">:</span>
-                <span class="n">value</span> <span class="o">=</span> <span class="n">clean_ID</span><span class="p">(</span>
-                    <span class="n">element</span><span class="o">.</span><span class="n">attrib</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_RESOURCE</span><span class="p">)</span>
-                    <span class="ow">or</span> <span class="n">element</span><span class="o">.</span><span class="n">attrib</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_NODEID</span><span class="p">)</span>
-                    <span class="ow">or</span> <span class="s2">""</span>
-                <span class="p">)</span>
-                <span class="k">if</span> <span class="n">shorten_resources</span> <span class="ow">and</span> <span class="n">value</span> <span class="ow">and</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"http"</span><span class="p">):</span>
-                    <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"#"</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="s2">"#"</span> <span class="ow">in</span> <span class="n">value</span> <span class="k">else</span> <span class="n">value</span>
-            <span class="n">id_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">obj_id</span><span class="p">)</span>
-            <span class="n">key_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-            <span class="n">val_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span> <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">""</span><span class="p">)</span>
-            <span class="n">inst_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">obj_id</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">iter_rdf_rows</span><span class="p">(</span><span class="n">root</span><span class="o">.</span><span class="n">iterchildren</span><span class="p">(),</span> <span class="n">local_resources</span><span class="p">,</span> <span class="n">document_base</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">default_base</span><span class="p">)):</span>
+        <span class="n">id_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">obj_id</span><span class="p">);</span> <span class="n">key_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">key</span><span class="p">);</span> <span class="n">val_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">);</span> <span class="n">inst_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">instance_id</span><span class="p">)</span>
 
     <span class="c1"># Finish builders to arrays (direct to Arrow)</span>
     <span class="n">batch</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">RecordBatch</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span>
@@ -417,7 +382,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -437,7 +402,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

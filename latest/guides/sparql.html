@@ -3,10 +3,10 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="SHACL Validation Architecture" href="validation.html"><link rel="prev" title="Export Schemas" href="export_schemas.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Validation Architecture" href="validation.html"><link rel="prev" title="Export Schemas" href="export_schemas.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>SPARQL Architecture - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>SPARQL Architecture - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -292,21 +288,24 @@
         <article role="main" id="furo-main-content">
           <section id="sparql-architecture">
 <h1>SPARQL Architecture<a class="headerlink" href="#sparql-architecture" title="Link to this heading">¶</a></h1>
-<section id="status-known-limitations-alpha">
-<h2>Status &amp; known limitations (alpha)<a class="headerlink" href="#status-known-limitations-alpha" title="Link to this heading">¶</a></h2>
-<p>The module is new — APIs may still shift. Know these before relying on it:</p>
+<section id="status-known-limitations">
+<span id="status--known-limitations"></span><h2>Status &amp; known limitations<a class="headerlink" href="#status-known-limitations" title="Link to this heading">¶</a></h2>
+<p>Know these before relying on it:</p>
 <ul class="simple">
 <li><p><strong>qlever is a local source build</strong> (no wheel, no CI — see
 <a class="reference internal" href="building.html"><span class="std std-doc">building.md</span></a>); the pip performance path is
 <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">triplets[oxigraph]</span></code>.</p></li>
 <li><p><strong>All SELECT values are lexical strings in every engine</strong> (triplets are
 all-string; consumers cast) — swapping engines never changes result
-dtypes. <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> still types the <em>loaded graph</em> (drives comparisons and
+dtypes. <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> types the <em>loaded graph</em> (drives comparisons and
 ORDER BY inside the query), not the returned representation.</p></li>
 <li><p><strong>oxigraph caveats</strong> (details under “Behavioral caveats” below):
-a multi-instance <code class="docutils literal notranslate"><span class="pre">scope</span></code> yields one solution per instance for shared
+a multi-instance <code class="docutils literal notranslate"><span class="pre">data_scope</span></code> yields one solution per instance for shared
 triples (<code class="docutils literal notranslate"><span class="pre">DISTINCT</span></code> dedupes); the CSV SELECT decode nulls empty-string
 literals; its parser accepts some queries qlever rejects (bare <code class="docutils literal notranslate"><span class="pre">HAVING</span></code>).</p></li>
+<li><p><strong>SELECT returns IRIs as stored</strong> — absolute and percent-encoded
+(<code class="docutils literal notranslate"><span class="pre">urn:uuid:a%20b</span></code>); CONSTRUCT decodes and shortens them to triplet form. Other
+import / export deviations: <a class="reference internal" href="parsers.html#known-limitations"><span class="std std-ref">parsers.md — Known limitations</span></a>.</p></li>
 <li><p>Engine state caches (indexes, stores, datasets) are unbounded by design —
 long-lived processes over many distinct datasets grow memory/disk. Manage
 the lifecycle explicitly: <code class="docutils literal notranslate"><span class="pre">triplets.clear_caches()</span></code> drops all in-memory
@@ -355,7 +354,10 @@ like the other engines. At load time the deduplicated union of the named
 graphs is projected into the store’s default graph
 (<code class="docutils literal notranslate"><span class="pre">INSERT</span> <span class="pre">{</span> <span class="pre">?s</span> <span class="pre">?p</span> <span class="pre">?o</span> <span class="pre">}</span> <span class="pre">WHERE</span> <span class="pre">{</span> <span class="pre">GRAPH</span> <span class="pre">?g</span> <span class="pre">{</span> <span class="pre">?s</span> <span class="pre">?p</span> <span class="pre">?o</span> <span class="pre">}</span> <span class="pre">}</span></code>), so unscoped queries
 match rdflib’s <code class="docutils literal notranslate"><span class="pre">default_union</span></code> set semantics — oxigraph’s own
-union-of-named-graphs keeps one solution per graph (see caveats). SELECT
+union-of-named-graphs keeps one solution per graph (see caveats). A
+single-graph store (one named graph, nothing in the default graph) skips the
+copy: unscoped queries run with that graph as the protocol default graph,
+which — as with <code class="docutils literal notranslate"><span class="pre">data_scope</span></code> — takes precedence over a <code class="docutils literal notranslate"><span class="pre">FROM</span></code> in the query. SELECT
 results decode from oxigraph’s SPARQL-CSV serializer (lexical forms — the
 same all-strings convention as qlever) straight into pandas/polars;
 CONSTRUCT/DESCRIBE results serialize to N-Quads Rust-side and come back
@@ -366,7 +368,7 @@ through <code class="docutils literal notranslate"><span class="pre">triplets.re
 <p>qlever natively ships a server (SPARQL-over-HTTP + UI); we use the <strong>engine</strong>.
 The boundary is qlever’s embedding facade — <code class="docutils literal notranslate"><span class="pre">src/libqlever</span></code> (<code class="docutils literal notranslate"><span class="pre">qlever::Qlever</span></code>,
 “use QLever as an embedded database, without the HTTP server”), plus a small
-vendored patch that adds two things the facade lacked: programmatic index
+vendored patch that adds two things the facade does not provide: programmatic index
 building via an injected <code class="docutils literal notranslate"><span class="pre">RdfParserBase</span></code> factory, and SPARQL-protocol dataset
 clauses on <code class="docutils literal notranslate"><span class="pre">parseAndPlanQuery</span></code>. Three boundaries cross it, all zero-copy Arrow
 for data:</p>
@@ -383,8 +385,8 @@ worker exceptions propagated to the consumer with deterministic row
 numbers). The term mapping reproduces the N-Quads export rules exactly —
 typed literals run through qlever’s own
 <code class="docutils literal notranslate"><span class="pre">literalAndDatatypeToTripleComponent</span></code> (the very code its N-Quads parser
-calls), and <code class="docutils literal notranslate"><span class="pre">build_key_metadata</span></code> stays the single Python source of truth
-for <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> interpretation.</p></li>
+calls), and the <code class="docutils literal notranslate"><span class="pre">triplets.iri</span></code> flat maps (<code class="docutils literal notranslate"><span class="pre">value_types</span></code> / <code class="docutils literal notranslate"><span class="pre">namespaces</span></code> /
+<code class="docutils literal notranslate"><span class="pre">datatypes</span></code>) are the single Python source of truth for <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> interpretation.</p></li>
 <li><p><strong>Arrow out (query results)</strong> — SPARQL text in, decoded Arrow string columns
 out. The C++ shim runs <code class="docutils literal notranslate"><span class="pre">parseAndPlanQuery</span></code>, walks the raw result <code class="docutils literal notranslate"><span class="pre">IdTable</span></code>
 and decodes each id with qlever’s own <code class="docutils literal notranslate"><span class="pre">exportIds::idToStringAndType</span></code>
@@ -397,23 +399,16 @@ serializations out (SPARQL 1.1 JSON / Turtle / CSV).</p></li>
 </ul>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">triplets</span><span class="o">/</span><span class="n">sparql</span><span class="o">/</span>
 <span class="o">|--</span> <span class="n">_qlever_wrapper</span><span class="o">.</span><span class="n">h</span><span class="o">/.</span><span class="n">cpp</span>     <span class="c1"># shim: build_index_from_arrow(), query(text, media_type,</span>
-<span class="o">|</span>                              <span class="c1">#   scope), select_arrow() / construct_arrow() -&gt; Arrow columns</span>
+<span class="o">|</span>                              <span class="c1">#   data_scope), select_arrow() / construct_arrow() -&gt; Arrow columns</span>
 <span class="o">|--</span> <span class="n">_qlever_arrow_parser</span><span class="o">.</span><span class="n">h</span><span class="o">/.</span><span class="n">cpp</span><span class="c1"># ArrowTripleParser: Arrow batches -&gt; TurtleTriples</span>
 <span class="o">|--</span> <span class="n">_qlever</span><span class="o">.</span><span class="n">pyx</span>                <span class="c1"># dumb Cython binding (zero-copy both ways, GIL released)</span>
 <span class="s1">'-- sparql_qlever.py           # engine: index cache, conventions, output flavor</span>
 </pre></div>
 </div>
-<p>Build (one-time; the pixi <code class="docutils literal notranslate"><span class="pre">qlever</span></code> environment pins the whole toolchain —
-compilers, cmake, boost, icu, openssl, zstd, jemalloc — via pixi.lock):</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--recursive<span class="w"> </span>https://github.com/ad-freiburg/qlever<span class="w"> </span>../qlever
-pixi<span class="w"> </span>run<span class="w"> </span>-e<span class="w"> </span>qlever<span class="w"> </span>build-qlever-lib<span class="w">   </span><span class="c1"># compile qlever with PIC (long, once)</span>
-pixi<span class="w"> </span>run<span class="w"> </span>-e<span class="w"> </span>qlever<span class="w"> </span>build-qlever<span class="w">       </span><span class="c1"># build triplets.sparql._qlever</span>
-</pre></div>
-</div>
+<p>Build: <code class="docutils literal notranslate"><span class="pre">pixi</span> <span class="pre">run</span> <span class="pre">-e</span> <span class="pre">qlever</span> <span class="pre">build-qlever</span></code> (the recipe, the pinned fork and the
+<code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">sync</span></code> prerequisite are in <a class="reference internal" href="building.html"><span class="std std-doc">building.md</span></a>).</p>
 <p>Without the extension nothing changes — auto falls back to oxigraph when
-installed, else rdflib. qlever ships in no wheel (source build only, local);
-how the fork/branch is pinned and reproduced is documented in
-<a class="reference internal" href="building.html"><span class="std std-doc">building.md</span></a>.</p>
+installed, else rdflib. qlever ships in no wheel (source build only, local).</p>
 <p><strong>Engine state lifecycle.</strong> Flavor-blind by construction — the input (pandas /
 polars DataFrame or DuckDB connection) carries every needed capability as a
 registered method, so the engine never inspects types: <code class="docutils literal notranslate"><span class="pre">content_hash</span></code>
@@ -423,7 +418,7 @@ which runs <strong>only on a cache miss</strong>, zero-copy. All three engines s
 same lifecycle (<code class="docutils literal notranslate"><span class="pre">triplets._content_key</span></code>, engine-neutral so no engine imports
 another’s package): the oxigraph engine caches loaded stores and the rdflib
 engine loaded datasets in-process the same way, each under its own salt.
-<code class="docutils literal notranslate"><span class="pre">scope</span></code> is not a data operation and does not key the state — the
+<code class="docutils literal notranslate"><span class="pre">data_scope</span></code> is not a data operation and does not key the state — the
 scoped instances’ named graphs travel beside each query as SPARQL-protocol
 dataset clauses (<code class="docutils literal notranslate"><span class="pre">default-graph-uri</span></code>), so the query text is never modified,
 one index serves every scope, and per the protocol the scope takes precedence
@@ -450,7 +445,7 @@ flag on a never-hashed object it runs once and is remembered. In-place
 mutation after asserting <code class="docutils literal notranslate"><span class="pre">data_unchanged</span></code> returns stale results — that is the
 contract.</p>
 <p>Cross-<em>parse</em> sharing is limited by the parser generating fresh INSTANCE_IDs
-per parse (they name the graphs, so they must be in the key — see TODO.md).
+per parse (they name the graphs, so they must be in the key).
 Every engine accepts bare pyarrow <code class="docutils literal notranslate"><span class="pre">Table</span></code>/<code class="docutils literal notranslate"><span class="pre">RecordBatch</span></code> input: non-registered
 input (no <code class="docutils literal notranslate"><span class="pre">content_hash</span></code> method) is routed through <code class="docutils literal notranslate"><span class="pre">to_pandas</span></code> / <code class="docutils literal notranslate"><span class="pre">as_frame</span></code>, which
 converts arrow/duckdb to pandas before loading. Custom engines register via
@@ -458,13 +453,12 @@ converts arrow/duckdb to pandas before loading. Custom engines register via
 <p><strong>Parallelism.</strong> rdflib query evaluation is GIL-bound pure Python, so threads
 don’t help — batch workloads (the sh:sparql constraints the SHACL engines
 delegate here) use <code class="docutils literal notranslate"><span class="pre">ProcessPoolExecutor</span></code> fork on the rdflib path. The qlever
-binding and pyoxigraph both release the GIL during queries, so plain threads
-parallelize; the SHACL engines skip the fork pool automatically whenever the
-auto engine is not rdflib (both are orders of magnitude faster sequentially
-anyway).</p>
+binding and pyoxigraph both release the GIL during queries and read-share one
+loaded store, so plain threads parallelize: the SHACL engines’ <code class="docutils literal notranslate"><span class="pre">max_workers</span></code>
+runs a thread pool whenever the auto engine is not rdflib.</p>
 </section>
 <section id="shared-loading-rdflib-loader-py">
-<h2>Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)<a class="headerlink" href="#shared-loading-rdflib-loader-py" title="Link to this heading">¶</a></h2>
+<span id="shared-loading-_rdflib_loaderpy"></span><h2>Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)<a class="headerlink" href="#shared-loading-rdflib-loader-py" title="Link to this heading">¶</a></h2>
 <p>SPARQL and SHACL reach rdflib through the same two helpers, so a query and a
 validation over the same data see an identical graph:</p>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -475,18 +469,22 @@ validation over the same data see an identical graph:</p>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">load_dataset(data,</span> <span class="pre">rdf_map=None,</span> <span class="pre">data_unchanged=False,</span> <span class="pre">store=&quot;memory&quot;)</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">load_dataset(data,</span> <span class="pre">rdf_map=None,</span> <span class="pre">data_unchanged=False,</span> <span class="pre">store=&quot;memory&quot;,</span> <span class="pre">undefined_namespace=CIM_NS)</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">rdflib.Dataset</span></code> seeing the deduplicated union, one named graph per <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code> (<code class="docutils literal notranslate"><span class="pre">urn:uuid:{INSTANCE_ID}</span></code>). <code class="docutils literal notranslate"><span class="pre">store=&quot;oxigraph&quot;</span></code> backs it with the oxigraph engine’s cached store via oxrdflib (<code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>: oxigraph when installed)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scoped_graph(dataset,</span> <span class="pre">scope=None)</span></code></p></td>
-<td><p>full union when <code class="docutils literal notranslate"><span class="pre">scope</span> <span class="pre">is</span> <span class="pre">None</span></code>; otherwise a concrete <code class="docutils literal notranslate"><span class="pre">Graph</span></code> holding just the scoped instances’ named graphs</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scoped_graph(dataset,</span> <span class="pre">data_scope=None)</span></code></p></td>
+<td><p>full union when <code class="docutils literal notranslate"><span class="pre">data_scope</span> <span class="pre">is</span> <span class="pre">None</span></code>; otherwise a concrete <code class="docutils literal notranslate"><span class="pre">Graph</span></code> holding just the scoped instances’ named graphs</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> is optional. Without it, every <code class="docutils literal notranslate"><span class="pre">VALUE</span></code> is an untyped string literal
-(<code class="docutils literal notranslate"><span class="pre">xsd:string</span></code>); with it, the N-Quads export attaches <code class="docutils literal notranslate"><span class="pre">xsd</span></code> datatypes, so numeric
+<p><code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> is optional. Without it, every literal <code class="docutils literal notranslate"><span class="pre">VALUE</span></code> is an untyped string
+(<code class="docutils literal notranslate"><span class="pre">xsd:string</span></code>; references that look like a UUID or absolute IRI stay IRIs); with
+it, the N-Quads export attaches <code class="docutils literal notranslate"><span class="pre">xsd</span></code> datatypes, so numeric
 and date literals carry their real type into the query result.</p>
+<p>Names the schema does not declare (every name without an <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code>) are written
+under <code class="docutils literal notranslate"><span class="pre">undefined_namespace=</span></code> (default CIM100, so schema-less <code class="docutils literal notranslate"><span class="pre">cim:</span></code> queries keep
+working); every row is loaded.</p>
 </section>
 <section id="call-sequence">
 <h2>Call Sequence<a class="headerlink" href="#call-sequence" title="Link to this heading">¶</a></h2>
@@ -498,20 +496,21 @@ and date literals carry their real type into the query result.</p>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="n">qlever</span> <span class="n">path</span> <span class="p">(</span><span class="n">performance</span><span class="p">)</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">_index_for</span><span class="p">:</span> <span class="n">content_key</span> <span class="o">-&gt;</span> <span class="n">cached</span> <span class="n">index</span> <span class="o">|</span> <span class="n">build</span> <span class="p">(</span><span class="n">export_to_arrow</span> <span class="o">-&gt;</span> <span class="n">ArrowTripleParser</span><span class="p">)</span>
-    <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">scope</span> <span class="o">-&gt;</span> <span class="n">SPARQL</span><span class="o">-</span><span class="n">protocol</span> <span class="n">dataset</span> <span class="n">clauses</span> <span class="p">(</span><span class="n">one</span> <span class="n">index</span> <span class="n">serves</span> <span class="n">every</span> <span class="n">scope</span><span class="p">)</span>
+    <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">data_scope</span> <span class="o">-&gt;</span> <span class="n">SPARQL</span><span class="o">-</span><span class="n">protocol</span> <span class="n">dataset</span> <span class="n">clauses</span> <span class="p">(</span><span class="n">one</span> <span class="n">index</span> <span class="n">serves</span> <span class="n">every</span> <span class="n">scope</span><span class="p">)</span>
     <span class="o">|</span>   <span class="s1">'-&gt; C++ decode -&gt; Arrow columns (GIL released) -&gt; zero-copy wrap</span>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="n">oxigraph</span> <span class="n">path</span> <span class="p">(</span><span class="n">portable</span> <span class="n">performance</span><span class="p">)</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">_store_for</span><span class="p">:</span> <span class="n">content_key</span> <span class="o">-&gt;</span> <span class="n">cached</span> <span class="n">store</span> <span class="o">|</span> <span class="n">bulk_load</span><span class="p">(</span><span class="n">export_to_nquads</span><span class="p">)</span>
     <span class="o">|</span>   <span class="o">|</span>   <span class="s1">'-&gt; default graph := deduplicated union of the named graphs</span>
-    <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">scope</span> <span class="o">-&gt;</span> <span class="n">SPARQL</span><span class="o">-</span><span class="n">protocol</span> <span class="n">default</span> <span class="n">graphs</span> <span class="p">(</span><span class="n">one</span> <span class="n">store</span> <span class="n">serves</span> <span class="n">every</span> <span class="n">scope</span><span class="p">)</span>
+    <span class="o">|</span>   <span class="o">|</span>       <span class="p">(</span><span class="n">single</span><span class="o">-</span><span class="n">graph</span> <span class="n">store</span><span class="p">:</span> <span class="n">its</span> <span class="n">one</span> <span class="n">graph</span><span class="p">,</span> <span class="k">as</span> <span class="n">protocol</span> <span class="n">default</span><span class="p">)</span>
+    <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">data_scope</span> <span class="o">-&gt;</span> <span class="n">SPARQL</span><span class="o">-</span><span class="n">protocol</span> <span class="n">default</span> <span class="n">graphs</span> <span class="p">(</span><span class="n">one</span> <span class="n">store</span> <span class="n">serves</span> <span class="n">every</span> <span class="n">scope</span><span class="p">)</span>
     <span class="o">|</span>   <span class="s1">'-&gt; SELECT: SPARQL-CSV -&gt; read_csv | CONSTRUCT: N-Quads -&gt; read_nquads</span>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="n">rdflib</span> <span class="n">path</span> <span class="p">(</span><span class="n">reference</span><span class="p">)</span>
     <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">load_dataset</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">)</span>        <span class="c1"># cached by content_key</span>
     <span class="o">|</span>   <span class="o">|</span>   <span class="s1">'-&gt; export_to_nquads(..., export_to_memory=True)</span>
     <span class="o">|</span>   <span class="o">|</span>       <span class="s1">'-&gt; rdflib.Dataset.parse(nquads)   # INSTANCE_ID -&gt; named graph</span>
-    <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">scoped_graph</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span>       <span class="c1"># union, or just scoped instances</span>
+    <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">scoped_graph</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">data_scope</span><span class="p">)</span>  <span class="c1"># union, or just scoped instances</span>
     <span class="o">|</span>   <span class="s1">'-&gt; graph.query(q)</span>
     <span class="o">|</span>
     <span class="s1">'-&gt; result by query form (finalized to return_type)</span>
@@ -543,7 +542,7 @@ and date literals carry their real type into the query result.</p>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CONSTRUCT</span></code> / <code class="docutils literal notranslate"><span class="pre">DESCRIBE</span></code></p></td>
 <td><p>triplet DataFrame</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">[ID,</span> <span class="pre">KEY,</span> <span class="pre">VALUE,</span> <span class="pre">INSTANCE_ID]</span></code>; <code class="docutils literal notranslate"><span class="pre">urn:uuid:</span></code> stripped from <code class="docutils literal notranslate"><span class="pre">ID</span></code>, CIM namespace shortened on <code class="docutils literal notranslate"><span class="pre">KEY</span></code>, <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">Type</span></code>, <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code> is <code class="docutils literal notranslate"><span class="pre">None</span></code> (constructed graph has no source instance)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[ID,</span> <span class="pre">KEY,</span> <span class="pre">VALUE,</span> <span class="pre">INSTANCE_ID]</span></code>; shortened per column by <code class="docutils literal notranslate"><span class="pre">triplets.iri</span></code> (<code class="docutils literal notranslate"><span class="pre">local_id</span></code> on <code class="docutils literal notranslate"><span class="pre">ID</span></code>, <code class="docutils literal notranslate"><span class="pre">local_key</span></code> on <code class="docutils literal notranslate"><span class="pre">KEY</span></code> — <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">Type</span></code>, <code class="docutils literal notranslate"><span class="pre">local_value</span></code> on <code class="docutils literal notranslate"><span class="pre">VALUE</span></code>: any http(s) <code class="docutils literal notranslate"><span class="pre">#fragment</span></code> namespace dropped, a namespace IRI ending in <code class="docutils literal notranslate"><span class="pre">#</span></code> kept whole; a <code class="docutils literal notranslate"><span class="pre">VALUE</span></code> IRI that is a subject of the same result shortens like its ID, <code class="docutils literal notranslate"><span class="pre">local_id</span></code>), <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code> is <code class="docutils literal notranslate"><span class="pre">None</span></code> (constructed graph has no source instance)</p></td>
 </tr>
 </tbody>
 </table>
@@ -585,7 +584,7 @@ from the result bindings — neither is Arrow-backed.</p>
 <span class="o">|--</span> <span class="n">_content_key</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># engine-neutral state keying (content_hash + rdf_map + salt,</span>
 <span class="o">|</span>                            <span class="c1">#   data_unchanged digest memo with weakref eviction)</span>
 <span class="o">|--</span> <span class="n">_caches</span><span class="o">.</span><span class="n">py</span>               <span class="c1"># clear_caches() / cache_scope(): in-process engine-state lifecycle</span>
-<span class="o">|--</span> <span class="n">_rdflib_loader</span><span class="o">.</span><span class="n">py</span>        <span class="c1"># shared with validation: load_dataset(), scoped_graph()</span>
+<span class="o">|--</span> <span class="n">_rdflib_loader</span><span class="o">.</span><span class="n">py</span>        <span class="c1"># load_dataset() (shared with validation), scoped_graph()</span>
 <span class="o">|--</span> <span class="n">parser</span><span class="o">/</span><span class="n">nquads</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># read_nquads: N-Quads -&gt; triplets (inverse of the export);</span>
 <span class="o">|</span>                            <span class="c1">#   terms_to_triplets shared by the engines' CONSTRUCT decode</span>
 <span class="s1">'-- sparql/</span>
@@ -625,10 +624,11 @@ from the result bindings — neither is Arrow-backed.</p>
     <span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">"SELECT ?l WHERE { ?s cim:Conductor.length ?l }"</span><span class="p">,</span>
     <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
 
-<span class="c1"># scope filters to the named graphs (queried instances) — out-of-scope data</span>
-<span class="c1"># is not loaded; include dependency instances for cross-instance references</span>
+<span class="c1"># data_scope restricts the query to these instances' named graphs (SPARQL-protocol</span>
+<span class="c1"># dataset clause on the one loaded store/index — the data stays loaded); include</span>
+<span class="c1"># dependency instances for cross-instance references</span>
 <span class="n">one_instance</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-<span class="n">scoped</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">"SELECT ?s WHERE { ?s rdf:type cim:ACLineSegment }"</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="p">[</span><span class="n">one_instance</span><span class="p">])</span>
+<span class="n">scoped</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">PREFIXES</span> <span class="o">+</span> <span class="s2">"SELECT ?s WHERE { ?s rdf:type cim:ACLineSegment }"</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="p">[</span><span class="n">one_instance</span><span class="p">])</span>
 
 <span class="c1"># explicit engine selection, and use on any input (e.g. a DuckDB connection)</span>
 <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"oxigraph"</span><span class="p">)</span>   <span class="c1"># or "qlever" / "rdflib"</span>
@@ -643,13 +643,9 @@ from the result bindings — neither is Arrow-backed.</p>
     <span class="n">data</span><span class="o">.</span><span class="n">sparql</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>   <span class="c1"># reuse the remembered digest, skip the hash</span>
 </pre></div>
 </div>
-<p>A runnable end-to-end demo lives in <code class="docutils literal notranslate"><span class="pre">examples/sparql_query.py</span></code>; the store
-backend comparison in <code class="docutils literal notranslate"><span class="pre">examples/sparql_backend_benchmark.py</span></code>.</p>
-</section>
-<section id="store-and-engine-comparison">
-<h2>Store and engine comparison<a class="headerlink" href="#store-and-engine-comparison" title="Link to this heading">¶</a></h2>
-<p>For measured import / warm-query / export numbers across the three engines,
-run <code class="docutils literal notranslate"><span class="pre">examples/sparql_backend_benchmark.py</span></code>.</p>
+<p>A runnable end-to-end demo lives in <code class="docutils literal notranslate"><span class="pre">examples/sparql_query.py</span></code>; for measured
+import / warm-query / export numbers across the three engines, run
+<code class="docutils literal notranslate"><span class="pre">examples/sparql_backend_benchmark.py</span></code>.</p>
 </section>
 <section id="behavioral-caveats">
 <h2>Behavioral caveats<a class="headerlink" href="#behavioral-caveats" title="Link to this heading">¶</a></h2>
@@ -657,7 +653,7 @@ run <code class="docutils literal notranslate"><span class="pre">examples/sparql
 <li><p>oxigraph’s union-of-named-graphs keeps duplicate solutions — one per graph
 holding the triple (rdflib and qlever dedupe). The <code class="docutils literal notranslate"><span class="pre">oxigraph</span></code> engine
 handles this by projecting the deduplicated union into the store’s default
-graph at load time; the residual is a <strong>multi-instance <code class="docutils literal notranslate"><span class="pre">scope</span></code></strong> (a
+graph at load time (multi-graph stores); the residual is a <strong>multi-instance <code class="docutils literal notranslate"><span class="pre">data_scope</span></code></strong> (a
 SPARQL-protocol dataset union): a triple present in several scoped
 instances yields one solution per instance — <code class="docutils literal notranslate"><span class="pre">DISTINCT</span></code> dedupes. Pinned in
 <code class="docutils literal notranslate"><span class="pre">tests/test_sparql_oxigraph.py</span></code>.</p></li>
@@ -690,7 +686,7 @@ tradeoff). qlever distinguishes them.</p></li>
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">SHACL Validation Architecture</div>
+                <div class="title">Validation Architecture</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -709,7 +705,7 @@ tradeoff). qlever distinguishes them.</p></li>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -736,7 +732,7 @@ tradeoff). qlever distinguishes them.</p></li>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">SPARQL Architecture</a><ul>
-<li><a class="reference internal" href="#status-known-limitations-alpha">Status &amp; known limitations (alpha)</a></li>
+<li><a class="reference internal" href="#status-known-limitations">Status &amp; known limitations</a></li>
 <li><a class="reference internal" href="#engines">Engines</a></li>
 <li><a class="reference internal" href="#the-qlever-c-boundary">The qlever C++ Boundary</a></li>
 <li><a class="reference internal" href="#shared-loading-rdflib-loader-py">Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)</a></li>
@@ -744,7 +740,6 @@ tradeoff). qlever distinguishes them.</p></li>
 <li><a class="reference internal" href="#result-structure">Result Structure</a></li>
 <li><a class="reference internal" href="#file-layout">File Layout</a></li>
 <li><a class="reference internal" href="#usage">Usage</a></li>
-<li><a class="reference internal" href="#store-and-engine-comparison">Store and engine comparison</a></li>
 <li><a class="reference internal" href="#behavioral-caveats">Behavioral caveats</a></li>
 <li><a class="reference internal" href="#naming-convention">Naming Convention</a></li>
 </ul>
@@ -758,7 +753,7 @@ tradeoff). qlever distinguishes them.</p></li>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>

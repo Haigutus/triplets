@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.tools.pandas_engine - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.tools.pandas_engine - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -301,6 +297,8 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">._diff_report</span><span class="w"> </span><span class="kn">import</span> <span class="n">print_diff</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -1187,23 +1185,23 @@
 <span class="sd">    ----------</span>
 <span class="sd">    data : pandas.DataFrame</span>
 <span class="sd">        Triplet dataset containing RDF data.</span>
-<span class="sd">    type_name : str</span>
-<span class="sd">        Object type to filter by (e.g., 'ACLineSegment').</span>
+<span class="sd">    type_name : str or list-like of str</span>
+<span class="sd">        Object type(s) to filter by (e.g., 'ACLineSegment'); list, tuple, set, Series or array.</span>
 <span class="sd">    type_key : str</span>
 <span class="sd">        Key used in triplet to indicate type, by default "Type"</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    pandas.DataFrame</span>
-<span class="sd">        Filtered triplet dataset containing only objects of the specified type.</span>
+<span class="sd">        Filtered triplet dataset containing only objects of the specified type(s).</span>
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
 <span class="sd">    &gt;&gt;&gt; filtered = filter_triplets_by_type(data, "ACLineSegment")</span>
+<span class="sd">    &gt;&gt;&gt; filtered = filter_triplets_by_type(data, ["ACLineSegment", "Terminal"])</span>
 <span class="sd">    """</span>
-    <span class="n">filter_triplet</span> <span class="o">=</span> <span class="n">data</span><span class="p">[(</span><span class="n">data</span><span class="o">.</span><span class="n">KEY</span> <span class="o">==</span> <span class="n">type_key</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">VALUE</span> <span class="o">==</span> <span class="n">type_name</span><span class="p">)]</span>
-
-    <span class="k">return</span> <span class="n">filter_triplets_by_triplets</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">filter_triplet</span><span class="p">)</span></div>
+    <span class="n">type_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">type_name</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">type_name</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="o">.</span><span class="n">ID</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">ID</span><span class="p">[(</span><span class="n">data</span><span class="o">.</span><span class="n">KEY</span> <span class="o">==</span> <span class="n">type_key</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">data</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">type_names</span><span class="p">)])]</span></div>
 
 
 
@@ -1316,12 +1314,13 @@
 <span class="sd">    -------</span>
 <span class="sd">    pandas.DataFrame</span>
 <span class="sd">        DataFrame containing triplets unique to old_data or new_data, with an '_merge' column</span>
-<span class="sd">        indicating 'left_only' (in old_data) or 'right_only' (in new_data).</span>
+<span class="sd">        indicating 'left_only' (in old_data) or 'right_only' (in new_data). A missing VALUE is "".</span>
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
 <span class="sd">    &gt;&gt;&gt; diff = diff_triplets(old_data, new_data)</span>
 <span class="sd">    """</span>
+    <span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span> <span class="o">=</span> <span class="p">[</span><span class="n">data</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">VALUE</span><span class="o">=</span><span class="n">data</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="s2">""</span><span class="p">))</span> <span class="k">for</span> <span class="n">data</span> <span class="ow">in</span> <span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">)]</span>  <span class="c1"># missing VALUE is "", as in every engine</span>
     <span class="k">return</span> <span class="n">old_data</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">new_data</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s1">'outer'</span><span class="p">,</span> <span class="n">indicator</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">suffixes</span><span class="o">=</span><span class="p">(</span><span class="s2">"_OLD"</span><span class="p">,</span> <span class="s2">"_NEW"</span><span class="p">),</span> <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"_merge != 'both'"</span><span class="p">)</span></div>
 
 
@@ -1355,8 +1354,9 @@
 
 <div class="viewcode-block" id="print_triplets_diff">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.pandas_engine.print_triplets_diff">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">file_id_object</span><span class="o">=</span><span class="s2">"Distribution"</span><span class="p">,</span> <span class="n">file_id_key</span><span class="o">=</span><span class="s2">"label"</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Print a human-readable diff of two triplet datasets.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">file_id_object</span><span class="o">=</span><span class="s2">"Distribution"</span><span class="p">,</span> <span class="n">file_id_key</span><span class="o">=</span><span class="s2">"label"</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                        <span class="n">include_objects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">context_keys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">stat</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Print a unified diff of two triplet datasets, one hunk per changed object.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -1365,91 +1365,48 @@
 <span class="sd">    new_data : pandas.DataFrame</span>
 <span class="sd">        New triplet dataset to compare against.</span>
 <span class="sd">    file_id_object : str, optional</span>
-<span class="sd">        Object type containing file identifiers (default is 'Distribution').</span>
+<span class="sd">        Object type holding the file names, left out of the diff (default is 'Distribution').</span>
 <span class="sd">    file_id_key : str, optional</span>
-<span class="sd">        Key containing file identifiers (default is 'label').</span>
+<span class="sd">        Key whose values name the files in the ``---`` / ``+++`` lines (default is 'label').</span>
+<span class="sd">        The file names are read before any filtering.</span>
 <span class="sd">    exclude_objects : list, optional</span>
-<span class="sd">        List of object types to exclude from the diff (default is None).</span>
+<span class="sd">        Object types left out of the diff (default is None).</span>
+<span class="sd">    include_objects : list, optional</span>
+<span class="sd">        Only objects of these types are diffed (default is None: all); ``exclude_objects`` applies after it.</span>
+<span class="sd">    context_keys : list, optional</span>
+<span class="sd">        Keys whose unchanged values are shown in each hunk as `` `` context lines,</span>
+<span class="sd">        e.g. ``["IdentifiedObject.name"]``.</span>
+<span class="sd">    stat : bool, optional</span>
+<span class="sd">        Print only the Removed / Added / Changed counts per type.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    int</span>
+<span class="sd">        Number of differing triplets (0 when the datasets match).</span>
 
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
-<span class="sd">    - Outputs a diff format showing removed, added, and changed objects.</span>
-<span class="sd">    - Nice diff viewer https://diffy.org/</span>
-<span class="sd">    - TODO: Add name field for better reporting with Type.</span>
+<span class="sd">    Nice diff viewer https://diffy.org/</span>
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; print_triplets_diff(old_data, new_data, exclude_objects=["NamespaceMap"])</span>
+<span class="sd">    &gt;&gt;&gt; print_triplets_diff(old_data, new_data, exclude_objects=["NamespaceMap"],</span>
+<span class="sd">    ...                     context_keys=["IdentifiedObject.name"])</span>
 <span class="sd">    """</span>
-    <span class="c1"># Get diff between datasets</span>
+    <span class="n">old_labels</span> <span class="o">=</span> <span class="n">old_data</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">old_data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">==</span> <span class="n">file_id_key</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+    <span class="n">new_labels</span> <span class="o">=</span> <span class="n">new_data</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">new_data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">==</span> <span class="n">file_id_key</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+    <span class="n">excluded</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="p">(</span><span class="n">exclude_objects</span> <span class="ow">or</span> <span class="p">[]),</span> <span class="o">*</span><span class="p">([</span><span class="n">file_id_object</span><span class="p">]</span> <span class="k">if</span> <span class="n">file_id_object</span> <span class="k">else</span> <span class="p">[])]</span>
+    <span class="k">if</span> <span class="n">include_objects</span><span class="p">:</span>
+        <span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">include_objects</span><span class="p">),</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">new_data</span><span class="p">,</span> <span class="n">include_objects</span><span class="p">)</span>
+    <span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span> <span class="o">=</span> <span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="o">~</span><span class="n">data</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">excluded</span><span class="p">)[</span><span class="s2">"ID"</span><span class="p">])]</span> <span class="k">for</span> <span class="n">data</span> <span class="ow">in</span> <span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">)]</span>
     <span class="n">diff</span> <span class="o">=</span> <span class="n">diff_triplets</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">)</span>
-    <span class="c1"># Convert _merge to plain string before replacing (avoids categorical setitem error with pyarrow dtypes)</span>
-    <span class="n">diff</span><span class="p">[</span><span class="s2">"_merge"</span><span class="p">]</span> <span class="o">=</span> <span class="n">diff</span><span class="p">[</span><span class="s2">"_merge"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">({</span><span class="s2">"left_only"</span><span class="p">:</span> <span class="s2">"-"</span><span class="p">,</span> <span class="s2">"right_only"</span><span class="p">:</span> <span class="s2">"+"</span><span class="p">})</span>
-    <span class="n">diff</span> <span class="o">=</span> <span class="n">diff</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s1">'ID'</span><span class="p">,</span> <span class="s1">'KEY'</span><span class="p">])</span>
+    <span class="n">keys</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"Type"</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="n">context_keys</span> <span class="ow">or</span> <span class="p">[])]</span>
+    <span class="n">related</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span>
+        <span class="n">data</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">diff</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">])</span> <span class="o">&amp;</span> <span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">keys</span><span class="p">),</span> <span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">side</span><span class="o">=</span><span class="n">side</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">side</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">"old"</span><span class="p">,</span> <span class="n">old_data</span><span class="p">),</span> <span class="p">(</span><span class="s2">"new"</span><span class="p">,</span> <span class="n">new_data</span><span class="p">))])</span><span class="o">.</span><span class="n">astype</span><span class="p">({</span><span class="s2">"VALUE"</span><span class="p">:</span> <span class="nb">object</span><span class="p">})</span><span class="o">.</span><span class="n">fillna</span><span class="p">({</span><span class="s2">"VALUE"</span><span class="p">:</span> <span class="s2">""</span><span class="p">})</span>
+    <span class="k">return</span> <span class="n">print_diff</span><span class="p">(</span><span class="n">diff</span><span class="p">[[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">_merge</span><span class="o">=</span><span class="n">diff</span><span class="p">[</span><span class="s2">"_merge"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">))</span><span class="o">.</span><span class="n">itertuples</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">),</span>
+                      <span class="n">related</span><span class="o">.</span><span class="n">itertuples</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">),</span> <span class="n">old_labels</span><span class="p">,</span> <span class="n">new_labels</span><span class="p">,</span> <span class="n">context_keys</span><span class="p">,</span> <span class="n">stat</span><span class="p">)</span></div>
 
-    <span class="c1"># Extract internal structures keeping file name information</span>
-    <span class="n">file_id_data</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">file_id_object</span><span class="p">)</span>
-    <span class="n">diff</span> <span class="o">=</span> <span class="n">remove_triplets_from_triplets</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">file_id_data</span><span class="p">)</span>
-    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"INFO - removed </span><span class="si">{</span><span class="n">file_id_object</span><span class="si">}</span><span class="s2"> from diff"</span><span class="p">)</span>
-
-    <span class="c1"># Exclude defined types form export</span>
-    <span class="k">if</span> <span class="n">exclude_objects</span><span class="p">:</span>
-        <span class="k">for</span> <span class="n">object_name</span> <span class="ow">in</span> <span class="n">exclude_objects</span><span class="p">:</span>
-            <span class="n">excluded_data</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">object_name</span><span class="p">)</span>
-            <span class="n">diff</span> <span class="o">=</span> <span class="n">remove_triplets_from_triplets</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">excluded_data</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"INFO - removed </span><span class="si">{</span><span class="n">object_name</span><span class="si">}</span><span class="s2"> from diff"</span><span class="p">)</span>
-
-    <span class="c1"># Extract types on left and right to get changed/modified types</span>
-    <span class="n">removed_added_modified_types</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span>
-        <span class="n">old_data</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">diff</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">])</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"KEY == 'Type'"</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">(),</span>
-        <span class="n">new_data</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">diff</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">])</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"KEY == 'Type'"</span><span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span>
-        <span class="p">])[[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span>
-
-    <span class="c1"># Print old file name</span>
-    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">file_id</span> <span class="ow">in</span> <span class="n">old_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="sa">f</span><span class="s2">"KEY == '</span><span class="si">{</span><span class="n">file_id_key</span><span class="si">}</span><span class="s2">'"</span><span class="p">)</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"--- </span><span class="si">{</span><span class="n">file_id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="c1"># from-file-modification-time")</span>
-
-    <span class="c1"># Print new file name</span>
-    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">file_id</span> <span class="ow">in</span> <span class="n">new_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="sa">f</span><span class="s2">"KEY == '</span><span class="si">{</span><span class="n">file_id_key</span><span class="si">}</span><span class="s2">'"</span><span class="p">)</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"+++ </span><span class="si">{</span><span class="n">file_id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="c1"># to-file-modification-time")</span>
-
-    <span class="c1"># Print changes</span>
-
-    <span class="nb">print</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"@@ -1,0 +1,0 @@ Removed:"</span><span class="p">)</span>
-
-    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">diff</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"KEY == 'Type' and _merge == '-'"</span><span class="p">)</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">" "</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
-
-    <span class="nb">print</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"@@ -1,0 +1,0 @@ Added:"</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">diff</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"KEY == 'Type' and _merge == '+'"</span><span class="p">)</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">" "</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
-
-    <span class="nb">print</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"@@ -1,0 +1,0 @@ Changed:"</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">removed_added_modified_types</span><span class="p">,</span> <span class="n">diff</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"KEY == 'Type'"</span><span class="p">)])[[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">(</span><span class="n">keep</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">" "</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
-
-    <span class="c1"># Types changed</span>
-    <span class="c1"># TODO add name field to be used with Type for better reporting</span>
-
-    <span class="k">for</span> <span class="n">group_name</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">removed_added_modified_types</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">"VALUE"</span><span class="p">):</span>
-        <span class="c1">#print(f"Types - {group_name}")</span>
-        <span class="k">for</span> <span class="n">objec_type</span> <span class="ow">in</span> <span class="n">group</span><span class="o">.</span><span class="n">itertuples</span><span class="p">():</span>
-
-            <span class="n">current_diff</span> <span class="o">=</span> <span class="n">diff</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"ID == @objec_type.ID"</span><span class="p">)</span>
-
-            <span class="n">changes_on_left</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">current_diff</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"_merge == '-'"</span><span class="p">))</span>
-            <span class="n">changes_on_right</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">current_diff</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"_merge == '+'"</span><span class="p">))</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"@@ -1,</span><span class="si">{</span><span class="n">changes_on_left</span><span class="si">}</span><span class="s2"> +1,</span><span class="si">{</span><span class="n">changes_on_right</span><span class="si">}</span><span class="s2"> @@ </span><span class="si">{</span><span class="n">objec_type</span><span class="o">.</span><span class="n">VALUE</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">objec_type</span><span class="o">.</span><span class="n">ID</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-
-            <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">change</span> <span class="ow">in</span> <span class="p">(</span><span class="n">current_diff</span><span class="o">.</span><span class="n">_merge</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span> <span class="o">+</span> <span class="n">current_diff</span><span class="o">.</span><span class="n">KEY</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span> <span class="o">+</span> <span class="s2">" -&gt; "</span> <span class="o">+</span> <span class="n">current_diff</span><span class="o">.</span><span class="n">VALUE</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">))</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-                <span class="nb">print</span><span class="p">(</span><span class="n">change</span><span class="p">)</span></div>
-
-
-    <span class="c1"># Nice diff viewer https://diffy.org/</span>
 
 
 <div class="viewcode-block" id="content_hash">
@@ -1500,7 +1457,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -1520,7 +1477,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Building" href="building.html"><link rel="prev" title="SPARQL Architecture" href="sparql.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>SHACL Validation Architecture - triplets 0.2.0rc5 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
@@ -293,7 +293,7 @@
           <section id="shacl-validation-architecture">
 <h1>SHACL Validation Architecture<a class="headerlink" href="#shacl-validation-architecture" title="Link to this heading">¶</a></h1>
 <section id="status-known-limitations-alpha">
-<h2>Status &amp; known limitations (alpha)<a class="headerlink" href="#status-known-limitations-alpha" title="Link to this heading">¶</a></h2>
+<span id="status--known-limitations-alpha"></span><h2>Status &amp; known limitations (alpha)<a class="headerlink" href="#status-known-limitations-alpha" title="Link to this heading">¶</a></h2>
 <p>The module is new — APIs may still shift. Know these before relying on it:</p>
 <ul class="simple">
 <li><p><strong>Vectorized engines walk <code class="docutils literal notranslate"><span class="pre">sh:targetClass</span></code> and <code class="docutils literal notranslate"><span class="pre">sh:targetSubjectsOf</span></code>.</strong>
@@ -358,7 +358,7 @@ touching the public API:</p>
 engines via <code class="docutils literal notranslate"><span class="pre">triplets.validation.register_engine(name,</span> <span class="pre">module)</span></code>.</p>
 </section>
 <section id="compile-once-shacl-ir-py">
-<h2>Compile Once (<code class="docutils literal notranslate"><span class="pre">shacl_ir.py</span></code>)<a class="headerlink" href="#compile-once-shacl-ir-py" title="Link to this heading">¶</a></h2>
+<span id="compile-once-shacl_irpy"></span><h2>Compile Once (<code class="docutils literal notranslate"><span class="pre">shacl_ir.py</span></code>)<a class="headerlink" href="#compile-once-shacl-ir-py" title="Link to this heading">¶</a></h2>
 <p>Shapes are parsed by rdflib <strong>exactly once</strong> into <code class="docutils literal notranslate"><span class="pre">CompiledShapes</span></code>, cached by
 content hash of the shape sources:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>shapes.ttl ──rdflib──► CompiledShapes
@@ -787,7 +787,7 @@ SHACL report node still gets <code class="docutils literal notranslate"><span cl
 written.</p>
 </section>
 <section id="schema-validation-validate-schema-compile-schema">
-<h2>Schema validation (<code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> / <code class="docutils literal notranslate"><span class="pre">compile_schema</span></code>)<a class="headerlink" href="#schema-validation-validate-schema-compile-schema" title="Link to this heading">¶</a></h2>
+<span id="schema-validation-validate_schema--compile_schema"></span><h2>Schema validation (<code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> / <code class="docutils literal notranslate"><span class="pre">compile_schema</span></code>)<a class="headerlink" href="#schema-validation-validate-schema-compile-schema" title="Link to this heading">¶</a></h2>
 <p>Validate data directly against the export schema (rdf_map) — no SHACL shapes
 needed, no rdflib on this path:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">violations</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate_schema</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
@@ -832,7 +832,7 @@ violation types <code class="docutils literal notranslate"><span class="pre">xsd
 message tags <code class="docutils literal notranslate"><span class="pre">[rdfs_expected]</span></code>, <code class="docutils literal notranslate"><span class="pre">[rdfs_path]</span></code>, <code class="docutils literal notranslate"><span class="pre">[rdfs_profile]</span></code>, …</p>
 </section>
 <section id="shared-loading-rdflib-loader-py">
-<h2>Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)<a class="headerlink" href="#shared-loading-rdflib-loader-py" title="Link to this heading">¶</a></h2>
+<span id="shared-loading-_rdflib_loaderpy"></span><h2>Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)<a class="headerlink" href="#shared-loading-rdflib-loader-py" title="Link to this heading">¶</a></h2>
 <p>SHACL and SPARQL reach rdflib through the same two helpers, so a validation and
 a query over the same data see an identical graph:</p>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -953,7 +953,7 @@ a query over the same data see an identical graph:</p>
 exports with source locations — <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">examples/shacl_reports.py</span></code>).</p>
 </section>
 <section id="context-enrichment-validation-context-py">
-<h2>Context enrichment (<code class="docutils literal notranslate"><span class="pre">validation/context.py</span></code>)<a class="headerlink" href="#context-enrichment-validation-context-py" title="Link to this heading">¶</a></h2>
+<span id="context-enrichment-validationcontextpy"></span><h2>Context enrichment (<code class="docutils literal notranslate"><span class="pre">validation/context.py</span></code>)<a class="headerlink" href="#context-enrichment-validation-context-py" title="Link to this heading">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">validate(...,</span> <span class="pre">context=True)</span></code> — or standalone
 <code class="docutils literal notranslate"><span class="pre">enrich(violations,</span> <span class="pre">data=,</span> <span class="pre">shapes=,</span> <span class="pre">rdf_map=)</span></code> — appends <code class="docutils literal notranslate"><span class="pre">ENRICHMENT_COLUMNS</span></code>
 to the report. Every source is optional; absent sources leave their columns
@@ -996,7 +996,7 @@ matched. An object present in several instances is attributed to its first
 occurrence.</p>
 </section>
 <section id="sarif-2-1-0-export-validation-sarif-py">
-<h2>SARIF 2.1.0 export (<code class="docutils literal notranslate"><span class="pre">validation/sarif.py</span></code>)<a class="headerlink" href="#sarif-2-1-0-export-validation-sarif-py" title="Link to this heading">¶</a></h2>
+<span id="sarif-210-export-validationsarifpy"></span><h2>SARIF 2.1.0 export (<code class="docutils literal notranslate"><span class="pre">validation/sarif.py</span></code>)<a class="headerlink" href="#sarif-2-1-0-export-validation-sarif-py" title="Link to this heading">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">triplets.validation.export_to_sarif(violations,</span> <span class="pre">...)</span></code> /
 <code class="docutils literal notranslate"><span class="pre">violations.shacl.to_sarif(...)</span></code> — a spec-valid SARIF 2.1.0 log for GitHub,
 SonarQube or any SARIF viewer. Passing <code class="docutils literal notranslate"><span class="pre">data=</span></code>/<code class="docutils literal notranslate"><span class="pre">shapes=</span></code>/<code class="docutils literal notranslate"><span class="pre">rdf_map=</span></code> runs the

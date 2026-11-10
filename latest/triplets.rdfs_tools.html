@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.rdf_parser (deprecated)" href="triplets.rdf_parser.html"><link rel="prev" title="triplets.cgmes_tools module" href="triplets.cgmes_tools.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.rdfs_tools package - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.rdfs_tools package - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -295,9 +291,6 @@
 <section id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
 </section>
-<section id="triplets-rdfs-tools-rdfs-to-azuredtdl-v2-module">
-<h2>triplets.rdfs_tools.RDFS_to_AzureDTDL_V2 module<a class="headerlink" href="#triplets-rdfs-tools-rdfs-to-azuredtdl-v2-module" title="Link to this heading">¶</a></h2>
-</section>
 <section id="module-triplets.rdfs_tools.cim_rdfs_to_html">
 <span id="triplets-rdfs-tools-cim-rdfs-to-html-module"></span><h2>triplets.rdfs_tools.cim_rdfs_to_html module<a class="headerlink" href="#module-triplets.rdfs_tools.cim_rdfs_to_html" title="Link to this heading">¶</a></h2>
 <dl class="py function">
@@ -308,6 +301,15 @@
 </section>
 <section id="module-triplets.rdfs_tools.cim_rdfs_to_json">
 <span id="triplets-rdfs-tools-cim-rdfs-to-json-module"></span><h2>triplets.rdfs_tools.cim_rdfs_to_json module<a class="headerlink" href="#module-triplets.rdfs_tools.cim_rdfs_to_json" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.xsd_types_from_rdfs">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">xsd_types_from_rdfs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">profile_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#xsd_types_from_rdfs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.xsd_types_from_rdfs" title="Link to this definition">¶</a></dt>
+<dd><p>CIMDatatype local name → <code class="docutils literal notranslate"><span class="pre">xsd:float</span></code> from its <code class="docutils literal notranslate"><span class="pre">.value</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">.value</span></code> is typed by an XSD <code class="docutils literal notranslate"><span class="pre">rdfs:range</span></code> (typed RDFS) or by <code class="docutils literal notranslate"><span class="pre">cims:dataType</span></code>
+pointing at a Primitive (<code class="docutils literal notranslate"><span class="pre">Area.value</span></code> → <code class="docutils literal notranslate"><span class="pre">Float</span></code>) or another CIMDatatype;
+the chain is followed until it reaches an XSD type or a <code class="docutils literal notranslate"><span class="pre">cgmes_data_types_map</span></code> key.</p>
+</dd></dl>
+
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.convert_profile">
 <span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">convert_profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">profile_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">serialization_version</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'552_ED2'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#convert_profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert_profile" title="Link to this definition">¶</a></dt>
@@ -334,6 +336,16 @@
 <dd></dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.profile_version_iris">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">profile_version_iris</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prof_dir</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#profile_version_iris"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.profile_version_iris" title="Link to this definition">¶</a></dt>
+<dd><p>Map each IRI that identifies a profile’s RDFS to the PROF profile’s <code class="docutils literal notranslate"><span class="pre">owl:versionIRI</span></code>.</p>
+<p>The keys are the profile’s own versionIRI (CGMES: the RDFS reuses it) and its
+<code class="docutils literal notranslate"><span class="pre">prof:hasResource</span></code> entries (NCP: the vocabulary resource is the RDFS versionIRI).
+A key two profiles claim (shared constraints) identifies neither and is dropped.
+No PROF directory gives {}.</p>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="triplets.rdfs_tools.cim_rdfs_to_json.index_by_keyword">
 <span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.cim_rdfs_to_json.</span></span><span class="sig-name descname"><span class="pre">index_by_keyword</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">merged_profiles</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/cim_rdfs_to_json.html#index_by_keyword"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.cim_rdfs_to_json.index_by_keyword" title="Link to this definition">¶</a></dt>
 <dd><p>Index profiles by their keyword; profiles without one are dropped with an error.</p>
@@ -356,8 +368,30 @@
 <dd></dd></dl>
 
 </section>
-<section id="triplets-rdfs-tools-cim-rdfs-to-json-deprecated-module">
-<h2>triplets.rdfs_tools.cim_rdfs_to_json_deprecated module<a class="headerlink" href="#triplets-rdfs-tools-cim-rdfs-to-json-deprecated-module" title="Link to this heading">¶</a></h2>
+<section id="module-triplets.rdfs_tools.fetch_profiles">
+<span id="triplets-rdfs-tools-fetch-profiles-module"></span><h2>triplets.rdfs_tools.fetch_profiles module<a class="headerlink" href="#module-triplets.rdfs_tools.fetch_profiles" title="Link to this heading">¶</a></h2>
+<p>Fetch profile RDFS snapshots from upstream refs into rdfs/&lt;bundle&gt;/.</p>
+<p>The PROF descriptors (<code class="docutils literal notranslate"><span class="pre">prof_path</span></code>) go to rdfs/&lt;bundle&gt;/PROF/: they hold the profile
+IRI instances declare in <code class="docutils literal notranslate"><span class="pre">dcterms:conformsTo</span></code>, which the RDFS does not carry. A spec
+with only <code class="docutils literal notranslate"><span class="pre">prof_path</span></code> refreshes PROF/ alone (CGMES: the RDFS is a legacy snapshot) and
+keeps its SOURCE.json there. <code class="docutils literal notranslate"><span class="pre">ref</span></code> is a release branch, or a commit where no release
+branch carries the files (CGMES PROF lived only on the library’s main branch).</p>
+<p>Each snapshot is committed to this repo together with a SOURCE.json recording the
+upstream repo, ref, commit and fetch date, so schema generation stays reproducible
+offline while the provenance of every bundle remains visible.</p>
+<p>Usage: python -m triplets.rdfs_tools.fetch_profiles [bundle …]   (default: all)</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.fetch_profiles.fetch">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.fetch_profiles.</span></span><span class="sig-name descname"><span class="pre">fetch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdfs_root</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">PosixPath('/home/runner/work/triplets/triplets/rdfs')</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/fetch_profiles.html#fetch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.fetch_profiles.fetch" title="Link to this definition">¶</a></dt>
+<dd><p>Materialize rdfs/&lt;name&gt;/ and/or rdfs/&lt;name&gt;/PROF/ from spec = {repo, ref[, path][, prof_path]}
+and return the directory holding SOURCE.json.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.rdfs_tools.fetch_profiles.main">
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.fetch_profiles.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">argv</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/fetch_profiles.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.fetch_profiles.main" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
 </section>
 <section id="module-triplets.rdfs_tools.rdfs_tools">
 <span id="triplets-rdfs-tools-rdfs-tools-module"></span><h2>triplets.rdfs_tools.rdfs_tools module<a class="headerlink" href="#module-triplets.rdfs_tools.rdfs_tools" title="Link to this heading">¶</a></h2>
@@ -422,8 +456,13 @@ shortening is disabled (only the python engines support that).</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.get_namespace_and_name">
-<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">get_namespace_and_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_namespace</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#get_namespace_and_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.get_namespace_and_name" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<span class="sig-prename descclassname"><span class="pre">triplets.rdfs_tools.rdfs_tools.</span></span><span class="sig-name descname"><span class="pre">get_namespace_and_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdfs_tools/rdfs_tools.html#get_namespace_and_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.rdfs_tools.rdfs_tools.get_namespace_and_name" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">ns#name</span></code> / <code class="docutils literal notranslate"><span class="pre">ns/name</span></code> → (<code class="docutils literal notranslate"><span class="pre">ns#</span></code> / <code class="docutils literal notranslate"><span class="pre">ns/</span></code>, name) by <a class="reference internal" href="triplets.iri.html#triplets.iri.split_iri" title="triplets.iri.split_iri"><code class="xref py py-func docutils literal notranslate"><span class="pre">triplets.iri.split_iri()</span></code></a>.</p>
+<p>An absolute IRI (<a class="reference internal" href="triplets.iri.html#triplets.iri.is_absolute" title="triplets.iri.is_absolute"><code class="xref py py-func docutils literal notranslate"><span class="pre">triplets.iri.is_absolute()</span></code></a>) splits as is. A bare <code class="docutils literal notranslate"><span class="pre">name</span></code> or <code class="docutils literal notranslate"><span class="pre">#name</span></code> (local-form
+parses) takes <code class="docutils literal notranslate"><span class="pre">default_namespace</span> <span class="pre">+</span> <span class="pre">&quot;#&quot;</span></code>. Any other relative form (<code class="docutils literal notranslate"><span class="pre">a/b</span></code>, <code class="docutils literal notranslate"><span class="pre">./x</span></code>), and
+a bare / <code class="docutils literal notranslate"><span class="pre">#</span></code> name without <em>default_namespace</em>, raises: an absolute-form parse
+(<code class="docutils literal notranslate"><span class="pre">local_resources=False</span></code>) never yields one, so there is no namespace to guess.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.rdfs_tools.rdfs_tools.parse_multiplicity">
@@ -488,7 +527,7 @@ shortening is disabled (only the python engines support that).</p>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -516,24 +555,29 @@ shortening is disabled (only the python engines support that).</p>
             <ul>
 <li><a class="reference internal" href="#">triplets.rdfs_tools package</a><ul>
 <li><a class="reference internal" href="#submodules">Submodules</a></li>
-<li><a class="reference internal" href="#triplets-rdfs-tools-rdfs-to-azuredtdl-v2-module">triplets.rdfs_tools.RDFS_to_AzureDTDL_V2 module</a></li>
 <li><a class="reference internal" href="#module-triplets.rdfs_tools.cim_rdfs_to_html">triplets.rdfs_tools.cim_rdfs_to_html module</a><ul>
 <li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_html.export_to_html"><code class="docutils literal notranslate"><span class="pre">export_to_html()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#module-triplets.rdfs_tools.cim_rdfs_to_json">triplets.rdfs_tools.cim_rdfs_to_json module</a><ul>
+<li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.xsd_types_from_rdfs"><code class="docutils literal notranslate"><span class="pre">xsd_types_from_rdfs()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert_profile"><code class="docutils literal notranslate"><span class="pre">convert_profile()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.convert"><code class="docutils literal notranslate"><span class="pre">convert()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.insert_profile_into_profile"><code class="docutils literal notranslate"><span class="pre">insert_profile_into_profile()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.get_metadata"><code class="docutils literal notranslate"><span class="pre">get_metadata()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.export_single_profile"><code class="docutils literal notranslate"><span class="pre">export_single_profile()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.profile_version_iris"><code class="docutils literal notranslate"><span class="pre">profile_version_iris()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.index_by_keyword"><code class="docutils literal notranslate"><span class="pre">index_by_keyword()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.index_largest_per_keyword"><code class="docutils literal notranslate"><span class="pre">index_largest_per_keyword()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.build_bundle"><code class="docutils literal notranslate"><span class="pre">build_bundle()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.rdfs_tools.cim_rdfs_to_json.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#triplets-rdfs-tools-cim-rdfs-to-json-deprecated-module">triplets.rdfs_tools.cim_rdfs_to_json_deprecated module</a></li>
+<li><a class="reference internal" href="#module-triplets.rdfs_tools.fetch_profiles">triplets.rdfs_tools.fetch_profiles module</a><ul>
+<li><a class="reference internal" href="#triplets.rdfs_tools.fetch_profiles.fetch"><code class="docutils literal notranslate"><span class="pre">fetch()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.rdfs_tools.fetch_profiles.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#module-triplets.rdfs_tools.rdfs_tools">triplets.rdfs_tools.rdfs_tools module</a><ul>
 <li><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.load_all_to_dataframe"><code class="docutils literal notranslate"><span class="pre">load_all_to_dataframe()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.rdfs_tools.rdfs_tools.get_owl_metadata"><code class="docutils literal notranslate"><span class="pre">get_owl_metadata()</span></code></a></li>
@@ -565,7 +609,7 @@ shortening is disabled (only the python engines support that).</p>
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

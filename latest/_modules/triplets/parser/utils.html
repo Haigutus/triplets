@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.parser.utils - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.parser.utils - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -299,29 +295,33 @@
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
-<span class="n">RDF_NS</span> <span class="o">=</span> <span class="s2">"http://www.w3.org/1999/02/22-rdf-syntax-ns#"</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF_NS</span><span class="p">,</span> <span class="n">TRIPLETS_NS</span><span class="p">,</span> <span class="n">TYPE_KEY</span><span class="p">,</span> <span class="n">is_absolute</span><span class="p">,</span> <span class="n">local_id</span><span class="p">,</span> <span class="n">local_value</span><span class="p">,</span> <span class="n">resolve_iri</span>
+
 <span class="n">RDF_ID</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="si">{</span><span class="n">RDF_NS</span><span class="si">}</span><span class="se">}}</span><span class="s2">ID"</span>
 <span class="n">RDF_ABOUT</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="si">{</span><span class="n">RDF_NS</span><span class="si">}</span><span class="se">}}</span><span class="s2">about"</span>
 <span class="n">RDF_NODEID</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="si">{</span><span class="n">RDF_NS</span><span class="si">}</span><span class="se">}}</span><span class="s2">nodeID"</span>
 <span class="n">RDF_RESOURCE</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="se">{{</span><span class="si">{</span><span class="n">RDF_NS</span><span class="si">}</span><span class="se">}}</span><span class="s2">resource"</span>
+<span class="n">XML_BASE</span> <span class="o">=</span> <span class="s2">"{http://www.w3.org/XML/1998/namespace}base"</span>
 
 
-<div class="viewcode-block" id="clean_ID">
-<a class="viewcode-back" href="../../../triplets.parser.html#triplets.parser.utils.clean_ID">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">clean_ID</span><span class="p">(</span><span class="n">ID</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""Removes ID prefixes used in CIM - urn:uuid:, #_, _ ."""</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">ID</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s2">""</span>
-    <span class="n">ID</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ID</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">prefix</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"urn:uuid:"</span><span class="p">,</span> <span class="s2">"#_"</span><span class="p">,</span> <span class="s2">"_"</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">ID</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">prefix</span><span class="p">):</span>
-            <span class="n">ID</span> <span class="o">=</span> <span class="n">ID</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">prefix</span><span class="p">):]</span>
-    <span class="k">return</span> <span class="n">ID</span></div>
+<div class="viewcode-block" id="document_base">
+<a class="viewcode-back" href="../../../triplets.parser.html#triplets.parser.utils.document_base">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">document_base</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">default_base</span><span class="o">=</span><span class="n">TRIPLETS_NS</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Base for the absolute form: the root's declared ``xml:base`` when it is absolute</span>
+<span class="sd">    (:func:`~triplets.iri.is_absolute`), else *default_base* (None: no base). The document's own location (file path, zip entry) is never used —</span>
+<span class="sd">    it is not an identity and would differ per machine."""</span>
+    <span class="n">declared</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">XML_BASE</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">declared</span> <span class="k">if</span> <span class="n">is_absolute</span><span class="p">(</span><span class="n">declared</span><span class="p">)</span> <span class="k">else</span> <span class="n">default_base</span></div>
 
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_split_prefixed_name</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""Split 'prefix:localname' or {ns}local -&gt; localname."""</span>
+<span class="w">    </span><span class="sd">"""Split 'prefix:localname' or {ns}local -&gt; localname.</span>
+
+<span class="sd">    Native QName mirror of :func:`triplets.iri.split_iri`: XML already separates</span>
+<span class="sd">    namespace and local name, so no IRI string exists to shorten</span>
+<span class="sd">    (parity: tests/test_iri.py ``test_parse_engines_follow_iri_rules``).</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
         <span class="k">return</span> <span class="s2">""</span>
     <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"{"</span><span class="p">):</span>
@@ -332,6 +332,53 @@
     <span class="k">if</span> <span class="n">idx</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">name</span><span class="p">[</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:]</span>
     <span class="k">return</span> <span class="n">name</span>
+
+
+<div class="viewcode-block" id="iter_rdf_rows">
+<a class="viewcode-back" href="../../../triplets.parser.html#triplets.parser.utils.iter_rdf_rows">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">iter_rdf_rows</span><span class="p">(</span><span class="n">rdf_objects</span><span class="p">,</span> <span class="n">local_resources</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""RDF/XML object elements (lxml) → ``(ID, KEY, VALUE)`` rows, the one python copy of the</span>
+<span class="sd">    XML → triplet rules (the cython engine mirrors the local form in C++).</span>
+
+<span class="sd">    KEY and Type VALUE: the element local name. VALUE: element text, else the</span>
+<span class="sd">    ``rdf:resource`` / ``rdf:nodeID`` reference; ``""`` when there is neither. The ID</span>
+<span class="sd">    (``rdf:ID`` &gt; ``rdf:about`` &gt; ``rdf:nodeID``, ``""`` when none) and references are:</span>
+
+<span class="sd">    - ``local_resources=True`` — local: :func:`~triplets.iri.local_id` for the ID,</span>
+<span class="sd">      :func:`~triplets.iri.local_value` for references (the CIM instance convention).</span>
+<span class="sd">    - ``local_resources=False`` — absolute: resolved against *base* (:func:`document_base`:</span>
+<span class="sd">      the declared absolute ``xml:base``, else ``default_base``) with</span>
+<span class="sd">      :func:`~triplets.iri.resolve_iri`, so nothing downstream needs the base again.</span>
+<span class="sd">      ``rdf:ID="X"`` is ``base#X``. ``rdf:nodeID`` labels stay as written (blank nodes are</span>
+<span class="sd">      not supported).</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">local_resources</span><span class="p">:</span>                  <span class="c1"># the hot path: first attribute that exists wins</span>
+        <span class="k">for</span> <span class="n">rdf_object</span> <span class="ow">in</span> <span class="n">rdf_objects</span><span class="p">:</span>
+            <span class="n">attribs</span> <span class="o">=</span> <span class="n">rdf_object</span><span class="o">.</span><span class="n">attrib</span>
+            <span class="n">obj_id</span> <span class="o">=</span> <span class="n">local_id</span><span class="p">(</span><span class="n">attribs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_ID</span><span class="p">)</span> <span class="ow">or</span> <span class="n">attribs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_ABOUT</span><span class="p">)</span> <span class="ow">or</span> <span class="n">attribs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_NODEID</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">""</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="n">obj_id</span><span class="p">,</span> <span class="n">TYPE_KEY</span><span class="p">,</span> <span class="n">_split_prefixed_name</span><span class="p">(</span><span class="n">rdf_object</span><span class="o">.</span><span class="n">tag</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">rdf_object</span><span class="o">.</span><span class="n">iterchildren</span><span class="p">():</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">element</span><span class="o">.</span><span class="n">text</span>
+                <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="n">local_value</span><span class="p">(</span><span class="n">element</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_RESOURCE</span><span class="p">)</span> <span class="ow">or</span> <span class="n">element</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_NODEID</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">""</span><span class="p">)</span> \
+                        <span class="k">if</span> <span class="n">element</span><span class="o">.</span><span class="n">attrib</span> <span class="k">else</span> <span class="s2">""</span>
+                <span class="k">yield</span> <span class="n">obj_id</span><span class="p">,</span> <span class="n">_split_prefixed_name</span><span class="p">(</span><span class="n">element</span><span class="o">.</span><span class="n">tag</span><span class="p">),</span> <span class="n">value</span>
+        <span class="k">return</span>
+    <span class="k">for</span> <span class="n">rdf_object</span> <span class="ow">in</span> <span class="n">rdf_objects</span><span class="p">:</span>
+        <span class="n">attribs</span> <span class="o">=</span> <span class="n">rdf_object</span><span class="o">.</span><span class="n">attrib</span>
+        <span class="n">rdf_id</span><span class="p">,</span> <span class="n">about</span> <span class="o">=</span> <span class="n">attribs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_ID</span><span class="p">),</span> <span class="n">attribs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_ABOUT</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">rdf_id</span> <span class="ow">or</span> <span class="n">about</span><span class="p">:</span>
+            <span class="n">obj_id</span> <span class="o">=</span> <span class="n">resolve_iri</span><span class="p">(</span><span class="s2">"#"</span> <span class="o">+</span> <span class="n">rdf_id</span><span class="p">,</span> <span class="n">base</span><span class="p">)</span> <span class="k">if</span> <span class="n">rdf_id</span> <span class="k">else</span> <span class="n">resolve_iri</span><span class="p">(</span><span class="n">about</span><span class="p">,</span> <span class="n">base</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">obj_id</span> <span class="o">=</span> <span class="n">attribs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_NODEID</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">""</span>
+        <span class="k">yield</span> <span class="n">obj_id</span><span class="p">,</span> <span class="n">TYPE_KEY</span><span class="p">,</span> <span class="n">_split_prefixed_name</span><span class="p">(</span><span class="n">rdf_object</span><span class="o">.</span><span class="n">tag</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">rdf_object</span><span class="o">.</span><span class="n">iterchildren</span><span class="p">():</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">element</span><span class="o">.</span><span class="n">text</span>
+            <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">reference</span> <span class="o">=</span> <span class="n">element</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_RESOURCE</span><span class="p">)</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">resolve_iri</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="n">base</span><span class="p">)</span> <span class="k">if</span> <span class="n">reference</span> <span class="k">else</span> <span class="n">element</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_NODEID</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">""</span>
+            <span class="k">yield</span> <span class="n">obj_id</span><span class="p">,</span> <span class="n">_split_prefixed_name</span><span class="p">(</span><span class="n">element</span><span class="o">.</span><span class="n">tag</span><span class="p">),</span> <span class="n">value</span></div>
+
 
 
 <div class="viewcode-block" id="iter_all_xml">
@@ -454,7 +501,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -474,7 +521,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

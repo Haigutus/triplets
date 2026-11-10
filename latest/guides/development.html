@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Migration: 0.0 → 0.1" href="migration_0.0_to_0.1.html"><link rel="prev" title="Testing" href="testing.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Development Notes - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>Development Notes - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -303,8 +299,7 @@ documented in the reference guides (<a class="reference internal" href="validati
 <div><p><strong>Auto-selection of the fastest available engine applies only to operations
 whose result is flavor-independent</strong> (parsed files, exported bytes/XML, query
 results, violation reports). <strong>Frame-in → frame-out operations always run in
-the input object’s engine</strong> — never auto-hop pandas → polars (measured: the
-round-trip conversion ≈16 ms/1M rows exceeds typical op savings ≈8 ms).</p>
+the input object’s engine</strong> — never auto-hop pandas → polars.</p>
 </div></blockquote>
 <p>All engine dispatch goes through <strong><code class="docutils literal notranslate"><span class="pre">triplets._registry.EngineRegistry</span></code></strong> — do
 not hand-roll module maps or local try-import blocks. Registries are
@@ -377,9 +372,149 @@ per subsystem (plus available alternatives); <code class="docutils literal notra
 Precedence: per-call <code class="docutils literal notranslate"><span class="pre">engine=</span></code> &gt; <code class="docutils literal notranslate"><span class="pre">set_engine()</span></code> &gt; auto probe order.
 <code class="docutils literal notranslate"><span class="pre">set_engine</span></code> is process-global startup configuration, not a per-thread
 control — concurrent code passes <code class="docutils literal notranslate"><span class="pre">engine=</span></code> per call. Per-call capability
-constraints still apply regardless of overrides (cimxml <code class="docutils literal notranslate"><span class="pre">datatypes=True</span></code>
-requires python_lxml; validation keeps duckdb out of auto because it is the
-explicit larger-than-memory choice).</p>
+constraints still apply regardless of overrides (a streaming N-Quads export
+of a <code class="docutils literal notranslate"><span class="pre">RecordBatchReader</span></code> requires polars; validation keeps duckdb out of auto
+because it is the explicit larger-than-memory choice).</p>
+</section>
+<section id="iri-contract-triplets-iri">
+<span id="iri-contract-tripletsiri"></span><h2>IRI contract (<code class="docutils literal notranslate"><span class="pre">triplets.iri</span></code>)<a class="headerlink" href="#iri-contract-triplets-iri" title="Link to this heading">¶</a></h2>
+<p>Short triplet names ↔ absolute IRIs is defined once, in <code class="docutils literal notranslate"><span class="pre">triplets/iri/</span></code>. Never
+split on <code class="docutils literal notranslate"><span class="pre">#</span></code>, strip <code class="docutils literal notranslate"><span class="pre">urn:uuid:</span></code> or prepend <code class="docutils literal notranslate"><span class="pre">CIM100#</span></code> at a call site — pick the
+function for the column:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>column / context</p></th>
+<th class="head"><p>local</p></th>
+<th class="head"><p>absolute</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ID</span></code>, <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>, focus node, graph</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">local_id</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">absolute_id</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">KEY</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">local_key(iri,</span> <span class="pre">type_key=&quot;Type&quot;)</span></code> (<code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> → <em>type_key</em>, else the split’s local name)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">absolute_key</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">VALUE</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">local_value(iri,</span> <span class="pre">kind)</span></code>: <code class="docutils literal notranslate"><span class="pre">class</span></code> / <code class="docutils literal notranslate"><span class="pre">enum</span></code> → name, <code class="docutils literal notranslate"><span class="pre">reference</span></code> → <code class="docutils literal notranslate"><span class="pre">local_id</span></code>, <code class="docutils literal notranslate"><span class="pre">None</span></code> → guess</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">absolute_value</span></code> → <code class="docutils literal notranslate"><span class="pre">(kind,</span> <span class="pre">payload)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>namespace + local name of any IRI (vocabulary labels, RDFS tools)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">split_iri</span></code></p></td>
+<td><p>—</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>One split, <code class="docutils literal notranslate"><span class="pre">split_iri</span></code> (last <code class="docutils literal notranslate"><span class="pre">#</span></code> or <code class="docutils literal notranslate"><span class="pre">/</span></code>, else a URN’s last <code class="docutils literal notranslate"><span class="pre">:</span></code>; lossless), and two
+policies on top: a <strong>name</strong> (KEY, class, enum value) always drops its namespace —
+the schema restores it; a <strong>node</strong> (ID, reference) drops only what a convention
+restores (<code class="docutils literal notranslate"><span class="pre">local_id</span></code>: <code class="docutils literal notranslate"><span class="pre">urn:uuid:</span></code>, <code class="docutils literal notranslate"><span class="pre">#_</span></code>, <code class="docutils literal notranslate"><span class="pre">_</span></code>) and otherwise stays whole. Without
+a schema <code class="docutils literal notranslate"><span class="pre">local_value</span></code> guesses: an <code class="docutils literal notranslate"><span class="pre">http(s)</span></code> IRI with <code class="docutils literal notranslate"><span class="pre">#</span></code> is a name, anything else
+a node or an external URL. <code class="docutils literal notranslate"><span class="pre">read_nquads(rdf_map=…)</span></code> gives the exact kind from
+<code class="docutils literal notranslate"><span class="pre">iri.value_types</span></code>. SHACL terms use the rule of the column they land on: paths →
+<code class="docutils literal notranslate"><span class="pre">local_key</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:class</span></code> / targets → <code class="docutils literal notranslate"><span class="pre">local_value(…,</span> <span class="pre">&quot;class&quot;)</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:in</span></code> /
+<code class="docutils literal notranslate"><span class="pre">sh:hasValue</span></code> → <code class="docutils literal notranslate"><span class="pre">local_value</span></code>; labels (severity, <code class="docutils literal notranslate"><span class="pre">xsd:</span></code> names, components) →
+<code class="docutils literal notranslate"><span class="pre">split_iri(…)[1]</span></code>.</p>
+<ul>
+<li><p>The absolute side takes flat maps built from <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code>, one function per
+map, each a single comprehension over <code class="docutils literal notranslate"><span class="pre">rdf_map_entries</span></code> (the root entries
+of a flat schema, then every profile section; first occurrence wins): <code class="docutils literal notranslate"><span class="pre">namespaces</span></code> (name → namespace IRI),
+<code class="docutils literal notranslate"><span class="pre">key_types</span></code> (name → schema entry type), <code class="docutils literal notranslate"><span class="pre">value_types</span></code> (KEY → <code class="docutils literal notranslate"><span class="pre">literal</span></code> /
+<code class="docutils literal notranslate"><span class="pre">reference</span></code> / <code class="docutils literal notranslate"><span class="pre">enum</span></code>, by entry type only), <code class="docutils literal notranslate"><span class="pre">datatypes</span></code> (Attribute KEY →
+datatype IRI, <code class="docutils literal notranslate"><span class="pre">None</span></code> = <code class="docutils literal notranslate"><span class="pre">xsd:string</span></code> / <code class="docutils literal notranslate"><span class="pre">rdf:langString</span></code> / a tagged KEY; anyURI
+included), <code class="docutils literal notranslate"><span class="pre">languages</span></code> (Attribute KEY → fixed language tag, written <code class="docutils literal notranslate"><span class="pre">&quot;text&quot;&#64;tag</span></code> /
+<code class="docutils literal notranslate"><span class="pre">xml:lang</span></code>), and <code class="docutils literal notranslate"><span class="pre">prefixes</span></code> (prefix → namespace; the one map read from the
+<code class="docutils literal notranslate"><span class="pre">ProfileNamespaceMap</span></code>s instead of the entries, first binding wins; <code class="docutils literal notranslate"><span class="pre">xsd</span></code>,
+<code class="docutils literal notranslate"><span class="pre">rdf</span></code>, <code class="docutils literal notranslate"><span class="pre">rdfs</span></code> built in where no map binds them). No cache: each is built on
+demand. Public entry points (<code class="docutils literal notranslate"><span class="pre">validate_shacl</span></code>,
+<code class="docutils literal notranslate"><span class="pre">validate_schema</span></code>, <code class="docutils literal notranslate"><span class="pre">export_to_*</span></code>, the qlever ingest) call <code class="docutils literal notranslate"><span class="pre">load_rdf_map</span></code>
+once; below them only dicts flow, so a path is parsed once per call. The
+validations hand the engines the scoped, merged schema
+(<code class="docutils literal notranslate"><span class="pre">validation.schema_scope.scoped_rdf_map</span></code>), so first-wins never decides
+between profiles there.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">xsd:type</span></code> is any prefixed name or absolute IRI, expanded by <code class="docutils literal notranslate"><span class="pre">prefixes</span></code>
+(<code class="docutils literal notranslate"><span class="pre">absolute_datatype</span></code>); N-Quads and both CIM XML engines write it as is
+(<code class="docutils literal notranslate"><span class="pre">cim:ActivePower</span></code> → <code class="docutils literal notranslate"><span class="pre">^^&lt;…#ActivePower&gt;</span></code>). A prefix no <code class="docutils literal notranslate"><span class="pre">ProfileNamespaceMap</span></code>
+binds raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> naming the KEY when the map is built — in every
+entry point that builds <code class="docutils literal notranslate"><span class="pre">datatypes</span></code>, whether or not the KEY occurs in the data.</p></li>
+<li><p><strong>The schema entry type decides the serialisation form, never <code class="docutils literal notranslate"><span class="pre">xsd:type</span></code></strong>
+and never the shape of the text: an Attribute value is a literal even when
+it reads <code class="docutils literal notranslate"><span class="pre">https://…</span></code> or looks like a UUID (<code class="docutils literal notranslate"><span class="pre">xsd:type</span></code> only annotates it), an
+Association value is <code class="docutils literal notranslate"><span class="pre">absolute_id(value)</span></code> (absolute passes through, else
+<code class="docutils literal notranslate"><span class="pre">urn:uuid:</span></code>), an Enumeration value an enum IRI. The absolute-IRI / canonical-
+UUID heuristic applies only to a KEY the schema does not declare.
+<code class="docutils literal notranslate"><span class="pre">node_kind</span></code> gives the SHACL engines the same decision for <code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code>.</p></li>
+<li><p>An IRI stays an IRI: <code class="docutils literal notranslate"><span class="pre">absolute_id</span></code> / <code class="docutils literal notranslate"><span class="pre">absolute_name</span></code> percent-encode what an
+IRIREF may not hold (<code class="docutils literal notranslate"><span class="pre">encode_iri</span></code>); the N-Quads / SPARQL readers reverse only
+those escapes (<code class="docutils literal notranslate"><span class="pre">decode_iri</span></code>). Literals are never encoded.</p></li>
+<li><p><strong>Undefined names</strong> — a class not in the schema (abstract CIM classes such as
+<code class="docutils literal notranslate"><span class="pre">Equipment</span></code> included), a KEY not in it, an enum value not in it, and every
+name when there is no <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> — take <code class="docutils literal notranslate"><span class="pre">undefined_namespace</span></code>.
+<code class="docutils literal notranslate"><span class="pre">absolute_name</span></code> has no schema branch: the map answers or the parameter does.
+<code class="docutils literal notranslate"><span class="pre">iri.defined(key,</span> <span class="pre">value,</span> <span class="pre">namespaces,</span> <span class="pre">value_types)</span></code> names the row-level test.
+Every exporter has the same two knobs: <code class="docutils literal notranslate"><span class="pre">export_undefined</span></code> (write such rows
+or drop them — N-Quads keeps them by default, CIM XML drops them) and
+<code class="docutils literal notranslate"><span class="pre">undefined_namespace</span></code> (default <code class="docutils literal notranslate"><span class="pre">http://triplets#</span></code>). <code class="docutils literal notranslate"><span class="pre">sparql.query</span></code>,
+<code class="docutils literal notranslate"><span class="pre">validate_shacl</span></code>, <code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> and <code class="docutils literal notranslate"><span class="pre">export_to_shacl_report</span></code> always load every
+row and default the namespace to CIM100 so schema-less data answers <code class="docutils literal notranslate"><span class="pre">cim:</span></code>
+queries; the same frame therefore exports <code class="docutils literal notranslate"><span class="pre">triplets#Equipment</span></code> and is
+queried as <code class="docutils literal notranslate"><span class="pre">CIM100#Equipment</span></code> unless the parameter is passed.</p></li>
+<li><p>Flavors: <code class="docutils literal notranslate"><span class="pre">iri_pandas</span></code> (Series in/out), <code class="docutils literal notranslate"><span class="pre">iri_polars</span></code> (Expr in/out, no UDFs),
+<code class="docutils literal notranslate"><span class="pre">iri_duckdb</span></code> (SQL text in/out) carry the same names.
+<code class="docutils literal notranslate"><span class="pre">__init__</span></code> imports only the standard library — the parser imports it per file.</p></li>
+<li><p><strong>Types:</strong> <code class="docutils literal notranslate"><span class="pre">Type</span></code> (<code class="docutils literal notranslate"><span class="pre">iri.TYPE_KEY</span></code>) is the typed-node element name, one per CIM
+object; <code class="docutils literal notranslate"><span class="pre">Description</span></code> (<code class="docutils literal notranslate"><span class="pre">iri.DESCRIPTION_TYPE</span></code>) means <code class="docutils literal notranslate"><span class="pre">rdf:Description</span></code>, not a
+class. An explicit <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> child is the ordinary KEY <code class="docutils literal notranslate"><span class="pre">type</span></code>, which collides
+with <code class="docutils literal notranslate"><span class="pre">dcterms:type</span></code> on export (known limitation):
+<a class="reference internal" href="parsers.html#types-type-vs-rdf-type"><span class="std std-ref">parsers.md — Types</span></a>.</p></li>
+<li><p><strong>Importers have two sources of truth</strong>, each held to the rows above:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>importer</p></th>
+<th class="head"><p>rules from</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CIM XML: <code class="docutils literal notranslate"><span class="pre">python_lxml_pandas</span></code>, <code class="docutils literal notranslate"><span class="pre">python_lxml_arrow</span></code>, <code class="docutils literal notranslate"><span class="pre">rdf_parser.load_RDF_to_list</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">parser.utils.iter_rdf_rows</span></code> — the one python row loop</p></td>
+</tr>
+<tr class="row-odd"><td><p>CIM XML: <code class="docutils literal notranslate"><span class="pre">cython_pugixml_arrow</span></code></p></td>
+<td><p>C++ mirror of that loop (<code class="docutils literal notranslate"><span class="pre">clean_id</span></code>, <code class="docutils literal notranslate"><span class="pre">clean_ref_value</span></code>, tag <code class="docutils literal notranslate"><span class="pre">local_name</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">read_nquads</span></code>, oxigraph / qlever CONSTRUCT (<code class="docutils literal notranslate"><span class="pre">terms_to_triplets</span></code>), rdflib CONSTRUCT, <code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code> results, the pyshacl report</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">iri.decode_iri</span></code> once, then <code class="docutils literal notranslate"><span class="pre">local_id</span></code> / <code class="docutils literal notranslate"><span class="pre">local_key</span></code> / <code class="docutils literal notranslate"><span class="pre">local_value</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>SPARQL SELECT</p></td>
+<td><p>none — absolute IRIs as stored</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The XML side splits element QNames natively (XML already separates namespace
+and local name, so no IRI string exists for <code class="docutils literal notranslate"><span class="pre">local_key</span></code>) and finds the RDF
+attributes by namespace (the cython engine resolves the prefix the root binds to
+it). <code class="docutils literal notranslate"><span class="pre">test_parse_engines_follow_iri_rules</span></code> derives every object row from lxml’s
+resolved QNames with the <code class="docutils literal notranslate"><span class="pre">triplets.iri</span></code> functions and requires each parser to
+produce exactly those rows, for any RDF prefix. The XML side has no <code class="docutils literal notranslate"><span class="pre">%XX</span></code>
+decoding and no subject join (see <em>Known limitations</em> in parsers.md).</p>
+</li>
+<li><p>Native mirrors (cython parser <code class="docutils literal notranslate"><span class="pre">clean_id</span></code>/<code class="docutils literal notranslate"><span class="pre">clean_ref_value</span></code>, qlever C++
+<code class="docutils literal notranslate"><span class="pre">isUri</span></code>/<code class="docutils literal notranslate"><span class="pre">isUuid</span></code>/<code class="docutils literal notranslate"><span class="pre">namespaceFor</span></code>/<code class="docutils literal notranslate"><span class="pre">encodeIri</span></code>) are commented as such and checked by the
+parse / ingest parity tests. Vectorized patterns derive from the constants
+(<code class="docutils literal notranslate"><span class="pre">ID_PREFIX_RE</span></code>, <code class="docutils literal notranslate"><span class="pre">URI_PREFIXES</span></code> / <code class="docutils literal notranslate"><span class="pre">URI_PREFIX_RE</span></code>, <code class="docutils literal notranslate"><span class="pre">UUID_RE.pattern</span></code>), so a prefix change
+cannot miss a flavor.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">UUID_RE</span></code> (strict lowercase, export rule) and <code class="docutils literal notranslate"><span class="pre">REFERENCE_LIKE</span></code> (loose
+nodeKind heuristic) are different contracts on purpose.</p></li>
+<li><p>CIM XML export is <em>not</em> on <code class="docutils literal notranslate"><span class="pre">absolute_id</span></code>: <code class="docutils literal notranslate"><span class="pre">rdf:about</span></code> / <code class="docutils literal notranslate"><span class="pre">rdf:resource</span></code> prefixes
+are the per-class schema <code class="docutils literal notranslate"><span class="pre">value_prefix</span></code>, and enum namespaces come from the
+resolved instance profile map (both CIM XML engines agree); only the
+<code class="docutils literal notranslate"><span class="pre">rdf:datatype</span></code> annotation uses <code class="docutils literal notranslate"><span class="pre">iri.datatypes</span></code>.</p></li>
+</ul>
 </section>
 <section id="flavor-conversion">
 <h2>Flavor conversion<a class="headerlink" href="#flavor-conversion" title="Link to this heading">¶</a></h2>
@@ -472,7 +607,7 @@ after load.</p></li>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -500,6 +635,7 @@ after load.</p></li>
             <ul>
 <li><a class="reference internal" href="#">Development Notes</a><ul>
 <li><a class="reference internal" href="#engine-model">Engine model</a></li>
+<li><a class="reference internal" href="#iri-contract-triplets-iri">IRI contract (<code class="docutils literal notranslate"><span class="pre">triplets.iri</span></code>)</a></li>
 <li><a class="reference internal" href="#flavor-conversion">Flavor conversion</a></li>
 <li><a class="reference internal" href="#polars-engine-guidance">Polars Engine Guidance</a></li>
 </ul>
@@ -513,7 +649,7 @@ after load.</p></li>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>

@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.tools.duckdb_engine - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.tools.duckdb_engine - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -288,7 +284,7 @@
 <span></span><span class="sd">"""DuckDB SQL-based implementation of triplet tools.</span>
 
 <span class="sd">Functions are monkey-patched onto duckdb.DuckDBPyConnection.</span>
-<span class="sd">The *_tableview helpers create a named SQL view and return a relation over it</span>
+<span class="sd">The ``*_tableview`` helpers create a named SQL view and return a relation over it</span>
 <span class="sd">(named/re-queryable, still lazy); other query/reference helpers return a</span>
 <span class="sd">DuckDBPyRelation; types_dict and get_namespace_map return python values;</span>
 <span class="sd">triplets_to_tableviews returns a dict.</span>
@@ -312,6 +308,8 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">weakref</span><span class="w"> </span><span class="kn">import</span> <span class="n">WeakKeyDictionary</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">._diff_report</span><span class="w"> </span><span class="kn">import</span> <span class="n">print_diff</span>
+
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 <span class="n">_DEFAULT_TABLE</span> <span class="o">=</span> <span class="s2">"triplets"</span>
@@ -334,17 +332,17 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_is_read_only</span><span class="p">(</span><span class="n">connection</span><span class="p">):</span>
-    <span class="n">row</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
-        <span class="s2">"SELECT value FROM duckdb_settings() WHERE name = 'access_mode'"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">row</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"read_only"</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+        <span class="s2">"SELECT value FROM duckdb_settings() WHERE name = 'access_mode'"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">"read_only"</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_load_config</span><span class="p">(</span><span class="n">connection</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""(schema, table) stored in the database, or None when never configured."""</span>
     <span class="n">exists</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
         <span class="s2">"SELECT 1 FROM duckdb_tables() "</span>
-        <span class="s2">"WHERE schema_name = 'main' AND table_name = '_triplets_config'"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">exists</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="s2">"WHERE schema_name = 'main' AND table_name = '_triplets_config'"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">exists</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span>
     <span class="n">stored</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT key, value FROM </span><span class="si">{</span><span class="n">_CONFIG_TABLE</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
     <span class="k">return</span> <span class="n">stored</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"schema"</span><span class="p">),</span> <span class="n">stored</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"table"</span><span class="p">,</span> <span class="n">_DEFAULT_TABLE</span><span class="p">)</span>
@@ -394,11 +392,11 @@
 <span class="sd">    ``row_number() OVER ()`` when the target has none (a VIEW or a registered</span>
 <span class="sd">    frame) — order then follows scan order, so only tie-breaks among duplicate</span>
 <span class="sd">    (ID, KEY) rows are affected."""</span>
-    <span class="n">row</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
         <span class="s2">"SELECT 1 FROM duckdb_tables() "</span>
         <span class="s2">"WHERE table_name = ? AND schema_name = COALESCE(?, current_schema())"</span><span class="p">,</span>
-        <span class="p">[</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="p">])</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">row</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="p">[</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="p">])</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">rows</span><span class="p">:</span>
         <span class="k">return</span> <span class="s2">"rowid"</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"</span><span class="si">%s</span><span class="s2"> has no rowid (view/registered frame) — using row_number()"</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
     <span class="k">return</span> <span class="s2">"row_number() OVER ()"</span>
@@ -436,8 +434,9 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_in_list</span><span class="p">(</span><span class="n">values</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Comma-separated SQL literal list from an iterable of values."""</span>
-    <span class="k">return</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_lit</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">)</span>
+<span class="w">    </span><span class="sd">"""Comma-separated SQL literal list from an iterable of values; NULL when</span>
+<span class="sd">    empty, so ``IN (...)`` matches nothing instead of failing."""</span>
+    <span class="k">return</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_lit</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">"NULL"</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
@@ -543,7 +542,7 @@
     <span class="n">types</span> <span class="o">=</span> <span class="p">[</span><span class="n">type_name</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">type_name</span><span class="p">)</span>
     <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span> <span class="o">=</span> <span class="n">_table_parts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">ref</span> <span class="o">=</span> <span class="n">_sql_name</span><span class="p">(</span><span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">)</span>
-    <span class="n">ids</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"SELECT DISTINCT ID FROM </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2"> WHERE KEY = 'Type' AND VALUE IN (</span><span class="si">{</span><span class="n">_in_list</span><span class="p">(</span><span class="n">types</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span> <span class="k">if</span> <span class="n">types</span> <span class="k">else</span> <span class="s2">"SELECT NULL AS ID WHERE FALSE"</span>
+    <span class="n">ids</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"SELECT DISTINCT ID FROM </span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2"> WHERE KEY = 'Type' AND VALUE IN (</span><span class="si">{</span><span class="n">_in_list</span><span class="p">(</span><span class="n">types</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span>
     <span class="k">return</span> <span class="n">_pivot_view</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">view_name</span> <span class="ow">or</span> <span class="s2">"/"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">types</span><span class="p">),</span> <span class="n">ids</span><span class="p">,</span> <span class="n">ref</span><span class="p">,</span> <span class="n">_ord_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sch</span><span class="p">,</span> <span class="n">tbl</span><span class="p">),</span> <span class="n">sch</span><span class="p">,</span>
                        <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span></div>
 
@@ -583,14 +582,15 @@
 
 <div class="viewcode-block" id="filter_triplets_by_type">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.filter_triplets_by_type">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets_by_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Filter to only objects of a specific type. Returns DuckDBPyRelation (lazy)."""</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">filter_triplets_by_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">type_name</span><span class="p">,</span> <span class="n">type_key</span><span class="o">=</span><span class="s2">"Type"</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Filter to only objects of a specific type (str or list-like of str). Returns DuckDBPyRelation (lazy)."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
+    <span class="n">type_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">type_name</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">type_name</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">else</span> <span class="nb">list</span><span class="p">(</span><span class="n">type_name</span><span class="p">)</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT d.* FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> d</span>
 <span class="s2">        WHERE d.ID IN (</span>
 <span class="s2">            SELECT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span>
-<span class="s2">            WHERE KEY = 'Type' AND VALUE = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">type_name</span><span class="p">)</span><span class="si">}</span>
+<span class="s2">            WHERE KEY = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">type_key</span><span class="p">)</span><span class="si">}</span><span class="s2"> AND VALUE IN (</span><span class="si">{</span><span class="n">_in_list</span><span class="p">(</span><span class="n">type_names</span><span class="p">)</span><span class="si">}</span><span class="s2">)</span>
 <span class="s2">        )</span>
 <span class="s2">    """</span><span class="p">)</span></div>
 
@@ -663,12 +663,14 @@
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_references_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span> <span class="n">levels</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">keep_ord</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ord_expr</span><span class="o">=</span><span class="s2">"rowid"</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""references_from + references_to, deduped on (ID,KEY,VALUE,INSTANCE_ID)</span>
-<span class="sd">    keeping the FROM side first — matches pandas concat+drop_duplicates. _ord is</span>
+<span class="sd">    keeping the FROM side, then the lowest level first — matches pandas</span>
+<span class="sd">    concat+drop_duplicates (an object referencing itself, e.g. by mRID, is</span>
+<span class="sd">    reached again one level down). _ord is</span>
 <span class="sd">    the base-table load order (kept only when a downstream pivot needs it)."""</span>
     <span class="n">drop</span> <span class="o">=</span> <span class="s2">"_src, _rn"</span> <span class="k">if</span> <span class="n">keep_ord</span> <span class="k">else</span> <span class="s2">"_src, _rn, _ord"</span>
     <span class="k">return</span> <span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        SELECT * EXCLUDE (</span><span class="si">{</span><span class="n">drop</span><span class="si">}</span><span class="s2">) FROM (</span>
-<span class="s2">            SELECT *, row_number() OVER (PARTITION BY ID, KEY, VALUE, INSTANCE_ID ORDER BY _src, _ord) AS _rn</span>
+<span class="s2">            SELECT *, row_number() OVER (PARTITION BY ID, KEY, VALUE, INSTANCE_ID ORDER BY _src, level, _ord) AS _rn</span>
 <span class="s2">            FROM (</span>
 <span class="s2">                SELECT *, 0 AS _src FROM (</span><span class="si">{</span><span class="n">_refs_from_sql</span><span class="p">(</span><span class="n">reference</span><span class="p">,</span><span class="w"> </span><span class="n">levels</span><span class="p">,</span><span class="w"> </span><span class="n">table_name</span><span class="p">,</span><span class="w"> </span><span class="n">ord_expr</span><span class="p">)</span><span class="si">}</span><span class="s2">)</span>
 <span class="s2">                UNION ALL</span>
@@ -831,7 +833,7 @@
     <span class="n">sel</span> <span class="o">=</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s1">', p."</span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s1">"'</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">keep</span><span class="p">)</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
 <span class="s2">        WITH refs AS (</span><span class="si">{</span><span class="n">refs_sql</span><span class="si">}</span><span class="s2">),</span>
-<span class="s2">        p AS (PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE FROM refs GROUP BY ID, KEY)</span>
+<span class="s2">        p AS (PIVOT (SELECT ID, KEY, arg_min(VALUE, _ord) AS VALUE FROM (</span><span class="si">{</span><span class="n">refs_sql</span><span class="si">}</span><span class="s2">) GROUP BY ID, KEY)</span>
 <span class="s2">              ON KEY USING FIRST(VALUE) GROUP BY ID),</span>
 <span class="s2">        m AS (SELECT ID, ANY_VALUE(level) AS level, ANY_VALUE(ID_FROM) AS ID_FROM,</span>
 <span class="s2">                     ANY_VALUE(ID_TO) AS ID_TO FROM refs GROUP BY ID)</span>
@@ -976,16 +978,16 @@
 <span class="sd">    _merge column. Returns DuckDBPyRelation."""</span>
     <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
     <span class="n">_materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="s2">"_new_data"</span><span class="p">)</span>
+    <span class="c1"># a missing VALUE is "" on both sides, as in every engine</span>
+    <span class="n">anti</span> <span class="o">=</span> <span class="s2">"ANTI JOIN </span><span class="si">{}</span><span class="s2"> o ON o.ID = d.ID AND o.KEY = d.KEY AND COALESCE(o.VALUE, '') = COALESCE(d.VALUE, '')"</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"""</span>
-<span class="s2">        SELECT ID, KEY, VALUE, INSTANCE_ID AS INSTANCE_ID_OLD, NULL AS INSTANCE_ID_NEW,</span>
+<span class="s2">        SELECT ID, KEY, COALESCE(VALUE, '') AS VALUE, INSTANCE_ID AS INSTANCE_ID_OLD, NULL AS INSTANCE_ID_NEW,</span>
 <span class="s2">               'left_only' AS _merge</span>
-<span class="s2">        FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span>
-<span class="s2">        WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM _new_data)</span>
+<span class="s2">        FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> d </span><span class="si">{</span><span class="n">anti</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s2">"_new_data"</span><span class="p">)</span><span class="si">}</span>
 <span class="s2">        UNION ALL BY NAME</span>
-<span class="s2">        SELECT ID, KEY, VALUE, NULL AS INSTANCE_ID_OLD, INSTANCE_ID AS INSTANCE_ID_NEW,</span>
+<span class="s2">        SELECT ID, KEY, COALESCE(VALUE, '') AS VALUE, NULL AS INSTANCE_ID_OLD, INSTANCE_ID AS INSTANCE_ID_NEW,</span>
 <span class="s2">               'right_only' AS _merge</span>
-<span class="s2">        FROM _new_data</span>
-<span class="s2">        WHERE (ID, KEY, VALUE) NOT IN (SELECT ID, KEY, VALUE FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">)</span>
+<span class="s2">        FROM _new_data d </span><span class="si">{</span><span class="n">anti</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span><span class="si">}</span>
 <span class="s2">    """</span><span class="p">)</span></div>
 
 
@@ -1008,17 +1010,27 @@
 
 <div class="viewcode-block" id="print_triplets_diff">
 <a class="viewcode-back" href="../../../triplets.tools.html#triplets.tools.duckdb_engine.print_triplets_diff">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">print_triplets_diff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">file_id_object</span><span class="o">=</span><span class="s2">"Distribution"</span><span class="p">,</span> <span class="n">file_id_key</span><span class="o">=</span><span class="s2">"label"</span><span class="p">,</span>
-                        <span class="n">exclude_objects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Print a simple removed/added diff of the table against new_data."""</span>
-    <span class="n">diff</span> <span class="o">=</span> <span class="n">diff_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>
-    <span class="n">removed</span> <span class="o">=</span> <span class="n">diff</span><span class="p">[</span><span class="n">diff</span><span class="p">[</span><span class="s2">"_merge"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"left_only"</span><span class="p">]</span>
-    <span class="n">added</span> <span class="o">=</span> <span class="n">diff</span><span class="p">[</span><span class="n">diff</span><span class="p">[</span><span class="s2">"_merge"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"right_only"</span><span class="p">]</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"--- removed (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">removed</span><span class="p">)</span><span class="si">}</span><span class="s2"> triplets) / +++ added (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">added</span><span class="p">)</span><span class="si">}</span><span class="s2"> triplets) ---"</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">removed</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"- </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'ID'</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'KEY'</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'VALUE'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">added</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"+ </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'ID'</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'KEY'</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s1">'VALUE'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">print_triplets_diff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">file_id_object</span><span class="o">=</span><span class="s2">"Distribution"</span><span class="p">,</span> <span class="n">file_id_key</span><span class="o">=</span><span class="s2">"label"</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                        <span class="n">include_objects</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">context_keys</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">stat</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Print a unified diff of the table against new_data; returns the number of</span>
+<span class="sd">    differing triplets. Same output and options as the pandas engine."""</span>
+    <span class="n">table_name</span> <span class="o">=</span> <span class="n">_resolve_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
+    <span class="n">_materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="s2">"_diff_new_data"</span><span class="p">)</span>
+    <span class="n">labels</span> <span class="o">=</span> <span class="p">[[</span><span class="n">label</span> <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT VALUE FROM </span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2"> WHERE KEY = </span><span class="si">{</span><span class="n">_lit</span><span class="p">(</span><span class="n">file_id_key</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()]</span>
+              <span class="k">for</span> <span class="n">source</span> <span class="ow">in</span> <span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="s2">"_diff_new_data"</span><span class="p">)]</span>
+    <span class="n">excluded</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="p">(</span><span class="n">exclude_objects</span> <span class="ow">or</span> <span class="p">[]),</span> <span class="o">*</span><span class="p">([</span><span class="n">file_id_object</span><span class="p">]</span> <span class="k">if</span> <span class="n">file_id_object</span> <span class="k">else</span> <span class="p">[])]</span>
+    <span class="k">for</span> <span class="n">view</span><span class="p">,</span> <span class="n">source</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">"_diff_old"</span><span class="p">,</span> <span class="n">table_name</span><span class="p">),</span> <span class="p">(</span><span class="s2">"_diff_new"</span><span class="p">,</span> <span class="s2">"_diff_new_data"</span><span class="p">)):</span>
+        <span class="n">typed</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"SELECT ID FROM </span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2"> WHERE KEY = 'Type' AND VALUE IN "</span>
+        <span class="n">included</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"ID IN (</span><span class="si">{</span><span class="n">typed</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">_in_list</span><span class="p">(</span><span class="n">include_objects</span><span class="p">)</span><span class="si">}</span><span class="s2">)) AND "</span> <span class="k">if</span> <span class="n">include_objects</span> <span class="k">else</span> <span class="s2">""</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CREATE OR REPLACE TEMP VIEW </span><span class="si">{</span><span class="n">view</span><span class="si">}</span><span class="s2"> AS SELECT * FROM </span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2"> "</span>
+                     <span class="sa">f</span><span class="s2">"WHERE </span><span class="si">{</span><span class="n">included</span><span class="si">}</span><span class="s2">ID NOT IN (</span><span class="si">{</span><span class="n">typed</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">_in_list</span><span class="p">(</span><span class="n">excluded</span><span class="p">)</span><span class="si">}</span><span class="s2">))"</span><span class="p">)</span>
+    <span class="n">diff</span> <span class="o">=</span> <span class="n">diff_triplets</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="s2">"_diff_new"</span><span class="p">),</span> <span class="n">table</span><span class="o">=</span><span class="s2">"_diff_old"</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="s2">"temp"</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CREATE OR REPLACE TEMP TABLE _diff AS SELECT ID, KEY, VALUE, _merge FROM (</span><span class="si">{</span><span class="n">diff</span><span class="o">.</span><span class="n">sql_query</span><span class="p">()</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+    <span class="n">keys</span> <span class="o">=</span> <span class="n">_in_list</span><span class="p">([</span><span class="s2">"Type"</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="n">context_keys</span> <span class="ow">or</span> <span class="p">[])])</span>
+    <span class="n">related</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s2">" UNION ALL "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">"SELECT ID, KEY, COALESCE(VALUE, ''), '</span><span class="si">{</span><span class="n">side</span><span class="si">}</span><span class="s2">' FROM </span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2"> WHERE KEY IN (</span><span class="si">{</span><span class="n">keys</span><span class="si">}</span><span class="s2">) AND ID IN (SELECT ID FROM _diff)"</span>
+        <span class="k">for</span> <span class="n">side</span><span class="p">,</span> <span class="n">source</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">"old"</span><span class="p">,</span> <span class="s2">"_diff_old"</span><span class="p">),</span> <span class="p">(</span><span class="s2">"new"</span><span class="p">,</span> <span class="s2">"_diff_new"</span><span class="p">))))</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">print_diff</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="s2">"SELECT * FROM _diff"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">(),</span> <span class="n">related</span><span class="p">,</span> <span class="o">*</span><span class="n">labels</span><span class="p">,</span> <span class="n">context_keys</span><span class="p">,</span> <span class="n">stat</span><span class="p">)</span></div>
 
 
 
@@ -1050,7 +1062,7 @@
 <span class="s2">            SELECT ID, KEY,</span>
 <span class="s2">                   CASE WHEN trim(VALUE) LIKE '[%' AND trim(VALUE) LIKE '%]'</span>
 <span class="s2">                        THEN list_transform(string_split(trim(trim(VALUE), ' []'), ','),</span>
-<span class="s2">                                            x -&gt; trim(x, ' ''"'))</span>
+<span class="s2">                                            lambda x: trim(x, ' ''"'))</span>
 <span class="s2">                        ELSE [VALUE] END AS vals</span>
 <span class="s2">            FROM (UNPIVOT </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2"> ON COLUMNS(* EXCLUDE (ID)) INTO NAME KEY VALUE VALUE)</span>
 <span class="s2">            WHERE VALUE IS NOT NULL)</span>
@@ -1087,7 +1099,7 @@
         <span class="n">source</span> <span class="o">+=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">" WHERE ID NOT IN (SELECT ID FROM </span><span class="si">{</span><span class="n">table_name</span><span class="si">}</span><span class="s2">"</span>
                    <span class="sa">f</span><span class="s2">" WHERE KEY = 'Type' AND VALUE IN (</span><span class="si">{</span><span class="n">_in_list</span><span class="p">(</span><span class="n">ignore_types</span><span class="p">)</span><span class="si">}</span><span class="s2">))"</span><span class="p">)</span>
     <span class="n">row</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT count(*), sum(h)::VARCHAR, bit_xor(h)::VARCHAR"</span>
-                       <span class="sa">f</span><span class="s2">" FROM (</span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+                       <span class="sa">f</span><span class="s2">" FROM (</span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
     <span class="k">return</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">blake2b</span><span class="p">(</span><span class="nb">repr</span><span class="p">(</span><span class="n">row</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span> <span class="n">digest_size</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span></div>
 
 </pre></div>
@@ -1102,7 +1114,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -1122,7 +1134,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

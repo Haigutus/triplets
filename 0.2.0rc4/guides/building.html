@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Testing" href="testing.html"><link rel="prev" title="SHACL Validation Architecture" href="validation.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Building - triplets 0.2.0rc4 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
@@ -444,11 +444,11 @@ to oxigraph, then rdflib (see docs/sparql.md).</p>
 <section id="troubleshooting">
 <h2>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading">¶</a></h2>
 <section id="unsupported-platform-tag-linux">
-<h3><code class="docutils literal notranslate"><span class="pre">unsupported</span> <span class="pre">platform</span> <span class="pre">tag</span> <span class="pre">'linux_*'</span></code><a class="headerlink" href="#unsupported-platform-tag-linux" title="Link to this heading">¶</a></h3>
+<span id="unsupported-platform-tag-linux_"></span><h3><code class="docutils literal notranslate"><span class="pre">unsupported</span> <span class="pre">platform</span> <span class="pre">tag</span> <span class="pre">'linux_*'</span></code><a class="headerlink" href="#unsupported-platform-tag-linux" title="Link to this heading">¶</a></h3>
 <p>PyPI requires manylinux tags. Run <code class="docutils literal notranslate"><span class="pre">auditwheel</span> <span class="pre">repair</span></code> on the wheel (see above).</p>
 </section>
 <section id="filenotfounderror-unable-to-find-library-arrow-dll">
-<h3><code class="docutils literal notranslate"><span class="pre">FileNotFoundError:</span> <span class="pre">Unable</span> <span class="pre">to</span> <span class="pre">find</span> <span class="pre">library:</span> <span class="pre">arrow.dll</span></code><a class="headerlink" href="#filenotfounderror-unable-to-find-library-arrow-dll" title="Link to this heading">¶</a></h3>
+<span id="filenotfounderror-unable-to-find-library-arrowdll"></span><h3><code class="docutils literal notranslate"><span class="pre">FileNotFoundError:</span> <span class="pre">Unable</span> <span class="pre">to</span> <span class="pre">find</span> <span class="pre">library:</span> <span class="pre">arrow.dll</span></code><a class="headerlink" href="#filenotfounderror-unable-to-find-library-arrow-dll" title="Link to this heading">¶</a></h3>
 <p>Windows <code class="docutils literal notranslate"><span class="pre">delvewheel</span></code> can’t find arrow DLLs. Add <code class="docutils literal notranslate"><span class="pre">--no-dll</span> <span class="pre">arrow.dll</span> <span class="pre">--no-dll</span> <span class="pre">arrow_python.dll</span></code> to exclude them.</p>
 </section>
 <section id="other-known-gotchas-already-handled-in-ci">

@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Quickstart" href="quickstart.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="#"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="#"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="#">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -293,8 +289,9 @@
           <section id="triplets">
 <h1>triplets<a class="headerlink" href="#triplets" title="Link to this heading">¶</a></h1>
 <p>RDF/XML toolkit for ENTSO-E/CGMES power grid data.</p>
-<p>Parses CIM RDF/XML to pandas/polars DataFrames, provides query/filter/diff tools,
-and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.</p>
+<p>Parse, query and export CIM RDF/XML power-grid data as triplet DataFrames (pandas,
+polars, DuckDB): SPARQL, SHACL and schema validation, Excel/CSV/CIM XML/N-Quads/NetworkX
+exports.</p>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
 <ul>
@@ -308,7 +305,7 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.</p>
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -329,6 +326,46 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.</p>
 <li class="toctree-l2"><a class="reference internal" href="triplets.parser.html#module-triplets.parser.python_lxml_arrow">triplets.parser.python_lxml_arrow</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.parser.html#module-triplets.parser.utils">triplets.parser.utils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.parser.html#module-triplets.parser.nquads">triplets.parser.nquads</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#which-function-for-which-column">Which function for which column</a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.TYPE_KEY"><code class="docutils literal notranslate"><span class="pre">TYPE_KEY</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.DESCRIPTION_TYPE"><code class="docutils literal notranslate"><span class="pre">DESCRIPTION_TYPE</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.UUID_RE"><code class="docutils literal notranslate"><span class="pre">UUID_RE</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.REFERENCE_LIKE"><code class="docutils literal notranslate"><span class="pre">REFERENCE_LIKE</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.LANGUAGE_TAG_RE"><code class="docutils literal notranslate"><span class="pre">LANGUAGE_TAG_RE</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.IRI_UNSAFE"><code class="docutils literal notranslate"><span class="pre">IRI_UNSAFE</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.local_id"><code class="docutils literal notranslate"><span class="pre">local_id()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.split_iri"><code class="docutils literal notranslate"><span class="pre">split_iri()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.local_key"><code class="docutils literal notranslate"><span class="pre">local_key()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.VALUE_KINDS"><code class="docutils literal notranslate"><span class="pre">VALUE_KINDS</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.local_value"><code class="docutils literal notranslate"><span class="pre">local_value()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.is_iri"><code class="docutils literal notranslate"><span class="pre">is_iri()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.is_absolute"><code class="docutils literal notranslate"><span class="pre">is_absolute()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.resolve_iri"><code class="docutils literal notranslate"><span class="pre">resolve_iri()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.encode_iri"><code class="docutils literal notranslate"><span class="pre">encode_iri()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.decode_iri"><code class="docutils literal notranslate"><span class="pre">decode_iri()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.load_rdf_map"><code class="docutils literal notranslate"><span class="pre">load_rdf_map()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.load_schema"><code class="docutils literal notranslate"><span class="pre">load_schema()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.rdf_map_entries"><code class="docutils literal notranslate"><span class="pre">rdf_map_entries()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.namespaces"><code class="docutils literal notranslate"><span class="pre">namespaces()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.key_types"><code class="docutils literal notranslate"><span class="pre">key_types()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.prefixes"><code class="docutils literal notranslate"><span class="pre">prefixes()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.absolute_datatype"><code class="docutils literal notranslate"><span class="pre">absolute_datatype()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.datatypes"><code class="docutils literal notranslate"><span class="pre">datatypes()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.language_tag"><code class="docutils literal notranslate"><span class="pre">language_tag()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.languages"><code class="docutils literal notranslate"><span class="pre">languages()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.value_types"><code class="docutils literal notranslate"><span class="pre">value_types()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.absolute_id"><code class="docutils literal notranslate"><span class="pre">absolute_id()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.absolute_name"><code class="docutils literal notranslate"><span class="pre">absolute_name()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.absolute_key"><code class="docutils literal notranslate"><span class="pre">absolute_key()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.defined"><code class="docutils literal notranslate"><span class="pre">defined()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.absolute_value"><code class="docutils literal notranslate"><span class="pre">absolute_value()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#triplets.iri.node_kind"><code class="docutils literal notranslate"><span class="pre">node_kind()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#module-triplets.iri.iri_pandas">triplets.iri.iri_pandas</a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#module-triplets.iri.iri_polars">triplets.iri.iri_polars</a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.iri.html#module-triplets.iri.iri_duckdb">triplets.iri.iri_duckdb</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a><ul>
@@ -417,6 +454,8 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.</p>
 <li class="toctree-l2"><a class="reference internal" href="triplets.validation.html#module-triplets.validation.context">triplets.validation.context module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.validation.html#module-triplets.validation.locations">triplets.validation.locations module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.validation.html#module-triplets.validation.sarif">triplets.validation.sarif module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.validation.html#module-triplets.validation.schema_ir">triplets.validation.schema_ir module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.validation.html#module-triplets.validation.schema_scope">triplets.validation.schema_scope module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.validation.html#module-triplets.validation.shacl_duckdb">triplets.validation.shacl_duckdb module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.validation.html#module-triplets.validation.shacl_ir">triplets.validation.shacl_ir module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.validation.html#module-triplets.validation.shacl_pandas">triplets.validation.shacl_pandas module</a></li>
@@ -427,6 +466,8 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.</p>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.cli.html">CLI</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="triplets.cli.html#triplets.cli.add_common_arguments"><code class="docutils literal notranslate"><span class="pre">add_common_arguments()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.cli.html#triplets.cli.excluded_types"><code class="docutils literal notranslate"><span class="pre">excluded_types()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.cli.html#module-triplets.cli.cim_spreadsheet">triplets.cli.cim_spreadsheet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.cli.html#module-triplets.cli.cim_diff">triplets.cli.cim_diff</a></li>
 </ul>
@@ -436,6 +477,8 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.</p>
 <li class="toctree-l2"><a class="reference internal" href="triplets.cgmes_tools.html#triplets.cgmes_tools.get_metadata_from_filename"><code class="docutils literal notranslate"><span class="pre">get_metadata_from_filename()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.cgmes_tools.html#triplets.cgmes_tools.get_filename_from_metadata"><code class="docutils literal notranslate"><span class="pre">get_filename_from_metadata()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.cgmes_tools.html#triplets.cgmes_tools.get_metadata_from_xml"><code class="docutils literal notranslate"><span class="pre">get_metadata_from_xml()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.cgmes_tools.html#triplets.cgmes_tools.declared_profiles"><code class="docutils literal notranslate"><span class="pre">declared_profiles()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.cgmes_tools.html#triplets.cgmes_tools.validate_by_header"><code class="docutils literal notranslate"><span class="pre">validate_by_header()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.cgmes_tools.html#triplets.cgmes_tools.count_GeneratingUnit_types"><code class="docutils literal notranslate"><span class="pre">count_GeneratingUnit_types()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.cgmes_tools.html#triplets.cgmes_tools.draw_references"><code class="docutils literal notranslate"><span class="pre">draw_references()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.cgmes_tools.html#triplets.cgmes_tools.draw_references_from"><code class="docutils literal notranslate"><span class="pre">draw_references_from()</span></code></a></li>
@@ -465,10 +508,9 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.</p>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.rdfs_tools.html">RDFS Tools</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="triplets.rdfs_tools.html#submodules">Submodules</a></li>
-<li class="toctree-l2"><a class="reference internal" href="triplets.rdfs_tools.html#triplets-rdfs-tools-rdfs-to-azuredtdl-v2-module">triplets.rdfs_tools.RDFS_to_AzureDTDL_V2 module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.rdfs_tools.html#module-triplets.rdfs_tools.cim_rdfs_to_html">triplets.rdfs_tools.cim_rdfs_to_html module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.rdfs_tools.html#module-triplets.rdfs_tools.cim_rdfs_to_json">triplets.rdfs_tools.cim_rdfs_to_json module</a></li>
-<li class="toctree-l2"><a class="reference internal" href="triplets.rdfs_tools.html#triplets-rdfs-tools-cim-rdfs-to-json-deprecated-module">triplets.rdfs_tools.cim_rdfs_to_json_deprecated module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="triplets.rdfs_tools.html#module-triplets.rdfs_tools.fetch_profiles">triplets.rdfs_tools.fetch_profiles module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.rdfs_tools.html#module-triplets.rdfs_tools.rdfs_tools">triplets.rdfs_tools.rdfs_tools module</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triplets.rdfs_tools.html#module-triplets.rdfs_tools">Module contents</a></li>
 </ul>
@@ -509,7 +551,7 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.</p>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -529,7 +571,7 @@ and exports to Excel, CSV, CIM XML, N-Quads, and NetworkX formats.</p>
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

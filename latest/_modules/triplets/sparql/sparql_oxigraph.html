@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.sparql.sparql_oxigraph - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.sparql.sparql_oxigraph - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -293,10 +289,14 @@
 
 <span class="sd">Data is loaded through the N-Quads export (datatype-annotated, INSTANCE_ID as</span>
 <span class="sd">named graph) via Store.bulk_load — loaded stores are cached in-process by</span>
-<span class="sd">content key, same logic as the qlever engine's index cache. After loading,</span>
-<span class="sd">the deduplicated union of the named graphs is projected into the store's</span>
-<span class="sd">default graph, so unscoped queries match rdflib's default_union set semantics</span>
-<span class="sd">(oxigraph's own union of named graphs keeps one solution per graph).</span>
+<span class="sd">content key, same logic as the qlever engine's index cache. Unscoped queries</span>
+<span class="sd">match rdflib's default_union set semantics (oxigraph's own union of named</span>
+<span class="sd">graphs keeps one solution per graph): a single-graph store (exactly one</span>
+<span class="sd">named graph, nothing in its default graph) runs unscoped queries with its</span>
+<span class="sd">one graph as the protocol default graph — which, as with data_scope,</span>
+<span class="sd">takes precedence over any FROM; other stores run against the projected</span>
+<span class="sd">default graph (the deduplicated union of the named graphs, copied in once</span>
+<span class="sd">after loading).</span>
 
 <span class="sd">Scope is not a data operation: the scoped instances' named graphs are passed</span>
 <span class="sd">to Store.query as SPARQL-protocol default graphs, so one store serves every</span>
@@ -322,35 +322,39 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">pyoxigraph</span>  <span class="c1"># ImportError here → the registry falls back to rdflib</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">pyoxigraph</span><span class="w"> </span><span class="kn">import</span> <span class="n">NamedNode</span><span class="p">,</span> <span class="n">QueryResultsFormat</span><span class="p">,</span> <span class="n">RdfFormat</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyoxigraph</span><span class="w"> </span><span class="kn">import</span> <span class="n">DefaultGraph</span><span class="p">,</span> <span class="n">NamedNode</span><span class="p">,</span> <span class="n">QueryResultsFormat</span><span class="p">,</span> <span class="n">RdfFormat</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._caches</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_cache</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._content_key</span><span class="w"> </span><span class="kn">import</span> <span class="n">content_key</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._engine_detect</span><span class="w"> </span><span class="kn">import</span> <span class="n">as_frame</span><span class="p">,</span> <span class="n">flavor</span><span class="p">,</span> <span class="n">to_pandas</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">..export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_to_nquads</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">CIM_NS</span><span class="p">,</span> <span class="n">absolute_id</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">..parser.nquads</span><span class="w"> </span><span class="kn">import</span> <span class="n">read_nquads</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
-<span class="n">_STORES</span> <span class="o">=</span> <span class="n">register_cache</span><span class="p">({})</span>    <span class="c1"># content hash → loaded in-memory pyoxigraph.Store</span>
+<span class="n">_STORES</span> <span class="o">=</span> <span class="n">register_cache</span><span class="p">({})</span>    <span class="c1"># content hash → (in-memory pyoxigraph.Store, unscoped default graph)</span>
 
 
 <div class="viewcode-block" id="query">
 <a class="viewcode-back" href="../../../triplets.sparql.html#triplets.sparql.sparql_oxigraph.query">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+          <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Execute query_string over data; shape the result by query type.</span>
 
 <span class="sd">    Queries are executed exactly as given — the text is never modified.</span>
 <span class="sd">    A rejected query raises ValueError carrying oxigraph's message plus the</span>
-<span class="sd">    query text, so the failure is directly actionable. ``scope`` travels</span>
+<span class="sd">    query text, so the failure is directly actionable. ``data_scope`` travels</span>
 <span class="sd">    beside the query as SPARQL-protocol default graphs: the query runs</span>
 <span class="sd">    against exactly the union of the scoped instances' named graphs on the</span>
 <span class="sd">    one shared store, and per the protocol these take precedence over any</span>
-<span class="sd">    FROM inside the query. None → the store's default graph (the</span>
-<span class="sd">    deduplicated union of all named graphs).</span>
+<span class="sd">    FROM inside the query. None → the deduplicated union of all named</span>
+<span class="sd">    graphs: a single-graph store runs it with its one graph as the protocol</span>
+<span class="sd">    default graph — which, as with data_scope, takes precedence over any</span>
+<span class="sd">    FROM; other stores run against the projected default graph.</span>
 <span class="sd">    """</span>
-    <span class="n">store</span> <span class="o">=</span> <span class="n">_store_for</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="p">)</span>
-    <span class="n">graphs</span> <span class="o">=</span> <span class="p">[</span><span class="n">NamedNode</span><span class="p">(</span><span class="sa">f</span><span class="s2">"urn:uuid:</span><span class="si">{</span><span class="n">instance</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">]</span> <span class="k">if</span> <span class="n">scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">store</span><span class="p">,</span> <span class="n">default_graph</span> <span class="o">=</span> <span class="n">_store_for</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="p">)</span>
+    <span class="n">graphs</span> <span class="o">=</span> <span class="p">[</span><span class="n">NamedNode</span><span class="p">(</span><span class="n">absolute_id</span><span class="p">(</span><span class="n">instance</span><span class="p">))</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">data_scope</span><span class="p">]</span> <span class="k">if</span> <span class="n">data_scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">default_graph</span>
     <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
         <span class="n">return_type</span> <span class="o">=</span> <span class="s2">"polars"</span> <span class="k">if</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"polars"</span> <span class="k">else</span> <span class="s2">"pandas"</span>
 
@@ -371,8 +375,11 @@
                          <span class="sa">f</span><span class="s2">"--- query ---</span><span class="se">\n</span><span class="si">{</span><span class="n">query_string</span><span class="o">.</span><span class="n">strip</span><span class="p">()[:</span><span class="mi">2000</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">error</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_store_for</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Load (or build) the engine state for this exact data + schema.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_store_for</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Load (or build) the engine state for this exact data + schema →</span>
+<span class="sd">    (store, default_graph): the protocol default graph for unscoped queries</span>
+<span class="sd">    — ``[the one named graph]`` for a single-graph store, None (the store's</span>
+<span class="sd">    own default graph, holding the projected union) otherwise.</span>
 
 <span class="sd">    Identity via content_hash, load via the N-Quads export — executed only</span>
 <span class="sd">    on a cache miss. Scope does not key the state (it travels with each</span>
@@ -380,14 +387,15 @@
 <span class="sd">    """</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"content_hash"</span><span class="p">):</span>  <span class="c1"># pyarrow — no registered methods</span>
         <span class="n">data</span> <span class="o">=</span> <span class="n">to_pandas</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-    <span class="n">key</span> <span class="o">=</span> <span class="n">content_key</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="sa">b</span><span class="s2">"triplets-oxigraph-1"</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="p">)</span>
+    <span class="n">key</span> <span class="o">=</span> <span class="n">content_key</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="sa">b</span><span class="s2">"triplets-oxigraph-1"</span> <span class="o">+</span> <span class="n">undefined_namespace</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span> <span class="n">data_unchanged</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">_STORES</span><span class="p">:</span>
         <span class="n">cached</span> <span class="o">=</span> <span class="n">_STORES</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cached</span><span class="p">,</span> <span class="ne">Exception</span><span class="p">):</span>   <span class="c1"># this exact data+schema already failed to load</span>
             <span class="k">raise</span> <span class="n">cached</span>
         <span class="k">return</span> <span class="n">cached</span>
 
-    <span class="n">buffer</span> <span class="o">=</span> <span class="n">export_to_nquads</span><span class="p">(</span><span class="n">as_frame</span><span class="p">(</span><span class="n">data</span><span class="p">),</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">buffer</span> <span class="o">=</span> <span class="n">export_to_nquads</span><span class="p">(</span><span class="n">as_frame</span><span class="p">(</span><span class="n">data</span><span class="p">),</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                              <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">)</span>
     <span class="n">buffer</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
     <span class="n">store</span> <span class="o">=</span> <span class="n">pyoxigraph</span><span class="o">.</span><span class="n">Store</span><span class="p">()</span>   <span class="c1"># in-memory</span>
     <span class="k">try</span><span class="p">:</span>
@@ -397,12 +405,21 @@
         <span class="c1"># so every retry would pay the full export+load just to fail again.</span>
         <span class="n">_STORES</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">error</span>
         <span class="k">raise</span>
-    <span class="c1"># default graph := deduplicated union of the named graphs (rdflib</span>
-    <span class="c1"># default_union set-semantics parity for unscoped queries)</span>
-    <span class="n">store</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">"INSERT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }"</span><span class="p">)</span>
+    <span class="n">graphs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">named_graphs</span><span class="p">())</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">graphs</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">_default_graph_empty</span><span class="p">(</span><span class="n">store</span><span class="p">):</span>
+        <span class="n">default_graph</span> <span class="o">=</span> <span class="n">graphs</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># default graph := deduplicated union of the named graphs (rdflib</span>
+        <span class="c1"># default_union set-semantics parity for unscoped queries)</span>
+        <span class="n">store</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">"INSERT { ?s ?p ?o } WHERE { GRAPH ?g { ?s ?p ?o } }"</span><span class="p">)</span>
+        <span class="n">default_graph</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"loaded oxigraph store: </span><span class="si">%d</span><span class="s2"> quads"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">store</span><span class="p">))</span>
-    <span class="n">_STORES</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">store</span>
-    <span class="k">return</span> <span class="n">store</span>
+    <span class="n">_STORES</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">store</span><span class="p">,</span> <span class="n">default_graph</span>
+    <span class="k">return</span> <span class="n">store</span><span class="p">,</span> <span class="n">default_graph</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_default_graph_empty</span><span class="p">(</span><span class="n">store</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">next</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">quads_for_pattern</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">DefaultGraph</span><span class="p">()),</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_select_frame</span><span class="p">(</span><span class="n">csv_bytes</span><span class="p">,</span> <span class="n">return_type</span><span class="p">):</span>
@@ -429,7 +446,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -449,7 +466,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

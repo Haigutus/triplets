@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Development Notes" href="development.html"><link rel="prev" title="Building" href="building.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Testing - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>Testing - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -312,11 +308,11 @@ pytest<span class="w"> </span>tests/test_parser.py<span class="w"> </span>tests/
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">".[dev]"</span>
 </pre></div>
 </div>
-<p>The <code class="docutils literal notranslate"><span class="pre">dev</span></code> extra pulls in every test dependency (pytest, pytest-xdist,
-pytest-benchmark, polars, pyarrow, networkx, openpyxl, rdflib, pyshacl,
-pyoxigraph, oxrdflib, and <code class="docutils literal notranslate"><span class="pre">jsonschema&gt;=4.0</span></code> — used by the SARIF
-schema-conformance test against <code class="docutils literal notranslate"><span class="pre">tests/data/sarif-schema-2.1.0.json</span></code>).</p>
-<p>The CI test job installs a narrower set of feature extras:</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">dev</span></code> extra pulls in the test tooling and most engine dependencies (pytest,
+pytest-xdist, pytest-benchmark, polars, pyarrow, networkx, openpyxl, rdflib,
+pyshacl, pyoxigraph, oxrdflib, and <code class="docutils literal notranslate"><span class="pre">jsonschema&gt;=4.0</span></code> for the SARIF
+schema-conformance test against <code class="docutils literal notranslate"><span class="pre">tests/data/sarif-schema-2.1.0.json</span></code>).
+<code class="docutils literal notranslate"><span class="pre">duckdb</span></code> comes from its own extra. CI installs <code class="docutils literal notranslate"><span class="pre">dev</span></code> plus the feature extras:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">".[dev,validation,oxigraph,duckdb,excel,networkx]"</span>
 </pre></div>
 </div>
@@ -346,49 +342,60 @@ schema-conformance test against <code class="docutils literal notranslate"><span
 </tbody>
 </table>
 </div>
-<p>For the compiled cython engine tests, build the extension first:</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>setup_cython_parser.py<span class="w"> </span>build_ext<span class="w"> </span>--inplace
-</pre></div>
-</div>
+<p>For the compiled cython engine tests, build the extension first — see
+<a class="reference internal" href="building.html"><span class="std std-doc">Building</span></a> (<code class="docutils literal notranslate"><span class="pre">pixi</span> <span class="pre">run</span> <span class="pre">build-cython-pugixml-arrow</span></code>).</p>
 </section>
 <section id="test-files">
 <h2>Test Files<a class="headerlink" href="#test-files" title="Link to this heading">¶</a></h2>
+<p>Grouped by family; each module docstring describes its tests.</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
-<tr class="row-odd"><th class="head"><p>File</p></th>
-<th class="head"><p>What it tests</p></th>
-<th class="head"><p>Needs external data?</p></th>
+<tr class="row-odd"><th class="head"><p>Family</p></th>
+<th class="head"><p>Files</p></th>
+<th class="head"><p>Needs external data</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_parser.py</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">parse()</span></code>, <code class="docutils literal notranslate"><span class="pre">clean_ID</span></code>, <code class="docutils literal notranslate"><span class="pre">find_all_xml</span></code>, nodeID support, categorical encoding, return types</p></td>
-<td><p>No (uses <code class="docutils literal notranslate"><span class="pre">tests/data/minimal_cim.xml</span></code>)</p></td>
+<tr class="row-even"><td><p>Parser</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_parser.py</span></code> (incl. <code class="docutils literal notranslate"><span class="pre">pandas.read_RDF</span></code> registration), <code class="docutils literal notranslate"><span class="pre">test_parser_nquads.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_path_handling.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_compiled_modules.py</span></code> (guard, see below)</p></td>
+<td><p>committed <code class="docutils literal notranslate"><span class="pre">tests/data</span></code>; RealGrid when present</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_parity_parser.py</span></code></p></td>
-<td><p>Cross-engine parser parity, <code class="docutils literal notranslate"><span class="pre">pandas.read_RDF</span></code> registration, all engines produce identical output</p></td>
-<td><p>No</p></td>
+<tr class="row-odd"><td><p>Import / tools / CGMES tools</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_import.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_tools.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_cgmes_tools.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_duckdb_table.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_api_surface.py</span></code></p></td>
+<td><p>relicapgrid</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_import.py</span></code></p></td>
-<td><p>Loading NC and CGMES files, column structure, metadata (Distribution, NamespaceMap)</p></td>
-<td><p>Yes (relicapgrid submodule)</p></td>
+<tr class="row-even"><td><p>Cross-engine parity (<code class="docutils literal notranslate"><span class="pre">test_parity_*.py</span></code>, shared <code class="docutils literal notranslate"><span class="pre">tests/_parity.py</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_parity_parser.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_parity_tools.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_parity_export.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_parity_cgmes_tools.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_parity_validation.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_parity_shacl_matrix.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_parity_shacl_raw.py</span></code></p></td>
+<td><p>relicapgrid; RealGrid LFS + CGMES-AP + APL cgmes-v2-4 for the <code class="docutils literal notranslate"><span class="pre">-m</span> <span class="pre">performance</span></code> parts</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_tools.py</span></code></p></td>
-<td><p>Data-manipulation tool functions on the Svedala IGM dataset</p></td>
-<td><p>Yes (relicapgrid submodule)</p></td>
+<tr class="row-odd"><td><p>Engine registry / flavors / caches</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_engines_api.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_engine_state.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_engine_detect.py</span></code></p></td>
+<td><p>none</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_parity_tools.py</span></code></p></td>
-<td><p>Cross-engine tool parity (pandas/polars/duckdb), including <code class="docutils literal notranslate"><span class="pre">type_tableview</span></code> / pivot correctness</p></td>
-<td><p>Yes (relicapgrid submodule)</p></td>
+<tr class="row-even"><td><p>IRI contract</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_iri.py</span></code></p></td>
+<td><p>none</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">test_benchmarks_realgrid.py</span></code></p></td>
-<td><p>Performance benchmarks for parsing and tools across all engines</p></td>
-<td><p>Yes (RealGrid LFS zip)</p></td>
+<tr class="row-odd"><td><p>Export</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_export_comment.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_export_profiles.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_export_undefined.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_roundtrip_nc.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_cim_spreadsheet.py</span></code></p></td>
+<td><p>relicapgrid</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">test_compiled_modules.py</span></code></p></td>
-<td><p>Compiled-extension import guard (see below)</p></td>
-<td><p>No</p></td>
+<tr class="row-even"><td><p>SPARQL</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_sparql.py</span></code> (rdflib), <code class="docutils literal notranslate"><span class="pre">test_sparql_oxigraph.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_sparql_qlever.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_sparql_qlever_ingest.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_rdflib_oxigraph_store.py</span></code></p></td>
+<td><p>relicapgrid; qlever files skip unless the extension is built</p></td>
+</tr>
+<tr class="row-odd"><td><p>Validation</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_validation.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_shacl_ir.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_shacl_engines.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_shacl_report.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_schema_validation.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_schema_references.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_schema_scope.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_cgmes_validation.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_validation_context.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_locations.py</span></code>, <code class="docutils literal notranslate"><span class="pre">test_sarif.py</span></code></p></td>
+<td><p>relicapgrid, CGMES-AP; APL cgmes-v2-4 for the CGMES 2.4 shapes in <code class="docutils literal notranslate"><span class="pre">test_shacl_ir.py</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>RDFS tools</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_rdfs_tools.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">rdfs/</span></code> snapshots in the repo</p></td>
+</tr>
+<tr class="row-odd"><td><p>Benchmarks (<code class="docutils literal notranslate"><span class="pre">-m</span> <span class="pre">performance</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">test_benchmarks_realgrid.py</span></code></p></td>
+<td><p>RealGrid LFS</p></td>
 </tr>
 </tbody>
 </table>
@@ -401,9 +408,11 @@ schema-conformance test against <code class="docutils literal notranslate"><span
 <li><p><code class="docutils literal notranslate"><span class="pre">tests/data/minimal_cim.xml</span></code> — 5 RDF objects, covers Substation, VoltageLevel, BaseVoltage, ConnectivityNode (with <code class="docutils literal notranslate"><span class="pre">rdf:nodeID</span></code>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">tests/data/sarif-schema-2.1.0.json</span></code> — official SARIF 2.1.0 schema for the exporter conformance test</p></li>
 </ul>
-<p><strong>Submodule</strong> (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">submodule</span> <span class="pre">update</span> <span class="pre">--init</span> <span class="pre">test_data/relicapgrid</span></code>):</p>
+<p><strong>Submodules</strong> (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">submodule</span> <span class="pre">update</span> <span class="pre">--init</span> <span class="pre">test_data/relicapgrid</span> <span class="pre">test_data/CGMES-AP</span> <span class="pre">test_data/application-profiles-library-cgmes-v2-4</span></code>):</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">test_data/relicapgrid/</span></code> — NC, CGMES, and Svedala IGM files for import and tools tests</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_data/relicapgrid/</span></code> — <a class="reference external" href="https://github.com/entsoe/relicapgrid">ReliCapGrid</a> release <code class="docutils literal notranslate"><span class="pre">cgmes-3.0_ncp-2.5_tc-2.0</span></code>: CGMES 3.0 grids and NCP 2.5 instances for import and tools tests</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_data/CGMES-AP/</span></code> — <a class="reference external" href="https://github.com/entsoe/CGMES-AP">CGMES-AP</a>: CGMES 3.0 SHACL shapes for the validation tests</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_data/application-profiles-library-cgmes-v2-4/</span></code> — <a class="reference external" href="https://github.com/entsoe/application-profiles-library">application-profiles-library</a> branch <code class="docutils literal notranslate"><span class="pre">cgmes-v2-4</span></code>: CGMES 2.4 Enhanced SHACL shapes (RealGrid parity tests)</p></li>
 </ul>
 <p><strong>Git LFS</strong> (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">lfs</span> <span class="pre">pull</span></code>):</p>
 <ul class="simple">
@@ -467,36 +476,42 @@ pytest<span class="w"> </span>tests/test_benchmarks_realgrid.py<span class="w"> 
 </pre></div>
 </div>
 </section>
-<section id="pixi-tasks">
-<h2>pixi Tasks<a class="headerlink" href="#pixi-tasks" title="Link to this heading">¶</a></h2>
-<p>If using pixi:</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">test</span><span class="w">                         </span><span class="c1"># all tests</span>
-pixi<span class="w"> </span>run<span class="w"> </span>build-cython-pugixml-arrow<span class="w">   </span><span class="c1"># build cython extension</span>
+<section id="local-flow">
+<h2>Local flow<a class="headerlink" href="#local-flow" title="Link to this heading">¶</a></h2>
+<p>Tests run in the uv venv, never inside pixi; pixi only supplies the C++
+toolchain for the optional compiled extensions:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>sync<span class="w"> </span>--all-extras
+uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>-n<span class="w"> </span>auto<span class="w"> </span>-q
+
+<span class="c1"># optional compiled extensions (built against the venv's pyarrow)</span>
+pixi<span class="w"> </span>run<span class="w"> </span>build-cython-pugixml-arrow
+pixi<span class="w"> </span>run<span class="w"> </span>-e<span class="w"> </span>qlever<span class="w"> </span>build-qlever<span class="w">       </span><span class="c1"># needs the qlever static libs, see docs/building.md</span>
 </pre></div>
 </div>
-<p>Parser-only run:</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pixi<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </span>tests/test_parity_parser.py<span class="w"> </span>-q
-</pre></div>
-</div>
+<p>The same <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">pytest</span></code> then picks the extensions up: the compiled-engine tests
+stop skipping and <code class="docutils literal notranslate"><span class="pre">auto</span></code> engine selection prefers them.</p>
 </section>
 <section id="ci-workflows">
 <h2>CI Workflows<a class="headerlink" href="#ci-workflows" title="Link to this heading">¶</a></h2>
 <p>Two GitHub Actions workflows run automatically.</p>
 <section id="tests-yml-unit-tests">
-<h3><code class="docutils literal notranslate"><span class="pre">tests.yml</span></code> — unit tests<a class="headerlink" href="#tests-yml-unit-tests" title="Link to this heading">¶</a></h3>
-<p>Runs on push to <code class="docutils literal notranslate"><span class="pre">main</span></code>, on pull requests, and on manual dispatch. Pure-Python
-engines only (the compiled parser and qlever extensions are covered by
-<code class="docutils literal notranslate"><span class="pre">build-wheels.yml</span></code>).</p>
+<span id="testsyml--unit-tests"></span><h3><code class="docutils literal notranslate"><span class="pre">tests.yml</span></code> — unit tests<a class="headerlink" href="#tests-yml-unit-tests" title="Link to this heading">¶</a></h3>
+<p>Runs on push to <code class="docutils literal notranslate"><span class="pre">main</span></code>, on pull requests, and on manual dispatch. The <code class="docutils literal notranslate"><span class="pre">pytest</span></code>
+matrix runs the pure-Python engines; the <code class="docutils literal notranslate"><span class="pre">pytest-compiled</span></code> job (CPython 3.13)
+builds the cython extensions and runs the suite with <code class="docutils literal notranslate"><span class="pre">TRIPLETS_REQUIRE_COMPILED=1</span></code>.
+The qlever extension has no CI.</p>
 <ul class="simple">
 <li><p><strong>Matrix:</strong> CPython 3.11, 3.13, 3.14 on <code class="docutils literal notranslate"><span class="pre">ubuntu-latest</span></code></p></li>
-<li><p><strong>Checkout:</strong> LFS enabled (RealGrid zips); inits only the
-<code class="docutils literal notranslate"><span class="pre">test_data/relicapgrid</span></code> submodule (not <code class="docutils literal notranslate"><span class="pre">vendor/qlever</span></code>)</p></li>
+<li><p><strong>Checkout:</strong> LFS enabled (RealGrid zips); inits the three test-data submodules
+<code class="docutils literal notranslate"><span class="pre">test_data/relicapgrid</span></code>, <code class="docutils literal notranslate"><span class="pre">test_data/CGMES-AP</span></code>,
+<code class="docutils literal notranslate"><span class="pre">test_data/application-profiles-library-cgmes-v2-4</span></code> (never <code class="docutils literal notranslate"><span class="pre">vendor/qlever</span></code>);
+<code class="docutils literal notranslate"><span class="pre">pytest-compiled</span></code> also inits <code class="docutils literal notranslate"><span class="pre">vendor/pugixml</span></code></p></li>
 <li><p><strong>Install:</strong> <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-e</span> <span class="pre">.[dev,validation,oxigraph,duckdb,excel,networkx]</span></code></p></li>
-<li><p><strong>Run:</strong> <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">-n</span> <span class="pre">auto</span> <span class="pre">-q</span></code></p></li>
+<li><p><strong>Run:</strong> <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">-n</span> <span class="pre">auto</span> <span class="pre">-q</span></code> (<code class="docutils literal notranslate"><span class="pre">pytest-compiled</span></code>: <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">-n</span> <span class="pre">auto</span> <span class="pre">-q</span> <span class="pre">-rs</span></code>)</p></li>
 </ul>
 </section>
 <section id="build-wheels-yml-wheels-publish">
-<h3><code class="docutils literal notranslate"><span class="pre">build-wheels.yml</span></code> — wheels + publish<a class="headerlink" href="#build-wheels-yml-wheels-publish" title="Link to this heading">¶</a></h3>
+<span id="build-wheelsyml--wheels--publish"></span><h3><code class="docutils literal notranslate"><span class="pre">build-wheels.yml</span></code> — wheels + publish<a class="headerlink" href="#build-wheels-yml-wheels-publish" title="Link to this heading">¶</a></h3>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -508,7 +523,7 @@ engines only (the compiled parser and qlever extensions are covered by
 <tr class="row-even"><td><p><strong>GitHub Release</strong> (pre-release or final)</p></td>
 <td><p>Build sdist + wheels, publish to PyPI</p></td>
 </tr>
-<tr class="row-odd"><td><p><strong>Pull Request</strong></p></td>
+<tr class="row-odd"><td><p><strong>Pull Request</strong> touching the build</p></td>
 <td><p>Build sdist + wheels only (no publish)</p></td>
 </tr>
 <tr class="row-even"><td><p><strong>Manual</strong> (workflow_dispatch)</p></td>
@@ -521,6 +536,12 @@ engines only (the compiled parser and qlever extensions are covered by
 environment. To enable it: on <a class="reference external" href="https://pypi.org/manage/project/triplets/settings/publishing/">PyPI</a>
 add a publisher for GitHub repo <code class="docutils literal notranslate"><span class="pre">Haigutus/triplets</span></code>, workflow <code class="docutils literal notranslate"><span class="pre">build-wheels.yml</span></code>,
 environment <code class="docutils literal notranslate"><span class="pre">pypi</span></code>.</p>
+<p>On pull requests the workflow runs only when the diff touches a path in its
+<code class="docutils literal notranslate"><span class="pre">paths:</span></code> filter: the workflow itself, <code class="docutils literal notranslate"><span class="pre">setup.py</span></code>, <code class="docutils literal notranslate"><span class="pre">setup.cfg</span></code>, <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code>,
+<code class="docutils literal notranslate"><span class="pre">MANIFEST.in</span></code>, versioneer, <code class="docutils literal notranslate"><span class="pre">.gitmodules</span></code>, the <code class="docutils literal notranslate"><span class="pre">vendor/pugixml</span></code> submodule, cython/C++
+sources under <code class="docutils literal notranslate"><span class="pre">triplets/</span></code> (<code class="docutils literal notranslate"><span class="pre">*.pyx</span></code>, <code class="docutils literal notranslate"><span class="pre">*.pxd</span></code>, <code class="docutils literal notranslate"><span class="pre">*.h</span></code>, <code class="docutils literal notranslate"><span class="pre">*.hpp</span></code>, <code class="docutils literal notranslate"><span class="pre">*.cpp</span></code>) and the two test
+files the wheel job runs. Pure-Python PRs skip it; <code class="docutils literal notranslate"><span class="pre">pytest-compiled</span></code> in <code class="docutils literal notranslate"><span class="pre">tests.yml</span></code>
+still builds the extensions on Linux. Manual dispatch builds wheels for any branch.</p>
 <p>Each wheel is tested during the build with <code class="docutils literal notranslate"><span class="pre">TRIPLETS_REQUIRE_COMPILED=1</span></code>, so a
 wheel missing its compiled extensions fails rather than skips.</p>
 <section id="build-matrix">
@@ -539,11 +560,15 @@ wheel missing its compiled extensions fails rather than skips.</p>
 <td><p><code class="docutils literal notranslate"><span class="pre">ubuntu-latest</span></code></p></td>
 <td><p>x86_64</p></td>
 </tr>
-<tr class="row-odd"><td><p>macOS (Apple Silicon)</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">macos-14</span></code></p></td>
+<tr class="row-odd"><td><p>Linux (manylinux)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ubuntu-24.04-arm</span></code></p></td>
+<td><p>aarch64</p></td>
+</tr>
+<tr class="row-even"><td><p>macOS (Apple Silicon)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">macos-15</span></code></p></td>
 <td><p>arm64</p></td>
 </tr>
-<tr class="row-even"><td><p>Windows</p></td>
+<tr class="row-odd"><td><p>Windows</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">windows-latest</span></code></p></td>
 <td><p>AMD64</p></td>
 </tr>
@@ -551,9 +576,9 @@ wheel missing its compiled extensions fails rather than skips.</p>
 </table>
 </div>
 <p>CPython 3.11–3.14 (<code class="docutils literal notranslate"><span class="pre">requires-python</span> <span class="pre">&gt;=3.11</span></code>). Each wheel includes the compiled
-<code class="docutils literal notranslate"><span class="pre">cython_pugixml_arrow</span></code> extension (usable when pyarrow is also installed). Linux
-aarch64 (QEMU) and macOS x86_64 (Intel, macos-13) targets are present but
-commented out in the workflow; Intel-Mac users can install from the sdist.</p>
+<code class="docutils literal notranslate"><span class="pre">cython_pugixml_arrow</span></code> extension (usable when pyarrow is also installed). macOS
+x86_64 (Intel, macos-13) is commented out in the workflow; Intel-Mac users can
+install from the sdist.</p>
 </section>
 </section>
 </section>
@@ -562,8 +587,8 @@ commented out in the workflow; Intel-Mac users can install from the sdist.</p>
 <p>Tags use bare numbers (matching existing releases like <code class="docutils literal notranslate"><span class="pre">0.0.17</span></code>).</p>
 <ol class="arabic">
 <li><p>Tag the release:</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>tag<span class="w"> </span><span class="m">0</span>.2.0a2<span class="w">       </span><span class="c1"># pre-release</span>
-git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span><span class="m">0</span>.2.0a2
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>tag<span class="w"> </span><span class="m">0</span>.3.0rc1<span class="w">      </span><span class="c1"># pre-release</span>
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span><span class="m">0</span>.3.0rc1
 </pre></div>
 </div>
 </li>
@@ -572,7 +597,7 @@ git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </
 </ol>
 <p>Install:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>--pre<span class="w"> </span>triplets<span class="w">       </span><span class="c1"># latest pre-release</span>
-pip<span class="w"> </span>install<span class="w"> </span><span class="nv">triplets</span><span class="o">==</span><span class="m">0</span>.2.0a2<span class="w">    </span><span class="c1"># pin an exact pre-release</span>
+pip<span class="w"> </span>install<span class="w"> </span><span class="nv">triplets</span><span class="o">==</span><span class="m">0</span>.3.0rc1<span class="w">   </span><span class="c1"># pin an exact pre-release</span>
 pip<span class="w"> </span>install<span class="w"> </span>triplets<span class="w">             </span><span class="c1"># latest stable</span>
 </pre></div>
 </div>
@@ -587,16 +612,16 @@ they are installed only when <code class="docutils literal notranslate"><span cl
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">0.2.0a2</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">0.2.0a2</span></code> (pre-release)</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">0.3.0a1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.3.0a1</span></code> (pre-release)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">--pre</span> <span class="pre">triplets</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">0.2.0rc1</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">0.2.0rc1</span></code> (pre-release)</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">0.3.0rc1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.3.0rc1</span></code> (pre-release)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">--pre</span> <span class="pre">triplets</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">0.2.0</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">0.2.0</span></code> (stable)</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">0.3.0</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0.3.0</span></code> (stable)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">triplets</span></code></p></td>
 </tr>
 </tbody>
@@ -622,10 +647,10 @@ they are installed only when <code class="docutils literal notranslate"><span cl
 <h2>Warnings policy<a class="headerlink" href="#warnings-policy" title="Link to this heading">¶</a></h2>
 <p>The suite runs <strong>warning-free</strong> and must stay that way: <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code>
 <code class="docutils literal notranslate"><span class="pre">filterwarnings</span></code> enables <code class="docutils literal notranslate"><span class="pre">always::ResourceWarning</span></code> (so unclosed handles fail
-review even though Python hides them by default) and ignores exactly two
-rdflib 7.6.0 self-deprecations (its own internals call its own deprecated
-<code class="docutils literal notranslate"><span class="pre">Dataset.default_context</span></code>/<code class="docutils literal notranslate"><span class="pre">Dataset.identifier</span></code>; drop the ignores when rdflib
-migrates). A test that legitimately exercises a deprecated triplets alias
+review even though Python hides them by default) and ignores two rdflib 7.6.0
+self-deprecations (rdflib’s own internals call its deprecated
+<code class="docutils literal notranslate"><span class="pre">Dataset.default_context</span></code>/<code class="docutils literal notranslate"><span class="pre">Dataset.identifier</span></code>), each filtered for the <code class="docutils literal notranslate"><span class="pre">rdflib</span></code>
+and the <code class="docutils literal notranslate"><span class="pre">pyshacl</span></code> module; drop the ignores when rdflib migrates. A test that legitimately exercises a deprecated triplets alias
 should assert it with <code class="docutils literal notranslate"><span class="pre">pytest.warns</span></code> or carry a scoped
 <code class="docutils literal notranslate"><span class="pre">pytest.mark.filterwarnings</span></code>, not leak it into the summary.</p>
 <p>Markers: <code class="docutils literal notranslate"><span class="pre">performance</span></code> (deselected by default, <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">-m</span> <span class="pre">performance</span></code>) and
@@ -663,7 +688,7 @@ suite with <code class="docutils literal notranslate"><span class="pre">pytest</
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -698,7 +723,7 @@ suite with <code class="docutils literal notranslate"><span class="pre">pytest</
 <li><a class="reference internal" href="#running-specific-engine-tests">Running Specific Engine Tests</a></li>
 <li><a class="reference internal" href="#compiled-module-guard">Compiled-Module Guard</a></li>
 <li><a class="reference internal" href="#benchmarks">Benchmarks</a></li>
-<li><a class="reference internal" href="#pixi-tasks">pixi Tasks</a></li>
+<li><a class="reference internal" href="#local-flow">Local flow</a></li>
 <li><a class="reference internal" href="#ci-workflows">CI Workflows</a><ul>
 <li><a class="reference internal" href="#tests-yml-unit-tests"><code class="docutils literal notranslate"><span class="pre">tests.yml</span></code> — unit tests</a></li>
 <li><a class="reference internal" href="#build-wheels-yml-wheels-publish"><code class="docutils literal notranslate"><span class="pre">build-wheels.yml</span></code> — wheels + publish</a><ul>
@@ -723,7 +748,7 @@ suite with <code class="docutils literal notranslate"><span class="pre">pytest</
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>

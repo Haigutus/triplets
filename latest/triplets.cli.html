@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.cgmes_tools module" href="triplets.cgmes_tools.html"><link rel="prev" title="triplets.validation package" href="triplets.validation.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.cli - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.cli - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -293,6 +289,19 @@
           <section id="module-triplets.cli">
 <span id="triplets-cli"></span><h1>triplets.cli<a class="headerlink" href="#module-triplets.cli" title="Link to this heading">¶</a></h1>
 <p>CLI tools for the triplets package.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.cli.add_common_arguments">
+<span class="sig-prename descclassname"><span class="pre">triplets.cli.</span></span><span class="sig-name descname"><span class="pre">add_common_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parser</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">purpose</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/cli.html#add_common_arguments"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.cli.add_common_arguments" title="Link to this definition">¶</a></dt>
+<dd><p>Options shared by every CLI: <code class="docutils literal notranslate"><span class="pre">--version</span></code>, <code class="docutils literal notranslate"><span class="pre">--include</span></code> / <code class="docutils literal notranslate"><span class="pre">-ex</span></code> / <code class="docutils literal notranslate"><span class="pre">--keep-metadata</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.cli.excluded_types">
+<span class="sig-prename descclassname"><span class="pre">triplets.cli.</span></span><span class="sig-name descname"><span class="pre">excluded_types</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/cli.html#excluded_types"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.cli.excluded_types" title="Link to this definition">¶</a></dt>
+<dd><p>Types to leave out: the <code class="docutils literal notranslate"><span class="pre">-ex</span></code> names, plus the metadata unless <code class="docutils literal notranslate"><span class="pre">--keep-metadata</span></code>
+or <code class="docutils literal notranslate"><span class="pre">--include</span></code> (which keeps only the types it names).</p>
+</dd></dl>
+
 <section id="module-triplets.cli.cim_spreadsheet">
 <span id="triplets-cli-cim-spreadsheet"></span><h2>triplets.cli.cim_spreadsheet<a class="headerlink" href="#module-triplets.cli.cim_spreadsheet" title="Link to this heading">¶</a></h2>
 <section id="cim-spreadsheet-converter-cli-tool">
@@ -332,12 +341,12 @@ making it simple to use without explicit direction specification.</p>
 </div>
 </li>
 <li><p><strong>As a Python module</strong>:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">triplets</span><span class="o">.</span><span class="n">tools</span><span class="o">.</span><span class="n">cim_spreadsheet_cli</span> <span class="o">-</span><span class="n">i</span> <span class="n">input_file</span> <span class="o">-</span><span class="n">o</span> <span class="n">output_file</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">triplets</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">cim_spreadsheet</span> <span class="o">-</span><span class="n">i</span> <span class="n">input_file</span> <span class="o">-</span><span class="n">o</span> <span class="n">output_file</span>
 </pre></div>
 </div>
 </li>
 <li><p><strong>Programmatically</strong> in Python code:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">triplets.tools.cim_spreadsheet_cli</span><span class="w"> </span><span class="kn">import</span> <span class="n">cim_to_spreadsheet</span><span class="p">,</span> <span class="n">spreadsheet_to_cim</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">triplets.cli.cim_spreadsheet</span><span class="w"> </span><span class="kn">import</span> <span class="n">cim_to_spreadsheet</span><span class="p">,</span> <span class="n">spreadsheet_to_cim</span>
 
 <span class="c1"># Convert CIM to Excel</span>
 <span class="n">cim_to_spreadsheet</span><span class="p">(</span><span class="s1">'model.xml'</span><span class="p">,</span> <span class="s1">'output.xlsx'</span><span class="p">)</span>
@@ -397,12 +406,35 @@ making it simple to use without explicit direction specification.</p>
 <li><p>Raw triplets import from dedicated Excel sheet or CSV file</p></li>
 <li><p>Handles zipped input/output files automatically</p></li>
 </ul>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Values are read back as text, so they return as written, except numbers: the
+spreadsheet export writes them as numbers, so a number can come back in another
+written form (<code class="docutils literal notranslate"><span class="pre">500</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">500.0</span></code>, <code class="docutils literal notranslate"><span class="pre">8e-5</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">8e-05</span></code>). Excel keeps 15
+significant digits, so longer numbers are rounded (<code class="docutils literal notranslate"><span class="pre">1.0712249999999999</span></code> -&gt;
+<code class="docutils literal notranslate"><span class="pre">1.071225</span></code>); CSV keeps them.</p></li>
+<li><p>Excel limits sheet names to 31 characters. Longer class names (e.g.
+<code class="docutils literal notranslate"><span class="pre">SynchronousMachineTimeConstantReactance</span></code>) are written as is: openpyxl warns
+and Excel may refuse or rename the sheet. Use CSV for such models.</p></li>
+<li><p>The spreadsheet leaves out <code class="docutils literal notranslate"><span class="pre">NamespaceMap</span></code> and <code class="docutils literal notranslate"><span class="pre">Distribution</span></code> by default, so
+to-cim names each CIM XML <code class="docutils literal notranslate"><span class="pre">&lt;uuid&gt;.xml</span></code> in <code class="docutils literal notranslate"><span class="pre">-o</span></code> and declares the schema
+profile’s namespaces. With <code class="docutils literal notranslate"><span class="pre">--keep-metadata</span></code> to-cim writes each instance to
+its <code class="docutils literal notranslate"><span class="pre">Distribution</span></code> <code class="docutils literal notranslate"><span class="pre">label</span></code>, the path the model was parsed from: an absolute
+path overwrites the source XML, a relative one is created under <code class="docutils literal notranslate"><span class="pre">-o</span></code>. Edit
+the label in the spreadsheet, or leave the metadata out, to write elsewhere.</p></li>
+<li><p>Without <code class="docutils literal notranslate"><span class="pre">--rdf-map</span></code> to-cim warns and writes every class in the triplets
+namespace instead of a CIM profile.</p></li>
+</ul>
 <div class="admonition seealso">
 <p class="admonition-title">See also</p>
 <dl class="simple">
 <dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">cim-diff</span></code></dt><dd><p>Tool for comparing CIM XML files</p>
 </dd>
-<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">triplets.rdf_parser</span></code></dt><dd><p>Core module for RDF/CIM data manipulation</p>
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">triplets.parse</span></code></dt><dd><p>CIM XML to triplets</p>
+</dd>
+<dt><a class="reference internal" href="triplets.tools.html#triplets.tools.tableviews_to_triplets" title="triplets.tools.tableviews_to_triplets"><code class="xref py py-obj docutils literal notranslate"><span class="pre">triplets.tools.tableviews_to_triplets</span></code></a></dt><dd><p>Spreadsheet tables to triplets</p>
+</dd>
+<dt><a class="reference internal" href="triplets.export.html#triplets.export.export_to_cimxml" title="triplets.export.export_to_cimxml"><code class="xref py py-obj docutils literal notranslate"><span class="pre">triplets.export.export_to_cimxml</span></code></a></dt><dd><p>Triplets to CIM XML</p>
 </dd>
 </dl>
 </div>
@@ -410,10 +442,10 @@ making it simple to use without explicit direction specification.</p>
 </section>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.cli.cim_spreadsheet.cim_to_spreadsheet">
-<span class="sig-prename descclassname"><span class="pre">triplets.cli.cim_spreadsheet.</span></span><span class="sig-name descname"><span class="pre">cim_to_spreadsheet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cim_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zip_output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multivalue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/cli/cim_spreadsheet.html#cim_to_spreadsheet"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.cli.cim_spreadsheet.cim_to_spreadsheet" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.cli.cim_spreadsheet.</span></span><span class="sig-name descname"><span class="pre">cim_to_spreadsheet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cim_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zip_output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multivalue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/cli/cim_spreadsheet.html#cim_to_spreadsheet"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.cli.cim_spreadsheet.cim_to_spreadsheet" title="Link to this definition">¶</a></dt>
 <dd><p>Convert CIM XML to spreadsheet format (Excel or CSV).</p>
 <p>Handles all orchestration including file I/O, format detection, zipping,
-and conversion through the core rdf_parser functions.</p>
+and conversion through <code class="docutils literal notranslate"><span class="pre">triplets.parse</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -425,6 +457,9 @@ Defaults to ‘excel’ if ambiguous.</p></li>
 False for Excel format.</p></li>
 <li><p><strong>multivalue</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, aggregate duplicate (ID, KEY) pairs into lists in the output.
 Use False to keep duplicate pairs as separate rows.</p></li>
+<li><p><strong>exclude_objects</strong> (<em>sequence</em><em> of </em><em>str</em><em>, </em><em>default</em><em> (</em><em>)</em>) – Class names left out, e.g. <code class="docutils literal notranslate"><span class="pre">triplets.cli.METADATA_TYPES</span></code> (what the CLI
+leaves out by default).</p></li>
+<li><p><strong>include_objects</strong> (<em>sequence</em><em> of </em><em>str</em><em>, </em><em>default</em><em> (</em><em>)</em>) – Only these classes (all if empty); <code class="docutils literal notranslate"><span class="pre">exclude_objects</span></code> applies after it.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
@@ -441,11 +476,11 @@ Use False to keep duplicate pairs as separate rows.</p></li>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.cli.cim_spreadsheet.spreadsheet_to_cim">
-<span class="sig-prename descclassname"><span class="pre">triplets.cli.cim_spreadsheet.</span></span><span class="sig-name descname"><span class="pre">spreadsheet_to_cim</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multivalue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zip_output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sheets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triplets_sheet</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/cli/cim_spreadsheet.html#spreadsheet_to_cim"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.cli.cim_spreadsheet.spreadsheet_to_cim" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.cli.cim_spreadsheet.</span></span><span class="sig-name descname"><span class="pre">spreadsheet_to_cim</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">multivalue</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zip_output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sheets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triplets_sheet</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/cli/cim_spreadsheet.html#spreadsheet_to_cim"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.cli.cim_spreadsheet.spreadsheet_to_cim" title="Link to this definition">¶</a></dt>
 <dd><p>Convert spreadsheet format (Excel or CSV) to CIM XML.</p>
 <p>Handles all orchestration including file I/O, format detection, unzipping,
-sheet selection, raw triplets import, and conversion through core rdf_parser
-functions.</p>
+sheet selection, raw triplets import, and conversion through
+<code class="docutils literal notranslate"><span class="pre">triplets.tools.tableviews_to_triplets</span></code> and <code class="docutils literal notranslate"><span class="pre">export_to_cimxml</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -453,7 +488,8 @@ functions.</p>
 <li><p><strong>output_path</strong> (<em>str</em>) – Path to output directory where CIM XML files will be written</p></li>
 <li><p><strong>format</strong> (<em>{'excel'</em><em>, </em><em>'csv'}</em><em>, </em><em>optional</em>) – Input format. If None, auto-detected from input_path extension.
 Defaults to ‘excel’ if ambiguous.</p></li>
-<li><p><strong>rdf_map</strong> (<em>str</em><em>, </em><em>optional</em>) – Path to RDF map JSON file for custom mappings during export</p></li>
+<li><p><strong>rdf_map</strong> (<em>str</em><em>, </em><em>optional</em>) – Path to RDF map JSON file (export schema). Without it every class is
+written in the triplets namespace, with a warning.</p></li>
 <li><p><strong>export_type</strong> (<em>{'xml_per_instance'</em><em>, </em><em>'xml_per_instance_zip_per_all'</em><em>, </em><em>'xml_per_instance_zip_per_xml'}</em><em>, </em><em>optional</em>) – How to package the CIM XML output. If None, defaults to
 ‘xml_per_instance_zip_per_all’ if zip_output=True, else ‘xml_per_instance’</p></li>
 <li><p><strong>multivalue</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, unpack list values into separate triplets during conversion.
@@ -466,10 +502,12 @@ If None, converts all sheets/files except triplets_sheet.</p></li>
 to include in the output. For Excel, this is a sheet name. For CSV,
 this is a base filename (without .csv extension).
 This sheet is not processed as tableview data.</p></li>
+<li><p><strong>exclude_objects</strong> (<em>sequence</em><em> of </em><em>str</em><em>, </em><em>default</em><em> (</em><em>)</em>) – Class names left out of the export.</p></li>
+<li><p><strong>include_objects</strong> (<em>sequence</em><em> of </em><em>str</em><em>, </em><em>default</em><em> (</em><em>)</em>) – Only these classes (all if empty); <code class="docutils literal notranslate"><span class="pre">exclude_objects</span></code> applies after it.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Export result from rdf_parser.export_to_cimxml()</p>
+<dd class="field-even"><p>Export result from triplets.export.export_to_cimxml()</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>result</p>
@@ -560,6 +598,8 @@ conversion direction.</p>
 <span class="n">cim</span><span class="o">-</span><span class="n">spreadsheet</span> <span class="o">-</span><span class="n">i</span> <span class="n">data</span><span class="o">.</span><span class="n">xlsx</span> <span class="o">-</span><span class="n">o</span> <span class="n">output</span><span class="o">/</span> <span class="o">--</span><span class="n">sheets</span> <span class="n">Sheet1</span> <span class="n">Sheet2</span>
 <span class="n">cim</span><span class="o">-</span><span class="n">spreadsheet</span> <span class="o">-</span><span class="n">i</span> <span class="n">data</span><span class="o">.</span><span class="n">xlsx</span> <span class="o">-</span><span class="n">o</span> <span class="n">output</span><span class="o">/</span> <span class="o">--</span><span class="n">triplets</span><span class="o">-</span><span class="n">sheet</span> <span class="n">RawData</span>
 <span class="n">cim</span><span class="o">-</span><span class="n">spreadsheet</span> <span class="o">-</span><span class="n">i</span> <span class="n">model</span><span class="o">.</span><span class="n">xml</span> <span class="o">-</span><span class="n">o</span> <span class="n">output</span><span class="o">.</span><span class="n">xlsx</span> <span class="o">-</span><span class="n">z</span>  <span class="c1"># force ZIP</span>
+<span class="n">cim</span><span class="o">-</span><span class="n">spreadsheet</span> <span class="o">-</span><span class="n">i</span> <span class="n">model</span><span class="o">.</span><span class="n">xml</span> <span class="o">-</span><span class="n">o</span> <span class="n">output</span><span class="o">.</span><span class="n">xlsx</span> <span class="o">-</span><span class="n">ex</span> <span class="n">Terminal</span><span class="p">,</span><span class="n">ConnectivityNode</span>
+<span class="n">cim</span><span class="o">-</span><span class="n">spreadsheet</span> <span class="o">-</span><span class="n">i</span> <span class="n">model</span><span class="o">.</span><span class="n">xml</span> <span class="o">-</span><span class="n">o</span> <span class="n">output</span><span class="o">.</span><span class="n">xlsx</span> <span class="o">--</span><span class="n">keep</span><span class="o">-</span><span class="n">metadata</span>
 </pre></div>
 </div>
 </section>
@@ -619,19 +659,20 @@ or ordering differences.</p>
 </div>
 </li>
 <li><p><strong>As a Python module</strong>:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">triplets</span><span class="o">.</span><span class="n">tools</span><span class="o">.</span><span class="n">cim_diff_cli</span> <span class="n">original</span><span class="o">.</span><span class="n">xml</span> <span class="n">modified</span><span class="o">.</span><span class="n">xml</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">triplets</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">cim_diff</span> <span class="n">original</span><span class="o">.</span><span class="n">xml</span> <span class="n">modified</span><span class="o">.</span><span class="n">xml</span>
 </pre></div>
 </div>
 </li>
 <li><p><strong>Programmatically</strong> in Python code:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">triplets</span><span class="w"> </span><span class="kn">import</span> <span class="n">rdf_parser</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">triplets</span><span class="w"> </span><span class="kn">import</span> <span class="n">parse</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">triplets.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">print_triplets_diff</span>
 
 <span class="c1"># Load both files</span>
-<span class="n">original</span> <span class="o">=</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">load_all_to_dataframe</span><span class="p">([</span><span class="s1">'original.xml'</span><span class="p">])</span>
-<span class="n">modified</span> <span class="o">=</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">load_all_to_dataframe</span><span class="p">([</span><span class="s1">'modified.xml'</span><span class="p">])</span>
+<span class="n">original</span> <span class="o">=</span> <span class="n">parse</span><span class="p">([</span><span class="s1">'original.xml'</span><span class="p">])</span>
+<span class="n">modified</span> <span class="o">=</span> <span class="n">parse</span><span class="p">([</span><span class="s1">'modified.xml'</span><span class="p">])</span>
 
 <span class="c1"># Print diff</span>
-<span class="n">rdf_parser</span><span class="o">.</span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">original</span><span class="p">,</span> <span class="n">modified</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s1">'NamespaceMap'</span><span class="p">,</span> <span class="s1">'Distribution'</span><span class="p">])</span>
+<span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">original</span><span class="p">,</span> <span class="n">modified</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s1">'NamespaceMap'</span><span class="p">],</span> <span class="n">include_objects</span><span class="o">=</span><span class="p">[</span><span class="s1">'ACLineSegment'</span><span class="p">,</span> <span class="s1">'Terminal'</span><span class="p">])</span>
 </pre></div>
 </div>
 </li>
@@ -643,8 +684,11 @@ or ordering differences.</p>
 <li><p>Semantic comparison at triplet level (ID, KEY, VALUE)</p></li>
 <li><p>Unified diff format output for easy reading</p></li>
 <li><p>Support for ZIP archives (single or nested)</p></li>
-<li><p>Default exclusions for metadata objects (NamespaceMap, Distribution)</p></li>
-<li><p>Custom exclusion lists for filtering out specific object types</p></li>
+<li><p>Parser metadata (NamespaceMap, Distribution) left out unless <code class="docutils literal notranslate"><span class="pre">--keep-metadata</span></code></p></li>
+<li><p>Only some object types with <code class="docutils literal notranslate"><span class="pre">--include</span></code>, more left out with <code class="docutils literal notranslate"><span class="pre">-ex</span></code></p></li>
+<li><p>Unchanged values shown for orientation with <code class="docutils literal notranslate"><span class="pre">--context</span> <span class="pre">KEY</span></code></p></li>
+<li><p>Counts per type only with <code class="docutils literal notranslate"><span class="pre">--stat</span></code></p></li>
+<li><p>Exit code 0 when equal, 1 when different, 2 on error (as <code class="docutils literal notranslate"><span class="pre">diff</span></code>)</p></li>
 <li><p>Handles large CIM files efficiently</p></li>
 </ul>
 <p class="rubric">Examples</p>
@@ -652,34 +696,48 @@ or ordering differences.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ cim-diff original.xml modified.xml
 </pre></div>
 </div>
-<p>Diff with custom exclusions:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ cim-diff original.xml modified.xml -ex Terminal ConnectivityNode
+<p>Also leave out some model classes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ cim-diff original.xml modified.xml -ex Terminal -ex ConnectivityNode
+$ cim-diff original.xml modified.xml -ex Terminal,ConnectivityNode
 </pre></div>
 </div>
-<p>Diff without default exclusions:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ cim-diff original.xml modified.xml --no-default-exclusions
+<p>Diff everything, parser metadata included:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ cim-diff original.xml modified.xml --keep-metadata
+</pre></div>
+</div>
+<p>Only line segments, with their names, or only the counts:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ cim-diff original.xml modified.xml --include ACLineSegment --context IdentifiedObject.name
+$ cim-diff original.xml modified.xml --stat
 </pre></div>
 </div>
 <p>Diff between ZIP archives:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ cim-diff original.zip modified.zip
 </pre></div>
 </div>
-<p>Add custom exclusions on top of defaults:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ cim-diff original.xml modified.xml -ex CustomType1 CustomType2
-</pre></div>
-</div>
 </section>
 <section id="output-format">
 <h4>Output Format<a class="headerlink" href="#output-format" title="Link to this heading">¶</a></h4>
-<p>The tool outputs differences in unified diff format:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">---</span> <span class="n">Objects</span> <span class="ow">in</span> <span class="n">original_file</span>
-<span class="o">+++</span> <span class="n">Objects</span> <span class="ow">in</span> <span class="n">modified_file</span>
-<span class="o">-</span> <span class="n">ObjectID</span> <span class="n">ObjectType</span><span class="o">.</span><span class="n">attribute</span> <span class="n">oldValue</span>
-<span class="o">+</span> <span class="n">ObjectID</span> <span class="n">ObjectType</span><span class="o">.</span><span class="n">attribute</span> <span class="n">newValue</span>
+<p>Counts of removed, added and changed objects per type, then one hunk per
+object (sorted by type and ID), keys sorted, <code class="docutils literal notranslate"><span class="pre">-</span></code> before <code class="docutils literal notranslate"><span class="pre">+</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">---</span> <span class="n">original</span><span class="o">.</span><span class="n">xml</span>
+<span class="o">+++</span> <span class="n">modified</span><span class="o">.</span><span class="n">xml</span>
+
+<span class="o">@@</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span> <span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span> <span class="o">@@</span> <span class="n">Removed</span><span class="p">:</span>
+  <span class="n">Terminal</span> <span class="mi">1</span>
+
+<span class="o">@@</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span> <span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span> <span class="o">@@</span> <span class="n">Added</span><span class="p">:</span>
+
+<span class="o">@@</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span> <span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span> <span class="o">@@</span> <span class="n">Changed</span><span class="p">:</span>
+  <span class="n">ACLineSegment</span> <span class="mi">1</span>
+
+<span class="o">@@</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span> <span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span> <span class="o">@@</span> <span class="n">ACLineSegment</span> <span class="n">c77668c9</span><span class="o">-</span><span class="mi">6993</span><span class="o">-</span><span class="mi">4391</span><span class="o">-</span><span class="mi">8</span><span class="n">c03</span><span class="o">-</span><span class="mi">29</span><span class="n">fc802ad605</span>
+<span class="o">-</span><span class="n">ACLineSegment</span><span class="o">.</span><span class="n">r</span> <span class="o">-&gt;</span> <span class="mf">9.6</span>
+<span class="o">+</span><span class="n">ACLineSegment</span><span class="o">.</span><span class="n">r</span> <span class="o">-&gt;</span> <span class="mf">9.99</span>
+ <span class="n">IdentifiedObject</span><span class="o">.</span><span class="n">name</span> <span class="o">-&gt;</span> <span class="n">CL15</span>
 </pre></div>
 </div>
-<p>Lines starting with ‘-’ indicate values removed (in original but not in modified).
-Lines starting with ‘+’ indicate values added (in modified but not in original).</p>
+<p><code class="docutils literal notranslate"><span class="pre">-</span></code> lines are only in the original, <code class="docutils literal notranslate"><span class="pre">+</span></code> lines only in the modified file,
+`` `` lines are unchanged values asked for with <code class="docutils literal notranslate"><span class="pre">--context</span></code>.</p>
 </section>
 <section id="default-exclusions">
 <h4>Default Exclusions<a class="headerlink" href="#default-exclusions" title="Link to this heading">¶</a></h4>
@@ -689,13 +747,13 @@ typically contain auto-generated metadata that changes between exports:</p>
 <li><p>NamespaceMap : XML namespace mappings (contains UUIDs)</p></li>
 <li><p>Distribution : File distribution metadata</p></li>
 </ul>
-<p>Use –no-default-exclusions to include these in the comparison.</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">--keep-metadata</span></code> to include these in the comparison.</p>
 <div class="admonition seealso">
 <p class="admonition-title">See also</p>
 <dl class="simple">
 <dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">cim-spreadsheet</span></code></dt><dd><p>Tool for converting between CIM XML and spreadsheet formats</p>
 </dd>
-<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">triplets.rdf_parser.print_triplets_diff</span></code></dt><dd><p>Core diff function</p>
+<dt><a class="reference internal" href="triplets.tools.html#triplets.tools.print_triplets_diff" title="triplets.tools.print_triplets_diff"><code class="xref py py-obj docutils literal notranslate"><span class="pre">triplets.tools.print_triplets_diff</span></code></a></dt><dd><p>Core diff function</p>
 </dd>
 </dl>
 </div>
@@ -713,16 +771,12 @@ displaying differences in unified diff format.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cim</span><span class="o">-</span><span class="n">diff</span> <span class="n">original</span><span class="o">.</span><span class="n">xml</span> <span class="n">modified</span><span class="o">.</span><span class="n">xml</span>
 </pre></div>
 </div>
-<p>With custom exclusions:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cim</span><span class="o">-</span><span class="n">diff</span> <span class="n">original</span><span class="o">.</span><span class="n">xml</span> <span class="n">modified</span><span class="o">.</span><span class="n">xml</span> <span class="o">-</span><span class="n">ex</span> <span class="n">Terminal</span> <span class="n">ACLineSegment</span>
+<p>Also leave out some classes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cim</span><span class="o">-</span><span class="n">diff</span> <span class="n">original</span><span class="o">.</span><span class="n">xml</span> <span class="n">modified</span><span class="o">.</span><span class="n">xml</span> <span class="o">-</span><span class="n">ex</span> <span class="n">Terminal</span> <span class="o">-</span><span class="n">ex</span> <span class="n">ACLineSegment</span>
 </pre></div>
 </div>
-<p>Without default exclusions:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cim</span><span class="o">-</span><span class="n">diff</span> <span class="n">original</span><span class="o">.</span><span class="n">xml</span> <span class="n">modified</span><span class="o">.</span><span class="n">xml</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">default</span><span class="o">-</span><span class="n">exclusions</span>
-</pre></div>
-</div>
-<p>Combined exclusions:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cim</span><span class="o">-</span><span class="n">diff</span> <span class="n">original</span><span class="o">.</span><span class="n">xml</span> <span class="n">modified</span><span class="o">.</span><span class="n">xml</span> <span class="o">-</span><span class="n">ex</span> <span class="n">CustomType</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">default</span><span class="o">-</span><span class="n">exclusions</span>
+<p>Without exclusions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cim</span><span class="o">-</span><span class="n">diff</span> <span class="n">original</span><span class="o">.</span><span class="n">xml</span> <span class="n">modified</span><span class="o">.</span><span class="n">xml</span> <span class="o">--</span><span class="n">keep</span><span class="o">-</span><span class="n">metadata</span>
 </pre></div>
 </div>
 <dl class="field-list simple">
@@ -739,24 +793,42 @@ displaying differences in unified diff format.</p>
 <dd class="field-even"><p>str (positional)</p>
 </dd>
 <dt class="field-odd">param -ex<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Object type names (without namespace/prefix) to exclude from diff.
-These are added to default exclusions unless –no-default-exclusions is used.</p>
+<dd class="field-odd"><p>Object type name (without namespace/prefix) left out of the diff;
+repeat or comma-separate for more.</p>
 </dd>
 <dt class="field-even">type -ex<span class="colon">:</span></dt>
-<dd class="field-even"><p>list of str, optional</p>
+<dd class="field-even"><p>str, repeatable</p>
 </dd>
 <dt class="field-odd">param –exclude_objects<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Object type names (without namespace/prefix) to exclude from diff.
-These are added to default exclusions unless –no-default-exclusions is used.</p>
+<dd class="field-odd"><p>Object type name (without namespace/prefix) left out of the diff;
+repeat or comma-separate for more.</p>
 </dd>
 <dt class="field-even">type –exclude_objects<span class="colon">:</span></dt>
-<dd class="field-even"><p>list of str, optional</p>
+<dd class="field-even"><p>str, repeatable</p>
 </dd>
-<dt class="field-odd">param –no-default-exclusions<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Disable default exclusions (NamespaceMap, Distribution)</p>
+<dt class="field-odd">param –include<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Only these object types; repeat or comma-separate for more.</p>
 </dd>
-<dt class="field-even">type –no-default-exclusions<span class="colon">:</span></dt>
-<dd class="field-even"><p>flag, optional</p>
+<dt class="field-even">type –include<span class="colon">:</span></dt>
+<dd class="field-even"><p>str, repeatable</p>
+</dd>
+<dt class="field-odd">param –keep-metadata<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Also diff NamespaceMap and Distribution, left out by default.</p>
+</dd>
+<dt class="field-even">type –keep-metadata<span class="colon">:</span></dt>
+<dd class="field-even"><p>flag</p>
+</dd>
+<dt class="field-odd">param –context<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Keys whose unchanged values are shown in each changed object.</p>
+</dd>
+<dt class="field-even">type –context<span class="colon">:</span></dt>
+<dd class="field-even"><p>str, repeatable</p>
+</dd>
+<dt class="field-odd">param –stat<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Only the Removed / Added / Changed counts per type.</p>
+</dd>
+<dt class="field-even">type –stat<span class="colon">:</span></dt>
+<dd class="field-even"><p>flag</p>
 </dd>
 <dt class="field-odd">param Exit Codes<span class="colon">:</span></dt>
 <dd class="field-odd"><p></p></dd>
@@ -765,7 +837,17 @@ These are added to default exclusions unless –no-default-exclusions is used.</
 <dt class="field-odd">param 0<span class="colon">:</span></dt>
 <dd class="field-odd"><p></p></dd>
 <dt class="field-even">type 0<span class="colon">:</span></dt>
-<dd class="field-even"><p>Successful comparison (differences shown on stdout)</p>
+<dd class="field-even"><p>No differences</p>
+</dd>
+<dt class="field-odd">param 1<span class="colon">:</span></dt>
+<dd class="field-odd"><p></p></dd>
+<dt class="field-even">type 1<span class="colon">:</span></dt>
+<dd class="field-even"><p>Differences (shown on stdout)</p>
+</dd>
+<dt class="field-odd">param 2<span class="colon">:</span></dt>
+<dd class="field-odd"><p></p></dd>
+<dt class="field-even">type 2<span class="colon">:</span></dt>
+<dd class="field-even"><p>Error (bad arguments, unreadable file)</p>
 </dd>
 </dl>
 <p class="rubric">Notes</p>
@@ -780,9 +862,9 @@ not on raw XML text. This means:</p>
 <div class="admonition seealso">
 <p class="admonition-title">See also</p>
 <dl class="simple">
-<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">triplets.rdf_parser.load_all_to_dataframe</span></code></dt><dd><p>Loads CIM XML into triplet format</p>
+<dt><a class="reference internal" href="triplets.parser.html#triplets.parser.parse" title="triplets.parser.parse"><code class="xref py py-obj docutils literal notranslate"><span class="pre">triplets.parser.parse</span></code></a></dt><dd><p>Loads CIM XML into triplet format</p>
 </dd>
-<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">triplets.rdf_parser.print_triplets_diff</span></code></dt><dd><p>Prints differences between triplet DataFrames</p>
+<dt><a class="reference internal" href="triplets.tools.html#triplets.tools.print_triplets_diff" title="triplets.tools.print_triplets_diff"><code class="xref py py-obj docutils literal notranslate"><span class="pre">triplets.tools.print_triplets_diff</span></code></a></dt><dd><p>Prints differences between triplet DataFrames</p>
 </dd>
 </dl>
 </div>
@@ -821,7 +903,7 @@ not on raw XML text. This means:</p>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -848,6 +930,8 @@ not on raw XML text. This means:</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">triplets.cli</a><ul>
+<li><a class="reference internal" href="#triplets.cli.add_common_arguments"><code class="docutils literal notranslate"><span class="pre">add_common_arguments()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.cli.excluded_types"><code class="docutils literal notranslate"><span class="pre">excluded_types()</span></code></a></li>
 <li><a class="reference internal" href="#module-triplets.cli.cim_spreadsheet">triplets.cli.cim_spreadsheet</a><ul>
 <li><a class="reference internal" href="#cim-spreadsheet-converter-cli-tool">CIM Spreadsheet Converter CLI Tool</a><ul>
 <li><a class="reference internal" href="#installation">Installation</a></li>
@@ -884,7 +968,7 @@ not on raw XML text. This means:</p>
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

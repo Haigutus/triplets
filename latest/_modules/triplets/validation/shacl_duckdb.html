@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.validation.shacl_duckdb - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.validation.shacl_duckdb - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -299,7 +295,9 @@
 <span class="sd">query components (sh:or, sh:and, sh:not, sh:node, sh:sparql) delegate to the</span>
 <span class="sd">pandas implementations — they materialize the (scoped) table, which is fine:</span>
 <span class="sd">those are a handful of rows even in the real profiles, and sh:sparql needs an</span>
-<span class="sd">rdflib graph anyway.</span>
+<span class="sd">rdflib graph anyway. SPARQL targets materialize it the same way: their focus</span>
+<span class="sd">IDs resolve through ``shacl_pandas.sparql_targets`` into the ``_shacl_targets``</span>
+<span class="sd">table the SQL reads.</span>
 
 <span class="sd">Explicitly selected (``engine="duckdb"``), not in the auto order: polars owns</span>
 <span class="sd">the in-memory fast path; this engine is the deliberate choice when the data</span>
@@ -311,25 +309,37 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._engine_detect</span><span class="w"> </span><span class="kn">import</span> <span class="n">flavor</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">split_rules</span><span class="p">,</span> <span class="n">FALLBACK_COMPONENTS</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_report</span><span class="w"> </span><span class="kn">import</span> <span class="n">VIOLATION_COLUMNS</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_pandas</span><span class="w"> </span><span class="kn">import</span> <span class="n">DATATYPES</span><span class="p">,</span> <span class="n">_REFERENCE_LIKE</span><span class="p">,</span> <span class="n">SchemaKind</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.schema_scope</span><span class="w"> </span><span class="kn">import</span> <span class="n">ancestor_pairs</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_report</span><span class="w"> </span><span class="kn">import</span> <span class="n">VIOLATION_COLUMNS</span><span class="p">,</span> <span class="n">has_violation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">CIM_NS</span><span class="p">,</span> <span class="n">REFERENCE_LIKE</span><span class="p">,</span> <span class="n">TYPE_KEY</span><span class="p">,</span> <span class="n">iri_duckdb</span><span class="p">,</span> <span class="n">node_kind</span><span class="p">,</span> <span class="n">value_types</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">shacl_pandas</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_pandas</span><span class="w"> </span><span class="kn">import</span> <span class="n">datatype_patterns</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 <span class="n">_BATCH_SIZE</span> <span class="o">=</span> <span class="mi">100</span>  <span class="c1"># constraints per UNION ALL statement</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_class_sql</span><span class="p">(</span><span class="n">table</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Instances of a class (bound with one class-name parameter)."""</span>
-    <span class="k">return</span> <span class="sa">f</span><span class="s2">"SELECT ID FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> WHERE KEY = 'Type' AND VALUE = ?"</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_class_sql</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">"""Instances of a class (bound with one class-name parameter): the ``_shacl_types``</span>
+<span class="sd">    table ``validate`` builds — Type rows, plus each ancestor class with rdf_map."""</span>
+    <span class="k">return</span> <span class="s2">"SELECT ID FROM _shacl_types WHERE VALUE = ?"</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_focus_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""The rule's focus nodes (bound with one target_class parameter): a class's</span>
-<span class="sd">    instances, or the subjects carrying the target property (sh:targetSubjectsOf)."""</span>
-    <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"target_kind"</span><span class="p">,</span> <span class="s2">"class"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"subjectsOf"</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The rule's focus nodes (bound with one target_on parameter), by ``target_by``:</span>
+<span class="sd">    the IDs having the KEY, the VALUEs under the KEY, the one ID, the SPARQL</span>
+<span class="sd">    target's result (``_shacl_targets``), or the Type's instances."""</span>
+    <span class="n">by</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"target_by"</span><span class="p">,</span> <span class="s2">"Type"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">by</span> <span class="o">==</span> <span class="s2">"SPARQL"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">"SELECT ID FROM _shacl_targets WHERE QUERY = ?"</span>
+    <span class="k">if</span> <span class="n">by</span> <span class="o">==</span> <span class="s2">"KEY"</span><span class="p">:</span>
         <span class="k">return</span> <span class="sa">f</span><span class="s2">"SELECT DISTINCT ID FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> WHERE KEY = ?"</span>
-    <span class="k">return</span> <span class="n">_class_sql</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">by</span> <span class="o">==</span> <span class="s2">"VALUE"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"SELECT DISTINCT VALUE AS ID FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> WHERE KEY = ?"</span>
+    <span class="k">if</span> <span class="n">by</span> <span class="o">==</span> <span class="s2">"ID"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">"SELECT ? AS ID"</span>
+    <span class="k">return</span> <span class="n">_class_sql</span><span class="p">()</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_rows_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">):</span>
@@ -344,8 +354,8 @@
                <span class="sa">f</span><span class="s2">"WHERE KEY = ? AND ID IN (</span><span class="si">{</span><span class="n">_focus_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span><span class="w"> </span><span class="n">table</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
     <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"via_type"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
         <span class="n">sql</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT r.FOCUS AS FOCUS, t.VALUE AS PV FROM (</span><span class="si">{</span><span class="n">sql</span><span class="si">}</span><span class="s2">) r "</span>
-               <span class="sa">f</span><span class="s2">"JOIN </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> t ON t.ID = r.PV AND t.KEY = 'Type'"</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">sql</span><span class="p">,</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">]</span>
+               <span class="sa">f</span><span class="s2">"JOIN (SELECT DISTINCT ID, VALUE FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> WHERE KEY = '</span><span class="si">{</span><span class="n">TYPE_KEY</span><span class="si">}</span><span class="s2">') t ON t.ID = r.PV"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">sql</span><span class="p">,</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">]</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_wrap</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">from_sql</span><span class="p">,</span> <span class="n">from_params</span><span class="p">,</span> <span class="n">where_sql</span><span class="p">,</span> <span class="n">where_params</span><span class="p">,</span> <span class="n">value_expr</span><span class="o">=</span><span class="s2">"PV"</span><span class="p">):</span>
@@ -371,7 +381,7 @@
                 <span class="sa">f</span><span class="s2">"LEFT JOIN (SELECT FOCUS, COUNT(*) AS n FROM (</span><span class="si">{</span><span class="n">rows</span><span class="si">}</span><span class="s2">) GROUP BY FOCUS) c "</span>
                 <span class="sa">f</span><span class="s2">"ON f.ID = c.FOCUS WHERE COALESCE(c.n, 0) &lt; ?"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_wrap</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2"> occurs fewer than </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2"> time(s)"</span><span class="p">,</span>
-                 <span class="n">from_sql</span><span class="p">,</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">,</span> <span class="o">*</span><span class="n">rows_params</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">],</span> <span class="s2">"TRUE"</span><span class="p">,</span> <span class="p">[],</span>
+                 <span class="n">from_sql</span><span class="p">,</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">,</span> <span class="o">*</span><span class="n">rows_params</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">],</span> <span class="s2">"TRUE"</span><span class="p">,</span> <span class="p">[],</span>
                  <span class="n">value_expr</span><span class="o">=</span><span class="n">_NULL_VALUE</span><span class="p">)</span>
 
 
@@ -384,7 +394,7 @@
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_datatype</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Two-level lexical check (same deviation as the other vectorized engines)."""</span>
-    <span class="n">spec</span> <span class="o">=</span> <span class="n">DATATYPES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span><span class="o">.</span><span class="n">removeprefix</span><span class="p">(</span><span class="s2">"xsd:"</span><span class="p">))</span>
+    <span class="n">spec</span> <span class="o">=</span> <span class="n">datatype_patterns</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">lexical</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">spec</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">None</span>
     <span class="n">valid_pattern</span><span class="p">,</span> <span class="n">warn_pattern</span> <span class="o">=</span> <span class="n">spec</span>
@@ -426,18 +436,22 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_range</span><span class="p">(</span><span class="n">operator</span><span class="p">,</span> <span class="n">description</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Numeric range builder factory; non-castable values are the datatype check's job."""</span>
+<span class="w">    </span><span class="sd">"""Numeric range builder factory; a value that is not a number (no cast, or NaN)</span>
+<span class="sd">    fails every range component (SHACL: the comparison is not true)."""</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">builder</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
         <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span> <span class="o">=</span> <span class="n">_rows_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">_wrap</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"value is </span><span class="si">{</span><span class="n">description</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
-                     <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"TRY_CAST(PV AS DOUBLE) </span><span class="si">{</span><span class="n">operator</span><span class="si">}</span><span class="s2"> ?"</span><span class="p">,</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">])</span>
+        <span class="n">numeric</span> <span class="o">=</span> <span class="s2">"TRY_CAST(PV AS DOUBLE)"</span>
+        <span class="k">return</span> <span class="n">_wrap</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"value is </span><span class="si">{</span><span class="n">description</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span><span class="p">,</span>
+                     <span class="sa">f</span><span class="s2">"PV IS NOT NULL AND (</span><span class="si">{</span><span class="n">numeric</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">operator</span><span class="si">}</span><span class="s2"> ? OR </span><span class="si">{</span><span class="n">numeric</span><span class="si">}</span><span class="s2"> IS NULL OR isnan(</span><span class="si">{</span><span class="n">numeric</span><span class="si">}</span><span class="s2">))"</span><span class="p">,</span>
+                     <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">])</span>
     <span class="k">return</span> <span class="n">builder</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_in</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Value's lexical form (an IRI's local id) against each member's text; the datatype is ignored."""</span>
     <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span> <span class="o">=</span> <span class="n">_rows_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
     <span class="n">allowed</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">]</span>
-    <span class="n">local</span> <span class="o">=</span> <span class="s2">"list_extract(string_split(list_extract(string_split(PV, '#'), -1), '/'), -1)"</span>
+    <span class="n">local</span> <span class="o">=</span> <span class="n">iri_duckdb</span><span class="o">.</span><span class="n">local_value</span><span class="p">(</span><span class="s2">"PV"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_wrap</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"value is not one of </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">allowed</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
                  <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"NOT list_contains(?, </span><span class="si">{</span><span class="n">local</span><span class="si">}</span><span class="s2">)"</span><span class="p">,</span> <span class="p">[</span><span class="n">allowed</span><span class="p">])</span>
 
@@ -447,26 +461,33 @@
     <span class="n">from_sql</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT f.ID AS FOCUS FROM (</span><span class="si">{</span><span class="n">_focus_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span><span class="w"> </span><span class="n">table</span><span class="p">)</span><span class="si">}</span><span class="s2">) f "</span>
                 <span class="sa">f</span><span class="s2">"WHERE f.ID NOT IN (SELECT FOCUS FROM (</span><span class="si">{</span><span class="n">rows</span><span class="si">}</span><span class="s2">) WHERE PV = ?)"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_wrap</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2"> does not have required value '</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">'"</span><span class="p">,</span>
-                 <span class="n">from_sql</span><span class="p">,</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">,</span> <span class="o">*</span><span class="n">rows_params</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)],</span> <span class="s2">"TRUE"</span><span class="p">,</span> <span class="p">[],</span>
+                 <span class="n">from_sql</span><span class="p">,</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">,</span> <span class="o">*</span><span class="n">rows_params</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)],</span> <span class="s2">"TRUE"</span><span class="p">,</span> <span class="p">[],</span>
                  <span class="n">value_expr</span><span class="o">=</span><span class="n">_NULL_VALUE</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_class</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
     <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span> <span class="o">=</span> <span class="n">_rows_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_wrap</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"referenced object is not of class </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
-                 <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"PV NOT IN (</span><span class="si">{</span><span class="n">_class_sql</span><span class="p">(</span><span class="n">table</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span><span class="p">,</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">])</span>
+                 <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"PV NOT IN (</span><span class="si">{</span><span class="n">_class_sql</span><span class="p">()</span><span class="si">}</span><span class="s2">)"</span><span class="p">,</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">])</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_schema_range</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""triplets:range — ANY of the target's types in the allowed set conforms</span>
-<span class="sd">    (issue #100); targets without a Type row are silent."""</span>
+<span class="sd">    (issue #100); a target without a Type row is left to triplets:missing."""</span>
     <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span> <span class="o">=</span> <span class="n">_rows_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
     <span class="n">placeholders</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">"?"</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
-    <span class="n">condition</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">"EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> x WHERE x.ID = PV AND x.KEY = 'Type') "</span>
+    <span class="n">condition</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">"EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> x WHERE x.ID = PV AND x.KEY = '</span><span class="si">{</span><span class="n">TYPE_KEY</span><span class="si">}</span><span class="s2">') "</span>
                  <span class="sa">f</span><span class="s2">"AND PV NOT IN (SELECT ID FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> x "</span>
-                 <span class="sa">f</span><span class="s2">"WHERE x.KEY = 'Type' AND x.VALUE IN (</span><span class="si">{</span><span class="n">placeholders</span><span class="si">}</span><span class="s2">))"</span><span class="p">)</span>
+                 <span class="sa">f</span><span class="s2">"WHERE x.KEY = '</span><span class="si">{</span><span class="n">TYPE_KEY</span><span class="si">}</span><span class="s2">' AND x.VALUE IN (</span><span class="si">{</span><span class="n">placeholders</span><span class="si">}</span><span class="s2">))"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_wrap</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"reference target is not one of </span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
                  <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_schema_missing</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""triplets:missing — the referenced object has no Type row in the validated data."""</span>
+    <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span> <span class="o">=</span> <span class="n">_rows_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
+    <span class="n">condition</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"NOT EXISTS (SELECT 1 FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> x WHERE x.ID = PV AND x.KEY = '</span><span class="si">{</span><span class="n">TYPE_KEY</span><span class="si">}</span><span class="s2">')"</span>
+    <span class="k">return</span> <span class="n">_wrap</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"referenced object not found in the data"</span><span class="p">,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="p">[])</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_node_kind</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
@@ -475,7 +496,7 @@
         <span class="k">return</span> <span class="kc">None</span>
     <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span> <span class="o">=</span> <span class="n">_rows_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
     <span class="c1"># via_type value nodes are the referenced objects' types — always IRIs</span>
-    <span class="n">kind</span> <span class="o">=</span> <span class="s2">"iri"</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"via_type"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="k">else</span> <span class="n">context</span><span class="o">.</span><span class="n">key_kind</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">kind</span> <span class="o">=</span> <span class="s2">"iri"</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="s2">"via_type"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="k">else</span> <span class="n">node_kind</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">path</span><span class="p">,</span> <span class="n">context</span><span class="o">.</span><span class="n">value_types</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">kind</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>                                 <span class="c1"># schema decides for the whole path</span>
         <span class="k">if</span> <span class="p">(</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">"iri"</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span> <span class="o">==</span> <span class="s2">"IRI"</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">None</span>                                  <span class="c1"># every value conforms — no query</span>
@@ -483,7 +504,7 @@
     <span class="k">else</span><span class="p">:</span>                                                <span class="c1"># value-form heuristic</span>
         <span class="n">is_iri</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"(regexp_full_match(PV, ?) OR PV IN (SELECT DISTINCT ID FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2">))"</span>
         <span class="n">condition</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"NOT </span><span class="si">{</span><span class="n">is_iri</span><span class="si">}</span><span class="s2">"</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">params</span> <span class="o">==</span> <span class="s2">"IRI"</span> <span class="k">else</span> <span class="n">is_iri</span>
-        <span class="n">condition_params</span> <span class="o">=</span> <span class="p">[</span><span class="n">_REFERENCE_LIKE</span><span class="o">.</span><span class="n">pattern</span><span class="p">]</span>
+        <span class="n">condition_params</span> <span class="o">=</span> <span class="p">[</span><span class="n">REFERENCE_LIKE</span><span class="o">.</span><span class="n">pattern</span><span class="p">]</span>
     <span class="k">return</span> <span class="n">_wrap</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"value is not of node kind sh:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
                  <span class="n">rows</span><span class="p">,</span> <span class="n">rows_params</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="n">condition_params</span><span class="p">)</span>
 
@@ -493,7 +514,7 @@
     <span class="n">left</span><span class="p">,</span> <span class="n">left_params</span> <span class="o">=</span> <span class="n">_rows_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
     <span class="n">right</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT ID AS FOCUS, VALUE AS OTHER FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> "</span>
              <span class="sa">f</span><span class="s2">"WHERE KEY = ? AND ID IN (</span><span class="si">{</span><span class="n">_focus_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span><span class="w"> </span><span class="n">table</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">left</span><span class="p">,</span> <span class="n">left_params</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="p">[</span><span class="n">other_path</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">left</span><span class="p">,</span> <span class="n">left_params</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="p">[</span><span class="n">other_path</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">]</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_equals</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
@@ -531,11 +552,11 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_closed</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
-    <span class="n">allowed</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span> <span class="o">|</span> <span class="p">{</span><span class="s2">"Type"</span><span class="p">})</span>
+    <span class="n">allowed</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">rule</span><span class="o">.</span><span class="n">params</span><span class="p">)</span> <span class="o">|</span> <span class="p">{</span><span class="n">TYPE_KEY</span><span class="p">})</span>
     <span class="n">sql</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT ID, KEY, VALUE, ? AS VIOLATION_TYPE, ? AS MESSAGE, ? AS SEVERITY, ? AS SOURCE_SHAPE "</span>
            <span class="sa">f</span><span class="s2">"FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> WHERE ID IN (</span><span class="si">{</span><span class="n">_focus_sql</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span><span class="w"> </span><span class="n">table</span><span class="p">)</span><span class="si">}</span><span class="s2">) AND NOT list_contains(?, KEY)"</span><span class="p">)</span>
     <span class="n">params</span> <span class="o">=</span> <span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">component</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">message</span> <span class="ow">or</span> <span class="s2">"property is not allowed on a closed shape"</span><span class="p">,</span>
-              <span class="n">rule</span><span class="o">.</span><span class="n">severity</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">target_class</span><span class="p">,</span> <span class="n">allowed</span><span class="p">]</span>
+              <span class="n">rule</span><span class="o">.</span><span class="n">severity</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">shape_id</span><span class="p">,</span> <span class="n">rule</span><span class="o">.</span><span class="n">target_on</span><span class="p">,</span> <span class="n">allowed</span><span class="p">]</span>
     <span class="k">return</span> <span class="n">sql</span><span class="p">,</span> <span class="n">params</span>
 
 
@@ -555,6 +576,7 @@
     <span class="s2">"sh:hasValue"</span><span class="p">:</span> <span class="n">_has_value</span><span class="p">,</span>
     <span class="s2">"sh:class"</span><span class="p">:</span> <span class="n">_class</span><span class="p">,</span>
     <span class="s2">"triplets:range"</span><span class="p">:</span> <span class="n">_schema_range</span><span class="p">,</span>
+    <span class="s2">"triplets:missing"</span><span class="p">:</span> <span class="n">_schema_missing</span><span class="p">,</span>
     <span class="s2">"sh:nodeKind"</span><span class="p">:</span> <span class="n">_node_kind</span><span class="p">,</span>
     <span class="s2">"sh:equals"</span><span class="p">:</span> <span class="n">_equals</span><span class="p">,</span>
     <span class="s2">"sh:disjoint"</span><span class="p">:</span> <span class="n">_disjoint</span><span class="p">,</span>
@@ -564,30 +586,61 @@
 <span class="p">}</span>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">_Context</span><span class="p">(</span><span class="n">SchemaKind</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Schema-driven term-kind decisions (shared with the other vectorized engines)."""</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_Context</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Schema-driven term-kind decisions and the lexical flag (shared with the</span>
+<span class="sd">    other vectorized engines)."""</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">rdf_map</span> <span class="o">=</span> <span class="n">rdf_map</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lexical</span> <span class="o">=</span> <span class="n">lexical</span>       <span class="c1"># sh:datatype also reports triplets:lexicalForm</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value_types</span> <span class="o">=</span> <span class="n">value_types</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span>   <span class="c1"># sh:nodeKind: schema-driven IRI/literal decision</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_create_types_table</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">ancestors</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Temp ``_shacl_types`` (ID, VALUE): each object's Type rows, and its ancestor</span>
+<span class="sd">    classes from *ancestors* ``(Type, ancestor)`` pairs. A native table: a registered</span>
+<span class="sd">    pandas frame scanned by thousands of subqueries is several times slower."""</span>
+    <span class="n">types</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"SELECT ID, VALUE FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> WHERE KEY = '</span><span class="si">{</span><span class="n">TYPE_KEY</span><span class="si">}</span><span class="s2">'"</span>
+    <span class="k">if</span> <span class="n">ancestors</span><span class="p">:</span>
+        <span class="n">connection</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">"_shacl_type_ancestors"</span><span class="p">,</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">ancestors</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"ANCESTOR"</span><span class="p">]))</span>
+        <span class="n">types</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">"WITH types AS (</span><span class="si">{</span><span class="n">types</span><span class="si">}</span><span class="s2">) SELECT ID, VALUE FROM types UNION ALL "</span>
+                 <span class="sa">f</span><span class="s2">"SELECT types.ID, pairs.ANCESTOR FROM types JOIN _shacl_type_ancestors pairs USING (VALUE)"</span><span class="p">)</span>
+    <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CREATE OR REPLACE TEMP TABLE _shacl_types AS SELECT DISTINCT ID, VALUE FROM (</span><span class="si">{</span><span class="n">types</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">ancestors</span><span class="p">:</span>
+        <span class="n">connection</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span><span class="s2">"_shacl_type_ancestors"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_create_targets_table</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">targets</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Temp ``_shacl_targets`` (QUERY, ID): the focus IDs per SPARQL target query.</span>
+<span class="sd">    A native table, like ``_shacl_types``; the schema is explicit because an</span>
+<span class="sd">    empty frame types no column."""</span>
+    <span class="n">pairs</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">([(</span><span class="n">query</span><span class="p">,</span> <span class="n">focus</span><span class="p">)</span> <span class="k">for</span> <span class="n">query</span><span class="p">,</span> <span class="n">ids</span> <span class="ow">in</span> <span class="n">targets</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">for</span> <span class="n">focus</span> <span class="ow">in</span> <span class="n">ids</span><span class="p">],</span>
+                             <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"QUERY"</span><span class="p">,</span> <span class="s2">"ID"</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+    <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"CREATE OR REPLACE TEMP TABLE _shacl_targets (QUERY VARCHAR, ID VARCHAR)"</span><span class="p">)</span>
+    <span class="n">connection</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s2">"_shacl_target_pairs"</span><span class="p">,</span> <span class="n">pairs</span><span class="p">)</span>
+    <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"INSERT INTO _shacl_targets SELECT QUERY, ID FROM _shacl_target_pairs"</span><span class="p">)</span>
+    <span class="n">connection</span><span class="o">.</span><span class="n">unregister</span><span class="p">(</span><span class="s2">"_shacl_target_pairs"</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="validate">
 <a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_duckdb.validate">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_workers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-             <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">components</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">max_workers</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+             <span class="n">table</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">,</span> <span class="n">ancestors</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+             <span class="n">abort_on_first</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Validate triplet data against the compiled constraint table (DuckDB SQL).</span>
 
-<span class="sd">    Parameters mirror shacl_pandas.validate, plus:</span>
+<span class="sd">    Parameters mirror shacl_pandas.validate (*abort_on_first*: a Violation from</span>
+<span class="sd">    the SQL pass skips the pandas-delegated components), plus:</span>
 
 <span class="sd">    table / schema / table_name</span>
 <span class="sd">        Triplets relation when *data* is a DuckDB connection (defaults from</span>
 <span class="sd">        the connection, else ``triplets``).</span>
 <span class="sd">    """</span>
     <span class="n">connection</span><span class="p">,</span> <span class="n">table</span> <span class="o">=</span> <span class="n">_connection</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">values</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">"'"</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s2">"''"</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"'"</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">scope</span><span class="p">)</span>
-        <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CREATE OR REPLACE TEMP VIEW _shacl_scoped AS "</span>
-                           <span class="sa">f</span><span class="s2">"SELECT * FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> WHERE INSTANCE_ID IN (</span><span class="si">{</span><span class="n">values</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">data_scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">"'"</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s2">"''"</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"'"</span> <span class="k">for</span> <span class="n">instance</span> <span class="ow">in</span> <span class="n">data_scope</span><span class="p">)</span>
+        <span class="n">where</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"INSTANCE_ID IN (</span><span class="si">{</span><span class="n">values</span><span class="si">}</span><span class="s2">)"</span> <span class="k">if</span> <span class="n">values</span> <span class="k">else</span> <span class="s2">"FALSE"</span>   <span class="c1"># an empty scope loads no instance</span>
+        <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CREATE OR REPLACE TEMP VIEW _shacl_scoped AS SELECT * FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="n">where</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="n">table</span> <span class="o">=</span> <span class="s1">'"_shacl_scoped"'</span>
 
     <span class="k">if</span> <span class="s2">"duckdb"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">compiled</span><span class="o">.</span><span class="n">plans</span><span class="p">:</span>   <span class="c1"># setdefault would re-split on every call</span>
@@ -597,7 +650,16 @@
         <span class="n">vectorized</span> <span class="o">=</span> <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">vectorized</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="ow">in</span> <span class="n">components</span><span class="p">]</span>
         <span class="n">fallback</span> <span class="o">=</span> <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">fallback</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="ow">in</span> <span class="n">components</span><span class="p">]</span>
 
-    <span class="n">context</span> <span class="o">=</span> <span class="n">_Context</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span>
+    <span class="n">_create_types_table</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">ancestor_pairs</span><span class="p">(</span><span class="n">ancestors</span><span class="p">))</span>
+    <span class="c1"># SPARQL targets and the pandas fallback both read the (scoped) table as a frame</span>
+    <span class="n">sparql_rules</span> <span class="o">=</span> <span class="p">[</span><span class="n">rule</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">vectorized</span> <span class="k">if</span> <span class="n">rule</span><span class="o">.</span><span class="n">target_by</span> <span class="o">==</span> <span class="s2">"SPARQL"</span><span class="p">]</span>   <span class="c1"># fallback resolves its own</span>
+    <span class="n">frame</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT * FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span> <span class="k">if</span> <span class="n">sparql_rules</span> <span class="ow">or</span> <span class="n">fallback</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">notes</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">VIOLATION_COLUMNS</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">sparql_rules</span><span class="p">:</span>
+        <span class="n">targets</span><span class="p">,</span> <span class="n">notes</span> <span class="o">=</span> <span class="n">shacl_pandas</span><span class="o">.</span><span class="n">sparql_targets</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">sparql_rules</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span>
+                                                     <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">)</span>
+        <span class="n">_create_targets_table</span><span class="p">(</span><span class="n">connection</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span>
+    <span class="n">context</span> <span class="o">=</span> <span class="n">_Context</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">lexical</span><span class="p">)</span>
     <span class="n">built</span> <span class="o">=</span> <span class="p">[</span><span class="n">statement</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">vectorized</span>
              <span class="k">if</span> <span class="p">(</span><span class="n">statement</span> <span class="o">:=</span> <span class="n">SQL_BUILDERS</span><span class="p">[</span><span class="n">rule</span><span class="o">.</span><span class="n">component</span><span class="p">](</span><span class="n">rule</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">context</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
 
@@ -616,16 +678,20 @@
     <span class="n">violations</span> <span class="o">=</span> <span class="p">(</span><span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">if</span> <span class="n">frames</span>
                   <span class="k">else</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">VIOLATION_COLUMNS</span><span class="p">))</span>
     <span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">object</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">violations</span><span class="o">.</span><span class="n">notna</span><span class="p">(),</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">violations</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">violations</span><span class="p">,</span> <span class="n">notes</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">fallback</span><span class="p">:</span>
-        <span class="c1"># nested/query components materialize the (already scoped) table — a</span>
-        <span class="c1"># handful of rows even in real profiles, and sh:sparql needs rdflib anyway</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">shacl_pandas</span>
-        <span class="n">frame</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SELECT * FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span><span class="o">.</span><span class="n">df</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">fallback</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">abort_on_first</span> <span class="ow">and</span> <span class="n">has_violation</span><span class="p">(</span><span class="n">violations</span><span class="p">)):</span>
+        <span class="c1"># nested/query components run on the materialized (already scoped) table —</span>
+        <span class="c1"># a handful of rows even in real profiles, and sh:sparql needs rdflib anyway</span>
         <span class="n">supplement</span> <span class="o">=</span> <span class="n">shacl_pandas</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span>
                                            <span class="n">components</span><span class="o">=</span><span class="p">{</span><span class="n">rule</span><span class="o">.</span><span class="n">component</span> <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">fallback</span><span class="p">},</span>
-                                           <span class="n">max_workers</span><span class="o">=</span><span class="n">max_workers</span><span class="p">)</span>
+                                           <span class="n">max_workers</span><span class="o">=</span><span class="n">max_workers</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">,</span>
+                                           <span class="n">ancestors</span><span class="o">=</span><span class="n">ancestors</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="n">lexical</span><span class="p">,</span> <span class="n">abort_on_first</span><span class="o">=</span><span class="n">abort_on_first</span><span class="p">,</span>
+                                           <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
         <span class="n">violations</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">violations</span><span class="p">,</span> <span class="n">supplement</span><span class="p">],</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="c1"># don't leave them on the caller's connection</span>
+    <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"DROP TABLE IF EXISTS _shacl_types"</span><span class="p">)</span>
+    <span class="n">connection</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"DROP TABLE IF EXISTS _shacl_targets"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">violations</span></div>
 
 
@@ -653,7 +719,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -673,7 +739,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

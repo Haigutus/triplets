@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.sparql.sparql_rdflib - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.sparql.sparql_rdflib - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -310,22 +306,22 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._engine_detect</span><span class="w"> </span><span class="kn">import</span> <span class="n">flavor</span><span class="p">,</span> <span class="n">to_return_type</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._rdflib_loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataset</span><span class="p">,</span> <span class="n">scoped_graph</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..export.nquads_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">CIM_NS</span><span class="p">,</span> <span class="n">RDF_TYPE</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">CIM_NS</span><span class="p">,</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">decode_iri</span><span class="p">,</span> <span class="n">local_id</span><span class="p">,</span> <span class="n">local_key</span><span class="p">,</span> <span class="n">local_value</span>
 
 <span class="k">if</span> <span class="n">find_spec</span><span class="p">(</span><span class="s2">"rdflib"</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># registry contract: an unavailable engine fails at import</span>
     <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">"rdflib is not installed"</span><span class="p">)</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
-<span class="n">_UUID_PREFIX</span> <span class="o">=</span> <span class="s2">"urn:uuid:"</span>
 
 
 <div class="viewcode-block" id="query">
 <a class="viewcode-back" href="../../../triplets.sparql.html#triplets.sparql.sparql_rdflib.query">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+          <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Execute query_string over data; shape the result by query type."""</span>
-    <span class="n">dataset</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="n">data_unchanged</span><span class="p">)</span>
-    <span class="n">graph</span> <span class="o">=</span> <span class="n">scoped_graph</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">scope</span><span class="p">)</span>
+    <span class="n">dataset</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="n">data_unchanged</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">)</span>
+    <span class="n">graph</span> <span class="o">=</span> <span class="n">scoped_graph</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">data_scope</span><span class="p">)</span>
     <span class="n">result</span> <span class="o">=</span> <span class="n">graph</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">query_string</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">return_type</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
         <span class="n">return_type</span> <span class="o">=</span> <span class="s2">"polars"</span> <span class="k">if</span> <span class="n">flavor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"polars"</span> <span class="k">else</span> <span class="s2">"pandas"</span>
@@ -351,52 +347,34 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_graph_to_triplets</span><span class="p">(</span><span class="n">graph</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""CONSTRUCT/DESCRIBE result graph → triplet DataFrame (ID/KEY/VALUE).</span>
 
-<span class="sd">    Inverse of the N-Quads export conventions: strips urn:uuid: from subjects,</span>
-<span class="sd">    CIM namespace from predicates, maps rdf:type → 'Type'. INSTANCE_ID is empty</span>
-<span class="sd">    (a constructed graph has no source instance).</span>
+<span class="sd">    Inverse of the N-Quads export conventions, with read_nquads' rules: IRIs</span>
+<span class="sd">    decoded once, then local_id on subjects, local_key on predicates (rdf:type →</span>
+<span class="sd">    'Type'), local_value on IRI objects (kind ``class`` on type rows; a guessed</span>
+<span class="sd">    value that is a subject shortens like its ID), literals verbatim.</span>
+<span class="sd">    INSTANCE_ID is None (a constructed graph has no source instance).</span>
 
 <span class="sd">    Measured: serialize(format="nt") + read_nquads loses to this loop (~9%</span>
 <span class="sd">    slower per 84k triples — rdflib's NT serializer overhead exceeds the</span>
 <span class="sd">    vectorized decode gain), so the direct iteration stays.</span>
 <span class="sd">    """</span>
+    <span class="n">subjects</span> <span class="o">=</span> <span class="p">{</span><span class="nb">str</span><span class="p">(</span><span class="n">subject</span><span class="p">)</span> <span class="k">for</span> <span class="n">subject</span> <span class="ow">in</span> <span class="n">graph</span><span class="o">.</span><span class="n">subjects</span><span class="p">()}</span>
     <span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">subject</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">obj</span> <span class="ow">in</span> <span class="n">graph</span><span class="p">:</span>
-
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"Literal"</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">str</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span> <span class="o">==</span> <span class="n">RDF_TYPE</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">local_value</span><span class="p">(</span><span class="n">decode_iri</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">obj</span><span class="p">)),</span> <span class="s2">"class"</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="p">(</span><span class="n">local_id</span> <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="ow">in</span> <span class="n">subjects</span> <span class="k">else</span> <span class="n">local_value</span><span class="p">)(</span><span class="n">decode_iri</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">obj</span><span class="p">)))</span>
         <span class="c1"># Tuples are faster than dicts to convert to dataframe</span>
-        <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-            <span class="p">(</span>
-                <span class="n">_strip_uuid</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">subject</span><span class="p">)),</span>              <span class="c1"># ID</span>
-                <span class="n">_shorten_predicate</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">predicate</span><span class="p">)),</span>     <span class="c1"># KEY</span>
-                <span class="n">_shorten_object</span><span class="p">(</span><span class="n">obj</span><span class="p">),</span>                   <span class="c1"># VALUE</span>
-                <span class="kc">None</span><span class="p">,</span>                                   <span class="c1"># INSTANCE_ID — constructed graph has no source instance</span>
-            <span class="p">)</span>
-        <span class="p">)</span>
+        <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">local_id</span><span class="p">(</span><span class="n">decode_iri</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">subject</span><span class="p">))),</span>        <span class="c1"># ID</span>
+                     <span class="n">local_key</span><span class="p">(</span><span class="n">decode_iri</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">predicate</span><span class="p">))),</span>     <span class="c1"># KEY</span>
+                     <span class="n">value</span><span class="p">,</span>                                     <span class="c1"># VALUE</span>
+                     <span class="kc">None</span><span class="p">))</span>                                     <span class="c1"># INSTANCE_ID — constructed graph has no source instance</span>
 
     <span class="c1"># return_type conversion happens in _finalize</span>
     <span class="k">return</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"INSTANCE_ID"</span><span class="p">])</span>
 
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_strip_uuid</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">value</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">_UUID_PREFIX</span><span class="p">):]</span> <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">_UUID_PREFIX</span><span class="p">)</span> <span class="k">else</span> <span class="n">value</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_shorten_predicate</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
-    <span class="k">if</span> <span class="n">predicate</span> <span class="o">==</span> <span class="n">RDF_TYPE</span><span class="p">:</span>
-        <span class="k">return</span> <span class="s2">"Type"</span>
-    <span class="k">if</span> <span class="n">predicate</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">CIM_NS</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">predicate</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">CIM_NS</span><span class="p">):]</span>
-    <span class="k">return</span> <span class="n">predicate</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_shorten_object</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
-    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">==</span> <span class="s2">"Literal"</span><span class="p">:</span>
-        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-    <span class="n">value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">_UUID_PREFIX</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">value</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">_UUID_PREFIX</span><span class="p">):]</span>
-    <span class="k">if</span> <span class="n">value</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">CIM_NS</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">value</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">CIM_NS</span><span class="p">):]</span>
-    <span class="k">return</span> <span class="n">value</span>
 </pre></div>
         </article>
       </div>
@@ -409,7 +387,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -429,7 +407,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

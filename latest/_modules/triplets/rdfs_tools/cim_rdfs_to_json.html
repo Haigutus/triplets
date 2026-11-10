@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.rdfs_tools.cim_rdfs_to_json - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.rdfs_tools.cim_rdfs_to_json - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -292,6 +288,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">triplets.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_namespace_map</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">triplets.rdfs_tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">rdfs_tools</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">triplets.rdfs_tools.rdfs_tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_all_to_dataframe</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">triplets.iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">XSD_NS</span><span class="p">,</span> <span class="n">split_iri</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
@@ -300,46 +297,62 @@
 <span class="n">RDFS_ROOT</span> <span class="o">=</span> <span class="n">REPO_ROOT</span> <span class="o">/</span> <span class="s2">"rdfs"</span>
 <span class="n">EXPORT_DIR</span> <span class="o">=</span> <span class="n">REPO_ROOT</span> <span class="o">/</span> <span class="s2">"triplets"</span> <span class="o">/</span> <span class="s2">"export_schema"</span>
 
+<span class="c1"># Primitive → XSD; CIMDatatypes (Area, Money, …) resolve via their .value, see xsd_types_from_rdfs</span>
 <span class="n">cgmes_data_types_map</span> <span class="o">=</span> <span class="p">{</span>
  <span class="s1">'String'</span><span class="p">:</span> <span class="s1">'xsd:string'</span><span class="p">,</span>
- <span class="s1">'Simple_Float'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
  <span class="s1">'Float'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Boolean'</span><span class="p">:</span> <span class="s1">'xsd:boolean'</span><span class="p">,</span>
- <span class="s1">'Reactance'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Resistance'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Voltage'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
+ <span class="s1">'Decimal'</span><span class="p">:</span> <span class="s1">'xsd:decimal'</span><span class="p">,</span>
  <span class="s1">'Integer'</span><span class="p">:</span> <span class="s1">'xsd:integer'</span><span class="p">,</span>
- <span class="s1">'ActivePower'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'ReactivePower'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'CurrentFlow'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'AngleDegrees'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'PerCent'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Conductance'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Susceptance'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'PU'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
+ <span class="s1">'Boolean'</span><span class="p">:</span> <span class="s1">'xsd:boolean'</span><span class="p">,</span>
  <span class="s1">'Date'</span><span class="p">:</span> <span class="s1">'xsd:date'</span><span class="p">,</span>
- <span class="s1">'Length'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
  <span class="s1">'DateTime'</span><span class="p">:</span> <span class="s1">'xsd:dateTime'</span><span class="p">,</span>
- <span class="s1">'ApparentPower'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Seconds'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Inductance'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Money'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'MonthDay'</span><span class="p">:</span> <span class="s1">'xsd:integer'</span><span class="p">,</span>
- <span class="s1">'VoltagePerReactivePower'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Capacitance'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'ActivePowerPerFrequency'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'ResistancePerLength'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'RotationSpeed'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'AngleRadians'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'InductancePerLength'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'ActivePowerPerCurrentFlow'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'CapacitancePerLength'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Decimal'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Frequency'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s1">'Temperature'</span><span class="p">:</span> <span class="s1">'xsd:float'</span><span class="p">,</span>
- <span class="s2">"IRI"</span><span class="p">:</span> <span class="s2">"xsd:anyURI"</span><span class="p">,</span>
- <span class="s2">"URI"</span><span class="p">:</span> <span class="s2">"xsd:anyURI"</span>
+ <span class="s1">'DateTimeStamp'</span><span class="p">:</span> <span class="s1">'xsd:dateTimeStamp'</span><span class="p">,</span>
+ <span class="s1">'Time'</span><span class="p">:</span> <span class="s1">'xsd:time'</span><span class="p">,</span>
+ <span class="s1">'MonthDay'</span><span class="p">:</span> <span class="s1">'xsd:gMonthDay'</span><span class="p">,</span>
+ <span class="s1">'Duration'</span><span class="p">:</span> <span class="s1">'xsd:duration'</span><span class="p">,</span>
+ <span class="s1">'UUID'</span><span class="p">:</span> <span class="s1">'xsd:string'</span><span class="p">,</span>
+ <span class="s1">'Version'</span><span class="p">:</span> <span class="s1">'xsd:string'</span><span class="p">,</span>
+ <span class="s1">'IRI'</span><span class="p">:</span> <span class="s1">'xsd:anyURI'</span><span class="p">,</span>
+ <span class="s1">'URI'</span><span class="p">:</span> <span class="s1">'xsd:anyURI'</span><span class="p">,</span>
+ <span class="s1">'StringIRI'</span><span class="p">:</span> <span class="s1">'xsd:anyURI'</span><span class="p">,</span>
+ <span class="s1">'StringFixedLanguage'</span><span class="p">:</span> <span class="s1">'xsd:string'</span><span class="p">,</span>
 <span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_as_xsd</span><span class="p">(</span><span class="n">uri</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">uri</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">XSD_NS</span><span class="p">,</span> <span class="s2">"xsd:"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">uri</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">uri</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">XSD_NS</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
+
+
+<div class="viewcode-block" id="xsd_types_from_rdfs">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.xsd_types_from_rdfs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">xsd_types_from_rdfs</span><span class="p">(</span><span class="n">profile_data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""CIMDatatype local name → ``xsd:float`` from its ``.value``.</span>
+
+<span class="sd">    ``.value`` is typed by an XSD ``rdfs:range`` (typed RDFS) or by ``cims:dataType``</span>
+<span class="sd">    pointing at a Primitive (``Area.value`` → ``Float``) or another CIMDatatype;</span>
+<span class="sd">    the chain is followed until it reaches an XSD type or a ``cgmes_data_types_map`` key.</span>
+<span class="sd">    """</span>
+    <span class="c1"># Only CIMDatatypes: ordinary classes (CurrentLimit, SetPoint, …) also have a .value</span>
+    <span class="n">datatypes</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">profile_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">rdfs_tools</span><span class="o">.</span><span class="n">stereotype_query</span><span class="p">(</span><span class="s2">"CIMDatatype"</span><span class="p">))</span><span class="o">.</span><span class="n">ID</span><span class="p">)</span>
+    <span class="n">datatypes</span> <span class="o">|=</span> <span class="nb">set</span><span class="p">(</span><span class="n">profile_data</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="s2">"KEY == 'isCIMDatatype' and VALUE == 'True'"</span><span class="p">)</span><span class="o">.</span><span class="n">ID</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">loc</span><span class="p">[(</span><span class="n">profile_data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"domain"</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">profile_data</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">datatypes</span><span class="p">),</span> <span class="p">[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span>
+    <span class="n">targets</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">profile_data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">([</span><span class="s2">"range"</span><span class="p">,</span> <span class="s2">"dataType"</span><span class="p">])]</span>
+    <span class="n">targets</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">targets</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">],</span> <span class="n">targets</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]))</span>
+    <span class="n">value_of</span> <span class="o">=</span> <span class="p">{</span><span class="n">split_iri</span><span class="p">(</span><span class="n">typ</span><span class="p">)[</span><span class="mi">1</span><span class="p">]:</span> <span class="n">_as_xsd</span><span class="p">(</span><span class="n">target</span><span class="p">)</span> <span class="ow">or</span> <span class="n">split_iri</span><span class="p">(</span><span class="n">target</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">prop_id</span><span class="p">,</span> <span class="n">typ</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">domain</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">],</span> <span class="n">domain</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">split_iri</span><span class="p">(</span><span class="n">prop_id</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">"."</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"value"</span>
+                <span class="ow">and</span> <span class="p">(</span><span class="n">target</span> <span class="o">:=</span> <span class="n">targets</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">prop_id</span><span class="p">))}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">resolve</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+        <span class="n">seen</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">while</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">value_of</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"xsd:"</span><span class="p">):</span>
+            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">value_of</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">name</span> <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"xsd:"</span><span class="p">)</span> <span class="k">else</span> <span class="n">cgmes_data_types_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">xsd</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">value_of</span> <span class="k">if</span> <span class="p">(</span><span class="n">xsd</span> <span class="o">:=</span> <span class="n">resolve</span><span class="p">(</span><span class="n">name</span><span class="p">))}</span></div>
+
+
 
 <span class="n">cim_serializations</span> <span class="o">=</span> <span class="p">{</span>
 <span class="s2">"552_ED1"</span><span class="p">:</span> <span class="p">{</span>
@@ -369,6 +382,8 @@
 <div class="viewcode-block" id="convert_profile">
 <a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.convert_profile">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">convert_profile</span><span class="p">(</span><span class="n">profile_data</span><span class="p">,</span> <span class="n">serialization_version</span><span class="o">=</span><span class="s2">"552_ED2"</span><span class="p">):</span>
+
+    <span class="n">types</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">cgmes_data_types_map</span><span class="p">,</span> <span class="o">**</span><span class="n">xsd_types_from_rdfs</span><span class="p">(</span><span class="n">profile_data</span><span class="p">)}</span>
 
     <span class="n">id_attribute</span> <span class="o">=</span> <span class="n">cim_serializations</span><span class="p">[</span><span class="n">serialization_version</span><span class="p">][</span><span class="s2">"id_attribute"</span><span class="p">]</span>
     <span class="n">id_prefix</span> <span class="o">=</span> <span class="n">cim_serializations</span><span class="p">[</span><span class="n">serialization_version</span><span class="p">][</span><span class="s2">"id_prefix"</span><span class="p">]</span>
@@ -411,7 +426,7 @@
         <span class="k">if</span> <span class="n">association_used</span> <span class="o">==</span> <span class="s1">'No'</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
 
-        <span class="n">parameter_namespace</span><span class="p">,</span> <span class="n">parameter_name</span> <span class="o">=</span> <span class="n">rdfs_tools</span><span class="o">.</span><span class="n">get_namespace_and_name</span><span class="p">(</span><span class="n">parameter</span><span class="p">,</span> <span class="n">default_namespace</span><span class="o">=</span><span class="n">xml_base</span><span class="p">)</span>
+        <span class="n">parameter_namespace</span><span class="p">,</span> <span class="n">parameter_name</span> <span class="o">=</span> <span class="n">rdfs_tools</span><span class="o">.</span><span class="n">get_namespace_and_name</span><span class="p">(</span><span class="n">parameter</span><span class="p">)</span>
 
         <span class="n">parameter_def</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s2">"description"</span><span class="p">:</span> <span class="n">parameter_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"comment"</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
@@ -434,34 +449,31 @@
 
         <span class="k">else</span><span class="p">:</span>
             <span class="n">data_type</span> <span class="o">=</span> <span class="n">parameter_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"dataType"</span><span class="p">)</span>
+            <span class="n">range_uri</span> <span class="o">=</span> <span class="n">parameter_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"range"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">data_type</span> <span class="ow">and</span> <span class="n">range_uri</span> <span class="ow">and</span> <span class="n">split_iri</span><span class="p">(</span><span class="n">range_uri</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">in</span> <span class="n">types</span><span class="p">:</span>
+                <span class="n">data_type</span> <span class="o">=</span> <span class="n">range_uri</span>
 
-            <span class="c1"># If regular attribute, find its data type and add to export</span>
             <span class="k">if</span> <span class="n">data_type</span><span class="p">:</span>
 
-                <span class="c1"># Set parameter type to Attribute</span>
                 <span class="n">parameter_def</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"Attribute"</span>
 
-                <span class="c1"># Get the attribute data type and add to export</span>
-                <span class="n">data_type_namespace</span><span class="p">,</span> <span class="n">data_type_name</span> <span class="o">=</span> <span class="n">rdfs_tools</span><span class="o">.</span><span class="n">get_namespace_and_name</span><span class="p">(</span><span class="n">data_type</span><span class="p">,</span> <span class="n">default_namespace</span><span class="o">=</span><span class="n">xml_base</span><span class="p">)</span>
+                <span class="n">data_type_namespace</span><span class="p">,</span> <span class="n">data_type_name</span> <span class="o">=</span> <span class="n">rdfs_tools</span><span class="o">.</span><span class="n">get_namespace_and_name</span><span class="p">(</span><span class="n">data_type</span><span class="p">)</span>
 
                 <span class="n">data_type_meta</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">get_object_data</span><span class="p">(</span><span class="n">data_type</span><span class="p">)</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
 
-                <span class="k">if</span> <span class="n">data_type_namespace</span> <span class="o">==</span> <span class="s2">""</span><span class="p">:</span>
-                    <span class="n">data_type_namespace</span> <span class="o">=</span> <span class="n">xml_base</span>
-
-                <span class="n">data_type_def</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">xsd</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"xsd:type"</span><span class="p">:</span> <span class="n">types</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">data_type_name</span><span class="p">,</span> <span class="s2">""</span><span class="p">)}</span>
+                <span class="n">profile</span><span class="p">[</span><span class="n">data_type_name</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
                     <span class="s2">"description"</span><span class="p">:</span> <span class="n">data_type_meta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"comment"</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
                     <span class="s2">"type"</span><span class="p">:</span> <span class="n">data_type_meta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"stereotype"</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
-                    <span class="s2">"xsd:type"</span><span class="p">:</span> <span class="n">cgmes_data_types_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">data_type_name</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
-                    <span class="s2">"namespace"</span><span class="p">:</span> <span class="n">data_type_namespace</span>
+                    <span class="o">**</span><span class="n">xsd</span><span class="p">,</span>
+                    <span class="s2">"namespace"</span><span class="p">:</span> <span class="n">data_type_namespace</span><span class="p">,</span>
                 <span class="p">}</span>
-
-                <span class="c1"># Add data type to export</span>
-                <span class="n">profile</span><span class="p">[</span><span class="n">data_type_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">data_type_def</span>
-
-                <span class="c1"># Add data type to attribute definition</span>
                 <span class="n">parameter_def</span><span class="p">[</span><span class="s2">"dataType"</span><span class="p">]</span> <span class="o">=</span> <span class="n">data_type_name</span>
-                <span class="n">parameter_def</span><span class="p">[</span><span class="s2">"xsd:type"</span><span class="p">]</span> <span class="o">=</span> <span class="n">data_type_def</span><span class="p">[</span><span class="s2">"xsd:type"</span><span class="p">]</span>
+                <span class="n">parameter_def</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">xsd</span><span class="p">)</span>
+
+            <span class="k">elif</span> <span class="n">xsd</span> <span class="o">:=</span> <span class="n">_as_xsd</span><span class="p">(</span><span class="n">range_uri</span><span class="p">):</span>
+                <span class="n">parameter_def</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"Attribute"</span>
+                <span class="n">parameter_def</span><span class="p">[</span><span class="s2">"xsd:type"</span><span class="p">]</span> <span class="o">=</span> <span class="n">xsd</span>
 
             <span class="c1"># If enumeration</span>
             <span class="k">else</span><span class="p">:</span>
@@ -471,7 +483,7 @@
                 <span class="p">}</span>
                 <span class="n">parameter_def</span><span class="p">[</span><span class="s2">"type"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"Enumeration"</span>
                 <span class="n">parameter_def</span><span class="p">[</span><span class="s2">"xsd:type"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"xsd:anyURI"</span>
-                <span class="n">parameter_def</span><span class="p">[</span><span class="s2">"range"</span><span class="p">]</span> <span class="o">=</span> <span class="n">parameter_dict</span><span class="p">[</span><span class="s2">"range"</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"#"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
+                <span class="n">parameter_def</span><span class="p">[</span><span class="s2">"range"</span><span class="p">]</span> <span class="o">=</span> <span class="n">parameter_dict</span><span class="p">[</span><span class="s2">"range"</span><span class="p">]</span>
                 <span class="n">parameter_def</span><span class="p">[</span><span class="s2">"values"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
 
                 <span class="c1"># Add allowed values</span>
@@ -479,11 +491,8 @@
 
                 <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
 
-                    <span class="n">value_namespace</span><span class="p">,</span> <span class="n">value_name</span> <span class="o">=</span> <span class="n">rdfs_tools</span><span class="o">.</span><span class="n">get_namespace_and_name</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">default_namespace</span><span class="o">=</span><span class="n">xml_base</span><span class="p">)</span>
+                    <span class="n">value_namespace</span><span class="p">,</span> <span class="n">value_name</span> <span class="o">=</span> <span class="n">rdfs_tools</span><span class="o">.</span><span class="n">get_namespace_and_name</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
                     <span class="n">value_meta</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">get_object_data</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
-
-                    <span class="k">if</span> <span class="n">value_namespace</span> <span class="o">==</span> <span class="s2">""</span><span class="p">:</span>
-                        <span class="n">value_namespace</span> <span class="o">=</span> <span class="n">xml_base</span>
 
                     <span class="n">value_def</span> <span class="o">=</span> <span class="p">{</span>
                         <span class="s2">"description"</span><span class="p">:</span> <span class="n">value_meta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"comment"</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
@@ -501,7 +510,7 @@
     <span class="k">for</span> <span class="n">concrete_class</span> <span class="ow">in</span> <span class="n">export_classes</span><span class="p">:</span>
 
         <span class="c1"># Define class namespace</span>
-        <span class="n">class_namespace</span><span class="p">,</span> <span class="n">class_name</span> <span class="o">=</span> <span class="n">rdfs_tools</span><span class="o">.</span><span class="n">get_namespace_and_name</span><span class="p">(</span><span class="n">concrete_class</span><span class="p">,</span> <span class="n">default_namespace</span><span class="o">=</span><span class="n">xml_base</span><span class="p">)</span>
+        <span class="n">class_namespace</span><span class="p">,</span> <span class="n">class_name</span> <span class="o">=</span> <span class="n">rdfs_tools</span><span class="o">.</span><span class="n">get_namespace_and_name</span><span class="p">(</span><span class="n">concrete_class</span><span class="p">)</span>
 
         <span class="n">class_meta</span> <span class="o">=</span> <span class="n">profile_data</span><span class="o">.</span><span class="n">get_object_data</span><span class="p">(</span><span class="n">concrete_class</span><span class="p">)</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
 
@@ -526,7 +535,7 @@
                 <span class="s2">"value_prefix"</span><span class="p">:</span> <span class="n">class_ID_prefix</span>
             <span class="p">},</span>
             <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"Class"</span><span class="p">,</span>
-            <span class="s2">"inheritance"</span><span class="p">:</span> <span class="n">class_inheritance</span><span class="p">,</span>
+            <span class="s2">"inheritance"</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">class_inheritance</span><span class="p">),</span>
             <span class="s2">"stereotyped"</span><span class="p">:</span> <span class="ow">not</span> <span class="n">class_is_local</span><span class="p">,</span>
             <span class="s2">"namespace"</span><span class="p">:</span> <span class="n">class_namespace</span><span class="p">,</span>
             <span class="s2">"description"</span><span class="p">:</span> <span class="n">class_meta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"comment"</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
@@ -628,6 +637,9 @@
             <span class="n">metadata</span><span class="p">[</span><span class="s2">"keyword"</span><span class="p">]</span> <span class="o">=</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">"shortName"</span><span class="p">]</span>
             <span class="n">metadata</span><span class="p">[</span><span class="s2">"versionInfo"</span><span class="p">]</span> <span class="o">=</span> <span class="n">uml</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"v"</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="p">(</span><span class="n">uml</span> <span class="o">:=</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"entsoeUML"</span><span class="p">))</span> <span class="k">else</span> <span class="s2">""</span>
             <span class="n">metadata</span><span class="p">[</span><span class="s2">"modified"</span><span class="p">]</span> <span class="o">=</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">"date"</span><span class="p">]</span>
+            <span class="c1"># The ENTSO-E profile URI headers declare in Model.profile (EQ / EQBD: the core one, FH: the European one)</span>
+            <span class="n">metadata</span><span class="p">[</span><span class="s2">"versionIRI"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">metadata</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"entsoeURI"</span><span class="p">,</span> <span class="s2">"entsoeURIcore"</span><span class="p">,</span> <span class="s2">"europeanProfileURI"</span><span class="p">)</span>
+                                           <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">metadata</span><span class="p">),</span> <span class="s2">""</span><span class="p">)</span>
 
     <span class="n">metadata</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">metadata</span><span class="p">,</span> <span class="n">category_metadata</span><span class="p">])</span>
     <span class="n">metadata</span><span class="p">[</span><span class="s2">"title"</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">type_tableview</span><span class="p">(</span><span class="s2">"Distribution"</span><span class="p">)</span><span class="o">.</span><span class="n">label</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">"/"</span><span class="p">,</span><span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
@@ -657,6 +669,32 @@
         <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">conf_dict</span><span class="p">,</span> <span class="n">file_object</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">conf_dict</span></div>
+
+
+<div class="viewcode-block" id="profile_version_iris">
+<a class="viewcode-back" href="../../../triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.profile_version_iris">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">profile_version_iris</span><span class="p">(</span><span class="n">prof_dir</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Map each IRI that identifies a profile's RDFS to the PROF profile's ``owl:versionIRI``.</span>
+
+<span class="sd">    The keys are the profile's own versionIRI (CGMES: the RDFS reuses it) and its</span>
+<span class="sd">    ``prof:hasResource`` entries (NCP: the vocabulary resource is the RDFS versionIRI).</span>
+<span class="sd">    A key two profiles claim (shared constraints) identifies neither and is dropped.</span>
+<span class="sd">    No PROF directory gives {}.</span>
+<span class="sd">    """</span>
+    <span class="n">files</span> <span class="o">=</span> <span class="n">rdfs_tools</span><span class="o">.</span><span class="n">list_of_files</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">prof_dir</span><span class="p">),</span> <span class="s2">".rdf"</span><span class="p">)</span> <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">prof_dir</span><span class="p">)</span><span class="o">.</span><span class="n">is_dir</span><span class="p">()</span> <span class="k">else</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">files</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="n">load_all_to_dataframe</span><span class="p">(</span><span class="n">files</span><span class="p">)</span>
+    <span class="n">links</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="o">.</span><span class="n">KEY</span><span class="o">.</span><span class="n">isin</span><span class="p">([</span><span class="s2">"versionIRI"</span><span class="p">,</span> <span class="s2">"hasResource"</span><span class="p">])]</span>
+    <span class="n">version_of</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">links</span><span class="p">[</span><span class="n">links</span><span class="o">.</span><span class="n">KEY</span> <span class="o">==</span> <span class="s2">"versionIRI"</span><span class="p">][[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+
+    <span class="n">index</span><span class="p">,</span> <span class="n">ambiguous</span> <span class="o">=</span> <span class="p">{},</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">profile</span><span class="p">,</span> <span class="n">link</span> <span class="ow">in</span> <span class="n">links</span><span class="p">[</span><span class="n">links</span><span class="o">.</span><span class="n">ID</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">version_of</span><span class="p">)][[</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">]]</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">index</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">link</span><span class="p">,</span> <span class="n">version_of</span><span class="p">[</span><span class="n">profile</span><span class="p">])</span> <span class="o">!=</span> <span class="n">version_of</span><span class="p">[</span><span class="n">profile</span><span class="p">]:</span>
+            <span class="n">ambiguous</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">link</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="n">link</span><span class="p">:</span> <span class="n">version</span> <span class="k">for</span> <span class="n">link</span><span class="p">,</span> <span class="n">version</span> <span class="ow">in</span> <span class="n">index</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">link</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ambiguous</span><span class="p">}</span></div>
+
 
 
 <div class="viewcode-block" id="index_by_keyword">
@@ -699,17 +737,11 @@
                                 <span class="n">header</span><span class="o">=</span><span class="s2">"ENTSOE_NC_2.4.1/DatasetMetadata-AP-Voc-RDFS2020.rdf"</span><span class="p">,</span>
                                 <span class="n">exclude</span><span class="o">=</span><span class="p">{</span><span class="s2">"DatasetMetadata-AP-Voc-RDFS2020.rdf"</span><span class="p">},</span>
                                 <span class="n">index</span><span class="o">=</span><span class="n">index_by_keyword</span><span class="p">),</span>
-    <span class="c1"># Not onboarded: DatasetMetadata lost rdfs:domain on 11 URI-typed Dataset properties,</span>
-    <span class="c1"># https://github.com/entsoe/application-profiles-library/issues/92 — and neither is</span>
-    <span class="c1"># an official publication. Uncomment (here and in fetch_profiles.SOURCES) when fixed.</span>
-    <span class="c1"># "ENTSOE_NC_2.4.2":     dict(rdfs_dir="ENTSOE_NC_2.4.2",</span>
-    <span class="c1">#                             header="ENTSOE_NC_2.4.2/DatasetMetadata-AP-Voc-RDFS2020.rdf",</span>
-    <span class="c1">#                             exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},</span>
-    <span class="c1">#                             index=index_by_keyword),</span>
-    <span class="c1"># "ENTSOE_NC_2.5-dev":   dict(rdfs_dir="ENTSOE_NC_2.5-dev",</span>
-    <span class="c1">#                             header="ENTSOE_NC_2.5-dev/DatasetMetadata-AP-Voc-RDFS2020.rdf",</span>
-    <span class="c1">#                             exclude={"DatasetMetadata-AP-Voc-RDFS2020.rdf"},</span>
-    <span class="c1">#                             index=index_by_keyword),</span>
+    <span class="c1"># DatasetMetadata class linkage via schema:domainIncludes (application-profiles-library#99, fixes #92)</span>
+    <span class="s2">"ENTSOE_NC_2.5.0"</span><span class="p">:</span>     <span class="nb">dict</span><span class="p">(</span><span class="n">rdfs_dir</span><span class="o">=</span><span class="s2">"ENTSOE_NC_2.5.0"</span><span class="p">,</span>
+                                <span class="n">header</span><span class="o">=</span><span class="s2">"ENTSOE_NC_2.5.0/DatasetMetadata-AP-Voc-RDFS2020.rdf"</span><span class="p">,</span>
+                                <span class="n">exclude</span><span class="o">=</span><span class="p">{</span><span class="s2">"DatasetMetadata-AP-Voc-RDFS2020.rdf"</span><span class="p">},</span>
+                                <span class="n">index</span><span class="o">=</span><span class="n">index_by_keyword</span><span class="p">),</span>
 <span class="p">}</span>
 
 
@@ -731,6 +763,7 @@
     <span class="n">files_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">file</span> <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">rdfs_tools</span><span class="o">.</span><span class="n">list_of_files</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">RDFS_ROOT</span> <span class="o">/</span> <span class="n">spec</span><span class="p">[</span><span class="s2">"rdfs_dir"</span><span class="p">]),</span> <span class="s2">".rdf"</span><span class="p">)</span>
                   <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">file</span><span class="p">)</span><span class="o">.</span><span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">spec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"exclude"</span><span class="p">,</span> <span class="nb">set</span><span class="p">())]</span>
     <span class="n">data</span> <span class="o">=</span> <span class="n">load_all_to_dataframe</span><span class="p">(</span><span class="n">files_list</span><span class="p">)</span>
+    <span class="n">profile_iris</span> <span class="o">=</span> <span class="n">profile_version_iris</span><span class="p">(</span><span class="n">RDFS_ROOT</span> <span class="o">/</span> <span class="n">spec</span><span class="p">[</span><span class="s2">"rdfs_dir"</span><span class="p">]</span> <span class="o">/</span> <span class="s2">"PROF"</span><span class="p">)</span>
 
     <span class="k">for</span> <span class="n">serialization_version</span> <span class="ow">in</span> <span class="n">serialization_versions</span><span class="p">:</span>
 
@@ -738,6 +771,11 @@
         <span class="n">indexed_profiles</span> <span class="o">=</span> <span class="n">spec</span><span class="p">[</span><span class="s2">"index"</span><span class="p">](</span><span class="n">merged_profiles</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">keyword</span><span class="p">,</span> <span class="n">profile</span> <span class="ow">in</span> <span class="n">indexed_profiles</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="c1"># Profile IRI instances declare: from PROF when present, else the RDFS versionIRI</span>
+            <span class="n">metadata</span> <span class="o">=</span> <span class="n">profile</span><span class="p">[</span><span class="s2">"ProfileMetadata"</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">version_iri</span> <span class="o">:=</span> <span class="n">metadata</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"versionIRI"</span><span class="p">):</span>
+                <span class="n">metadata</span><span class="p">[</span><span class="s2">"profileVersionIRI"</span><span class="p">]</span> <span class="o">=</span> <span class="n">profile_iris</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">version_iri</span><span class="p">,</span> <span class="n">version_iri</span><span class="p">)</span>
+
             <span class="c1"># Insert Header entries into each profile, only if missing</span>
             <span class="n">profile</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">key</span><span class="p">:</span> <span class="n">value</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">header_profile</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">profile</span><span class="p">})</span>
 
@@ -797,7 +835,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -817,7 +855,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

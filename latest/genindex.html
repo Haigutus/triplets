@@ -4,7 +4,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="#"><link rel="search" title="Search" href="search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 --><title>Index - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 --><title>Index - triplets 0.2.0+182.g81b0b26 documentation</title>
 <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -160,7 +160,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -181,7 +181,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -199,7 +199,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -209,6 +209,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.sparql.html">SPARQL</a></li>
@@ -235,21 +236,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -286,19 +282,73 @@
           
 <section class="genindex-section">
   <h1 id="index">Index</h1>
-  <div class="genindex-jumpbox"><a href="#B"><strong>B</strong></a> | <a href="#C"><strong>C</strong></a> | <a href="#D"><strong>D</strong></a> | <a href="#E"><strong>E</strong></a> | <a href="#F"><strong>F</strong></a> | <a href="#G"><strong>G</strong></a> | <a href="#H"><strong>H</strong></a> | <a href="#I"><strong>I</strong></a> | <a href="#K"><strong>K</strong></a> | <a href="#L"><strong>L</strong></a> | <a href="#M"><strong>M</strong></a> | <a href="#P"><strong>P</strong></a> | <a href="#Q"><strong>Q</strong></a> | <a href="#R"><strong>R</strong></a> | <a href="#S"><strong>S</strong></a> | <a href="#T"><strong>T</strong></a> | <a href="#U"><strong>U</strong></a> | <a href="#V"><strong>V</strong></a> | <a href="#W"><strong>W</strong></a> | <a href="#X"><strong>X</strong></a></div>
+  <div class="genindex-jumpbox"><a href="#A"><strong>A</strong></a> | <a href="#B"><strong>B</strong></a> | <a href="#C"><strong>C</strong></a> | <a href="#D"><strong>D</strong></a> | <a href="#E"><strong>E</strong></a> | <a href="#F"><strong>F</strong></a> | <a href="#G"><strong>G</strong></a> | <a href="#H"><strong>H</strong></a> | <a href="#I"><strong>I</strong></a> | <a href="#K"><strong>K</strong></a> | <a href="#L"><strong>L</strong></a> | <a href="#M"><strong>M</strong></a> | <a href="#N"><strong>N</strong></a> | <a href="#P"><strong>P</strong></a> | <a href="#Q"><strong>Q</strong></a> | <a href="#R"><strong>R</strong></a> | <a href="#S"><strong>S</strong></a> | <a href="#T"><strong>T</strong></a> | <a href="#U"><strong>U</strong></a> | <a href="#V"><strong>V</strong></a> | <a href="#W"><strong>W</strong></a> | <a href="#X"><strong>X</strong></a></div>
 </section>
+<section id="A" class="genindex-section">
+  <h2>A</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.iri.html#triplets.iri.absolute_datatype">absolute_datatype() (in module triplets.iri)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.absolute_id">absolute_id() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.absolute_id">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.absolute_id">(in module triplets.iri.iri_polars)</a>
+</li>
+        </ul></li>
+        <li><a href="triplets.iri.html#triplets.iri.absolute_key">absolute_key() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.absolute_key">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.absolute_key">(in module triplets.iri.iri_polars)</a>
+</li>
+        </ul></li>
+        <li><a href="triplets.iri.html#triplets.iri.absolute_name">absolute_name() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.absolute_name">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.absolute_name">(in module triplets.iri.iri_polars)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.iri.html#triplets.iri.absolute_value">absolute_value() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.absolute_value">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.absolute_value">(in module triplets.iri.iri_polars)</a>
+</li>
+        </ul></li>
+        <li><a href="triplets.validation.html#triplets.validation.shacl_ir.CompiledShapes.active">active() (triplets.validation.shacl_ir.CompiledShapes method)</a>
+</li>
+        <li><a href="triplets.cli.html#triplets.cli.add_common_arguments">add_common_arguments() (in module triplets.cli)</a>
+</li>
+        <li><a href="triplets.validation.html#triplets.validation.schema_scope.ancestor_pairs">ancestor_pairs() (in module triplets.validation.schema_scope)</a>
+</li>
+        <li><a href="triplets.validation.html#triplets.validation.schema_scope.ancestor_triples">ancestor_triples() (in module triplets.validation.schema_scope)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
 <section id="B" class="genindex-section">
   <h2>B</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.validation.html#triplets.validation.shacl_ir.CompiledShapes.base">base (triplets.validation.shacl_ir.CompiledShapes attribute)</a>
+</li>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.build_bundle">build_bundle() (in module triplets.rdfs_tools.cim_rdfs_to_json)</a>
 </li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="triplets.export.html#triplets.export.nquads_utils.build_key_metadata">build_key_metadata() (in module triplets.export.nquads_utils)</a>
-</li>
         <li><a href="triplets.validation.html#triplets.validation.sarif.build_sarif">build_sarif() (in module triplets.validation.sarif)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.iri_pandas.by_distinct">by_distinct() (in module triplets.iri.iri_pandas)</a>
 </li>
     </ul></td>
   </tr></table>
@@ -310,12 +360,20 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.cli.html#triplets.cli.cim_spreadsheet.cim_to_spreadsheet">cim_to_spreadsheet() (in module triplets.cli.cim_spreadsheet)</a>
 </li>
-        <li><a href="triplets.parser.html#triplets.parser.utils.clean_ID">clean_ID() (in module triplets.parser.utils)</a>
+        <li><a href="triplets.validation.html#triplets.validation.schema_scope.class_ancestors">class_ancestors() (in module triplets.validation.schema_scope)</a>
+</li>
+        <li><a href="triplets.validation.html#triplets.validation.schema_ir.compile_references">compile_references() (in module triplets.validation.schema_ir)</a>
+</li>
+        <li><a href="triplets.validation.html#triplets.validation.schema_ir.compile_schema">compile_schema() (in module triplets.validation.schema_ir)</a>
 </li>
         <li><a href="triplets.validation.html#triplets.validation.shacl_ir.compile_shapes">compile_shapes() (in module triplets.validation.shacl_ir)</a>
 </li>
         <li><a href="triplets.validation.html#triplets.validation.shacl_ir.CompiledShapes">CompiledShapes (class in triplets.validation.shacl_ir)</a>
 </li>
+        <li><a href="triplets.validation.html#triplets.validation.context.concat_violations">concat_violations() (in module triplets.validation.context)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.concrete_classes_list">concrete_classes_list() (in module triplets.rdfs_tools.rdfs_tools)</a>
 </li>
         <li><a href="triplets.tools.html#triplets.tools.content_hash">content_hash() (in module triplets.tools)</a>
@@ -328,8 +386,6 @@
           <li><a href="triplets.tools.html#triplets.tools.polars_engine.content_hash">(in module triplets.tools.polars_engine)</a>
 </li>
         </ul></li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.convert">convert() (in module triplets.rdfs_tools.cim_rdfs_to_json)</a>
 </li>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.convert_profile">convert_profile() (in module triplets.rdfs_tools.cim_rdfs_to_json)</a>
@@ -346,12 +402,40 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.dangling_references">dangling_references() (in module triplets.rdfs_tools.rdfs_tools)</a>
 </li>
+        <li><a href="triplets.validation.html#triplets.validation.shacl_pandas.datatype_patterns">datatype_patterns() (in module triplets.validation.shacl_pandas)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.datatypes">datatypes() (in module triplets.iri)</a>
+</li>
+        <li><a href="triplets.validation.html#triplets.validation.shacl_ir.CompiledShapes.deactivated">deactivated (triplets.validation.shacl_ir.CompiledShapes attribute)</a>
+</li>
+        <li><a href="triplets.cgmes_tools.html#triplets.cgmes_tools.declared_profiles">declared_profiles() (in module triplets.cgmes_tools)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.decode_iri">decode_iri() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.decode_iri">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.decode_iri">(in module triplets.iri.iri_polars)</a>
+</li>
+        </ul></li>
+        <li><a href="triplets.iri.html#triplets.iri.defined">defined() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.defined">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.defined">(in module triplets.iri.iri_polars)</a>
+</li>
+        </ul></li>
+        <li><a href="triplets.iri.html#triplets.iri.DESCRIPTION_TYPE">DESCRIPTION_TYPE (in module triplets.iri)</a>
+</li>
         <li><a href="triplets.cli.html#triplets.cli.cim_spreadsheet.detect_conversion_direction">detect_conversion_direction() (in module triplets.cli.cim_spreadsheet)</a>
 </li>
         <li><a href="triplets.tools.html#triplets.tools.diff_between_INSTANCE">diff_between_INSTANCE() (in module triplets.tools)</a>
 </li>
         <li><a href="triplets.tools.html#triplets.tools.diff_between_triplet">diff_between_triplet() (in module triplets.tools)</a>
 </li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.tools.html#triplets.tools.diff_triplets">diff_triplets() (in module triplets.tools)</a>
 
         <ul>
@@ -372,8 +456,8 @@
           <li><a href="triplets.tools.html#triplets.tools.polars_engine.diff_triplets_by_instance">(in module triplets.tools.polars_engine)</a>
 </li>
         </ul></li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.parser.html#triplets.parser.utils.document_base">document_base() (in module triplets.parser.utils)</a>
+</li>
         <li><a href="triplets.cgmes_tools.html#triplets.cgmes_tools.draw_references">draw_references() (in module triplets.cgmes_tools)</a>
 </li>
         <li><a href="triplets.cgmes_tools.html#triplets.cgmes_tools.draw_references_from">draw_references_from() (in module triplets.cgmes_tools)</a>
@@ -394,7 +478,19 @@
   <h2>E</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.iri.html#triplets.iri.encode_iri">encode_iri() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.encode_iri">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.encode_iri">(in module triplets.iri.iri_polars)</a>
+</li>
+        </ul></li>
         <li><a href="triplets.validation.html#triplets.validation.context.enrich">enrich() (in module triplets.validation.context)</a>
+</li>
+        <li><a href="triplets.export.html#triplets.export.nquads_utils.escape_literal">escape_literal() (in module triplets.export.nquads_utils)</a>
+</li>
+        <li><a href="triplets.cli.html#triplets.cli.excluded_types">excluded_types() (in module triplets.cli)</a>
 </li>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.export_single_profile">export_single_profile() (in module triplets.rdfs_tools.cim_rdfs_to_json)</a>
 </li>
@@ -408,14 +504,14 @@
           <li><a href="triplets.export.html#triplets.export.csv_polars.export_to_csv">(in module triplets.export.csv_polars)</a>
 </li>
         </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.export.html#triplets.export.export_to_excel">export_to_excel() (in module triplets.export)</a>
 
         <ul>
           <li><a href="triplets.export.html#triplets.export.excel_pandas.export_to_excel">(in module triplets.export.excel_pandas)</a>
 </li>
         </ul></li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_html.export_to_html">export_to_html() (in module triplets.rdfs_tools.cim_rdfs_to_html)</a>
 </li>
         <li><a href="triplets.export.html#triplets.export.export_to_networkx">export_to_networkx() (in module triplets.export)</a>
@@ -446,6 +542,8 @@
   <h2>F</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.fetch_profiles.fetch">fetch() (in module triplets.rdfs_tools.fetch_profiles)</a>
+</li>
         <li><a href="triplets.tools.html#triplets.tools.filter_by_triplet">filter_by_triplet() (in module triplets.tools)</a>
 </li>
         <li><a href="triplets.tools.html#triplets.tools.filter_by_type">filter_by_type() (in module triplets.tools)</a>
@@ -604,6 +702,10 @@
   <h2>H</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.validation.html#triplets.validation.shacl_report.has_violation">has_violation() (in module triplets.validation.shacl_report)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.validation.html#triplets.validation.shacl_ir.CompiledShapes.hash">hash (triplets.validation.shacl_ir.CompiledShapes attribute)</a>
 </li>
     </ul></td>
@@ -624,17 +726,31 @@
           <li><a href="triplets.tools.html#triplets.tools.polars_engine.id_tableview">(in module triplets.tools.polars_engine)</a>
 </li>
         </ul></li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.index_by_keyword">index_by_keyword() (in module triplets.rdfs_tools.cim_rdfs_to_json)</a>
 </li>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.index_largest_per_keyword">index_largest_per_keyword() (in module triplets.rdfs_tools.cim_rdfs_to_json)</a>
 </li>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.insert_profile_into_profile">insert_profile_into_profile() (in module triplets.rdfs_tools.cim_rdfs_to_json)</a>
 </li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.validation.html#triplets.validation.shacl_ir.CompiledShapes.ir">ir (triplets.validation.shacl_ir.CompiledShapes attribute)</a>
 </li>
+        <li><a href="triplets.iri.html#triplets.iri.IRI_UNSAFE">IRI_UNSAFE (in module triplets.iri)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.is_absolute">is_absolute() (in module triplets.iri)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.is_iri">is_iri() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.is_iri">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.is_iri">(in module triplets.iri.iri_polars)</a>
+</li>
+        </ul></li>
         <li><a href="triplets.parser.html#triplets.parser.utils.iter_all_xml">iter_all_xml() (in module triplets.parser.utils)</a>
+</li>
+        <li><a href="triplets.parser.html#triplets.parser.utils.iter_rdf_rows">iter_rdf_rows() (in module triplets.parser.utils)</a>
 </li>
     </ul></td>
   </tr></table>
@@ -644,8 +760,6 @@
   <h2>K</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="triplets.validation.html#triplets.validation.shacl_pandas.SchemaKind.key_kind">key_kind() (triplets.validation.shacl_pandas.SchemaKind method)</a>
-</li>
         <li><a href="triplets.tools.html#triplets.tools.key_tableview">key_tableview() (in module triplets.tools)</a>
 
         <ul>
@@ -657,6 +771,10 @@
 </li>
         </ul></li>
     </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.iri.html#triplets.iri.key_types">key_types() (in module triplets.iri)</a>
+</li>
+    </ul></td>
   </tr></table>
 </section>
 
@@ -666,16 +784,52 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.validation.html#triplets.validation.shacl_ir.CompiledShapes.language">language (triplets.validation.shacl_ir.CompiledShapes attribute)</a>
 </li>
+        <li><a href="triplets.iri.html#triplets.iri.language_tag">language_tag() (in module triplets.iri)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.LANGUAGE_TAG_RE">LANGUAGE_TAG_RE (in module triplets.iri)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.languages">languages() (in module triplets.iri)</a>
+</li>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.list_of_files">list_of_files() (in module triplets.rdfs_tools.rdfs_tools)</a>
 </li>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.load_all_to_dataframe">load_all_to_dataframe() (in module triplets.rdfs_tools.rdfs_tools)</a>
 </li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.iri.html#triplets.iri.load_rdf_map">load_rdf_map() (in module triplets.iri)</a>
+</li>
         <li><a href="triplets.parser.html#triplets.parser.python_lxml_arrow.load_rdf_to_dataframe">load_rdf_to_dataframe() (in module triplets.parser.python_lxml_arrow)</a>
 
         <ul>
           <li><a href="triplets.parser.html#triplets.parser.python_lxml_pandas.load_rdf_to_dataframe">(in module triplets.parser.python_lxml_pandas)</a>
+</li>
+        </ul></li>
+        <li><a href="triplets.iri.html#triplets.iri.load_schema">load_schema() (in module triplets.iri)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.local_id">local_id() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.local_id">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.local_id">(in module triplets.iri.iri_polars)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.iri.html#triplets.iri.local_key">local_key() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.local_key">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.local_key">(in module triplets.iri.iri_polars)</a>
+</li>
+        </ul></li>
+        <li><a href="triplets.iri.html#triplets.iri.local_value">local_value() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_duckdb.local_value">(in module triplets.iri.iri_duckdb)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.local_value">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.local_value">(in module triplets.iri.iri_polars)</a>
 </li>
         </ul></li>
         <li><a href="triplets.validation.html#triplets.validation.locations.locate">locate() (in module triplets.validation.locations)</a>
@@ -697,12 +851,10 @@
 </li>
           <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.main">(in module triplets.rdfs_tools.cim_rdfs_to_json)</a>
 </li>
+          <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.fetch_profiles.main">(in module triplets.rdfs_tools.fetch_profiles)</a>
+</li>
         </ul></li>
-        <li><a href="triplets.export.html#triplets.export.nquads_utils.make_graph">make_graph() (in module triplets.export.nquads_utils)</a>
-</li>
         <li><a href="triplets.export.html#triplets.export.nquads_utils.make_object">make_object() (in module triplets.export.nquads_utils)</a>
-</li>
-        <li><a href="triplets.export.html#triplets.export.nquads_utils.make_predicate">make_predicate() (in module triplets.export.nquads_utils)</a>
 </li>
         <li><a href="triplets.export.html#triplets.export.nquads_utils.make_subject">make_subject() (in module triplets.export.nquads_utils)</a>
 </li>
@@ -744,6 +896,14 @@
 </li>
           <li><a href="triplets.export_schema.html#module-triplets.export_schema">triplets.export_schema</a>
 </li>
+          <li><a href="triplets.iri.html#module-triplets.iri">triplets.iri</a>
+</li>
+          <li><a href="triplets.iri.html#module-triplets.iri.iri_duckdb">triplets.iri.iri_duckdb</a>
+</li>
+          <li><a href="triplets.iri.html#module-triplets.iri.iri_pandas">triplets.iri.iri_pandas</a>
+</li>
+          <li><a href="triplets.iri.html#module-triplets.iri.iri_polars">triplets.iri.iri_polars</a>
+</li>
           <li><a href="triplets.parser.html#module-triplets.parser">triplets.parser</a>
 </li>
           <li><a href="triplets.parser.html#module-triplets.parser.nquads">triplets.parser.nquads</a>
@@ -759,6 +919,8 @@
           <li><a href="triplets.rdfs_tools.html#module-triplets.rdfs_tools.cim_rdfs_to_html">triplets.rdfs_tools.cim_rdfs_to_html</a>
 </li>
           <li><a href="triplets.rdfs_tools.html#module-triplets.rdfs_tools.cim_rdfs_to_json">triplets.rdfs_tools.cim_rdfs_to_json</a>
+</li>
+          <li><a href="triplets.rdfs_tools.html#module-triplets.rdfs_tools.fetch_profiles">triplets.rdfs_tools.fetch_profiles</a>
 </li>
           <li><a href="triplets.rdfs_tools.html#module-triplets.rdfs_tools.rdfs_tools">triplets.rdfs_tools.rdfs_tools</a>
 </li>
@@ -786,6 +948,10 @@
 </li>
           <li><a href="triplets.validation.html#module-triplets.validation.sarif">triplets.validation.sarif</a>
 </li>
+          <li><a href="triplets.validation.html#module-triplets.validation.schema_ir">triplets.validation.schema_ir</a>
+</li>
+          <li><a href="triplets.validation.html#module-triplets.validation.schema_scope">triplets.validation.schema_scope</a>
+</li>
           <li><a href="triplets.validation.html#module-triplets.validation.shacl_duckdb">triplets.validation.shacl_duckdb</a>
 </li>
           <li><a href="triplets.validation.html#module-triplets.validation.shacl_ir">triplets.validation.shacl_ir</a>
@@ -807,6 +973,20 @@
   </tr></table>
 </section>
 
+<section id="N" class="genindex-section">
+  <h2>N</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.iri.html#triplets.iri.namespaces">namespaces() (in module triplets.iri)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.iri.html#triplets.iri.node_kind">node_kind() (in module triplets.iri)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
 <section id="P" class="genindex-section">
   <h2>P</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
@@ -823,9 +1003,11 @@
 </li>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.parse_multiplicity">parse_multiplicity() (in module triplets.rdfs_tools.rdfs_tools)</a>
 </li>
+        <li><a href="triplets.validation.html#triplets.validation.shacl_ir.CompiledShapes.plans">plans (triplets.validation.shacl_ir.CompiledShapes attribute)</a>
+</li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="triplets.validation.html#triplets.validation.shacl_ir.CompiledShapes.plans">plans (triplets.validation.shacl_ir.CompiledShapes attribute)</a>
+        <li><a href="triplets.iri.html#triplets.iri.prefixes">prefixes() (in module triplets.iri)</a>
 </li>
         <li><a href="triplets.tools.html#triplets.tools.print_triplet_diff">print_triplet_diff() (in module triplets.tools)</a>
 </li>
@@ -839,6 +1021,10 @@
           <li><a href="triplets.tools.html#triplets.tools.polars_engine.print_triplets_diff">(in module triplets.tools.polars_engine)</a>
 </li>
         </ul></li>
+        <li><a href="triplets.validation.html#triplets.validation.shacl_report.profile_text">profile_text() (in module triplets.validation.shacl_report)</a>
+</li>
+        <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.profile_version_iris">profile_version_iris() (in module triplets.rdfs_tools.cim_rdfs_to_json)</a>
+</li>
     </ul></td>
   </tr></table>
 </section>
@@ -865,11 +1051,13 @@
   <h2>R</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="triplets.validation.html#triplets.validation.shacl_pandas.SchemaKind.rdf_map">rdf_map (triplets.validation.shacl_pandas.SchemaKind attribute)</a>
+        <li><a href="triplets.iri.html#triplets.iri.rdf_map_entries">rdf_map_entries() (in module triplets.iri)</a>
 </li>
         <li><a href="triplets.parser.html#triplets.parser.nquads.read_nquads">read_nquads() (in module triplets.parser.nquads)</a>
 </li>
         <li><a href="triplets.parser.html#triplets.parser.read_rdf">read_rdf() (in module triplets.parser)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.REFERENCE_LIKE">REFERENCE_LIKE (in module triplets.iri)</a>
 </li>
         <li><a href="triplets.tools.html#triplets.tools.references">references() (in module triplets.tools)</a>
 
@@ -965,7 +1153,11 @@
         </ul></li>
         <li><a href="triplets.validation.html#triplets.validation.shacl_report.report_to_violations">report_to_violations() (in module triplets.validation.shacl_report)</a>
 </li>
+        <li><a href="triplets.validation.html#triplets.validation.schema_scope.require_entries">require_entries() (in module triplets.validation.schema_scope)</a>
+</li>
         <li><a href="triplets.export.html#triplets.export.cimxml_utils.resolve_instance_config">resolve_instance_config() (in module triplets.export.cimxml_utils)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.resolve_iri">resolve_iri() (in module triplets.iri)</a>
 </li>
     </ul></td>
   </tr></table>
@@ -977,7 +1169,9 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.cgmes_tools.html#triplets.cgmes_tools.scale_load">scale_load() (in module triplets.cgmes_tools)</a>
 </li>
-        <li><a href="triplets.validation.html#triplets.validation.shacl_pandas.SchemaKind">SchemaKind (class in triplets.validation.shacl_pandas)</a>
+        <li><a href="triplets.validation.html#triplets.validation.schema_scope.scope_sections">scope_sections() (in module triplets.validation.schema_scope)</a>
+</li>
+        <li><a href="triplets.validation.html#triplets.validation.schema_scope.scoped_rdf_map">scoped_rdf_map() (in module triplets.validation.schema_scope)</a>
 </li>
         <li><a href="triplets.tools.html#triplets.tools.set_VALUE_at_KEY">set_VALUE_at_KEY() (in module triplets.tools)</a>
 </li>
@@ -1007,6 +1201,16 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.validation.html#triplets.validation.shacl_ir.CompiledShapes.sources">sources (triplets.validation.shacl_ir.CompiledShapes attribute)</a>
 </li>
+        <li><a href="triplets.validation.html#triplets.validation.shacl_pandas.sparql_targets">sparql_targets() (in module triplets.validation.shacl_pandas)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.split_iri">split_iri() (in module triplets.iri)</a>
+
+        <ul>
+          <li><a href="triplets.iri.html#triplets.iri.iri_pandas.split_iri">(in module triplets.iri.iri_pandas)</a>
+</li>
+          <li><a href="triplets.iri.html#triplets.iri.iri_polars.split_iri">(in module triplets.iri.iri_polars)</a>
+</li>
+        </ul></li>
         <li><a href="triplets.validation.html#triplets.validation.shacl_ir.split_rules">split_rules() (in module triplets.validation.shacl_ir)</a>
 </li>
         <li><a href="triplets.cli.html#triplets.cli.cim_spreadsheet.spreadsheet_to_cim">spreadsheet_to_cim() (in module triplets.cli.cim_spreadsheet)</a>
@@ -1166,6 +1370,34 @@
 </li>
         </ul></li>
         <li>
+    triplets.iri
+
+        <ul>
+          <li><a href="triplets.iri.html#module-triplets.iri">module</a>
+</li>
+        </ul></li>
+        <li>
+    triplets.iri.iri_duckdb
+
+        <ul>
+          <li><a href="triplets.iri.html#module-triplets.iri.iri_duckdb">module</a>
+</li>
+        </ul></li>
+        <li>
+    triplets.iri.iri_pandas
+
+        <ul>
+          <li><a href="triplets.iri.html#module-triplets.iri.iri_pandas">module</a>
+</li>
+        </ul></li>
+        <li>
+    triplets.iri.iri_polars
+
+        <ul>
+          <li><a href="triplets.iri.html#module-triplets.iri.iri_polars">module</a>
+</li>
+        </ul></li>
+        <li>
     triplets.parser
 
         <ul>
@@ -1200,6 +1432,8 @@
           <li><a href="triplets.parser.html#module-triplets.parser.utils">module</a>
 </li>
         </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
         <li>
     triplets.rdfs_tools
 
@@ -1207,8 +1441,6 @@
           <li><a href="triplets.rdfs_tools.html#module-triplets.rdfs_tools">module</a>
 </li>
         </ul></li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
         <li>
     triplets.rdfs_tools.cim_rdfs_to_html
 
@@ -1221,6 +1453,13 @@
 
         <ul>
           <li><a href="triplets.rdfs_tools.html#module-triplets.rdfs_tools.cim_rdfs_to_json">module</a>
+</li>
+        </ul></li>
+        <li>
+    triplets.rdfs_tools.fetch_profiles
+
+        <ul>
+          <li><a href="triplets.rdfs_tools.html#module-triplets.rdfs_tools.fetch_profiles">module</a>
 </li>
         </ul></li>
         <li>
@@ -1315,6 +1554,20 @@
 </li>
         </ul></li>
         <li>
+    triplets.validation.schema_ir
+
+        <ul>
+          <li><a href="triplets.validation.html#module-triplets.validation.schema_ir">module</a>
+</li>
+        </ul></li>
+        <li>
+    triplets.validation.schema_scope
+
+        <ul>
+          <li><a href="triplets.validation.html#module-triplets.validation.schema_scope">module</a>
+</li>
+        </ul></li>
+        <li>
     triplets.validation.shacl_duckdb
 
         <ul>
@@ -1366,6 +1619,8 @@
           <li><a href="triplets.tools.html#triplets.tools.polars_engine.triplets_to_tableviews">(in module triplets.tools.polars_engine)</a>
 </li>
         </ul></li>
+        <li><a href="triplets.iri.html#triplets.iri.TYPE_KEY">TYPE_KEY (in module triplets.iri)</a>
+</li>
         <li><a href="triplets.tools.html#triplets.tools.type_tableview">type_tableview() (in module triplets.tools)</a>
 
         <ul>
@@ -1426,6 +1681,8 @@
           <li><a href="triplets.tools.html#triplets.tools.polars_engine.update_triplets_from_triplets">(in module triplets.tools.polars_engine)</a>
 </li>
         </ul></li>
+        <li><a href="triplets.iri.html#triplets.iri.UUID_RE">UUID_RE (in module triplets.iri)</a>
+</li>
     </ul></td>
   </tr></table>
 </section>
@@ -1434,11 +1691,9 @@
   <h2>V</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
-        <li><a href="triplets.validation.html#triplets.validation.validate">validate() (in module triplets.validation)</a>
+        <li><a href="triplets.validation.html#triplets.validation.shacl_duckdb.validate">validate() (in module triplets.validation.shacl_duckdb)</a>
 
         <ul>
-          <li><a href="triplets.validation.html#triplets.validation.shacl_duckdb.validate">(in module triplets.validation.shacl_duckdb)</a>
-</li>
           <li><a href="triplets.validation.html#triplets.validation.shacl_pandas.validate">(in module triplets.validation.shacl_pandas)</a>
 </li>
           <li><a href="triplets.validation.html#triplets.validation.shacl_polars.validate">(in module triplets.validation.shacl_polars)</a>
@@ -1446,11 +1701,21 @@
           <li><a href="triplets.validation.html#triplets.validation.shacl_pyshacl.validate">(in module triplets.validation.shacl_pyshacl)</a>
 </li>
         </ul></li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.cgmes_tools.html#triplets.cgmes_tools.validate_by_header">validate_by_header() (in module triplets.cgmes_tools)</a>
+</li>
         <li><a href="triplets.validation.html#triplets.validation.validate_schema">validate_schema() (in module triplets.validation)</a>
 </li>
+        <li><a href="triplets.validation.html#triplets.validation.validate_schema_references">validate_schema_references() (in module triplets.validation)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="triplets.validation.html#triplets.validation.validate_shacl">validate_shacl() (in module triplets.validation)</a>
+</li>
         <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.rdfs_tools.validation_view">validation_view() (in module triplets.rdfs_tools.rdfs_tools)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.VALUE_KINDS">VALUE_KINDS (in module triplets.iri)</a>
+</li>
+        <li><a href="triplets.iri.html#triplets.iri.value_types">value_types() (in module triplets.iri)</a>
 </li>
         <li><a href="triplets.validation.html#triplets.validation.shacl_report.violations_to_csv">violations_to_csv() (in module triplets.validation.shacl_report)</a>
 </li>
@@ -1478,11 +1743,13 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.export.html#triplets.export.ExportType.XML_PER_INSTANCE">XML_PER_INSTANCE (triplets.export.ExportType attribute)</a>
 </li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.export.html#triplets.export.ExportType.XML_PER_INSTANCE_ZIP_PER_ALL">XML_PER_INSTANCE_ZIP_PER_ALL (triplets.export.ExportType attribute)</a>
 </li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="triplets.export.html#triplets.export.ExportType.XML_PER_INSTANCE_ZIP_PER_XML">XML_PER_INSTANCE_ZIP_PER_XML (triplets.export.ExportType attribute)</a>
+</li>
+        <li><a href="triplets.rdfs_tools.html#triplets.rdfs_tools.cim_rdfs_to_json.xsd_types_from_rdfs">xsd_types_from_rdfs() (in module triplets.rdfs_tools.cim_rdfs_to_json)</a>
 </li>
     </ul></td>
   </tr></table>
@@ -1500,7 +1767,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -1520,7 +1787,7 @@
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

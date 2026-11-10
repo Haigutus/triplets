@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Overview: module code - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>Overview: module code - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -287,10 +283,12 @@
           <h1>All modules for which code is available</h1>
 <ul><li><a href="triplets/_caches.html">triplets._caches</a></li>
 <li><a href="triplets/_registry.html">triplets._registry</a></li>
-<li><a href="triplets/cgmes_tools/pandas_engine.html">triplets.cgmes_tools.pandas_engine</a></li>
-<li><a href="triplets/cli/cim_diff.html">triplets.cli.cim_diff</a></li>
+<li><a href="triplets/cgmes_tools.html">triplets.cgmes_tools</a></li>
+<ul><li><a href="triplets/cgmes_tools/pandas_engine.html">triplets.cgmes_tools.pandas_engine</a></li>
+</ul><li><a href="triplets/cli.html">triplets.cli</a></li>
+<ul><li><a href="triplets/cli/cim_diff.html">triplets.cli.cim_diff</a></li>
 <li><a href="triplets/cli/cim_spreadsheet.html">triplets.cli.cim_spreadsheet</a></li>
-<li><a href="triplets/export.html">triplets.export</a></li>
+</ul><li><a href="triplets/export.html">triplets.export</a></li>
 <ul><li><a href="triplets/export/cimxml_pandas.html">triplets.export.cimxml_pandas</a></li>
 <li><a href="triplets/export/cimxml_pugixml.html">triplets.export.cimxml_pugixml</a></li>
 <li><a href="triplets/export/cimxml_utils.html">triplets.export.cimxml_utils</a></li>
@@ -301,6 +299,10 @@
 <li><a href="triplets/export/nquads_pandas.html">triplets.export.nquads_pandas</a></li>
 <li><a href="triplets/export/nquads_polars.html">triplets.export.nquads_polars</a></li>
 <li><a href="triplets/export/nquads_utils.html">triplets.export.nquads_utils</a></li>
+</ul><li><a href="triplets/iri.html">triplets.iri</a></li>
+<ul><li><a href="triplets/iri/iri_duckdb.html">triplets.iri.iri_duckdb</a></li>
+<li><a href="triplets/iri/iri_pandas.html">triplets.iri.iri_pandas</a></li>
+<li><a href="triplets/iri/iri_polars.html">triplets.iri.iri_polars</a></li>
 </ul><li><a href="triplets/parser.html">triplets.parser</a></li>
 <ul><li><a href="triplets/parser/nquads.html">triplets.parser.nquads</a></li>
 <li><a href="triplets/parser/python_lxml_arrow.html">triplets.parser.python_lxml_arrow</a></li>
@@ -309,6 +311,7 @@
 </ul><li><a href="triplets/rdf_parser.html">triplets.rdf_parser</a></li>
 <li><a href="triplets/rdfs_tools/cim_rdfs_to_html.html">triplets.rdfs_tools.cim_rdfs_to_html</a></li>
 <li><a href="triplets/rdfs_tools/cim_rdfs_to_json.html">triplets.rdfs_tools.cim_rdfs_to_json</a></li>
+<li><a href="triplets/rdfs_tools/fetch_profiles.html">triplets.rdfs_tools.fetch_profiles</a></li>
 <li><a href="triplets/rdfs_tools/rdfs_tools.html">triplets.rdfs_tools.rdfs_tools</a></li>
 <li><a href="triplets/sparql.html">triplets.sparql</a></li>
 <ul><li><a href="triplets/sparql/sparql_oxigraph.html">triplets.sparql.sparql_oxigraph</a></li>
@@ -321,6 +324,8 @@
 <ul><li><a href="triplets/validation/context.html">triplets.validation.context</a></li>
 <li><a href="triplets/validation/locations.html">triplets.validation.locations</a></li>
 <li><a href="triplets/validation/sarif.html">triplets.validation.sarif</a></li>
+<li><a href="triplets/validation/schema_ir.html">triplets.validation.schema_ir</a></li>
+<li><a href="triplets/validation/schema_scope.html">triplets.validation.schema_scope</a></li>
 <li><a href="triplets/validation/shacl_duckdb.html">triplets.validation.shacl_duckdb</a></li>
 <li><a href="triplets/validation/shacl_ir.html">triplets.validation.shacl_ir</a></li>
 <li><a href="triplets/validation/shacl_pandas.html">triplets.validation.shacl_pandas</a></li>
@@ -339,7 +344,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -359,7 +364,7 @@
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>

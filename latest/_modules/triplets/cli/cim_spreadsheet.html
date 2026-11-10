@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.cli.cim_spreadsheet - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.cli.cim_spreadsheet - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -327,11 +323,11 @@
 
 <span class="sd">2. **As a Python module**::</span>
 
-<span class="sd">    python -m triplets.tools.cim_spreadsheet_cli -i input_file -o output_file</span>
+<span class="sd">    python -m triplets.cli.cim_spreadsheet -i input_file -o output_file</span>
 
 <span class="sd">3. **Programmatically** in Python code::</span>
 
-<span class="sd">    from triplets.tools.cim_spreadsheet_cli import cim_to_spreadsheet, spreadsheet_to_cim</span>
+<span class="sd">    from triplets.cli.cim_spreadsheet import cim_to_spreadsheet, spreadsheet_to_cim</span>
 
 <span class="sd">    # Convert CIM to Excel</span>
 <span class="sd">    cim_to_spreadsheet('model.xml', 'output.xlsx')</span>
@@ -387,10 +383,31 @@
 <span class="sd">- Raw triplets import from dedicated Excel sheet or CSV file</span>
 <span class="sd">- Handles zipped input/output files automatically</span>
 
+<span class="sd">Notes</span>
+<span class="sd">-----</span>
+<span class="sd">- Values are read back as text, so they return as written, except numbers: the</span>
+<span class="sd">  spreadsheet export writes them as numbers, so a number can come back in another</span>
+<span class="sd">  written form (``500`` -&gt; ``500.0``, ``8e-5`` -&gt; ``8e-05``). Excel keeps 15</span>
+<span class="sd">  significant digits, so longer numbers are rounded (``1.0712249999999999`` -&gt;</span>
+<span class="sd">  ``1.071225``); CSV keeps them.</span>
+<span class="sd">- Excel limits sheet names to 31 characters. Longer class names (e.g.</span>
+<span class="sd">  ``SynchronousMachineTimeConstantReactance``) are written as is: openpyxl warns</span>
+<span class="sd">  and Excel may refuse or rename the sheet. Use CSV for such models.</span>
+<span class="sd">- The spreadsheet leaves out ``NamespaceMap`` and ``Distribution`` by default, so</span>
+<span class="sd">  to-cim names each CIM XML ``&lt;uuid&gt;.xml`` in ``-o`` and declares the schema</span>
+<span class="sd">  profile's namespaces. With ``--keep-metadata`` to-cim writes each instance to</span>
+<span class="sd">  its ``Distribution`` ``label``, the path the model was parsed from: an absolute</span>
+<span class="sd">  path overwrites the source XML, a relative one is created under ``-o``. Edit</span>
+<span class="sd">  the label in the spreadsheet, or leave the metadata out, to write elsewhere.</span>
+<span class="sd">- Without ``--rdf-map`` to-cim warns and writes every class in the triplets</span>
+<span class="sd">  namespace instead of a CIM profile.</span>
+
 <span class="sd">See Also</span>
 <span class="sd">--------</span>
 <span class="sd">cim-diff : Tool for comparing CIM XML files</span>
-<span class="sd">triplets.rdf_parser : Core module for RDF/CIM data manipulation</span>
+<span class="sd">triplets.parse : CIM XML to triplets</span>
+<span class="sd">triplets.tools.tableviews_to_triplets : Spreadsheet tables to triplets</span>
+<span class="sd">triplets.export.export_to_cimxml : Triplets to CIM XML</span>
 <span class="sd">"""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
@@ -402,17 +419,21 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">io</span><span class="w"> </span><span class="kn">import</span> <span class="n">BytesIO</span><span class="p">,</span> <span class="n">StringIO</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">uuid</span><span class="w"> </span><span class="kn">import</span> <span class="n">uuid4</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">..</span><span class="w"> </span><span class="kn">import</span> <span class="n">rdf_parser</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..export_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">schemas</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..export</span><span class="w"> </span><span class="kn">import</span> <span class="n">export_to_cimxml</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..parser</span><span class="w"> </span><span class="kn">import</span> <span class="n">parse</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">filter_triplets_by_type</span><span class="p">,</span> <span class="n">tableviews_to_triplets</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">add_common_arguments</span><span class="p">,</span> <span class="n">excluded_types</span>
+
 
 <div class="viewcode-block" id="cim_to_spreadsheet">
 <a class="viewcode-back" href="../../../triplets.cli.html#triplets.cli.cim_spreadsheet.cim_to_spreadsheet">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">cim_to_spreadsheet</span><span class="p">(</span><span class="n">cim_path</span><span class="p">,</span> <span class="n">output_path</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">zip_output</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">cim_to_spreadsheet</span><span class="p">(</span><span class="n">cim_path</span><span class="p">,</span> <span class="n">output_path</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">zip_output</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                       <span class="n">exclude_objects</span><span class="o">=</span><span class="p">(),</span> <span class="n">include_objects</span><span class="o">=</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Convert CIM XML to spreadsheet format (Excel or CSV).</span>
 
 <span class="sd">    Handles all orchestration including file I/O, format detection, zipping,</span>
-<span class="sd">    and conversion through the core rdf_parser functions.</span>
+<span class="sd">    and conversion through ``triplets.parse``.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -429,6 +450,11 @@
 <span class="sd">    multivalue : bool, default True</span>
 <span class="sd">        If True, aggregate duplicate (ID, KEY) pairs into lists in the output.</span>
 <span class="sd">        Use False to keep duplicate pairs as separate rows.</span>
+<span class="sd">    exclude_objects : sequence of str, default ()</span>
+<span class="sd">        Class names left out, e.g. ``triplets.cli.METADATA_TYPES`` (what the CLI</span>
+<span class="sd">        leaves out by default).</span>
+<span class="sd">    include_objects : sequence of str, default ()</span>
+<span class="sd">        Only these classes (all if empty); ``exclude_objects`` applies after it.</span>
 
 <span class="sd">    Raises</span>
 <span class="sd">    ------</span>
@@ -455,7 +481,10 @@
     <span class="k">if</span> <span class="n">zip_output</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">zip_output</span> <span class="o">=</span> <span class="p">(</span><span class="nb">format</span> <span class="o">==</span> <span class="s2">"csv"</span><span class="p">)</span>
 
-    <span class="n">data</span> <span class="o">=</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">load_all_to_dataframe</span><span class="p">(</span><span class="n">cim_path</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">parse</span><span class="p">(</span><span class="n">cim_path</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">include_objects</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">include_objects</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="o">~</span><span class="n">data</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="p">)[</span><span class="s2">"ID"</span><span class="p">])]</span>
 
     <span class="n">base_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">output_path</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'.zip'</span><span class="p">,</span> <span class="s1">''</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'.xlsx'</span><span class="p">,</span> <span class="s1">''</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'.csv'</span><span class="p">,</span> <span class="s1">''</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">base_name</span><span class="p">:</span>
@@ -508,13 +537,13 @@
 <a class="viewcode-back" href="../../../triplets.cli.html#triplets.cli.cim_spreadsheet.spreadsheet_to_cim">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">spreadsheet_to_cim</span><span class="p">(</span><span class="n">input_path</span><span class="p">,</span> <span class="n">output_path</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                        <span class="n">export_type</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">zip_output</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-                       <span class="n">sheets</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+                       <span class="n">sheets</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">(),</span> <span class="n">include_objects</span><span class="o">=</span><span class="p">()):</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Convert spreadsheet format (Excel or CSV) to CIM XML.</span>
 
 <span class="sd">    Handles all orchestration including file I/O, format detection, unzipping,</span>
-<span class="sd">    sheet selection, raw triplets import, and conversion through core rdf_parser</span>
-<span class="sd">    functions.</span>
+<span class="sd">    sheet selection, raw triplets import, and conversion through</span>
+<span class="sd">    ``triplets.tools.tableviews_to_triplets`` and ``export_to_cimxml``.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -526,7 +555,8 @@
 <span class="sd">        Input format. If None, auto-detected from input_path extension.</span>
 <span class="sd">        Defaults to 'excel' if ambiguous.</span>
 <span class="sd">    rdf_map : str, optional</span>
-<span class="sd">        Path to RDF map JSON file for custom mappings during export</span>
+<span class="sd">        Path to RDF map JSON file (export schema). Without it every class is</span>
+<span class="sd">        written in the triplets namespace, with a warning.</span>
 <span class="sd">    export_type : {'xml_per_instance', 'xml_per_instance_zip_per_all', 'xml_per_instance_zip_per_xml'}, optional</span>
 <span class="sd">        How to package the CIM XML output. If None, defaults to</span>
 <span class="sd">        'xml_per_instance_zip_per_all' if zip_output=True, else 'xml_per_instance'</span>
@@ -544,11 +574,15 @@
 <span class="sd">        to include in the output. For Excel, this is a sheet name. For CSV,</span>
 <span class="sd">        this is a base filename (without .csv extension).</span>
 <span class="sd">        This sheet is not processed as tableview data.</span>
+<span class="sd">    exclude_objects : sequence of str, default ()</span>
+<span class="sd">        Class names left out of the export.</span>
+<span class="sd">    include_objects : sequence of str, default ()</span>
+<span class="sd">        Only these classes (all if empty); ``exclude_objects`` applies after it.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    result</span>
-<span class="sd">        Export result from rdf_parser.export_to_cimxml()</span>
+<span class="sd">        Export result from triplets.export.export_to_cimxml()</span>
 
 <span class="sd">    Raises</span>
 <span class="sd">    ------</span>
@@ -598,12 +632,12 @@
                     <span class="n">excel_bytes</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">(</span><span class="n">zf</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">excel_filename</span><span class="p">))</span>
 
                     <span class="c1"># Read sheets as tableviews</span>
-                    <span class="n">excel_obj</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">ExcelFile</span><span class="p">(</span><span class="n">excel_bytes</span><span class="p">)</span>
-                    <span class="n">_read_excel_sheets</span><span class="p">(</span><span class="n">excel_obj</span><span class="p">,</span> <span class="n">tableviews</span><span class="p">,</span> <span class="n">raw_triplets</span><span class="p">,</span> <span class="n">sheets</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="p">)</span>
+                    <span class="k">with</span> <span class="n">pandas</span><span class="o">.</span><span class="n">ExcelFile</span><span class="p">(</span><span class="n">excel_bytes</span><span class="p">)</span> <span class="k">as</span> <span class="n">excel_obj</span><span class="p">:</span>
+                        <span class="n">_read_excel_sheets</span><span class="p">(</span><span class="n">excel_obj</span><span class="p">,</span> <span class="n">tableviews</span><span class="p">,</span> <span class="n">raw_triplets</span><span class="p">,</span> <span class="n">sheets</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="c1"># Read directly from file (including .xlsx files)</span>
-                <span class="n">excel_obj</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">ExcelFile</span><span class="p">(</span><span class="n">input_path</span><span class="p">)</span>
-                <span class="n">_read_excel_sheets</span><span class="p">(</span><span class="n">excel_obj</span><span class="p">,</span> <span class="n">tableviews</span><span class="p">,</span> <span class="n">raw_triplets</span><span class="p">,</span> <span class="n">sheets</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="p">)</span>
+                <span class="k">with</span> <span class="n">pandas</span><span class="o">.</span><span class="n">ExcelFile</span><span class="p">(</span><span class="n">input_path</span><span class="p">)</span> <span class="k">as</span> <span class="n">excel_obj</span><span class="p">:</span>
+                    <span class="n">_read_excel_sheets</span><span class="p">(</span><span class="n">excel_obj</span><span class="p">,</span> <span class="n">tableviews</span><span class="p">,</span> <span class="n">raw_triplets</span><span class="p">,</span> <span class="n">sheets</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">ImportError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span>
                 <span class="s2">"openpyxl is required for Excel import. "</span>
@@ -620,14 +654,14 @@
                     <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">'.csv'</span><span class="p">):</span>
                         <span class="n">sheet_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">filename</span><span class="p">)[:</span><span class="o">-</span><span class="mi">4</span><span class="p">]</span>
                         <span class="n">csv_content</span> <span class="o">=</span> <span class="n">zf</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">'utf-8'</span><span class="p">)</span>
-                        <span class="n">csv_dataframes</span><span class="p">[</span><span class="n">sheet_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">StringIO</span><span class="p">(</span><span class="n">csv_content</span><span class="p">),</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+                        <span class="n">csv_dataframes</span><span class="p">[</span><span class="n">sheet_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">StringIO</span><span class="p">(</span><span class="n">csv_content</span><span class="p">),</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">str</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">input_path</span><span class="p">):</span>
             <span class="c1"># Read from directory</span>
             <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">input_path</span><span class="p">):</span>
                 <span class="k">if</span> <span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">'.csv'</span><span class="p">):</span>
                     <span class="n">sheet_name</span> <span class="o">=</span> <span class="n">filename</span><span class="p">[:</span><span class="o">-</span><span class="mi">4</span><span class="p">]</span>
                     <span class="n">csv_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">input_path</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
-                    <span class="n">csv_dataframes</span><span class="p">[</span><span class="n">sheet_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">csv_path</span><span class="p">,</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+                    <span class="n">csv_dataframes</span><span class="p">[</span><span class="n">sheet_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">csv_path</span><span class="p">,</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">str</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"CSV format requires a directory or ZIP file, got: </span><span class="si">{</span><span class="n">input_path</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
@@ -644,10 +678,13 @@
 
         <span class="n">tableviews</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">csv_dataframes</span><span class="p">)</span>
 
-    <span class="n">data</span> <span class="o">=</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">tableviews_to_triplets</span><span class="p">(</span><span class="n">tableviews</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">tableviews_to_triplets</span><span class="p">(</span><span class="n">tableviews</span><span class="p">,</span> <span class="n">multivalue</span><span class="o">=</span><span class="n">multivalue</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">raw_triplets</span><span class="p">:</span>
         <span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">data</span><span class="p">]</span> <span class="o">+</span> <span class="n">raw_triplets</span><span class="p">,</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">include_objects</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">include_objects</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="o">~</span><span class="n">data</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="p">)[</span><span class="s2">"ID"</span><span class="p">])]</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">triplets._version</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_versions</span>
     <span class="n">version</span> <span class="o">=</span> <span class="n">get_versions</span><span class="p">()[</span><span class="s1">'version'</span><span class="p">]</span>
@@ -668,11 +705,14 @@
 
     <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
+    <span class="k">if</span> <span class="n">rdf_map</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"No --rdf-map given: classes are written in the triplets namespace, not a CIM profile"</span><span class="p">)</span>
+
     <span class="c1"># Export to CIM XML</span>
-    <span class="k">return</span> <span class="n">rdf_parser</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span>
+    <span class="k">return</span> <span class="n">export_to_cimxml</span><span class="p">(</span>
         <span class="n">data</span><span class="p">,</span>
         <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span>
-        <span class="n">export_undefined</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">export_undefined</span><span class="o">=</span><span class="n">rdf_map</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">export_type</span><span class="o">=</span><span class="n">export_type</span><span class="p">,</span>
         <span class="n">export_base_path</span><span class="o">=</span><span class="n">output_path</span><span class="p">,</span>
         <span class="n">debug</span><span class="o">=</span><span class="kc">False</span>
@@ -732,10 +772,10 @@
             <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Sheet '</span><span class="si">{</span><span class="n">s</span><span class="si">}</span><span class="s2">' not found in Excel file, skipping"</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">valid_sheets</span><span class="p">:</span>
-        <span class="n">tableviews</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">pandas</span><span class="o">.</span><span class="n">read_excel</span><span class="p">(</span><span class="n">excel_obj</span><span class="p">,</span> <span class="n">sheet_name</span><span class="o">=</span><span class="n">valid_sheets</span><span class="p">,</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+        <span class="n">tableviews</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">pandas</span><span class="o">.</span><span class="n">read_excel</span><span class="p">(</span><span class="n">excel_obj</span><span class="p">,</span> <span class="n">sheet_name</span><span class="o">=</span><span class="n">valid_sheets</span><span class="p">,</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">str</span><span class="p">))</span>
 
     <span class="k">if</span> <span class="n">triplets_sheet</span> <span class="ow">and</span> <span class="n">triplets_sheet</span> <span class="ow">in</span> <span class="n">excel_obj</span><span class="o">.</span><span class="n">sheet_names</span><span class="p">:</span>
-        <span class="n">triplet_df</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_excel</span><span class="p">(</span><span class="n">excel_obj</span><span class="p">,</span> <span class="n">sheet_name</span><span class="o">=</span><span class="n">triplets_sheet</span><span class="p">)</span>
+        <span class="n">triplet_df</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_excel</span><span class="p">(</span><span class="n">excel_obj</span><span class="p">,</span> <span class="n">sheet_name</span><span class="o">=</span><span class="n">triplets_sheet</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">str</span><span class="p">)</span>
         <span class="n">_extract_raw_triplets</span><span class="p">(</span><span class="n">triplet_df</span><span class="p">,</span> <span class="n">triplets_sheet</span><span class="p">,</span> <span class="n">raw_triplets</span><span class="p">)</span>
 
 
@@ -848,6 +888,8 @@
 <span class="sd">        cim-spreadsheet -i data.xlsx -o output/ --sheets Sheet1 Sheet2</span>
 <span class="sd">        cim-spreadsheet -i data.xlsx -o output/ --triplets-sheet RawData</span>
 <span class="sd">        cim-spreadsheet -i model.xml -o output.xlsx -z  # force ZIP</span>
+<span class="sd">        cim-spreadsheet -i model.xml -o output.xlsx -ex Terminal,ConnectivityNode</span>
+<span class="sd">        cim-spreadsheet -i model.xml -o output.xlsx --keep-metadata</span>
 
 <span class="sd">    Exit Codes</span>
 <span class="sd">    ----------</span>
@@ -875,6 +917,7 @@
     <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--zip"</span><span class="p">,</span> <span class="s2">"-z"</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">"store_true"</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s2">"zip_output"</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Zip output"</span><span class="p">)</span>
     <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--no-zip"</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">"store_false"</span><span class="p">,</span> <span class="n">dest</span><span class="o">=</span><span class="s2">"zip_output"</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Do not zip output"</span><span class="p">)</span>
     <span class="n">parser</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">zip_output</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+    <span class="n">add_common_arguments</span><span class="p">(</span><span class="n">parser</span><span class="p">,</span> <span class="s2">"the output"</span><span class="p">)</span>
 
     <span class="c1"># Spreadsheet to CIM specific arguments</span>
     <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--rdf-map"</span><span class="p">,</span> <span class="s2">"-r"</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">"Path to RDF map JSON (for to-cim conversion)"</span><span class="p">)</span>
@@ -884,7 +927,7 @@
 
     <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
 
-    <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">WARNING</span><span class="p">)</span>
 
     <span class="c1"># Detect conversion direction if not specified</span>
     <span class="n">direction</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">direction</span>
@@ -903,7 +946,9 @@
                 <span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">,</span>
                 <span class="nb">format</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">format</span><span class="p">,</span>
                 <span class="n">zip_output</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">zip_output</span><span class="p">,</span>
-                <span class="n">multivalue</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">multivalue</span>
+                <span class="n">multivalue</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">multivalue</span><span class="p">,</span>
+                <span class="n">exclude_objects</span><span class="o">=</span><span class="n">excluded_types</span><span class="p">(</span><span class="n">args</span><span class="p">),</span>
+                <span class="n">include_objects</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">include</span>
             <span class="p">)</span>
             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Converted </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
@@ -917,7 +962,9 @@
                 <span class="n">multivalue</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">multivalue</span><span class="p">,</span>
                 <span class="n">zip_output</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">zip_output</span><span class="p">,</span>
                 <span class="n">sheets</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">sheets</span><span class="p">,</span>
-                <span class="n">triplets_sheet</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">triplets_sheet</span>
+                <span class="n">triplets_sheet</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">triplets_sheet</span><span class="p">,</span>
+                <span class="n">exclude_objects</span><span class="o">=</span><span class="n">excluded_types</span><span class="p">(</span><span class="n">args</span><span class="p">),</span>
+                <span class="n">include_objects</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">include</span>
             <span class="p">)</span>
             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Converted </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
@@ -941,7 +988,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -961,7 +1008,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.validation package" href="triplets.validation.html"><link rel="prev" title="triplets.export" href="triplets.export.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.sparql package - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.sparql package - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.export.html">Export</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -303,10 +299,14 @@ Rust-speed queries. Sits between qlever (fastest, needs the compiled
 extension) and rdflib (pure-Python reference) in auto preference.</p>
 <p>Data is loaded through the N-Quads export (datatype-annotated, INSTANCE_ID as
 named graph) via Store.bulk_load — loaded stores are cached in-process by
-content key, same logic as the qlever engine’s index cache. After loading,
-the deduplicated union of the named graphs is projected into the store’s
-default graph, so unscoped queries match rdflib’s default_union set semantics
-(oxigraph’s own union of named graphs keeps one solution per graph).</p>
+content key, same logic as the qlever engine’s index cache. Unscoped queries
+match rdflib’s default_union set semantics (oxigraph’s own union of named
+graphs keeps one solution per graph): a single-graph store (exactly one
+named graph, nothing in its default graph) runs unscoped queries with its
+one graph as the protocol default graph — which, as with data_scope,
+takes precedence over any FROM; other stores run against the projected
+default graph (the deduplicated union of the named graphs, copied in once
+after loading).</p>
 <p>Scope is not a data operation: the scoped instances’ named graphs are passed
 to Store.query as SPARQL-protocol default graphs, so one store serves every
 scope and the query text is never modified. Caveat: a multi-instance scope is
@@ -326,16 +326,18 @@ through read_nquads — the same round-trip that loaded the data.</p></li>
 </ul>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.sparql.sparql_oxigraph.query">
-<span class="sig-prename descclassname"><span class="pre">triplets.sparql.sparql_oxigraph.</span></span><span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query_string</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_unchanged</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/sparql/sparql_oxigraph.html#query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.sparql.sparql_oxigraph.query" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.sparql.sparql_oxigraph.</span></span><span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query_string</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_unchanged</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/sparql/sparql_oxigraph.html#query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.sparql.sparql_oxigraph.query" title="Link to this definition">¶</a></dt>
 <dd><p>Execute query_string over data; shape the result by query type.</p>
 <p>Queries are executed exactly as given — the text is never modified.
 A rejected query raises ValueError carrying oxigraph’s message plus the
-query text, so the failure is directly actionable. <code class="docutils literal notranslate"><span class="pre">scope</span></code> travels
+query text, so the failure is directly actionable. <code class="docutils literal notranslate"><span class="pre">data_scope</span></code> travels
 beside the query as SPARQL-protocol default graphs: the query runs
 against exactly the union of the scoped instances’ named graphs on the
 one shared store, and per the protocol these take precedence over any
-FROM inside the query. None → the store’s default graph (the
-deduplicated union of all named graphs).</p>
+FROM inside the query. None → the deduplicated union of all named
+graphs: a single-graph store runs it with its one graph as the protocol
+default graph — which, as with data_scope, takes precedence over any
+FROM; other stores run against the projected default graph.</p>
 </dd></dl>
 
 </section>
@@ -357,7 +359,7 @@ heavy lifting happens on the C++ side:</p>
 <li><p>in: the triplet columns go to the index builder as Arrow batches, feeding
 an injected parser (no N-Quads serialization or text re-parsing anywhere;
 the term mapping applies the same rules as the N-Quads export, from the
-same <code class="docutils literal notranslate"><span class="pre">build_key_metadata</span></code> schema interpretation).</p></li>
+same <code class="docutils literal notranslate"><span class="pre">triplets.iri</span></code> schema interpretation).</p></li>
 <li><p>out: the wrapper decodes the query result straight into Arrow string
 buffers (unbound → null), the Cython layer wraps them zero-copy, and this
 module only maps conventions and finalizes the output flavor
@@ -376,13 +378,13 @@ decoding: Python threads parallelize, no fork needed.</p>
 from disk ~4 ms.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.sparql.sparql_qlever.query">
-<span class="sig-prename descclassname"><span class="pre">triplets.sparql.sparql_qlever.</span></span><span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query_string</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_unchanged</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/sparql/sparql_qlever.html#query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.sparql.sparql_qlever.query" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.sparql.sparql_qlever.</span></span><span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query_string</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_unchanged</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/sparql/sparql_qlever.html#query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.sparql.sparql_qlever.query" title="Link to this definition">¶</a></dt>
 <dd><p>Execute query_string over data; shape the result by query type.</p>
 <p>Queries are executed exactly as given — the text is never modified.
 qlever’s parser is strict; a rejected query raises ValueError carrying
 qlever’s message plus the query text, so the failure is directly
 actionable (broken constraint queries belong upstream, see TODO.md).
-<code class="docutils literal notranslate"><span class="pre">scope</span></code> travels beside the query as SPARQL-protocol dataset clauses
+<code class="docutils literal notranslate"><span class="pre">data_scope</span></code> travels beside the query as SPARQL-protocol dataset clauses
 (<code class="docutils literal notranslate"><span class="pre">default-graph-uri</span></code>): the query runs against exactly the union of the
 scoped instances’ named graphs on the one shared index, and per the
 protocol these take precedence over any FROM inside the query.</p>
@@ -406,7 +408,7 @@ comparisons/ORDER BY <em>inside</em> the query — only the returned representat
 is string.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.sparql.sparql_rdflib.query">
-<span class="sig-prename descclassname"><span class="pre">triplets.sparql.sparql_rdflib.</span></span><span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query_string</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_unchanged</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/sparql/sparql_rdflib.html#query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.sparql.sparql_rdflib.query" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.sparql.sparql_rdflib.</span></span><span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query_string</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_unchanged</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/sparql/sparql_rdflib.html#query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.sparql.sparql_rdflib.query" title="Link to this definition">¶</a></dt>
 <dd><p>Execute query_string over data; shape the result by query type.</p>
 </dd></dl>
 
@@ -414,12 +416,10 @@ is string.</p>
 <section id="module-triplets.sparql">
 <span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-triplets.sparql" title="Link to this heading">¶</a></h2>
 <p>SPARQL querying over triplet data.</p>
-<p>Engines (registry dispatch, mirroring triplets.parser):
-- qlever   — performance (embedded C++ via the official libqlever facade; needs</p>
-<blockquote>
-<div><p>the compiled extension, see setup_qlever.py; takes auto priority when built)</p>
-</div></blockquote>
+<p>Engines (registry dispatch, mirroring triplets.parser):</p>
 <ul class="simple">
+<li><p>qlever   — performance (embedded C++ via the official libqlever facade; needs
+the compiled extension, see setup_qlever.py; takes auto priority when built)</p></li>
 <li><p>oxigraph — portable performance (embedded Rust via the pyoxigraph wheel,
 <cite>oxigraph</cite> extra; auto priority when qlever is not built)</p></li>
 <li><p>rdflib   — reference, built-in SPARQL 1.1, always available with the <cite>sparql</cite> extra</p></li>
@@ -441,7 +441,7 @@ qlever ingests the same term mapping as Arrow batches.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.sparql.query">
-<span class="sig-prename descclassname"><span class="pre">triplets.sparql.</span></span><span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query_string</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_unchanged</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/sparql.html#query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.sparql.query" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.sparql.</span></span><span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query_string</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_unchanged</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/sparql.html#query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.sparql.query" title="Link to this definition">¶</a></dt>
 <dd><p>Run a SPARQL query over triplet data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -450,7 +450,7 @@ qlever ingests the same term mapping as Arrow batches.</p>
 <li><p><strong>query_string</strong> (<em>str</em>) – SPARQL query. SELECT → DataFrame (columns = projected vars),
 ASK → bool, CONSTRUCT/DESCRIBE → triplet DataFrame.</p></li>
 <li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema — enables xsd-typed literals in the queried graph (optional).</p></li>
-<li><p><strong>scope</strong> (<em>iterable</em><em> of </em><em>INSTANCE_ID</em><em>, </em><em>optional</em>) – Restrict the queried data to these instances’ named graphs; all data
+<li><p><strong>data_scope</strong> (<em>iterable</em><em> of </em><em>INSTANCE_ID</em><em>, </em><em>optional</em>) – Restrict the queried data to these instances’ named graphs; all data
 stays loaded for reference resolution. None = full union.</p></li>
 <li><p><strong>engine</strong> (<em>str</em><em>, </em><em>default &quot;auto&quot;</em>) – “qlever” (performance, embedded C++), “oxigraph” (portable
 performance, embedded Rust) or “rdflib” (reference). “auto” picks
@@ -464,6 +464,9 @@ the engine reuses the stored content digest for this exact object
 and skips the content_hash (the dominant cost of small warm
 queries). Only skips work when this object was hashed before;
 otherwise the hash runs and is remembered.</p></li>
+<li><p><strong>undefined_namespace</strong> (<em>str</em><em>, </em><em>default CIM100</em>) – Namespace for names the schema does not declare — every name when no
+rdf_map is given — so schema-less data answers <code class="docutils literal notranslate"><span class="pre">cim:</span></code> queries. The
+store keeps every row (the N-Quads <code class="docutils literal notranslate"><span class="pre">export_undefined=True</span></code> form).</p></li>
 </ul>
 </dd>
 </dl>
@@ -501,7 +504,7 @@ otherwise the hash runs and is remembered.</p></li>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -558,7 +561,7 @@ otherwise the hash runs and is remembered.</p></li>
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

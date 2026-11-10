@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.rdfs_tools package" href="triplets.rdfs_tools.html"><link rel="prev" title="triplets.cli" href="triplets.cli.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.cgmes_tools module - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.cgmes_tools module - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -416,6 +412,42 @@ FullModel element.</p>
 <span class="go">...</span>
 </pre></div>
 </div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.cgmes_tools.declared_profiles">
+<span class="sig-prename descclassname"><span class="pre">triplets.cgmes_tools.</span></span><span class="sig-name descname"><span class="pre">declared_profiles</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/cgmes_tools.html#declared_profiles"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.cgmes_tools.declared_profiles" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">{INSTANCE_ID:</span> <span class="pre">[schema</span> <span class="pre">section,</span> <span class="pre">...]}</span></code> — the profiles each instance header declares.</p>
+<p>The header’s profile-identity fields (<code class="docutils literal notranslate"><span class="pre">Model.messageType</span></code>, <code class="docutils literal notranslate"><span class="pre">keyword</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Model.profile</span></code>, <code class="docutils literal notranslate"><span class="pre">conformsTo</span></code>) are matched against the schema profiles’
+own declared identity (section key / keyword / versionIRI / profileVersionIRI /
+conformsTo; an identifier several profiles share identifies none), legacy
+CGMES 2.4.15 profile URLs by substring. An instance without a match maps to
+an empty list. DuckDB: <code class="docutils literal notranslate"><span class="pre">table</span></code> / <code class="docutils literal notranslate"><span class="pre">schema</span></code> / <code class="docutils literal notranslate"><span class="pre">table_name</span></code> kwargs.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">declared_profiles</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED2</span><span class="p">)</span>
+<span class="go">{'4f8d…': ['EQ'], '9a1c…': ['SSH']}</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.cgmes_tools.validate_by_header">
+<span class="sig-prename descclassname"><span class="pre">triplets.cgmes_tools.</span></span><span class="sig-name descname"><span class="pre">validate_by_header</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_undefined_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">references</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_missing_targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/cgmes_tools.html#validate_by_header"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.cgmes_tools.validate_by_header" title="Link to this definition">¶</a></dt>
+<dd><p>Schema-validate every instance against the profiles its header declares.</p>
+<p>Instances declaring the same profiles run together through
+<code class="docutils literal notranslate"><span class="pre">triplets.validation.validate_schema</span></code> (each instance still counted on its
+own, its declared profiles merged). With <em>references</em>,
+<code class="docutils literal notranslate"><span class="pre">validate_schema_references</span></code> checks each instance’s references against
+every loaded instance and its declared profiles. An instance whose header
+matches no profile is skipped and named in <code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>.</p>
+<dl class="simple">
+<dt>data_scope<span class="classifier">iterable of INSTANCE_ID, optional</span></dt><dd><p>The instances to validate; None = every instance. References are still
+looked up in every loaded instance.</p>
+</dd>
+<dt>rdf_map_scope<span class="classifier">profile identifier(s), optional</span></dt><dd><p>Override the declared profiles for every instance (header-less data).</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py function">
@@ -1133,7 +1165,7 @@ HTML (if notebook=True).</p>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -1164,6 +1196,8 @@ HTML (if notebook=True).</p>
 <li><a class="reference internal" href="#triplets.cgmes_tools.get_metadata_from_filename"><code class="docutils literal notranslate"><span class="pre">get_metadata_from_filename()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.cgmes_tools.get_filename_from_metadata"><code class="docutils literal notranslate"><span class="pre">get_filename_from_metadata()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.cgmes_tools.get_metadata_from_xml"><code class="docutils literal notranslate"><span class="pre">get_metadata_from_xml()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.cgmes_tools.declared_profiles"><code class="docutils literal notranslate"><span class="pre">declared_profiles()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.cgmes_tools.validate_by_header"><code class="docutils literal notranslate"><span class="pre">validate_by_header()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.cgmes_tools.count_GeneratingUnit_types"><code class="docutils literal notranslate"><span class="pre">count_GeneratingUnit_types()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.cgmes_tools.draw_references"><code class="docutils literal notranslate"><span class="pre">draw_references()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.cgmes_tools.draw_references_from"><code class="docutils literal notranslate"><span class="pre">draw_references_from()</span></code></a></li>
@@ -1200,7 +1234,7 @@ HTML (if notebook=True).</p>
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

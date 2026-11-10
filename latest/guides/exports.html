@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Export Schemas" href="export_schemas.html"><link rel="prev" title="Parser Architecture" href="parsers.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Export Architecture - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>Export Architecture - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -374,8 +370,7 @@ from <code class="docutils literal notranslate"><span class="pre">docs/source/gu
 <p>Input flavor: the cython engine consumes polars input directly — per-instance
 frames stay polars and reach the extension as Arrow <code class="docutils literal notranslate"><span class="pre">large_string</span></code> /
 dictionary columns through the shared accessor (<code class="docutils literal notranslate"><span class="pre">triplets/_arrow/</span> <span class="pre">string_column.h</span></code>), no pandas hop. The python_lxml engine is pandas-only, so
-polars input converts first; <code class="docutils literal notranslate"><span class="pre">datatypes=True</span></code> implies python_lxml under
-<code class="docutils literal notranslate"><span class="pre">engine=&quot;auto&quot;</span></code>.</p>
+polars input converts first.</p>
 <p>DuckDB notes: <code class="docutils literal notranslate"><span class="pre">con.read_rdf(paths)</span></code> streams one Arrow batch per XML file into
 the table (<code class="docutils literal notranslate"><span class="pre">append=True</span></code> adds instead of replacing) — see
 <a class="reference internal" href="parsers.html"><span class="std std-doc">parsers.md</span></a>. In the other direction <code class="docutils literal notranslate"><span class="pre">con.export_to_nquads</span></code>
@@ -383,17 +378,21 @@ streams batch-by-batch through duckdb’s record-batch reader (bounded memory �
 works larger-than-RAM; needs the polars engine). The remaining formats fetch
 the table through duckdb’s native arrow result path (~4x cheaper than a
 pandas materialization) but hold the whole table in memory during the export;
-streaming cimxml is the recorded TODO follow-up.</p>
+CIM XML export from a DuckDB connection is not streamed.</p>
 <p>Both engines expose the same interface:
-<code class="docutils literal notranslate"><span class="pre">generate_xml(instance_data,</span> <span class="pre">rdf_map,</span> <span class="pre">namespace_map,</span> <span class="pre">class_KEY,</span> <span class="pre">export_undefined,</span> <span class="pre">comment,</span> <span class="pre">debug,</span> <span class="pre">datatypes)</span></code>
-returning <code class="docutils literal notranslate"><span class="pre">{&quot;filename&quot;:</span> <span class="pre">str,</span> <span class="pre">&quot;file&quot;:</span> <span class="pre">bytes}</span></code> for one instance. They produce
+<code class="docutils literal notranslate"><span class="pre">generate_xml(instance_data,</span> <span class="pre">rdf_map,</span> <span class="pre">namespace_map,</span> <span class="pre">class_KEY,</span> <span class="pre">export_undefined,</span> <span class="pre">comment,</span> <span class="pre">debug,</span> <span class="pre">datatypes,</span> <span class="pre">undefined_namespace,</span> <span class="pre">key_datatypes,</span> <span class="pre">key_languages)</span></code>
+returning <code class="docutils literal notranslate"><span class="pre">{&quot;filename&quot;:</span> <span class="pre">str,</span> <span class="pre">&quot;file&quot;:</span> <span class="pre">bytes}</span></code> for one instance — the dispatcher loads the
+schema once and passes the <code class="docutils literal notranslate"><span class="pre">iri.datatypes</span></code> / <code class="docutils literal notranslate"><span class="pre">iri.languages</span></code> maps to every instance. They produce
 data-identical XML (verified by an engine-equivalence test); only whitespace
 formatting differs.</p>
 <p>Engine aliases: <code class="docutils literal notranslate"><span class="pre">performance</span></code> / <code class="docutils literal notranslate"><span class="pre">pugixml</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">cython_pugixml</span></code>, <code class="docutils literal notranslate"><span class="pre">lxml</span></code> / <code class="docutils literal notranslate"><span class="pre">pandas</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">python_lxml</span></code></p>
 <p><code class="docutils literal notranslate"><span class="pre">export_to_cimxml(...,</span> <span class="pre">datatypes=True)</span></code> annotates literal elements with
 <code class="docutils literal notranslate"><span class="pre">rdf:datatype</span></code> from the schema’s <code class="docutils literal notranslate"><span class="pre">xsd:type</span></code> (like N-Quads; <code class="docutils literal notranslate"><span class="pre">xsd:string</span></code> stays
-plain). Supported by <code class="docutils literal notranslate"><span class="pre">python_lxml</span></code> only — passing <code class="docutils literal notranslate"><span class="pre">datatypes=True</span></code> with
-<code class="docutils literal notranslate"><span class="pre">engine=&quot;auto&quot;</span></code> forces the <code class="docutils literal notranslate"><span class="pre">python_lxml</span></code> engine.</p>
+plain). Both engines write the same attributes.</p>
+<p>A schema <code class="docutils literal notranslate"><span class="pre">language</span></code> (<a class="reference internal" href="export_schemas.html#fixed-language-tag-language"><span class="std std-ref">export_schemas.md</span></a>)
+writes <code class="docutils literal notranslate"><span class="pre">xml:lang=&quot;&lt;tag&gt;&quot;</span></code> on the literal element in both engines, with or without
+<code class="docutils literal notranslate"><span class="pre">datatypes=</span></code> — the tag is part of the value; that element carries no <code class="docutils literal notranslate"><span class="pre">rdf:datatype</span></code>.
+<code class="docutils literal notranslate"><span class="pre">export_to_nquads</span></code> writes the same KEY as <code class="docutils literal notranslate"><span class="pre">&quot;text&quot;&#64;&lt;tag&gt;</span></code>.</p>
 </section>
 <section id="call-sequence-cim-xml">
 <h2>Call Sequence (CIM XML)<a class="headerlink" href="#call-sequence-cim-xml" title="Link to this heading">¶</a></h2>
@@ -413,7 +412,8 @@ plain). Supported by <code class="docutils literal notranslate"><span class="pre
     <span class="o">|</span>       <span class="o">|</span>
     <span class="o">|</span>       <span class="o">|-&gt;</span> <span class="n">cimxml_utils</span><span class="o">.</span><span class="n">resolve_instance_config</span><span class="p">()</span>
     <span class="o">|</span>       <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">file_name</span> <span class="kn">from</span><span class="w"> </span><span class="s1">'label'</span> <span class="p">(</span><span class="n">source</span> <span class="n">filename</span><span class="p">)</span> <span class="ow">or</span> <span class="n">new</span> <span class="n">UUID</span>
-    <span class="o">|</span>       <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">profile</span> <span class="n">sub</span><span class="o">-</span><span class="n">schema</span> <span class="n">via</span> <span class="n">Model</span><span class="o">.</span><span class="n">messageType</span> <span class="o">/</span> <span class="n">Model</span><span class="o">.</span><span class="n">profile</span>
+    <span class="o">|</span>       <span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">every</span> <span class="n">declared</span> <span class="n">profile</span> <span class="n">section</span><span class="p">,</span> <span class="n">merged</span> <span class="p">(</span><span class="n">header</span><span class="p">:</span> <span class="n">Model</span><span class="o">.</span><span class="n">messageType</span> <span class="o">/</span>
+    <span class="o">|</span>       <span class="o">|</span>   <span class="o">|</span>   <span class="n">keyword</span> <span class="o">/</span> <span class="n">Model</span><span class="o">.</span><span class="n">profile</span> <span class="o">/</span> <span class="n">conformsTo</span><span class="p">)</span>
     <span class="o">|</span>       <span class="o">|</span>   <span class="s1">'-&gt; namespace map: given &gt; instance NamespaceMap &gt; schema</span>
     <span class="o">|</span>       <span class="o">|</span>
     <span class="o">|</span>       <span class="o">|</span>  <span class="n">python_lxml</span>                     <span class="n">cython_pugixml</span>
@@ -436,7 +436,7 @@ plain). Supported by <code class="docutils literal notranslate"><span class="pre
 <h2>File Layout<a class="headerlink" href="#file-layout" title="Link to this heading">¶</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">triplets</span><span class="o">/</span><span class="n">export</span><span class="o">/</span>
 <span class="o">|--</span> <span class="fm">__init__</span><span class="o">.</span><span class="n">py</span>                <span class="c1"># dispatchers: export_to_cimxml() + engine registry,</span>
-<span class="o">|</span>                              <span class="c1"># export_to_csv(), export_to_nquads(), ExportType</span>
+<span class="o">|</span>                              <span class="c1"># export_to_csv(), export_to_nquads(), export_to_arrow(), ExportType</span>
 <span class="o">|--</span> <span class="n">cimxml_utils</span><span class="o">.</span><span class="n">py</span>            <span class="c1"># shared per-instance config resolution (both cimxml engines)</span>
 <span class="o">|--</span> <span class="n">cimxml_pandas</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># generate_xml() via lxml (default)</span>
 <span class="o">|--</span> <span class="n">cimxml_pugixml</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># generate_xml() via compiled extension</span>
@@ -470,14 +470,18 @@ plain). Supported by <code class="docutils literal notranslate"><span class="pre
 <span class="n">files</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span><span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"python_lxml"</span><span class="p">)</span>
 <span class="n">files</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span><span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"cython_pugixml"</span><span class="p">)</span>
 
-<span class="c1"># N-Quads (fast input for SPARQL engines like qlever); schema enables enum namespaces.</span>
+<span class="c1"># N-Quads (fast input for SPARQL engines like qlever); the schema gives every</span>
+<span class="c1"># class / enum / key its own namespace (triplets.iri.namespaces). Names the schema</span>
+<span class="c1"># does not declare — every name without one — are kept (export_undefined=True)</span>
+<span class="c1"># under undefined_namespace, http://triplets# by default; both are parameters,</span>
+<span class="c1"># the same pair export_to_cimxml has (where export_undefined defaults to False).</span>
 <span class="c1"># N-Quads output is serialization-edition-independent — references are always</span>
 <span class="c1"># emitted as absolute urn:uuid: IRIs, so ED1 and ED2 produce identical, valid</span>
 <span class="c1"># input for any SPARQL engine (the ED1 "#uuid" fragment-reference pitfall is a</span>
 <span class="c1"># CIM XML / RDF-XML concern, not N-Quads). ED2 shown for consistency.</span>
 <span class="n">data</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">"grid.nq"</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED2</span><span class="p">)</span>
 
-<span class="c1"># CIM XML with rdf:datatype annotations (python_lxml only; forces that engine)</span>
+<span class="c1"># CIM XML with rdf:datatype annotations</span>
 <span class="n">files</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span><span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">,</span> <span class="n">datatypes</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 <span class="c1"># Arrow — columnar interchange (ID, KEY, VALUE, INSTANCE_ID) for qlever's Arrow ingest</span>
@@ -507,7 +511,7 @@ First fetch the pugixml source (<code class="docutils literal notranslate"><span
 </pre></div>
 </div>
 <p>Then build:</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pixi<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>build
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>sync<span class="w"> </span>--all-extras
 pixi<span class="w"> </span>run<span class="w"> </span>build-cython-pugixml-arrow
 </pre></div>
 </div>
@@ -556,7 +560,7 @@ pixi<span class="w"> </span>run<span class="w"> </span>build-cython-pugixml-arro
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -601,7 +605,7 @@ pixi<span class="w"> </span>run<span class="w"> </span>build-cython-pugixml-arro
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>

@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.export.nquads_pandas - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.export.nquads_pandas - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -285,21 +281,25 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for triplets.export.nquads_pandas</h1><div class="highlight"><pre>
-<span></span><span class="sd">"""N-Quads export using pandas — schema-aware value classification."""</span>
+<span></span><span class="sd">"""N-Quads export using pandas — vectorized over the ``triplets.iri`` pandas flavor."""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">io</span><span class="w"> </span><span class="kn">import</span> <span class="n">BytesIO</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span><span class="n">DESCRIPTION_TYPE</span><span class="p">,</span> <span class="n">TRIPLETS_NS</span><span class="p">,</span> <span class="n">TYPE_KEY</span><span class="p">,</span> <span class="n">datatypes</span><span class="p">,</span> <span class="n">iri_pandas</span><span class="p">,</span> <span class="n">languages</span><span class="p">,</span> <span class="n">load_rdf_map</span><span class="p">,</span> <span class="n">namespaces</span><span class="p">,</span>
+                   <span class="n">value_types</span><span class="p">)</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">.nquads_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">make_subject</span><span class="p">,</span> <span class="n">make_predicate</span><span class="p">,</span> <span class="n">make_object</span><span class="p">,</span> <span class="n">make_graph</span><span class="p">,</span>
-    <span class="n">build_key_metadata</span><span class="p">,</span>
-<span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_escape</span><span class="p">(</span><span class="n">series</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">series</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"</span><span class="se">\\</span><span class="s2">"</span><span class="p">,</span> <span class="s2">"</span><span class="se">\\\\</span><span class="s2">"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">'"'</span><span class="p">,</span> <span class="s1">'</span><span class="se">\\</span><span class="s1">"'</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="s2">"</span><span class="se">\\</span><span class="s2">n"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"</span><span class="se">\r</span><span class="s2">"</span><span class="p">,</span> <span class="s2">"</span><span class="se">\\</span><span class="s2">r"</span><span class="p">,</span> <span class="n">regex</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
 
 
 <div class="viewcode-block" id="export_to_nquads">
 <a class="viewcode-back" href="../../../triplets.export.html#triplets.export.nquads_pandas.export_to_nquads">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">export_to_nquads</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">export_to_nquads</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">export_to_memory</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">export_undefined</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                     <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">TRIPLETS_NS</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Export triplet DataFrame to N-Quads file.</span>
 
 <span class="sd">    Parameters</span>
@@ -310,39 +310,75 @@
 <span class="sd">        Output file path (.nq). Ignored when export_to_memory=True.</span>
 <span class="sd">    rdf_map : dict or str, optional</span>
 <span class="sd">        Export schema for proper enum/association detection and literal</span>
-<span class="sd">        datatype annotations ("400"^^&lt;...XMLSchema#float&gt;). If None,</span>
-<span class="sd">        enumerations won't get namespace and literals stay untyped.</span>
+<span class="sd">        datatype annotations ("400"^^&lt;...XMLSchema#float&gt;) and language tags</span>
+<span class="sd">        ("text"@en). If None, enumerations won't get namespace and literals stay untyped.</span>
 <span class="sd">    export_to_memory : bool, default False</span>
 <span class="sd">        If True, return an in-memory BytesIO (with .name) instead of writing to disk.</span>
+<span class="sd">    export_undefined : bool, default True</span>
+<span class="sd">        Keep rows the schema does not account for (unknown class, KEY or enum</span>
+<span class="sd">        value — every row without a schema); False drops them.</span>
+<span class="sd">    undefined_namespace : str, default "http://triplets#"</span>
+<span class="sd">        Namespace those names are written in.</span>
 <span class="sd">    """</span>
-    <span class="n">enum_keys</span><span class="p">,</span> <span class="n">key_namespaces</span><span class="p">,</span> <span class="n">key_datatypes</span> <span class="o">=</span> <span class="n">build_key_metadata</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span> <span class="k">if</span> <span class="n">rdf_map</span> <span class="k">else</span> <span class="p">(</span><span class="nb">set</span><span class="p">(),</span> <span class="p">{},</span> <span class="p">{})</span>
+    <span class="n">rdf_map</span> <span class="o">=</span> <span class="n">load_rdf_map</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span>
+    <span class="n">maps</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">namespaces</span><span class="o">=</span><span class="n">namespaces</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">),</span> <span class="n">value_types</span><span class="o">=</span><span class="n">value_types</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">),</span> <span class="n">datatypes</span><span class="o">=</span><span class="n">datatypes</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">))</span>
+    <span class="n">tags</span> <span class="o">=</span> <span class="n">languages</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span>
 
     <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">data</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()]</span>  <span class="c1"># no object to state (parity with the polars engine)</span>
+    <span class="c1"># Type "Description" is an rdf:Description element — not a class, so no rdf:type</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="o">~</span><span class="p">((</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span> <span class="o">==</span> <span class="n">TYPE_KEY</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span> <span class="o">==</span> <span class="n">DESCRIPTION_TYPE</span><span class="p">))</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">bool</span><span class="p">)]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">export_undefined</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">iri_pandas</span><span class="o">.</span><span class="n">defined</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span> <span class="n">data</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">),</span>
+                                       <span class="n">maps</span><span class="p">[</span><span class="s2">"namespaces"</span><span class="p">],</span> <span class="n">maps</span><span class="p">[</span><span class="s2">"value_types"</span><span class="p">])]</span>
 
-    <span class="n">id_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
-    <span class="n">key_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
-    <span class="n">val_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
-    <span class="n">inst_col</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+    <span class="n">ids</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+    <span class="n">keys</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+    <span class="n">values</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+    <span class="n">instances</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">(),</span> <span class="kc">None</span><span class="p">)</span>
 
-    <span class="n">subjects</span> <span class="o">=</span> <span class="n">id_col</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">make_subject</span><span class="p">)</span>
-    <span class="n">predicates</span> <span class="o">=</span> <span class="n">key_col</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">k</span><span class="p">:</span> <span class="n">make_predicate</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">key_namespaces</span><span class="p">))</span>
-    <span class="n">objects</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span>
-        <span class="p">[</span><span class="n">make_object</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">enum_keys</span><span class="p">,</span> <span class="n">key_datatypes</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">key_col</span><span class="p">,</span> <span class="n">val_col</span><span class="p">)],</span>
-        <span class="n">index</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
-    <span class="p">)</span>
-    <span class="n">graphs</span> <span class="o">=</span> <span class="n">inst_col</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">make_graph</span><span class="p">)</span>
+    <span class="n">kind</span><span class="p">,</span> <span class="n">payload</span> <span class="o">=</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">absolute_value</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">,</span> <span class="o">**</span><span class="n">maps</span><span class="p">)</span>
+    <span class="n">is_iri</span> <span class="o">=</span> <span class="p">(</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">"iri"</span><span class="p">)</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+    <span class="n">typed</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">is_iri</span>
+    <span class="n">objects</span> <span class="o">=</span> <span class="s1">'"'</span> <span class="o">+</span> <span class="n">_escape</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">+</span> <span class="s1">'"'</span>                     <span class="c1"># plain literal by default</span>
+    <span class="n">objects</span><span class="p">[</span><span class="n">typed</span><span class="p">]</span> <span class="o">=</span> <span class="n">objects</span><span class="p">[</span><span class="n">typed</span><span class="p">]</span> <span class="o">+</span> <span class="s2">"^^&lt;"</span> <span class="o">+</span> <span class="n">payload</span><span class="p">[</span><span class="n">typed</span><span class="p">]</span> <span class="o">+</span> <span class="s2">"&gt;"</span>
+    <span class="k">if</span> <span class="n">tags</span><span class="p">:</span>                                                  <span class="c1"># a tagged KEY has no datatype: disjoint from typed</span>
+        <span class="n">tag</span> <span class="o">=</span> <span class="n">keys</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span>
+        <span class="n">tagged</span> <span class="o">=</span> <span class="n">tag</span><span class="o">.</span><span class="n">notna</span><span class="p">()</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">is_iri</span>
+        <span class="n">objects</span><span class="p">[</span><span class="n">tagged</span><span class="p">]</span> <span class="o">=</span> <span class="n">objects</span><span class="p">[</span><span class="n">tagged</span><span class="p">]</span> <span class="o">+</span> <span class="s2">"@"</span> <span class="o">+</span> <span class="n">tag</span><span class="p">[</span><span class="n">tagged</span><span class="p">]</span>
+    <span class="n">objects</span><span class="p">[</span><span class="n">is_iri</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"&lt;"</span> <span class="o">+</span> <span class="n">payload</span><span class="p">[</span><span class="n">is_iri</span><span class="p">]</span> <span class="o">+</span> <span class="s2">"&gt;"</span>
 
-    <span class="n">quads</span> <span class="o">=</span> <span class="n">subjects</span> <span class="o">+</span> <span class="s2">" "</span> <span class="o">+</span> <span class="n">predicates</span> <span class="o">+</span> <span class="s2">" "</span> <span class="o">+</span> <span class="n">objects</span> <span class="o">+</span> <span class="s2">" "</span> <span class="o">+</span> <span class="n">graphs</span> <span class="o">+</span> <span class="s2">" ."</span>
-    <span class="n">content</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">quads</span><span class="o">.</span><span class="n">values</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
+    <span class="n">graphs</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"&lt;"</span> <span class="o">+</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">by_distinct</span><span class="p">(</span><span class="n">instances</span><span class="p">,</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">absolute_id</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"&gt;"</span><span class="p">)</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">instances</span><span class="o">.</span><span class="n">notna</span><span class="p">(),</span> <span class="s2">"."</span><span class="p">)</span>
+    <span class="n">content</span> <span class="o">=</span> <span class="n">_lines</span><span class="p">(</span><span class="s2">"&lt;"</span> <span class="o">+</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">absolute_id</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"&gt;"</span><span class="p">,</span>
+                     <span class="s2">"&lt;"</span> <span class="o">+</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">by_distinct</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">distinct</span><span class="p">:</span> <span class="n">iri_pandas</span><span class="o">.</span><span class="n">absolute_key</span><span class="p">(</span>
+                         <span class="n">distinct</span><span class="p">,</span> <span class="n">maps</span><span class="p">[</span><span class="s2">"namespaces"</span><span class="p">],</span> <span class="n">undefined_namespace</span><span class="p">))</span> <span class="o">+</span> <span class="s2">"&gt;"</span><span class="p">,</span>
+                     <span class="n">objects</span><span class="p">,</span>
+                     <span class="n">graphs</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">export_to_memory</span><span class="p">:</span>
-        <span class="n">buffer</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">(</span><span class="n">content</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span>
+        <span class="n">buffer</span> <span class="o">=</span> <span class="n">BytesIO</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
         <span class="n">buffer</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s2">"export.nq"</span>
         <span class="k">return</span> <span class="n">buffer</span>
 
-    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">"w"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">"wb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
         <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">content</span><span class="p">)</span></div>
 
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_lines</span><span class="p">(</span><span class="n">subjects</span><span class="p">,</span> <span class="n">predicates</span><span class="p">,</span> <span class="n">objects</span><span class="p">,</span> <span class="n">graphs</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Term columns → ``s p o g .\n`` lines as UTF-8 bytes, joined in Arrow</span>
+<span class="sd">    (one C++ pass). A row with no</span>
+<span class="sd">    graph carries ``.`` in *graphs* and comes out as an N-Triples line."""</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">pyarrow.compute</span>
+    <span class="n">arrays</span> <span class="o">=</span> <span class="p">[</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">column</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">string</span><span class="p">())</span> <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="p">(</span><span class="n">subjects</span><span class="p">,</span> <span class="n">predicates</span><span class="p">,</span> <span class="n">objects</span><span class="p">,</span> <span class="n">graphs</span><span class="p">)]</span>
+    <span class="n">arrays</span> <span class="o">=</span> <span class="p">[</span><span class="n">array</span><span class="o">.</span><span class="n">combine_chunks</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">ChunkedArray</span><span class="p">)</span> <span class="k">else</span> <span class="n">array</span>
+              <span class="k">for</span> <span class="n">array</span> <span class="ow">in</span> <span class="n">arrays</span><span class="p">]</span>
+    <span class="n">quads</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">compute</span><span class="o">.</span><span class="n">binary_join_element_wise</span><span class="p">(</span><span class="o">*</span><span class="n">arrays</span><span class="p">,</span> <span class="s2">" "</span><span class="p">)</span>
+    <span class="n">quads</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">compute</span><span class="o">.</span><span class="n">if_else</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">compute</span><span class="o">.</span><span class="n">ends_with</span><span class="p">(</span><span class="n">quads</span><span class="p">,</span> <span class="s2">" ."</span><span class="p">),</span> <span class="n">quads</span><span class="p">,</span>
+                                    <span class="n">pyarrow</span><span class="o">.</span><span class="n">compute</span><span class="o">.</span><span class="n">binary_join_element_wise</span><span class="p">(</span><span class="n">quads</span><span class="p">,</span> <span class="s2">"."</span><span class="p">,</span> <span class="s2">" "</span><span class="p">))</span>
+    <span class="n">offsets</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">quads</span><span class="p">)],</span> <span class="nb">type</span><span class="o">=</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">int32</span><span class="p">())</span>
+    <span class="n">joined</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">compute</span><span class="o">.</span><span class="n">binary_join</span><span class="p">(</span><span class="n">pyarrow</span><span class="o">.</span><span class="n">ListArray</span><span class="o">.</span><span class="n">from_arrays</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">quads</span><span class="p">),</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">joined</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">as_buffer</span><span class="p">()</span><span class="o">.</span><span class="n">to_pybytes</span><span class="p">()</span> <span class="o">+</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
 </pre></div>
         </article>
       </div>
@@ -355,7 +391,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -375,7 +411,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

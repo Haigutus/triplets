@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.validation.shacl_pyshacl - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.validation.shacl_pyshacl - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -289,13 +285,17 @@
 
 <span class="sd">Correctness-first reference; the data is loaded into an in-memory rdflib graph</span>
 <span class="sd">via the N-Quads export. Consumes ``CompiledShapes.graph`` (shapes are parsed</span>
-<span class="sd">once by the IR compiler); the constraint table is for the vectorized engines.</span>
+<span class="sd">once by the IR compiler) without its malformed shapes; the constraint table is</span>
+<span class="sd">for the vectorized engines.</span>
 <span class="sd">"""</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">importlib.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_spec</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">.._rdflib_loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataset</span><span class="p">,</span> <span class="n">scoped_graph</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">CIM_NS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.._rdflib_loader</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">_scoped</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">_mark_switched_off</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_report</span><span class="w"> </span><span class="kn">import</span> <span class="n">report_to_violations</span>
 
 <span class="k">if</span> <span class="n">find_spec</span><span class="p">(</span><span class="s2">"pyshacl"</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># registry contract: an unavailable engine fails at import</span>
@@ -306,8 +306,9 @@
 
 <div class="viewcode-block" id="validate">
 <a class="viewcode-back" href="../../../triplets.validation.html#triplets.validation.shacl_pyshacl.validate">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">inference</span><span class="o">=</span><span class="s2">"none"</span><span class="p">,</span>
-             <span class="n">advanced</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">abort_on_first</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="s2">"memory"</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">inference</span><span class="o">=</span><span class="s2">"none"</span><span class="p">,</span>
+             <span class="n">advanced</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">abort_on_first</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="s2">"memory"</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">,</span>
+             <span class="n">ancestors</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Validate triplet data against compiled shapes; return a violations DataFrame.</span>
 
 <span class="sd">    Parameters</span>
@@ -315,15 +316,22 @@
 <span class="sd">    data : triplet DataFrame (pandas/polars), arrow, or DuckDB connection</span>
 <span class="sd">    compiled : CompiledShapes</span>
 <span class="sd">        From ``triplets.validation.compile`` — this engine uses the shapes graph.</span>
-<span class="sd">    rdf_map : dict or str, optional</span>
-<span class="sd">        Export schema — xsd-typed literals in the data graph (optional).</span>
-<span class="sd">    scope : iterable of INSTANCE_ID, optional</span>
+<span class="sd">    rdf_map : dict, optional</span>
+<span class="sd">        Scoped export schema (``schema_scope.scoped_rdf_map``) — xsd-typed</span>
+<span class="sd">        literals and class IRIs in the data graph.</span>
+<span class="sd">    ancestors : dict, optional</span>
+<span class="sd">        ``schema_scope.class_ancestors`` map, given to pyshacl as ``rdfs:subClassOf``</span>
+<span class="sd">        in ``ont_graph`` (already closed, so pyshacl's own closure adds nothing):</span>
+<span class="sd">        ``sh:targetClass`` / ``sh:class`` see SHACL instances of ancestors.</span>
+<span class="sd">        None passes no ``ont_graph``.</span>
+<span class="sd">    data_scope : iterable of INSTANCE_ID, optional</span>
 <span class="sd">        Validate only these instances' named graphs — data outside the scope</span>
 <span class="sd">        is not loaded, so references into unscoped instances count as absent.</span>
 <span class="sd">        Include dependency instances in the scope (or validate the full</span>
-<span class="sd">        union, scope=None) for cross-instance checks.</span>
-<span class="sd">    inference, advanced, abort_on_first : passed to pyshacl.validate.</span>
-<span class="sd">    **kwargs : other engines' options (components, max_workers, table_name) —</span>
+<span class="sd">        union, data_scope=None) for cross-instance checks.</span>
+<span class="sd">    inference, advanced, abort_on_first : passed to pyshacl.validate;</span>
+<span class="sd">        abort_on_first also sets ``allow_warnings``, so only a Violation stops the run.</span>
+<span class="sd">    **kwargs : other engines' options (components, max_workers, table_name, lexical) —</span>
 <span class="sd">        accepted and ignored, per the shared engine contract.</span>
 <span class="sd">    store : str, default "memory"</span>
 <span class="sd">        rdflib store backend for the data graph (see ``load_dataset``):</span>
@@ -335,7 +343,8 @@
 <span class="sd">        (advanced=True), and the clone through the oxrdflib wrapper costs</span>
 <span class="sd">        more than the Rust parse saves (95k warm: 1.8 s vs 1.2 s; 1.14M</span>
 <span class="sd">        load+clone: 40 s vs 33 s). Opt in when the store is already loaded</span>
-<span class="sd">        for SPARQL anyway — then the load leg is free.</span>
+<span class="sd">        for SPARQL anyway — then the load leg is free (unscoped runs only:</span>
+<span class="sd">        a data_scope run loads its own store of the scoped rows).</span>
 <span class="sd">    """</span>
     <span class="k">if</span> <span class="n">compiled</span><span class="o">.</span><span class="n">graph</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"schema-compiled (rdfs) shapes carry no SHACL graph — "</span>
@@ -343,15 +352,62 @@
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">pyshacl</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate</span> <span class="k">as</span> <span class="n">pyshacl_validate</span>
 
-    <span class="n">data_graph</span> <span class="o">=</span> <span class="n">scoped_graph</span><span class="p">(</span><span class="n">load_dataset</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">),</span> <span class="n">scope</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">data_scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>   <span class="c1"># filter before the export — data outside the scope is never loaded</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_table_ref</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">_scoped</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">data_scope</span><span class="p">,</span> <span class="n">_table_ref</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">))</span>
+    <span class="n">data_graph</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">)</span>
+    <span class="n">ont_graph</span> <span class="o">=</span> <span class="n">_ontology_graph</span><span class="p">(</span><span class="n">ancestors</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="p">)</span> <span class="k">if</span> <span class="n">ancestors</span> <span class="k">else</span> <span class="kc">None</span>
 
+    <span class="n">shapes_graph</span> <span class="o">=</span> <span class="n">_shapes_graph</span><span class="p">(</span><span class="n">compiled</span><span class="p">)</span>
     <span class="n">conforms</span><span class="p">,</span> <span class="n">report_graph</span><span class="p">,</span> <span class="n">_report_text</span> <span class="o">=</span> <span class="n">pyshacl_validate</span><span class="p">(</span>
-        <span class="n">data_graph</span><span class="p">,</span> <span class="n">shacl_graph</span><span class="o">=</span><span class="n">compiled</span><span class="o">.</span><span class="n">graph</span><span class="p">,</span>
+        <span class="n">data_graph</span><span class="p">,</span> <span class="n">shacl_graph</span><span class="o">=</span><span class="n">shapes_graph</span><span class="p">,</span> <span class="n">ont_graph</span><span class="o">=</span><span class="n">ont_graph</span><span class="p">,</span>
         <span class="n">inference</span><span class="o">=</span><span class="n">inference</span><span class="p">,</span> <span class="n">advanced</span><span class="o">=</span><span class="n">advanced</span><span class="p">,</span> <span class="n">abort_on_first</span><span class="o">=</span><span class="n">abort_on_first</span><span class="p">,</span>
+        <span class="n">allow_warnings</span><span class="o">=</span><span class="n">abort_on_first</span><span class="p">,</span>   <span class="c1"># else pyshacl's abort_on_first also stops on a Warning</span>
     <span class="p">)</span>
     <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"SHACL conforms=</span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">conforms</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">report_to_violations</span><span class="p">(</span><span class="n">report_graph</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">report_to_violations</span><span class="p">(</span><span class="n">report_graph</span><span class="p">,</span> <span class="n">shapes_graph</span><span class="o">=</span><span class="n">shapes_graph</span><span class="p">)</span></div>
 
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_shapes_graph</span><span class="p">(</span><span class="n">compiled</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""The shapes graph pyshacl validates with: the compiled graph without its</span>
+<span class="sd">    malformed shapes (pyshacl would refuse the whole graph) — their triples, the</span>
+<span class="sd">    references to them and the rows the compile drops over them — and with</span>
+<span class="sd">    exactly the run's switched-off set marked ``sh:deactivated true``. A copy</span>
+<span class="sd">    (prefixes included — pyshacl renders its messages with them) only when one</span>
+<span class="sd">    of the two changes it — pyshacl (advanced=True) may mutate the graph it is</span>
+<span class="sd">    given. Every triple with a malformed shape as object goes, not only the</span>
+<span class="sd">    references the compile walked: pyshacl reads a list cell without rdf:first</span>
+<span class="sd">    as a list without that member."""</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">rdflib</span>
+
+    <span class="n">base</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">base</span> <span class="ow">or</span> <span class="n">compiled</span>
+    <span class="n">drops</span> <span class="o">=</span> <span class="p">{</span><span class="n">drop</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">drop</span> <span class="ow">in</span> <span class="n">base</span><span class="o">.</span><span class="n">_skipped</span> <span class="k">if</span> <span class="n">drop</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">}</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">drops</span> <span class="ow">and</span> <span class="n">compiled</span><span class="o">.</span><span class="n">deactivated</span> <span class="o">==</span> <span class="n">base</span><span class="o">.</span><span class="n">deactivated</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">compiled</span><span class="o">.</span><span class="n">graph</span>
+    <span class="n">graph</span> <span class="o">=</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">prefix</span><span class="p">,</span> <span class="n">namespace</span> <span class="ow">in</span> <span class="n">compiled</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">namespaces</span><span class="p">():</span>
+        <span class="n">graph</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">namespace</span><span class="p">,</span> <span class="n">override</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">replace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">graph</span> <span class="o">+=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">graph</span>
+    <span class="k">for</span> <span class="n">drop</span> <span class="ow">in</span> <span class="n">drops</span><span class="p">:</span>   <span class="c1"># a malformed shape's term (its triples and every reference to it) or a dropped row's triple</span>
+        <span class="k">for</span> <span class="n">triple</span> <span class="ow">in</span> <span class="p">[</span><span class="n">drop</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">drop</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="p">[(</span><span class="n">drop</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">drop</span><span class="p">)]:</span>
+            <span class="n">graph</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">triple</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_mark_switched_off</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">compiled</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_ontology_graph</span><span class="p">(</span><span class="n">ancestors</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""``rdfs:subClassOf`` triples of the ancestor map, as a pyshacl ont_graph.</span>
+
+<span class="sd">    Same IRIs as the data graph's ``rdf:type``: one *undefined_namespace* for both.</span>
+<span class="sd">    The instance data graph is not mutated.</span>
+<span class="sd">    """</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">rdflib</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.schema_scope</span><span class="w"> </span><span class="kn">import</span> <span class="n">ancestor_triples</span>
+
+    <span class="n">graph</span> <span class="o">=</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">child</span><span class="p">,</span> <span class="n">parent</span> <span class="ow">in</span> <span class="n">ancestor_triples</span><span class="p">(</span><span class="n">ancestors</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="p">):</span>
+        <span class="n">graph</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">rdflib</span><span class="o">.</span><span class="n">URIRef</span><span class="p">(</span><span class="n">child</span><span class="p">),</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">RDFS</span><span class="o">.</span><span class="n">subClassOf</span><span class="p">,</span> <span class="n">rdflib</span><span class="o">.</span><span class="n">URIRef</span><span class="p">(</span><span class="n">parent</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">graph</span>
 </pre></div>
         </article>
       </div>
@@ -364,7 +420,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -384,7 +440,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

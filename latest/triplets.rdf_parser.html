@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.export_schema package" href="triplets.export_schema.html"><link rel="prev" title="triplets.rdfs_tools package" href="triplets.rdfs_tools.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.rdf_parser (deprecated) - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.rdf_parser (deprecated) - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -293,7 +289,7 @@
           <section id="triplets-rdf-parser-deprecated">
 <h1>triplets.rdf_parser (deprecated)<a class="headerlink" href="#triplets-rdf-parser-deprecated" title="Link to this heading">¶</a></h1>
 <div class="deprecated">
-<p><span class="versionmodified deprecated">Deprecated since version All: </span>functions have moved to <code class="docutils literal notranslate"><span class="pre">triplets.tools</span></code> and <code class="docutils literal notranslate"><span class="pre">triplets.export</span></code>.
+<p><span class="versionmodified deprecated">Deprecated since version 0.1: </span>All functions have moved to <code class="docutils literal notranslate"><span class="pre">triplets.tools</span></code> and <code class="docutils literal notranslate"><span class="pre">triplets.export</span></code>.
 See <a class="reference internal" href="triplets.tools.html"><span class="doc">triplets.tools</span></a> and <a class="reference internal" href="triplets.export.html"><span class="doc">triplets.export</span></a>.</p>
 </div>
 <dl class="py function">
@@ -306,25 +302,7 @@ See <a class="reference internal" href="triplets.tools.html"><span class="doc">t
 <dl class="py function">
 <dt class="sig sig-object py">
 <span class="sig-prename descclassname"><span class="pre">triplets.rdf_parser.</span></span><span class="sig-name descname"><span class="pre">clean_ID</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ID</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/rdf_parser.html#clean_ID"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><p>Remove common CIM ID prefixes from a string.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>ID</strong> (<em>str</em>) – The input ID string to clean.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The ID with prefixes (’<a class="reference external" href="urn:uuid">urn:uuid</a>:’, ‘#_’, ‘_’) removed from the start.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>str</p>
-</dd>
-</dl>
-<p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">clean_ID</span><span class="p">(</span><span class="s2">"urn:uuid:1234"</span><span class="p">)</span>
-<span class="go">'1234'</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">clean_ID</span><span class="p">(</span><span class="s2">"#_abc"</span><span class="p">)</span>
-<span class="go">'abc'</span>
-</pre></div>
-</div>
+<dd><p>Deprecated: use <a class="reference internal" href="triplets.iri.html#triplets.iri.local_id" title="triplets.iri.local_id"><code class="xref py py-func docutils literal notranslate"><span class="pre">triplets.iri.local_id()</span></code></a> (strips one of <code class="docutils literal notranslate"><span class="pre">urn:uuid:</span></code>, <code class="docutils literal notranslate"><span class="pre">#_</span></code>, <code class="docutils literal notranslate"><span class="pre">_</span></code>).</p>
 </dd></dl>
 
 <dl class="py function">
@@ -636,7 +614,7 @@ categorical_columns: tuple of cols to dictionary-encode (default INSTANCE_ID, KE
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -656,7 +634,7 @@ categorical_columns: tuple of cols to dictionary-encode (default INSTANCE_ID, KE
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

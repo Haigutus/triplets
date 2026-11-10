@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Parser Architecture" href="guides/parsers.html"><link rel="prev" title="triplets" href="index.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Quickstart - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>Quickstart - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -304,14 +300,14 @@
 <section id="documentation">
 <h2>Documentation:<a class="headerlink" href="#documentation" title="Link to this heading">¶</a></h2>
 <p>https://haigutus.github.io/triplets</p>
-<p>Upgrading from 0.0.x? See <a class="reference internal" href="#docs/migration_0.0_to_0.1.md"><span class="xref myst">docs/migration_0.0_to_0.1.md</span></a>.</p>
+<p>Upgrading from 0.0.x? See <a class="reference external" href="https://github.com/Haigutus/triplets/blob/main/docs/migration_0.0_to_0.1.md">docs/migration_0.0_to_0.1.md</a>.</p>
 </section>
 <section id="to-get-started">
 <h2>To get started:<a class="headerlink" href="#to-get-started" title="Link to this heading">¶</a></h2>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="c1"># Core (python_lxml_pandas engine, no extra deps)</span>
 pip<span class="w"> </span>install<span class="w"> </span>triplets
 
-<span class="c1"># With pyarrow (enables python_lxml_arrow + cython_pugixml_arrow engines, ~10x faster)</span>
+<span class="c1"># With pyarrow (enables python_lxml_arrow + cython_pugixml_arrow engines, ~11x faster)</span>
 pip<span class="w"> </span>install<span class="w"> </span>triplets<span class="o">[</span>arrow<span class="o">]</span>
 </pre></div>
 </div>
@@ -325,7 +321,7 @@ pip<span class="w"> </span>install<span class="w"> </span>triplets<span class="o
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">arrow</span></code></p></td>
-<td><p>compiled Arrow parser engines (~10x faster parsing)</p></td>
+<td><p>compiled Arrow parser engines (~11x faster parsing)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">polars</span></code></p></td>
 <td><p>polars DataFrames (<code class="docutils literal notranslate"><span class="pre">polars.read_rdf</span></code>, <code class="docutils literal notranslate"><span class="pre">.triplets</span></code> namespace)</p></td>
@@ -349,7 +345,7 @@ pip<span class="w"> </span>install<span class="w"> </span>triplets<span class="o
 </table>
 </div>
 <p>The embedded qlever SPARQL engine (fastest) ships in no wheel — it is a local
-source build, see <a class="reference internal" href="#docs/building.md"><span class="xref myst">docs/building.md</span></a>.</p>
+source build, see <a class="reference external" href="https://github.com/Haigutus/triplets/blob/main/docs/building.md">docs/building.md</a>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
 
@@ -381,10 +377,10 @@ source build, see <a class="reference internal" href="#docs/building.md"><span c
 <p>Export schemas are versioned and shipped per profile. Alongside the CGMES
 bundles (<code class="docutils literal notranslate"><span class="pre">schemas.ENTSOE_CGMES_2_4_15_552_ED1</span></code>,
 <code class="docutils literal notranslate"><span class="pre">schemas.ENTSOE_CGMES_3_0_0_552_ED1</span></code>, …) the versioned <strong>NC (Network Code)</strong>
-profiles are available as <code class="docutils literal notranslate"><span class="pre">schemas.ENTSOE_NC_2_4_1_552_ED1</span></code> /
-<code class="docutils literal notranslate"><span class="pre">schemas.ENTSOE_NC_2_4_1_552_ED2</span></code>. The <code class="docutils literal notranslate"><span class="pre">_ED1</span></code> / <code class="docutils literal notranslate"><span class="pre">_ED2</span></code> suffix selects the
-serialization edition; profile resolution is schema-driven, so the right
-profile section is matched from the instance header.</p>
+profiles are available as <code class="docutils literal notranslate"><span class="pre">schemas.ENTSOE_NC_2_4_1_552_ED1</span></code> / <code class="docutils literal notranslate"><span class="pre">_ED2</span></code> (NCP 2.4.1)
+and <code class="docutils literal notranslate"><span class="pre">schemas.ENTSOE_NC_2_5_0_552_ED1</span></code> / <code class="docutils literal notranslate"><span class="pre">_ED2</span></code> (NCP 2.5.0). The <code class="docutils literal notranslate"><span class="pre">_ED1</span></code> / <code class="docutils literal notranslate"><span class="pre">_ED2</span></code> suffix selects the
+serialization edition; profile resolution is schema-driven: every profile
+section the instance header declares is matched and used.</p>
 <p>Look into examples folders for more</p>
 </section>
 <section id="parser-engines">
@@ -409,7 +405,7 @@ profile section is matched from the instance header.</p>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cython_pugixml_arrow</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">triplets[arrow]</span></code> (included in wheels)</p></td>
-<td><p><strong>~10x faster</strong></p></td>
+<td><p><strong>~11x faster</strong></p></td>
 </tr>
 </tbody>
 </table>
@@ -499,7 +495,7 @@ is also exposed top-level as <code class="docutils literal notranslate"><span cl
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qlever</span></code></p></td>
-<td><p>local source build (<a class="reference internal" href="#docs/building.md"><span class="xref myst">docs/building.md</span></a>)</p></td>
+<td><p>local source build (<a class="reference external" href="https://github.com/Haigutus/triplets/blob/main/docs/building.md">docs/building.md</a>)</p></td>
 <td><p>fastest — embedded C++, persistent on-disk index</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">oxigraph</span></code></p></td>
@@ -513,19 +509,26 @@ is also exposed top-level as <code class="docutils literal notranslate"><span cl
 </tbody>
 </table>
 </div>
-<p>Details and measured numbers: <a class="reference internal" href="#docs/sparql.md"><span class="xref myst">docs/sparql.md</span></a>.</p>
+<p>Details and measured numbers: <a class="reference external" href="https://github.com/Haigutus/triplets/blob/main/docs/sparql.md">docs/sparql.md</a>.</p>
 </section>
 <section id="shacl-validation">
 <h2>SHACL validation<a class="headerlink" href="#shacl-validation" title="Link to this heading">¶</a></h2>
 <p>Validate against SHACL shape files; the result is a violations DataFrame
 (empty = conforms) with the same shape across all engines:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">triplets.export_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">schemas</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">triplets.export_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">schemas</span>
 
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
+<span class="n">rdf_map</span> <span class="o">=</span> <span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="p">[</span><span class="s2">"EQ"</span><span class="p">])</span>
 
-<span class="c1"># slower optional context pass: source file, object type/name,</span>
-<span class="c1"># shape sh:name/sh:description, schema attribute/class definitions</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">shapes</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="c1"># schema validation: cardinality / datatypes per instance, reference types</span>
+<span class="c1"># against target instances — or by instance header via cgmes_tools</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_schema</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="p">[</span><span class="s2">"EQ"</span><span class="p">])</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">cgmes_tools</span><span class="o">.</span><span class="n">validate_by_header</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">references</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># context pass, a separate call: what was found, source file, object</span>
+<span class="c1"># type/name, shape sh:name/sh:description, schema attribute/class definitions</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">enrich</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">)</span>
 
 <span class="c1"># SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer — grouped by default</span>
 <span class="c1"># (one result per rule with occurrenceCount + sample instances)</span>
@@ -539,8 +542,8 @@ is also exposed top-level as <code class="docutils literal notranslate"><span cl
 </div>
 <p>Engines: <code class="docutils literal notranslate"><span class="pre">polars</span></code> (auto, real profiles in ~2 s) → <code class="docutils literal notranslate"><span class="pre">pandas</span></code> → <code class="docutils literal notranslate"><span class="pre">pyshacl</span></code>
 (reference); <code class="docutils literal notranslate"><span class="pre">duckdb</span></code> for larger-than-memory data. <code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code> constraints
-ride the SPARQL engine above (minutes → milliseconds with oxigraph/qlever).
-Details: <a class="reference internal" href="#docs/validation.md"><span class="xref myst">docs/validation.md</span></a>.</p>
+ride the SPARQL engine above (milliseconds on oxigraph/qlever, minutes on rdflib).
+Details: <a class="reference external" href="https://github.com/Haigutus/triplets/blob/main/docs/validation.md">docs/validation.md</a>.</p>
 </section>
 <section id="accessor-namespace">
 <h2>Accessor namespace<a class="headerlink" href="#accessor-namespace" title="Link to this heading">¶</a></h2>
@@ -556,8 +559,8 @@ relations — add <code class="docutils literal notranslate"><span class="pre">.
 <span class="n">con</span><span class="o">.</span><span class="n">triplets</span><span class="o">.</span><span class="n">get_types_count</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>Root-level methods (<code class="docutils literal notranslate"><span class="pre">df.type_tableview(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">con.filter_triplets(...)</span></code>) still
-work for backwards compatibility.</p>
+<p>Root-level methods (<code class="docutils literal notranslate"><span class="pre">df.type_tableview(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">con.filter_triplets(...)</span></code>) are the
+same functions bound directly on the class.</p>
 </section>
 <section id="cache-lifecycle">
 <h2>Cache lifecycle<a class="headerlink" href="#cache-lifecycle" title="Link to this heading">¶</a></h2>
@@ -575,16 +578,42 @@ block so it is cleared on exit:</p>
 </section>
 <section id="cli-tools">
 <h2>CLI tools<a class="headerlink" href="#cli-tools" title="Link to this heading">¶</a></h2>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cim-spreadsheet<span class="w"> </span>-i<span class="w"> </span>model.xml<span class="w"> </span>-o<span class="w"> </span>output.xlsx
-cim-diff<span class="w"> </span>original.xml<span class="w"> </span>modified.xml
+<p>Install the commands on your PATH with <a class="reference external" href="https://docs.astral.sh/uv/">uv</a>, or run them without installing:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">"triplets[arrow,excel]"</span><span class="w">        </span><span class="c1"># cim-spreadsheet, cim-diff for the user</span>
+uv<span class="w"> </span>tool<span class="w"> </span>upgrade<span class="w"> </span>triplets
+uvx<span class="w"> </span>--from<span class="w"> </span><span class="s2">"triplets[arrow,excel]"</span><span class="w"> </span>cim-diff<span class="w"> </span>original.xml<span class="w"> </span>modified.xml<span class="w">   </span><span class="c1"># one-off run</span>
 </pre></div>
 </div>
+<p><code class="docutils literal notranslate"><span class="pre">excel</span></code> is needed for <code class="docutils literal notranslate"><span class="pre">.xlsx</span></code>; <code class="docutils literal notranslate"><span class="pre">arrow</span></code> makes parsing ~11x faster.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cim-spreadsheet<span class="w"> </span>-i<span class="w"> </span>model.xml<span class="w"> </span>-o<span class="w"> </span>output.xlsx<span class="w">                  </span><span class="c1"># one sheet per class</span>
+cim-spreadsheet<span class="w"> </span>-i<span class="w"> </span>output.xlsx<span class="w"> </span>-o<span class="w"> </span>out/<span class="w"> </span>--rdf-map<span class="w"> </span>schema.json<span class="w">  </span><span class="c1"># back to CIM XML</span>
+cim-diff<span class="w"> </span>original.xml<span class="w"> </span>modified.xml
+cim-diff<span class="w"> </span>original.xml<span class="w"> </span>modified.xml<span class="w"> </span>-ex<span class="w"> </span>Terminal,ConnectivityNode<span class="w">   </span><span class="c1"># also leave out these classes</span>
+cim-diff<span class="w"> </span>original.xml<span class="w"> </span>modified.xml<span class="w"> </span>--keep-metadata<span class="w">            </span><span class="c1"># also diff NamespaceMap, Distribution</span>
+cim-diff<span class="w"> </span>original.xml<span class="w"> </span>modified.xml<span class="w"> </span>--include<span class="w"> </span>ACLineSegment<span class="w"> </span>--context<span class="w"> </span>IdentifiedObject.name
+cim-diff<span class="w"> </span>original.xml<span class="w"> </span>modified.xml<span class="w"> </span>--stat<span class="w">                     </span><span class="c1"># counts per type only</span>
+</pre></div>
+</div>
+<p>Both tools take the same type options. They leave out <code class="docutils literal notranslate"><span class="pre">NamespaceMap</span></code> and <code class="docutils literal notranslate"><span class="pre">Distribution</span></code>
+(parser metadata, source file path) unless <code class="docutils literal notranslate"><span class="pre">--keep-metadata</span></code> or <code class="docutils literal notranslate"><span class="pre">--include</span></code> names them.
+<code class="docutils literal notranslate"><span class="pre">--include</span> <span class="pre">TYPE</span></code> keeps only these classes, <code class="docutils literal notranslate"><span class="pre">-ex</span> <span class="pre">TYPE</span></code> leaves out more (also from
+<code class="docutils literal notranslate"><span class="pre">--include</span></code>); repeat them or comma-separate names.
+<code class="docutils literal notranslate"><span class="pre">cim-diff</span> <span class="pre">--context</span> <span class="pre">KEY</span></code> also shows the unchanged values of KEY in each changed object.
+<code class="docutils literal notranslate"><span class="pre">cim-diff</span></code> exits 0 when the models match, 1 when they differ and
+2 on error, as <code class="docutils literal notranslate"><span class="pre">diff</span></code> does.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">--keep-metadata</span></code>, to-cim writes each model back to the path it was parsed
+from (<code class="docutils literal notranslate"><span class="pre">Distribution</span></code> label): an absolute path overwrites the source, a relative one
+is created under <code class="docutils literal notranslate"><span class="pre">-o</span></code>. Without the metadata the files are <code class="docutils literal notranslate"><span class="pre">&lt;uuid&gt;.xml</span></code> in <code class="docutils literal notranslate"><span class="pre">-o</span></code>.
+Without <code class="docutils literal notranslate"><span class="pre">--rdf-map</span></code>, to-cim warns and writes the classes in the triplets namespace.</p>
+<p>Spreadsheet values come back as written, except numbers, which can change their
+written form (<code class="docutils literal notranslate"><span class="pre">500</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">500.0</span></code>). Excel keeps 15 significant digits and sheet names of
+up to 31 characters; use CSV (<code class="docutils literal notranslate"><span class="pre">-f</span> <span class="pre">csv</span></code>) to keep longer numbers and class names.</p>
 </section>
 <section id="performance-realgrid-1-14m-rows">
-<h2>Performance (RealGrid, 1.14M rows)<a class="headerlink" href="#performance-realgrid-1-14m-rows" title="Link to this heading">¶</a></h2>
+<span id="performance-realgrid-114m-rows"></span><h2>Performance (RealGrid, 1.14M rows)<a class="headerlink" href="#performance-realgrid-1-14m-rows" title="Link to this heading">¶</a></h2>
 <p>Committed benchmark results live in <code class="docutils literal notranslate"><span class="pre">tests/performance_results/</span></code>; re-run with
-<code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">-m</span> <span class="pre">performance</span></code>. Representative numbers (cython parse 1.47s → 0.157s
-vs the lxml engine = ~9.4x):</p>
+<code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">-m</span> <span class="pre">performance</span></code>. Representative numbers (2026-11-09; parse to pandas:
+lxml engine 1.44 s, cython engine 0.127 s, ~11x):</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -596,30 +625,30 @@ vs the lxml engine = ~9.4x):</p>
 </thead>
 <tbody>
 <tr class="row-even"><td><p>Parse (cython engine)</p></td>
-<td><p>157ms</p></td>
-<td><p>180ms</p></td>
-<td><p>streams (see duckdb section)</p></td>
+<td><p>127ms</p></td>
+<td><p>151ms</p></td>
+<td><p>262ms (streamed <code class="docutils literal notranslate"><span class="pre">read_rdf</span></code>)</p></td>
 </tr>
 <tr class="row-odd"><td><p>tableview_by_type</p></td>
-<td><p>72ms</p></td>
-<td><p><strong>15ms</strong></p></td>
-<td><p>53ms</p></td>
+<td><p>67ms</p></td>
+<td><p><strong>19ms</strong></p></td>
+<td><p>43ms</p></td>
 </tr>
 <tr class="row-even"><td><p>filter_triplets_by_type</p></td>
-<td><p>103ms</p></td>
+<td><p>33ms</p></td>
 <td><p><strong>9ms</strong></p></td>
-<td><p>50ms</p></td>
+<td><p>45ms</p></td>
 </tr>
 <tr class="row-odd"><td><p>get_types_count</p></td>
-<td><p>21ms</p></td>
-<td><p><strong>11ms</strong></p></td>
-<td><p>18ms</p></td>
+<td><p>35ms</p></td>
+<td><p><strong>8ms</strong></p></td>
+<td><p>8ms</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>The old <code class="docutils literal notranslate"><span class="pre">rdf_parser.py</span></code> functions still work but emit deprecation warnings.
-See <a class="reference internal" href="#docs/migration_0.0_to_0.1.md"><span class="xref myst">docs/migration_0.0_to_0.1.md</span></a> for renames and breaking changes.</p>
+<p><code class="docutils literal notranslate"><span class="pre">rdf_parser</span></code> functions emit <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code>; their replacements are listed in
+<a class="reference external" href="https://github.com/Haigutus/triplets/blob/main/docs/migration_0.0_to_0.1.md">docs/migration_0.0_to_0.1.md</a>.</p>
 </section>
 </section>
 
@@ -652,7 +681,7 @@ See <a class="reference internal" href="#docs/migration_0.0_to_0.1.md"><span cla
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -704,7 +733,7 @@ See <a class="reference internal" href="#docs/migration_0.0_to_0.1.md"><span cla
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

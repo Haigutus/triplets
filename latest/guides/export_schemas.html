@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="SPARQL Architecture" href="sparql.html"><link rel="prev" title="Export Architecture" href="exports.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Export Schemas - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>Export Schemas - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="exports.html">Export Architecture</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -319,12 +315,16 @@ generated from the ENTSO-E RDFS profile definitions — never edited by hand.</p
 <td><p><code class="docutils literal notranslate"><span class="pre">schemas.ENTSOE_CGMES_2_4_15_552_ED1/ED2</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ENTSOE_CGMES_3.0.0_552_ED1/ED2.json</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">rdfs/ENTSOE_CGMES_3.0.0/</span></code> (legacy hand-collected)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">rdfs/ENTSOE_CGMES_3.0.0/</span></code> (legacy hand-collected RDFS; <code class="docutils literal notranslate"><span class="pre">PROF/</span></code> fetched, commit-pinned in <code class="docutils literal notranslate"><span class="pre">PROF/SOURCE.json</span></code>)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">schemas.ENTSOE_CGMES_3_0_0_552_ED1/ED2</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ENTSOE_NC_2.4.1_552_ED1/ED2.json</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">rdfs/ENTSOE_NC_2.4.1/</span></code> — snapshot of <a class="reference external" href="https://github.com/entsoe/application-profiles-library">entsoe/application-profiles-library</a> branch <code class="docutils literal notranslate"><span class="pre">ncp-v2-4-1</span></code>, commit-pinned in <code class="docutils literal notranslate"><span class="pre">SOURCE.json</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">schemas.ENTSOE_NC_2_4_1_552_ED1/ED2</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ENTSOE_NC_2.5.0_552_ED1/ED2.json</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">rdfs/ENTSOE_NC_2.5.0/</span></code> — NCP 2.5.0, release branch <code class="docutils literal notranslate"><span class="pre">ncp-v2-5-0</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">schemas.ENTSOE_NC_2_5_0_552_ED1/ED2</span></code></p></td>
 </tr>
 </tbody>
 </table>
@@ -333,10 +333,10 @@ generated from the ENTSO-E RDFS profile definitions — never edited by hand.</p
 exposes every JSON as an attribute on the <code class="docutils literal notranslate"><span class="pre">schemas</span></code> object (filename sanitized:
 <code class="docutils literal notranslate"><span class="pre">.</span></code>/<code class="docutils literal notranslate"><span class="pre">-</span></code> become <code class="docutils literal notranslate"><span class="pre">_</span></code>), so a new bundle file is available without code changes.
 Source provenance, release onboarding and known upstream defects are documented
-in <a class="reference internal" href="#../rdfs/README.md"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">rdfs/README.md</span></code></span></a>.</p>
+in <a class="reference external" href="https://github.com/Haigutus/triplets/blob/main/rdfs/README.md"><code class="docutils literal notranslate"><span class="pre">rdfs/README.md</span></code></a>.</p>
 </section>
 <section id="ed1-vs-552-ed2">
-<h2>552_ED1 vs 552_ED2<a class="headerlink" href="#ed1-vs-552-ed2" title="Link to this heading">¶</a></h2>
+<span id="552_ed1-vs-552_ed2"></span><h2>552_ED1 vs 552_ED2<a class="headerlink" href="#ed1-vs-552-ed2" title="Link to this heading">¶</a></h2>
 <p>The two serialization editions of IEC 61970-552 differ in how identifiers are
 written; each bundle is generated once per edition (<code class="docutils literal notranslate"><span class="pre">cim_serializations</span></code> in
 <code class="docutils literal notranslate"><span class="pre">rdfs_tools/cim_rdfs_to_json.py</span></code>):</p>
@@ -383,8 +383,8 @@ examples use ED2 only for consistency with the CIM XML calls beside them.</p>
 <p>A bundle is a dict of profile sections keyed by profile keyword
 (<code class="docutils literal notranslate"><span class="pre">EQ</span></code>, <code class="docutils literal notranslate"><span class="pre">SSH</span></code>, … / <code class="docutils literal notranslate"><span class="pre">AE</span></code>, <code class="docutils literal notranslate"><span class="pre">CO</span></code>, <code class="docutils literal notranslate"><span class="pre">RAS</span></code>, …). Each section:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="s2">"AE"</span><span class="p">:</span> <span class="p">{</span>
-    <span class="s2">"ProfileMetadata"</span><span class="p">:</span>     <span class="n">keyword</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">versionInfo</span><span class="p">,</span> <span class="n">versionIRI</span><span class="p">,</span> <span class="n">conformsTo</span><span class="p">,</span>
-                           <span class="n">serialization</span><span class="p">,</span> <span class="o">...</span> <span class="o">+</span> <span class="s2">"header"</span><span class="p">:</span> <span class="n">identity</span> <span class="n">of</span> <span class="n">the</span> <span class="n">injected</span>
+    <span class="s2">"ProfileMetadata"</span><span class="p">:</span>     <span class="n">keyword</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">versionInfo</span><span class="p">,</span> <span class="n">versionIRI</span><span class="p">,</span> <span class="n">profileVersionIRI</span><span class="p">,</span>
+                           <span class="n">conformsTo</span><span class="p">,</span> <span class="n">serialization</span><span class="p">,</span> <span class="o">...</span> <span class="o">+</span> <span class="s2">"header"</span><span class="p">:</span> <span class="n">identity</span> <span class="n">of</span> <span class="n">the</span> <span class="n">injected</span>
                            <span class="n">header</span> <span class="n">profile</span> <span class="p">(</span><span class="n">keyword</span><span class="p">,</span> <span class="n">title</span><span class="p">,</span> <span class="n">identifier</span><span class="p">,</span> <span class="n">versionInfo</span><span class="p">,</span>
                            <span class="n">versionIRI</span><span class="p">)</span>
     <span class="s2">"ProfileNamespaceMap"</span><span class="p">:</span> <span class="n">prefix</span> <span class="o">-&gt;</span> <span class="n">namespace</span> <span class="p">(</span><span class="n">profile</span> <span class="o">+</span> <span class="n">header</span><span class="p">,</span> <span class="n">merged</span><span class="p">)</span>
@@ -394,12 +394,22 @@ examples use ED2 only for consistency with the CIM XML calls beside them.</p>
                             <span class="s2">"namespace"</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span> <span class="s2">"parameters"</span><span class="p">:</span> <span class="p">[</span><span class="o">...</span><span class="p">]}</span>
     <span class="s2">"&lt;Class.attribute&gt;"</span><span class="p">:</span>   <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"Attribute"</span><span class="p">,</span> <span class="s2">"dataType"</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span> <span class="s2">"xsd:type"</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
                             <span class="s2">"multiplicity"</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span> <span class="s2">"namespace"</span><span class="p">:</span> <span class="o">...</span><span class="p">}</span>
+                            <span class="c1"># xsd:type: any prefixed name (prefixes from ProfileNamespaceMap;</span>
+                            <span class="c1"># xsd, rdf, rdfs built in) or absolute IRI, written as is as</span>
+                            <span class="c1"># rdf:datatype / ^^&lt;…&gt;; xsd:string, rdf:langString and "" (no XSD,</span>
+                            <span class="c1"># e.g. LangString) write a plain literal; an unbound prefix raises</span>
+                            <span class="c1"># optional "language": a fixed tag ("en"), see below</span>
     <span class="s2">"&lt;Class.Association&gt;"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"Association"</span><span class="p">,</span> <span class="s2">"range"</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span> <span class="s2">"attrib"</span><span class="p">:</span> <span class="p">{</span><span class="o">...</span><span class="p">}}</span>
     <span class="s2">"&lt;Class.enumAttr&gt;"</span><span class="p">:</span>    <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"Enumeration"</span><span class="p">,</span> <span class="s2">"range"</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span> <span class="s2">"values"</span><span class="p">:</span> <span class="p">[</span><span class="o">...</span><span class="p">]}</span>
     <span class="s2">"&lt;Datatype|EnumValue&gt;"</span><span class="p">:</span> <span class="n">supporting</span> <span class="n">definitions</span> <span class="n">referenced</span> <span class="n">by</span> <span class="n">the</span> <span class="n">entries</span> <span class="n">above</span>
 <span class="p">}</span>
 </pre></div>
 </div>
+<p><code class="docutils literal notranslate"><span class="pre">inheritance</span></code> (the class itself first, then its ancestors) and every <code class="docutils literal notranslate"><span class="pre">range</span></code> are
+absolute IRIs: the generator resolves a relative <code class="docutils literal notranslate"><span class="pre">rdf:resource=&quot;#Name&quot;</span></code> against the
+profile’s <code class="docutils literal notranslate"><span class="pre">xml:base</span></code>, so a cross-namespace parent (an NC class extending
+<code class="docutils literal notranslate"><span class="pre">https://cim.ucaiug.io/ns#IdentifiedObject</span></code>) is stated, never guessed from the
+child’s namespace. Consumers that only need the local name use <code class="docutils literal notranslate"><span class="pre">iri.split_iri(…)[1]</span></code>.</p>
 <p>Two class flavors matter for export:</p>
 <ul class="simple">
 <li><p><strong>concrete</strong> classes (stereotype <code class="docutils literal notranslate"><span class="pre">concrete</span></code>) are instantiated with the
@@ -409,29 +419,67 @@ profile and referenced with <code class="docutils literal notranslate"><span cla
 associations to EQ equipment, or CGMES SSH updating <code class="docutils literal notranslate"><span class="pre">RegulatingCondEq</span></code>.
 <code class="docutils literal notranslate"><span class="pre">&quot;stereotyped&quot;:</span> <span class="pre">true</span></code> marks them.</p></li>
 </ul>
+<section id="fixed-language-tag-language">
+<h3>Fixed language tag (<code class="docutils literal notranslate"><span class="pre">language</span></code>)<a class="headerlink" href="#fixed-language-tag-language" title="Link to this heading">¶</a></h3>
+<p>An Attribute entry with <code class="docutils literal notranslate"><span class="pre">&quot;language&quot;:</span> <span class="pre">&quot;&lt;tag&gt;&quot;</span></code> writes every value of that KEY
+language-tagged: <code class="docutils literal notranslate"><span class="pre">&quot;text&quot;&#64;en</span></code> in N-Quads (pandas, polars, streaming; hence the rdflib /
+pyshacl loader; the qlever SPARQL ingest writes a plain literal) and <code class="docutils literal notranslate"><span class="pre">xml:lang=&quot;en&quot;</span></code> on
+the literal element in both CIM XML engines, with or without <code class="docutils literal notranslate"><span class="pre">datatypes=</span></code>. Like
+<code class="docutils literal notranslate"><span class="pre">xsd:type</span></code> the tag is read from the whole schema: the first entry of the KEY that
+carries a <code class="docutils literal notranslate"><span class="pre">language</span></code> tags it in every profile. A tagged literal has no datatype
+annotation, so the KEY’s <code class="docutils literal notranslate"><span class="pre">xsd:type</span></code> (its first entry with one) must be <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">xsd:string</span></code> or <code class="docutils literal notranslate"><span class="pre">rdf:langString</span></code>; any other type, or a tag that is not a well-formed
+BCP 47 tag (<code class="docutils literal notranslate"><span class="pre">en</span></code>, <code class="docutils literal notranslate"><span class="pre">en-GB</span></code>), raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> naming the KEY — in the exports and in
+<code class="docutils literal notranslate"><span class="pre">validate_schema</span></code>, which checks no datatype on a tagged KEY. The parsers drop the tag
+(<a class="reference internal" href="parsers.html"><span class="std std-doc">parsers.md</span></a>).</p>
+<p>The shipped bundles carry no <code class="docutils literal notranslate"><span class="pre">language</span></code> (the RDFS fixes none; <code class="docutils literal notranslate"><span class="pre">ProfileMetadata.language</span></code>
+is the vocabulary’s own). Set it in a downstream schema JSON, or on the loaded bundle:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">triplets.export_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">schemas</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">triplets.iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_rdf_map</span>
+
+<span class="n">rdf_map</span> <span class="o">=</span> <span class="n">load_rdf_map</span><span class="p">(</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_NC_2_5_0_552_ED2</span><span class="p">)</span>      <span class="c1"># a fresh dict per call</span>
+<span class="n">rdf_map</span><span class="p">[</span><span class="s2">"CO"</span><span class="p">][</span><span class="s2">"description"</span><span class="p">][</span><span class="s2">"language"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"en"</span>
+<span class="n">files</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">export_to_cimxml</span><span class="p">(</span><span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">)</span>   <span class="c1"># &lt;dcterms:description xml:lang="en"&gt;…</span>
+</pre></div>
+</div>
+</section>
 </section>
 <section id="how-exporters-pick-a-section">
 <h2>How Exporters Pick a Section<a class="headerlink" href="#how-exporters-pick-a-section" title="Link to this heading">¶</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">export/cimxml_utils.py</span></code> matches each instance against the schema’s own
-identity metadata — there is no hardcoded per-release knowledge:</p>
+<p><code class="docutils literal notranslate"><span class="pre">export/cimxml_utils.resolve_instance_config</span></code> resolves the header through
+<code class="docutils literal notranslate"><span class="pre">triplets/_header.py</span></code> — one rule shared with <code class="docutils literal notranslate"><span class="pre">cgmes_tools.declared_profiles</span></code> —
+against the schema’s own identity metadata; there is no hardcoded per-release knowledge:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">resolve_instance_config</span><span class="p">(</span><span class="n">instance_data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">)</span>
-<span class="o">|</span>
-<span class="o">|-&gt;</span> <span class="n">_profile_identity_index</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span>
-<span class="o">|</span>   <span class="n">every</span> <span class="n">section</span> <span class="n">registers</span><span class="p">:</span> <span class="n">section</span> <span class="n">key</span><span class="p">,</span> <span class="n">ProfileMetadata</span><span class="o">.</span><span class="n">keyword</span><span class="p">,</span>
-<span class="o">|</span>   <span class="n">versionIRI</span><span class="p">,</span> <span class="n">conformsTo</span> <span class="o">-&gt;</span> <span class="n">section</span> <span class="n">name</span>
 <span class="o">|</span>
 <span class="o">|-&gt;</span> <span class="n">_instance_profile_hints</span><span class="p">(</span><span class="n">instance_data</span><span class="p">)</span>
 <span class="o">|</span>   <span class="n">header</span> <span class="n">fields</span> <span class="ow">in</span> <span class="n">priority</span> <span class="n">order</span><span class="p">:</span>
 <span class="o">|</span>   <span class="n">Model</span><span class="o">.</span><span class="n">messageType</span> <span class="o">&gt;</span> <span class="n">keyword</span> <span class="o">&gt;</span> <span class="n">Model</span><span class="o">.</span><span class="n">profile</span> <span class="o">&gt;</span> <span class="n">conformsTo</span>
 <span class="o">|</span>
-<span class="o">|-&gt;</span> <span class="n">first</span> <span class="n">hint</span> <span class="n">found</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">index</span> <span class="n">wins</span>
-<span class="o">|-&gt;</span> <span class="n">fallback</span><span class="p">:</span> <span class="n">legacy</span> <span class="mf">2.4.15</span> <span class="n">Model</span><span class="o">.</span><span class="n">profile</span> <span class="n">URL</span> <span class="n">substrings</span> <span class="p">(</span><span class="n">PROFILE_URL_MAP</span><span class="p">)</span>
-<span class="s1">'-&gt; fallback: schema root (warns)</span>
+<span class="o">|-&gt;</span> <span class="n">_header</span><span class="o">.</span><span class="n">profile_sections</span><span class="p">(</span><span class="n">hints</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">)</span>
+<span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">_profile_identity_index</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span>
+<span class="o">|</span>   <span class="o">|</span>   <span class="n">every</span> <span class="n">section</span> <span class="n">registers</span><span class="p">:</span> <span class="n">section</span> <span class="n">key</span><span class="p">,</span> <span class="n">ProfileMetadata</span><span class="o">.</span><span class="n">keyword</span><span class="p">,</span>
+<span class="o">|</span>   <span class="o">|</span>   <span class="n">versionIRI</span><span class="p">,</span> <span class="n">profileVersionIRI</span><span class="p">,</span> <span class="n">conformsTo</span> <span class="o">-&gt;</span> <span class="n">section</span> <span class="n">name</span>
+<span class="o">|</span>   <span class="o">|-&gt;</span> <span class="n">every</span> <span class="n">hint</span> <span class="n">found</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">index</span><span class="p">,</span> <span class="ow">in</span> <span class="n">hint</span> <span class="n">order</span> <span class="p">(</span><span class="n">EQ</span><span class="p">,</span> <span class="n">OP</span><span class="p">,</span> <span class="n">SC</span> <span class="k">for</span> <span class="n">a</span> <span class="n">CGMES</span> <span class="mf">3.0</span> <span class="n">EQ</span> <span class="n">file</span><span class="p">)</span>
+<span class="o">|</span>   <span class="s1">'-&gt; fallback: legacy 2.4.15 Model.profile URL substrings (PROFILE_URL_MAP)</span>
+<span class="o">|-&gt;</span> <span class="n">fallback</span><span class="p">:</span> <span class="n">the</span> <span class="n">schema</span><span class="s1">'s root entries (a flat schema; warns on a sectioned one)</span>
+<span class="o">|</span>
+<span class="s1">'-&gt; _header.merge_sections(): the matched sections as one schema, merged like</span>
+    <span class="n">validation</span><span class="s1">'s rdf_map_scope; then a class concrete in any matched section is</span>
+    <span class="n">instantiated</span> <span class="p">(</span><span class="n">rdf</span><span class="p">:</span><span class="n">ID</span> <span class="ow">in</span> <span class="n">ED1</span><span class="p">),</span> <span class="n">described</span> <span class="p">(</span><span class="n">rdf</span><span class="p">:</span><span class="n">about</span><span class="p">)</span> <span class="n">only</span> <span class="n">when</span> <span class="n">every</span> <span class="n">matched</span>
+    <span class="n">section</span> <span class="n">describes</span> <span class="n">it</span><span class="p">;</span> <span class="n">the</span> <span class="n">first</span> <span class="n">matched</span> <span class="n">section</span> <span class="n">gives</span> <span class="n">the</span> <span class="n">ProfileNamespaceMap</span>
 </pre></div>
 </div>
-<p>Note: NC instances declare <code class="docutils literal notranslate"><span class="pre">dcterms:conformsTo</span></code> on host <code class="docutils literal notranslate"><span class="pre">ap.cim4.eu</span></code> while the
-schema <code class="docutils literal notranslate"><span class="pre">versionIRI</span></code> uses <code class="docutils literal notranslate"><span class="pre">ap-voc.cim4.eu</span></code>, so NC resolution works via
-<code class="docutils literal notranslate"><span class="pre">dcat:keyword</span></code> (pinned by <code class="docutils literal notranslate"><span class="pre">tests/test_roundtrip_nc.py</span></code>).</p>
+<p>A flat schema — entries at the root, no profile sections — is used as it is. At the
+root, a dict with a <code class="docutils literal notranslate"><span class="pre">type</span></code> string is an entry, one without is a profile section;
+<code class="docutils literal notranslate"><span class="pre">ProfileMetadata</span></code> and <code class="docutils literal notranslate"><span class="pre">ProfileNamespaceMap</span></code> are neither.</p>
+<p><code class="docutils literal notranslate"><span class="pre">versionIRI</span></code> is the RDFS vocabulary’s own IRI; <code class="docutils literal notranslate"><span class="pre">profileVersionIRI</span></code> is the profile
+IRI headers declare. With W3C PROF descriptors in <code class="docutils literal notranslate"><span class="pre">rdfs/&lt;bundle&gt;/PROF/</span></code> it is the
+<code class="docutils literal notranslate"><span class="pre">owl:versionIRI</span></code> of the <code class="docutils literal notranslate"><span class="pre">prof:Profile</span></code> whose own <code class="docutils literal notranslate"><span class="pre">owl:versionIRI</span></code> or one of whose
+<code class="docutils literal notranslate"><span class="pre">prof:hasResource</span></code> equals the RDFS <code class="docutils literal notranslate"><span class="pre">versionIRI</span></code>; without PROF it equals <code class="docutils literal notranslate"><span class="pre">versionIRI</span></code>.
+They differ only in NC: an NC dataset declares <code class="docutils literal notranslate"><span class="pre">dcterms:conformsTo</span></code>
+<code class="docutils literal notranslate"><span class="pre">https://ap.cim4.eu/&lt;Profile&gt;/&lt;ver&gt;</span></code>, its vocabulary is <code class="docutils literal notranslate"><span class="pre">https://ap-voc.cim4.eu/...</span></code>.
+CGMES 2.4.15 has no RDFS ontology header; its <code class="docutils literal notranslate"><span class="pre">versionIRI</span></code> is the ENTSO-E profile URI
+constant (<code class="docutils literal notranslate"><span class="pre">entsoeURI</span></code>; EQ / EQBD <code class="docutils literal notranslate"><span class="pre">entsoeURIcore</span></code>, FH <code class="docutils literal notranslate"><span class="pre">europeanProfileURI</span></code>).</p>
 </section>
 <section id="generation-pipeline">
 <h2>Generation Pipeline<a class="headerlink" href="#generation-pipeline" title="Link to this heading">¶</a></h2>
@@ -439,10 +487,12 @@ schema <code class="docutils literal notranslate"><span class="pre">versionIRI</
 as arguments and default to all:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>python -m triplets.rdfs_tools.fetch_profiles [bundle ...]
 |
-|-&gt; SOURCES registry: name -&gt; {repo, ref, path}
-|-&gt; shallow sparse clone of the upstream ref
-|-&gt; wipe + recreate rdfs/&lt;bundle&gt;/, copy *.rdf
-'-&gt; write rdfs/&lt;bundle&gt;/SOURCE.json  {repo, ref, commit, path, fetched}
+|-&gt; SOURCES registry: name -&gt; {repo, ref (branch or commit), path?, prof_path?}
+|-&gt; shallow sparse fetch of the upstream ref
+|-&gt; per path: wipe + recreate rdfs/&lt;bundle&gt;/ (path), rdfs/&lt;bundle&gt;/PROF/ (prof_path),
+|   copy *.rdf
+'-&gt; write SOURCE.json {repo, ref, commit, path, prof_path, fetched} into the first
+    of them (PROF/ for a PROF-only spec)
 
 python -m triplets.rdfs_tools.cim_rdfs_to_json [bundle ...]
 |
@@ -454,12 +504,16 @@ python -m triplets.rdfs_tools.cim_rdfs_to_json [bundle ...]
     |   '-&gt; header identity (get_metadata) kept for ProfileMetadata["header"]
     |
     |-&gt; parse all profile RDFS in rdfs_dir (minus exclude)
-    |   parse(..., engine="python_lxml_pandas", shorten_resources=False)
+    |   parse(..., engine="python_lxml_pandas", local_resources=False)
     |   # lossless: ranges/inheritance/stereotypes are cross-namespace URIs
+    |
+    |-&gt; profile_version_iris(rdfs_dir/PROF)   # RDFS versionIRI -&gt; profile versionIRI
     |
     '-&gt; per serialization edition (552_ED1, 552_ED2):
         |-&gt; convert(): one section per RDFS profile (classes, attributes,
         |   associations, enumerations, datatypes + ProfileMetadata)
+        |   # xsd:type: CIMDatatype .value → XSD rdfs:range, or → Primitive
+        |   #   via cgmes_data_types_map; "" if neither resolves
         |   # attribute→class binding (rdfs_tools.get_class_parameters):
         |   # CIM-owned terms bind via rdfs:domain; reused external terms
         |   # (dcterms:/prov:/dcat:) via the non-inferential
@@ -482,8 +536,8 @@ git<span class="w"> </span>diff<span class="w"> </span>--exit-code<span class="w
 <h2>Onboarding a New Release<a class="headerlink" href="#onboarding-a-new-release" title="Link to this heading">¶</a></h2>
 <ol class="arabic simple">
 <li><p>Add one entry to <code class="docutils literal notranslate"><span class="pre">SOURCES</span></code> (<code class="docutils literal notranslate"><span class="pre">fetch_profiles.py</span></code>) and one to <code class="docutils literal notranslate"><span class="pre">BUNDLES</span></code>
-(<code class="docutils literal notranslate"><span class="pre">cim_rdfs_to_json.py</span></code>) — commented-out templates for NCP 2.4.2/2.5 sit in
-both registries.</p></li>
+(<code class="docutils literal notranslate"><span class="pre">cim_rdfs_to_json.py</span></code>). Unpublished drafts keep a <code class="docutils literal notranslate"><span class="pre">-dev</span></code> suffix
+until a release branch exists.</p></li>
 <li><p>Fetch, generate, and run the roundtrip suite:</p></li>
 </ol>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>triplets.rdfs_tools.fetch_profiles<span class="w"> </span>ENTSOE_NC_X.Y.Z
@@ -497,16 +551,18 @@ uv<span class="w"> </span>run<span class="w"> </span>pytest<span class="w"> </sp
 </ol>
 <p>The roundtrip suite (<code class="docutils literal notranslate"><span class="pre">tests/test_roundtrip_nc.py</span></code>) parses every ReliCapGrid
 (TSO, profile) example instance, exports it through the bundle, re-parses and
-requires exact row-set equality — deviations are named per case in a
-<code class="docutils literal notranslate"><span class="pre">KNOWN_MISMATCH</span></code> registry with reasons, never tolerated fuzzily.</p>
+requires exact row-set equality — deviations are named per case in
+<code class="docutils literal notranslate"><span class="pre">EXPECTED_FAILURES</span></code> (strict xfail, linked to the upstream issue) and <code class="docutils literal notranslate"><span class="pre">KNOWN_MISMATCH</span></code>,
+never tolerated fuzzily.</p>
 </section>
 <section id="file-layout">
 <h2>File Layout<a class="headerlink" href="#file-layout" title="Link to this heading">¶</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">rdfs</span><span class="o">/</span>                              <span class="c1"># RDFS sources (committed snapshots)</span>
 <span class="o">|--</span> <span class="n">README</span><span class="o">.</span><span class="n">md</span>                      <span class="c1"># provenance, onboarding, upstream defects</span>
-<span class="o">|--</span> <span class="n">ENTSOE_NC_2</span><span class="mf">.4.1</span><span class="o">/</span>               <span class="c1"># fetched: *.rdf + SOURCE.json commit pin</span>
+<span class="o">|--</span> <span class="n">ENTSOE_NC_2</span><span class="mf">.4.1</span><span class="o">/</span>               <span class="c1"># fetched: *.rdf + PROF/ + SOURCE.json commit pin</span>
+<span class="o">|--</span> <span class="n">ENTSOE_NC_2</span><span class="mf">.5.0</span><span class="o">/</span>               <span class="c1"># fetched: *.rdf + PROF/ + SOURCE.json commit pin</span>
 <span class="o">|--</span> <span class="n">ENTSOE_CGMES_2</span><span class="mf">.4.15</span><span class="o">/</span>           <span class="c1"># legacy hand-collected</span>
-<span class="o">|--</span> <span class="n">ENTSOE_CGMES_3</span><span class="mf">.0.0</span><span class="o">/</span>            <span class="c1"># legacy hand-collected</span>
+<span class="o">|--</span> <span class="n">ENTSOE_CGMES_3</span><span class="mf">.0.0</span><span class="o">/</span>            <span class="c1"># legacy hand-collected RDFS; fetched PROF/ + SOURCE.json</span>
 <span class="s1">'-- ENTSOE_FH/                     # header profiles for the CGMES bundles</span>
 
 <span class="n">triplets</span><span class="o">/</span><span class="n">rdfs_tools</span><span class="o">/</span>
@@ -533,8 +589,9 @@ requires exact row-set equality — deviations are named per case in a
 <span class="c1"># N-Quads is edition-independent (always absolute urn:uuid: IRIs) — see the note below</span>
 <span class="n">data</span><span class="o">.</span><span class="n">export_to_nquads</span><span class="p">(</span><span class="s2">"nc.nq"</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_NC_2_4_1_552_ED2</span><span class="p">)</span>
 
-<span class="c1"># validation context enrichment uses the same bundles</span>
-<span class="n">report</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">shapes</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
+<span class="c1"># validation and its context enrichment use the same bundles, scoped to the profiles</span>
+<span class="n">report</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="n">shapes</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="p">[</span><span class="s2">"EQ"</span><span class="p">])</span>
+<span class="n">report</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">enrich</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="p">[</span><span class="s2">"EQ"</span><span class="p">])</span>
 
 <span class="c1"># a bundle is plain JSON — inspect it directly</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
@@ -575,7 +632,7 @@ requires exact row-set equality — deviations are named per case in a
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -604,7 +661,10 @@ requires exact row-set equality — deviations are named per case in a
 <li><a class="reference internal" href="#">Export Schemas</a><ul>
 <li><a class="reference internal" href="#shipped-bundles">Shipped Bundles</a></li>
 <li><a class="reference internal" href="#ed1-vs-552-ed2">552_ED1 vs 552_ED2</a></li>
-<li><a class="reference internal" href="#anatomy-of-a-bundle">Anatomy of a Bundle</a></li>
+<li><a class="reference internal" href="#anatomy-of-a-bundle">Anatomy of a Bundle</a><ul>
+<li><a class="reference internal" href="#fixed-language-tag-language">Fixed language tag (<code class="docutils literal notranslate"><span class="pre">language</span></code>)</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#how-exporters-pick-a-section">How Exporters Pick a Section</a></li>
 <li><a class="reference internal" href="#generation-pipeline">Generation Pipeline</a></li>
 <li><a class="reference internal" href="#onboarding-a-new-release">Onboarding a New Release</a></li>
@@ -621,7 +681,7 @@ requires exact row-set equality — deviations are named per case in a
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>

@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.sparql - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.sparql - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -288,6 +284,7 @@
 <span></span><span class="sd">"""SPARQL querying over triplet data.</span>
 
 <span class="sd">Engines (registry dispatch, mirroring triplets.parser):</span>
+
 <span class="sd">- qlever   — performance (embedded C++ via the official libqlever facade; needs</span>
 <span class="sd">  the compiled extension, see setup_qlever.py; takes auto priority when built)</span>
 <span class="sd">- oxigraph — portable performance (embedded Rust via the pyoxigraph wheel,</span>
@@ -304,6 +301,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.._registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">EngineRegistry</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">CIM_NS</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -347,8 +345,8 @@
 
 <div class="viewcode-block" id="query">
 <a class="viewcode-back" href="../../triplets.sparql.html#triplets.sparql.query">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span>
-          <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span>
+          <span class="n">data_unchanged</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">CIM_NS</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Run a SPARQL query over triplet data.</span>
 
 <span class="sd">    Parameters</span>
@@ -359,7 +357,7 @@
 <span class="sd">        ASK → bool, CONSTRUCT/DESCRIBE → triplet DataFrame.</span>
 <span class="sd">    rdf_map : dict or str, optional</span>
 <span class="sd">        Export schema — enables xsd-typed literals in the queried graph (optional).</span>
-<span class="sd">    scope : iterable of INSTANCE_ID, optional</span>
+<span class="sd">    data_scope : iterable of INSTANCE_ID, optional</span>
 <span class="sd">        Restrict the queried data to these instances' named graphs; all data</span>
 <span class="sd">        stays loaded for reference resolution. None = full union.</span>
 <span class="sd">    engine : str, default "auto"</span>
@@ -377,10 +375,14 @@
 <span class="sd">        and skips the content_hash (the dominant cost of small warm</span>
 <span class="sd">        queries). Only skips work when this object was hashed before;</span>
 <span class="sd">        otherwise the hash runs and is remembered.</span>
+<span class="sd">    undefined_namespace : str, default CIM100</span>
+<span class="sd">        Namespace for names the schema does not declare — every name when no</span>
+<span class="sd">        rdf_map is given — so schema-less data answers ``cim:`` queries. The</span>
+<span class="sd">        store keeps every row (the N-Quads ``export_undefined=True`` form).</span>
 <span class="sd">    """</span>
     <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span> <span class="o">=</span> <span class="n">get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">engine_mod</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="n">scope</span><span class="p">,</span>
-                            <span class="n">return_type</span><span class="o">=</span><span class="n">return_type</span><span class="p">,</span> <span class="n">data_unchanged</span><span class="o">=</span><span class="n">data_unchanged</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">engine_mod</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">query_string</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="n">data_scope</span><span class="p">,</span> <span class="n">return_type</span><span class="o">=</span><span class="n">return_type</span><span class="p">,</span>
+                            <span class="n">data_unchanged</span><span class="o">=</span><span class="n">data_unchanged</span><span class="p">,</span> <span class="n">undefined_namespace</span><span class="o">=</span><span class="n">undefined_namespace</span><span class="p">)</span></div>
 
 </pre></div>
         </article>
@@ -394,7 +396,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -414,7 +416,7 @@
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>

@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.validation.sarif - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.validation.sarif - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -309,14 +305,17 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">ENRICHMENT_COLUMNS</span><span class="p">,</span> <span class="n">enrich</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.locations</span><span class="w"> </span><span class="kn">import</span> <span class="n">LOCATION_COLUMNS</span><span class="p">,</span> <span class="n">locate_violations</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_report</span><span class="w"> </span><span class="kn">import</span> <span class="n">message_prefix</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">_local</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.shacl_report</span><span class="w"> </span><span class="kn">import</span> <span class="n">_expand</span><span class="p">,</span> <span class="n">message_prefix</span><span class="p">,</span> <span class="n">profile_text</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">split_iri</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 <span class="n">_SCHEMA</span> <span class="o">=</span> <span class="s2">"https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"</span>
 <span class="n">_LEVELS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"Violation"</span><span class="p">:</span> <span class="s2">"error"</span><span class="p">,</span> <span class="s2">"Warning"</span><span class="p">:</span> <span class="s2">"warning"</span><span class="p">,</span> <span class="s2">"Info"</span><span class="p">:</span> <span class="s2">"note"</span><span class="p">}</span>
 <span class="n">_SAMPLES</span> <span class="o">=</span> <span class="mi">3</span>   <span class="c1"># per end: grouped results carry the first 3 and last 3 instances</span>
+<span class="c1"># violation-type prefix → where the constraint is defined (the term IRI otherwise)</span>
+<span class="n">_CONSTRAINT_DOCS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"sh"</span><span class="p">:</span> <span class="s2">"https://www.w3.org/TR/shacl/#</span><span class="si">{local}</span><span class="s2">"</span><span class="p">,</span>
+                    <span class="s2">"triplets"</span><span class="p">:</span> <span class="s2">"https://github.com/Haigutus/triplets/blob/main/docs/validation.md"</span><span class="p">}</span>
 
 
 <div class="viewcode-block" id="export_to_sarif">
@@ -380,15 +379,16 @@
         <span class="k">if</span> <span class="n">column</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">frame</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
             <span class="n">frame</span><span class="p">[</span><span class="n">column</span><span class="p">]</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">NA</span>
 
-    <span class="n">language</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"validation"</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"language"</span><span class="p">,</span> <span class="s2">"shacl"</span><span class="p">)</span>
+    <span class="n">meta</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"validation"</span><span class="p">,</span> <span class="p">{})</span>
+    <span class="n">language</span> <span class="o">=</span> <span class="n">meta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"language"</span><span class="p">,</span> <span class="s2">"shacl"</span><span class="p">)</span>
     <span class="n">groups</span> <span class="o">=</span> <span class="p">[(</span><span class="n">key</span><span class="p">,</span> <span class="n">rows</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="s2">"records"</span><span class="p">))</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">rows</span>
               <span class="ow">in</span> <span class="n">frame</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s2">"SOURCE_SHAPE"</span><span class="p">,</span> <span class="s2">"VIOLATION_TYPE"</span><span class="p">],</span> <span class="n">dropna</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">sort</span><span class="o">=</span><span class="kc">False</span><span class="p">)]</span>
 
     <span class="n">rules</span><span class="p">,</span> <span class="n">results</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
     <span class="n">seen_ids</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">for</span> <span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">constraint</span><span class="p">),</span> <span class="n">records</span> <span class="ow">in</span> <span class="n">groups</span><span class="p">:</span>
-        <span class="n">rule</span> <span class="o">=</span> <span class="n">_rule</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">constraint</span><span class="p">,</span> <span class="n">records</span><span class="p">,</span> <span class="n">seen_ids</span><span class="p">,</span>
-                     <span class="n">occurrences</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">records</span><span class="p">)</span> <span class="k">if</span> <span class="n">group</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="n">language</span><span class="p">)</span>
+        <span class="n">rule</span> <span class="o">=</span> <span class="n">_rule</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">constraint</span><span class="p">,</span> <span class="n">records</span><span class="p">,</span> <span class="n">seen_ids</span><span class="p">,</span> <span class="n">occurrences</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">records</span><span class="p">)</span> <span class="k">if</span> <span class="n">group</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                     <span class="n">language</span><span class="o">=</span><span class="n">language</span><span class="p">,</span> <span class="n">references</span><span class="o">=</span><span class="n">meta</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"references"</span><span class="p">))</span>
         <span class="n">rule_index</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">rules</span><span class="p">)</span>
         <span class="n">rules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">group</span><span class="p">:</span>
@@ -398,7 +398,6 @@
                            <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">records</span><span class="p">)</span>
 
     <span class="kn">import</span><span class="w"> </span><span class="nn">triplets</span>
-    <span class="n">meta</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"validation"</span><span class="p">,</span> <span class="p">{})</span>
     <span class="c1"># GitHub displays a result only if it has a location: rows with neither a</span>
     <span class="c1"># focus ID nor stamped source columns fall back to a whole-file artifact —</span>
     <span class="c1"># the shapes file for tool findings (triplets:*), else the first data file</span>
@@ -416,7 +415,7 @@
             <span class="s2">"version"</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">triplets</span><span class="p">,</span> <span class="s2">"__version__"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
             <span class="s2">"rules"</span><span class="p">:</span> <span class="n">rules</span><span class="p">,</span>
         <span class="p">})},</span>
-        <span class="c1"># the validation-run metadata validate() stamps on the frame — the</span>
+        <span class="c1"># the validation-run metadata the validation functions stamp on the frame — the</span>
         <span class="c1"># same facts the sh:ValidationReport carries as prov/dcterms terms;</span>
         <span class="c1"># timestamps go to the invocation, everything else (engine, duration,</span>
         <span class="c1"># shape/constraint counts, coverage) to the run property bag</span>
@@ -441,21 +440,19 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_fallback_name</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">first</span><span class="p">,</span> <span class="n">language</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Alert title when the shape carries no sh:name — GitHub otherwise shows</span>
-<span class="sd">    the raw multi-line message text as the title. Schema runs:</span>
-<span class="sd">    "RDFS &lt;Class&gt; &lt;attr&gt;" (the class is the shape's local name); unnamed</span>
-<span class="sd">    SHACL shapes: "&lt;attr&gt; &lt;violation type&gt;"."""</span>
+<span class="w">    </span><span class="sd">"""Alert label when the shape carries no sh:name — GitHub otherwise shows</span>
+<span class="sd">    the raw multi-line message text as the title; the title carries it after</span>
+<span class="sd">    the language prefix. Schema runs: "&lt;profiles&gt; &lt;Class&gt; &lt;attr&gt;" (the class</span>
+<span class="sd">    is the shape's local name); unnamed SHACL shapes: "&lt;attr&gt; &lt;violation type&gt;"."""</span>
     <span class="n">key</span> <span class="o">=</span> <span class="n">_value</span><span class="p">(</span><span class="n">first</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">])</span>
     <span class="k">if</span> <span class="n">language</span> <span class="o">!=</span> <span class="s2">"shacl"</span><span class="p">:</span>
-        <span class="n">profile</span> <span class="o">=</span> <span class="n">_value</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"PROFILE"</span><span class="p">))</span>
-        <span class="bp">cls</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="k">else</span> <span class="n">_local</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">shape</span><span class="p">))</span>
-        <span class="k">if</span> <span class="bp">cls</span> <span class="ow">and</span> <span class="n">profile</span> <span class="ow">and</span> <span class="bp">cls</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">profile</span><span class="si">}</span><span class="s2">:"</span><span class="p">):</span>   <span class="c1"># shape id: &lt;profile&gt;:Class.&lt;key&gt;</span>
-            <span class="bp">cls</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">profile</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:]</span>
+        <span class="n">profile</span> <span class="o">=</span> <span class="n">profile_text</span><span class="p">(</span><span class="n">first</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"PROFILE"</span><span class="p">))</span>
+        <span class="bp">cls</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="k">else</span> <span class="n">split_iri</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">shape</span><span class="p">))[</span><span class="mi">1</span><span class="p">]</span>
         <span class="k">if</span> <span class="bp">cls</span> <span class="ow">and</span> <span class="n">key</span> <span class="ow">and</span> <span class="bp">cls</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="sa">f</span><span class="s2">".</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span><span class="p">):</span>             <span class="c1"># per-property shape id</span>
             <span class="bp">cls</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">[:</span> <span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
         <span class="n">label</span> <span class="o">=</span> <span class="p">(</span><span class="n">key</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">and</span> <span class="bp">cls</span> <span class="ow">and</span> <span class="n">key</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">cls</span><span class="si">}</span><span class="s2">."</span><span class="p">)</span>
                  <span class="k">else</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">key</span><span class="p">))))</span>
-        <span class="k">return</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span><span class="n">language</span><span class="o">.</span><span class="n">upper</span><span class="p">(),</span> <span class="n">profile</span><span class="p">,</span> <span class="n">label</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span><span class="n">profile</span><span class="p">,</span> <span class="n">label</span><span class="p">)))</span>
     <span class="k">return</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">_value</span><span class="p">(</span><span class="n">first</span><span class="p">[</span><span class="s2">"VIOLATION_TYPE"</span><span class="p">]))))</span> <span class="ow">or</span> <span class="kc">None</span>
 
 
@@ -464,8 +461,8 @@
     <span class="k">return</span> <span class="n">records</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">records</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">_SAMPLES</span> <span class="k">else</span> <span class="n">records</span><span class="p">[:</span><span class="n">_SAMPLES</span><span class="p">]</span> <span class="o">+</span> <span class="n">records</span><span class="p">[</span><span class="o">-</span><span class="n">_SAMPLES</span><span class="p">:]</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_rule</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">constraint</span><span class="p">,</span> <span class="n">records</span><span class="p">,</span> <span class="n">seen_ids</span><span class="p">,</span> <span class="n">occurrences</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="s2">"shacl"</span><span class="p">):</span>
-    <span class="n">identifier</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_local</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">shape</span><span class="p">))</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">constraint</span><span class="si">}</span><span class="s2">"</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">constraint</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_rule</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">constraint</span><span class="p">,</span> <span class="n">records</span><span class="p">,</span> <span class="n">seen_ids</span><span class="p">,</span> <span class="n">occurrences</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="s2">"shacl"</span><span class="p">,</span> <span class="n">references</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="n">identifier</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">split_iri</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">shape</span><span class="p">))[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">constraint</span><span class="si">}</span><span class="s2">"</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">constraint</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">identifier</span> <span class="ow">in</span> <span class="n">seen_ids</span><span class="p">:</span>                       <span class="c1"># distinct shapes, same local name</span>
         <span class="n">seen_ids</span><span class="p">[</span><span class="n">identifier</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
         <span class="n">identifier</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">identifier</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">seen_ids</span><span class="p">[</span><span class="n">identifier</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span>
@@ -473,20 +470,77 @@
         <span class="n">seen_ids</span><span class="p">[</span><span class="n">identifier</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
 
     <span class="n">first</span> <span class="o">=</span> <span class="n">records</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-    <span class="c1"># grouped runs put the occurrence count in the rule title — what GitHub</span>
-    <span class="c1"># shows as the alert name (the ruleId stays stable, so alerts still match)</span>
+    <span class="c1"># the rule title — what GitHub shows as the alert name — names the</span>
+    <span class="c1"># constraint language; grouped runs add the occurrence count (the ruleId</span>
+    <span class="c1"># stays stable, so alerts still match)</span>
     <span class="n">name</span> <span class="o">=</span> <span class="n">_value</span><span class="p">(</span><span class="n">first</span><span class="p">[</span><span class="s2">"SHAPE_NAME"</span><span class="p">])</span> <span class="ow">or</span> <span class="n">_fallback_name</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">first</span><span class="p">,</span> <span class="n">language</span><span class="p">)</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">language</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span> <span class="k">if</span> <span class="n">name</span> <span class="k">else</span> <span class="kc">None</span>
     <span class="k">if</span> <span class="n">name</span> <span class="ow">and</span> <span class="n">occurrences</span><span class="p">:</span>
         <span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">occurrences</span><span class="si">}</span><span class="s2">×)"</span>
+    <span class="n">uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"http"</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
     <span class="k">return</span> <span class="n">_prune</span><span class="p">({</span>
         <span class="s2">"id"</span><span class="p">:</span> <span class="n">identifier</span><span class="p">,</span>
         <span class="s2">"name"</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
         <span class="s2">"shortDescription"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"text"</span><span class="p">:</span> <span class="n">name</span><span class="p">}</span> <span class="k">if</span> <span class="n">name</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
         <span class="s2">"fullDescription"</span><span class="p">:</span> <span class="n">_text</span><span class="p">(</span><span class="n">first</span><span class="p">[</span><span class="s2">"SHAPE_DESCRIPTION"</span><span class="p">]),</span>
-        <span class="s2">"helpUri"</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">str</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"http"</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="s2">"helpUri"</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span>
+        <span class="s2">"help"</span><span class="p">:</span> <span class="n">_help</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">uri</span><span class="p">,</span> <span class="n">constraint</span><span class="p">,</span> <span class="n">references</span><span class="p">),</span>
         <span class="s2">"defaultConfiguration"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"level"</span><span class="p">:</span> <span class="n">_LEVELS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_value</span><span class="p">(</span><span class="n">first</span><span class="p">[</span><span class="s2">"SEVERITY"</span><span class="p">]),</span> <span class="s2">"warning"</span><span class="p">)},</span>
         <span class="s2">"properties"</span><span class="p">:</span> <span class="n">_prune</span><span class="p">({</span><span class="s2">"sourceShape"</span><span class="p">:</span> <span class="n">_value</span><span class="p">(</span><span class="n">shape</span><span class="p">),</span> <span class="s2">"constraint"</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">constraint</span><span class="p">)}),</span>
     <span class="p">})</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_help</span><span class="p">(</span><span class="n">record</span><span class="p">,</span> <span class="n">shape_iri</span><span class="p">,</span> <span class="n">constraint</span><span class="p">,</span> <span class="n">references</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Rule help (text + markdown) — the panel under a GitHub alert: what the</span>
+<span class="sd">    constraint checks (the shape's own sh:message, path, expected value), the</span>
+<span class="sd">    schema context (when enriched with the rdf_map) and the source (shape IRI,</span>
+<span class="sd">    profiles, the single shapes file, the constraint's definition). Lines</span>
+<span class="sd">    without data are left out, sections without lines dropped."""</span>
+    <span class="n">path</span><span class="p">,</span> <span class="n">constraint</span> <span class="o">=</span> <span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]),</span> <span class="n">_value</span><span class="p">(</span><span class="n">constraint</span><span class="p">)</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"MESSAGE"</span><span class="p">])</span> <span class="k">if</span> <span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"MESSAGE_SOURCE"</span><span class="p">))</span> <span class="o">==</span> <span class="s2">"shacl"</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">multiplicity</span> <span class="o">=</span> <span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"SCHEMA_MULTIPLICITY"</span><span class="p">])</span>
+    <span class="n">schema</span> <span class="o">=</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="p">(</span><span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"SCHEMA_DESCRIPTION"</span><span class="p">]),</span>
+                                    <span class="n">multiplicity</span> <span class="ow">and</span> <span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">multiplicity</span><span class="si">}</span><span class="s2">]"</span><span class="p">)))</span>
+    <span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">references</span> <span class="ow">or</span> <span class="p">()</span> <span class="k">if</span> <span class="n">name</span> <span class="o">!=</span> <span class="s2">"rdf_map"</span><span class="p">]</span>   <span class="c1"># a dict schema loads as "rdf_map"</span>
+    <span class="n">link</span> <span class="o">=</span> <span class="n">_constraint_link</span><span class="p">(</span><span class="n">constraint</span><span class="p">)</span> <span class="k">if</span> <span class="n">constraint</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">sections</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">"What this checks"</span><span class="p">:</span> <span class="p">[</span><span class="n">_line</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">message</span> <span class="ow">and</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">split</span><span class="p">())),</span>   <span class="c1"># one list item</span>
+                             <span class="n">_line</span><span class="p">(</span><span class="s2">"Path"</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"`</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">`"</span><span class="p">),</span>
+                             <span class="n">_line</span><span class="p">(</span><span class="s2">"Expected"</span><span class="p">,</span> <span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"EXPECTED"</span><span class="p">)))],</span>
+        <span class="s2">"Schema context"</span><span class="p">:</span> <span class="p">[</span><span class="n">_line</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">schema</span><span class="p">),</span>
+                           <span class="n">_line</span><span class="p">(</span><span class="s2">"Class"</span><span class="p">,</span> <span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"CLASS_DESCRIPTION"</span><span class="p">]))],</span>
+        <span class="s2">"Source"</span><span class="p">:</span> <span class="p">[</span><span class="n">_line</span><span class="p">(</span><span class="s2">"Shape"</span><span class="p">,</span> <span class="n">shape_iri</span><span class="p">),</span>
+                   <span class="n">_line</span><span class="p">(</span><span class="s2">"Profile"</span><span class="p">,</span> <span class="n">profile_text</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"PROFILE"</span><span class="p">))),</span>
+                   <span class="n">_line</span><span class="p">(</span><span class="s2">"File"</span><span class="p">,</span> <span class="n">files</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">files</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="kc">None</span><span class="p">),</span>
+                   <span class="n">_line</span><span class="p">(</span><span class="s2">"Constraint"</span><span class="p">,</span> <span class="n">link</span> <span class="ow">and</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">constraint</span><span class="si">}</span><span class="s2"> — </span><span class="si">{</span><span class="n">link</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">constraint</span><span class="si">}</span><span class="s2">](</span><span class="si">{</span><span class="n">link</span><span class="si">}</span><span class="s2">)"</span><span class="p">)],</span>
+    <span class="p">}</span>
+    <span class="n">sections</span> <span class="o">=</span> <span class="p">[(</span><span class="n">heading</span><span class="p">,</span> <span class="p">[</span><span class="n">line</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span> <span class="k">if</span> <span class="n">line</span><span class="p">])</span> <span class="k">for</span> <span class="n">heading</span><span class="p">,</span> <span class="n">lines</span> <span class="ow">in</span> <span class="n">sections</span><span class="o">.</span><span class="n">items</span><span class="p">()]</span>
+    <span class="n">sections</span> <span class="o">=</span> <span class="p">[(</span><span class="n">heading</span><span class="p">,</span> <span class="n">lines</span><span class="p">)</span> <span class="k">for</span> <span class="n">heading</span><span class="p">,</span> <span class="n">lines</span> <span class="ow">in</span> <span class="n">sections</span> <span class="k">if</span> <span class="n">lines</span><span class="p">]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">sections</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">"text"</span><span class="p">:</span> <span class="s2">"</span><span class="se">\n\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">heading</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="n">text</span> <span class="k">for</span> <span class="n">text</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">)])</span>
+                             <span class="k">for</span> <span class="n">heading</span><span class="p">,</span> <span class="n">lines</span> <span class="ow">in</span> <span class="n">sections</span><span class="p">),</span>
+        <span class="c1"># one list item per line: a single newline is a soft break in markdown</span>
+        <span class="s2">"markdown"</span><span class="p">:</span> <span class="s2">"</span><span class="se">\n\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="sa">f</span><span class="s2">"### </span><span class="si">{</span><span class="n">heading</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="o">*</span><span class="p">(</span><span class="sa">f</span><span class="s2">"- </span><span class="si">{</span><span class="n">markdown</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">markdown</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">)])</span>
+                                 <span class="k">for</span> <span class="n">heading</span><span class="p">,</span> <span class="n">lines</span> <span class="ow">in</span> <span class="n">sections</span><span class="p">),</span>
+    <span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_line</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">markdown</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""One help line as (text, markdown); None without a value."""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">value</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">prefix</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">: "</span> <span class="k">if</span> <span class="n">label</span> <span class="k">else</span> <span class="s2">""</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">prefix</span><span class="si">}{</span><span class="n">value</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">prefix</span><span class="si">}{</span><span class="n">markdown</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">value</span><span class="si">}</span><span class="s2">"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_constraint_link</span><span class="p">(</span><span class="n">constraint</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""The definition of a violation type: the SHACL spec section of an sh:*</span>
+<span class="sd">    component, the triplets docs for a tool finding, else the term IRI itself."""</span>
+    <span class="n">uri</span> <span class="o">=</span> <span class="n">_expand</span><span class="p">(</span><span class="n">constraint</span><span class="p">)</span>
+    <span class="n">template</span> <span class="o">=</span> <span class="n">_CONSTRAINT_DOCS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">constraint</span><span class="o">.</span><span class="n">partition</span><span class="p">(</span><span class="s2">":"</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">"</span><span class="si">{uri}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">template</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">uri</span><span class="o">=</span><span class="n">uri</span><span class="p">,</span> <span class="n">local</span><span class="o">=</span><span class="n">split_iri</span><span class="p">(</span><span class="n">uri</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_grouped_result</span><span class="p">(</span><span class="n">rule_id</span><span class="p">,</span> <span class="n">rule_index</span><span class="p">,</span> <span class="n">records</span><span class="p">,</span> <span class="n">language</span><span class="o">=</span><span class="s2">"shacl"</span><span class="p">):</span>
@@ -518,7 +572,7 @@
         <span class="s2">"locations"</span><span class="p">:</span> <span class="n">locations</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
         <span class="s2">"properties"</span><span class="p">:</span> <span class="n">_prune</span><span class="p">({</span>
             <span class="s2">"count"</span><span class="p">:</span> <span class="n">total</span><span class="p">,</span>
-            <span class="s2">"profile"</span><span class="p">:</span> <span class="n">_value</span><span class="p">(</span><span class="n">records</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"PROFILE"</span><span class="p">)),</span>
+            <span class="s2">"profile"</span><span class="p">:</span> <span class="n">profile_text</span><span class="p">(</span><span class="n">records</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"PROFILE"</span><span class="p">)),</span>
             <span class="s2">"key"</span><span class="p">:</span> <span class="n">_value</span><span class="p">(</span><span class="n">records</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">"KEY"</span><span class="p">]),</span>
             <span class="s2">"sampleIDs"</span><span class="p">:</span> <span class="p">[</span><span class="n">record</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]</span> <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">samples</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">])]</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
             <span class="s2">"sampleValues"</span><span class="p">:</span> <span class="nb">sorted</span><span class="p">({</span><span class="nb">str</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">])</span> <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">samples</span>
@@ -542,7 +596,7 @@
         <span class="s2">"locations"</span><span class="p">:</span> <span class="p">[</span><span class="n">location</span><span class="p">]</span> <span class="k">if</span> <span class="n">location</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
         <span class="s2">"properties"</span><span class="p">:</span> <span class="n">_prune</span><span class="p">({</span>
             <span class="s2">"id"</span><span class="p">:</span> <span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"ID"</span><span class="p">]),</span>
-            <span class="s2">"profile"</span><span class="p">:</span> <span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"PROFILE"</span><span class="p">)),</span>
+            <span class="s2">"profile"</span><span class="p">:</span> <span class="n">profile_text</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"PROFILE"</span><span class="p">)),</span>
             <span class="s2">"key"</span><span class="p">:</span> <span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]),</span>
             <span class="s2">"value"</span><span class="p">:</span> <span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]),</span>
             <span class="s2">"violationType"</span><span class="p">:</span> <span class="n">_value</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"VIOLATION_TYPE"</span><span class="p">]),</span>
@@ -566,8 +620,8 @@
 <span class="sd">    physicalLocation, shape description to the rule."""</span>
     <span class="n">blocks</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">message_prefix</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s1">'VIOLATION_TYPE'</span><span class="p">],</span><span class="w"> </span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'MESSAGE_SOURCE'</span><span class="p">),</span><span class="w"> </span><span class="n">language</span><span class="p">)</span><span class="si">}</span><span class="s2"> "</span>
               <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">_message</span><span class="p">(</span><span class="n">record</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">]</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"PROFILE"</span><span class="p">)):</span>
-        <span class="n">blocks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">language</span><span class="si">}</span><span class="s2">_profile] </span><span class="si">{</span><span class="n">record</span><span class="p">[</span><span class="s1">'PROFILE'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">profile_text</span><span class="p">(</span><span class="n">record</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"PROFILE"</span><span class="p">))</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">blocks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">language</span><span class="si">}</span><span class="s2">_profile] </span><span class="si">{</span><span class="n">profile_text</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s1">'PROFILE'</span><span class="p">])</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"KEY"</span><span class="p">]):</span>
         <span class="n">blocks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"[</span><span class="si">{</span><span class="n">language</span><span class="si">}</span><span class="s2">_path] </span><span class="si">{</span><span class="n">record</span><span class="p">[</span><span class="s1">'KEY'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">value</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">pandas</span><span class="o">.</span><span class="n">isna</span><span class="p">(</span><span class="n">record</span><span class="p">[</span><span class="s2">"VALUE"</span><span class="p">]):</span>       <span class="c1"># grouped: values ride the examples</span>
@@ -684,7 +738,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -704,7 +758,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.cli" href="triplets.cli.html"><link rel="prev" title="triplets.sparql package" href="triplets.sparql.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.validation package - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.validation package - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -297,36 +293,60 @@
 </section>
 <section id="module-triplets.validation.context">
 <span id="triplets-validation-context-module"></span><h2>triplets.validation.context module<a class="headerlink" href="#module-triplets.validation.context" title="Link to this heading">¶</a></h2>
-<p>Optional context enrichment for violations frames.</p>
-<p>The slower opt-in pass (<code class="docutils literal notranslate"><span class="pre">validate(...,</span> <span class="pre">context=True)</span></code> or a standalone
-<code class="docutils literal notranslate"><span class="pre">enrich</span></code> call) that adds human/schema context columns to the canonical
-violations frame: which instance/file the object came from, what the object
-is, what the shape says about itself, and what the export schema defines for
-the class and attribute. Every source is optional — absent sources leave
-their columns null, so the output schema is stable.</p>
+<p>Context enrichment for violations frames, a separate call after validation.</p>
+<p><code class="docutils literal notranslate"><span class="pre">enrich</span></code> adds human/schema context columns to the canonical violations
+frame: what a finding found in the data (TARGET), which instance/file the
+object came from, what the object is, what the shape says about itself, and
+what the export schema defines for the class and attribute. Every source is
+optional — absent sources leave their columns null, so the output schema is
+stable. <code class="docutils literal notranslate"><span class="pre">concat_violations</span></code> joins the frames of several validation runs.</p>
 <p>All lookups are vectorized maps built once from the sources — cost is
 O(data), not O(violations × data).</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.validation.context.enrich">
-<span class="sig-prename descclassname"><span class="pre">triplets.validation.context.</span></span><span class="sig-name descname"><span class="pre">enrich</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">violations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shapes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/context.html#enrich"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.context.enrich" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.context.</span></span><span class="sig-name descname"><span class="pre">enrich</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">violations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shapes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/context.html#enrich"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.context.enrich" title="Link to this definition">¶</a></dt>
 <dd><p>Return a copy of the violations frame with ENRICHMENT_COLUMNS added.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>violations</strong> (<em>DataFrame in VIOLATION_COLUMNS</em><em> (</em><em>any engine's output</em><em>)</em><em>.</em>)</p></li>
-<li><p><strong>data</strong> (<em>triplet DataFrame</em><em>, </em><em>optional</em>) – Source data — fills INSTANCE_ID / INSTANCE_LABEL (the parsed file
-name) / OBJECT_TYPE / OBJECT_NAME. An object present in several
-instances is attributed to its first occurrence.</p></li>
+<li><p><strong>violations</strong> (<em>DataFrame from validate_shacl / validate_schema / validate_schema_references.</em>)</p></li>
+<li><p><strong>data</strong> (<em>triplet DataFrame</em><em>, </em><em>arrow</em><em> or </em><em>DuckDB connection</em><em>, </em><em>optional</em>) – Source data — fills TARGET (the referenced object found, or not; the
+duplicate values of a maximum-count finding), INSTANCE_ID /
+INSTANCE_LABEL (the parsed file name) / OBJECT_TYPE / OBJECT_NAME. An
+object present in several instances is attributed to its first
+occurrence. DuckDB: <code class="docutils literal notranslate"><span class="pre">table</span></code> / <code class="docutils literal notranslate"><span class="pre">schema</span></code> / <code class="docutils literal notranslate"><span class="pre">table_name</span></code> kwargs as
+for the duckdb engine.</p></li>
 <li><p><strong>shapes</strong> (<a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes" title="triplets.validation.shacl_ir.CompiledShapes"><em>CompiledShapes</em></a><em> or </em><em>shape source</em><em>, </em><em>optional</em>) – Fills SHAPE_NAME / SHAPE_DESCRIPTION (sh:name / sh:description of
 the source shape; a property shape without its own inherits the
-parent NodeShape’s). Pass the same shapes object the validation ran
-with — anonymous property shapes get fresh blank-node ids per parse,
-so a re-parsed graph cannot be matched to the violations.</p></li>
+parent NodeShape’s) and tells TARGET which findings are valueType rows.
+Pass the same shapes object the validation ran with — anonymous
+property shapes get fresh blank-node ids per parse, so a re-parsed
+graph cannot be matched to the violations.</p></li>
 <li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema — fills SCHEMA_DESCRIPTION / SCHEMA_MULTIPLICITY for
-the violation’s KEY and CLASS_DESCRIPTION for the object’s type.</p></li>
+the violation’s KEY and CLASS_DESCRIPTION for the object’s type, from
+the profiles the violation was checked against: the PROFILE column
+(the schema validations — a list of section keys), else <em>rdf_map_scope</em>,
+else the run’s <code class="docutils literal notranslate"><span class="pre">attrs[&quot;validation&quot;][&quot;profiles&quot;]</span></code>, merged like the run.
+A row with none of them reads the root entries; a name its profiles lack
+stays empty — another profile’s text is never borrowed.</p></li>
+<li><p><strong>rdf_map_scope</strong> (<em>profile identifier</em><em>(</em><em>s</em><em>)</em><em>, or </em><em>{INSTANCE_ID: profile identifier</em><em>(</em><em>s</em><em>)</em><em>}</em><em>, </em><em>optional</em>) – The profiles of rows without a PROFILE (a validate_shacl run): one scope
+for every row, or one per instance.</p></li>
+<li><p><strong>data_scope</strong> (<em>iterable</em><em> of </em><em>INSTANCE_ID</em><em>, </em><em>optional</em>) – Read only these instances of <em>data</em> — pass the validation’s own scope,
+so TARGET finds exactly what the run saw (data outside is not loaded).</p></li>
 </ul>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.context.concat_violations">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.context.</span></span><span class="sig-name descname"><span class="pre">concat_violations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">frames</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/context.html#concat_violations"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.context.concat_violations" title="Link to this definition">¶</a></dt>
+<dd><p>Concatenate violations frames, merging their run metadata (<code class="docutils literal notranslate"><span class="pre">attrs[&quot;validation&quot;]</span></code>):
+the earliest start, the latest end and the duration between them; shape and
+constraint counts once per rule set (<code class="docutils literal notranslate"><span class="pre">compiled_hash</span></code> + <code class="docutils literal notranslate"><span class="pre">deactivated_shapes</span></code>);
+lists and dicts united; other values kept when equal, else the list of distinct
+values.
+The runs must share one constraint language (ValueError otherwise).</p>
 </dd></dl>
 
 </section>
@@ -440,6 +460,132 @@ already carrying LOCATION_COLUMNS is used as-is).</p>
 </dd></dl>
 
 </section>
+<section id="module-triplets.validation.schema_ir">
+<span id="triplets-validation-schema-ir-module"></span><h2>triplets.validation.schema_ir module<a class="headerlink" href="#module-triplets.validation.schema_ir" title="Link to this heading">¶</a></h2>
+<p>Schema-based validation: compile the export schema (rdf_map) into engine
+IR — cardinality, datatypes and enumerations (<code class="docutils literal notranslate"><span class="pre">compile_schema</span></code>) and the
+reference types of associations (<code class="docutils literal notranslate"><span class="pre">compile_references</span></code>), validated by the same
+vectorized engines that run SHACL shapes.</p>
+<p><code class="docutils literal notranslate"><span class="pre">compile_schema</span></code> compiles the profiles of an <code class="docutils literal notranslate"><span class="pre">rdf_map_scope</span></code>, merged into
+one (<code class="docutils literal notranslate"><span class="pre">triplets.validation.schema_scope</span></code>): a CGMES 3.0 EQ file is
+<code class="docutils literal notranslate"><span class="pre">[&quot;EQ&quot;,</span> <span class="pre">&quot;OP&quot;,</span> <span class="pre">&quot;SC&quot;]</span></code>. One profile = that profile’s own rules.</p>
+<p>The IR keeps the engines’ <code class="docutils literal notranslate"><span class="pre">sh:*</span></code> dispatch keys (registries stay shared);
+results present with vocabulary-accurate types instead — schema validation
+does not masquerade as SHACL (constraint language <code class="docutils literal notranslate"><span class="pre">&quot;rdfs&quot;</span></code>):</p>
+<blockquote>
+<div><p>sh:minCount → xsd:minOccurs      sh:maxCount → xsd:maxOccurs
+sh:datatype → xsd:type           sh:in       → rdfs:range
+sh:closed   → schema:domainIncludes
+triplets:range → rdfs:range      triplets:missing (a reference to an object not in the data)</p>
+</div></blockquote>
+<p>Cardinality comes from the schema’s already-resolved <code class="docutils literal notranslate"><span class="pre">xsd:minOccours</span></code> /
+<code class="docutils literal notranslate"><span class="pre">xsd:maxOccours</span></code> fields, datatypes from <code class="docutils literal notranslate"><span class="pre">xsd:type</span></code> expanded by the schema’s
+prefixes: an XSD type is checked as such; any other (<code class="docutils literal notranslate"><span class="pre">cim:ActivePower</span></code>) by the
+XSD type of its own datatype entry (<code class="docutils literal notranslate"><span class="pre">dataType</span></code>, else the IRI’s local name — the
+CIMDatatype entry a bundle carries); a type without one is listed in
+<code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>, not checked. Enumeration membership comes from <code class="docutils literal notranslate"><span class="pre">values</span></code>. Class
+rules never widen to subclasses: each Class entry already lists its inherited
+attributes. No rdflib on this path: <code class="docutils literal notranslate"><span class="pre">graph</span></code> is None and the pyshacl engine
+refuses schema-compiled shapes.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.schema_ir.compile_schema">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.schema_ir.</span></span><span class="sig-name descname"><span class="pre">compile_schema</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_undefined_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">severity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Violation'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes" title="triplets.validation.shacl_ir.CompiledShapes"><span class="pre">CompiledShapes</span></a></span></span><a class="reference internal" href="_modules/triplets/validation/schema_ir.html#compile_schema"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.schema_ir.compile_schema" title="Link to this definition">¶</a></dt>
+<dd><p>Compile the scoped profiles of an export schema (dict or path), merged into one.</p>
+<dl class="simple">
+<dt>rdf_map_scope<span class="classifier">profile identifier or sequence of them</span></dt><dd><p>Section keys and/or declared profile IRIs; <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> = every section;
+None = the root entries. A scope without Class entries raises ValueError.</p>
+</dd>
+<dt>report_undefined_keys<span class="classifier">bool, default False</span></dt><dd><p>False: only the keys the scoped profiles define are checked. True also
+reports keys on an object that no scoped profile defines for its class
+(one schema:domainIncludes check per class).</p>
+</dd>
+<dt>severity<span class="classifier">{“Violation”, “Warning”, “Info”}, default “Violation”</span></dt><dd><p>The severity of every rule.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.schema_ir.compile_references">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.schema_ir.</span></span><span class="sig-name descname"><span class="pre">compile_references</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map_scope</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_rdf_map_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_missing_targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inheritance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">severity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Violation'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes" title="triplets.validation.shacl_ir.CompiledShapes"><span class="pre">CompiledShapes</span></a></span></span><a class="reference internal" href="_modules/triplets/validation/schema_ir.html#compile_references"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.schema_ir.compile_references" title="Link to this definition">¶</a></dt>
+<dd><p>Compile the association reference checks of the scoped (source) profiles, merged.</p>
+<p>A reference conforms when ANY type of the referenced object (RDF types are
+cumulative — issue #100) is the range class or, with <em>inheritance</em>, a class
+whose <a class="reference internal" href="#triplets.validation.schema_scope.class_ancestors" title="triplets.validation.schema_scope.class_ancestors"><code class="xref py py-func docutils literal notranslate"><span class="pre">class_ancestors()</span></code></a> over the source
+and target profiles reach it. A range class none of those profiles defines
+cannot be decided: the association is listed in <code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>.</p>
+<dl class="simple">
+<dt>report_missing_targets<span class="classifier">bool, default True</span></dt><dd><p>Also report references whose object is not in the validated data
+(<code class="docutils literal notranslate"><span class="pre">triplets:missing</span></code>); False leaves them silent.</p>
+</dd>
+<dt>severity<span class="classifier">{“Violation”, “Warning”, “Info”}, default “Violation”</span></dt><dd><p>The severity of every rule.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-triplets.validation.schema_scope">
+<span id="triplets-validation-schema-scope-module"></span><h2>triplets.validation.schema_scope module<a class="headerlink" href="#module-triplets.validation.schema_scope" title="Link to this heading">¶</a></h2>
+<p>The export-schema scope of a validation run: which profiles of an rdf_map
+it uses, merged into one, and the class inheritance they declare.</p>
+<p><code class="docutils literal notranslate"><span class="pre">rdf_map_scope</span></code> names profiles by section key (<code class="docutils literal notranslate"><span class="pre">&quot;EQ&quot;</span></code>) or by any identifier
+the profile declares (keyword / versionIRI / profileVersionIRI / conformsTo),
+mixed, in any sequence. <code class="docutils literal notranslate"><span class="pre">None</span></code> is the rdf_map’s root entries (an unsectioned,
+hand-made schema; a sectioned bundle has none). <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> is every section.</p>
+<p>Listed profiles are merged into one, never stricter than the profiles run one
+by one — <code class="xref py py-func docutils literal notranslate"><span class="pre">triplets._header.merge_sections()</span></code> holds the rules: a CGMES 3.0 EQ
+file is <code class="docutils literal notranslate"><span class="pre">[&quot;EQ&quot;,</span> <span class="pre">&quot;OP&quot;,</span> <span class="pre">&quot;SC&quot;]</span></code>. A run logs each datatype conflict as an error and
+one warning for the relaxed constraints; the notes become the run’s
+<code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code> (not checked) and <code class="docutils literal notranslate"><span class="pre">relaxed_constraints</span></code> (checked, more loosely).</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.schema_scope.scope_sections">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.schema_scope.</span></span><span class="sig-name descname"><span class="pre">scope_sections</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map_scope</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/schema_scope.html#scope_sections"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.schema_scope.scope_sections" title="Link to this definition">¶</a></dt>
+<dd><p>Section keys an <code class="docutils literal notranslate"><span class="pre">rdf_map_scope</span></code> names, in the given order; <code class="docutils literal notranslate"><span class="pre">None</span></code> → None (root).</p>
+<p>Unknown identifiers, identifiers several sections declare and <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code>
+mixed with other identifiers raise ValueError.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.schema_scope.scoped_rdf_map">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.schema_scope.</span></span><span class="sig-name descname"><span class="pre">scoped_rdf_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/schema_scope.html#scoped_rdf_map"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.schema_scope.scoped_rdf_map" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">({SCOPE_KEY:</span> <span class="pre">merged</span> <span class="pre">entries},</span> <span class="pre">notes)</span></code> — the one schema dict a run reads.</p>
+<p>The result keeps the sectioned shape every schema reader expects, with one
+section; its <code class="docutils literal notranslate"><span class="pre">ProfileMetadata</span></code> lists the scoped profiles (<code class="docutils literal notranslate"><span class="pre">sections</span></code>,
+and every field as a list — none for the root entries). <code class="docutils literal notranslate"><span class="pre">notes</span></code> holds the
+merge decisions as text: <code class="docutils literal notranslate"><span class="pre">{&quot;skipped_shapes&quot;:</span> <span class="pre">[...],</span> <span class="pre">&quot;relaxed_constraints&quot;:</span> <span class="pre">[...]}</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.schema_scope.class_ancestors">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.schema_scope.</span></span><span class="sig-name descname"><span class="pre">class_ancestors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/schema_scope.html#class_ancestors"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.schema_scope.class_ancestors" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">{class</span> <span class="pre">local</span> <span class="pre">name:</span> <span class="pre">frozenset(ancestor</span> <span class="pre">IRIs</span> <span class="pre">as</span> <span class="pre">the</span> <span class="pre">schema</span> <span class="pre">records</span> <span class="pre">them)}</span></code> over the scope.</p>
+<p>One map for every engine. Same-named Class entries of the scoped profiles
+union their <code class="docutils literal notranslate"><span class="pre">inheritance</span></code> lists; the relation is closed only through
+ancestors that have a Class entry of their own in the scope — another
+class’s list is never read as a definition of its parents.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.schema_scope.require_entries">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.schema_scope.</span></span><span class="sig-name descname"><span class="pre">require_entries</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entries</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map_scope</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/schema_scope.html#require_entries"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.schema_scope.require_entries" title="Link to this definition">¶</a></dt>
+<dd><p>ValueError when the scope leaves nothing to validate against: no entries at
+all, or — <em>classes</em> — no Class entries (the schema validations’ targets).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.schema_scope.ancestor_pairs">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.schema_scope.</span></span><span class="sig-name descname"><span class="pre">ancestor_pairs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ancestors</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/schema_scope.html#ancestor_pairs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.schema_scope.ancestor_pairs" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">(Type,</span> <span class="pre">ancestor)</span></code> local-name pairs — the vectorized engines’ type widening.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.schema_scope.ancestor_triples">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.schema_scope.</span></span><span class="sig-name descname"><span class="pre">ancestor_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ancestors</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/schema_scope.html#ancestor_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.schema_scope.ancestor_triples" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">(child</span> <span class="pre">IRI,</span> <span class="pre">parent</span> <span class="pre">IRI)</span></code> for pyshacl’s <code class="docutils literal notranslate"><span class="pre">rdfs:subClassOf</span></code> ont_graph — the same
+pairs as <a class="reference internal" href="#triplets.validation.schema_scope.ancestor_pairs" title="triplets.validation.schema_scope.ancestor_pairs"><code class="xref py py-func docutils literal notranslate"><span class="pre">ancestor_pairs()</span></code></a>. The child resolves like the data graph’s <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code>
+(schema namespace, else <em>undefined_namespace</em>); recorded parent IRIs pass through.</p>
+</dd></dl>
+
+</section>
 <section id="module-triplets.validation.shacl_duckdb">
 <span id="triplets-validation-shacl-duckdb-module"></span><h2>triplets.validation.shacl_duckdb module<a class="headerlink" href="#module-triplets.validation.shacl_duckdb" title="Link to this heading">¶</a></h2>
 <p>SHACL DuckDB engine — compiled-IR executor for larger-than-memory data.</p>
@@ -454,15 +600,18 @@ violations schema, same lexical-form datatype deviation). The nested and
 query components (sh:or, sh:and, sh:not, sh:node, sh:sparql) delegate to the
 pandas implementations — they materialize the (scoped) table, which is fine:
 those are a handful of rows even in the real profiles, and sh:sparql needs an
-rdflib graph anyway.</p>
+rdflib graph anyway. SPARQL targets materialize it the same way: their focus
+IDs resolve through <code class="docutils literal notranslate"><span class="pre">shacl_pandas.sparql_targets</span></code> into the <code class="docutils literal notranslate"><span class="pre">_shacl_targets</span></code>
+table the SQL reads.</p>
 <p>Explicitly selected (<code class="docutils literal notranslate"><span class="pre">engine=&quot;duckdb&quot;</span></code>), not in the auto order: polars owns
 the in-memory fast path; this engine is the deliberate choice when the data
 does not fit.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.validation.shacl_duckdb.validate">
-<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_duckdb.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compiled</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_duckdb.html#validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_duckdb.validate" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_duckdb.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compiled</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ancestors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lexical</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">abort_on_first</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_duckdb.html#validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_duckdb.validate" title="Link to this definition">¶</a></dt>
 <dd><p>Validate triplet data against the compiled constraint table (DuckDB SQL).</p>
-<p>Parameters mirror shacl_pandas.validate, plus:</p>
+<p>Parameters mirror shacl_pandas.validate (<em>abort_on_first</em>: a Violation from
+the SQL pass skips the pandas-delegated components), plus:</p>
 <dl class="simple">
 <dt>table / schema / table_name</dt><dd><p>Triplets relation when <em>data</em> is a DuckDB connection (defaults from
 the connection, else <code class="docutils literal notranslate"><span class="pre">triplets</span></code>).</p>
@@ -481,18 +630,21 @@ executors, which never touch rdflib). Compilation is cached by content hash,
 and each engine caches its own compiled artifact (LazyFrame plan builders,
 SQL) in <code class="docutils literal notranslate"><span class="pre">CompiledShapes.plans</span></code> — re-validating new data against the same
 shapes never recompiles anything.</p>
-<dl class="simple">
-<dt>IR: one row per shape x path x constraint component.</dt><dd><p>shape_id, target_class, path, inverse, component, params,
-severity, message, name, description</p>
-</dd>
-</dl>
+<p>IR: one row per shape x target x path x constraint component:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">shape_id</span><span class="p">,</span> <span class="n">shapes</span><span class="p">,</span> <span class="n">target_on</span><span class="p">,</span> <span class="n">target_by</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">inverse</span><span class="p">,</span> <span class="n">via_type</span><span class="p">,</span>
+<span class="n">component</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">severity</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">description</span>
+</pre></div>
+</div>
 <p><code class="docutils literal notranslate"><span class="pre">params</span></code> holds the component’s parameter: a scalar (sh:minCount), a list
-(sh:in), or nested row-dict lists (sh:or / sh:and / sh:not). Unknown
+(sh:in), or nested row-dict lists (sh:or / sh:and / sh:xone / sh:not, and the
+<code class="docutils literal notranslate"><span class="pre">rows</span></code> of sh:node / sh:property). Unknown
 components are kept as rows and logged — engines skip what they don’t
-implement; pyshacl still covers the full spec.</p>
+implement; pyshacl still covers the full spec. <code class="docutils literal notranslate"><span class="pre">shapes</span></code> is the row’s
+lineage — the shape ids whose <code class="docutils literal notranslate"><span class="pre">sh:deactivated</span></code> removes it; every shape
+compiles, and <code class="docutils literal notranslate"><span class="pre">CompiledShapes.active()</span></code> filters the switched-off ones.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="triplets.validation.shacl_ir.CompiledShapes">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_ir.</span></span><span class="sig-name descname"><span class="pre">CompiledShapes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hash</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sources</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">language</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'shacl'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stats</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plans</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_ir.html#CompiledShapes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_ir.CompiledShapes" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_ir.</span></span><span class="sig-name descname"><span class="pre">CompiledShapes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hash</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sources</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">language</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'shacl'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stats</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plans</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">deactivated</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">frozenset</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">frozenset({})</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">object</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_active</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_skipped</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">frozenset</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">frozenset({})</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_ir.html#CompiledShapes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_ir.CompiledShapes" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Shapes compiled once, shared by all validation engines.</p>
 <dl class="py attribute">
@@ -530,6 +682,29 @@ implement; pyshacl still covers the full spec.</p>
 <span class="sig-name descname"><span class="pre">plans</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span></span><a class="headerlink" href="#triplets.validation.shacl_ir.CompiledShapes.plans" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
+<dl class="py attribute">
+<dt class="sig sig-object py" id="triplets.validation.shacl_ir.CompiledShapes.deactivated">
+<span class="sig-name descname"><span class="pre">deactivated</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">frozenset</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">frozenset({})</span></span><a class="headerlink" href="#triplets.validation.shacl_ir.CompiledShapes.deactivated" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="triplets.validation.shacl_ir.CompiledShapes.base">
+<span class="sig-name descname"><span class="pre">base</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">object</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#triplets.validation.shacl_ir.CompiledShapes.base" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="triplets.validation.shacl_ir.CompiledShapes.active">
+<span class="sig-name descname"><span class="pre">active</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">deactivated_shapes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_ir.html#CompiledShapes.active"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_ir.CompiledShapes.active" title="Link to this definition">¶</a></dt>
+<dd><p>The run’s rule set: <em>deactivated_shapes</em> (a shape IRI or an iterable of
+them) switched off — None = this compile’s own set (on the full compile the
+shapes the graph declares), [] = every shape runs, any other set replaces the
+declared one. The same compile and <code class="docutils literal notranslate"><span class="pre">hash</span></code>, its IR without their rows; cached
+per set on the full compile, the full compile itself when nothing is declared
+or chosen.
+[] over a declared set is a compile of its own: pyshacl then validates the
+declared shapes too.</p>
+</dd></dl>
+
 </dd></dl>
 
 <dl class="py function">
@@ -546,19 +721,22 @@ compiled before (content hash — path identity does not matter).</p>
 <dd><p>IR rows → (vectorized, fallback, skipped components) against an
 engine’s registries.</p>
 <p>Engines cache the result in <code class="docutils literal notranslate"><span class="pre">CompiledShapes.plans[engine]</span></code> so the split
-runs once per compiled shapes, not once per validate call; validate()
+runs once per compiled shapes, not once per validate call; validate_shacl()
 reads the skipped components into the report metadata.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.validation.shacl_ir.parse_ir">
-<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_ir.</span></span><span class="sig-name descname"><span class="pre">parse_ir</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="reference internal" href="_modules/triplets/validation/shacl_ir.html#parse_ir"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_ir.parse_ir" title="Link to this definition">¶</a></dt>
-<dd><p>Walk NodeShapes → property shapes → one IR row per constraint component.</p>
-<p>A NodeShape may declare several sh:targetClass (the ENTSO-E profiles do);
-every constraint row is emitted once per target. <code class="docutils literal notranslate"><span class="pre">sh:targetSubjectsOf</span></code>
-targets compile the same way with target_kind=”subjectsOf” — the engines
-resolve the focus as the subjects carrying that KEY instead of a class’s
-instances.</p>
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_ir.</span></span><span class="sig-name descname"><span class="pre">parse_ir</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skipped</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">DataFrame</span></span></span><a class="reference internal" href="_modules/triplets/validation/shacl_ir.html#parse_ir"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_ir.parse_ir" title="Link to this definition">¶</a></dt>
+<dd><p>Walk the targeted NodeShapes → one IR row per constraint component.</p>
+<p>A NodeShape may declare several targets (the ENTSO-E profiles do); every
+constraint row is emitted once per target, <code class="docutils literal notranslate"><span class="pre">target_by</span></code> saying how the
+engines pick the rows: <code class="docutils literal notranslate"><span class="pre">Type</span></code> (sh:targetClass), <code class="docutils literal notranslate"><span class="pre">KEY</span></code> (sh:targetSubjectsOf:
+the IDs having that KEY), <code class="docutils literal notranslate"><span class="pre">VALUE</span></code> (sh:targetObjectsOf: the VALUEs under
+that KEY), <code class="docutils literal notranslate"><span class="pre">ID</span></code> (sh:targetNode), <code class="docutils literal notranslate"><span class="pre">SPARQL</span></code> (sh:target with sh:select: the
+IDs the query projects as <code class="docutils literal notranslate"><span class="pre">?this</span></code>, resolved per run; <code class="docutils literal notranslate"><span class="pre">target_on</span></code> is the
+executable query text). <em>skipped</em> collects what the IR cannot express as
+(lineage, text, drop) entries, for the run metadata (see CompiledShapes._skipped).</p>
 </dd></dl>
 
 </section>
@@ -567,7 +745,7 @@ instances.</p>
 <p>SHACL pandas engine — compiled-IR executor (debugging reference for the
 vectorized engine family).</p>
 <p>Operates directly on the triplet DataFrame’s raw string VALUEs — no rdflib,
-no rdf_map. That enables the one deliberate deviation from pyshacl: the
+no rdf_map. That enables a deliberate deviation from pyshacl: the
 datatype check judges the actual lexical form. rdflib reads <code class="docutils literal notranslate"><span class="pre">&quot;1&quot;^^xsd:float</span></code>
 as simply valid; here it is reported, on two levels:</p>
 <ul class="simple">
@@ -575,7 +753,8 @@ as simply valid; here it is reported, on two levels:</p>
 → VIOLATION_TYPE sh:datatype, the shape’s declared severity</p></li>
 <li><p>value valid but written in a non-canonical / narrower form (“1” for
 xsd:float — integer form; “0” for xsd:boolean)
-→ VIOLATION_TYPE triplets:lexicalForm, severity Warning</p></li>
+→ VIOLATION_TYPE triplets:lexicalForm, severity Warning (<code class="docutils literal notranslate"><span class="pre">lexical=False</span></code>
+skips this level)</p></li>
 </ul>
 <p>Structure: one pure function per constraint component
 <code class="docutils literal notranslate"><span class="pre">(context,</span> <span class="pre">rule)</span> <span class="pre">→</span> <span class="pre">violations</span> <span class="pre">DataFrame</span></code>, registered in
@@ -586,54 +765,56 @@ so direction is handled once in <code class="docutils literal notranslate"><span
 when built, else oxigraph, else rdflib): the engine loads the data once
 (content-hash cached), each constraint runs as one SELECT with the focus
 nodes bound via VALUES, and <code class="docutils literal notranslate"><span class="pre">max_workers</span></code> runs the constraint queries in
-parallel processes on the rdflib path only (fork — copy-on-write shares the
-dataset; threads don’t help GIL-bound rdflib; the embedded engines are
-ms-scale sequentially).</p>
-<p>Known limits:
-- sh:nodeKind — triplets store every value as a string, so term kind is decided</p>
-<blockquote>
-<div><p>like the N-Quads exporter decides it: by the schema when rdf_map names the
+parallel: forked processes on rdflib (copy-on-write shares the dataset;
+threads don’t help GIL-bound rdflib), threads on the embedded engines (they
+release the GIL while evaluating over one read-shared store). SPARQL targets
+run the same way, each distinct target query once per validation
+(<code class="docutils literal notranslate"><span class="pre">sparql_targets</span></code> — the polars and duckdb engines call it too).</p>
+<p>Known limits:</p>
+<ul class="simple">
+<li><p>sh:nodeKind — triplets store every value as a string, so term kind is decided
+like the N-Quads exporter decides it: by the schema when rdf_map names the
 path (a datatype key is Literal even when its values look like UUIDs), by
-value form otherwise (known ID / UUID / URI scheme / enum <code class="docutils literal notranslate"><span class="pre">PhaseCode.ABC</span></code>)</p>
-</div></blockquote>
-<dl class="py class">
-<dt class="sig sig-object py" id="triplets.validation.shacl_pandas.SchemaKind">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_pandas.</span></span><span class="sig-name descname"><span class="pre">SchemaKind</span></span><a class="reference internal" href="_modules/triplets/validation/shacl_pandas.html#SchemaKind"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_pandas.SchemaKind" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Schema-driven term-kind decision, shared by the vectorized engines’ contexts.</p>
-<p>Mirrors the N-Quads exporter’s classification (build_key_metadata): a key
-with a schema datatype (incl. xsd:string) holds literals; an enumeration
-key holds IRIs; anyURI/unknown keys return None (decide by value form).
-Without rdf_map everything is None.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="triplets.validation.shacl_pandas.SchemaKind.rdf_map">
-<span class="sig-name descname"><span class="pre">rdf_map</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#triplets.validation.shacl_pandas.SchemaKind.rdf_map" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="triplets.validation.shacl_pandas.SchemaKind.key_kind">
-<span class="sig-name descname"><span class="pre">key_kind</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_pandas.html#SchemaKind.key_kind"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_pandas.SchemaKind.key_kind" title="Link to this definition">¶</a></dt>
-<dd><p>“literal” / “iri” / None — what the export schema says values at <em>key</em> are.</p>
+value form otherwise (known ID / UUID / URI scheme / enum <code class="docutils literal notranslate"><span class="pre">PhaseCode.ABC</span></code>)</p></li>
+</ul>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.shacl_pandas.datatype_patterns">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_pandas.</span></span><span class="sig-name descname"><span class="pre">datatype_patterns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">datatype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lexical</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_pandas.html#datatype_patterns"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_pandas.datatype_patterns" title="Link to this definition">¶</a></dt>
+<dd><p>(valid pattern, warn pattern or None) of an xsd datatype — None when
+the type is unchecked. <code class="docutils literal notranslate"><span class="pre">lexical=False</span></code> drops the triplets:lexicalForm level.</p>
 </dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.shacl_pandas.sparql_targets">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_pandas.</span></span><span class="sig-name descname"><span class="pre">sparql_targets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rules</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_pandas.html#sparql_targets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_pandas.sparql_targets" title="Link to this definition">¶</a></dt>
+<dd><p>Focus IDs of the SPARQL targets among <em>rules</em> over <em>data</em> (any flavor
+triplets.sparql accepts) and the note rows — see <code class="docutils literal notranslate"><span class="pre">_sparql_targets</span></code>.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.validation.shacl_pandas.validate">
-<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_pandas.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compiled</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_pandas.html#validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_pandas.validate" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_pandas.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compiled</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ancestors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lexical</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">abort_on_first</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_pandas.html#validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_pandas.validate" title="Link to this definition">¶</a></dt>
 <dd><p>Validate triplet data against the compiled constraint table.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data</strong> (<em>triplet DataFrame</em><em> (</em><em>pandas/polars</em><em>)</em><em>, </em><em>arrow</em><em>, or </em><em>DuckDB connection</em>)</p></li>
 <li><p><strong>compiled</strong> (<a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes" title="triplets.validation.shacl_ir.CompiledShapes"><em>CompiledShapes</em></a>) – From <code class="docutils literal notranslate"><span class="pre">triplets.validation.compile</span></code> — this engine executes the IR.</p></li>
-<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Used only for the sh:sparql constraints (typed literals in the queried
-graph); every other component reads the raw lexical forms directly.</p></li>
-<li><p><strong>scope</strong> (<em>iterable</em><em> of </em><em>INSTANCE_ID</em><em>, </em><em>optional</em>) – Validate only rows of these instances.</p></li>
+<li><p><strong>rdf_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Scoped export schema (<code class="docutils literal notranslate"><span class="pre">schema_scope.scoped_rdf_map</span></code>): typed literals for
+the sh:sparql graph and the IRI/literal decision for sh:nodeKind. Every
+other component reads the raw lexical forms.</p></li>
+<li><p><strong>data_scope</strong> (<em>iterable</em><em> of </em><em>INSTANCE_ID</em><em>, </em><em>optional</em>) – Validate only rows of these instances.</p></li>
 <li><p><strong>components</strong> (<em>iterable</em><em> of </em><em>component names</em><em>, </em><em>optional</em>) – Restrict to a subset (e.g. <code class="docutils literal notranslate"><span class="pre">(&quot;sh:datatype&quot;,)</span></code> for the lexical
 supplement run next to pyshacl). None = everything implemented.</p></li>
-<li><p><strong>max_workers</strong> (<em>int</em><em>, </em><em>optional</em>) – Run the sh:sparql constraint queries in parallel processes (fork).
+<li><p><strong>max_workers</strong> (<em>int</em><em>, </em><em>optional</em>) – Run the sh:sparql constraint queries on that many workers: forked
+processes on the rdflib engine, threads on oxigraph / qlever.
 None = sequential.</p></li>
+<li><p><strong>ancestors</strong> (<em>dict</em><em>, </em><em>optional</em>) – <code class="docutils literal notranslate"><span class="pre">schema_scope.class_ancestors</span></code> map: class targets and sh:class also
+match subclass instances. None = exact rdf:type only.</p></li>
+<li><p><strong>lexical</strong> (<em>bool</em><em>, </em><em>default True</em>) – sh:datatype also reports valid-but-narrower forms as triplets:lexicalForm
+Warnings; False checks the lexical space only.</p></li>
+<li><p><strong>abort_on_first</strong> (<em>bool</em><em>, </em><em>default False</em>) – Stop after the first rule that finds a Violation (<code class="docutils literal notranslate"><span class="pre">has_violation</span></code>);
+the sh:sparql phase then does not run.</p></li>
 </ul>
 </dd>
 </dl>
@@ -654,7 +835,9 @@ per-constraint collects, no streaming.</p>
 violations schema, same lexical-form datatype deviation — see shacl_pandas).
 The rare nested/query components (sh:or, sh:and, sh:not, sh:node, sh:sparql —
 a handful of rows even in the real profiles) are delegated to the pandas
-implementations, so coverage is complete while the hot path stays lazy.</p>
+implementations, so coverage is complete while the hot path stays lazy.
+SPARQL targets resolve through <code class="docutils literal notranslate"><span class="pre">shacl_pandas.sparql_targets</span></code> once per run;
+their rules then plan like any other.</p>
 <p>Per-rule plan builders are cached in <code class="docutils literal notranslate"><span class="pre">CompiledShapes.plans[&quot;polars&quot;]</span></code> — the
 IR is split and normalized once per compiled shapes, then only re-bound to
 new data.</p>
@@ -662,12 +845,13 @@ new data.</p>
 use plain character-class patterns; exotic patterns belong to pyshacl.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.validation.shacl_polars.validate">
-<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_polars.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compiled</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_polars.html#validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_polars.validate" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_polars.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compiled</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">components</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_workers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ancestors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lexical</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">abort_on_first</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_polars.html#validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_polars.validate" title="Link to this definition">¶</a></dt>
 <dd><p>Validate triplet data against the compiled constraint table (lazy polars).</p>
 <p>Parameters mirror shacl_pandas.validate. Vectorized components run as one
 <code class="docutils literal notranslate"><span class="pre">polars.collect_all</span></code> over per-constraint LazyFrame plans; the nested and
 query components (FALLBACK_COMPONENTS) are delegated to the pandas engine
-so results are identical across both.</p>
+so results are identical across both. With <em>abort_on_first</em>, a Violation
+from the vectorized pass skips the delegated components.</p>
 </dd></dl>
 
 </section>
@@ -676,25 +860,31 @@ so results are identical across both.</p>
 <p>SHACL reference engine — pyshacl (spec-complete, rdflib-based).</p>
 <p>Correctness-first reference; the data is loaded into an in-memory rdflib graph
 via the N-Quads export. Consumes <code class="docutils literal notranslate"><span class="pre">CompiledShapes.graph</span></code> (shapes are parsed
-once by the IR compiler); the constraint table is for the vectorized engines.</p>
+once by the IR compiler) without its malformed shapes; the constraint table is
+for the vectorized engines.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.validation.shacl_pyshacl.validate">
-<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_pyshacl.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compiled</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inference</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'none'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">advanced</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">abort_on_first</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">store</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'memory'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_pyshacl.html#validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_pyshacl.validate" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_pyshacl.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compiled</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inference</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'none'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">advanced</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">abort_on_first</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">store</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'memory'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ancestors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_pyshacl.html#validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_pyshacl.validate" title="Link to this definition">¶</a></dt>
 <dd><p>Validate triplet data against compiled shapes; return a violations DataFrame.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data</strong> (<em>triplet DataFrame</em><em> (</em><em>pandas/polars</em><em>)</em><em>, </em><em>arrow</em><em>, or </em><em>DuckDB connection</em>)</p></li>
 <li><p><strong>compiled</strong> (<a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes" title="triplets.validation.shacl_ir.CompiledShapes"><em>CompiledShapes</em></a>) – From <code class="docutils literal notranslate"><span class="pre">triplets.validation.compile</span></code> — this engine uses the shapes graph.</p></li>
-<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema — xsd-typed literals in the data graph (optional).</p></li>
-<li><p><strong>scope</strong> (<em>iterable</em><em> of </em><em>INSTANCE_ID</em><em>, </em><em>optional</em>) – Validate only these instances’ named graphs — data outside the scope
+<li><p><strong>rdf_map</strong> (<em>dict</em><em>, </em><em>optional</em>) – Scoped export schema (<code class="docutils literal notranslate"><span class="pre">schema_scope.scoped_rdf_map</span></code>) — xsd-typed
+literals and class IRIs in the data graph.</p></li>
+<li><p><strong>ancestors</strong> (<em>dict</em><em>, </em><em>optional</em>) – <code class="docutils literal notranslate"><span class="pre">schema_scope.class_ancestors</span></code> map, given to pyshacl as <code class="docutils literal notranslate"><span class="pre">rdfs:subClassOf</span></code>
+in <code class="docutils literal notranslate"><span class="pre">ont_graph</span></code> (already closed, so pyshacl’s own closure adds nothing):
+<code class="docutils literal notranslate"><span class="pre">sh:targetClass</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:class</span></code> see SHACL instances of ancestors.
+None passes no <code class="docutils literal notranslate"><span class="pre">ont_graph</span></code>.</p></li>
+<li><p><strong>data_scope</strong> (<em>iterable</em><em> of </em><em>INSTANCE_ID</em><em>, </em><em>optional</em>) – Validate only these instances’ named graphs — data outside the scope
 is not loaded, so references into unscoped instances count as absent.
 Include dependency instances in the scope (or validate the full
-union, scope=None) for cross-instance checks.</p></li>
-<li><p><strong>inference</strong> (<em>passed to pyshacl.validate.</em>)</p></li>
-<li><p><strong>advanced</strong> (<em>passed to pyshacl.validate.</em>)</p></li>
-<li><p><strong>abort_on_first</strong> (<em>passed to pyshacl.validate.</em>)</p></li>
-<li><p><strong>**kwargs</strong> (<em>other engines' options</em><em> (</em><em>components</em><em>, </em><em>max_workers</em><em>, </em><em>table_name</em><em>) </em><em>—</em>) – accepted and ignored, per the shared engine contract.</p></li>
+union, data_scope=None) for cross-instance checks.</p></li>
+<li><p><strong>inference</strong> (<em>passed to pyshacl.validate;</em>) – abort_on_first also sets <code class="docutils literal notranslate"><span class="pre">allow_warnings</span></code>, so only a Violation stops the run.</p></li>
+<li><p><strong>advanced</strong> (<em>passed to pyshacl.validate;</em>) – abort_on_first also sets <code class="docutils literal notranslate"><span class="pre">allow_warnings</span></code>, so only a Violation stops the run.</p></li>
+<li><p><strong>abort_on_first</strong> (<em>passed to pyshacl.validate;</em>) – abort_on_first also sets <code class="docutils literal notranslate"><span class="pre">allow_warnings</span></code>, so only a Violation stops the run.</p></li>
+<li><p><strong>**kwargs</strong> (<em>other engines' options</em><em> (</em><em>components</em><em>, </em><em>max_workers</em><em>, </em><em>table_name</em><em>, </em><em>lexical</em><em>) </em><em>—</em>) – accepted and ignored, per the shared engine contract.</p></li>
 <li><p><strong>store</strong> (<em>str</em><em>, </em><em>default &quot;memory&quot;</em>) – rdflib store backend for the data graph (see <code class="docutils literal notranslate"><span class="pre">load_dataset</span></code>):
 “oxigraph” loads through the oxigraph engine’s cached store
 (Rust N-Quads parse instead of rdflib’s Python parser); “auto” picks
@@ -704,7 +894,8 @@ force-clones the data graph into rdflib Memory regardless
 (advanced=True), and the clone through the oxrdflib wrapper costs
 more than the Rust parse saves (95k warm: 1.8 s vs 1.2 s; 1.14M
 load+clone: 40 s vs 33 s). Opt in when the store is already loaded
-for SPARQL anyway — then the load leg is free.</p></li>
+for SPARQL anyway — then the load leg is free (unscoped runs only:
+a data_scope run loads its own store of the scoped rows).</p></li>
 </ul>
 </dd>
 </dl>
@@ -717,21 +908,34 @@ for SPARQL anyway — then the load leg is free.</p></li>
 and the inverse: export a violations DataFrame as a standard sh:ValidationReport.</p>
 <p>Canonical violations schema (identical across all current and future SHACL
 engines, so the later vectorized engines can produce it natively):</p>
-<blockquote>
-<div><p>[ID, KEY, VALUE, VIOLATION_TYPE, MESSAGE, SEVERITY, SOURCE_SHAPE]</p>
-</div></blockquote>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">ID</span><span class="p">,</span> <span class="n">KEY</span><span class="p">,</span> <span class="n">VALUE</span><span class="p">,</span> <span class="n">VIOLATION_TYPE</span><span class="p">,</span> <span class="n">MESSAGE</span><span class="p">,</span> <span class="n">SEVERITY</span><span class="p">,</span> <span class="n">SOURCE_SHAPE</span><span class="p">]</span>
+</pre></div>
+</div>
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.shacl_report.has_violation">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_report.</span></span><span class="sig-name descname"><span class="pre">has_violation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">violations</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_report.html#has_violation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_report.has_violation" title="Link to this definition">¶</a></dt>
+<dd><p>Whether <em>violations</em> holds a data Violation — the <code class="docutils literal notranslate"><span class="pre">abort_on_first</span></code> stop.
+A <code class="docutils literal notranslate"><span class="pre">triplets:invalidSparql</span></code> row flags a defective shape, not the data.</p>
+</dd></dl>
+
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.validation.shacl_report.report_to_violations">
-<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_report.</span></span><span class="sig-name descname"><span class="pre">report_to_violations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">report_graph</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_report.html#report_to_violations"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_report.report_to_violations" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_report.</span></span><span class="sig-name descname"><span class="pre">report_to_violations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">report_graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shapes_graph</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_report.html#report_to_violations"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_report.report_to_violations" title="Link to this definition">¶</a></dt>
 <dd><p>ValidationReport rdflib graph → violations DataFrame (single columnar pass).</p>
+<p>Nested <code class="docutils literal notranslate"><span class="pre">sh:detail</span></code> results (the cause of a <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> result) are not
+listed: the parent result is the finding. With the <code class="docutils literal notranslate"><span class="pre">shapes_graph</span></code> the
+report was made from, a blank-node <code class="docutils literal notranslate"><span class="pre">sh:resultPath</span></code> (inverse / sequence /
+alternative path) is the KEY it resolves to; without it (reports written by
+other tools) KEY is the blank-node label.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.validation.shacl_report.violations_to_report_graph">
-<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_report.</span></span><span class="sig-name descname"><span class="pre">violations_to_report_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">violations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_references</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_report.html#violations_to_report_graph"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_report.violations_to_report_graph" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_report.</span></span><span class="sig-name descname"><span class="pre">violations_to_report_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">violations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_references</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_report.html#violations_to_report_graph"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_report.violations_to_report_graph" title="Link to this definition">¶</a></dt>
 <dd><p>Violations DataFrame → sh:ValidationReport rdflib graph (inverse of
-report_to_violations; KEYs expand to the CIM namespace unless already URIs).</p>
-<p>A result carries several plain-text <a href="#id1"><span class="problematic" id="id2">``</span></a>sh:resultMessage``s when the frame
+report_to_violations; KEYs expand through the export schema namespaces —
+<code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> — <code class="docutils literal notranslate"><span class="pre">undefined_namespace</span></code> for names it lacks, unless already URIs).</p>
+<p>A result carries several plain-text <code class="docutils literal notranslate"><span class="pre">sh:resultMessage</span></code>s when the frame
 has the context/location columns: the engine message, the shape and
 schema descriptions (context.enrich) and the source position
 (locations.locate_violations) — SHACL has no location vocabulary, so a
@@ -741,7 +945,7 @@ message is the interoperable carrier.</p>
 <code class="docutils literal notranslate"><span class="pre">dcterms:references</span></code> from <code class="docutils literal notranslate"><span class="pre">report_source</span></code> / <code class="docutils literal notranslate"><span class="pre">report_references</span></code>
 (str or sequence — validated file name(s) / shape file name(s)).</p>
 <p>Defaults come from <code class="docutils literal notranslate"><span class="pre">violations.attrs[&quot;validation&quot;]</span></code> — the metadata
-<code class="docutils literal notranslate"><span class="pre">validate()</span></code> stamps on the frame (timestamp of the validation run, tool
+the validation functions stamp on the frame (timestamp of the validation run, tool
 version, data/shape file names). Explicit arguments override it.</p>
 </dd></dl>
 
@@ -749,7 +953,7 @@ version, data/shape file names). Explicit arguments override it.</p>
 <dt class="sig sig-object py" id="triplets.validation.shacl_report.message_prefix">
 <span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_report.</span></span><span class="sig-name descname"><span class="pre">message_prefix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">violation_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">language</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'shacl'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_report.html#message_prefix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_report.message_prefix" title="Link to this definition">¶</a></dt>
 <dd><p>[&lt;language&gt;_message] = the text is the shape’s/schema’s own message;
-[engine_message] = the engine worded it. validate() stamps MESSAGE_SOURCE
+[engine_message] = the engine worded it. the validation functions stamp MESSAGE_SOURCE
 on every row; frames without it fall back to the violation-type namespace
 (triplets:* → engine). The constraint language (“shacl”; “rdfs” for
 schema-compiled runs) names the whole tag family in both report formats.</p>
@@ -757,13 +961,13 @@ schema-compiled runs) names the whole tag family in both report formats.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.validation.shacl_report.export_to_shacl_report">
-<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_report.</span></span><span class="sig-name descname"><span class="pre">export_to_shacl_report</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">violations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sources</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_references</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_report.html#export_to_shacl_report"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_report.export_to_shacl_report" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_report.</span></span><span class="sig-name descname"><span class="pre">export_to_shacl_report</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">violations</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sources</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_to_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_references</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_report.html#export_to_shacl_report"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_report.export_to_shacl_report" title="Link to this definition">¶</a></dt>
 <dd><p>Violations frame → standard sh:ValidationReport (any rdflib format).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>violations</strong> (<em>DataFrame in VIOLATION_COLUMNS</em><em> (</em><em>any engine's output</em><em>)</em><em>.</em>) – Enrichment/location columns, when present, become additional
-<a href="#id3"><span class="problematic" id="id4">``</span></a>sh:resultMessage``s (Description/Schema/Source).</p></li>
+<code class="docutils literal notranslate"><span class="pre">sh:resultMessage</span></code>s (Description/Schema/Source).</p></li>
 <li><p><strong>sources</strong> (<em>optional</em>) – The original CIM/XML files — runs the locate_violations pass so each
 result carries a “Source: file line N” message (a frame
 already carrying LOCATION_COLUMNS is used as-is).</p></li>
@@ -775,14 +979,22 @@ RDF/XML, <code class="docutils literal notranslate"><span class="pre">.ttl</span
 (unknown/missing → turtle). Explicit value always wins.</p></li>
 <li><p><strong>report_source</strong> (<em>str</em><em> or </em><em>sequence</em><em>, </em><em>optional</em>) – <code class="docutils literal notranslate"><span class="pre">dcterms:source</span></code> on the ValidationReport (validated file name(s)).
 Metadata only — <code class="docutils literal notranslate"><span class="pre">sources</span></code> is the one that runs the locate pass.
-Default: the data file names <code class="docutils literal notranslate"><span class="pre">validate()</span></code> stamped in
+Default: the data file names the validation functions stamped in
 <code class="docutils literal notranslate"><span class="pre">violations.attrs[&quot;validation&quot;]</span></code>.</p></li>
 <li><p><strong>report_references</strong> (<em>str</em><em> or </em><em>sequence</em><em>, </em><em>optional</em>) – <code class="docutils literal notranslate"><span class="pre">dcterms:references</span></code> on the ValidationReport (shape file name(s)).
 Plain labels — not the shapes object <code class="docutils literal notranslate"><span class="pre">to_sarif(shapes=)</span></code> takes.
 Default: the shape file names from <code class="docutils literal notranslate"><span class="pre">violations.attrs[&quot;validation&quot;]</span></code>.</p></li>
+<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema — <code class="docutils literal notranslate"><span class="pre">sh:resultPath</span></code> KEYs expand to their profile namespace.</p></li>
+<li><p><strong>undefined_namespace</strong> (<em>str</em><em>, </em><em>default CIM100</em>) – Namespace for KEYs the schema does not declare (every KEY without one).</p></li>
 </ul>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.shacl_report.profile_text">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.shacl_report.</span></span><span class="sig-name descname"><span class="pre">profile_text</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation/shacl_report.html#profile_text"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.shacl_report.profile_text" title="Link to this definition">¶</a></dt>
+<dd><p>A PROFILE cell as text: the scoped section keys joined with “, “ (display only).</p>
 </dd></dl>
 
 <dl class="py function">
@@ -806,19 +1018,28 @@ same convention as the other exports.</p>
 </section>
 <section id="module-triplets.validation">
 <span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-triplets.validation" title="Link to this heading">¶</a></h2>
-<p>SHACL validation over triplet data.</p>
-<p>Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
-- pyshacl — reference, spec-complete, rdflib-based; always available with the</p>
-<blockquote>
-<div><p><cite>validation</cite> extra</p>
-</div></blockquote>
+<p>Validation over triplet data — three generic validations, scoped by the caller:</p>
 <ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">validate_shacl</span></code> — SHACL shapes;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> — the export schema’s cardinality, datatypes and
+enumerations, per instance;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">validate_schema_references</span></code> — the reference types of associations, per
+source instance, against target instances and profiles.</p></li>
+</ul>
+<p>Every input has a scope named after it: <code class="docutils literal notranslate"><span class="pre">data</span></code> + <code class="docutils literal notranslate"><span class="pre">data_scope</span></code> (INSTANCE_IDs),
+<code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> + <code class="docutils literal notranslate"><span class="pre">rdf_map_scope</span></code> (profiles, merged — <code class="docutils literal notranslate"><span class="pre">schema_scope</span></code>). Nothing
+here reads instance headers; <code class="docutils literal notranslate"><span class="pre">triplets.cgmes_tools.validate_by_header</span></code> does.
+<code class="docutils literal notranslate"><span class="pre">enrich</span></code> adds the context columns in a separate call.</p>
+<p>Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):</p>
+<ul class="simple">
+<li><p>pyshacl — reference, spec-complete, rdflib-based; always available with the
+<cite>validation</cite> extra</p></li>
 <li><p>polars — compiled-IR executor (performance; one lazy plan per constraint,
 single collect_all; auto-preferred when polars is installed)</p></li>
 <li><p>pandas — compiled-IR executor (debugging; same complete registry and
 semantics, eager. sh:sparql delegates to triplets.sparql with optional
 max_workers; sh:node runs the compile-time-expanded referenced shape against
-the value nodes; sh:nodeKind is decided by the rdf_map schema)</p></li>
+the value nodes (on a node shape, the focus node); sh:nodeKind is decided by the rdf_map schema)</p></li>
 <li><p>duckdb — compiled-IR executor for larger-than-memory data (one SQL query
 per constraint against the triplets table, streams/spills via DuckDB;
 explicit engine=”duckdb”, not in auto — polars owns the in-memory fast path)</p></li>
@@ -826,16 +1047,18 @@ explicit engine=”duckdb”, not in auto — polars owns the in-memory fast pat
 <p>Compile once: <code class="docutils literal notranslate"><span class="pre">compile(shapes)</span></code> parses the shapes with rdflib exactly once
 into <code class="docutils literal notranslate"><span class="pre">CompiledShapes</span></code> (shapes graph + flat constraint table, cached by
 content hash). Engines receive the compiled object:</p>
-<blockquote>
-<div><p>validate(data, compiled, rdf_map=None, scope=None, <a href="#id5"><span class="problematic" id="id6">**</span></a>kwargs) → violations DataFrame</p>
-</div></blockquote>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>validate(data, compiled, rdf_map=None, data_scope=None, ancestors=None, **kwargs) → violations DataFrame
+</pre></div>
+</div>
+<p>(<code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> the scoped schema, <code class="docutils literal notranslate"><span class="pre">ancestors</span></code> the <code class="docutils literal notranslate"><span class="pre">class_ancestors</span></code> map.)</p>
 <p>pyshacl consumes the graph; the vectorized engines consume the IR (and cache
 their own plan per engine in <code class="docutils literal notranslate"><span class="pre">CompiledShapes.plans</span></code>) — they never touch
-rdflib. sh:sparql IR rows are delegated to triplets.sparql by the vectorized
-engines (pyshacl evaluates them itself via advanced=True).</p>
-<p>One deliberate deviation from pyshacl: the datatype check inspects the raw
+rdflib. sh:sparql IR rows and SPARQL targets are delegated to triplets.sparql
+by the vectorized engines (pyshacl evaluates both itself via advanced=True).</p>
+<p>A deliberate deviation from pyshacl: the datatype check inspects the raw
 lexical form of VALUE (see shacl_pandas) — with <code class="docutils literal notranslate"><span class="pre">lexical=True</span></code> (default)
-those findings are appended to any engine’s report.</p>
+every engine’s report carries the triplets:lexicalForm Warnings, with
+<code class="docutils literal notranslate"><span class="pre">lexical=False</span></code> none does.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.validation.register_engine">
 <span class="sig-prename descclassname"><span class="pre">triplets.validation.</span></span><span class="sig-name descname"><span class="pre">register_engine</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/triplets/validation.html#register_engine"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.register_engine" title="Link to this definition">¶</a></dt>
@@ -849,8 +1072,8 @@ those findings are appended to any engine’s report.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="triplets.validation.validate">
-<span class="sig-prename descclassname"><span class="pre">triplets.validation.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shapes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lexical</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation.html#validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.validate" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="triplets.validation.validate_shacl">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.</span></span><span class="sig-name descname"><span class="pre">validate_shacl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shapes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lexical</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inheritance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">deactivated_shapes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">abort_on_first</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation.html#validate_shacl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.validate_shacl" title="Link to this definition">¶</a></dt>
 <dd><p>Validate triplet data against SHACL shapes; return a violations DataFrame.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -858,59 +1081,111 @@ those findings are appended to any engine’s report.</p>
 <li><p><strong>data</strong> (<em>triplet DataFrame</em><em> (</em><em>pandas/polars</em><em>)</em><em>, </em><em>arrow</em><em>, or </em><em>DuckDB connection</em>)</p></li>
 <li><p><strong>shapes</strong> (<em>str</em><em> | </em><em>path</em><em> | </em><em>list</em><em> of </em><em>paths</em><em> | </em><em>rdflib.Graph</em><em> | </em><a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes" title="triplets.validation.shacl_ir.CompiledShapes"><em>CompiledShapes</em></a>) – SHACL shapes (format auto-detected by extension). Pass the result of
 <code class="docutils literal notranslate"><span class="pre">compile(shapes)</span></code> to reuse the parsed shapes across validations.</p></li>
-<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema — xsd-typed literals in the data graph (optional).</p></li>
-<li><p><strong>scope</strong> (<em>iterable</em><em> of </em><em>INSTANCE_ID</em><em>, </em><em>optional</em>) – Validate only these instances’ named graphs — data outside the scope
+<li><p><strong>rdf_map</strong> (<em>dict</em><em> or </em><em>str</em><em>, </em><em>optional</em>) – Export schema — xsd-typed literals in the data graph, the schema-driven
+sh:nodeKind decision and the class inheritance (see <code class="docutils literal notranslate"><span class="pre">inheritance</span></code>),
+from the profiles in <code class="docutils literal notranslate"><span class="pre">rdf_map_scope</span></code>.</p></li>
+<li><p><strong>data_scope</strong> (<em>iterable</em><em> of </em><em>INSTANCE_ID</em><em>, </em><em>optional</em>) – Validate only these instances’ named graphs — data outside the scope
 is not loaded, so references into unscoped instances count as absent.
 Include dependency instances in the scope (or validate the full
-union, scope=None) for cross-instance checks.</p></li>
+union, data_scope=None) for cross-instance checks.</p></li>
+<li><p><strong>rdf_map_scope</strong> (<em>profile identifier</em><em> or </em><em>sequence</em><em> of </em><em>them</em><em>, </em><em>optional</em>) – The rdf_map profiles the run uses, merged into one: section keys
+(<code class="docutils literal notranslate"><span class="pre">&quot;EQ&quot;</span></code>) and/or declared profile IRIs; <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> = every section;
+None = the rdf_map’s root entries. A scope without entries raises
+ValueError (see <code class="docutils literal notranslate"><span class="pre">triplets.validation.schema_scope</span></code>).</p></li>
 <li><p><strong>engine</strong> (<em>str</em><em>, </em><em>default &quot;auto&quot;</em>) – “polars” (performance), “pandas” (debugging), “duckdb”
 (larger-than-memory) or “pyshacl” (reference). “auto” picks
 polars → pandas → pyshacl; duckdb is always an explicit choice.</p></li>
-<li><p><strong>lexical</strong> (<em>bool</em><em>, </em><em>default True</em>) – Append the lexical-form datatype findings (the deliberate deviation
-from pyshacl — see shacl_pandas) to the engine’s report.</p></li>
-<li><p><strong>context</strong> (<em>bool</em><em>, </em><em>default False</em>) – Run the slower enrichment pass (triplets.validation.context.enrich):
-adds instance/file, object type/name, shape name/description and
-schema definition columns to the report.</p></li>
-<li><p><strong>in</strong> (<em>The returned frame carries the validation-run metadata</em>)</p></li>
-<li><p><strong>duration</strong> (<em>violations.attrs</em><em>[</em><em>&quot;validation&quot;</em><em>] </em><em>(</em><em>start/end timestamps and</em>)</p></li>
+<li><p><strong>lexical</strong> (<em>bool</em><em>, </em><em>default True</em>) – Report valid-but-narrower datatype forms (<code class="docutils literal notranslate"><span class="pre">&quot;1&quot;</span></code> for xsd:float) as
+triplets:lexicalForm Warnings — a deliberate deviation from pyshacl,
+see shacl_pandas. The vectorized engines check them inline, pyshacl
+gets the pandas datatype check as a supplement. False skips the check
+on every engine (pyshacl: the pure pyshacl report); values outside the
+lexical space stay sh:datatype violations.</p></li>
+<li><p><strong>undefined_namespace</strong> (<em>str</em><em>, </em><em>default CIM100</em>) – Namespace for names the schema does not declare (every name without
+an rdf_map) in the graph the sh:sparql constraints and pyshacl see.</p></li>
+<li><p><strong>inheritance</strong> (<em>bool</em><em>, </em><em>default True</em>) – <code class="docutils literal notranslate"><span class="pre">sh:targetClass</span></code> and <code class="docutils literal notranslate"><span class="pre">sh:class</span></code> also match instances of subclasses,
+from the scoped profiles’ <code class="docutils literal notranslate"><span class="pre">inheritance</span></code> lists
+(<a class="reference internal" href="#triplets.validation.schema_scope.class_ancestors" title="triplets.validation.schema_scope.class_ancestors"><code class="xref py py-func docutils literal notranslate"><span class="pre">class_ancestors()</span></code></a>; pyshacl: as
+<code class="docutils literal notranslate"><span class="pre">rdfs:subClassOf</span></code> in <code class="docutils literal notranslate"><span class="pre">ont_graph</span></code>). False matches the exact
+<code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> only. No effect without an rdf_map.</p></li>
+<li><p><strong>deactivated_shapes</strong> (<em>shape IRI</em><em> or </em><em>iterable</em><em> of </em><em>them</em><em>, </em><em>optional</em>) – The shapes to switch off for this run — replaces the set the graph
+declares (<code class="docutils literal notranslate"><span class="pre">compiled.deactivated</span></code>): None = the declared set, <code class="docutils literal notranslate"><span class="pre">[]</span></code> =
+every shape runs, the declared ones included; extend or reduce it
+freely. The NC validation aggregates switch off different shapes of a
+shared base this way, and one compile serves every aggregate
+(<code class="docutils literal notranslate"><span class="pre">CompiledShapes.active</span></code>).</p></li>
+<li><p><strong>abort_on_first</strong> (<em>bool</em><em>, </em><em>default False</em>) – Stop at the first Violation — for a yes/no gate, not a full report.
+Warning and Info findings and <code class="docutils literal notranslate"><span class="pre">triplets:invalidSparql</span></code> rows never
+stop the run. The result holds the findings of the work finished
+before the stop, so engines agree on whether a Violation exists, not
+on the rows. polars / duckdb stop after the vectorized pass, pandas
+between rules, pyshacl after its first failing constraint (the lexical
+supplement is then skipped).</p></li>
 </ul>
 </dd>
 </dl>
-<p>:param :
-:param engine:
-:param tool version:
-:param data/shape file names:
-:param shape and constraint counts:
-:param :
-:param and any shapes/components the run skipped) — every report exporter reads:
-:param it:
-:type it: ValidationReport and the csv/excel exports tell the
-:param so SARIF:
-:type so SARIF: ValidationReport and the csv/excel exports tell the
-:param the sh:
-:type the sh: ValidationReport and the csv/excel exports tell the
-:param same story.:</p>
+<p class="rubric">Notes</p>
+<p>The returned frame carries the validation-run metadata in
+<code class="docutils literal notranslate"><span class="pre">violations.attrs[&quot;validation&quot;]</span></code> (start/end timestamps and duration,
+engine, tool version, data/shape file names, shape and constraint counts,
+any shapes/components the run skipped, and <code class="docutils literal notranslate"><span class="pre">aborted</span></code>: True when
+<code class="docutils literal notranslate"><span class="pre">abort_on_first</span></code> met a Violation) — every report exporter reads
+it, so SARIF, the sh:ValidationReport and the csv/excel exports tell the
+same story.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.validation.validate_schema">
-<span class="sig-prename descclassname"><span class="pre">triplets.validation.</span></span><span class="sig-name descname"><span class="pre">validate_schema</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">closed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">profiles</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation.html#validate_schema"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.validate_schema" title="Link to this definition">¶</a></dt>
-<dd><p>Validate triplet data against the export schema — per instance, per
-declared profile; profiles are never merged.</p>
-<p>Every INSTANCE_ID is validated separately (the scope filter), against
-each profile its own header declares: the header’s profile-identity
-fields (<code class="docutils literal notranslate"><span class="pre">conformsTo</span></code>, <code class="docutils literal notranslate"><span class="pre">Model.profile</span></code>, <code class="docutils literal notranslate"><span class="pre">keyword</span></code>,
-<code class="docutils literal notranslate"><span class="pre">Model.messageType</span></code>) are matched against the schema profiles’ declared
-identity (versionIRI / conformsTo / keyword / section key; legacy 2.4
-profile URLs by substring). One instance may declare several profiles —
-each runs on its own, so per-profile constraints (e.g. mRID 1..1 in
-every CGMES 3.0 profile) are checked against that instance’s rows alone.</p>
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.</span></span><span class="sig-name descname"><span class="pre">validate_schema</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_undefined_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">severity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Violation'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation.html#validate_schema"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.validate_schema" title="Link to this definition">¶</a></dt>
+<dd><p>Validate triplet data against the export schema: cardinality, datatypes and
+enumerations of the scoped profiles, per instance.</p>
+<p>Every instance in <em>data_scope</em> is validated on its own (cardinality never
+counts rows of another instance) against the profiles in <em>rdf_map_scope</em>,
+merged into one (<code class="docutils literal notranslate"><span class="pre">triplets.validation.schema_scope</span></code>). Class rules never
+widen to subclasses; references are checked by <code class="docutils literal notranslate"><span class="pre">validate_schema_references</span></code>.</p>
 <dl class="simple">
-<dt>profiles<span class="classifier">sequence of profile identifiers, optional</span></dt><dd><p>Explicit override applied to EVERY instance (section key, keyword or
-profile URI) — for header-less or legacy data. Unknown identifiers
-raise ValueError. Default None = resolve from each instance’s header;
-instances resolving to nothing are skipped and reported in the run
-metadata coverage (<code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>).</p>
+<dt>data_scope<span class="classifier">iterable of INSTANCE_ID, optional</span></dt><dd><p>The instances to validate; None = every instance in <em>data</em>.</p>
+</dd>
+<dt>rdf_map_scope<span class="classifier">profile identifier or sequence of them</span></dt><dd><p>Section keys and/or declared profile IRIs (<code class="docutils literal notranslate"><span class="pre">[&quot;EQ&quot;,</span> <span class="pre">&quot;OP&quot;,</span> <span class="pre">&quot;SC&quot;]</span></code> for a
+CGMES 3.0 EQ file); <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> = every section; None = the root entries.
+A scope without Class entries raises ValueError.</p>
+</dd>
+<dt>report_undefined_keys<span class="classifier">bool, default False</span></dt><dd><p>Also report keys on an object that no scoped profile defines for its class.</p>
+</dd>
+<dt>severity<span class="classifier">{“Violation”, “Warning”, “Info”}, default “Violation”</span></dt><dd><p>The SEVERITY of every finding (<code class="docutils literal notranslate"><span class="pre">triplets:lexicalForm</span></code> stays Warning).</p>
+</dd>
+</dl>
+<p>The PROFILE column lists the scoped section keys (<code class="docutils literal notranslate"><span class="pre">[&quot;EQ&quot;,</span> <span class="pre">&quot;OP&quot;,</span> <span class="pre">&quot;SC&quot;]</span></code>).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="triplets.validation.validate_schema_references">
+<span class="sig-prename descclassname"><span class="pre">triplets.validation.</span></span><span class="sig-name descname"><span class="pre">validate_schema_references</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rdf_map_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_data_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_rdf_map_scope</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">report_missing_targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inheritance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undefined_namespace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://iec.ch/TC57/CIM100#'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">severity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Violation'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/validation.html#validate_schema_references"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.validation.validate_schema_references" title="Link to this definition">¶</a></dt>
+<dd><p>Check the reference types of the source instances’ associations.</p>
+<p>Every instance in <em>data_scope</em> is checked on its own against the
+associations of its profiles (<em>rdf_map_scope</em>, merged); the referenced
+objects are looked up in that instance and the <em>target_data_scope</em>
+instances. A reference conforms when ANY type of its object is the range
+class or, with <em>inheritance</em>, one of its subclasses — the classes the source
+and <em>target_rdf_map_scope</em> profiles define. Findings are on source objects only.</p>
+<dl class="simple">
+<dt>data_scope<span class="classifier">iterable of INSTANCE_ID, optional</span></dt><dd><p>The source instances; None = every instance.</p>
+</dd>
+<dt>rdf_map_scope<span class="classifier">profile identifier or sequence of them, optional</span></dt><dd><p>The source profiles — their associations are checked; None = the root entries.</p>
+</dd>
+<dt>target_data_scope<span class="classifier">iterable of INSTANCE_ID, optional</span></dt><dd><p>Instances holding the referenced objects (e.g. the EQ for an SSH);
+None = every instance, <code class="docutils literal notranslate"><span class="pre">[]</span></code> = none (only the source itself).</p>
+</dd>
+<dt>target_rdf_map_scope<span class="classifier">profile identifier or sequence of them, optional</span></dt><dd><p>Profiles defining the referenced classes. A range class no source or
+target profile defines cannot be decided: the association is listed in
+<code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>.</p>
+</dd>
+<dt>report_missing_targets<span class="classifier">bool, default True</span></dt><dd><p>Report references whose object is in neither the source nor the target
+instances (<code class="docutils literal notranslate"><span class="pre">triplets:missing</span></code>); False leaves them silent.</p>
+</dd>
+<dt>inheritance<span class="classifier">bool, default True</span></dt><dd><p>False accepts the range class itself only.</p>
+</dd>
+<dt>severity<span class="classifier">{“Violation”, “Warning”, “Info”}, default “Violation”</span></dt><dd><p>The SEVERITY of every finding.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -947,7 +1222,7 @@ metadata coverage (<code class="docutils literal notranslate"><span class="pre">
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -977,6 +1252,7 @@ metadata coverage (<code class="docutils literal notranslate"><span class="pre">
 <li><a class="reference internal" href="#submodules">Submodules</a></li>
 <li><a class="reference internal" href="#module-triplets.validation.context">triplets.validation.context module</a><ul>
 <li><a class="reference internal" href="#triplets.validation.context.enrich"><code class="docutils literal notranslate"><span class="pre">enrich()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.context.concat_violations"><code class="docutils literal notranslate"><span class="pre">concat_violations()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#module-triplets.validation.locations">triplets.validation.locations module</a><ul>
@@ -987,6 +1263,20 @@ metadata coverage (<code class="docutils literal notranslate"><span class="pre">
 <li><a class="reference internal" href="#module-triplets.validation.sarif">triplets.validation.sarif module</a><ul>
 <li><a class="reference internal" href="#triplets.validation.sarif.export_to_sarif"><code class="docutils literal notranslate"><span class="pre">export_to_sarif()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.sarif.build_sarif"><code class="docutils literal notranslate"><span class="pre">build_sarif()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-triplets.validation.schema_ir">triplets.validation.schema_ir module</a><ul>
+<li><a class="reference internal" href="#triplets.validation.schema_ir.compile_schema"><code class="docutils literal notranslate"><span class="pre">compile_schema()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.schema_ir.compile_references"><code class="docutils literal notranslate"><span class="pre">compile_references()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-triplets.validation.schema_scope">triplets.validation.schema_scope module</a><ul>
+<li><a class="reference internal" href="#triplets.validation.schema_scope.scope_sections"><code class="docutils literal notranslate"><span class="pre">scope_sections()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.schema_scope.scoped_rdf_map"><code class="docutils literal notranslate"><span class="pre">scoped_rdf_map()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.schema_scope.class_ancestors"><code class="docutils literal notranslate"><span class="pre">class_ancestors()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.schema_scope.require_entries"><code class="docutils literal notranslate"><span class="pre">require_entries()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.schema_scope.ancestor_pairs"><code class="docutils literal notranslate"><span class="pre">ancestor_pairs()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.schema_scope.ancestor_triples"><code class="docutils literal notranslate"><span class="pre">ancestor_triples()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#module-triplets.validation.shacl_duckdb">triplets.validation.shacl_duckdb module</a><ul>
@@ -1002,6 +1292,9 @@ metadata coverage (<code class="docutils literal notranslate"><span class="pre">
 <li><a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes.language"><code class="docutils literal notranslate"><span class="pre">language</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes.stats"><code class="docutils literal notranslate"><span class="pre">stats</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes.plans"><code class="docutils literal notranslate"><span class="pre">plans</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes.deactivated"><code class="docutils literal notranslate"><span class="pre">deactivated</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes.base"><code class="docutils literal notranslate"><span class="pre">base</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.shacl_ir.CompiledShapes.active"><code class="docutils literal notranslate"><span class="pre">active()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#triplets.validation.shacl_ir.compile_shapes"><code class="docutils literal notranslate"><span class="pre">compile_shapes()</span></code></a></li>
@@ -1010,11 +1303,8 @@ metadata coverage (<code class="docutils literal notranslate"><span class="pre">
 </ul>
 </li>
 <li><a class="reference internal" href="#module-triplets.validation.shacl_pandas">triplets.validation.shacl_pandas module</a><ul>
-<li><a class="reference internal" href="#triplets.validation.shacl_pandas.SchemaKind"><code class="docutils literal notranslate"><span class="pre">SchemaKind</span></code></a><ul>
-<li><a class="reference internal" href="#triplets.validation.shacl_pandas.SchemaKind.rdf_map"><code class="docutils literal notranslate"><span class="pre">rdf_map</span></code></a></li>
-<li><a class="reference internal" href="#triplets.validation.shacl_pandas.SchemaKind.key_kind"><code class="docutils literal notranslate"><span class="pre">key_kind()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#triplets.validation.shacl_pandas.datatype_patterns"><code class="docutils literal notranslate"><span class="pre">datatype_patterns()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.shacl_pandas.sparql_targets"><code class="docutils literal notranslate"><span class="pre">sparql_targets()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.shacl_pandas.validate"><code class="docutils literal notranslate"><span class="pre">validate()</span></code></a></li>
 </ul>
 </li>
@@ -1027,10 +1317,12 @@ metadata coverage (<code class="docutils literal notranslate"><span class="pre">
 </ul>
 </li>
 <li><a class="reference internal" href="#module-triplets.validation.shacl_report">triplets.validation.shacl_report module</a><ul>
+<li><a class="reference internal" href="#triplets.validation.shacl_report.has_violation"><code class="docutils literal notranslate"><span class="pre">has_violation()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.shacl_report.report_to_violations"><code class="docutils literal notranslate"><span class="pre">report_to_violations()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.shacl_report.violations_to_report_graph"><code class="docutils literal notranslate"><span class="pre">violations_to_report_graph()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.shacl_report.message_prefix"><code class="docutils literal notranslate"><span class="pre">message_prefix()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.shacl_report.export_to_shacl_report"><code class="docutils literal notranslate"><span class="pre">export_to_shacl_report()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.shacl_report.profile_text"><code class="docutils literal notranslate"><span class="pre">profile_text()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.shacl_report.violations_to_csv"><code class="docutils literal notranslate"><span class="pre">violations_to_csv()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.shacl_report.violations_to_excel"><code class="docutils literal notranslate"><span class="pre">violations_to_excel()</span></code></a></li>
 </ul>
@@ -1038,8 +1330,9 @@ metadata coverage (<code class="docutils literal notranslate"><span class="pre">
 <li><a class="reference internal" href="#module-triplets.validation">Module contents</a><ul>
 <li><a class="reference internal" href="#triplets.validation.register_engine"><code class="docutils literal notranslate"><span class="pre">register_engine()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.get_engine"><code class="docutils literal notranslate"><span class="pre">get_engine()</span></code></a></li>
-<li><a class="reference internal" href="#triplets.validation.validate"><code class="docutils literal notranslate"><span class="pre">validate()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.validate_shacl"><code class="docutils literal notranslate"><span class="pre">validate_shacl()</span></code></a></li>
 <li><a class="reference internal" href="#triplets.validation.validate_schema"><code class="docutils literal notranslate"><span class="pre">validate_schema()</span></code></a></li>
+<li><a class="reference internal" href="#triplets.validation.validate_schema_references"><code class="docutils literal notranslate"><span class="pre">validate_schema_references()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -1053,7 +1346,7 @@ metadata coverage (<code class="docutils literal notranslate"><span class="pre">
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

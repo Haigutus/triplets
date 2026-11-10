@@ -3,10 +3,10 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.export" href="triplets.export.html"><link rel="prev" title="triplets.parser" href="triplets.parser.html">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="triplets.export" href="triplets.export.html"><link rel="prev" title="triplets.iri package" href="triplets.iri.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.tools - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.tools - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -361,7 +357,7 @@ content is split across instances.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>DataFrame containing triplets unique to old_data or new_data, with an ‘_merge’ column
-indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
+indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data). A missing VALUE is “”.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>pandas.DataFrame</p>
@@ -386,7 +382,7 @@ indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>DataFrame containing triplets unique to old_data or new_data, with an ‘_merge’ column
-indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
+indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data). A missing VALUE is “”.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>pandas.DataFrame</p>
@@ -455,12 +451,12 @@ indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p></li>
-<li><p><strong>type_name</strong> (<em>str</em>) – Object type to filter by (e.g., ‘ACLineSegment’).</p></li>
+<li><p><strong>type_name</strong> (<em>str</em><em> or </em><em>list-like</em><em> of </em><em>str</em>) – Object type(s) to filter by (e.g., ‘ACLineSegment’); list, tuple, set, Series or array.</p></li>
 <li><p><strong>type_key</strong> (<em>str</em>) – Key used in triplet to indicate type, by default “Type”</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Filtered triplet dataset containing only objects of the specified type.</p>
+<dd class="field-even"><p>Filtered triplet dataset containing only objects of the specified type(s).</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>pandas.DataFrame</p>
@@ -468,6 +464,7 @@ indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
 </dl>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"ACLineSegment"</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s2">"ACLineSegment"</span><span class="p">,</span> <span class="s2">"Terminal"</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -538,12 +535,12 @@ regex=True the value(s) are regex patterns (re.search).</p></li>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p></li>
-<li><p><strong>type_name</strong> (<em>str</em>) – Object type to filter by (e.g., ‘ACLineSegment’).</p></li>
+<li><p><strong>type_name</strong> (<em>str</em><em> or </em><em>list-like</em><em> of </em><em>str</em>) – Object type(s) to filter by (e.g., ‘ACLineSegment’); list, tuple, set, Series or array.</p></li>
 <li><p><strong>type_key</strong> (<em>str</em>) – Key used in triplet to indicate type, by default “Type”</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Filtered triplet dataset containing only objects of the specified type.</p>
+<dd class="field-even"><p>Filtered triplet dataset containing only objects of the specified type(s).</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>pandas.DataFrame</p>
@@ -551,6 +548,7 @@ regex=True the value(s) are regex patterns (re.search).</p></li>
 </dl>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"ACLineSegment"</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s2">"ACLineSegment"</span><span class="p">,</span> <span class="s2">"Terminal"</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -741,54 +739,70 @@ Must contain a <cite>NamespaceMap</cite> instance for successful extraction.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.tools.print_triplet_diff">
-<span class="sig-prename descclassname"><span class="pre">triplets.tools.</span></span><span class="sig-name descname"><span class="pre">print_triplet_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Distribution'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'label'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#triplets.tools.print_triplet_diff" title="Link to this definition">¶</a></dt>
-<dd><p>Print a human-readable diff of two triplet datasets.</p>
+<span class="sig-prename descclassname"><span class="pre">triplets.tools.</span></span><span class="sig-name descname"><span class="pre">print_triplet_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Distribution'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'label'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stat</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#triplets.tools.print_triplet_diff" title="Link to this definition">¶</a></dt>
+<dd><p>Print a unified diff of two triplet datasets, one hunk per changed object.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>old_data</strong> (<em>pandas.DataFrame</em>) – Original triplet dataset.</p></li>
 <li><p><strong>new_data</strong> (<em>pandas.DataFrame</em>) – New triplet dataset to compare against.</p></li>
-<li><p><strong>file_id_object</strong> (<em>str</em><em>, </em><em>optional</em>) – Object type containing file identifiers (default is ‘Distribution’).</p></li>
-<li><p><strong>file_id_key</strong> (<em>str</em><em>, </em><em>optional</em>) – Key containing file identifiers (default is ‘label’).</p></li>
-<li><p><strong>exclude_objects</strong> (<em>list</em><em>, </em><em>optional</em>) – List of object types to exclude from the diff (default is None).</p></li>
+<li><p><strong>file_id_object</strong> (<em>str</em><em>, </em><em>optional</em>) – Object type holding the file names, left out of the diff (default is ‘Distribution’).</p></li>
+<li><p><strong>file_id_key</strong> (<em>str</em><em>, </em><em>optional</em>) – Key whose values name the files in the <code class="docutils literal notranslate"><span class="pre">---</span></code> / <code class="docutils literal notranslate"><span class="pre">+++</span></code> lines (default is ‘label’).
+The file names are read before any filtering.</p></li>
+<li><p><strong>exclude_objects</strong> (<em>list</em><em>, </em><em>optional</em>) – Object types left out of the diff (default is None).</p></li>
+<li><p><strong>include_objects</strong> (<em>list</em><em>, </em><em>optional</em>) – Only objects of these types are diffed (default is None: all); <code class="docutils literal notranslate"><span class="pre">exclude_objects</span></code> applies after it.</p></li>
+<li><p><strong>context_keys</strong> (<em>list</em><em>, </em><em>optional</em>) – Keys whose unchanged values are shown in each hunk as `` `` context lines,
+e.g. <code class="docutils literal notranslate"><span class="pre">[&quot;IdentifiedObject.name&quot;]</span></code>.</p></li>
+<li><p><strong>stat</strong> (<em>bool</em><em>, </em><em>optional</em>) – Print only the Removed / Added / Changed counts per type.</p></li>
 </ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Number of differing triplets (0 when the datasets match).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>int</p>
 </dd>
 </dl>
 <p class="rubric">Notes</p>
-<ul class="simple">
-<li><p>Outputs a diff format showing removed, added, and changed objects.</p></li>
-<li><p>Nice diff viewer <a class="reference external" href="https://diffy.org/">https://diffy.org/</a></p></li>
-<li><p>TODO: Add name field for better reporting with Type.</p></li>
-</ul>
+<p>Nice diff viewer <a class="reference external" href="https://diffy.org/">https://diffy.org/</a></p>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">"NamespaceMap"</span><span class="p">])</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">"NamespaceMap"</span><span class="p">],</span>
+<span class="gp">... </span>                    <span class="n">context_keys</span><span class="o">=</span><span class="p">[</span><span class="s2">"IdentifiedObject.name"</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.tools.print_triplets_diff">
-<span class="sig-prename descclassname"><span class="pre">triplets.tools.</span></span><span class="sig-name descname"><span class="pre">print_triplets_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Distribution'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'label'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#triplets.tools.print_triplets_diff" title="Link to this definition">¶</a></dt>
-<dd><p>Print a human-readable diff of two triplet datasets.</p>
+<span class="sig-prename descclassname"><span class="pre">triplets.tools.</span></span><span class="sig-name descname"><span class="pre">print_triplets_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Distribution'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'label'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stat</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#triplets.tools.print_triplets_diff" title="Link to this definition">¶</a></dt>
+<dd><p>Print a unified diff of two triplet datasets, one hunk per changed object.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>old_data</strong> (<em>pandas.DataFrame</em>) – Original triplet dataset.</p></li>
 <li><p><strong>new_data</strong> (<em>pandas.DataFrame</em>) – New triplet dataset to compare against.</p></li>
-<li><p><strong>file_id_object</strong> (<em>str</em><em>, </em><em>optional</em>) – Object type containing file identifiers (default is ‘Distribution’).</p></li>
-<li><p><strong>file_id_key</strong> (<em>str</em><em>, </em><em>optional</em>) – Key containing file identifiers (default is ‘label’).</p></li>
-<li><p><strong>exclude_objects</strong> (<em>list</em><em>, </em><em>optional</em>) – List of object types to exclude from the diff (default is None).</p></li>
+<li><p><strong>file_id_object</strong> (<em>str</em><em>, </em><em>optional</em>) – Object type holding the file names, left out of the diff (default is ‘Distribution’).</p></li>
+<li><p><strong>file_id_key</strong> (<em>str</em><em>, </em><em>optional</em>) – Key whose values name the files in the <code class="docutils literal notranslate"><span class="pre">---</span></code> / <code class="docutils literal notranslate"><span class="pre">+++</span></code> lines (default is ‘label’).
+The file names are read before any filtering.</p></li>
+<li><p><strong>exclude_objects</strong> (<em>list</em><em>, </em><em>optional</em>) – Object types left out of the diff (default is None).</p></li>
+<li><p><strong>include_objects</strong> (<em>list</em><em>, </em><em>optional</em>) – Only objects of these types are diffed (default is None: all); <code class="docutils literal notranslate"><span class="pre">exclude_objects</span></code> applies after it.</p></li>
+<li><p><strong>context_keys</strong> (<em>list</em><em>, </em><em>optional</em>) – Keys whose unchanged values are shown in each hunk as `` `` context lines,
+e.g. <code class="docutils literal notranslate"><span class="pre">[&quot;IdentifiedObject.name&quot;]</span></code>.</p></li>
+<li><p><strong>stat</strong> (<em>bool</em><em>, </em><em>optional</em>) – Print only the Removed / Added / Changed counts per type.</p></li>
 </ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Number of differing triplets (0 when the datasets match).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>int</p>
 </dd>
 </dl>
 <p class="rubric">Notes</p>
-<ul class="simple">
-<li><p>Outputs a diff format showing removed, added, and changed objects.</p></li>
-<li><p>Nice diff viewer <a class="reference external" href="https://diffy.org/">https://diffy.org/</a></p></li>
-<li><p>TODO: Add name field for better reporting with Type.</p></li>
-</ul>
+<p>Nice diff viewer <a class="reference external" href="https://diffy.org/">https://diffy.org/</a></p>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">"NamespaceMap"</span><span class="p">])</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">"NamespaceMap"</span><span class="p">],</span>
+<span class="gp">... </span>                    <span class="n">context_keys</span><span class="o">=</span><span class="p">[</span><span class="s2">"IdentifiedObject.name"</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2083,12 +2097,12 @@ does.</p>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data</strong> (<em>pandas.DataFrame</em>) – Triplet dataset containing RDF data.</p></li>
-<li><p><strong>type_name</strong> (<em>str</em>) – Object type to filter by (e.g., ‘ACLineSegment’).</p></li>
+<li><p><strong>type_name</strong> (<em>str</em><em> or </em><em>list-like</em><em> of </em><em>str</em>) – Object type(s) to filter by (e.g., ‘ACLineSegment’); list, tuple, set, Series or array.</p></li>
 <li><p><strong>type_key</strong> (<em>str</em>) – Key used in triplet to indicate type, by default “Type”</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Filtered triplet dataset containing only objects of the specified type.</p>
+<dd class="field-even"><p>Filtered triplet dataset containing only objects of the specified type(s).</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>pandas.DataFrame</p>
@@ -2096,6 +2110,7 @@ does.</p>
 </dl>
 <p class="rubric">Examples</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"ACLineSegment"</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">filtered</span> <span class="o">=</span> <span class="n">filter_triplets_by_type</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">[</span><span class="s2">"ACLineSegment"</span><span class="p">,</span> <span class="s2">"Terminal"</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2178,7 +2193,7 @@ by ID with the type row first within each ID group.</p></li>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>DataFrame containing triplets unique to old_data or new_data, with an ‘_merge’ column
-indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
+indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data). A missing VALUE is “”.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>pandas.DataFrame</p>
@@ -2217,27 +2232,35 @@ indicating ‘left_only’ (in old_data) or ‘right_only’ (in new_data).</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.tools.pandas_engine.print_triplets_diff">
-<span class="sig-prename descclassname"><span class="pre">triplets.tools.pandas_engine.</span></span><span class="sig-name descname"><span class="pre">print_triplets_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Distribution'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'label'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/tools/pandas_engine.html#print_triplets_diff"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.tools.pandas_engine.print_triplets_diff" title="Link to this definition">¶</a></dt>
-<dd><p>Print a human-readable diff of two triplet datasets.</p>
+<span class="sig-prename descclassname"><span class="pre">triplets.tools.pandas_engine.</span></span><span class="sig-name descname"><span class="pre">print_triplets_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Distribution'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'label'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stat</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/tools/pandas_engine.html#print_triplets_diff"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.tools.pandas_engine.print_triplets_diff" title="Link to this definition">¶</a></dt>
+<dd><p>Print a unified diff of two triplet datasets, one hunk per changed object.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>old_data</strong> (<em>pandas.DataFrame</em>) – Original triplet dataset.</p></li>
 <li><p><strong>new_data</strong> (<em>pandas.DataFrame</em>) – New triplet dataset to compare against.</p></li>
-<li><p><strong>file_id_object</strong> (<em>str</em><em>, </em><em>optional</em>) – Object type containing file identifiers (default is ‘Distribution’).</p></li>
-<li><p><strong>file_id_key</strong> (<em>str</em><em>, </em><em>optional</em>) – Key containing file identifiers (default is ‘label’).</p></li>
-<li><p><strong>exclude_objects</strong> (<em>list</em><em>, </em><em>optional</em>) – List of object types to exclude from the diff (default is None).</p></li>
+<li><p><strong>file_id_object</strong> (<em>str</em><em>, </em><em>optional</em>) – Object type holding the file names, left out of the diff (default is ‘Distribution’).</p></li>
+<li><p><strong>file_id_key</strong> (<em>str</em><em>, </em><em>optional</em>) – Key whose values name the files in the <code class="docutils literal notranslate"><span class="pre">---</span></code> / <code class="docutils literal notranslate"><span class="pre">+++</span></code> lines (default is ‘label’).
+The file names are read before any filtering.</p></li>
+<li><p><strong>exclude_objects</strong> (<em>list</em><em>, </em><em>optional</em>) – Object types left out of the diff (default is None).</p></li>
+<li><p><strong>include_objects</strong> (<em>list</em><em>, </em><em>optional</em>) – Only objects of these types are diffed (default is None: all); <code class="docutils literal notranslate"><span class="pre">exclude_objects</span></code> applies after it.</p></li>
+<li><p><strong>context_keys</strong> (<em>list</em><em>, </em><em>optional</em>) – Keys whose unchanged values are shown in each hunk as `` `` context lines,
+e.g. <code class="docutils literal notranslate"><span class="pre">[&quot;IdentifiedObject.name&quot;]</span></code>.</p></li>
+<li><p><strong>stat</strong> (<em>bool</em><em>, </em><em>optional</em>) – Print only the Removed / Added / Changed counts per type.</p></li>
 </ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Number of differing triplets (0 when the datasets match).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>int</p>
 </dd>
 </dl>
 <p class="rubric">Notes</p>
-<ul class="simple">
-<li><p>Outputs a diff format showing removed, added, and changed objects.</p></li>
-<li><p>Nice diff viewer <a class="reference external" href="https://diffy.org/">https://diffy.org/</a></p></li>
-<li><p>TODO: Add name field for better reporting with Type.</p></li>
-</ul>
+<p>Nice diff viewer <a class="reference external" href="https://diffy.org/">https://diffy.org/</a></p>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">"NamespaceMap"</span><span class="p">])</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">print_triplets_diff</span><span class="p">(</span><span class="n">old_data</span><span class="p">,</span> <span class="n">new_data</span><span class="p">,</span> <span class="n">exclude_objects</span><span class="o">=</span><span class="p">[</span><span class="s2">"NamespaceMap"</span><span class="p">],</span>
+<span class="gp">... </span>                    <span class="n">context_keys</span><span class="o">=</span><span class="p">[</span><span class="s2">"IdentifiedObject.name"</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2354,7 +2377,7 @@ level/ID_FROM/ID_TO metadata merged back, matching pandas.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.tools.polars_engine.filter_triplets_by_type">
 <span class="sig-prename descclassname"><span class="pre">triplets.tools.polars_engine.</span></span><span class="sig-name descname"><span class="pre">filter_triplets_by_type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/tools/polars_engine.html#filter_triplets_by_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.tools.polars_engine.filter_triplets_by_type" title="Link to this definition">¶</a></dt>
-<dd><p>Filter triplet data to only include objects of a specific type.</p>
+<dd><p>Filter triplet data to only include objects of a specific type (str or list-like of str).</p>
 </dd></dl>
 
 <dl class="py function">
@@ -2474,7 +2497,8 @@ joins cleanly with a string KEY in <cite>update_data</cite>.</p>
 <dt class="sig sig-object py" id="triplets.tools.polars_engine.diff_triplets">
 <span class="sig-prename descclassname"><span class="pre">triplets.tools.polars_engine.</span></span><span class="sig-name descname"><span class="pre">diff_triplets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/tools/polars_engine.html#diff_triplets"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.tools.polars_engine.diff_triplets" title="Link to this definition">¶</a></dt>
 <dd><p>Rows unique to old (left_only) or new (right_only), matching the pandas
-outer-merge shape: columns [ID, KEY, VALUE, INSTANCE_ID_OLD, INSTANCE_ID_NEW, _merge].</p>
+outer-merge shape: columns [ID, KEY, VALUE, INSTANCE_ID_OLD, INSTANCE_ID_NEW, _merge].
+A missing VALUE comes back as “”.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -2486,8 +2510,9 @@ on ID/KEY/VALUE), matching pandas drop_duplicates(keep=False).</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.tools.polars_engine.print_triplets_diff">
-<span class="sig-prename descclassname"><span class="pre">triplets.tools.polars_engine.</span></span><span class="sig-name descname"><span class="pre">print_triplets_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Distribution'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'label'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/tools/polars_engine.html#print_triplets_diff"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.tools.polars_engine.print_triplets_diff" title="Link to this definition">¶</a></dt>
-<dd><p>Print a human-readable diff between two triplet datasets.</p>
+<span class="sig-prename descclassname"><span class="pre">triplets.tools.polars_engine.</span></span><span class="sig-name descname"><span class="pre">print_triplets_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">old_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Distribution'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'label'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stat</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/tools/polars_engine.html#print_triplets_diff"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.tools.polars_engine.print_triplets_diff" title="Link to this definition">¶</a></dt>
+<dd><p>Print a unified diff of two triplet datasets; returns the number of
+differing triplets. Same output and options as the pandas engine.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -2506,7 +2531,7 @@ not comparable across engines (see pandas_engine).</p>
 <span id="triplets-tools-duckdb-engine"></span><h2>triplets.tools.duckdb_engine<a class="headerlink" href="#module-triplets.tools.duckdb_engine" title="Link to this heading">¶</a></h2>
 <p>DuckDB SQL-based implementation of triplet tools.</p>
 <p>Functions are monkey-patched onto duckdb.DuckDBPyConnection.
-The <a href="#id1"><span class="problematic" id="id2">*</span></a>_tableview helpers create a named SQL view and return a relation over it
+The <code class="docutils literal notranslate"><span class="pre">*_tableview</span></code> helpers create a named SQL view and return a relation over it
 (named/re-queryable, still lazy); other query/reference helpers return a
 DuckDBPyRelation; types_dict and get_namespace_map return python values;
 triplets_to_tableviews returns a dict.</p>
@@ -2553,8 +2578,8 @@ str.contains.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.tools.duckdb_engine.filter_triplets_by_type">
-<span class="sig-prename descclassname"><span class="pre">triplets.tools.duckdb_engine.</span></span><span class="sig-name descname"><span class="pre">filter_triplets_by_type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/tools/duckdb_engine.html#filter_triplets_by_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.tools.duckdb_engine.filter_triplets_by_type" title="Link to this definition">¶</a></dt>
-<dd><p>Filter to only objects of a specific type. Returns DuckDBPyRelation (lazy).</p>
+<span class="sig-prename descclassname"><span class="pre">triplets.tools.duckdb_engine.</span></span><span class="sig-name descname"><span class="pre">filter_triplets_by_type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Type'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/tools/duckdb_engine.html#filter_triplets_by_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.tools.duckdb_engine.filter_triplets_by_type" title="Link to this definition">¶</a></dt>
+<dd><p>Filter to only objects of a specific type (str or list-like of str). Returns DuckDBPyRelation (lazy).</p>
 </dd></dl>
 
 <dl class="py function">
@@ -2697,8 +2722,9 @@ _merge column. Returns DuckDBPyRelation.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="triplets.tools.duckdb_engine.print_triplets_diff">
-<span class="sig-prename descclassname"><span class="pre">triplets.tools.duckdb_engine.</span></span><span class="sig-name descname"><span class="pre">print_triplets_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Distribution'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'label'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/tools/duckdb_engine.html#print_triplets_diff"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.tools.duckdb_engine.print_triplets_diff" title="Link to this definition">¶</a></dt>
-<dd><p>Print a simple removed/added diff of the table against new_data.</p>
+<span class="sig-prename descclassname"><span class="pre">triplets.tools.duckdb_engine.</span></span><span class="sig-name descname"><span class="pre">print_triplets_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_object</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Distribution'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_id_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'label'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_objects</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stat</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">schema</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/triplets/tools/duckdb_engine.html#print_triplets_diff"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#triplets.tools.duckdb_engine.print_triplets_diff" title="Link to this definition">¶</a></dt>
+<dd><p>Print a unified diff of the table against new_data; returns the number of
+differing triplets. Same output and options as the pandas engine.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -2740,14 +2766,14 @@ not comparable across engines (see pandas_engine).</p>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="triplets.parser.html">
+          <a class="prev-page" href="triplets.iri.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">triplets.parser</div>
+                <div class="title">triplets.iri package</div>
                 
               </div>
             </a>
@@ -2755,7 +2781,7 @@ not comparable across engines (see pandas_engine).</p>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -2932,7 +2958,7 @@ not comparable across engines (see pandas_engine).</p>
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="_static/documentation_options.js?v=6f4d8279"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>

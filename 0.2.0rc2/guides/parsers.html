@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Export Architecture" href="exports.html"><link rel="prev" title="Quickstart" href="../quickstart.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Parser Architecture - triplets 0.2.0rc2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
@@ -337,7 +337,7 @@ from <code class="docutils literal notranslate"><span class="pre">docs/source/gu
 <p>Engine aliases: <code class="docutils literal notranslate"><span class="pre">performance</span></code> / <code class="docutils literal notranslate"><span class="pre">pugixml</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">cython_pugixml_arrow</span></code>, <code class="docutils literal notranslate"><span class="pre">native</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">python_lxml_pandas</span></code></p>
 </section>
 <section id="streaming-parse-batches">
-<h2>Streaming — <code class="docutils literal notranslate"><span class="pre">parse_batches()</span></code><a class="headerlink" href="#streaming-parse-batches" title="Link to this heading">¶</a></h2>
+<span id="streaming--parse_batches"></span><h2>Streaming — <code class="docutils literal notranslate"><span class="pre">parse_batches()</span></code><a class="headerlink" href="#streaming-parse-batches" title="Link to this heading">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">parse_batches(paths,</span> <span class="pre">engine=&quot;auto&quot;,</span> <span class="pre">...)</span></code> returns a <code class="docutils literal notranslate"><span class="pre">pyarrow.RecordBatchReader</span></code>
 producing one batch per XML file as the reader is consumed — the dataset is
 never materialized in Python. Fixed all-utf8 schema (no dictionary encoding, no
@@ -350,7 +350,7 @@ through the lazy <code class="docutils literal notranslate"><span class="pre">it
 time and handles are closed); <code class="docutils literal notranslate"><span class="pre">find_all_xml()</span></code> is its eager list form.</p>
 </section>
 <section id="string-layout-parse-string-type">
-<h2>String layout — <code class="docutils literal notranslate"><span class="pre">parse(...,</span> <span class="pre">string_type=...)</span></code><a class="headerlink" href="#string-layout-parse-string-type" title="Link to this heading">¶</a></h2>
+<span id="string-layout--parse-string_type"></span><h2>String layout — <code class="docutils literal notranslate"><span class="pre">parse(...,</span> <span class="pre">string_type=...)</span></code><a class="headerlink" href="#string-layout-parse-string-type" title="Link to this heading">¶</a></h2>
 <p>The Arrow layout of the ID and VALUE columns is selectable: <code class="docutils literal notranslate"><span class="pre">&quot;utf8&quot;</span></code> (32-bit
 offsets, the stable default), <code class="docutils literal notranslate"><span class="pre">&quot;large_utf8&quot;</span></code> (64-bit) or <code class="docutils literal notranslate"><span class="pre">&quot;string_view&quot;</span></code>
 (polars’/duckdb’s native 16-byte view layout, adopted zero-copy by polars;

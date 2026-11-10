@@ -4,8 +4,8 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>triplets.parser - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>triplets.parser - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -200,7 +200,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../guides/exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../guides/validation.html">SHACL Validation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/validation.html">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/development.html">Development Notes</a></li>
@@ -210,6 +210,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../triplets.sparql.html">SPARQL</a></li>
@@ -236,21 +237,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -354,8 +350,9 @@
 
 
 
-<span class="c1"># Re-exports for compat layer (rdf_parser.py)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_all_xml</span><span class="p">,</span> <span class="n">iter_all_xml</span><span class="p">,</span> <span class="n">clean_ID</span>  <span class="c1"># noqa: F401</span>
+<span class="c1"># Re-exports (rdf_parser.py compat layer, public parser surface)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_all_xml</span><span class="p">,</span> <span class="n">iter_all_xml</span>  <span class="c1"># noqa: F401</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..iri</span><span class="w"> </span><span class="kn">import</span> <span class="n">TRIPLETS_NS</span><span class="p">,</span> <span class="n">local_id</span>  <span class="c1"># noqa: F401 — local_id re-exported</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.nquads</span><span class="w"> </span><span class="kn">import</span> <span class="n">read_nquads</span>  <span class="c1"># noqa: F401</span>
 
@@ -369,8 +366,9 @@
     <span class="n">engine</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
     <span class="n">return_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"pandas"</span><span class="p">,</span>
     <span class="n">categorical_columns</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"INSTANCE_ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">),</span>
-    <span class="n">shorten_resources</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">local_resources</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">string_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
+    <span class="n">default_base</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">TRIPLETS_NS</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Main entry: parse CIM RDF/XML (or zips) using chosen engine.</span>
 
@@ -387,9 +385,14 @@
 <span class="sd">        Output format: "pandas", "arrow", or "polars".</span>
 <span class="sd">    categorical_columns : tuple or None, default ("INSTANCE_ID", "KEY")</span>
 <span class="sd">        Columns to dictionary-encode for memory savings. Pass None to disable.</span>
-<span class="sd">    shorten_resources : bool, default True</span>
-<span class="sd">        Shorten http(s) resource values to their #fragment (CIM instance data convention).</span>
-<span class="sd">        Pass False for lossless URIs (e.g. RDFS schema parsing); only the python engines</span>
+<span class="sd">    local_resources : bool, default True</span>
+<span class="sd">        Resource (``rdf:resource`` / ``rdf:nodeID``) values in local form,</span>
+<span class="sd">        ``triplets.iri.local_value``: the ID prefix stripped and http(s) IRIs cut to their</span>
+<span class="sd">        ``#fragment`` (CIM instance data convention; a namespace IRI ending in ``#`` stays whole) — enumerations are stored as</span>
+<span class="sd">        ``ControlAreaTypeKind.Interchange``; filters against the full CIM URI will not match.</span>
+<span class="sd">        False is the absolute form: IDs and resource references are resolved against the</span>
+<span class="sd">        document's declared absolute ``xml:base`` at parse time, ``triplets.iri.resolve_iri``</span>
+<span class="sd">        (``rdf:ID="X"`` → ``base#X``; e.g. RDFS schema parsing); only the python engines</span>
 <span class="sd">        support this.</span>
 <span class="sd">    string_type : str, default "auto"</span>
 <span class="sd">        Arrow layout of the ID and VALUE string columns (arrow/polars output,</span>
@@ -399,14 +402,17 @@
 <span class="sd">        zero-copy: string_view for polars, utf8 otherwise. Dictionary-encoded</span>
 <span class="sd">        columns are unaffected (consumers use the indices). Ignored by the</span>
 <span class="sd">        pandas engine (python_lxml_pandas).</span>
+<span class="sd">    default_base : str, default "http://triplets#"</span>
+<span class="sd">        Base for ``local_resources=False`` when the document declares no absolute ``xml:base``</span>
+<span class="sd">        (the file location is never used as a base).</span>
 <span class="sd">    """</span>
     <span class="n">debug</span> <span class="o">=</span> <span class="n">debug</span> <span class="ow">or</span> <span class="n">logger</span><span class="o">.</span><span class="n">isEnabledFor</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
     <span class="n">engine_name</span><span class="p">,</span> <span class="n">engine_mod</span> <span class="o">=</span> <span class="n">get_engine</span><span class="p">(</span><span class="n">engine</span><span class="p">)</span>
     <span class="n">is_arrow_engine</span> <span class="o">=</span> <span class="n">engine_name</span> <span class="ow">in</span> <span class="n">_ARROW_ENGINES</span>
     <span class="n">string_type</span> <span class="o">=</span> <span class="n">_resolve_string_type</span><span class="p">(</span><span class="n">string_type</span><span class="p">,</span> <span class="n">return_type</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">shorten_resources</span> <span class="ow">and</span> <span class="n">engine_name</span> <span class="o">==</span> <span class="s2">"cython_pugixml_arrow"</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"shorten_resources=False is not supported by the cython_pugixml_arrow engine, "</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">local_resources</span> <span class="ow">and</span> <span class="n">engine_name</span> <span class="o">==</span> <span class="s2">"cython_pugixml_arrow"</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"local_resources=False is not supported by the cython_pugixml_arrow engine, "</span>
                          <span class="s2">"use engine='python_lxml_pandas' or 'python_lxml_arrow'"</span><span class="p">)</span>
 
     <span class="n">parse_one</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">engine_mod</span><span class="p">,</span> <span class="s2">"load_rdf_to_dataframe"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
@@ -430,8 +436,8 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_one</span><span class="p">(</span><span class="n">f</span><span class="p">:</span> <span class="n">Any</span><span class="p">):</span>
         <span class="n">one_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"string_type"</span><span class="p">:</span> <span class="n">string_type</span><span class="p">}</span> <span class="k">if</span> <span class="n">native_string_type</span> <span class="k">else</span> <span class="p">{}</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">shorten_resources</span><span class="p">:</span>
-            <span class="n">one_kwargs</span><span class="p">[</span><span class="s2">"shorten_resources"</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">local_resources</span><span class="p">:</span>
+            <span class="n">one_kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">local_resources</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">default_base</span><span class="o">=</span><span class="n">default_base</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">parse_one</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="n">debug</span><span class="p">,</span> <span class="o">**</span><span class="n">one_kwargs</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">max_workers</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">xml_files</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
@@ -457,8 +463,9 @@
     <span class="n">list_of_paths_to_zip_globalzip_xml</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
     <span class="n">debug</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">engine</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">shorten_resources</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">local_resources</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_workers</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">default_base</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">TRIPLETS_NS</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Parse CIM RDF/XML lazily into a ``pyarrow.RecordBatchReader``.</span>
 
@@ -484,13 +491,13 @@
     <span class="k">if</span> <span class="n">engine_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_ARROW_ENGINES</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"parse_batches requires an arrow parser engine, got </span><span class="si">{</span><span class="n">engine_name</span><span class="si">!r}</span><span class="s2">. "</span>
                          <span class="sa">f</span><span class="s2">"Install with: pip install triplets[arrow]."</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">shorten_resources</span> <span class="ow">and</span> <span class="n">engine_name</span> <span class="o">==</span> <span class="s2">"cython_pugixml_arrow"</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"shorten_resources=False is not supported by the cython_pugixml_arrow engine, "</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">local_resources</span> <span class="ow">and</span> <span class="n">engine_name</span> <span class="o">==</span> <span class="s2">"cython_pugixml_arrow"</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"local_resources=False is not supported by the cython_pugixml_arrow engine, "</span>
                          <span class="s2">"use engine='python_lxml_arrow'"</span><span class="p">)</span>
     <span class="n">parse_one</span> <span class="o">=</span> <span class="n">engine_mod</span><span class="o">.</span><span class="n">load_rdf_to_dataframe</span>
 
     <span class="n">schema</span> <span class="o">=</span> <span class="n">pa</span><span class="o">.</span><span class="n">schema</span><span class="p">([(</span><span class="n">c</span><span class="p">,</span> <span class="n">pa</span><span class="o">.</span><span class="n">string</span><span class="p">())</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"ID"</span><span class="p">,</span> <span class="s2">"KEY"</span><span class="p">,</span> <span class="s2">"VALUE"</span><span class="p">,</span> <span class="s2">"INSTANCE_ID"</span><span class="p">)])</span>
-    <span class="n">one_kwargs</span> <span class="o">=</span> <span class="p">{}</span> <span class="k">if</span> <span class="n">shorten_resources</span> <span class="k">else</span> <span class="p">{</span><span class="s2">"shorten_resources"</span><span class="p">:</span> <span class="kc">False</span><span class="p">}</span>
+    <span class="n">one_kwargs</span> <span class="o">=</span> <span class="p">{}</span> <span class="k">if</span> <span class="n">local_resources</span> <span class="k">else</span> <span class="p">{</span><span class="s2">"local_resources"</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">"default_base"</span><span class="p">:</span> <span class="n">default_base</span><span class="p">}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">one</span><span class="p">(</span><span class="n">xml_file</span><span class="p">):</span>
         <span class="n">batch</span> <span class="o">=</span> <span class="n">parse_one</span><span class="p">(</span><span class="n">xml_file</span><span class="p">,</span> <span class="n">debug</span><span class="o">=</span><span class="n">debug</span><span class="p">,</span> <span class="o">**</span><span class="n">one_kwargs</span><span class="p">)</span>
@@ -653,7 +660,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -673,7 +680,7 @@
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>

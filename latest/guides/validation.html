@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Building" href="building.html"><link rel="prev" title="SPARQL Architecture" href="sparql.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>SHACL Validation Architecture - triplets 0.2.0 documentation</title>
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
+        <title>Validation Architecture - triplets 0.2.0+182.g81b0b26 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -162,7 +162,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">triplets 0.2.0 documentation</div></a>
+      <a href="../index.html"><div class="brand">triplets 0.2.0+182.g81b0b26 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -183,7 +183,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   
-  <span class="sidebar-brand-text">triplets 0.2.0 documentation</span>
+  <span class="sidebar-brand-text">triplets 0.2.0+182.g81b0b26 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -201,7 +201,7 @@
 <li class="toctree-l1"><a class="reference internal" href="exports.html">Export Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="export_schemas.html">Export Schemas</a></li>
 <li class="toctree-l1"><a class="reference internal" href="sparql.html">SPARQL Architecture</a></li>
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">SHACL Validation Architecture</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Validation Architecture</a></li>
 <li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
 <li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="development.html">Development Notes</a></li>
@@ -211,6 +211,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.html">Package (engines, parse, caches)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.parser.html">Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../triplets.iri.html">IRI contract</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.tools.html">Tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.export.html">Export</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../triplets.sparql.html">SPARQL</a></li>
@@ -237,21 +238,16 @@
     .then(r => r.json())
     .then(versions => {
       const sel = document.getElementById('version-select');
-      sel.innerHTML = '<option value="/triplets/latest/">latest (dev)</option>';
-      versions.forEach(v => {
+      const current = window.location.pathname.split('/')[2];  // /triplets/<version>/...
+      const stable = versions.find(v => /^\d+\.\d+\.\d+$/.test(v));  // newest final release
+      sel.innerHTML = '';
+      ['latest'].concat(versions).forEach(v => {
         const opt = document.createElement('option');
         opt.value = '/triplets/' + v + '/';
-        opt.textContent = v;
-        // Highlight current version
-        if (window.location.pathname.includes('/' + v + '/')) {
-          opt.selected = true;
-        }
+        opt.textContent = v === 'latest' ? 'latest (dev)' : v === stable ? v + ' (stable)' : v;
+        opt.selected = v === current;
         sel.appendChild(opt);
       });
-      // Check if we're on latest
-      if (window.location.pathname.includes('/latest/')) {
-        sel.querySelector('option[value="/triplets/latest/"]').selected = true;
-      }
     })
     .catch(() => {
       document.getElementById('version-select').innerHTML =
@@ -290,30 +286,186 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="shacl-validation-architecture">
-<h1>SHACL Validation Architecture<a class="headerlink" href="#shacl-validation-architecture" title="Link to this heading">¶</a></h1>
-<section id="status-known-limitations">
-<h2>Status &amp; known limitations<a class="headerlink" href="#status-known-limitations" title="Link to this heading">¶</a></h2>
-<p>The validation API is frozen as of 0.2.0rc1. Known engine gaps (each
-reported in the run’s coverage metadata, <code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code> /
-<code class="docutils literal notranslate"><span class="pre">skipped_components</span></code>):</p>
+          <section id="validation-architecture">
+<h1>Validation Architecture<a class="headerlink" href="#validation-architecture" title="Link to this heading">¶</a></h1>
+<section id="three-validations">
+<h2>Three validations<a class="headerlink" href="#three-validations" title="Link to this heading">¶</a></h2>
+<p>Validation is generic: the caller decides which instances and which schema
+profiles a run uses, and the core never reads instance headers — it works for
+any RDF loaded as triplets, CIM or not. Every input has a scope named after it:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Input</p></th>
+<th class="head"><p>Scope</p></th>
+<th class="head"><p>Values</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">data</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">data_scope</span></code></p></td>
+<td><p>INSTANCE_IDs — rows outside the scope are not loaded, so references into unscoped instances count as absent; None = every instance, <code class="docutils literal notranslate"><span class="pre">[]</span></code> = none</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">rdf_map</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">rdf_map_scope</span></code></p></td>
+<td><p>the export schema’s profiles: section keys (<code class="docutils literal notranslate"><span class="pre">&quot;EQ&quot;</span></code>) and/or the IRIs a profile declares (keyword / versionIRI / profileVersionIRI / conformsTo), mixed, in any sequence; <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> = every section; None = the rdf_map’s root entries (an unsectioned, hand-made schema — a sectioned bundle has none). An unknown identifier, one several profiles share, and an empty scope raise <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>: no entries at all for <code class="docutils literal notranslate"><span class="pre">validate_shacl</span></code>, no Class entries for the schema validations. <code class="docutils literal notranslate"><span class="pre">rdf_map_scope</span></code> without an <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> raises too</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Function</p></th>
+<th class="head"><p>Checks</p></th>
+<th class="head"><p>Runs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">validate_shacl(data,</span> <span class="pre">shapes,</span> <span class="pre">rdf_map,</span> <span class="pre">data_scope,</span> <span class="pre">rdf_map_scope,</span> <span class="pre">lexical=True,</span> <span class="pre">inheritance=True,</span> <span class="pre">deactivated_shapes=None,</span> <span class="pre">abort_on_first=False)</span></code></p></td>
+<td><p>SHACL shapes; the scoped profiles give typed literals, the <code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code> decision and class inheritance</p></td>
+<td><p>once over the scoped data</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">validate_schema(data,</span> <span class="pre">rdf_map,</span> <span class="pre">data_scope,</span> <span class="pre">rdf_map_scope,</span> <span class="pre">report_undefined_keys=False,</span> <span class="pre">severity=&quot;Violation&quot;)</span></code></p></td>
+<td><p>cardinality, datatypes and enumerations of the scoped profiles (merged); <code class="docutils literal notranslate"><span class="pre">report_undefined_keys</span></code> also reports keys no scoped profile defines for the object’s class</p></td>
+<td><p>per instance in <code class="docutils literal notranslate"><span class="pre">data_scope</span></code> — cardinality never counts another instance’s rows</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">validate_schema_references(data,</span> <span class="pre">rdf_map,</span> <span class="pre">data_scope,</span> <span class="pre">rdf_map_scope,</span> <span class="pre">target_data_scope,</span> <span class="pre">target_rdf_map_scope=(),</span> <span class="pre">report_missing_targets=True,</span> <span class="pre">inheritance=True,</span> <span class="pre">severity=&quot;Violation&quot;)</span></code> — <code class="docutils literal notranslate"><span class="pre">target_data_scope=None</span></code> = every instance</p></td>
+<td><p>the reference type of each association of the source profiles (merged, or a union of several): valid classes from the source and target profiles, referenced objects from the source and target instances</p></td>
+<td><p>per source instance; findings on source objects only</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The CIM header logic lives outside the core, in <code class="docutils literal notranslate"><span class="pre">triplets.cgmes_tools</span></code>:
+<code class="docutils literal notranslate"><span class="pre">declared_profiles(data,</span> <span class="pre">rdf_map)</span></code> maps each instance to the profiles its
+header declares, and <code class="docutils literal notranslate"><span class="pre">validate_by_header(data,</span> <span class="pre">rdf_map,</span> <span class="pre">references=False)</span></code>
+validates each instance against them (see <em>CIM helpers</em> below).</p>
+<section id="merged-schema-schema-scope-scoped-rdf-map">
+<span id="merged-schema-schema_scopescoped_rdf_map"></span><h3>Merged schema (<code class="docutils literal notranslate"><span class="pre">schema_scope.scoped_rdf_map</span></code>)<a class="headerlink" href="#merged-schema-schema-scope-scoped-rdf-map" title="Link to this heading">¶</a></h3>
+<p>The listed profiles merge into one schema for the run — a CGMES 3.0 EQ file is
+<code class="docutils literal notranslate"><span class="pre">[&quot;EQ&quot;,</span> <span class="pre">&quot;OP&quot;,</span> <span class="pre">&quot;SC&quot;]</span></code>; a CGMES 2.4.15 <code class="docutils literal notranslate"><span class="pre">EQ</span></code> section already holds Core,
+Operation and ShortCircuit as published. Same-named entries combine:</p>
 <ul class="simple">
-<li><p><strong>Vectorized engines walk <code class="docutils literal notranslate"><span class="pre">sh:targetClass</span></code> and <code class="docutils literal notranslate"><span class="pre">sh:targetSubjectsOf</span></code>.</strong>
-Shapes reached solely through <code class="docutils literal notranslate"><span class="pre">sh:targetNode</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:targetObjectsOf</span></code> /
-<code class="docutils literal notranslate"><span class="pre">sh:target</span></code> (or using <code class="docutils literal notranslate"><span class="pre">sh:xone</span></code>) are invisible to polars/pandas/duckdb —
-<code class="docutils literal notranslate"><span class="pre">compile()</span></code> logs a warning naming them; use <code class="docutils literal notranslate"><span class="pre">engine=&quot;pyshacl&quot;</span></code> for full
-spec coverage.</p></li>
+<li><p>Class <code class="docutils literal notranslate"><span class="pre">parameters</span></code> and <code class="docutils literal notranslate"><span class="pre">inheritance</span></code> lists: union.</p></li>
+<li><p>Property cardinality: the lowest <code class="docutils literal notranslate"><span class="pre">xsd:minOccours</span></code>, the highest
+<code class="docutils literal notranslate"><span class="pre">xsd:maxOccours</span></code> (<code class="docutils literal notranslate"><span class="pre">n</span></code> = unbounded; a missing bound is no bound);
+<code class="docutils literal notranslate"><span class="pre">multiplicity</span></code> follows.</p></li>
+<li><p>Attribute <code class="docutils literal notranslate"><span class="pre">xsd:type</span></code>: when the profiles differ (a definition without a type
+counts) the intended type is unknown — the key is left untyped and logged as
+an error. <code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> does not check its datatype. Under
+<code class="docutils literal notranslate"><span class="pre">validate_shacl</span></code> its literals stay plain: pyshacl then reports an
+<code class="docutils literal notranslate"><span class="pre">sh:datatype</span></code> shape on such a key for every value, while the vectorized
+engines’ lexical check judges the text. The types compare expanded by the
+merged prefixes: <code class="docutils literal notranslate"><span class="pre">xsd:float</span></code> and <code class="docutils literal notranslate"><span class="pre">http://www.w3.org/2001/XMLSchema#float</span></code> agree.</p></li>
+<li><p>Enumeration <code class="docutils literal notranslate"><span class="pre">values</span></code>: union.</p></li>
+</ul>
+<p>An <code class="docutils literal notranslate"><span class="pre">xsd:type</span></code> outside the XSD namespace (<code class="docutils literal notranslate"><span class="pre">cim:ActivePower</span></code>) is checked by
+<code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> as its base type: the <code class="docutils literal notranslate"><span class="pre">xsd:type</span></code> of the schema’s own entry
+for that datatype (named by the Attribute’s <code class="docutils literal notranslate"><span class="pre">dataType</span></code>, else the IRI’s local
+name — the <code class="docutils literal notranslate"><span class="pre">CIMDatatype</span></code> entry a bundle carries). Without one it is listed in
+<code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code> (<code class="docutils literal notranslate"><span class="pre">SvPowerFlow.p:</span> <span class="pre">datatype</span> <span class="pre">cim:ActivePower</span> <span class="pre">has</span> <span class="pre">no</span> <span class="pre">xsd</span> <span class="pre">base</span> <span class="pre">type</span> <span class="pre">—</span> <span class="pre">not</span> <span class="pre">checked</span></code>). A plain-literal type or base (<code class="docutils literal notranslate"><span class="pre">xsd:string</span></code>,
+<code class="docutils literal notranslate"><span class="pre">rdf:langString</span></code>) has nothing to check: no rule, no note. Neither has a
+language-tagged key (<code class="docutils literal notranslate"><span class="pre">language</span></code>, see <a class="reference internal" href="export_schemas.html"><span class="std std-doc">export_schemas.md</span></a>); a
+malformed tag, or a tag on a key with any other <code class="docutils literal notranslate"><span class="pre">xsd:type</span></code>, raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>
+as in the export.</p>
+<p>Datatype conflicts and types without an xsd base (not checked) are listed in
+the run’s <code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>; relaxed cardinalities and united enumerations (checked, more loosely) in its
+<code class="docutils literal notranslate"><span class="pre">relaxed_constraints</span></code>, with one warning per run naming their count; each note
+quotes every profile’s own value (<code class="docutils literal notranslate"><span class="pre">cardinality</span> <span class="pre">relaxed</span> <span class="pre">to</span> <span class="pre">0..2</span> <span class="pre">(DL:</span> <span class="pre">1..1,</span> <span class="pre">DY:</span> <span class="pre">0..1,</span> <span class="pre">GL:</span> <span class="pre">1..2)</span></code>). The merged <code class="docutils literal notranslate"><span class="pre">ProfileMetadata</span></code> keeps every profile’s
+identity: <code class="docutils literal notranslate"><span class="pre">sections</span></code> (the section keys, in scope order) and each field as a
+list in the same order (<code class="docutils literal notranslate"><span class="pre">keyword:</span> <span class="pre">[&quot;EQ&quot;,</span> <span class="pre">&quot;OP&quot;,</span> <span class="pre">&quot;SC&quot;]</span></code>, <code class="docutils literal notranslate"><span class="pre">versionIRI:</span> <span class="pre">[...]</span></code>); the merged
+<code class="docutils literal notranslate"><span class="pre">ProfileNamespaceMap</span></code> holds the root’s and every scoped profile’s prefixes, bound as
+in the full schema (root first, then the profiles in schema order; first binding
+wins), so a prefixed <code class="docutils literal notranslate"><span class="pre">xsd:type</span></code> expands as in the full schema. A merged run is never stricter than running the
+listed profiles one by one: parameters only add, cardinality only relaxes.
+The shipped bundles merged whole (<code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code>) differ in cardinality for 1–15 keys,
+in datatype only for CGMES 2.4.15 FH <code class="docutils literal notranslate"><span class="pre">Model.version</span></code>, and in enumeration values
+for 1–2 keys (NC).</p>
+</section>
+<section id="class-inheritance-schema-scope-class-ancestors">
+<span id="class-inheritance-schema_scopeclass_ancestors"></span><h3>Class inheritance (<code class="docutils literal notranslate"><span class="pre">schema_scope.class_ancestors</span></code>)<a class="headerlink" href="#class-inheritance-schema-scope-class-ancestors" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">class_ancestors(rdf_map,</span> <span class="pre">rdf_map_scope)</span></code> → <code class="docutils literal notranslate"><span class="pre">{class:</span> <span class="pre">ancestor</span> <span class="pre">IRIs}</span></code>: the
+same-named Class entries of the scoped profiles union their <code class="docutils literal notranslate"><span class="pre">inheritance</span></code>
+lists, and the relation is closed only through ancestors that have a Class
+entry of their own in the scope — another class’s list is never read as the
+parents of a class it mentions. Every engine gets this one map:</p>
+<ul class="simple">
+<li><p>the vectorized engines widen <code class="docutils literal notranslate"><span class="pre">sh:targetClass</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:class</span></code> through one
+class-membership index built from its <code class="docutils literal notranslate"><span class="pre">(Type,</span> <span class="pre">ancestor)</span></code> pairs per run (the
+IR is not fanned out): <code class="docutils literal notranslate"><span class="pre">sh:targetClass</span> <span class="pre">Equipment</span></code> hits <code class="docutils literal notranslate"><span class="pre">Breaker</span></code>;</p></li>
+<li><p>pyshacl gets the same edges as <code class="docutils literal notranslate"><span class="pre">rdfs:subClassOf</span></code> in <code class="docutils literal notranslate"><span class="pre">ont_graph</span></code> (instance
+data is not mutated); the map is already closed, so pyshacl’s own closure
+adds nothing. Parents are the IRIs the schema records
+(<code class="docutils literal notranslate"><span class="pre">https://cim.ucaiug.io/ns#IdentifiedObject</span></code> for NC); a bare name resolves
+like <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> in the data graph (schema namespace, else
+<code class="docutils literal notranslate"><span class="pre">undefined_namespace</span></code>).</p></li>
+</ul>
+<p>So the engines agree by construction. Each profile is its own world: NC SSI’s
+<code class="docutils literal notranslate"><span class="pre">ACLineSegment</span></code> list stops at <code class="docutils literal notranslate"><span class="pre">Equipment</span></code>, and SSI has no IdentifiedObject
+attributes — it reaches <code class="docutils literal notranslate"><span class="pre">IdentifiedObject</span></code> only when a scoped profile (ER) has
+an <code class="docutils literal notranslate"><span class="pre">Equipment</span></code> entry of its own. <code class="docutils literal notranslate"><span class="pre">inheritance=False</span></code> matches the exact
+<code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> on every engine (pyshacl without <code class="docutils literal notranslate"><span class="pre">ont_graph</span></code>). Only <code class="docutils literal notranslate"><span class="pre">sh:targetClass</span></code>
+(<code class="docutils literal notranslate"><span class="pre">target_by=&quot;Type&quot;</span></code>) and <code class="docutils literal notranslate"><span class="pre">sh:class</span></code> widen; KEY / VALUE / ID targets pick exactly
+what they name, a SPARQL target exactly what its query selects in the data
+(the <code class="docutils literal notranslate"><span class="pre">rdfs:subClassOf</span></code> edges pyshacl gets in <code class="docutils literal notranslate"><span class="pre">ont_graph</span></code> are visible to a
+query that walks them on pyshacl only — no CGMES target query does). Schema class rules
+never widen: each Class entry already lists its inherited attributes.
+Identical findings are reported once (a property shape on both a parent and a
+child node shape, the same triple in two instance files).</p>
+</section>
+</section>
+<section id="status-known-limitations">
+<span id="status--known-limitations"></span><h2>Status &amp; known limitations<a class="headerlink" href="#status-known-limitations" title="Link to this heading">¶</a></h2>
+<p>Known engine gaps (those a run can detect land in its coverage metadata,
+<code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code> / <code class="docutils literal notranslate"><span class="pre">skipped_components</span></code>):</p>
+<ul class="simple">
+<li><p><strong>Vectorized engines walk <code class="docutils literal notranslate"><span class="pre">sh:targetClass</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:targetSubjectsOf</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sh:targetObjectsOf</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:targetNode</span></code> and SPARQL targets</strong> (<code class="docutils literal notranslate"><span class="pre">sh:target</span></code>
+with <code class="docutils literal notranslate"><span class="pre">sh:select</span></code>; <code class="docutils literal notranslate"><span class="pre">$shapesGraph</span></code> / <code class="docutils literal notranslate"><span class="pre">$currentShape</span></code> are not bound). Shapes
+reached solely through a <code class="docutils literal notranslate"><span class="pre">sh:target</span></code> without <code class="docutils literal notranslate"><span class="pre">sh:select</span></code> (a
+<code class="docutils literal notranslate"><span class="pre">sh:SPARQLTargetType</span></code> instance, a JavaScript or other custom target) are
+invisible to polars/pandas/duckdb — <code class="docutils literal notranslate"><span class="pre">compile()</span></code> logs a warning naming them;
+use <code class="docutils literal notranslate"><span class="pre">engine=&quot;pyshacl&quot;</span></code> for full spec coverage. <code class="docutils literal notranslate"><span class="pre">sh:rule</span></code> (SPARQLRule
+inference) is never applied by the vectorized engines; pyshacl applies it
+(<code class="docutils literal notranslate"><span class="pre">advanced=True</span></code>), so shapes with rules diverge by design — both land in
+<code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>.</p></li>
 <li><p><strong>Property paths</strong>: direct, <code class="docutils literal notranslate"><span class="pre">sh:inversePath</span></code>, and the two-step sequence
 <code class="docutils literal notranslate"><span class="pre">sh:path</span> <span class="pre">(</span> <span class="pre">assoc</span> <span class="pre">rdf:type</span> <span class="pre">)</span></code> (the ENTSO-E “valueType” pattern — the
 constraint applies to the referenced object’s type; a dangling reference
 yields no value node per SHACL path semantics). Longer sequences and the
 <code class="docutils literal notranslate"><span class="pre">*OrMorePath</span></code> forms are skipped with a compile warning; <code class="docutils literal notranslate"><span class="pre">engine=&quot;pyshacl&quot;</span></code>
 covers them.</p></li>
-<li><p><strong>Lexical datatype checks</strong>: with <code class="docutils literal notranslate"><span class="pre">lexical=True</span></code> (the default) datatype
-checks judge the raw <em>lexical form</em> of values — see the dedicated section
-below. <code class="docutils literal notranslate"><span class="pre">engine=&quot;reference&quot;</span></code> always gives the pure pyshacl view.</p></li>
+<li><p><strong>Lexical datatype checks</strong>: datatype checks judge the raw <em>lexical form</em>
+of values; with <code class="docutils literal notranslate"><span class="pre">lexical=True</span></code> (the default) a valid but narrower form is a
+<code class="docutils literal notranslate"><span class="pre">triplets:lexicalForm</span></code> Warning — see the dedicated section below.
+<code class="docutils literal notranslate"><span class="pre">engine=&quot;reference&quot;</span></code> always gives the pure pyshacl view.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">sh:in</span></code> compares text</strong>: the value’s lexical form (for an IRI, its local
+id) is compared with each member’s text, so the datatype is ignored —
+<code class="docutils literal notranslate"><span class="pre">&quot;1.0&quot;^^xsd:float</span></code> matches the member <code class="docutils literal notranslate"><span class="pre">1.0</span></code> (<code class="docutils literal notranslate"><span class="pre">xsd:decimal</span></code>). pyshacl
+compares typed RDF terms and reports a violation. CGMES <code class="docutils literal notranslate"><span class="pre">sh:in</span></code> lists hold IRIs
+(enumeration values), where both agree.</p></li>
+<li><p><strong>Numeric comparisons only</strong>: <code class="docutils literal notranslate"><span class="pre">sh:minInclusive</span></code> … <code class="docutils literal notranslate"><span class="pre">sh:maxExclusive</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sh:lessThan</span></code> and <code class="docutils literal notranslate"><span class="pre">sh:lessThanOrEquals</span></code> compare values as numbers; a value
+(or pair) that is not a number — a date, a string — is reported as
+violating. pyshacl compares typed literals, so date/string comparisons agree
+only on <code class="docutils literal notranslate"><span class="pre">engine=&quot;pyshacl&quot;</span></code>
+(<a class="reference external" href="https://github.com/Haigutus/triplets/issues/216">#216</a>).</p></li>
+<li><p><strong>A non-numeric range bound fails the compile</strong>: <code class="docutils literal notranslate"><span class="pre">sh:minInclusive</span> <span class="pre">&quot;2020-01-01&quot;^^xsd:date</span></code> (any range bound that is not a number) raises
+<code class="docutils literal notranslate"><span class="pre">ValueError</span></code> in <code class="docutils literal notranslate"><span class="pre">compile()</span></code>, so no shape is validated
+(<a class="reference external" href="https://github.com/Haigutus/triplets/issues/215">#215</a>).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">sh:closed</span></code> always allows <code class="docutils literal notranslate"><span class="pre">Type</span></code></strong>: every triplets object carries
+<code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> by construction, so the vectorized engines never report it on a
+closed shape; pyshacl reports it unless the shape lists <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> in
+<code class="docutils literal notranslate"><span class="pre">sh:ignoredProperties</span></code>. A deliberate divergence.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code> BlankNode(+combo) cases are intentionally not implemented in
 the vectorized engines (triplets data has no blank nodes).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code> follows the export schema: an Association / Enumeration path is
+IRI and an Attribute path Literal, whatever the text. For a KEY the schema does
+not declare (or without <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code>) the vectorized engines guess from the text
+(<code class="docutils literal notranslate"><span class="pre">iri.REFERENCE_LIKE</span></code>: any-case UUID, <code class="docutils literal notranslate"><span class="pre">scheme://…</span></code>, <code class="docutils literal notranslate"><span class="pre">urn:…</span></code>, <code class="docutils literal notranslate"><span class="pre">Name.attr</span></code>, or an
+ID in the data), while the exported graph pyshacl sees uses the stricter export
+rule (absolute IRI or lowercase UUID → IRI) — the two can disagree on such keys.</p></li>
 <li><p>The duckdb engine streams/spills by design, but a true larger-than-RAM
 validation has not been exercised yet.</p></li>
 </ul>
@@ -340,7 +492,7 @@ touching the public API:</p>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">pandas</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">validation/shacl_pandas.py</span></code></p></td>
 <td><p>core (+<code class="docutils literal notranslate"><span class="pre">sparql</span></code> extra for sh:sparql rules)</p></td>
-<td><p>compiled-IR executor for debugging; <strong>complete registry</strong> — <code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code> delegated to <code class="docutils literal notranslate"><span class="pre">triplets.sparql</span></code> (<code class="docutils literal notranslate"><span class="pre">max_workers</span></code> parallelizes those queries), <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> expanded at compile time and run against the referenced value nodes, <code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code> decided by the rdf_map schema (value form when schema is silent). Explicit <code class="docutils literal notranslate"><span class="pre">engine=&quot;pandas&quot;</span></code></p></td>
+<td><p>compiled-IR executor for debugging; <strong>complete registry</strong> — <code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code> delegated to <code class="docutils literal notranslate"><span class="pre">triplets.sparql</span></code> (<code class="docutils literal notranslate"><span class="pre">max_workers</span></code> parallelizes those queries), <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> expanded at compile time and run against the referenced value nodes (the focus node on a node shape), <code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code> decided by the rdf_map schema (value form when schema is silent). Explicit <code class="docutils literal notranslate"><span class="pre">engine=&quot;pandas&quot;</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">polars</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">validation/shacl_polars.py</span></code></p></td>
@@ -350,7 +502,7 @@ touching the public API:</p>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">duckdb</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">validation/shacl_duckdb.py</span></code></p></td>
 <td><p>duckdb</p></td>
-<td><p>compiled-IR executor for <strong>larger-than-memory</strong> data: one SQL query per constraint against the connection’s triplets table (streams/spills via DuckDB’s executor). Defaults come from the connection (<code class="docutils literal notranslate"><span class="pre">duckdb.connect(table=...,</span> <span class="pre">schema=...)</span></code>); call kwargs <code class="docutils literal notranslate"><span class="pre">table</span></code>/<code class="docutils literal notranslate"><span class="pre">schema</span></code>/<code class="docutils literal notranslate"><span class="pre">table_name</span></code> override. Accepts a connection or registers any frame. Constraints batch 100-per-<code class="docutils literal notranslate"><span class="pre">UNION</span> <span class="pre">ALL</span></code> statement — explicit choice (<code class="docutils literal notranslate"><span class="pre">engine=&quot;duckdb&quot;</span></code>, not in auto) when the data does not fit in memory</p></td>
+<td><p>compiled-IR executor for <strong>larger-than-memory</strong> data: one SQL query per constraint against the connection’s triplets table (streams/spills via DuckDB’s executor; SPARQL targets and the delegated components materialize the scoped table). Defaults come from the connection (<code class="docutils literal notranslate"><span class="pre">duckdb.connect(table=...,</span> <span class="pre">schema=...)</span></code>); call kwargs <code class="docutils literal notranslate"><span class="pre">table</span></code>/<code class="docutils literal notranslate"><span class="pre">schema</span></code>/<code class="docutils literal notranslate"><span class="pre">table_name</span></code> override. Accepts a connection or registers any frame. Constraints batch 100-per-<code class="docutils literal notranslate"><span class="pre">UNION</span> <span class="pre">ALL</span></code> statement — explicit choice (<code class="docutils literal notranslate"><span class="pre">engine=&quot;duckdb&quot;</span></code>, not in auto) when the data does not fit in memory</p></td>
 </tr>
 </tbody>
 </table>
@@ -360,14 +512,16 @@ touching the public API:</p>
 engines via <code class="docutils literal notranslate"><span class="pre">triplets.validation.register_engine(name,</span> <span class="pre">module)</span></code>.</p>
 </section>
 <section id="compile-once-shacl-ir-py">
-<h2>Compile Once (<code class="docutils literal notranslate"><span class="pre">shacl_ir.py</span></code>)<a class="headerlink" href="#compile-once-shacl-ir-py" title="Link to this heading">¶</a></h2>
+<span id="compile-once-shacl_irpy"></span><h2>Compile Once (<code class="docutils literal notranslate"><span class="pre">shacl_ir.py</span></code>)<a class="headerlink" href="#compile-once-shacl-ir-py" title="Link to this heading">¶</a></h2>
 <p>Shapes are parsed by rdflib <strong>exactly once</strong> into <code class="docutils literal notranslate"><span class="pre">CompiledShapes</span></code>, cached by
 content hash of the shape sources:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>shapes.ttl ──rdflib──► CompiledShapes
                         ├── graph  (rdflib shapes graph — what pyshacl consumes)
                         ├── ir     (flat constraint table — what the vectorized engines consume)
                         ├── hash   (content hash, the cache key)
-                        └── plans  {engine name → compiled artifact, filled lazily}
+                        ├── plans  {engine name → compiled artifact, filled lazily}
+                        ├── deactivated  (shape ids switched off: the graph's sh:deactivated true)
+                        └── active(deactivated_shapes) ──► CompiledShapes  (the run's rule set, cached per set)
 </pre></div>
 </div>
 <p>The IR is a pandas DataFrame, one row per shape × target × constraint component.
@@ -386,43 +540,47 @@ registries that consume it are internal.</p>
 <td><p>str</p></td>
 <td><p>full shape IRI (blank-node id for anonymous property shapes) — becomes <code class="docutils literal notranslate"><span class="pre">SOURCE_SHAPE</span></code> in reports and the join key for <code class="docutils literal notranslate"><span class="pre">enrich</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">target_class</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">shapes</span></code></p></td>
+<td><p>tuple[str]</p></td>
+<td><p>lineage: the shape ids whose switch-off removes the row, outermost first — NodeShape → property shape → <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> target / logical member → the defining shape, then a <code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code> row’s constraint node (nested row dicts carry it too)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">target_on</span></code></p></td>
 <td><p>str</p></td>
-<td><p>local name: the class for <code class="docutils literal notranslate"><span class="pre">target_kind=&quot;class&quot;</span></code>, the property KEY for <code class="docutils literal notranslate"><span class="pre">&quot;subjectsOf&quot;</span></code></p></td>
+<td><p>what the shape applies to, read by <code class="docutils literal notranslate"><span class="pre">target_by</span></code>: a Type name, a KEY, an ID or a SPARQL target’s query</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">target_kind</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">&quot;class&quot;</span></code> / <code class="docutils literal notranslate"><span class="pre">&quot;subjectsOf&quot;</span></code></p></td>
-<td><p>which target declaration produced the row</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">target_by</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;Type&quot;</span></code> / <code class="docutils literal notranslate"><span class="pre">&quot;KEY&quot;</span></code> / <code class="docutils literal notranslate"><span class="pre">&quot;VALUE&quot;</span></code> / <code class="docutils literal notranslate"><span class="pre">&quot;ID&quot;</span></code> / <code class="docutils literal notranslate"><span class="pre">&quot;SPARQL&quot;</span></code></p></td>
+<td><p>how the rows are picked: <code class="docutils literal notranslate"><span class="pre">Type</span></code> = objects of that Type (<code class="docutils literal notranslate"><span class="pre">sh:targetClass</span></code>; subclasses with <code class="docutils literal notranslate"><span class="pre">inheritance</span></code>); <code class="docutils literal notranslate"><span class="pre">KEY</span></code> = the IDs having that KEY (<code class="docutils literal notranslate"><span class="pre">sh:targetSubjectsOf</span></code>); <code class="docutils literal notranslate"><span class="pre">VALUE</span></code> = the VALUEs under that KEY (<code class="docutils literal notranslate"><span class="pre">sh:targetObjectsOf</span></code> — referenced objects, described in the data or not; literal values too); <code class="docutils literal notranslate"><span class="pre">ID</span></code> = that one ID (<code class="docutils literal notranslate"><span class="pre">sh:targetNode</span></code>; <code class="docutils literal notranslate"><span class="pre">urn:uuid:</span></code> stripped, any other IRI verbatim — it need not occur in the data, the ENTSO-E shapes use a class IRI as the focus of a dataset-wide <code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code>); <code class="docutils literal notranslate"><span class="pre">SPARQL</span></code> = the IDs the target’s <code class="docutils literal notranslate"><span class="pre">sh:select</span></code> projects as <code class="docutils literal notranslate"><span class="pre">?this</span></code> (<code class="docutils literal notranslate"><span class="pre">target_on</span></code> = the <code class="docutils literal notranslate"><span class="pre">PREFIX</span></code> header from <code class="docutils literal notranslate"><span class="pre">sh:prefixes</span></code> → <code class="docutils literal notranslate"><span class="pre">sh:declare</span></code> + the select text), resolved per run on <code class="docutils literal notranslate"><span class="pre">triplets.sparql</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">path</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">path</span></code></p></td>
 <td><p>str | None</p></td>
-<td><p>the property as one triplet KEY (local name); None for node-level constraints (<code class="docutils literal notranslate"><span class="pre">sh:closed</span></code>, node-level <code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code>)</p></td>
+<td><p>the property as one triplet KEY (local name); None for node-level constraints (<code class="docutils literal notranslate"><span class="pre">sh:closed</span></code>, node-level <code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code>, and <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:or</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:and</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:xone</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:not</span></code> on the NodeShape, which judge the focus)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">inverse</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">inverse</span></code></p></td>
 <td><p>bool</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">sh:inversePath</span></code> — engines swap the FOCUS/VALUE direction</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">via_type</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">via_type</span></code></p></td>
 <td><p>bool</p></td>
 <td><p>the <code class="docutils literal notranslate"><span class="pre">(</span> <span class="pre">assoc</span> <span class="pre">rdf:type</span> <span class="pre">)</span></code> sequence path: the value nodes are the referenced objects’ <em>types</em></p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">component</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">component</span></code></p></td>
 <td><p>str</p></td>
 <td><p>the dispatch key (<code class="docutils literal notranslate"><span class="pre">&quot;sh:minCount&quot;</span></code>, …) — see the matrix below</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">params</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">params</span></code></p></td>
 <td><p>object</p></td>
 <td><p>component parameter, shape varies (next table)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">severity</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">severity</span></code></p></td>
 <td><p>str</p></td>
 <td><p>local name of <code class="docutils literal notranslate"><span class="pre">sh:severity</span></code>, default <code class="docutils literal notranslate"><span class="pre">&quot;Violation&quot;</span></code> applied at compile time</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">message</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">message</span></code></p></td>
 <td><p>str | None</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">sh:message</span></code>; engines substitute their own default text when None</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sh:message</span></code> (several: sorted, newline-joined); engines substitute their own default text when None</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">description</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">description</span></code></p></td>
 <td><p>str | None</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">sh:name</span></code>/<code class="docutils literal notranslate"><span class="pre">sh:description</span></code> with parent-NodeShape inheritance — read only by <code class="docutils literal notranslate"><span class="pre">context.enrich</span></code>, never by engines</p></td>
 </tr>
@@ -442,47 +600,130 @@ registries that consume it are internal.</p>
 <td><p>int</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sh:minInclusive</span></code> <code class="docutils literal notranslate"><span class="pre">sh:maxInclusive</span></code> <code class="docutils literal notranslate"><span class="pre">sh:minExclusive</span></code> <code class="docutils literal notranslate"><span class="pre">sh:maxExclusive</span></code></p></td>
-<td><p>float (integer bounds are coerced)</p></td>
+<td><p>float (integer bounds are coerced; a non-numeric bound such as <code class="docutils literal notranslate"><span class="pre">xsd:date</span></code> is not supported)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sh:datatype</span></code> (<code class="docutils literal notranslate"><span class="pre">&quot;xsd:float&quot;</span></code>), <code class="docutils literal notranslate"><span class="pre">sh:class</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:pattern</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:hasValue</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:equals</span></code> <code class="docutils literal notranslate"><span class="pre">sh:disjoint</span></code> <code class="docutils literal notranslate"><span class="pre">sh:lessThan</span></code> <code class="docutils literal notranslate"><span class="pre">sh:lessThanOrEquals</span></code> (the other path’s KEY)</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sh:datatype</span></code> (<code class="docutils literal notranslate"><span class="pre">&quot;xsd:float&quot;</span></code>), <code class="docutils literal notranslate"><span class="pre">sh:class</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:pattern</span></code> (<code class="docutils literal notranslate"><span class="pre">sh:flags</span></code> folded in: <code class="docutils literal notranslate"><span class="pre">q</span></code> quotes the pattern, <code class="docutils literal notranslate"><span class="pre">i</span></code> <code class="docutils literal notranslate"><span class="pre">m</span></code> <code class="docutils literal notranslate"><span class="pre">s</span></code> an inline <code class="docutils literal notranslate"><span class="pre">(?ims)</span></code> prefix; any other flag skips the shape), <code class="docutils literal notranslate"><span class="pre">sh:hasValue</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:equals</span></code> <code class="docutils literal notranslate"><span class="pre">sh:disjoint</span></code> <code class="docutils literal notranslate"><span class="pre">sh:lessThan</span></code> <code class="docutils literal notranslate"><span class="pre">sh:lessThanOrEquals</span></code> (the other path’s KEY)</p></td>
 <td><p>str</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sh:in</span></code></p></td>
 <td><p>list[str] (IRIs shortened to local names)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sh:closed</span></code></p></td>
-<td><p>list[str] — the <strong>fully resolved</strong> allowed KEY list: <code class="docutils literal notranslate"><span class="pre">sh:ignoredProperties</span></code> + every direct non-inverse <code class="docutils literal notranslate"><span class="pre">sh:property</span></code> path of the shape, resolved at compile time (paths reached through <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> are not included)</p></td>
+<td><p>list[str] — the <strong>fully resolved</strong> allowed KEY list: every <code class="docutils literal notranslate"><span class="pre">sh:ignoredProperties</span></code> list + every direct non-inverse <code class="docutils literal notranslate"><span class="pre">sh:property</span></code> path of the shape, resolved at compile time (paths reached through <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> are not included); the vectorized engines always allow <code class="docutils literal notranslate"><span class="pre">Type</span></code> (rdf:type) on top</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sh:or</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:and</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sh:or</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:and</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:xone</span></code></p></td>
 <td><p>list[list[dict]] — one inner list of nested IR row dicts per alternative</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sh:not</span></code></p></td>
 <td><p>list[dict] — nested IR row dicts</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sh:node</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">{&quot;shape&quot;:</span> <span class="pre">local</span> <span class="pre">name,</span> <span class="pre">&quot;rows&quot;:</span> <span class="pre">[nested</span> <span class="pre">IR</span> <span class="pre">row</span> <span class="pre">dicts]}</span></code> — the referenced shape expanded at compile time</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">{&quot;shape&quot;:</span> <span class="pre">local</span> <span class="pre">name,</span> <span class="pre">&quot;rows&quot;:</span> <span class="pre">[nested</span> <span class="pre">IR</span> <span class="pre">row</span> <span class="pre">dicts]}</span></code> — the referenced shape expanded at compile time, run against the value nodes (the focus node on a node shape); one finding per non-conforming value node</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sh:property</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">{&quot;shape&quot;:</span> <span class="pre">local</span> <span class="pre">name,</span> <span class="pre">&quot;rows&quot;:</span> <span class="pre">[nested</span> <span class="pre">IR</span> <span class="pre">row</span> <span class="pre">dicts]}</span></code> — a property shape’s own property shapes (and its <code class="docutils literal notranslate"><span class="pre">sh:closed</span></code>), run against its value nodes; their findings are reported as they are, with the value node as <code class="docutils literal notranslate"><span class="pre">ID</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">{&quot;select&quot;:</span> <span class="pre">SELECT</span> <span class="pre">text</span> <span class="pre">with</span> </code>$this<code class="docutils literal notranslate"><span class="pre">/</span></code>$PATH<code class="docutils literal notranslate"><span class="pre">placeholders,</span> <span class="pre">&quot;prefixes&quot;:</span> <span class="pre">resolved</span></code>PREFIX<code class="docutils literal notranslate"><span class="pre">header,</span> <span class="pre">&quot;path&quot;:</span> <span class="pre">full</span> <span class="pre">IRI</span> <span class="pre">of</span> <span class="pre">the</span> <span class="pre">owning</span></code>sh:path<code class="docutils literal notranslate"> <span class="pre">or</span> <span class="pre">None}</span></code></p></td>
 </tr>
 </tbody>
 </table>
 </div>
+<p>Each value of a parameter is a constraint of its own (SHACL §4.1): two
+<code class="docutils literal notranslate"><span class="pre">sh:node</span></code> shapes, two <code class="docutils literal notranslate"><span class="pre">sh:or</span></code> lists or two <code class="docutils literal notranslate"><span class="pre">sh:pattern</span></code> values compile to two
+rows. One malformed shape does not stop the validation of the others (a
+non-numeric range bound does — see Known engine gaps). The
+compile runs these load checks, each one pyshacl refuses the whole shapes graph
+for (<code class="docutils literal notranslate"><span class="pre">ConstraintLoadError</span></code> / <code class="docutils literal notranslate"><span class="pre">ShapeLoadError</span></code>): a parameter taken once
+(<code class="docutils literal notranslate"><span class="pre">sh:path</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:minCount</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:maxCount</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:datatype</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sh:in</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:minLength</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:maxLength</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:closed</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:deactivated</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sh:uniqueLang</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:languageIn</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:qualifiedMinCount</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sh:qualifiedMaxCount</span></code>) given twice, an empty <code class="docutils literal notranslate"><span class="pre">sh:or</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:and</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:xone</span></code>
+list, a non-literal <code class="docutils literal notranslate"><span class="pre">sh:deactivated</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:ignoredProperties</span></code> without
+<code class="docutils literal notranslate"><span class="pre">sh:closed</span></code>, a declared <code class="docutils literal notranslate"><span class="pre">sh:PropertyShape</span></code> without <code class="docutils literal notranslate"><span class="pre">sh:path</span></code>. A shape that
+fails one is skipped and named in <code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code> with the reason (<code class="docutils literal notranslate"><span class="pre">two</span> <span class="pre">sh:path</span> <span class="pre">values</span></code>, <code class="docutils literal notranslate"><span class="pre">two</span> <span class="pre">sh:in</span> <span class="pre">lists</span></code>, <code class="docutils literal notranslate"><span class="pre">empty</span> <span class="pre">sh:or</span> <span class="pre">list</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:PropertyShape</span> <span class="pre">without</span> <span class="pre">sh:path</span></code>); the rest compiles and validates. The skip is the malformed
+shape itself: a property shape alone, a node shape with its property shapes; a
+logical operator over it is dropped as over any skipped part, and so is a
+<code class="docutils literal notranslate"><span class="pre">sh:node</span></code> row whose target has nothing left (see below) — both decided at
+compile time. A malformed shape no targeted shape reaches is listed the same
+way. pyshacl validates a copy of the shapes graph without them: the malformed
+shapes’ triples, the references to them, the logical operators the compile
+drops over them and the <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> rows whose target has only malformed parts
+left are removed, and <code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code> lists the same entries for them as the
+vectorized engines. pyshacl still refuses the graph for a malformed shape
+reached through <code class="docutils literal notranslate"><span class="pre">sh:qualifiedValueShape</span></code> (its owner keeps
+<code class="docutils literal notranslate"><span class="pre">sh:qualifiedMinCount</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:qualifiedMaxCount</span></code> without the shape). <code class="docutils literal notranslate"><span class="pre">sh:minInclusive</span></code> and the other
+range parameters are not in the list: pyshacl evaluates every value.</p>
+<p>The logical operators report one row per non-conforming focus node on a node
+shape (no <code class="docutils literal notranslate"><span class="pre">KEY</span></code>) and one per non-conforming value node in a property shape
+(<code class="docutils literal notranslate"><span class="pre">VALUE</span></code> = the value node), with the operator’s shape, severity and message.
+In a property shape, a member without its own <code class="docutils literal notranslate"><span class="pre">sh:path</span></code> takes the property’s
+path; a member with its own <code class="docutils literal notranslate"><span class="pre">sh:path</span></code> is a property shape over the value nodes
+(it compiles to a <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> row of the property’s path). <code class="docutils literal notranslate"><span class="pre">sh:and</span></code> holds when
+every member does, <code class="docutils literal notranslate"><span class="pre">sh:xone</span></code> when exactly one alternative does; an empty
+(switched-off) alternative holds for every node.</p>
 <p>Compile-time behaviors worth knowing: a NodeShape with several <code class="docutils literal notranslate"><span class="pre">sh:targetClass</span></code>
 (the ENTSO-E profiles do this) emits every row once per target class; shape
 reference cycles through <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:or</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:and</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:not</span></code> are detected,
 warned about, and dropped; supported <code class="docutils literal notranslate"><span class="pre">sh:path</span></code> forms are a direct IRI,
 <code class="docutils literal notranslate"><span class="pre">sh:inversePath</span></code>, the <code class="docutils literal notranslate"><span class="pre">(</span> <span class="pre">assoc</span> <span class="pre">rdf:type</span> <span class="pre">)</span></code> sequence, and <code class="docutils literal notranslate"><span class="pre">sh:alternativePath</span></code>
-only when one member carries a nested inverse (any other path form warns and
-skips the property shape — pyshacl covers it). Unknown components are kept and
-logged — engines skip what they don’t implement.</p>
+only when every member resolves to the same one of these forms — one property
+in several namespaces, as the ENTSO-E profiles write it (any other path form
+warns and skips the property shape — pyshacl covers it). One walker compiles every shape
+— the targeted NodeShape, its property shapes, a shape referenced through
+<code class="docutils literal notranslate"><span class="pre">sh:node</span></code>, a member of <code class="docutils literal notranslate"><span class="pre">sh:or</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:and</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:xone</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:not</span></code>: <code class="docutils literal notranslate"><span class="pre">sh:closed</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sh:sparql</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> and the logical operators on the NodeShape itself judge
+its focus nodes; a
+member or referenced shape with its own <code class="docutils literal notranslate"><span class="pre">sh:property</span></code> judges the same focus at
+node level. A property shape with its own <code class="docutils literal notranslate"><span class="pre">sh:property</span></code> runs those property
+shapes on its value nodes: below a <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> target or a logical member (a
+shape judged for conformance) as a <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> row — one finding per
+non-conforming value node, on the referring focus (SHACL §4.7.1); reached from
+the targeted NodeShape through <code class="docutils literal notranslate"><span class="pre">sh:property</span></code> only, as a <code class="docutils literal notranslate"><span class="pre">sh:property</span></code> row whose
+property shapes report their own findings on the value nodes (§4.7.2).</p>
+<p>Terms no engine implements (<code class="docutils literal notranslate"><span class="pre">sh:qualifiedValueShape</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:qualifiedMinCount</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sh:qualifiedMaxCount</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:uniqueLang</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:languageIn</span></code>) compile to rows with
+<code class="docutils literal notranslate"><span class="pre">params</span></code> None: the engines skip them and the run metadata names them in
+<code class="docutils literal notranslate"><span class="pre">skipped_components</span></code>. A logical operator whose member the IR cannot express —
+such a term anywhere in it, a bare IRI with no shape triples, a part of it
+already skipped (a dropped operator, an inexpressible <code class="docutils literal notranslate"><span class="pre">sh:path</span></code>) — is not
+evaluated at all (judging the expressible part would fire on every focus
+node): the row is dropped and named in <code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>, the shape’s other
+constraints still run. A value constraint declared on a node shape itself
+(<code class="docutils literal notranslate"><span class="pre">sh:class</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:in</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:datatype</span></code>, … judging the focus node) is not
+evaluated by the vectorized engines and is named in <code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>. A
+<code class="docutils literal notranslate"><span class="pre">sh:node</span></code> row whose target has nothing left but skipped parts would conform on
+every node: it is dropped and named the same way (<code class="docutils literal notranslate"><span class="pre">&lt;shape&gt;:</span> <span class="pre">sh:node</span> <span class="pre">target</span> <span class="pre">&lt;target&gt;</span> <span class="pre">not</span> <span class="pre">evaluated</span></code>).</p>
+<p>Every shape compiles, <code class="docutils literal notranslate"><span class="pre">sh:deactivated</span></code> or not. <code class="docutils literal notranslate"><span class="pre">compiled.deactivated</span></code> lists the
+shapes the graph declares <code class="docutils literal notranslate"><span class="pre">sh:deactivated</span></code>; <code class="docutils literal notranslate"><span class="pre">compiled.active(deactivated_shapes)</span></code>
+is the run’s rule set with exactly that argument switched off — None: the
+declared set, <code class="docutils literal notranslate"><span class="pre">[]</span></code>: nothing (every shape runs, the declared ones included), a
+shape IRI or any list: it replaces the declared set. Rows whose lineage meets a
+switched-off shape are dropped; a switched-off <code class="docutils literal notranslate"><span class="pre">sh:or</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:and</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:xone</span></code>
+member or <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> target empties and conforms, a switched-off <code class="docutils literal notranslate"><span class="pre">sh:not</span></code> shape empties and
+flags every node it judges (as pyshacl); under <code class="docutils literal notranslate"><span class="pre">sh:closed</span></code> a switched-off
+property shape’s path stays declared. The filtered compile is cached per set on
+the one compile: the compile’s <code class="docutils literal notranslate"><span class="pre">hash</span></code>, its own <code class="docutils literal notranslate"><span class="pre">plans</span></code>; with nothing declared
+and nothing chosen <code class="docutils literal notranslate"><span class="pre">active()</span></code> is the compile itself. Truthiness follows pyshacl
+(<code class="docutils literal notranslate"><span class="pre">bool(literal.value)</span></code>): <code class="docutils literal notranslate"><span class="pre">true</span></code>, a non-empty plain literal — so a plain
+<code class="docutils literal notranslate"><span class="pre">&quot;false&quot;</span></code> deactivates — or a non-zero number; <code class="docutils literal notranslate"><span class="pre">&quot;false&quot;^^xsd:boolean</span></code> and an
+ill-typed literal (no value) do not; a non-literal or a second value makes the
+shape malformed: it is skipped (see above). A malformed shape switched off is
+not evaluated and not listed; switched on, every engine skips it with the reason. An id that names no shape in
+the graph is logged as a warning. pyshacl validates a copy of the shapes graph
+carrying exactly the chosen set as <code class="docutils literal notranslate"><span class="pre">sh:deactivated</span> <span class="pre">true</span></code> when it differs from
+the declared one; the shapes embedded in the SHACL report carry the same flags.
+Rows that differ only in lineage (one property shape under two node shapes with
+a common target) run once. Each <code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code> entry carries its lineage too,
+so a switched-off shape takes its entries along; the operator drop rule is
+decided at compile time.</p>
 <p><code class="docutils literal notranslate"><span class="pre">CompiledShapes.plans</span></code> is where each engine caches its own compiled artifact
 (the polars/duckdb <code class="docutils literal notranslate"><span class="pre">split_rules</span></code> partition) — re-validating new data against
 the same shapes never recompiles anything.</p>
 <section id="component-coverage-per-engine">
 <h3>Component coverage per engine<a class="headerlink" href="#component-coverage-per-engine" title="Link to this heading">¶</a></h3>
-<p>The shared contract lives in <code class="docutils literal notranslate"><span class="pre">shacl_ir</span></code>: <code class="docutils literal notranslate"><span class="pre">KNOWN_COMPONENTS</span></code> (all 24 keys) and
-<code class="docutils literal notranslate"><span class="pre">FALLBACK_COMPONENTS</span></code> (<code class="docutils literal notranslate"><span class="pre">sh:or/and/not/node/sparql</span></code> — the nested/query components
+<p>The shared contract lives in <code class="docutils literal notranslate"><span class="pre">shacl_ir</span></code>: <code class="docutils literal notranslate"><span class="pre">KNOWN_COMPONENTS</span></code> (all 28 keys) and
+<code class="docutils literal notranslate"><span class="pre">FALLBACK_COMPONENTS</span></code> (<code class="docutils literal notranslate"><span class="pre">sh:or/and/xone/not/node/property/sparql</span></code> — the nested/query components
 every vectorized engine delegates to the pandas implementations via
 <code class="docutils literal notranslate"><span class="pre">split_rules</span></code>). A test (<code class="docutils literal notranslate"><span class="pre">test_shacl_ir.py::test_component_registries_agree</span></code>)
 pins the registries together:</p>
@@ -497,15 +738,15 @@ pins the registries together:</p>
 <tbody>
 <tr class="row-even"><td><p>pandas</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">CONSTRAINT_VALIDATORS</span></code></p></td>
-<td><p>all 24 (the fallback target)</p></td>
+<td><p>all 28 (the fallback target)</p></td>
 </tr>
 <tr class="row-odd"><td><p>polars</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">PLAN_BUILDERS</span></code> (+ <code class="docutils literal notranslate"><span class="pre">BATCH_BUILDERS</span></code> fast path)</p></td>
-<td><p>19 vectorized + 5 delegated</p></td>
+<td><p>21 vectorized + 7 delegated</p></td>
 </tr>
 <tr class="row-even"><td><p>duckdb</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">SQL_BUILDERS</span></code></p></td>
-<td><p>19 vectorized + 5 delegated</p></td>
+<td><p>21 vectorized + 7 delegated</p></td>
 </tr>
 <tr class="row-odd"><td><p>pyshacl</p></td>
 <td><p>consumes <code class="docutils literal notranslate"><span class="pre">compiled.graph</span></code>, not the IR</p></td>
@@ -520,8 +761,9 @@ together with the SPARQL engines’ loaded state, and
 <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">triplets.cache_scope():</span></code> bounds the state created inside the block —
 see <a class="reference internal" href="sparql.html"><span class="std std-doc">sparql.md</span></a>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">compiled</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile</span><span class="p">([</span><span class="s2">"equipment.ttl"</span><span class="p">,</span> <span class="s2">"topology.ttl"</span><span class="p">])</span>
-<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data_a</span><span class="p">,</span> <span class="n">compiled</span><span class="p">)</span>
-<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">data_b</span><span class="p">,</span> <span class="n">compiled</span><span class="p">)</span>   <span class="c1"># shapes parsed once, plans reused</span>
+<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="n">data_a</span><span class="p">,</span> <span class="n">compiled</span><span class="p">)</span>
+<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="n">data_b</span><span class="p">,</span> <span class="n">compiled</span><span class="p">)</span>   <span class="c1"># shapes parsed once, plans reused</span>
+<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="n">data_b</span><span class="p">,</span> <span class="n">compiled</span><span class="p">,</span> <span class="n">deactivated_shapes</span><span class="o">=</span><span class="p">[</span><span class="s2">"http://example.org/OptionalShape"</span><span class="p">])</span>
 </pre></div>
 </div>
 </section>
@@ -529,34 +771,59 @@ see <a class="reference internal" href="sparql.html"><span class="std std-doc">s
 <section id="engine-contract">
 <h2>Engine Contract<a class="headerlink" href="#engine-contract" title="Link to this heading">¶</a></h2>
 <p>Every engine module implements:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>validate(data, compiled: CompiledShapes, rdf_map=None, scope=None, **kwargs) → violations DataFrame
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>validate(data, compiled: CompiledShapes, rdf_map=None, data_scope=None, ancestors=None, **kwargs) → violations DataFrame
 </pre></div>
 </div>
+<p><code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> is the scoped, merged schema (<code class="docutils literal notranslate"><span class="pre">scoped_rdf_map</span></code>), <code class="docutils literal notranslate"><span class="pre">ancestors</span></code> the
+<code class="docutils literal notranslate"><span class="pre">class_ancestors</span></code> map (None = exact <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code>). <code class="docutils literal notranslate"><span class="pre">validate_shacl</span></code> hands the
+engines <code class="docutils literal notranslate"><span class="pre">compiled.active(...)</span></code>, the rule set with the switched-off shapes
+already removed; an engine called directly with the full compile validates
+them too.</p>
 <ul class="simple">
-<li><p><strong>pyshacl</strong> consumes <code class="docutils literal notranslate"><span class="pre">compiled.graph</span></code> (data goes through <code class="docutils literal notranslate"><span class="pre">_rdflib_loader</span></code>).</p></li>
+<li><p><strong>pyshacl</strong> consumes <code class="docutils literal notranslate"><span class="pre">compiled.graph</span></code> without its malformed shapes (data goes through <code class="docutils literal notranslate"><span class="pre">_rdflib_loader</span></code>);
+<code class="docutils literal notranslate"><span class="pre">ancestors</span></code> becomes its <code class="docutils literal notranslate"><span class="pre">ont_graph</span></code>. Its report keeps the top-level results and
+drops the nested <code class="docutils literal notranslate"><span class="pre">sh:detail</span></code> explanations, one row per finding like the vectorized engines.
+A blank-node <code class="docutils literal notranslate"><span class="pre">sh:resultPath</span></code> (inverse, sequence or alternative path) reads as the KEY it resolves to.</p></li>
 <li><p><strong>pandas/polars/duckdb</strong> consume <code class="docutils literal notranslate"><span class="pre">compiled.ir</span></code> — they never touch rdflib and
-read the raw string <code class="docutils literal notranslate"><span class="pre">VALUE</span></code>s directly (<code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> matters only for their
-sh:sparql delegation, where it types the queried graph).</p></li>
+read the raw string <code class="docutils literal notranslate"><span class="pre">VALUE</span></code>s directly (<code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> decides <code class="docutils literal notranslate"><span class="pre">sh:nodeKind</span></code> and
+types the graph of their sh:sparql and SPARQL target delegation); <code class="docutils literal notranslate"><span class="pre">ancestors</span></code>
+becomes the class-membership index.</p></li>
 <li><p><strong>sh:sparql IR rows</strong>: pyshacl evaluates them natively (<code class="docutils literal notranslate"><span class="pre">advanced=True</span></code>).
 The vectorized engines delegate them to <code class="docutils literal notranslate"><span class="pre">triplets.sparql</span></code> (auto order:
 qlever when built, else oxigraph when installed, else rdflib): the data is
 loaded into one dataset, each constraint runs as a single SELECT with the
-focus nodes bound via <code class="docutils literal notranslate"><span class="pre">VALUES</span> <span class="pre">?this</span> <span class="pre">{...}</span></code> and <code class="docutils literal notranslate"><span class="pre">$PATH</span></code> substituted from
-the IR, and <code class="docutils literal notranslate"><span class="pre">max_workers=N</span></code> runs the constraint queries in parallel
-processes on the rdflib path only (fork gives copy-on-write sharing of the
-dataset; threads don’t help rdflib — it is GIL-bound pure Python; qlever
-and oxigraph are ms-scale sequentially).
+focus nodes bound via <code class="docutils literal notranslate"><span class="pre">VALUES</span> <span class="pre">?this</span> <span class="pre">{...}</span></code> opening the WHERE group (the
+authored pattern starts from the focus nodes) and <code class="docutils literal notranslate"><span class="pre">$PATH</span></code> substituted from
+the IR, and <code class="docutils literal notranslate"><span class="pre">max_workers=N</span></code> runs the constraint queries in parallel:
+forked processes on rdflib (copy-on-write sharing of the dataset; threads
+don’t help rdflib — it is GIL-bound pure Python), threads on oxigraph and
+qlever (they release the GIL while evaluating over one shared store).
+Queries a strict engine rejects fall back to rdflib and do not run in
+parallel: a shapes file with many rejected queries can be slower with
+<code class="docutils literal notranslate"><span class="pre">max_workers</span></code> (GIL-bound fallbacks).
 For sh:sparql-heavy profiles build the qlever extension or
 <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">triplets[oxigraph]</span></code>; the rdflib fallback runs in minutes.
 <strong>No query fixing</strong>: constraint queries run exactly as authored. A
 constraint query a strict engine rejects is reported as a
 <code class="docutils literal notranslate"><span class="pre">triplets:invalidSparql</span></code> Warning row naming the shape and is still
 evaluated on the lenient rdflib engine.</p></li>
+<li><p><strong>SPARQL targets</strong> (<code class="docutils literal notranslate"><span class="pre">target_by=&quot;SPARQL&quot;</span></code>) run the same way: each distinct
+target query once per run over the (scoped) data, its <code class="docutils literal notranslate"><span class="pre">?this</span></code> column the
+focus nodes. A target query a strict engine rejects gets the same Warning
+row and is evaluated on rdflib; one no engine can run gives a
+<code class="docutils literal notranslate"><span class="pre">triplets:invalidSparql</span></code> Violation naming the NodeShape, which then has no
+focus; so does a query that projects no <code class="docutils literal notranslate"><span class="pre">?this</span></code>. Every NodeShape sharing
+the query gets its own row. Prefixes come only from the <code class="docutils literal notranslate"><span class="pre">sh:declare</span></code> entries
+of the target’s <code class="docutils literal notranslate"><span class="pre">sh:prefixes</span></code> node (pyshacl also takes those of every
+<code class="docutils literal notranslate"><span class="pre">owl:Ontology</span></code> when that node declares none). A query matching a typed
+literal (<code class="docutils literal notranslate"><span class="pre">md:Model.profile</span> <span class="pre">&quot;…&quot;^^xsd:anyURI</span></code> in the Header shapes,
+<code class="docutils literal notranslate"><span class="pre">cim:TransformerEnd.endNumber</span> <span class="pre">3</span></code>) matches only when the <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> scope
+types that KEY — pyshacl sees the same graph.</p></li>
 </ul>
 </section>
 <section id="the-lexical-form-datatype-deviation">
 <h2>The Lexical-Form Datatype Deviation<a class="headerlink" href="#the-lexical-form-datatype-deviation" title="Link to this heading">¶</a></h2>
-<p>The one deliberate divergence from pyshacl. rdflib compares a literal’s
+<p>A deliberate divergence from pyshacl. rdflib compares a literal’s
 <em>declared</em> datatype, so <code class="docutils literal notranslate"><span class="pre">&quot;1&quot;^^xsd:float</span></code> is simply valid — the vectorized
 engines see the raw lexical form and can judge it. Two levels:</p>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -582,18 +849,33 @@ engines see the raw lexical form and can judge it. Two levels:</p>
 </tbody>
 </table>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">validate(...,</span> <span class="pre">lexical=True)</span></code> (the default) appends these findings to any
-engine’s report (duplicates dropped on
+<p>A nested datatype check (a member of <code class="docutils literal notranslate"><span class="pre">sh:and</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:or</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:xone</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:not</span></code>,
+a shape referenced through <code class="docutils literal notranslate"><span class="pre">sh:node</span></code>) decides conformance on the lexical space
+only: <code class="docutils literal notranslate"><span class="pre">&quot;1&quot;</span></code> satisfies <code class="docutils literal notranslate"><span class="pre">xsd:float</span></code> there, as in pyshacl, and no Warning is
+reported for it. The <code class="docutils literal notranslate"><span class="pre">sh:datatype</span></code> of a property shape, also one reached through
+<code class="docutils literal notranslate"><span class="pre">sh:property</span></code>, reports the Warning.</p>
+<p>The vectorized engines check both levels inline. pyshacl gets the pandas
+datatype check as a supplement (duplicates dropped on
 <code class="docutils literal notranslate"><span class="pre">[ID,</span> <span class="pre">KEY,</span> <span class="pre">VALUE,</span> <span class="pre">VIOLATION_TYPE,</span> <span class="pre">SOURCE_SHAPE,</span> <span class="pre">SEVERITY]</span></code>).
+<code class="docutils literal notranslate"><span class="pre">validate_shacl(...,</span> <span class="pre">lexical=False)</span></code> skips the <code class="docutils literal notranslate"><span class="pre">triplets:lexicalForm</span></code> level on
+every engine and pyshacl’s supplement; values
+outside the lexical space stay <code class="docutils literal notranslate"><span class="pre">sh:datatype</span></code> violations on the vectorized engines.
 Parity tests treat <code class="docutils literal notranslate"><span class="pre">triplets:lexicalForm</span></code> rows as documented extras: engines
 must never <em>lose</em> a violation pyshacl reports.</p>
-<p><code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> still matters for the pyshacl path: without it every <code class="docutils literal notranslate"><span class="pre">VALUE</span></code> is an
-untyped string, so <code class="docutils literal notranslate"><span class="pre">sh:datatype</span> <span class="pre">xsd:float</span></code> trips on everything; with it the
-N-Quads export attaches real <code class="docutils literal notranslate"><span class="pre">xsd</span></code> types and only genuinely broken values fail.</p>
+<p><code class="docutils literal notranslate"><span class="pre">xsd:anyURI</span></code> values are literals (the schema entry type decides, not the
+datatype), so they get the same lexical check: an IRI reference (RFC 3987,
+relative and non-ASCII allowed) — no controls, space, DEL or <code class="docutils literal notranslate"><span class="pre">&lt;&gt;&quot;{}|^`\</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">%</span></code> only as a <code class="docutils literal notranslate"><span class="pre">%XX</span></code> escape. <code class="docutils literal notranslate"><span class="pre">&quot;has</span> <span class="pre">space&quot;^^xsd:anyURI</span></code> is an <code class="docutils literal notranslate"><span class="pre">sh:datatype</span></code>
+violation on every engine; <code class="docutils literal notranslate"><span class="pre">xsd:string</span></code> stays unchecked.</p>
+<p><code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> + <code class="docutils literal notranslate"><span class="pre">rdf_map_scope</span></code> matter for the pyshacl path: without them every
+literal <code class="docutils literal notranslate"><span class="pre">VALUE</span></code> is an untyped string (references that look like a UUID or
+absolute IRI stay IRIs), so <code class="docutils literal notranslate"><span class="pre">sh:datatype</span> <span class="pre">xsd:float</span></code> trips on everything;
+with them the N-Quads export attaches the scoped profiles’ <code class="docutils literal notranslate"><span class="pre">xsd</span></code> types and only
+genuinely broken values fail.</p>
 </section>
 <section id="result-structure">
 <h2>Result Structure<a class="headerlink" href="#result-structure" title="Link to this heading">¶</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">validate</span></code> always returns the canonical violations DataFrame — <strong>empty =
+<p>Every validation returns the canonical violations DataFrame — <strong>empty =
 conforms</strong> — identical across all engines:</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
@@ -604,7 +886,7 @@ conforms</strong> — identical across all engines:</p>
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ID</span></code></p></td>
-<td><p>focus node (instance UUID, <code class="docutils literal notranslate"><span class="pre">urn:uuid:</span></code> stripped)</p></td>
+<td><p>focus node (instance UUID, <code class="docutils literal notranslate"><span class="pre">urn:uuid:</span></code> stripped — <code class="docutils literal notranslate"><span class="pre">triplets.iri.local_id</span></code>)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">KEY</span></code></p></td>
 <td><p>property path (CIM short name, e.g. <code class="docutils literal notranslate"><span class="pre">IdentifiedObject.name</span></code>)</p></td>
@@ -627,19 +909,27 @@ conforms</strong> — identical across all engines:</p>
 </tbody>
 </table>
 </div>
+<p>plus <code class="docutils literal notranslate"><span class="pre">EXPECTED</span></code> (what the constraint requires, worded from the rule) and
+<code class="docutils literal notranslate"><span class="pre">MESSAGE_SOURCE</span></code> (authored <code class="docutils literal notranslate"><span class="pre">sh:message</span></code> or engine text) — both from the rules
+alone — and, for the schema validations, <code class="docutils literal notranslate"><span class="pre">PROFILE</span></code> (the list of scoped
+section keys, <code class="docutils literal notranslate"><span class="pre">[&quot;EQ&quot;,</span> <span class="pre">&quot;OP&quot;,</span> <span class="pre">&quot;SC&quot;]</span></code>; the reports format it for display). What
+a finding found in the data (<code class="docutils literal notranslate"><span class="pre">TARGET</span></code>) is added by <code class="docutils literal notranslate"><span class="pre">enrich</span></code>.</p>
 <p>Violations DataFrames export like any other DataFrame (<code class="docutils literal notranslate"><span class="pre">export_to_csv</span></code>, Excel, …),
 as a standard <code class="docutils literal notranslate"><span class="pre">sh:ValidationReport</span></code> (<code class="docutils literal notranslate"><span class="pre">violations.shacl.to_shacl_report(...)</span></code> — the
 exact inverse of the pyshacl report mapping in <code class="docutils literal notranslate"><span class="pre">shacl_report.py</span></code>) or as SARIF 2.1.0
 (<code class="docutils literal notranslate"><span class="pre">violations.shacl.to_sarif(...)</span></code>, see below). Source positions come from one shared
 pass — <code class="docutils literal notranslate"><span class="pre">violations.shacl.locate(sources=...)</span></code> stamps <code class="docutils literal notranslate"><span class="pre">LOCATION_COLUMNS</span></code>
-(<code class="docutils literal notranslate"><span class="pre">SOURCE_URI</span></code>, <code class="docutils literal notranslate"><span class="pre">SOURCE_LINE</span></code>) onto the frame; both exports run it
+(<code class="docutils literal notranslate"><span class="pre">SOURCE_URI</span></code>, <code class="docutils literal notranslate"><span class="pre">SOURCE_LINE</span></code>, <code class="docutils literal notranslate"><span class="pre">SOURCE_SNIPPET</span></code>) onto the frame; both exports run it
 automatically when given <code class="docutils literal notranslate"><span class="pre">sources=</span></code>, or reuse the columns when already present.</p>
 <p>The SHACL report serializes via rdflib: <code class="docutils literal notranslate"><span class="pre">format=None</span></code> (default) derives the format
 from the path suffix (<code class="docutils literal notranslate"><span class="pre">.ttl</span></code> → turtle, <code class="docutils literal notranslate"><span class="pre">.xml</span></code>/<code class="docutils literal notranslate"><span class="pre">.rdf</span></code> → RDF/XML, …); an explicit
 <code class="docutils literal notranslate"><span class="pre">format=</span></code> always wins.</p>
-<p><strong>Validation-run metadata</strong> is stamped once, by <code class="docutils literal notranslate"><span class="pre">validate()</span></code>, onto the returned
-frame as <code class="docutils literal notranslate"><span class="pre">violations.attrs[&quot;validation&quot;]</span></code>. Every report exporter reads it, so
-all formats tell the same story:</p>
+<p><strong>Validation-run metadata</strong> is stamped once, by the validation function, onto
+the returned frame as <code class="docutils literal notranslate"><span class="pre">violations.attrs[&quot;validation&quot;]</span></code>. Every report exporter
+reads it, so all formats tell the same story; <code class="docutils literal notranslate"><span class="pre">concat_violations(frames)</span></code>
+joins the frames of several runs of one constraint language and merges their
+metadata (earliest start, latest end, counts once per rule set, lists
+united, differing values kept as the list of distinct values):</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -649,7 +939,7 @@ all formats tell the same story:</p>
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">started_at</span></code> / <code class="docutils literal notranslate"><span class="pre">generated_at</span></code> / <code class="docutils literal notranslate"><span class="pre">duration_seconds</span></code></p></td>
-<td><p>validation start/end (UTC, Zulu form) and wall-clock duration of the engine run (shapes compilation excluded — cache-independent)</p></td>
+<td><p>validation start/end (UTC, Zulu form) and wall-clock duration of the run — <code class="docutils literal notranslate"><span class="pre">validate_shacl</span></code> excludes the shapes compilation (cache-independent); the schema validations include <code class="docutils literal notranslate"><span class="pre">compile_schema</span></code> / <code class="docutils literal notranslate"><span class="pre">compile_references</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">engine</span></code></p></td>
 <td><p>the engine that produced the report</p></td>
@@ -663,14 +953,32 @@ all formats tell the same story:</p>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">references</span></code></p></td>
 <td><p>shape file names (recorded at compile)</p></td>
 </tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">compiled_hash</span></code></p></td>
+<td><p>the shape files’ content hash (<code class="docutils literal notranslate"><span class="pre">CompiledShapes.hash</span></code>, the same with any <code class="docutils literal notranslate"><span class="pre">deactivated_shapes</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">deactivated_shapes</span></code></p></td>
+<td><p>the shape ids the run switched off, sorted (<code class="docutils literal notranslate"><span class="pre">[]</span></code> = every shape ran); the run’s rule set is <code class="docutils literal notranslate"><span class="pre">compiled_hash</span></code> + <code class="docutils literal notranslate"><span class="pre">deactivated_shapes</span></code> — <code class="docutils literal notranslate"><span class="pre">concat_violations</span></code> counts shapes and constraints once per rule set</p></td>
+</tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">node_shapes</span></code> / <code class="docutils literal notranslate"><span class="pre">constraints</span></code></p></td>
-<td><p>shape count / compiled IR constraint rows</p></td>
+<td><p>count of NodeShapes not switched off / distinct constraints of the run’s rule set (IR rows that differ only in lineage count once)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">profiles</span></code></p></td>
+<td><p>the section keys the run used, a list (None = root entries, or no rdf_map)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">inheritance</span></code></p></td>
+<td><p>whether class inheritance was applied — <code class="docutils literal notranslate"><span class="pre">validate_shacl</span></code>: an rdf_map scope with classes and <code class="docutils literal notranslate"><span class="pre">inheritance=True</span></code>; <code class="docutils literal notranslate"><span class="pre">validate_schema_references</span></code>: the <code class="docutils literal notranslate"><span class="pre">inheritance</span></code> flag</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code></p></td>
-<td><p>feature-level gaps THIS run did not evaluate: unreachable targets (<code class="docutils literal notranslate"><span class="pre">sh:targetNode</span></code> / <code class="docutils literal notranslate"><span class="pre">targetObjectsOf</span></code> / <code class="docutils literal notranslate"><span class="pre">target</span></code> / <code class="docutils literal notranslate"><span class="pre">xone</span></code>) and inexpressible <code class="docutils literal notranslate"><span class="pre">sh:path</span></code> forms (a listed property shape’s sibling constraints on the same NodeShape may still have run) — empty for <code class="docutils literal notranslate"><span class="pre">engine=&quot;pyshacl&quot;</span></code> (spec-complete) and empty when coverage is full</p></td>
+<td><p>what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); shapes reached only through a <code class="docutils literal notranslate"><span class="pre">sh:target</span></code> without <code class="docutils literal notranslate"><span class="pre">sh:select</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:rule</span></code> shapes (not applied), inexpressible <code class="docutils literal notranslate"><span class="pre">sh:path</span></code> forms (a listed property shape’s sibling constraints on the same NodeShape may still have run), logical operators over a member the IR cannot express and <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> rows whose target has nothing left but skipped parts; malformed shapes (the compile’s load checks), each with the reason — for <code class="docutils literal notranslate"><span class="pre">engine=&quot;pyshacl&quot;</span></code> (spec-complete) only the malformed shapes’ entries and the operator / <code class="docutils literal notranslate"><span class="pre">sh:node</span></code> rows dropped over them; a shape switched off takes its entries along; association ranges no given profile defines (<code class="docutils literal notranslate"><span class="pre">validate_schema_references</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">aborted</span></code></p></td>
+<td><p>True when <code class="docutils literal notranslate"><span class="pre">abort_on_first</span></code> met a Violation; the report may then be partial</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">relaxed_constraints</span></code></p></td>
+<td><p>checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">skipped_components</span></code></p></td>
-<td><p>constraint components the engine neither vectorizes nor delegates</p></td>
+<td><p>constraint components the engine neither vectorizes nor delegates, and the terms the IR keeps as unimplemented rows (<code class="docutils literal notranslate"><span class="pre">sh:qualifiedValueShape</span></code>, …)</p></td>
 </tr>
 </tbody>
 </table>
@@ -688,7 +996,7 @@ a blank-valued row.</p>
 </thead>
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">to_shacl_report</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">prov:generatedAtTime</span></code>, <code class="docutils literal notranslate"><span class="pre">dcterms:creator</span></code> (tool + version + engine, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;triplets</span> <span class="pre">0.2.0</span> <span class="pre">(engine:</span> <span class="pre">polars)&quot;</span></code>) / <code class="docutils literal notranslate"><span class="pre">source</span></code> / <code class="docutils literal notranslate"><span class="pre">references</span></code> on the report node (standard vocabulary only — counts/coverage stay in the tabular/SARIF forms)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">prov:generatedAtTime</span></code>, <code class="docutils literal notranslate"><span class="pre">dcterms:creator</span></code> (tool + version + engine, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;triplets</span> <span class="pre">&lt;version&gt;</span> <span class="pre">(engine:</span> <span class="pre">polars)&quot;</span></code>) / <code class="docutils literal notranslate"><span class="pre">source</span></code> / <code class="docutils literal notranslate"><span class="pre">references</span></code> on the report node (standard vocabulary only — counts/coverage stay in the tabular/SARIF forms)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">to_sarif</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">invocations[].startTimeUtc</span></code>/<code class="docutils literal notranslate"><span class="pre">endTimeUtc</span></code> + the full run <code class="docutils literal notranslate"><span class="pre">properties</span></code> bag (engine, duration, counts, coverage)</p></td>
@@ -708,9 +1016,8 @@ convention as <code class="docutils literal notranslate"><span class="pre">expor
 data file + sidecar).</p>
 <p>Every message states its origin with a prefix, and the constraint text is
 never rewritten — raw <code class="docutils literal notranslate"><span class="pre">sh:message</span></code> / engine wording stays verbatim behind its
-tag:</p>
-<p>Exactly one of <code class="docutils literal notranslate"><span class="pre">[shacl_message]</span></code>/<code class="docutils literal notranslate"><span class="pre">[engine_message]</span></code> appears per result — the constraint
-text has one author.</p>
+tag. Exactly one of <code class="docutils literal notranslate"><span class="pre">[shacl_message]</span></code>/<code class="docutils literal notranslate"><span class="pre">[engine_message]</span></code> appears per result —
+the constraint text has one author:</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -725,31 +1032,34 @@ text has one author.</p>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">[engine_message]</span></code></p></td>
 <td><p>engine-worded constraint text (default messages, <code class="docutils literal notranslate"><span class="pre">triplets:*</span></code> tool findings)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">[shacl_expected]</span></code></p></td>
-<td><p>what the constraint requires, worded from the IR parameter (<code class="docutils literal notranslate"><span class="pre">one</span> <span class="pre">of:</span> <span class="pre">Bay,</span> <span class="pre">VoltageLevel</span></code>) — the <code class="docutils literal notranslate"><span class="pre">EXPECTED</span></code> column, stamped by <code class="docutils literal notranslate"><span class="pre">validate()</span></code>, no extra input needed</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">[shacl_profile]</span></code> / <code class="docutils literal notranslate"><span class="pre">[rdfs_profile]</span></code></p></td>
+<td><p>the scoped profiles the finding was checked against — the <code class="docutils literal notranslate"><span class="pre">PROFILE</span></code> column (schema validations)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">[context_value]</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">[shacl_expected]</span></code></p></td>
+<td><p>what the constraint requires, worded from the IR parameter (<code class="docutils literal notranslate"><span class="pre">one</span> <span class="pre">of:</span> <span class="pre">Bay,</span> <span class="pre">VoltageLevel</span></code>) — the <code class="docutils literal notranslate"><span class="pre">EXPECTED</span></code> column, stamped by the validation, no extra input needed</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">[context_value]</span></code></p></td>
 <td><p>the offending value itself (the bad literal, or the reference) — self-contained errors, no need to open the instance data</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">[context_message]</span></code></p></td>
-<td><p>what was actually found — reference targets (id, Type, name / dangling), duplicate values on maxCount — the <code class="docutils literal notranslate"><span class="pre">TARGET</span></code> column</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">[context_message]</span></code></p></td>
+<td><p>what was actually found — reference targets (id, Type, name / dangling), duplicate values on maxCount — the <code class="docutils literal notranslate"><span class="pre">TARGET</span></code> column (context.enrich with <code class="docutils literal notranslate"><span class="pre">data=</span></code>)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">[context_object]</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">[context_object]</span></code></p></td>
 <td><p>the validated object (<code class="docutils literal notranslate"><span class="pre">Breaker</span> <span class="pre">BRK-1</span></code> — context.enrich)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">[shacl_description]</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">[shacl_description]</span></code></p></td>
 <td><p>the shape’s <code class="docutils literal notranslate"><span class="pre">sh:description</span></code> (context.enrich)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">[schema_property]</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">[schema_property]</span></code></p></td>
 <td><p>the rdf_map property (attribute/association) definition + multiplicity (context.enrich with <code class="docutils literal notranslate"><span class="pre">rdf_map=</span></code>)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">[schema_class]</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">[schema_class]</span></code></p></td>
 <td><p>the rdf_map description of the object’s class (context.enrich with <code class="docutils literal notranslate"><span class="pre">rdf_map=</span></code>)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">[context_location]</span></code> / <code class="docutils literal notranslate"><span class="pre">[context_snippet]</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">[context_location]</span></code> / <code class="docutils literal notranslate"><span class="pre">[context_snippet]</span></code></p></td>
 <td><p>source file + line, and the located line’s text (locate pass)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">[shacl_path]</span></code> / <code class="docutils literal notranslate"><span class="pre">[context_count]</span></code> / <code class="docutils literal notranslate"><span class="pre">[context_examples]</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">[shacl_path]</span></code> / <code class="docutils literal notranslate"><span class="pre">[context_count]</span></code> / <code class="docutils literal notranslate"><span class="pre">[context_examples]</span></code></p></td>
 <td><p>SARIF text only: the shape’s declared path, grouped totals, sample objects</p></td>
 </tr>
 </tbody>
@@ -763,21 +1073,19 @@ semantics), but every message entry is column-driven — drop a column
 (<code class="docutils literal notranslate"><span class="pre">violations.drop(columns=[&quot;CLASS_DESCRIPTION&quot;])</span></code>) and its entry disappears;
 enrichment itself is opt-in.</p>
 <p>The SHACL report additionally <strong>embeds the violated shapes’ defining triples</strong>
-(CBD, stamped by <code class="docutils literal notranslate"><span class="pre">validate()</span></code> into the run metadata), so <code class="docutils literal notranslate"><span class="pre">sh:sourceShape</span></code> is
+(CBD, stamped by <code class="docutils literal notranslate"><span class="pre">validate_shacl()</span></code> into the run metadata), so <code class="docutils literal notranslate"><span class="pre">sh:sourceShape</span></code> is
 never an empty blank node — the <code class="docutils literal notranslate"><span class="pre">sh:in</span></code> list and every other constraint
 parameter are machine-recoverable from the report alone. SARIF carries the
 located line as the native <code class="docutils literal notranslate"><span class="pre">region.snippet.text</span></code>. All of this happens in the
 post-validate/context/locate passes — the engine hot path is untouched.</p>
-<p><code class="docutils literal notranslate"><span class="pre">validate()</span></code> stamps the message/engine distinction as a <code class="docutils literal notranslate"><span class="pre">MESSAGE_SOURCE</span></code>
+<p>The validation stamps the message/engine distinction as a <code class="docutils literal notranslate"><span class="pre">MESSAGE_SOURCE</span></code>
 column (authored messages are known from the compiled IR); bare frames fall
-back to the violation-type namespace. The SHACL report’s <code class="docutils literal notranslate"><span class="pre">dcterms:creator</span></code>
-names the engine (<code class="docutils literal notranslate"><span class="pre">&quot;triplets</span> <span class="pre">0.2.0</span> <span class="pre">(engine:</span> <span class="pre">polars)&quot;</span></code>); SARIF carries it in
-the run properties. The SHACL
-report carries them as separate <code class="docutils literal notranslate"><span class="pre">sh:resultMessage</span></code>s (results stay one per
+back to the violation-type namespace. The SHACL report carries the tagged
+entries as separate <code class="docutils literal notranslate"><span class="pre">sh:resultMessage</span></code>s (results stay one per
 violation — merging them would break sh:ValidationReport semantics); SARIF
 carries them as newline-separated blocks in one <code class="docutils literal notranslate"><span class="pre">message.text</span></code>, adds
-<code class="docutils literal notranslate"><span class="pre">[count]</span></code> / <code class="docutils literal notranslate"><span class="pre">[examples]</span></code> blocks for grouped results, and puts the occurrence
-count in the rule title (<code class="docutils literal notranslate"><span class="pre">Line</span> <span class="pre">completeness</span> <span class="pre">(8×)</span></code> — the ruleId stays stable,
+<code class="docutils literal notranslate"><span class="pre">[context_count]</span></code> / <code class="docutils literal notranslate"><span class="pre">[context_examples]</span></code> blocks for grouped results, and puts the occurrence
+count in the rule title (<code class="docutils literal notranslate"><span class="pre">SHACL</span> <span class="pre">Line</span> <span class="pre">completeness</span> <span class="pre">(8×)</span></code> — the ruleId stays stable,
 so GitHub alert matching is unaffected).</p>
 <p><code class="docutils literal notranslate"><span class="pre">enrich</span></code> and <code class="docutils literal notranslate"><span class="pre">locate</span></code> preserve the attrs. On <code class="docutils literal notranslate"><span class="pre">to_shacl_report</span></code>, explicit
 <code class="docutils literal notranslate"><span class="pre">report_source=</span></code> / <code class="docutils literal notranslate"><span class="pre">report_references=</span></code> override the stamped values (plain
@@ -788,55 +1096,93 @@ SHACL report node still gets <code class="docutils literal notranslate"><span cl
 <code class="docutils literal notranslate"><span class="pre">dcterms:creator</span></code> — a standard report always says when and by what it was
 written.</p>
 </section>
-<section id="schema-validation-validate-schema-compile-schema">
-<h2>Schema validation (<code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> / <code class="docutils literal notranslate"><span class="pre">compile_schema</span></code>)<a class="headerlink" href="#schema-validation-validate-schema-compile-schema" title="Link to this heading">¶</a></h2>
+<section id="schema-validation-validate-schema-validate-schema-references">
+<span id="schema-validation-validate_schema--validate_schema_references"></span><h2>Schema validation (<code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> / <code class="docutils literal notranslate"><span class="pre">validate_schema_references</span></code>)<a class="headerlink" href="#schema-validation-validate-schema-validate-schema-references" title="Link to this heading">¶</a></h2>
 <p>Validate data directly against the export schema (rdf_map) — no SHACL shapes
 needed, no rdflib on this path:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">violations</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate_schema</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_schema</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"duckdb"</span><span class="p">,</span> <span class="n">closed</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_schema</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">profiles</span><span class="o">=</span><span class="p">(</span><span class="s2">"EQ"</span><span class="p">,</span> <span class="s2">"SSH"</span><span class="p">))</span>  <span class="c1"># explicit override</span>
-<span class="n">compiled</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile_schema</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">)</span>   <span class="c1"># the whole profile set, cached</span>
-<span class="n">compiled</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0"</span><span class="p">)</span>  <span class="c1"># lookup by profile URI</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">rdf_map</span> <span class="o">=</span> <span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED2</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate_schema</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="p">[</span><span class="s2">"EQ"</span><span class="p">,</span> <span class="s2">"OP"</span><span class="p">,</span> <span class="s2">"SC"</span><span class="p">])</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_schema</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="p">[</span><span class="n">eq_id</span><span class="p">],</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="s2">"EQ"</span><span class="p">,</span>
+                                        <span class="n">engine</span><span class="o">=</span><span class="s2">"duckdb"</span><span class="p">,</span> <span class="n">report_undefined_keys</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">references</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate_schema_references</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="p">[</span><span class="n">ssh_id</span><span class="p">],</span> <span class="p">[</span><span class="s2">"SSH"</span><span class="p">],</span> <span class="n">target_data_scope</span><span class="o">=</span><span class="p">[</span><span class="n">eq_id</span><span class="p">],</span> <span class="n">target_rdf_map_scope</span><span class="o">=</span><span class="p">[</span><span class="s2">"EQ"</span><span class="p">])</span>
+<span class="n">references</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate_schema_references</span><span class="p">(</span>   <span class="c1"># every loaded instance, source and target</span>
+    <span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="p">[</span><span class="s2">"SSH"</span><span class="p">],</span> <span class="n">target_rdf_map_scope</span><span class="o">=</span><span class="p">[</span><span class="s2">"EQ"</span><span class="p">])</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile_schema</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="p">[</span><span class="s2">"EQ"</span><span class="p">,</span> <span class="s2">"OP"</span><span class="p">,</span> <span class="s2">"SC"</span><span class="p">])</span>     <span class="c1"># cached</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile_references</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="p">[</span><span class="s2">"SSH"</span><span class="p">],</span> <span class="p">[</span><span class="s2">"EQ"</span><span class="p">])</span>
 </pre></div>
 </div>
-<p><strong>Semantics: per instance, per declared profile — profiles are never merged.</strong>
-The schema JSON is a SET of profiles; <code class="docutils literal notranslate"><span class="pre">compile_schema</span></code> compiles every section
-separately into a <code class="docutils literal notranslate"><span class="pre">CompiledSchema</span></code> addressable by each profile’s own declared
-identity (versionIRI / conformsTo URI / keyword / section key). Every
-INSTANCE_ID is validated on its own (the scope filter) against each profile
-its header declares — resolved from <code class="docutils literal notranslate"><span class="pre">conformsTo</span></code> (NC dcat headers),
-<code class="docutils literal notranslate"><span class="pre">Model.profile</span></code>/<code class="docutils literal notranslate"><span class="pre">Model.messageType</span></code> (CGMES), <code class="docutils literal notranslate"><span class="pre">keyword</span></code>, with the legacy 2.4
-profile-URL substring fallback. One instance may declare several profiles;
-each runs separately. This is why merging is wrong: every CGMES 3.0 profile
-serializes <code class="docutils literal notranslate"><span class="pre">IdentifiedObject.mRID</span></code> 1..1 — a union frame carries duplicate
-mRID rows per re-declared object (false maxOccurs), while SSH’s own mRID
-requirement must be met by SSH’s own rows, not EQ’s.</p>
-<p><code class="docutils literal notranslate"><span class="pre">profiles=</span></code> overrides resolution for header-less or legacy data (identifiers
-may be section keys, keywords or URIs; unknown ones raise). Instances that
-resolve to no profile are skipped and reported in the run-metadata coverage
-(<code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>); the applied profiles land in <code class="docutils literal notranslate"><span class="pre">attrs[&quot;validation&quot;][&quot;profiles&quot;]</span></code>,
-each violation carries a <code class="docutils literal notranslate"><span class="pre">PROFILE</span></code> column, reports carry <code class="docutils literal notranslate"><span class="pre">[rdfs_profile]</span> <span class="pre">EQ</span></code>
-entries, and SARIF alert titles read <code class="docutils literal notranslate"><span class="pre">RDFS</span> <span class="pre">&lt;profile&gt;</span> <span class="pre">&lt;Class&gt;</span> <span class="pre">&lt;attr&gt;</span> <span class="pre">(N×)</span></code>.</p>
-<p>Per profile the checks are: cardinality from the resolved <code class="docutils literal notranslate"><span class="pre">xsd:minOccours</span></code>/
-<code class="docutils literal notranslate"><span class="pre">xsd:maxOccours</span></code> (incl. mRID — the schemas are profile-accurate: CGMES 2.4
-declares it 0..1/not serialized, CGMES 3.0/NCP 1..1), datatype lexical checks
-from <code class="docutils literal notranslate"><span class="pre">xsd:type</span></code>, enumeration membership from <code class="docutils literal notranslate"><span class="pre">values</span></code>, association targets
-from <code class="docutils literal notranslate"><span class="pre">range</span></code> expanded to concrete subclasses via <code class="docutils literal notranslate"><span class="pre">inheritance</span></code> (the expansion
-index spans all sections — inheritance is model knowledge). A referenced
-object conforms when ANY of its types is in the range set; dangling
-references are silent (cross-instance references resolve outside the scope).
-<code class="docutils literal notranslate"><span class="pre">closed=True</span></code> adds an unknown-property check per class and profile
-(<code class="docutils literal notranslate"><span class="pre">schema:domainIncludes</span></code>). The same vectorized engines run everything (plans
-cached per compiled profile); the pyshacl engine refuses schema-compiled IR.
-<strong>Results do not masquerade as SHACL</strong>: constraint language <code class="docutils literal notranslate"><span class="pre">&quot;rdfs&quot;</span></code>,
-violation types <code class="docutils literal notranslate"><span class="pre">xsd:minOccurs</span></code>/<code class="docutils literal notranslate"><span class="pre">xsd:maxOccurs</span></code>/<code class="docutils literal notranslate"><span class="pre">xsd:type</span></code>/<code class="docutils literal notranslate"><span class="pre">rdfs:range</span></code>/
-<code class="docutils literal notranslate"><span class="pre">schema:domainIncludes</span></code> — real vocabulary IRIs in <code class="docutils literal notranslate"><span class="pre">sh:sourceConstraintComponent</span></code>,
+<p><strong><code class="docutils literal notranslate"><span class="pre">validate_schema</span></code>: per instance, against the merged scoped profiles.</strong>
+Every instance in <code class="docutils literal notranslate"><span class="pre">data_scope</span></code> is validated on its own (None = every
+instance). This is why the run is per instance: every CGMES 3.0 profile
+serializes <code class="docutils literal notranslate"><span class="pre">IdentifiedObject.mRID</span></code> 1..1 — a union frame carries duplicate mRID
+rows per re-declared object (false maxOccurs), while SSH’s own mRID
+requirement must be met by SSH’s own rows, not EQ’s. The checks are:
+cardinality from the resolved <code class="docutils literal notranslate"><span class="pre">xsd:minOccours</span></code>/<code class="docutils literal notranslate"><span class="pre">xsd:maxOccours</span></code> (incl. mRID —
+the schemas are profile-accurate: CGMES 2.4 declares it 0..1/not serialized,
+CGMES 3.0/NCP 1..1), datatype lexical checks from <code class="docutils literal notranslate"><span class="pre">xsd:type</span></code>, enumeration
+membership from <code class="docutils literal notranslate"><span class="pre">values</span></code>, and with <code class="docutils literal notranslate"><span class="pre">report_undefined_keys=True</span></code> keys an object
+carries that no scoped profile defines for its class (<code class="docutils literal notranslate"><span class="pre">schema:domainIncludes</span></code>).
+Class rules never widen to subclasses.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">validate_schema_references</span></code>: reference types against target instances and
+profiles.</strong> Each source instance’s associations (the source profiles, merged)
+are checked with the referenced objects looked up in that instance and the
+<code class="docutils literal notranslate"><span class="pre">target_data_scope</span></code> instances. A reference conforms when ANY type of its
+object (RDF types are cumulative) is the range class or, with
+<code class="docutils literal notranslate"><span class="pre">inheritance</span></code>, a subclass by <code class="docutils literal notranslate"><span class="pre">class_ancestors</span></code> over the source and target
+profiles. A range class none of those profiles defines cannot be decided: the
+association is listed in <code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>. With <code class="docutils literal notranslate"><span class="pre">report_missing_targets=True</span></code>
+(default) a reference to an object in neither the source nor the target
+instances is a <code class="docutils literal notranslate"><span class="pre">triplets:missing</span></code> finding. Only associations stored in the
+source instance are reported — EQ and SSH share object IDs, so a target file
+re-declaring an object does not bring its rows into the source’s report.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">severity=</span></code></strong> (both schema validations) sets the <code class="docutils literal notranslate"><span class="pre">SEVERITY</span></code> of every
+finding: <code class="docutils literal notranslate"><span class="pre">&quot;Violation&quot;</span></code> (default), <code class="docutils literal notranslate"><span class="pre">&quot;Warning&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;Info&quot;</span></code> — SARIF
+<code class="docutils literal notranslate"><span class="pre">error</span></code> / <code class="docutils literal notranslate"><span class="pre">warning</span></code> / <code class="docutils literal notranslate"><span class="pre">note</span></code>, <code class="docutils literal notranslate"><span class="pre">sh:resultSeverity</span></code> in the SHACL report;
+<code class="docutils literal notranslate"><span class="pre">has_violation</span></code> is False for a <code class="docutils literal notranslate"><span class="pre">&quot;Warning&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;Info&quot;</span></code> run. Any other value
+raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>. <code class="docutils literal notranslate"><span class="pre">triplets:lexicalForm</span></code> findings are always <code class="docutils literal notranslate"><span class="pre">Warning</span></code>.
+<code class="docutils literal notranslate"><span class="pre">validate_by_header</span></code> forwards it to both runs.</p>
+<p>The applied profiles land in <code class="docutils literal notranslate"><span class="pre">attrs[&quot;validation&quot;][&quot;profiles&quot;]</span></code>, each
+violation carries them as a list in the <code class="docutils literal notranslate"><span class="pre">PROFILE</span></code> column, reports carry
+<code class="docutils literal notranslate"><span class="pre">[rdfs_profile]</span> <span class="pre">EQ,</span> <span class="pre">OP,</span> <span class="pre">SC</span></code> entries, and SARIF alert titles read
+<code class="docutils literal notranslate"><span class="pre">RDFS</span> <span class="pre">&lt;profiles&gt;</span> <span class="pre">&lt;Class&gt;</span> <span class="pre">&lt;attr&gt;</span> <span class="pre">(N×)</span></code>. Schema shape ids carry the scope in
+their namespace (<code class="docutils literal notranslate"><span class="pre">urn:triplets:schema:EQ:OP:SC#Breaker.IdentifiedObject.name</span></code>),
+so findings of different scopes never share a rule.
+The same vectorized engines run everything (plans cached per compiled
+schema); the pyshacl engine refuses schema-compiled IR. <strong>Results do not
+masquerade as SHACL</strong>: constraint language <code class="docutils literal notranslate"><span class="pre">&quot;rdfs&quot;</span></code>, violation types
+<code class="docutils literal notranslate"><span class="pre">xsd:minOccurs</span></code>/<code class="docutils literal notranslate"><span class="pre">xsd:maxOccurs</span></code>/<code class="docutils literal notranslate"><span class="pre">xsd:type</span></code>/<code class="docutils literal notranslate"><span class="pre">rdfs:range</span></code>/<code class="docutils literal notranslate"><span class="pre">schema:domainIncludes</span></code>/
+<code class="docutils literal notranslate"><span class="pre">triplets:missing</span></code> — real vocabulary IRIs in <code class="docutils literal notranslate"><span class="pre">sh:sourceConstraintComponent</span></code>,
 message tags <code class="docutils literal notranslate"><span class="pre">[rdfs_expected]</span></code>, <code class="docutils literal notranslate"><span class="pre">[rdfs_path]</span></code>, <code class="docutils literal notranslate"><span class="pre">[rdfs_profile]</span></code>, …</p>
 </section>
+<section id="cim-helpers-triplets-cgmes-tools">
+<span id="cim-helpers-tripletscgmes_tools"></span><h2>CIM helpers (<code class="docutils literal notranslate"><span class="pre">triplets.cgmes_tools</span></code>)<a class="headerlink" href="#cim-helpers-triplets-cgmes-tools" title="Link to this heading">¶</a></h2>
+<p>The only code that reads instance headers, built on the generic calls:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">triplets</span><span class="w"> </span><span class="kn">import</span> <span class="n">cgmes_tools</span>
+
+<span class="n">cgmes_tools</span><span class="o">.</span><span class="n">declared_profiles</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">)</span>        <span class="c1"># {INSTANCE_ID: ["EQ"], ...}</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">cgmes_tools</span><span class="o">.</span><span class="n">validate_by_header</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">references</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">declared_profiles</span></code> matches the header’s profile-identity fields
+(<code class="docutils literal notranslate"><span class="pre">Model.messageType</span></code>, <code class="docutils literal notranslate"><span class="pre">keyword</span></code>, <code class="docutils literal notranslate"><span class="pre">Model.profile</span></code>, <code class="docutils literal notranslate"><span class="pre">conformsTo</span></code>) against the
+schema profiles’ declared identity, with the legacy CGMES 2.4.15 profile-URL
+substrings as fallback; an identifier several profiles share matches none.
+<code class="docutils literal notranslate"><span class="pre">validate_by_header</span></code> runs <code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> for each group of instances
+declaring the same profiles (merged), with <code class="docutils literal notranslate"><span class="pre">references=True</span></code> also
+<code class="docutils literal notranslate"><span class="pre">validate_schema_references</span></code> against every loaded instance and its declared
+profiles, and joins the runs with <code class="docutils literal notranslate"><span class="pre">concat_violations</span></code>. <code class="docutils literal notranslate"><span class="pre">data_scope=</span></code> selects
+the validated instances; references still resolve in every loaded instance.
+An instance whose header matches no profile is skipped and named in
+<code class="docutils literal notranslate"><span class="pre">skipped_shapes</span></code>; <code class="docutils literal notranslate"><span class="pre">rdf_map_scope=</span></code> overrides the declared profiles for
+header-less data.</p>
+</section>
 <section id="shared-loading-rdflib-loader-py">
-<h2>Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)<a class="headerlink" href="#shared-loading-rdflib-loader-py" title="Link to this heading">¶</a></h2>
-<p>SHACL and SPARQL reach rdflib through the same two helpers, so a validation and
-a query over the same data see an identical graph:</p>
+<span id="shared-loading-_rdflib_loaderpy"></span><h2>Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)<a class="headerlink" href="#shared-loading-rdflib-loader-py" title="Link to this heading">¶</a></h2>
+<p>SHACL and SPARQL reach rdflib through the same <code class="docutils literal notranslate"><span class="pre">load_dataset</span></code>, so a validation and
+a query over the same data see an identical graph. SPARQL scopes after loading
+(<code class="docutils literal notranslate"><span class="pre">scoped_graph</span></code>); the pyshacl engine filters the rows to <code class="docutils literal notranslate"><span class="pre">data_scope</span></code> before
+loading, so data outside the scope is never exported or parsed:</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -845,11 +1191,11 @@ a query over the same data see an identical graph:</p>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">load_dataset(data,</span> <span class="pre">rdf_map=None,</span> <span class="pre">store=&quot;memory&quot;)</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">load_dataset(data,</span> <span class="pre">rdf_map=None,</span> <span class="pre">data_unchanged=False,</span> <span class="pre">store=&quot;memory&quot;,</span> <span class="pre">undefined_namespace=CIM_NS)</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">rdflib.Dataset</span></code> seeing the deduplicated union, one named graph per <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code> (<code class="docutils literal notranslate"><span class="pre">urn:uuid:{INSTANCE_ID}</span></code>). <code class="docutils literal notranslate"><span class="pre">store=&quot;oxigraph&quot;</span></code> backs it with the oxigraph SPARQL engine’s cached store via oxrdflib (<code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>: oxigraph when installed)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scoped_graph(dataset,</span> <span class="pre">scope=None)</span></code></p></td>
-<td><p>full union when <code class="docutils literal notranslate"><span class="pre">scope</span> <span class="pre">is</span> <span class="pre">None</span></code>; otherwise a concrete <code class="docutils literal notranslate"><span class="pre">Graph</span></code> holding just the scoped instances’ named graphs</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scoped_graph(dataset,</span> <span class="pre">data_scope=None)</span></code></p></td>
+<td><p>full union when <code class="docutils literal notranslate"><span class="pre">data_scope</span> <span class="pre">is</span> <span class="pre">None</span></code>; otherwise a concrete <code class="docutils literal notranslate"><span class="pre">Graph</span></code> holding just the scoped instances’ named graphs (<code class="docutils literal notranslate"><span class="pre">sparql.query</span></code>’s <code class="docutils literal notranslate"><span class="pre">data_scope</span></code>, rdflib engine)</p></td>
 </tr>
 </tbody>
 </table>
@@ -857,36 +1203,49 @@ a query over the same data see an identical graph:</p>
 </section>
 <section id="call-sequence">
 <h2>Call Sequence<a class="headerlink" href="#call-sequence" title="Link to this heading">¶</a></h2>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="n">shapes</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=...</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="p">[</span><span class="s2">"EQ"</span><span class="p">])</span>
 <span class="o">|</span>
-<span class="s1">'-&gt; validation.validate(data, shapes, engine="auto", lexical=True)</span>
+<span class="s1">'-&gt; validation.validate_shacl(data, shapes, engine="auto", lexical=True)</span>
     <span class="o">|</span>
     <span class="o">|-&gt;</span> <span class="nb">compile</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span>                        <span class="c1"># cached by content hash</span>
     <span class="o">|</span>   <span class="s1">'-&gt; _load_shapes -&gt; parse_ir           # rdflib parses ONCE</span>
     <span class="o">|</span>
-    <span class="o">|-&gt;</span> <span class="n">get_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)</span>                     <span class="c1"># polars (first importable)</span>
-    <span class="o">|</span>   <span class="s1">'-&gt; shacl_polars.validate(data, compiled, rdf_map)</span>
-    <span class="o">|</span>       <span class="c1"># reads raw VALUEs; lexical findings emitted inline</span>
-    <span class="o">|</span>       <span class="c1"># (pyshacl path instead: load_dataset -&gt; scoped_graph -&gt;</span>
-    <span class="o">|</span>       <span class="c1">#  pyshacl.validate(compiled.graph) -&gt; report_to_violations)</span>
+    <span class="o">|-&gt;</span> <span class="n">scoped_rdf_map</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="p">)</span> <span class="c1"># the merged schema of the run</span>
+    <span class="o">|-&gt;</span> <span class="n">class_ancestors</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="p">)</span>
     <span class="o">|</span>
-    <span class="s1">'-&gt; + shacl_pandas datatype/lexical supplement   # ONLY for engine="pyshacl"</span>
+    <span class="o">|-&gt;</span> <span class="n">get_engine</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">)</span>                     <span class="c1"># polars (first importable)</span>
+    <span class="o">|</span>   <span class="s1">'-&gt; shacl_polars.validate(data, compiled, scoped, data_scope, ancestors)</span>
+    <span class="o">|</span>       <span class="c1"># reads raw VALUEs; lexical findings emitted inline (lexical=False: no lexicalForm)</span>
+    <span class="o">|</span>       <span class="c1"># (pyshacl path instead: _scoped(data_scope) -&gt; load_dataset -&gt;</span>
+    <span class="o">|</span>       <span class="c1">#  pyshacl.validate(compiled.graph, ont_graph=ancestors as</span>
+    <span class="o">|</span>       <span class="c1">#  rdfs:subClassOf) -&gt; report_to_violations)</span>
+    <span class="o">|</span>
+    <span class="o">|-&gt;</span> <span class="o">+</span> <span class="n">shacl_pandas</span> <span class="n">datatype</span><span class="o">/</span><span class="n">lexical</span> <span class="n">supplement</span>   <span class="c1"># ONLY for engine="pyshacl", lexical=True</span>
+    <span class="s1">'-&gt; EXPECTED / MESSAGE_SOURCE, run metadata</span>
+
+<span class="n">validation</span><span class="o">.</span><span class="n">validate_schema</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rdf_map</span><span class="p">,</span> <span class="n">data_scope</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="p">)</span>
+<span class="o">|-&gt;</span> <span class="n">compile_schema</span><span class="p">(</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="p">)</span>     <span class="c1"># merged, cached</span>
+<span class="s1">'-&gt; one engine pass per instance (data_scope=[instance]), PROFILE = the scoped section keys</span>
+
+<span class="n">enrich</span><span class="p">(</span><span class="n">violations</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="p">,</span> <span class="n">shapes</span><span class="o">=</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="p">)</span>  <span class="c1"># TARGET + context columns, a separate call</span>
 </pre></div>
 </div>
 </section>
 <section id="file-layout">
 <h2>File Layout<a class="headerlink" href="#file-layout" title="Link to this heading">¶</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">triplets</span><span class="o">/</span>
-<span class="o">|--</span> <span class="n">_rdflib_loader</span><span class="o">.</span><span class="n">py</span>        <span class="c1"># shared with sparql: load_dataset(), scoped_graph()</span>
+<span class="o">|--</span> <span class="n">_rdflib_loader</span><span class="o">.</span><span class="n">py</span>        <span class="c1"># shared with sparql: load_dataset()</span>
 <span class="s1">'-- validation/</span>
-    <span class="o">|--</span> <span class="fm">__init__</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># validate() + compile() dispatcher, engine registry</span>
+    <span class="o">|--</span> <span class="fm">__init__</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># validate_shacl / validate_schema / validate_schema_references, engine registry</span>
+    <span class="o">|--</span> <span class="n">schema_scope</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># rdf_map_scope: profile resolution, merged schema, class_ancestors</span>
+    <span class="o">|--</span> <span class="n">schema_ir</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># export schema -&gt; CompiledShapes (compile_schema, compile_references)</span>
     <span class="o">|--</span> <span class="n">shacl_ir</span><span class="o">.</span><span class="n">py</span>          <span class="c1"># shapes -&gt; CompiledShapes (IR compiler, content-hash cache)</span>
     <span class="o">|--</span> <span class="n">shacl_pyshacl</span><span class="o">.</span><span class="n">py</span>     <span class="c1"># reference engine: data + compiled.graph -&gt; report</span>
     <span class="o">|--</span> <span class="n">shacl_pandas</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># compiled-IR executor (full registry; eager, debugging)</span>
     <span class="o">|--</span> <span class="n">shacl_polars</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># compiled-IR executor (lazy plans + collect_all, performance)</span>
     <span class="o">|--</span> <span class="n">shacl_duckdb</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># compiled-IR executor (SQL per constraint, larger-than-memory)</span>
     <span class="o">|--</span> <span class="n">shacl_report</span><span class="o">.</span><span class="n">py</span>      <span class="c1"># ValidationReport &lt;-&gt; violations; multi-format export</span>
-    <span class="o">|--</span> <span class="n">context</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># optional enrichment pass (instance/object/shape/schema context)</span>
+    <span class="o">|--</span> <span class="n">context</span><span class="o">.</span><span class="n">py</span>           <span class="c1"># enrich (TARGET, instance/object/shape/schema context), concat_violations</span>
     <span class="o">|--</span> <span class="n">locations</span><span class="o">.</span><span class="n">py</span>         <span class="c1"># violations -&gt; source line/column (the sources= grep pass)</span>
     <span class="s1">'-- sarif.py             # violations -&gt; SARIF 2.1.0 (grouped by default)</span>
 </pre></div>
@@ -900,31 +1259,37 @@ a query over the same data see an identical graph:</p>
 
 <span class="n">data</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">read_RDF</span><span class="p">([</span><span class="s2">"grid.zip"</span><span class="p">])</span>
 
-<span class="c1"># validate against a shapes file (format auto-detected by extension) — empty = conforms</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span><span class="p">)</span>
+<span class="c1"># validate against a shapes file (format auto-detected by extension) — empty = conforms;</span>
+<span class="c1"># the scoped profiles type the literals and give the class inheritance</span>
+<span class="n">rdf_map</span> <span class="o">=</span> <span class="n">schemas</span><span class="o">.</span><span class="n">ENTSOE_CGMES_3_0_0_552_ED1</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="p">[</span><span class="s2">"EQ"</span><span class="p">])</span>
 
 <span class="c1"># compile once, validate many</span>
 <span class="n">compiled</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile</span><span class="p">([</span><span class="s2">"equipment.ttl"</span><span class="p">,</span> <span class="s2">"topology.ttl"</span><span class="p">])</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">compiled</span><span class="p">)</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="n">compiled</span><span class="p">)</span>
 
-<span class="c1"># scope filters to the named graphs (validated instances) — out-of-scope data</span>
-<span class="c1"># is not loaded; include dependency instances for cross-instance references</span>
+<span class="c1"># one compiled base, shapes switched off per run (the NC validation aggregates):</span>
+<span class="c1"># each set is filtered from the same compile and cached on it</span>
+<span class="n">base</span> <span class="o">=</span> <span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">base_shape_files</span><span class="p">)</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">deactivated_shapes</span><span class="o">=</span><span class="n">aggregate_off</span><span class="p">)</span>
+
+<span class="c1"># data_scope filters to the named graphs (validated instances) — out-of-scope</span>
+<span class="c1"># data is not loaded; include dependency instances for cross-instance references</span>
 <span class="n">one_instance</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s2">"INSTANCE_ID"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="p">[</span><span class="n">one_instance</span><span class="p">])</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">data_scope</span><span class="o">=</span><span class="p">[</span><span class="n">one_instance</span><span class="p">])</span>
 
 <span class="c1"># engines: auto is polars -&gt; pandas -&gt; pyshacl; works on any input flavor</span>
-<span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"pyshacl"</span><span class="p">)</span>      <span class="c1"># or "polars" / "pandas" / "duckdb"</span>
-<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">con</span><span class="p">,</span> <span class="s2">"shapes.ttl"</span><span class="p">)</span>          <span class="c1"># DuckDB connection</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>   <span class="c1"># pure pyshacl report</span>
+<span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"pyshacl"</span><span class="p">)</span>      <span class="c1"># or "polars" / "pandas" / "duckdb"</span>
+<span class="n">triplets</span><span class="o">.</span><span class="n">validation</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="n">con</span><span class="p">,</span> <span class="s2">"shapes.ttl"</span><span class="p">)</span>          <span class="c1"># DuckDB connection</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">lexical</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>   <span class="c1"># no triplets:lexicalForm Warnings (pyshacl: the pure report)</span>
 
 <span class="c1"># pyshacl on the oxigraph engine's cached store (identical results; opt in</span>
 <span class="c1"># when the store is already loaded for SPARQL — Memory is faster otherwise)</span>
-<span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"pyshacl"</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="s2">"oxigraph"</span><span class="p">)</span>
+<span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate_shacl</span><span class="p">(</span><span class="s2">"shapes.ttl"</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">"pyshacl"</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="s2">"oxigraph"</span><span class="p">)</span>
 
-<span class="c1"># slower optional context pass — adds instance/file, object type/name,</span>
-<span class="c1"># shape sh:name/sh:description and schema definition columns</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=...</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">enrich</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">shapes</span><span class="o">=</span><span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=...</span><span class="p">)</span>  <span class="c1"># same, standalone</span>
+<span class="c1"># the context pass, a separate call — TARGET (what was found), instance/file,</span>
+<span class="c1"># object type/name, shape sh:name/sh:description and schema definition columns</span>
+<span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">enrich</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">shapes</span><span class="o">=</span><span class="n">compiled</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">,</span> <span class="n">rdf_map_scope</span><span class="o">=</span><span class="p">[</span><span class="s2">"EQ"</span><span class="p">])</span>
 
 <span class="c1"># SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer</span>
 <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_sarif</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"report.sarif"</span><span class="p">)</span>
@@ -933,33 +1298,44 @@ a query over the same data see an identical graph:</p>
 <span class="c1"># or format=); sources= adds an "[context_location] file line N" message per</span>
 <span class="c1"># result (SHACL has no location vocabulary — plain-text messages travel</span>
 <span class="c1"># everywhere); the dcterms metadata (timestamp, creator, data/shape file</span>
-<span class="c1"># names) comes from violations.attrs — stamped by validate(), overridable</span>
+<span class="c1"># names) comes from violations.attrs — stamped by the validation, overridable</span>
 <span class="c1"># with report_source=/report_references=</span>
 <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_shacl_report</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"report.ttl"</span><span class="p">,</span> <span class="n">sources</span><span class="o">=</span><span class="p">[</span><span class="s2">"grid.zip"</span><span class="p">])</span>
 <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_shacl_report</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"report.xml"</span><span class="p">)</span>  <span class="c1"># RDF/XML via .xml</span>
+<span class="c1"># rdf_map= expands sh:resultPath KEYs to their profile namespace</span>
+<span class="c1"># (undefined_namespace for KEYs it lacks)</span>
+<span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_shacl_report</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"report.ttl"</span><span class="p">,</span> <span class="n">rdf_map</span><span class="o">=</span><span class="n">rdf_map</span><span class="p">)</span>
 
 <span class="c1"># tabular exports with the same metadata: CSV writes a report_meta.csv</span>
 <span class="c1"># sidecar, Excel a second "metadata" sheet</span>
 <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"report.csv"</span><span class="p">)</span>
 <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">to_excel</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">"report.xlsx"</span><span class="p">)</span>
 
-<span class="c1"># the location pass standalone — SOURCE_URI/LINE/COLUMN/COLUMN_END columns,</span>
+<span class="c1"># the location pass standalone — SOURCE_URI / SOURCE_LINE / SOURCE_SNIPPET columns,</span>
 <span class="c1"># reused by both report exports</span>
 <span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="o">.</span><span class="n">shacl</span><span class="o">.</span><span class="n">locate</span><span class="p">(</span><span class="n">sources</span><span class="o">=</span><span class="p">[</span><span class="s2">"grid.zip"</span><span class="p">])</span>
 </pre></div>
 </div>
-<p>pyshacl pass-through options (<code class="docutils literal notranslate"><span class="pre">inference</span></code>, <code class="docutils literal notranslate"><span class="pre">advanced</span></code>, <code class="docutils literal notranslate"><span class="pre">abort_on_first</span></code>,
-<code class="docutils literal notranslate"><span class="pre">store</span></code>) are forwarded as keyword arguments. Runnable end-to-end demos live in
+<p>pyshacl pass-through options (<code class="docutils literal notranslate"><span class="pre">inference</span></code>, <code class="docutils literal notranslate"><span class="pre">advanced</span></code>, <code class="docutils literal notranslate"><span class="pre">store</span></code>) are forwarded
+as keyword arguments. Names the schema does not declare (every name without an
+<code class="docutils literal notranslate"><span class="pre">rdf_map</span></code>) are written under <code class="docutils literal notranslate"><span class="pre">undefined_namespace=</span></code> (default CIM100, so
+schema-less <code class="docutils literal notranslate"><span class="pre">cim:</span></code> shapes keep working; the same parameter on
+<code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> / <code class="docutils literal notranslate"><span class="pre">validate_schema_references</span></code> / <code class="docutils literal notranslate"><span class="pre">to_shacl_report</span></code>); every
+row is loaded. <code class="docutils literal notranslate"><span class="pre">abort_on_first=True</span></code> stops every engine at the first
+Violation (Warnings and <code class="docutils literal notranslate"><span class="pre">triplets:invalidSparql</span></code> never stop it), for a yes/no
+gate rather than a full report. Runnable end-to-end demos live in
 <code class="docutils literal notranslate"><span class="pre">examples/shacl_validation.py</span></code> (engine behavior walkthrough) and
 <code class="docutils literal notranslate"><span class="pre">examples/shacl_reports.py</span></code> (uv-runnable: performance engines + both report
 exports with source locations — <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">examples/shacl_reports.py</span></code>).</p>
 </section>
 <section id="context-enrichment-validation-context-py">
-<h2>Context enrichment (<code class="docutils literal notranslate"><span class="pre">validation/context.py</span></code>)<a class="headerlink" href="#context-enrichment-validation-context-py" title="Link to this heading">¶</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">validate(...,</span> <span class="pre">context=True)</span></code> — or standalone
-<code class="docutils literal notranslate"><span class="pre">enrich(violations,</span> <span class="pre">data=,</span> <span class="pre">shapes=,</span> <span class="pre">rdf_map=)</span></code> — appends <code class="docutils literal notranslate"><span class="pre">ENRICHMENT_COLUMNS</span></code>
-to the report. Every source is optional; absent sources leave their columns
-null, so the output schema is stable:</p>
+<span id="context-enrichment-validationcontextpy"></span><h2>Context enrichment (<code class="docutils literal notranslate"><span class="pre">validation/context.py</span></code>)<a class="headerlink" href="#context-enrichment-validation-context-py" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">enrich(violations,</span> <span class="pre">data=,</span> <span class="pre">shapes=,</span> <span class="pre">rdf_map=,</span> <span class="pre">rdf_map_scope=,</span> <span class="pre">data_scope=)</span></code> —
+a separate call after any validation — appends <code class="docutils literal notranslate"><span class="pre">ENRICHMENT_COLUMNS</span></code> to the
+report. Every source is optional; absent sources leave their columns null, so
+the output schema is stable. <code class="docutils literal notranslate"><span class="pre">data_scope</span></code> reads only those instances of
+<code class="docutils literal notranslate"><span class="pre">data</span></code> — pass the validation’s own scope so TARGET finds exactly what the run
+saw:</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -969,36 +1345,40 @@ null, so the output schema is stable:</p>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>, <code class="docutils literal notranslate"><span class="pre">INSTANCE_LABEL</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TARGET</span></code></p></td>
+<td><p>data (+ shapes, rdf_map)</p></td>
+<td><p>what the finding found: the referenced object’s id, Type and name — or that it is not in the data — for <code class="docutils literal notranslate"><span class="pre">sh:class</span></code> / reference-range / <code class="docutils literal notranslate"><span class="pre">triplets:missing</span></code> findings; the found type of a valueType row (needs <em>shapes</em>); the duplicate values of a maximum-count finding. A presented <code class="docutils literal notranslate"><span class="pre">rdfs:range</span></code> counts as a reference when its rule or the schema says the KEY is an Association</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code>, <code class="docutils literal notranslate"><span class="pre">INSTANCE_LABEL</span></code></p></td>
 <td><p>data</p></td>
 <td><p>instance and its parsed file name (the <code class="docutils literal notranslate"><span class="pre">Distribution</span></code>/<code class="docutils literal notranslate"><span class="pre">label</span></code> meta rows)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">OBJECT_TYPE</span></code>, <code class="docutils literal notranslate"><span class="pre">OBJECT_NAME</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">OBJECT_TYPE</span></code>, <code class="docutils literal notranslate"><span class="pre">OBJECT_NAME</span></code></p></td>
 <td><p>data</p></td>
 <td><p>the focus object’s <code class="docutils literal notranslate"><span class="pre">Type</span></code> and <code class="docutils literal notranslate"><span class="pre">IdentifiedObject.name</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SHAPE_NAME</span></code>, <code class="docutils literal notranslate"><span class="pre">SHAPE_DESCRIPTION</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SHAPE_NAME</span></code>, <code class="docutils literal notranslate"><span class="pre">SHAPE_DESCRIPTION</span></code></p></td>
 <td><p>shapes</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">sh:name</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:description</span></code> (a property shape inherits the parent NodeShape’s)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SCHEMA_DESCRIPTION</span></code>, <code class="docutils literal notranslate"><span class="pre">SCHEMA_MULTIPLICITY</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SCHEMA_DESCRIPTION</span></code>, <code class="docutils literal notranslate"><span class="pre">SCHEMA_MULTIPLICITY</span></code></p></td>
 <td><p>rdf_map</p></td>
-<td><p>the violated attribute’s schema definition</p></td>
+<td><p>the violated attribute’s schema definition in the profiles the violation was checked against — the <code class="docutils literal notranslate"><span class="pre">PROFILE</span></code> column, else <code class="docutils literal notranslate"><span class="pre">rdf_map_scope</span></code> (one scope, or <code class="docutils literal notranslate"><span class="pre">{INSTANCE_ID:</span> <span class="pre">scope}</span></code>), else the run’s <code class="docutils literal notranslate"><span class="pre">attrs[&quot;validation&quot;][&quot;profiles&quot;]</span></code> — merged like the run (the multiplicity that was checked). Rows without profiles read the root entries; a name the profiles lack stays empty</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CLASS_DESCRIPTION</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">CLASS_DESCRIPTION</span></code></p></td>
 <td><p>rdf_map</p></td>
 <td><p>the object’s class description</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Pass the <em>same</em> shapes object the validation ran with — anonymous property
-shapes get fresh blank-node ids per parse, so a re-parsed graph cannot be
-matched. An object present in several instances is attributed to its first
-occurrence.</p>
+<p><code class="docutils literal notranslate"><span class="pre">enrich</span></code> reads no instance headers. Pass the <em>same</em> shapes object the
+validation ran with — anonymous property shapes get fresh blank-node ids per
+parse, so a re-parsed graph cannot be matched. An object present in several
+instances is attributed to its first occurrence.</p>
 </section>
 <section id="sarif-2-1-0-export-validation-sarif-py">
-<h2>SARIF 2.1.0 export (<code class="docutils literal notranslate"><span class="pre">validation/sarif.py</span></code>)<a class="headerlink" href="#sarif-2-1-0-export-validation-sarif-py" title="Link to this heading">¶</a></h2>
+<span id="sarif-210-export-validationsarifpy"></span><h2>SARIF 2.1.0 export (<code class="docutils literal notranslate"><span class="pre">validation/sarif.py</span></code>)<a class="headerlink" href="#sarif-2-1-0-export-validation-sarif-py" title="Link to this heading">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">triplets.validation.export_to_sarif(violations,</span> <span class="pre">...)</span></code> /
 <code class="docutils literal notranslate"><span class="pre">violations.shacl.to_sarif(...)</span></code> — a spec-valid SARIF 2.1.0 log for GitHub,
 SonarQube or any SARIF viewer. Passing <code class="docutils literal notranslate"><span class="pre">data=</span></code>/<code class="docutils literal notranslate"><span class="pre">shapes=</span></code>/<code class="docutils literal notranslate"><span class="pre">rdf_map=</span></code> runs the
@@ -1009,8 +1389,22 @@ findings that are really <em>one</em> issue — each rule becomes one result wit
 <code class="docutils literal notranslate"><span class="pre">occurrenceCount</span></code> and the first-3 + last-3 sample instances (all listed
 when ≤ 6). <code class="docutils literal notranslate"><span class="pre">group=False</span></code> emits one result per violation row.</p></li>
 <li><p>Severity maps <code class="docutils literal notranslate"><span class="pre">Violation/Warning/Info</span></code> → <code class="docutils literal notranslate"><span class="pre">error/warning/note</span></code>; rules carry
-the shape’s <code class="docutils literal notranslate"><span class="pre">sh:name</span></code>/<code class="docutils literal notranslate"><span class="pre">sh:description</span></code>; <code class="docutils literal notranslate"><span class="pre">MESSAGE</span></code> falls back to a generated
-text (message is mandatory in SARIF).</p></li>
+the shape’s <code class="docutils literal notranslate"><span class="pre">sh:description</span></code>, and the rule title names the constraint
+language: <code class="docutils literal notranslate"><span class="pre">SHACL</span> <span class="pre">&lt;sh:name&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">SHACL</span> <span class="pre">&lt;attr&gt;</span> <span class="pre">&lt;violation</span> <span class="pre">type&gt;</span></code> for unnamed
+shapes, <code class="docutils literal notranslate"><span class="pre">RDFS</span> <span class="pre">&lt;profiles&gt;</span> <span class="pre">&lt;Class&gt;</span> <span class="pre">&lt;attr&gt;</span></code> for schema runs, <code class="docutils literal notranslate"><span class="pre">(N×)</span></code> appended
+when grouped; <code class="docutils literal notranslate"><span class="pre">MESSAGE</span></code> falls back to a generated text (message is
+mandatory in SARIF).</p></li>
+<li><p>Every rule carries <code class="docutils literal notranslate"><span class="pre">help</span></code> (text + markdown, the panel GitHub shows under
+an alert), built from the group’s first finding and the run metadata:
+<em>What this checks</em> — the shape’s own <code class="docutils literal notranslate"><span class="pre">sh:message</span></code>, the path and the
+<code class="docutils literal notranslate"><span class="pre">EXPECTED</span></code> statement (verbatim, long value lists included); <em>Schema
+context</em> when enriched with the <code class="docutils literal notranslate"><span class="pre">rdf_map</span></code> — the property description with
+its multiplicity and the class description; <em>Source</em> — the shape IRI
+(<code class="docutils literal notranslate"><span class="pre">http…</span></code> shapes; also <code class="docutils literal notranslate"><span class="pre">helpUri</span></code>), the profiles of a schema run, the shapes
+file when the run used exactly one, and a link to the constraint’s
+definition (the SHACL spec section for <code class="docutils literal notranslate"><span class="pre">sh:*</span></code>, this page for
+<code class="docutils literal notranslate"><span class="pre">triplets:*</span></code>, the term IRI for <code class="docutils literal notranslate"><span class="pre">xsd:</span></code>/<code class="docutils literal notranslate"><span class="pre">rdfs:</span></code>/<code class="docutils literal notranslate"><span class="pre">schema:</span></code>). Lines without
+data are left out.</p></li>
 <li><p>RDF objects carry no text coordinates through the triplets frame:
 results always point at the model via <code class="docutils literal notranslate"><span class="pre">logicalLocations</span></code> (<code class="docutils literal notranslate"><span class="pre">Type/ID</span></code> +
 object name). Passing <code class="docutils literal notranslate"><span class="pre">sources=</span></code> (the original CIM/XML files — paths,
@@ -1023,9 +1417,9 @@ grep-style pass per file; the parse/validate hot paths are untouched.
 A frame already carrying <code class="docutils literal notranslate"><span class="pre">LOCATION_COLUMNS</span></code> (from
 <code class="docutils literal notranslate"><span class="pre">violations.shacl.locate(sources=...)</span></code>) is used as-is. Without either,
 <code class="docutils literal notranslate"><span class="pre">artifactLocation.uri</span></code> falls back to the enrichment-traced file label,
-region-less. Columns are 1-based UTF-16 code units (SARIF’s unit) — a
-start-only region cannot be displayed by GitHub, so regions always carry
-their end.</p></li>
+region-less. Positions are whole lines (1-based): RDF serializations put
+one statement per line, and a start-only region cannot be displayed by
+GitHub, so regions always carry <code class="docutils literal notranslate"><span class="pre">startLine</span></code> and <code class="docutils literal notranslate"><span class="pre">endLine</span></code>.</p></li>
 <li><p>Everything domain-specific (triplet coordinates, schema descriptions,
 sample IDs) rides in the <code class="docutils literal notranslate"><span class="pre">properties</span></code> bags.</p></li>
 </ul>
@@ -1067,7 +1461,7 @@ modules. Shared loading lives in <code class="docutils literal notranslate"><spa
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Kristjan Vilgo
+                Copyright &#169; 2025-2026, Kristjan Vilgo
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -1093,7 +1487,12 @@ modules. Shared loading lives in <code class="docutils literal notranslate"><spa
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">SHACL Validation Architecture</a><ul>
+<li><a class="reference internal" href="#">Validation Architecture</a><ul>
+<li><a class="reference internal" href="#three-validations">Three validations</a><ul>
+<li><a class="reference internal" href="#merged-schema-schema-scope-scoped-rdf-map">Merged schema (<code class="docutils literal notranslate"><span class="pre">schema_scope.scoped_rdf_map</span></code>)</a></li>
+<li><a class="reference internal" href="#class-inheritance-schema-scope-class-ancestors">Class inheritance (<code class="docutils literal notranslate"><span class="pre">schema_scope.class_ancestors</span></code>)</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#status-known-limitations">Status &amp; known limitations</a></li>
 <li><a class="reference internal" href="#engines">Engines</a></li>
 <li><a class="reference internal" href="#compile-once-shacl-ir-py">Compile Once (<code class="docutils literal notranslate"><span class="pre">shacl_ir.py</span></code>)</a><ul>
@@ -1103,7 +1502,8 @@ modules. Shared loading lives in <code class="docutils literal notranslate"><spa
 <li><a class="reference internal" href="#engine-contract">Engine Contract</a></li>
 <li><a class="reference internal" href="#the-lexical-form-datatype-deviation">The Lexical-Form Datatype Deviation</a></li>
 <li><a class="reference internal" href="#result-structure">Result Structure</a></li>
-<li><a class="reference internal" href="#schema-validation-validate-schema-compile-schema">Schema validation (<code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> / <code class="docutils literal notranslate"><span class="pre">compile_schema</span></code>)</a></li>
+<li><a class="reference internal" href="#schema-validation-validate-schema-validate-schema-references">Schema validation (<code class="docutils literal notranslate"><span class="pre">validate_schema</span></code> / <code class="docutils literal notranslate"><span class="pre">validate_schema_references</span></code>)</a></li>
+<li><a class="reference internal" href="#cim-helpers-triplets-cgmes-tools">CIM helpers (<code class="docutils literal notranslate"><span class="pre">triplets.cgmes_tools</span></code>)</a></li>
 <li><a class="reference internal" href="#shared-loading-rdflib-loader-py">Shared Loading (<code class="docutils literal notranslate"><span class="pre">_rdflib_loader.py</span></code>)</a></li>
 <li><a class="reference internal" href="#call-sequence">Call Sequence</a></li>
 <li><a class="reference internal" href="#file-layout">File Layout</a></li>
@@ -1122,7 +1522,7 @@ modules. Shared loading lives in <code class="docutils literal notranslate"><spa
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=95e61db4"></script>
+</div><script src="../_static/documentation_options.js?v=6f4d8279"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>

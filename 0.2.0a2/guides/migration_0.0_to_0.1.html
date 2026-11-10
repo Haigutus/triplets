@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="triplets.parser" href="../triplets.parser.html"><link rel="prev" title="Development Notes" href="development.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+    <!-- Generated with Sphinx 9.2.0 and Furo 2025.12.19 -->
         <title>Migration: 0.0 → 0.1 - triplets 0.2.0a2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
@@ -290,7 +290,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <section id="migration-0-0-0-1">
-<h1>Migration: 0.0 → 0.1<a class="headerlink" href="#migration-0-0-0-1" title="Link to this heading">¶</a></h1>
+<span id="migration-00--01"></span><h1>Migration: 0.0 → 0.1<a class="headerlink" href="#migration-0-0-0-1" title="Link to this heading">¶</a></h1>
 <blockquote>
 <div><p><strong>Single source of truth:</strong> edit this file only. The published docs include it
 from <code class="docutils literal notranslate"><span class="pre">docs/source/guides/migration_0.0_to_0.1.md</span></code> via MyST <code class="docutils literal notranslate"><span class="pre">{include}</span></code>.</p>
@@ -302,7 +302,7 @@ from <code class="docutils literal notranslate"><span class="pre">docs/source/gu
 <p>Python 3.10 is no longer supported. The <code class="docutils literal notranslate"><span class="pre">StrEnum</span></code> class (used internally) requires 3.11+.</p>
 </section>
 <section id="to-networkx-renamed-to-export-to-networkx">
-<h3><code class="docutils literal notranslate"><span class="pre">to_networkx()</span></code> renamed to <code class="docutils literal notranslate"><span class="pre">export_to_networkx()</span></code><a class="headerlink" href="#to-networkx-renamed-to-export-to-networkx" title="Link to this heading">¶</a></h3>
+<span id="to_networkx-renamed-to-export_to_networkx"></span><h3><code class="docutils literal notranslate"><span class="pre">to_networkx()</span></code> renamed to <code class="docutils literal notranslate"><span class="pre">export_to_networkx()</span></code><a class="headerlink" href="#to-networkx-renamed-to-export-to-networkx" title="Link to this heading">¶</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Old</span>
 <span class="n">graph</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">to_networkx</span><span class="p">()</span>
 
@@ -336,7 +336,7 @@ plain <code class="docutils literal notranslate"><span class="pre">object</span>
 </div>
 </section>
 <section id="dictionary-encoded-key-and-instance-id-columns">
-<h3>Dictionary-encoded KEY and INSTANCE_ID columns<a class="headerlink" href="#dictionary-encoded-key-and-instance-id-columns" title="Link to this heading">¶</a></h3>
+<span id="dictionary-encoded-key-and-instance_id-columns"></span><h3>Dictionary-encoded KEY and INSTANCE_ID columns<a class="headerlink" href="#dictionary-encoded-key-and-instance-id-columns" title="Link to this heading">¶</a></h3>
 <p>With arrow engines, <code class="docutils literal notranslate"><span class="pre">KEY</span></code> and <code class="docutils literal notranslate"><span class="pre">INSTANCE_ID</span></code> columns are dictionary-encoded (categorical) by default.
 This saves ~60% memory but may affect code that expects plain string columns:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check if a column is categorical</span>
@@ -461,7 +461,7 @@ corrected before 0.1.0 — treated as an rc-only bug, no compatibility aliases.<
 <code class="docutils literal notranslate"><span class="pre">.triplets</span></code> accessor namespace (pandas, polars, and DuckDB).</p>
 </section>
 <section id="cgmes-tools-renames">
-<h3>cgmes_tools renames<a class="headerlink" href="#cgmes-tools-renames" title="Link to this heading">¶</a></h3>
+<span id="cgmes_tools-renames"></span><h3>cgmes_tools renames<a class="headerlink" href="#cgmes-tools-renames" title="Link to this heading">¶</a></h3>
 <p>Old names keep working in 0.1 but emit <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code>; they will be removed in a future release.</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
@@ -515,7 +515,7 @@ tolerate them, but converting with <code class="docutils literal notranslate"><s
 within the contract.</p>
 </section>
 <section id="export-to-cimxml-exports-schema-defined-content-only-by-default">
-<h3><code class="docutils literal notranslate"><span class="pre">export_to_cimxml</span></code> exports schema-defined content only by default<a class="headerlink" href="#export-to-cimxml-exports-schema-defined-content-only-by-default" title="Link to this heading">¶</a></h3>
+<span id="export_to_cimxml-exports-schema-defined-content-only-by-default"></span><h3><code class="docutils literal notranslate"><span class="pre">export_to_cimxml</span></code> exports schema-defined content only by default<a class="headerlink" href="#export-to-cimxml-exports-schema-defined-content-only-by-default" title="Link to this heading">¶</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">export_undefined</span></code> now defaults to <strong>False</strong>: internal structures
 (<code class="docutils literal notranslate"><span class="pre">Distribution</span></code>, <code class="docutils literal notranslate"><span class="pre">NamespaceMap</span></code> and any class/attribute without a schema
 definition) are no longer written into CIM XML exports. Pass
