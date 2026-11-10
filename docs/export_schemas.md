@@ -25,7 +25,7 @@ One JSON per (profile release, IEC 61970-552 serialization edition):
 exposes every JSON as an attribute on the `schemas` object (filename sanitized:
 `.`/`-` become `_`), so a new bundle file is available without code changes.
 Source provenance, release onboarding and known upstream defects are documented
-in [`rdfs/README.md`](../rdfs/README.md).
+in [`rdfs/README.md`](https://github.com/Haigutus/triplets/blob/main/rdfs/README.md).
 
 ## 552_ED1 vs 552_ED2
 

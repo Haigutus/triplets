@@ -8,7 +8,7 @@
 ### Documentation:
 https://haigutus.github.io/triplets
 
-Upgrading from 0.0.x? See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md).
+Upgrading from 0.0.x? See [docs/migration_0.0_to_0.1.md](https://github.com/Haigutus/triplets/blob/main/docs/migration_0.0_to_0.1.md).
 
 ### To get started:
 
@@ -33,7 +33,7 @@ Install extras by feature:
 | `excel` / `networkx` / `visualization` | Excel export / graph export / drawing |
 
 The embedded qlever SPARQL engine (fastest) ships in no wheel — it is a local
-source build, see [docs/building.md](docs/building.md).
+source build, see [docs/building.md](https://github.com/Haigutus/triplets/blob/main/docs/building.md).
 
 ```python
 import pandas
@@ -175,11 +175,11 @@ Three engines behind one API (auto picks the fastest available):
 
 | Engine | Install | Role |
 |--------|---------|------|
-| `qlever` | local source build ([docs/building.md](docs/building.md)) | fastest — embedded C++, persistent on-disk index |
+| `qlever` | local source build ([docs/building.md](https://github.com/Haigutus/triplets/blob/main/docs/building.md)) | fastest — embedded C++, persistent on-disk index |
 | `oxigraph` | `pip install triplets[oxigraph]` | embedded Rust — ~3x faster import, 2–5x faster queries than rdflib |
 | `rdflib` | `pip install triplets[sparql]` | pure-Python reference |
 
-Details and measured numbers: [docs/sparql.md](docs/sparql.md).
+Details and measured numbers: [docs/sparql.md](https://github.com/Haigutus/triplets/blob/main/docs/sparql.md).
 
 ## SHACL validation
 
@@ -215,7 +215,7 @@ violations.shacl.to_shacl_report(path="report.xml", report_source="model.xml",
 Engines: `polars` (auto, real profiles in ~2 s) → `pandas` → `pyshacl`
 (reference); `duckdb` for larger-than-memory data. `sh:sparql` constraints
 ride the SPARQL engine above (milliseconds on oxigraph/qlever, minutes on rdflib).
-Details: [docs/validation.md](docs/validation.md).
+Details: [docs/validation.md](https://github.com/Haigutus/triplets/blob/main/docs/validation.md).
 
 ## Accessor namespace
 
@@ -304,4 +304,4 @@ lxml engine 1.44 s, cython engine 0.127 s, ~11x):
 | get_types_count | 35ms | **8ms** | 8ms |
 
 `rdf_parser` functions emit `DeprecationWarning`; their replacements are listed in
-[docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md).
+[docs/migration_0.0_to_0.1.md](https://github.com/Haigutus/triplets/blob/main/docs/migration_0.0_to_0.1.md).

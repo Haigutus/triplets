@@ -30,6 +30,7 @@ run the same way, each distinct target query once per validation
 (``sparql_targets`` — the polars and duckdb engines call it too).
 
 Known limits:
+
 - sh:nodeKind — triplets store every value as a string, so term kind is decided
   like the N-Quads exporter decides it: by the schema when rdf_map names the
   path (a datatype key is Literal even when its values look like UUIDs), by

@@ -47,15 +47,15 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
     Returns
     -------
     tuple (file_name, namespace_map, instance_rdf_map)
-        file_name : from the instance 'label' (source filename) or a new UUID
-        namespace_map : given > instance NamespaceMap > schema ProfileNamespaceMap
-        instance_rdf_map : every profile section the instance header declares, merged
-            (:func:`triplets._header.merge_sections`; a class concrete in any of them is
-            instantiated, not described) — sections matched by the schema's own
-            identity metadata (section key / keyword / versionIRI / profileVersionIRI /
-            conformsTo) against the header (Model.messageType, keyword, Model.profile,
-            conformsTo); legacy URL-substring fallback for 2.4.15-era URLs; the schema's
-            root entries when nothing matches (warns on a sectioned schema)
+        - file_name : from the instance 'label' (source filename) or a new UUID
+        - namespace_map : given > instance NamespaceMap > schema ProfileNamespaceMap
+        - instance_rdf_map : every profile section the instance header declares, merged
+          (:func:`triplets._header.merge_sections`; a class concrete in any of them is
+          instantiated, not described) — sections matched by the schema's own
+          identity metadata (section key / keyword / versionIRI / profileVersionIRI /
+          conformsTo) against the header (Model.messageType, keyword, Model.profile,
+          conformsTo); legacy URL-substring fallback for 2.4.15-era URLs; the schema's
+          root entries when nothing matches (warns on a sectioned schema)
     """
     if not namespace_map:
         namespace_map, xml_base = get_namespace_map(instance_data)
