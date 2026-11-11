@@ -27,11 +27,12 @@ import os
 import re
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 import pandas
 
 from .._caches import register_cache
-from ..iri import SH_NS, local_id, local_key, local_value, split_iri
+from ..iri import SH_NS, XSD_NS, local_id, local_key, local_value, split_iri
 
 logger = logging.getLogger(__name__)
 
@@ -471,8 +472,13 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
             if path is None:
                 # on a node shape it judges the focus node itself, which no engine reads
                 skipped.add((meta["shapes"], f"{shape_uri}: node-level {component} not evaluated", None))
+            elif (params := transform(graph, value)) is None:
+                # valid SHACL the engines cannot compare with (a date bound); pyshacl evaluates it
+                reason = f"{shape_uri}: {component} {value.n3(graph.namespace_manager)} not evaluated"
+                _warn_skipped(reason, None)
+                skipped.add((meta["shapes"], reason, None))
             else:
-                rows.append({**meta, "component": component, "params": transform(graph, value)})
+                rows.append({**meta, "component": component, "params": params})
     # components no engine implements stay visible as rows: the run metadata
     # names them, and a logical operator over such a member is not evaluated
     for name in _UNKNOWN_TERMS:
@@ -706,17 +712,18 @@ def _resolve_path(graph, SH, path_node):
 
 # SHACL term → (component short name, params transform). Short names match the
 # VIOLATION_TYPE values in shacl_report._COMPONENT_MAP so IR rows, engine
-# output and pyshacl output all speak the same vocabulary.
+# output and pyshacl output all speak the same vocabulary. A transform gives
+# None for a value the IR cannot express: that one constraint is skipped.
 def _components(SH, shape):
     return [
         (SH.minCount, "sh:minCount", lambda g, v: int(v)),
         (SH.maxCount, "sh:maxCount", lambda g, v: int(v)),
         (SH.datatype, "sh:datatype", lambda g, v: f"xsd:{split_iri(v)[1]}"),
         (SH["class"], "sh:class", lambda g, v: local_value(v, "class")),
-        (SH.minInclusive, "sh:minInclusive", lambda g, v: float(v)),
-        (SH.maxInclusive, "sh:maxInclusive", lambda g, v: float(v)),
-        (SH.minExclusive, "sh:minExclusive", lambda g, v: float(v)),
-        (SH.maxExclusive, "sh:maxExclusive", lambda g, v: float(v)),
+        (SH.minInclusive, "sh:minInclusive", lambda g, v: _bound(v)),
+        (SH.maxInclusive, "sh:maxInclusive", lambda g, v: _bound(v)),
+        (SH.minExclusive, "sh:minExclusive", lambda g, v: _bound(v)),
+        (SH.maxExclusive, "sh:maxExclusive", lambda g, v: _bound(v)),
         (SH.pattern, "sh:pattern", lambda g, v: _regex(v, g.value(shape, SH.flags))),
         (SH.minLength, "sh:minLength", lambda g, v: int(v)),
         (SH.maxLength, "sh:maxLength", lambda g, v: int(v)),
@@ -730,6 +737,12 @@ def _components(SH, shape):
     ]
 
 
+def _bound(value):
+    """A range bound as the engines compare it: a number, else None — a date, a
+    string or an ill-typed literal compares by SPARQL's typed rules, not as a number."""
+    return float(value.value) if type(value.value) in (int, float, Decimal) else None
+
+
 def _regex(pattern, flags):
     """sh:pattern + sh:flags → one regex text: q quotes the pattern, i m s become
     an inline (?ims) prefix (Python re, Rust regex and RE2 all read it)."""
@@ -741,11 +754,11 @@ def _regex(pattern, flags):
 
 def _malformed(graph, SH, shape):
     """Why *shape* is malformed, or None — these load checks, each one pyshacl
-    refuses the whole shapes graph for (ConstraintLoadError / ShapeLoadError):
-    a parameter taken once (_SINGLE) given twice, an empty sh:or / sh:and /
-    sh:xone list, a non-literal sh:deactivated, sh:ignoredProperties without
-    sh:closed, a declared sh:PropertyShape without sh:path. The compile skips
-    such a shape."""
+    refuses the whole shapes graph for (ConstraintLoadError / ShapeLoadError)
+    or fails its run on: a parameter taken once (_SINGLE) given twice, an empty
+    sh:or / sh:and / sh:xone list, a parameter value of the wrong kind (_VALUES),
+    sh:ignoredProperties without sh:closed, a declared sh:PropertyShape without
+    sh:path. The compile skips such a shape."""
     import rdflib
 
     for name, kind in _SINGLE.items():
@@ -754,9 +767,10 @@ def _malformed(graph, SH, shape):
     for name in ("or", "and", "xone"):
         if any(not _rdf_list(graph, head, lambda node: node) for head in graph.objects(shape, SH[name])):
             return f"empty sh:{name} list"
-    flag = graph.value(shape, SH.deactivated)
-    if flag is not None and not isinstance(flag, rdflib.Literal):
-        return f"the sh:deactivated value {flag} is not a literal"
+    for name, (valid, kind) in _VALUES.items():
+        for value in graph.objects(shape, SH[name]):
+            if not valid(value):
+                return f"the sh:{name} value {value} is not {kind}"
     if graph.value(shape, SH.ignoredProperties) is not None and graph.value(shape, SH.closed) is None:
         return "sh:ignoredProperties without sh:closed"
     if (shape, rdflib.RDF.type, SH.PropertyShape) in graph and graph.value(shape, SH.path) is None:
@@ -769,6 +783,23 @@ def _malformed(graph, SH, shape):
 _SINGLE = {**dict.fromkeys(("path", "minCount", "maxCount", "datatype", "nodeKind", "minLength", "maxLength", "closed",
                             "deactivated", "uniqueLang", "qualifiedMinCount", "qualifiedMaxCount"), "values"),
            "in": "lists", "languageIn": "lists"}
+
+
+def _literal(value):
+    return type(value).__name__ == "Literal"
+
+
+def _count(value):
+    return (_literal(value) and str(value.datatype) == XSD_NS + "integer"
+            and type(value.value) is int and value.value >= 0)
+
+
+# parameter → (what each of its values must be, what the skip reason calls it), the
+# SHACL rule: pyshacl refuses the whole shapes graph for a non-literal sh:deactivated
+# or a count or length of another kind, and fails its run on a non-literal range bound
+_VALUES = {"deactivated": (_literal, "a literal"),
+           **dict.fromkeys(("minInclusive", "maxInclusive", "minExclusive", "maxExclusive"), (_literal, "a literal")),
+           **dict.fromkeys(("minCount", "maxCount", "minLength", "maxLength"), (_count, "a non-negative xsd:integer"))}
 
 
 # SHACL terms no engine implements — kept as rows (params None) so the run

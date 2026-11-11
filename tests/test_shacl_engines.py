@@ -997,6 +997,10 @@ MALFORMED_OWNER = {
     ("sh:and ( )", "empty sh:and list"),
     ("sh:xone ( )", "empty sh:xone list"),
     ("sh:ignoredProperties ( rdf:type )", "sh:ignoredProperties without sh:closed"),
+    ("sh:minInclusive cim:Low", f"the sh:minInclusive value {CIM}Low is not a literal"),
+    ('sh:maxLength "abc"', "the sh:maxLength value abc is not a non-negative xsd:integer"),
+    ('sh:maxCount "1"', "the sh:maxCount value 1 is not a non-negative xsd:integer"),
+    ("sh:maxCount -1", "the sh:maxCount value -1 is not a non-negative xsd:integer"),
 ])
 def test_malformed_shape_skipped(engine_name, owner, flaw, reason):
     """A malformed shape (the compile's load checks): the engines name exactly
@@ -1006,6 +1010,35 @@ def test_malformed_shape_skipped(engine_name, owner, flaw, reason):
     violations = switched_off(breaker("b1"), compiled, engine_name)
     assert set(zip(violations["ID"], violations["KEY"])) == {("b1", "IdentifiedObject.description")}
     assert violations.attrs["validation"]["skipped_shapes"] == [f"{CIM}X: {reason}"]
+
+
+DATED = {"EQ": {
+    "Breaker": {"type": "Class", "namespace": CIM, "inheritance": [CIM + "Breaker"]},
+    "IdentifiedObject.description": {"type": "Attribute", "xsd:type": "xsd:string", "namespace": CIM},
+    "Switch.installationDate": {"type": "Attribute", "xsd:type": "xsd:date", "namespace": CIM},
+}}
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+def test_date_range_bound_skips_only_its_constraint(engine_name):
+    """A date range bound is valid SHACL the vectorized engines do not compare
+    (#215): that one constraint is named in skipped_shapes (not malformed), the
+    rest of the shape and of the file validates; pyshacl evaluates it."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes("""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ; sh:property cim:Installed .
+        cim:Installed sh:path cim:Switch.installationDate ; sh:minInclusive "2020-01-01"^^xsd:date ; sh:maxCount 1 .""")
+    skipped = [f'{CIM}Installed: sh:minInclusive "2020-01-01"^^xsd:date not evaluated']
+    assert (compiled.stats["skipped_shapes"], compiled.stats["malformed_shapes"]) == (skipped, [])
+    rows = (breaker("b1", ("Switch.installationDate", "2019-05-01"))
+            + breaker("b2", ("IdentifiedObject.description", "d"), ("Switch.installationDate", "2021-05-01"),
+                      ("Switch.installationDate", "2022-01-01")))
+    violations = triplets.validation.validate_shacl(pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"]),
+                                                    compiled, engine=engine_name, rdf_map=DATED, rdf_map_scope="*",
+                                                    lexical=False)
+    date_finding = {("b1", "sh:minInclusive")} if engine_name == "pyshacl" else set()
+    assert findings(violations) == {("b1", "sh:minCount"), ("b2", "sh:maxCount"), *date_finding}
+    assert violations.attrs["validation"]["skipped_shapes"] == ([] if engine_name == "pyshacl" else skipped)
 
 
 # a malformed shape reached in other ways, next to the valid sibling of MALFORMED_OWNER:
