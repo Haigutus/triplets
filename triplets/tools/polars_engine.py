@@ -143,38 +143,47 @@ def _cast_columns_to_string(data):
 
 def references_to(data, reference, levels=1):
     """Objects that reference `reference`, traversing up to `levels`. Matches the
-    pandas engine: level 0 is the object itself; level N rows carry level/ID_TO/ID_FROM."""
+    pandas engine: level 0 is the object itself; level N rows carry level/ID_TO/ID_FROM,
+    once per reference. Each reference is followed once, at the lowest level it is
+    reached, and the walk stops when a level adds nothing new."""
     data = _cast_columns_to_string(data)
-    base = data.filter(pl.col("ID") == reference).with_columns(pl.lit(0, dtype=pl.Int64).alias("level"))
-    parts, frontier = [base], base
+    parts = [data.filter(pl.col("ID") == reference).with_columns(pl.lit(0, dtype=pl.Int64).alias("level"))]
+    reached = frontier = {reference}
     for level in range(1, levels + 1):
-        to_ids = frontier.select("ID").unique().to_series().to_list()
-        links = (data.filter(pl.col("VALUE").is_in(to_ids))
+        links = (data.filter(pl.col("VALUE").is_in(list(frontier)))
                  .select(pl.col("ID").alias("ID_FROM"), pl.col("VALUE").alias("ID_TO"))
-                 .unique(subset="ID_FROM", keep="first"))
+                 .unique(maintain_order=True))
         if links.is_empty():
             break
         objs = (data.join(links, left_on="ID", right_on="ID_FROM", how="inner")
                 .with_columns(pl.col("ID").alias("ID_FROM"), pl.lit(level, dtype=pl.Int64).alias("level")))
         parts.append(objs)
-        frontier = objs
+        # an object already reached had its referrers collected then
+        frontier = set(links["ID_FROM"].to_list()) - reached
+        reached = reached | frontier
     return pl.concat(parts, how="diagonal_relaxed")
 
 
 def references_from(data, reference, levels=1):
     """Objects referenced BY `reference`, traversing up to `levels`. Matches pandas:
-    level 0 is the object itself; level N rows carry level/ID_TO/ID_FROM."""
+    level 0 is the object itself; level N rows carry level/ID_TO/ID_FROM, once per
+    reference. Each reference is followed once, at the lowest level it is reached, and
+    the walk stops when a level adds nothing new."""
     data = _cast_columns_to_string(data)
-    base = data.filter(pl.col("ID") == reference).with_columns(pl.lit(0, dtype=pl.Int64).alias("level"))
-    parts, frontier = [base], base
+    parts = [data.filter(pl.col("ID") == reference).with_columns(pl.lit(0, dtype=pl.Int64).alias("level"))]
+    reached = frontier = {reference}
     for level in range(1, levels + 1):
-        edges = frontier.select(pl.col("ID").alias("ID_FROM"), pl.col("VALUE").alias("ID_TO"))
+        edges = (data.filter(pl.col("ID").is_in(list(frontier)))
+                 .select(pl.col("ID").alias("ID_FROM"), pl.col("VALUE").alias("ID_TO"))
+                 .unique(maintain_order=True))
         objs = (edges.join(data, left_on="ID_TO", right_on="ID", how="inner")
                 .with_columns(pl.col("ID_TO").alias("ID"), pl.lit(level, dtype=pl.Int64).alias("level")))
         if objs.is_empty():
             break
         parts.append(objs)
-        frontier = objs
+        # an object already reached had its references followed then
+        frontier = set(objs["ID"].to_list()) - reached
+        reached = reached | frontier
     return pl.concat(parts, how="diagonal_relaxed")
 
 
