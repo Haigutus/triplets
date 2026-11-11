@@ -244,15 +244,21 @@ def references_to(data, reference, levels=1):
     reference : str
         ID of the reference object.
     levels : int, optional
-        Number of reference levels to traverse (default is 1).
+        Maximum number of reference levels to traverse (default is 1).
 
     Returns
     -------
     pandas.DataFrame
-        DataFrame containing triplets of objects pointing to the reference, with a 'level' column.
+        The reference object's triplets at level 0, then the triplets of each referring
+        object with ``level``, ``ID_FROM`` (the referring object) and ``ID_TO`` (the
+        object it refers to), once per reference.
 
     Notes
     -----
+    - Each reference (``ID_FROM`` → ``ID_TO``) is followed once, at the lowest level it
+      is reached, and the walk stops when a level adds nothing new: the result is
+      bounded by the data for any ``levels``, also on reference cycles.
+    - The referrers of an ID without triplets of its own are still found.
     - TODO: Add the key on which the connection was made.
 
     Examples
@@ -260,44 +266,19 @@ def references_to(data, reference, levels=1):
     >>> refs = data.references_to("99722373_VL_TN1", levels=2)
     """
     # TODO - add the key on which connection was made
-    level = 0
+    objects_list = [data[data["ID"] == reference].assign(level=0)]
+    reached = frontier = {reference}
 
-    # Get the object itself
-    object_data = data.query(f"ID == '{reference}'").copy()
-    object_data["level"] = level
-    # object_data["ID_TO"] = reference
-    # object_data["ID_FROM"] = reference
-
-    # Add object to processing list
-    objects_list = [object_data]
-
-    for object_data in objects_list:
-
-        level += 1
-
-        # End loop if we have reached desired level
-        if level > levels:
+    for level in range(1, levels + 1):
+        references = (data.loc[data["VALUE"].isin(frontier), ["VALUE", "ID"]].drop_duplicates()
+                      .set_axis(["ID_TO", "ID_FROM"], axis=1))
+        referring_objects = references.merge(data, left_on="ID_FROM", right_on="ID").assign(level=level)
+        if referring_objects.empty:
             break
-
-        # Get column where possible reference to other objects reside
-        reference_column = object_data[["ID"]]
-
-        # Filter original data VALUE-s by found references ID-s
-        reference_data = pandas.merge(reference_column, data,
-                                      left_on="ID",
-                                      right_on="VALUE",
-                                      suffixes=("_TO", "_FROM"))[["ID_TO", "ID_FROM"]].drop_duplicates("ID_FROM")
-
-        if not reference_data.empty:
-            referring_objects = pandas.merge(reference_data, data,
-                                             left_on="ID_FROM",
-                                             right_on="ID")  # .drop(columns=["ID_FROM"])
-
-            # Set object level
-            referring_objects["level"] = level
-
-            # Add data for future processing
-            objects_list.append(referring_objects)
+        objects_list.append(referring_objects)
+        # an object already reached had its referrers collected then: each reference is followed once
+        frontier = set(references["ID_FROM"]) - reached
+        reached = reached | frontier
 
     return pandas.concat(objects_list)
 
@@ -341,15 +322,20 @@ def references_from(data, reference, levels=1):
     reference : str
         ID of the reference object.
     levels : int, optional
-        Number of reference levels to traverse (default is 1).
+        Maximum number of reference levels to traverse (default is 1).
 
     Returns
     -------
     pandas.DataFrame
-        DataFrame containing triplets of objects referenced by the input, with a 'level' column.
+        The reference object's triplets at level 0, then the triplets of each referenced
+        object with ``level``, ``ID_FROM`` (the referring object) and ``ID_TO`` (the
+        referenced object), once per reference.
 
     Notes
     -----
+    - Each reference (``ID_FROM`` → ``ID_TO``) is followed once, at the lowest level it
+      is reached, and the walk stops when a level adds nothing new: the result is
+      bounded by the data for any ``levels``, also on reference cycles.
     - TODO: Add the key on which the connection was made.
 
     Examples
@@ -357,41 +343,19 @@ def references_from(data, reference, levels=1):
     >>> refs = data.references_from("99722373_VL_TN1", levels=2)
     """
     # TODO - add the key on which connection was made
-    level = 0
+    objects_list = [data[data["ID"] == reference].assign(level=0)]
+    reached = frontier = {reference}
 
-    # Get the object itself
-    object_data = data.query(f"ID == '{reference}'").copy()
-    object_data["level"] = level
-    #object_data["ID_TO"] = reference
-    #object_data["ID_FROM"] = reference
-
-    # Add object to processing list
-    objects_list = [object_data]
-
-    for object_data in objects_list:
-
-        level += 1
-
-        # End loop if we have reached desired level
-        if level > levels:
+    for level in range(1, levels + 1):
+        references = (data.loc[data["ID"].isin(frontier), ["ID", "VALUE"]].drop_duplicates()
+                      .set_axis(["ID_FROM", "ID_TO"], axis=1))
+        referenced_objects = references.merge(data, left_on="ID_TO", right_on="ID").assign(level=level)
+        if referenced_objects.empty:
             break
-
-        # Get column where possible reference to other objects reside
-        reference_column = object_data[["ID", "VALUE"]]
-
-        # Filter original data ID-s by values form reference object
-        reference_data = pandas.merge(reference_column, data,
-                                      left_on="VALUE",
-                                      right_on="ID",
-                                      suffixes=("_FROM", "")).rename(columns={"VALUE_FROM": "ID_TO"})
-
-        if not reference_data.empty:
-
-            # Set object level
-            reference_data["level"] = level
-
-            # Add data for future processing
-            objects_list.append(reference_data)
+        objects_list.append(referenced_objects)
+        # an object already reached had its references followed then: each reference is followed once
+        frontier = set(referenced_objects["ID"]) - reached
+        reached = reached | frontier
 
     return pandas.concat(objects_list)
 

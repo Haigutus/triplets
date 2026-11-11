@@ -400,6 +400,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `sh:minLength` / `sh:maxLength` value that is not a non-negative `xsd:integer`, make the
   shape malformed (skipped with the reason, also for pyshacl) instead of failing the compile
   or pyshacl's run ([#215](https://github.com/Haigutus/triplets/issues/215)).
+- **`references_from` / `references_to` end on reference cycles** (pandas, polars and
+  duckdb): each reference (`ID_FROM` → `ID_TO`) is followed once, at the lowest level it is
+  reached, and the walk stops when a level adds nothing new, so the result is bounded by
+  the data for any `levels`. Before, pandas and polars doubled the rows per level on a
+  cycle and duckdb walked it up to `levels`, so `draw_references_from` /
+  `draw_references_to` (`levels=99`) ran out of memory. All three engines now return the
+  same rows: an object referenced by several keys of one object appears once (pandas and
+  polars repeated it per key), an object referring to two reached objects appears once
+  per reference (pandas and polars kept one), and the referrers of an ID without triplets
+  of its own are found (duckdb did, pandas and polars returned none)
+  ([#221](https://github.com/Haigutus/triplets/issues/221)).
 - **A value that is not a number fails every range component** (`sh:minInclusive`,
   `sh:maxInclusive`, `sh:minExclusive`, `sh:maxExclusive`) in the pandas, polars and duckdb
   SHACL engines: a value that does not cast to a double (`"abc"`, `"1,5"`, `""`) or is `NaN`

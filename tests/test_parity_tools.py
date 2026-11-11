@@ -304,6 +304,70 @@ def test_polars_tableview_row_order_matches_pandas(svedala_pandas):
     for _ in range(5):
         assert polars_engine.type_tableview(data, "ConformLoad")["ID"].to_list() == expected
 
+
+# ── references_from / references_to walk (#221) ───────────────────────────────
+def _objects(*rows):
+    return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE"]).assign(INSTANCE_ID="i")
+
+
+# a and b reference each other, each by two keys
+CYCLE = _objects(("a", "Type", "A"), ("a", "A.first", "b"), ("a", "A.second", "b"),
+                 ("b", "Type", "B"), ("b", "B.first", "a"), ("b", "B.second", "a"))
+DIAMOND = _objects(("a", "Type", "A"), ("a", "A.x", "b"), ("a", "A.y", "c"), ("b", "Type", "B"),
+                   ("b", "B.x", "d"), ("c", "Type", "C"), ("c", "C.x", "d"), ("d", "Type", "D"))
+TWO_LEVELS = _objects(("a", "Type", "A"), ("a", "A.x", "b"), ("a", "A.y", "c"),
+                      ("b", "Type", "B"), ("b", "B.x", "c"), ("c", "Type", "C"))
+SELF_MRID = _objects(("a", "Type", "A"), ("a", "IdentifiedObject.mRID", "a"), ("a", "A.x", "b"),
+                     ("b", "Type", "B"), ("b", "IdentifiedObject.mRID", "b"))
+DANGLING = _objects(("a", "Type", "A"), ("a", "A.x", "missing"))
+
+# walk -> (data, function, start, levels, blocks); each (object, level, ID_FROM, ID_TO)
+# block stands for every row of that object
+WALKS = {
+    "cycle-from": (CYCLE, "references_from", "a", 99, [("a", 0, None, None), ("b", 1, "a", "b"), ("a", 2, "b", "a")]),
+    "cycle-to": (CYCLE, "references_to", "a", 99, [("a", 0, None, None), ("b", 1, "b", "a"), ("a", 2, "a", "b")]),
+    "cycle-from-levels-1": (CYCLE, "references_from", "a", 1, [("a", 0, None, None), ("b", 1, "a", "b")]),
+    "cycle-to-levels-1": (CYCLE, "references_to", "a", 1, [("a", 0, None, None), ("b", 1, "b", "a")]),
+    # two keys to the same object are one reference
+    "two-keys-from": (CYCLE.iloc[:4], "references_from", "a", 99, [("a", 0, None, None), ("b", 1, "a", "b")]),
+    # a references b and c, both reference d: one block per reference
+    "diamond-from": (DIAMOND, "references_from", "a", 99, [("a", 0, None, None), ("b", 1, "a", "b"),
+                     ("c", 1, "a", "c"), ("d", 2, "b", "d"), ("d", 2, "c", "d")]),
+    "diamond-to": (DIAMOND, "references_to", "d", 99, [("d", 0, None, None), ("b", 1, "b", "d"),
+                   ("c", 1, "c", "d"), ("a", 2, "a", "b"), ("a", 2, "a", "c")]),
+    # c is reached at level 1 from a and at level 2 from b
+    "two-levels-from": (TWO_LEVELS, "references_from", "a", 99, [("a", 0, None, None), ("b", 1, "a", "b"),
+                        ("c", 1, "a", "c"), ("c", 2, "b", "c")]),
+    "two-levels-to": (TWO_LEVELS, "references_to", "c", 99, [("c", 0, None, None), ("a", 1, "a", "c"),
+                      ("b", 1, "b", "c"), ("a", 2, "a", "b")]),
+    # a reference to the object itself (by mRID) is followed once
+    "self-from": (SELF_MRID, "references_from", "a", 99, [("a", 0, None, None), ("a", 1, "a", "a"),
+                  ("b", 1, "a", "b"), ("b", 2, "b", "b")]),
+    "self-to": (SELF_MRID, "references_to", "b", 99, [("b", 0, None, None), ("a", 1, "a", "b"),
+                ("b", 1, "b", "b"), ("a", 2, "a", "a")]),
+    # an ID without rows of its own still has its referrers
+    "dangling-to": (DANGLING, "references_to", "missing", 99, [("a", 1, "a", "missing")]),
+    "dangling-from": (DANGLING, "references_from", "missing", 99, []),
+}
+
+
+def _walk_rows(frame):
+    # pandas and polars carry ID_FROM / ID_TO only once a reference is followed
+    frame = to_pandas(frame).reindex(columns=["ID", "KEY", "VALUE", "INSTANCE_ID", "level", "ID_FROM", "ID_TO"]).astype(object)
+    return sorted((tuple(None if pandas.isna(value) else value for value in row)
+                   for row in frame.itertuples(index=False)), key=str)
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb"])
+@pytest.mark.parametrize("walk", sorted(WALKS))
+def test_references_walk_follows_each_reference_once(walk, engine):
+    pytest.importorskip(engine)
+    data, function, start, levels, blocks = WALKS[walk]
+    expected = sorted(((row.ID, row.KEY, row.VALUE, row.INSTANCE_ID, level, id_from, id_to)
+                       for name, level, id_from, id_to in blocks
+                       for row in data[data["ID"] == name].itertuples()), key=str)
+    assert _walk_rows(getattr(build_engine(engine, data), function)(start, levels=levels)) == expected
+
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(f, e, id=f"{f}-{e}")
                  for f in sorted(ALL_FUNCTIONS) for e in ("pandas", "polars", "duckdb")]

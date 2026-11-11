@@ -328,38 +328,57 @@ def filter_triplets_by_value(self, VALUE, detailed=False, type_key="Type",
 
 def _refs_to_sql(reference, levels, table_name, ord_expr="rowid"):
     """SQL for references_to: object (level 0) + multi-level referrers, with
-    level/ID_TO/ID_FROM — matches the pandas engine."""
+    level/ID_TO/ID_FROM once per reference — matches the pandas engine. `nodes`
+    keeps each object once, at the lowest level it is reached (USING KEY, anti-joined
+    on the recurring table), so a cycle ends the recursion; `refs` then takes every
+    reference of a node below `levels` once."""
     return f"""
-        WITH RECURSIVE nodes(node, lvl, id_to, id_from) AS (
-            SELECT {_lit(reference)}, 0, CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)
+        WITH RECURSIVE nodes(node, lvl) USING KEY (node) AS (
+            SELECT {_lit(reference)}, 0
             UNION
-            SELECT t.ID, n.lvl + 1, n.node, t.ID
+            SELECT DISTINCT t.ID, n.lvl + 1
+            FROM {table_name} t JOIN nodes n ON t.VALUE = n.node
+            WHERE n.lvl < {int(levels)} AND t.ID NOT IN (SELECT node FROM recurring.nodes)
+        ),
+        refs(node, lvl, id_to, id_from) AS (
+            SELECT {_lit(reference)}, 0, CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)
+            UNION ALL
+            SELECT DISTINCT t.ID, n.lvl + 1, t.VALUE, t.ID
             FROM {table_name} t JOIN nodes n ON t.VALUE = n.node
             WHERE n.lvl < {int(levels)}
         )
-        SELECT t.ID, t.KEY, t.VALUE, t.INSTANCE_ID, n.lvl AS level,
-               n.id_to AS ID_TO, n.id_from AS ID_FROM, t._ord
-        FROM nodes n
+        SELECT t.ID, t.KEY, t.VALUE, t.INSTANCE_ID, r.lvl AS level,
+               r.id_to AS ID_TO, r.id_from AS ID_FROM, t._ord
+        FROM refs r
         JOIN (SELECT ID, KEY, VALUE, INSTANCE_ID, {ord_expr} AS _ord FROM {table_name}) t
-        ON t.ID = n.node
+        ON t.ID = r.node
     """
 
 
 def _refs_from_sql(reference, levels, table_name, ord_expr="rowid"):
-    """SQL for references_from: object (level 0) + multi-level referenced objects."""
+    """SQL for references_from: object (level 0) + multi-level referenced objects,
+    once per reference; `nodes` and `refs` as in _refs_to_sql."""
     return f"""
-        WITH RECURSIVE nodes(node, lvl, id_to, id_from) AS (
-            SELECT {_lit(reference)}, 0, CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)
+        WITH RECURSIVE nodes(node, lvl) USING KEY (node) AS (
+            SELECT {_lit(reference)}, 0
             UNION
-            SELECT t.VALUE, n.lvl + 1, t.VALUE, n.node
+            SELECT DISTINCT t.VALUE, n.lvl + 1
             FROM {table_name} t JOIN nodes n ON t.ID = n.node
             WHERE n.lvl < {int(levels)} AND t.VALUE IN (SELECT ID FROM {table_name})
+              AND t.VALUE NOT IN (SELECT node FROM recurring.nodes)
+        ),
+        refs(node, lvl, id_to, id_from) AS (
+            SELECT {_lit(reference)}, 0, CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)
+            UNION ALL
+            SELECT DISTINCT t.VALUE, n.lvl + 1, t.VALUE, t.ID
+            FROM {table_name} t JOIN nodes n ON t.ID = n.node
+            WHERE n.lvl < {int(levels)}
         )
-        SELECT t.ID, t.KEY, t.VALUE, t.INSTANCE_ID, n.lvl AS level,
-               n.id_to AS ID_TO, n.id_from AS ID_FROM, t._ord
-        FROM nodes n
+        SELECT t.ID, t.KEY, t.VALUE, t.INSTANCE_ID, r.lvl AS level,
+               r.id_to AS ID_TO, r.id_from AS ID_FROM, t._ord
+        FROM refs r
         JOIN (SELECT ID, KEY, VALUE, INSTANCE_ID, {ord_expr} AS _ord FROM {table_name}) t
-        ON t.ID = n.node
+        ON t.ID = r.node
     """
 
 
@@ -383,14 +402,20 @@ def _references_sql(reference, levels, table_name, keep_ord=False, ord_expr="row
 
 
 def references_to(self, reference, levels=1, table=None, schema=None, table_name=None):
-    """Objects that reference the given ID, multi-level. Returns DuckDBPyRelation."""
+    """Objects that reference the given ID, multi-level. Returns DuckDBPyRelation.
+
+    Each reference is followed once, at the lowest level it is reached, and the walk
+    stops when a level adds nothing new."""
     sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
     refs = _refs_to_sql(reference, levels, _sql_name(sch, tbl), _ord_expr(self, sch, tbl))
     return self.sql(f"SELECT * EXCLUDE (_ord) FROM ({refs})")
 
 
 def references_from(self, reference, levels=1, table=None, schema=None, table_name=None):
-    """Objects referenced BY the given ID, multi-level. Returns DuckDBPyRelation."""
+    """Objects referenced BY the given ID, multi-level. Returns DuckDBPyRelation.
+
+    Each reference is followed once, at the lowest level it is reached, and the walk
+    stops when a level adds nothing new."""
     sch, tbl = _table_parts(self, table=table, schema=schema, table_name=table_name)
     refs = _refs_from_sql(reference, levels, _sql_name(sch, tbl), _ord_expr(self, sch, tbl))
     return self.sql(f"SELECT * EXCLUDE (_ord) FROM ({refs})")

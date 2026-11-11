@@ -142,6 +142,21 @@ def test_polars_draw_uses_native_engine(svedala_pandas, svedala_ctx, monkeypatch
     assert not boundary, f"{func} on polars input fell back to the pandas boundary"
 
 
+@pytest.mark.parametrize("flavor", ["pandas", "polars", "duckdb"])
+@pytest.mark.parametrize("func,rows", [("draw_references_from", 9), ("draw_references_to", 9), ("draw_references", 6)])
+def test_draw_references_ends_on_a_cycle(monkeypatch, func, rows, flavor):
+    """a and b reference each other: the walk reaches a, b, a and stops (#221)."""
+    pytest.importorskip(flavor)
+    rendered = []
+    monkeypatch.setattr(cgmes.pandas_engine, "_draw_references_graph",
+                        lambda reference_data, *args, **kwargs: rendered.append(len(reference_data)))
+    cycle = pandas.DataFrame([("a", "Type", "A"), ("a", "A.first", "b"), ("a", "A.second", "b"),
+                              ("b", "Type", "B"), ("b", "B.first", "a"), ("b", "B.second", "a")],
+                             columns=["ID", "KEY", "VALUE"]).assign(INSTANCE_ID="i")
+    getattr(cgmes, func)(build_engine(flavor, cycle), "a")
+    assert rendered == [rows]
+
+
 # ── Test 1c: synthetic parity for functions Svedala can't exercise ────────────
 # scale_load (needs ConformLoad), the filename round-trips (need CGMES-named labels)
 # and get_model_triplets (the shared spec passes a dict) all skip on Svedala — cover
