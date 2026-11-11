@@ -629,6 +629,23 @@ cim:P sh:path cim:IdentifiedObject.name ; sh:pattern "a b" ; sh:flags "x" ."""))
     assert compiled.stats["skipped_shapes"] == [f'{CIM}P: sh:flags "x" not supported']
 
 
+@pytest.mark.parametrize("term", ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive"])
+@pytest.mark.parametrize("bound", ['"2020-01-01"^^xsd:date', '"2020-01-01T00:00:00"^^xsd:dateTime', '"abc"', '"3"',
+                                   '"abc"^^xsd:integer'])
+def test_non_numeric_range_bound_skips_that_constraint(term, bound):
+    """A range bound that is not a number compiles (#215): that one constraint is
+    skipped, not malformed (pyshacl evaluates it); a logical operator over it is
+    not evaluated; a numeric bound next to it still compiles."""
+    compiled = compile_shapes(_graph(f"""cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property cim:P ; sh:or ( [ sh:path cim:Conductor.length ; sh:{term} {bound} ] ) .
+cim:P sh:path cim:Conductor.length ; sh:{term} {bound}, 1 ; sh:minCount 1 ."""))
+    assert set(zip(compiled.ir["component"], compiled.ir["params"])) == {("sh:minCount", 1), (f"sh:{term}", 1.0)}
+    skipped = compiled.stats["skipped_shapes"]
+    assert f"{CIM}P: sh:{term} {bound} not evaluated" in skipped
+    assert any(entry.startswith(f"{CIM}N: sh:or member ") for entry in skipped)
+    assert compiled.stats["malformed_shapes"] == []
+
+
 @pytest.mark.parametrize("operator", ["or", "and", "xone"])
 def test_empty_member_list_skips_the_node_shape(operator):
     """An empty sh:or / sh:and / sh:xone list (pyshacl: ShapeLoadError): the node

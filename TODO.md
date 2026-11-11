@@ -9,10 +9,9 @@ SPARQL — rdflib (reference) / oxigraph (pip performance) / qlever (local build
 - [ ] Custom `sh:target` without `sh:select` (`sh:SPARQLTargetType` instance, JS target)
   stays pyshacl-only; the vectorized engines warn at compile time and list the shape in
   `skipped_shapes`.
-- [ ] Non-numeric values in range and pair comparisons: a date bound on
-  `sh:minInclusive` … `sh:maxExclusive` stops the whole shapes compile
-  (https://github.com/Haigutus/triplets/issues/215), and pandas / polars / duckdb report
-  every date value under `sh:lessThan`, `sh:lessThanOrEquals` and the range checks
+- [ ] Non-numeric values in range and pair comparisons: pandas / polars / duckdb report
+  every date value under `sh:lessThan`, `sh:lessThanOrEquals` and the range checks, and
+  skip a range constraint whose bound is a date
   (https://github.com/Haigutus/triplets/issues/216).
 - [ ] duckdb `tableview_to_triplets(string_to_number=True)` raises
   (`tools/duckdb_engine.py:_check_string_to_number`); a TRY_CAST implementation is open.

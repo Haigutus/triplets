@@ -54,6 +54,7 @@ SCHEMA = {"EQ": {
     "Switch.normalOpen": attribute("xsd:boolean"),
     "Switch.switchOnDuration": attribute("xsd:duration"),
     "Switch.switchOnTime": attribute("xsd:time"),
+    "Switch.installationDate": attribute("xsd:date"),
     "Equipment.EquipmentContainer": {"type": "Association"},
     "Bay.VoltageLevel": {"type": "Association"},
     "Switch.kind": {"type": "Enumeration", "xsd:type": "xsd:anyURI", "namespace": CIM},
@@ -461,6 +462,11 @@ SKIPPED = {
     "path_alternative_inverse": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; sh:property [ sh:path [ sh:alternativePath "
                                  "( cim:Bay.VoltageLevel [ sh:inversePath cim:Equipment.EquipmentContainer ] ) ] ; sh:minCount 2 ] .",
                                  TRIO + [("bay1", "Bay.VoltageLevel", "sub1", "eq")], "unsupported sh:path form"),
+    # a date bound is valid SHACL: pyshacl compares the dates, the engines only numbers (#215)
+    "range_date_bound": (prop('sh:path cim:Switch.installationDate ; sh:minInclusive "2020-01-01"^^xsd:date'),
+                         breaker("b1", ("Switch.installationDate", "2019-05-01"))
+                         + breaker("b2", ("Switch.installationDate", "2021-05-01")),
+                         'sh:minInclusive "2020-01-01"^^xsd:date not evaluated'),
     "node_level_in": (f"{B} sh:in ( <urn:uuid:b1> ) .", TRIO, "node-level sh:in not evaluated"),
     "node_level_hasValue": (f"{B} sh:hasValue <urn:uuid:b1> .", TRIO, "node-level sh:hasValue not evaluated"),
     "qualified": (prop('sh:path cim:IdentifiedObject.name ; sh:qualifiedValueShape [ sh:pattern "^B" ] ; sh:qualifiedMinCount 1'),

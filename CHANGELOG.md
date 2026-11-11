@@ -392,6 +392,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **A range bound that is not a number no longer fails the SHACL compile**: a
+  `sh:minInclusive` … `sh:maxExclusive` bound such as `"2020-01-01"^^xsd:date` raised
+  `ValueError` in `compile()`, so no shape was validated. The pandas, polars and duckdb
+  engines now skip that one constraint and name it in `skipped_shapes`; `engine="pyshacl"`
+  evaluates it. A non-literal range bound, and a `sh:minCount` / `sh:maxCount` /
+  `sh:minLength` / `sh:maxLength` value that is not a non-negative `xsd:integer`, make the
+  shape malformed (skipped with the reason, also for pyshacl) instead of failing the compile
+  or pyshacl's run ([#215](https://github.com/Haigutus/triplets/issues/215)).
 - **A value that is not a number fails every range component** (`sh:minInclusive`,
   `sh:maxInclusive`, `sh:minExclusive`, `sh:maxExclusive`) in the pandas, polars and duckdb
   SHACL engines: a value that does not cast to a double (`"abc"`, `"1,5"`, `""`) or is `NaN`

@@ -50,7 +50,7 @@ EXPECTED = {case: reason for (case, engine), reason in XFAIL.items() if engine =
 UNLISTED = {"nodeKind_blank_or_iri": "#180 sh:nodeKind sh:BlankNodeOrIRI not evaluated and no skipped_shapes entry"}
 EXPECTED |= UNLISTED
 # skipped_shapes reasons that name one component of a shape otherwise evaluated
-PART = re.compile(r"(?:node-level (sh:\w+)|(sh:node) target|(sh:(?:and|or|xone|not)) member)")
+PART = re.compile(r"(?:node-level (sh:\w+)|(sh:node) target|(sh:(?:and|or|xone|not)) member|(sh:(?:min|max)(?:In|Ex)clusive) )")
 
 CGMES_3 = Path("test_data/CGMES-AP/CGMES")
 RELICAPGRID = Path("test_data/relicapgrid/Instance")
