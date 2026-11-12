@@ -33,7 +33,7 @@ from .shacl_report import VIOLATION_COLUMNS, has_violation
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
 from . import shacl_pandas, value_space
-from .shacl_pandas import datatype_patterns
+from .value_space import datatype_patterns
 
 logger = logging.getLogger(__name__)
 

@@ -289,12 +289,12 @@ def _range(comparison, description):
     """Range validator factory: the values parse in the bound's value space; a value
     that does not (no cast, NaN, another form) fails every range component (SHACL:
     the comparison is not true). A number bound is a float already; any other is
-    parsed like the values."""
+    keyed like the values (``value_space.key``)."""
     def validator(context, rule):
         rows = context.path_rows(rule)
         space, bound = value_space.range_bound(rule.params)
         parsed = _PARSE[space](rows["PATH_VALUE"], bound)
-        limit = bound if space == "number" else _PARSE[space](pandas.Series([bound]), bound)[0]
+        limit = bound if space == "number" else value_space.key(space, bound)
         bad = (comparison(parsed, limit) | parsed.isna()) & rows["PATH_VALUE"].notna()
         return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                       f"value is {description} {bound}")
