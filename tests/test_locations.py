@@ -89,3 +89,37 @@ def test_locate_violations_empty_frame(xml_path):
     frame = locate_violations(empty, [xml_path])
     assert set(LOCATION_COLUMNS) <= set(frame.columns)
     assert frame.empty
+
+
+def test_source_root(tmp_path, monkeypatch):
+    """source_root: a path source under it → relative uri with forward slashes;
+    a path outside it and a zip member keep their names; a relative source path
+    is read against the working directory, as open() reads it."""
+    (tmp_path / "repo" / "data").mkdir(parents=True)
+    inside = tmp_path / "repo" / "data" / "grid.xml"
+    inside.write_bytes(XML)
+    outside = tmp_path / "other.xml"
+    outside.write_bytes(XML.replace(b"_aaaa", b"_cccc"))
+    archive = tmp_path / "repo" / "grid.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("inner/grid.xml", XML.replace(b"_aaaa", b"_dddd"))
+    wanted = {"aaaa": set(), "cccc": set(), "dddd": set()}
+
+    located = locate(wanted, [str(inside), str(outside), str(archive)], source_root=tmp_path / "repo")
+    assert {object_id: entry["uri"] for object_id, entry in located.items()} \
+        == {"aaaa": "data/grid.xml", "cccc": str(outside), "dddd": "inner/grid.xml"}
+
+    monkeypatch.chdir(tmp_path / "repo")
+    assert locate({"aaaa": set()}, ["data/grid.xml"], source_root=tmp_path / "repo")["aaaa"]["uri"] \
+        == "data/grid.xml"
+    assert locate({"aaaa": set()}, ["data/grid.xml"], source_root=".")["aaaa"]["uri"] == "data/grid.xml"
+    assert locate({"aaaa": set()}, [str(inside)])["aaaa"]["uri"] == str(inside)   # default: as given
+
+
+def test_locate_violations_source_root(xml_path, tmp_path):
+    violations = pandas.DataFrame([("aaaa", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s")],
+                                  columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY",
+                                           "SOURCE_SHAPE"])
+    frame = violations.shacl.locate(sources=[xml_path], source_root=tmp_path)
+    assert frame.loc[0, "SOURCE_URI"] == "grid.xml"
+    pandas.testing.assert_frame_equal(frame, locate_violations(violations, [xml_path], source_root=str(tmp_path)))

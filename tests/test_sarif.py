@@ -1,6 +1,7 @@
 """Tests for the SARIF 2.1.0 exporter (triplets.validation.sarif)."""
 import io
 import json
+import zipfile
 
 from pathlib import Path
 
@@ -271,6 +272,13 @@ def test_official_schema_conformance(violations):
         columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
     jsonschema.validate(build_sarif(minimal), schema)
 
+    minimal.attrs["validation"] = {"language": "rdfs", "skipped_shapes": ["X: datatype conflict"],
+                                   "skipped_components": ["sh:qualifiedValueShape"]}
+    document = build_sarif(minimal)                                    # notifications, no timestamps
+    assert document["runs"][0]["invocations"][0]["toolConfigurationNotifications"]
+    assert document["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
+    jsonschema.validate(document, schema)
+
 
 def test_github_code_scanning_requirements(violations):
     """GitHub code-scanning ingestion rules (docs.github.com, 'SARIF support
@@ -377,3 +385,122 @@ def test_sources_absent_ids_fall_back(shapes):
     assert location["physicalLocation"]["artifactLocation"]["uri"] == "Svedala%20EQ.xml"
     # whole-file convention — GitHub needs region.startLine to display at all
     assert location["physicalLocation"]["region"] == {"startLine": 1, "endLine": 1}
+
+
+def bare(profiles, language=None, constraint="sh:minCount", **meta):
+    """One-rule bare frame, one row per PROFILE cell."""
+    violations = pandas.DataFrame(
+        [["id1", "IdentifiedObject.name", None, constraint, "m", "Violation", "urn:shape", profile]
+         for profile in profiles],
+        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE", "PROFILE"])
+    if language or meta:
+        violations.attrs["validation"] = {**({"language": language} if language else {}), **meta}
+    return violations
+
+
+def test_rule_tags():
+    """Tags: language, constraint, each profile of the rule (all rows, first
+    seen) — distinct, at most 10 (what GitHub keeps)."""
+    tags = lambda violations: build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
+    assert tags(bare([None])) == ["shacl", "sh:minCount"]                      # bare frame: shacl
+    assert tags(bare([["EQ", "OP"], ["OP", "SC"], "SSH", None], language="rdfs",
+                     constraint="xsd:minOccurs")) == ["rdfs", "xsd:minOccurs", "EQ", "OP", "SC", "SSH"]
+    many = tags(bare([[f"P{index}" for index in range(12)]], language="rdfs"))
+    assert many == ["rdfs", "sh:minCount", *(f"P{index}" for index in range(8))]
+    assert tags(bare([["rdfs", "EQ"]], language="rdfs")) == ["rdfs", "sh:minCount", "EQ"]   # no duplicates
+
+
+def test_tool_name_per_language():
+    name = lambda violations: build_sarif(violations)["runs"][0]["tool"]["driver"]["name"]
+    assert name(bare([None])) == "triplets-shacl"                              # no metadata
+    assert name(bare([None], language="shacl")) == "triplets-shacl"
+    assert name(bare([None], language="rdfs")) == "triplets-rdfs"
+
+
+def test_skipped_entries_as_configuration_notifications():
+    """One warning notification per skipped shape / component on
+    invocations[0]; the run property bag keeps the lists; no timestamps still
+    gives a valid invocation (executionSuccessful)."""
+    meta = {"skipped_shapes": ["A: datatype conflict", "profile XX: no schema"],
+            "skipped_components": ["sh:qualifiedValueShape"]}
+    run = build_sarif(bare([None], language="rdfs", **meta))["runs"][0]
+    assert run["invocations"] == [{"executionSuccessful": True, "toolConfigurationNotifications": [
+        {"descriptor": {"id": "triplets/skippedShape"}, "level": "warning",
+         "message": {"text": "A: datatype conflict"}},
+        {"descriptor": {"id": "triplets/skippedShape"}, "level": "warning",
+         "message": {"text": "profile XX: no schema"}},
+        {"descriptor": {"id": "triplets/skippedComponent"}, "level": "warning",
+         "message": {"text": "sh:qualifiedValueShape"}}]}]
+    assert run["properties"] == {"language": "rdfs", **meta}
+
+    timed = build_sarif(bare([None], generated_at="2026-01-01T00:00:00+00:00",
+                             skipped_shapes=["A"], skipped_components=[]))["runs"][0]["invocations"][0]
+    assert list(timed) == ["executionSuccessful", "endTimeUtc", "toolConfigurationNotifications"]
+    assert len(timed["toolConfigurationNotifications"]) == 1
+    assert "invocations" not in build_sarif(bare([None], skipped_shapes=[], skipped_components=[]))["runs"][0]
+
+
+def located(tmp_path):
+    """Violations of objects a (repo/sub/grid EQ.xml, under the root), c (other.xml,
+    outside it), d (zip member inner/grid.xml of repo/grid.zip) and e (a file-like)."""
+    (tmp_path / "repo" / "sub").mkdir(parents=True)
+    inside = tmp_path / "repo" / "sub" / "grid EQ.xml"
+    inside.write_text(XML, encoding="utf-8")
+    outside = tmp_path / "other.xml"
+    outside.write_text(XML.replace("_aaaaaaaa", "_cccccccc"), encoding="utf-8")
+    archive = tmp_path / "repo" / "grid.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("inner/grid.xml", XML.replace("_aaaaaaaa", "_dddddddd"))
+    memory = io.BytesIO(XML.replace("_aaaaaaaa", "_eeeeeeee").encode("utf-8"))
+    memory.name = "memory.xml"
+    violations = pandas.DataFrame(
+        [[f"{letter * 8}-2222-3333-4444-555555555555", "IdentifiedObject.name", None, "sh:minCount", "m",
+          "Violation", f"urn:shape{letter}"] for letter in "acde"],
+        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
+    return violations, [str(inside), str(outside), str(archive), memory]
+
+
+def test_source_root_relative_locations(tmp_path):
+    """source_root: a source under it is written relative (forward slashes) —
+    no absolute root in the log; a path outside it, a zip member and a
+    file-like keep their names."""
+    expected = {"a": "sub/grid%20EQ.xml", "c": quote_path(str(tmp_path / "other.xml")),
+                "d": "inner/grid.xml", "e": "memory.xml"}
+    violations, sources = located(tmp_path)
+    document = build_sarif(violations, sources=sources, source_root=tmp_path / "repo")
+    assert {result["properties"]["sampleIDs"][0][0]:
+            result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+            for result in document["runs"][0]["results"]} == expected
+    assert str(tmp_path / "repo") not in json.dumps(document)
+
+    violations, sources = located(tmp_path / "rows")
+    rows = build_sarif(violations, group=False, sources=sources, source_root=tmp_path / "rows" / "repo")
+    assert {result["properties"]["id"][0]: result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+            for result in rows["runs"][0]["results"]} \
+        == {**expected, "c": quote_path(str(tmp_path / "rows" / "other.xml"))}
+
+    violations, sources = located(tmp_path / "default")
+    without = build_sarif(violations, sources=sources)["runs"][0]           # default: as given
+    assert without["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"] \
+        == {"uri": quote_path(sources[0])}
+
+    violations, sources = located(tmp_path / "accessor")
+    via_accessor = json.loads(violations.shacl.to_sarif(sources=sources, source_root=tmp_path / "accessor" / "repo",
+                                                        export_to_memory=True).read())
+    assert via_accessor["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"] \
+        == {"uri": "sub/grid%20EQ.xml"}
+
+
+def test_source_root_applies_to_the_locate_pass_only(tmp_path):
+    """A frame already carrying the location columns is used as-is."""
+    violations, sources = located(tmp_path)
+    stamped = triplets.validation.locate_violations(violations, sources)
+    violations, sources = located(tmp_path / "again")                      # fresh file-like
+    run = build_sarif(stamped, sources=sources, source_root=tmp_path / "repo")["runs"][0]
+    assert run["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"] \
+        == {"uri": quote_path(str(tmp_path / "repo" / "sub" / "grid EQ.xml"))}
+
+
+def quote_path(path):
+    from urllib.parse import quote
+    return quote(path, safe="/")

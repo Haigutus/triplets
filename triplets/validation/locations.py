@@ -12,7 +12,9 @@ offending property element, not just the object.
 (SOURCE_URI, SOURCE_LINE, SOURCE_SNIPPET — the located line's text) onto a
 violations frame — both the SARIF and the sh:ValidationReport exports call
 it when given ``sources=``, and it is exposed as
-``violations.shacl.locate(sources=...)``.
+``violations.shacl.locate(sources=...)``. With ``source_root=``, a path source
+under that directory is reported relative to it (forward slashes); zip
+members and file-likes keep their own names.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
 are handed to an export. When the same object is defined in several files
@@ -25,8 +27,10 @@ and broke SARIF viewers, for no extra information. Line-only is also what
 keeps the pass extensible beyond XML: IDs and KEYs appear as literal
 substrings in every serialization (N-Quads, Turtle, JSON-LD).
 """
+import os
 import re
 import logging
+import pathlib
 
 from ..iri import ID_PREFIXES, TYPE_KEY
 
@@ -41,7 +45,7 @@ _DEFINITION = re.compile(rb'rdf:(?:ID|about)="(?:' + "|".join(map(re.escape, ID_
                          + rb')?([^"]+)"')
 
 
-def locate(wanted, sources):
+def locate(wanted, sources, source_root=None):
     """Find the wanted objects in the source XML.
 
     Parameters
@@ -51,6 +55,11 @@ def locate(wanted, sources):
         own lines are worth pinpointing (may be empty).
     sources : str/Path to .xml/.rdf/.zip, file-like, or a list of those —
         the same shapes ``parse()``/``read_rdf`` accept.
+    source_root : str/Path, optional
+        A path source under this directory gets its "uri" relative to it,
+        with forward slashes (relative paths are read against the working
+        directory, as ``open`` reads them). Paths outside it, zip members and
+        file-likes keep their own names.
 
     Returns
     -------
@@ -66,6 +75,8 @@ def locate(wanted, sources):
         if not remaining:
             break
         uri, text = _read(source)
+        if isinstance(source, str):                    # a path, not a zip member / file-like
+            uri = _relative(uri, source_root) or uri
         matches = list(_DEFINITION.finditer(text))
         line, previous = 1, 0
         for position, match in enumerate(matches):
@@ -84,12 +95,13 @@ def locate(wanted, sources):
     return located
 
 
-def locate_violations(violations, sources):
+def locate_violations(violations, sources, source_root=None):
     """Stamp LOCATION_COLUMNS onto a violations frame — one locate() pass.
 
     Per row (ID, KEY): the violated property element's own position when it
     was found inside the object's text window, else the object definition's;
-    rows whose object is not in the sources get nulls.
+    rows whose object is not in the sources get nulls. *source_root*: SOURCE_URI
+    of a path source under it is relative to it (see locate).
     """
     import pandas
 
@@ -97,7 +109,7 @@ def locate_violations(violations, sources):
     for object_id, key in zip(violations["ID"], violations["KEY"]):
         if not pandas.isna(object_id):
             wanted.setdefault(str(object_id), set()).add(None if pandas.isna(key) else str(key))
-    located = locate(wanted, sources)
+    located = locate(wanted, sources, source_root)
 
     def position(object_id, key):
         entry = located.get(str(object_id)) if not pandas.isna(object_id) else None
@@ -139,6 +151,15 @@ def _line_text(text, position):
     line_end = text.find(b"\n", position)
     line_end = len(text) if line_end == -1 else line_end
     return text[line_start:line_end].decode("utf-8", "replace").strip()
+
+
+def _relative(path, source_root):
+    """*path* relative to *source_root* with forward slashes; None without a
+    root or for a path outside it."""
+    if source_root is None:
+        return None
+    path, root = (pathlib.Path(os.path.abspath(item)) for item in (path, source_root))
+    return path.relative_to(root).as_posix() if path.is_relative_to(root) else None
 
 
 def _read(source):

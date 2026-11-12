@@ -213,6 +213,28 @@ def test_sources_add_location_message(tmp_path):
     assert any(message.startswith("[context_location] ") and "line 4" in message for message in messages)
 
 
+def test_sources_with_source_root(tmp_path):
+    """source_root writes the located file relative to it — no absolute path in the report."""
+    import rdflib
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    (tmp_path / "models").mkdir()
+    xml = tmp_path / "models" / "grid.xml"
+    xml.write_text('<?xml version="1.0"?>\n'
+                   '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" '
+                   'xmlns:cim="http://iec.ch/TC57/CIM100#">\n'
+                   '  <cim:ACLineSegment rdf:ID="_11111111-2222-3333-4444-555555555555">\n'
+                   '    <cim:Conductor.length>100</cim:Conductor.length>\n'
+                   '  </cim:ACLineSegment>\n'
+                   '</rdf:RDF>\n')
+
+    buffer = VIOLATIONS.head(1).shacl.to_shacl_report(sources=[str(xml)], source_root=tmp_path,
+                                                      export_to_memory=True)
+    assert str(tmp_path) not in buffer.getvalue().decode("utf-8")
+    graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
+    assert "[context_location] models/grid.xml line 4" in {str(message) for message
+                                                           in graph.objects(None, sh.resultMessage)}
+
+
 # ── validation-run metadata (violations.attrs["validation"]) ─────────────────
 
 SHAPE_TTL = """

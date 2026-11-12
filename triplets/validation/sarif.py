@@ -30,13 +30,17 @@ logger = logging.getLogger(__name__)
 _SCHEMA = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"
 _LEVELS = {"Violation": "error", "Warning": "warning", "Info": "note"}
 _SAMPLES = 3   # per end: grouped results carry the first 3 and last 3 instances
+_TAGS = 10     # GitHub keeps the first 10 tags of a rule
+# run-metadata list → descriptor id of its "not evaluated" configuration notifications
+_SKIPPED = {"skipped_shapes": "triplets/skippedShape",
+            "skipped_components": "triplets/skippedComponent"}
 # violation-type prefix → where the constraint is defined (the term IRI otherwise)
 _CONSTRAINT_DOCS = {"sh": "https://www.w3.org/TR/shacl/#{local}",
                     "triplets": "https://github.com/Haigutus/triplets/blob/main/docs/validation.md"}
 
 
 def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True,
-                    sources=None, path=None, export_to_memory=False):
+                    sources=None, path=None, export_to_memory=False, source_root=None):
     """Violations frame → SARIF 2.1.0 log.
 
     Parameters
@@ -61,12 +65,17 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
         Output file (default "report.sarif"). Ignored with export_to_memory.
     export_to_memory : bool, default False
         Return a BytesIO (with .name) instead of writing to disk.
+    source_root : str or Path, optional
+        Applies when the locate pass runs (*sources* given, frame without
+        LOCATION_COLUMNS): a source path under this directory is written
+        relative to it (forward slashes) in ``artifactLocation.uri``. Paths
+        outside it, zip members and file-likes keep their names.
     """
     if any(source is not None for source in (data, shapes, rdf_map)) \
             and not set(ENRICHMENT_COLUMNS) <= set(violations.columns):
         violations = enrich(violations, data=data, shapes=shapes, rdf_map=rdf_map)
 
-    payload = json.dumps(build_sarif(violations, group=group, sources=sources),
+    payload = json.dumps(build_sarif(violations, group=group, sources=sources, source_root=source_root),
                          ensure_ascii=False, indent=2).encode("utf-8")
     if export_to_memory:
         buffer = io.BytesIO(payload)
@@ -80,13 +89,13 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
     return path
 
 
-def build_sarif(violations, group=True, sources=None):
+def build_sarif(violations, group=True, sources=None, source_root=None):
     """Violations frame → SARIF document dict (I/O only when *sources* is
     given — the locate_violations pass reads just the source files; a frame
     already carrying LOCATION_COLUMNS is used as-is)."""
     frame = violations.copy()
     if sources is not None and not set(LOCATION_COLUMNS) <= set(frame.columns):
-        frame = locate_violations(frame, sources)
+        frame = locate_violations(frame, sources, source_root)
     for column in (*ENRICHMENT_COLUMNS, *LOCATION_COLUMNS):   # tolerate bare frames
         if column not in frame.columns:
             frame[column] = pandas.NA
@@ -120,9 +129,13 @@ def build_sarif(violations, group=True, sources=None):
             names = meta.get("references") if tool_finding else meta.get("source")
             if names:
                 result["locations"] = [{"physicalLocation": _artifact_location(names[0])}]
+    # what this run did not evaluate (shapes, components): configuration
+    # notifications — the shapes graph / schema is the tool's rule configuration
+    notifications = [{"descriptor": {"id": descriptor}, "level": "warning", "message": {"text": str(text)}}
+                     for key, descriptor in _SKIPPED.items() for text in meta.get(key) or ()]
     run = _prune({
         "tool": {"driver": _prune({
-            "name": "triplets-shacl",
+            "name": f"triplets-{language}",
             "informationUri": "https://github.com/Haigutus/triplets",
             "version": getattr(triplets, "__version__", None),
             "rules": rules,
@@ -135,7 +148,8 @@ def build_sarif(violations, group=True, sources=None):
             "executionSuccessful": True,
             "startTimeUtc": _utc(meta.get("started_at")),
             "endTimeUtc": _utc(meta.get("generated_at")),
-        })] if meta.get("generated_at") else None,
+            "toolConfigurationNotifications": notifications or None,
+        })] if meta.get("generated_at") or notifications else None,
         # empty coverage lists stay in — a clean run STATES full coverage
         "properties": {key: value for key, value in meta.items()
                        if key not in ("started_at", "generated_at", "creator",
@@ -172,6 +186,13 @@ def _samples(records):
     return records if len(records) <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
 
 
+def _profile_names(value):
+    """The profiles of a PROFILE cell: a list's items, a text cell as one name."""
+    if isinstance(value, (list, tuple)):
+        return [str(name) for name in value]
+    return [] if value is None or pandas.isna(value) else [str(value)]
+
+
 def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shacl", references=None):
     identifier = f"{split_iri(str(shape))[1]}/{constraint}" if not pandas.isna(shape) else str(constraint)
     if identifier in seen_ids:                       # distinct shapes, same local name
@@ -189,6 +210,9 @@ def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shac
     if name and occurrences:
         name = f"{name} ({occurrences}×)"
     uri = str(shape) if not pandas.isna(shape) and str(shape).startswith("http") else None
+    # GitHub filters alerts by tag: language, constraint, the rule's profiles
+    profiles = (profile for record in records for profile in _profile_names(record.get("PROFILE")))
+    tags = list(dict.fromkeys(filter(None, (language, _value(constraint), *profiles))))[:_TAGS]
     return _prune({
         "id": identifier,
         "name": name,
@@ -197,7 +221,8 @@ def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shac
         "helpUri": uri,
         "help": _help(first, uri, constraint, references),
         "defaultConfiguration": {"level": _LEVELS.get(_value(first["SEVERITY"]), "warning")},
-        "properties": _prune({"sourceShape": _value(shape), "constraint": str(constraint)}),
+        "properties": _prune({"sourceShape": _value(shape), "constraint": str(constraint),
+                              "tags": tags or None}),
     })
 
 

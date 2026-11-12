@@ -349,7 +349,7 @@ def _default_path(fmt):
 
 def export_to_shacl_report(violations, sources=None, path=None, export_to_memory=False,
                            format=None, report_source=None, report_references=None,
-                           rdf_map=None, undefined_namespace=CIM_NS):
+                           rdf_map=None, undefined_namespace=CIM_NS, source_root=None):
     r"""Violations frame → standard sh:ValidationReport (any rdflib format).
 
     Parameters
@@ -383,11 +383,15 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         Export schema — ``sh:resultPath`` KEYs expand to their profile namespace.
     undefined_namespace : str, default CIM100
         Namespace for KEYs the schema does not declare (every KEY without one).
+    source_root : str or Path, optional
+        Applies when the locate pass runs: a source path under this directory
+        is written relative to it (forward slashes) in the "[context_location]"
+        message; paths outside it, zip members and file-likes keep their names.
     """
     if sources is not None:
         from .locations import LOCATION_COLUMNS, locate_violations
         if not set(LOCATION_COLUMNS) <= set(violations.columns):
-            violations = locate_violations(violations, sources)
+            violations = locate_violations(violations, sources, source_root)
     fmt = _resolve_format(path, format)
     path = _default_path(fmt) if path is None else os.fspath(path)
     payload = (violations_to_report_graph(violations, report_source=report_source,
