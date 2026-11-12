@@ -19,6 +19,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   definition (SHACL spec section for `sh:*`)
   ([#113](https://github.com/Haigutus/triplets/issues/113),
   [#150](https://github.com/Haigutus/triplets/issues/150)).
+- **SARIF rule tags** — `rules[].properties.tags`: the constraint language (`shacl` /
+  `rdfs`), the constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
+  rule's findings, distinct, at most 10 (what GitHub keeps); GitHub code scanning filters
+  alerts by tag ([#94](https://github.com/Haigutus/triplets/issues/94)).
+- **SARIF configuration notifications for what a run did not evaluate** — one
+  `invocations[0].toolConfigurationNotifications` entry (level `warning`) per
+  `skipped_shapes` item (`descriptor.id` `triplets/skippedShape`) and per
+  `skipped_components` item (`triplets/skippedComponent`), the reason or component name
+  as the message; the run property bag keeps both lists. A run without timestamps but
+  with skipped entries gets an invocation too. GitHub code scanning does not display
+  invocation notifications; SARIF viewers do
+  ([#94](https://github.com/Haigutus/triplets/issues/94)).
+- **`source_root=` on `export_to_sarif` / `to_sarif`, `export_to_shacl_report` /
+  `to_shacl_report` and `locate_violations` / `locate`** — when the locate pass runs, a
+  `sources=` path under that directory is written relative to it with forward slashes,
+  so no absolute path reaches SARIF `artifactLocation.uri` or the SHACL report's
+  `[context_location]` message. Paths outside it, zip members and file-likes keep their
+  names; default `None` writes the paths as given ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **Fixed language tag per schema entry** — `"language": "en"` on an Attribute entry writes
   `"text"@en` in N-Quads (pandas, polars, streaming; hence the rdflib / pyshacl loader) and
   `xml:lang="en"` on the literal element in both CIM XML engines, with or without
@@ -175,6 +193,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **SARIF rule titles name the constraint language**: `SHACL …` / `RDFS …` on every
   rule, `sh:name` titles included (`SHACL Line completeness (8×)`)
   ([#150](https://github.com/Haigutus/triplets/issues/150)).
+- **SARIF tool name per constraint language**: `tool.driver.name` is `triplets-rdfs` for
+  schema runs (`validate_schema` / `validate_schema_references` / `validate_by_header`);
+  SHACL runs and bare frames stay `triplets-shacl`. GitHub code scanning tracks alerts per
+  tool name: alerts of schema runs already uploaded under `triplets-shacl` are closed there
+  and appear as new alerts under `triplets-rdfs`
+  ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **CIM XML export loads the schema and builds its datatype / language maps once per
   export** instead of per instance (sequential `cython_pugixml`, Svedala: ~76 → ~55 ms min);
   with `max_workers` on pandas input each worker gets the loaded schema once, so an in-memory

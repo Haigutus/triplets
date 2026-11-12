@@ -571,7 +571,7 @@ a blank-valued row.
 | exporter | carries the metadata as |
 |----------|-------------------------|
 | `to_shacl_report` | `prov:generatedAtTime`, `dcterms:creator` (tool + version + engine, e.g. `"triplets <version> (engine: polars)"`) / `source` / `references` on the report node (standard vocabulary only — counts/coverage stay in the tabular/SARIF forms) |
-| `to_sarif` | `invocations[].startTimeUtc`/`endTimeUtc` + the full run `properties` bag (engine, duration, counts, coverage) |
+| `to_sarif` | `tool.driver.name` from `language` (`triplets-shacl` / `triplets-rdfs`), `invocations[].startTimeUtc`/`endTimeUtc`, one `invocations[].toolConfigurationNotifications` entry per `skipped_shapes` / `skipped_components` item, and the full run `properties` bag (engine, duration, counts, coverage) |
 | `to_csv` | a `<name>_meta.<ext>` sidecar file with KEY,VALUE rows |
 | `to_excel` | a second `metadata` sheet |
 
@@ -827,6 +827,8 @@ violations = violations.shacl.enrich(data=data, shapes=compiled, rdf_map=rdf_map
 
 # SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer
 violations.shacl.to_sarif(path="report.sarif")
+# located lines, file paths relative to the repository checkout
+violations.shacl.to_sarif(path="report.sarif", sources=["models/grid.xml"], source_root=".")
 
 # standard sh:ValidationReport for SHACL tooling (format from path suffix,
 # or format=); sources= adds an "[context_location] file line N" message per
@@ -846,7 +848,7 @@ violations.shacl.to_csv(path="report.csv")
 violations.shacl.to_excel(path="report.xlsx")
 
 # the location pass standalone — SOURCE_URI / SOURCE_LINE / SOURCE_SNIPPET columns,
-# reused by both report exports
+# reused by both report exports (source_root= writes paths under it relative to it)
 violations = violations.shacl.locate(sources=["grid.zip"])
 ```
 
@@ -896,6 +898,14 @@ enrichment pass first (an already-enriched frame is used as-is).
   findings that are really *one* issue — each rule becomes one result with
   `occurrenceCount` and the first-3 + last-3 sample instances (all listed
   when ≤ 6). `group=False` emits one result per violation row.
+- The tool is named per constraint language: `tool.driver.name` is
+  `triplets-shacl` for SHACL runs and bare frames, `triplets-rdfs` for schema
+  runs (a frame holds one language: `concat_violations` raises on a mix).
+  GitHub code scanning filters alerts by tool.
+- Every rule carries `properties.tags`: the language (`shacl` / `rdfs`), the
+  constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
+  rule's findings (the `PROFILE` column), distinct, first seen, at most 10
+  (GitHub keeps 10). GitHub code scanning filters alerts by tag.
 - Severity maps `Violation/Warning/Info` → `error/warning/note`; rules carry
   the shape's `sh:description`, and the rule title names the constraint
   language: `SHACL <sh:name>`, `SHACL <attr> <violation type>` for unnamed
@@ -928,6 +938,25 @@ enrichment pass first (an already-enriched frame is used as-is).
   region-less. Positions are whole lines (1-based): RDF serializations put
   one statement per line, and a start-only region cannot be displayed by
   GitHub, so regions always carry `startLine` and `endLine`.
+- `source_root=` (a directory, explicit — never taken from the working
+  directory) applies when the locate pass runs, in `to_sarif` and
+  `to_shacl_report` alike: a `sources=` path under it is written relative
+  to it with forward slashes (relative paths in `sources=` are read against
+  the working directory, as `open` reads them) — in SARIF
+  `artifactLocation.uri` (GitHub reads a relative uri against the repository
+  root) and in the SHACL report's `[context_location]` message. Paths outside
+  `source_root`, zip members and file-likes keep their own names. Default
+  `None`: the paths as given.
+- What the run did not evaluate becomes
+  `invocations[0].toolConfigurationNotifications` (the shapes graph or schema
+  is the tool's rule configuration, SARIF 2.1.0 §3.20.22): one `warning`
+  notification per `skipped_shapes` entry (`descriptor.id`
+  `triplets/skippedShape`) and per `skipped_components` entry
+  (`triplets/skippedComponent`), the reason or component name as
+  `message.text`; the run `properties` bag keeps both lists. GitHub code
+  scanning does not display invocation notifications; SARIF viewers do
+  (§3.20.22: viewers MAY present them). `relaxed_constraints` were evaluated, more
+  loosely, and stay in the property bag only.
 - Everything domain-specific (triplet coordinates, schema descriptions,
   sample IDs) rides in the `properties` bags.
 
