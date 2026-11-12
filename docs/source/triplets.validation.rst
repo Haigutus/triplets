@@ -92,6 +92,14 @@ triplets.validation.shacl\_report module
    :show-inheritance:
    :undoc-members:
 
+triplets.validation.value\_space module
+---------------------------------------
+
+.. automodule:: triplets.validation.value_space
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 Module contents
 ---------------
 
