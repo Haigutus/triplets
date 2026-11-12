@@ -741,7 +741,7 @@ def _components(SH, shape):
 def _bound(value):
     """A range bound as the engines compare it: the float of a number, the (space,
     lexical form) pair of a date or dateTime, else None — a string, an xsd:time or
-    an ill-typed literal (value_space.bound_space)."""
+    a bound value_space.bound_space rejects."""
     typed = bound_space(value)
     return None if typed is None else float(value.value) if typed[0] == "number" else typed
 

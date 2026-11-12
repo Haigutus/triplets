@@ -134,7 +134,8 @@ Known engine gaps (those a run can detect land in its coverage metadata,
   compares numbers, an `xsd:date` bound calendar dates, an `xsd:dateTime` /
   `xsd:dateTimeStamp` bound instants. A value that does not parse in that space
   violates — `"abc"`, `""`, `NaN`, a day the calendar lacks (`2020-02-30`), a
-  dateTime under a date bound and the reverse. A date's zone suffix is ignored,
+  dateTime under a date bound and the reverse, a date or dateTime with leading
+  or trailing whitespace (a number is stripped). A date's zone suffix is ignored,
   on the value and on the bound (as pyshacl does). Zoned dateTimes compare as
   instants (`2020-06-01T14:00:00+02:00` equals `2020-06-01T12:00:00Z`, fractions
   of a second count down to microseconds); an unzoned value compares only with
@@ -144,15 +145,26 @@ Known engine gaps (those a run can detect land in its coverage metadata,
   00–59, a zone within ±23:59 — `24:00:00`, a leap second, `10000-01-01` violate
   on every Python (from Python 3.14 on, rdflib and so pyshacl read hour 24 as
   the next day's midnight).
-  The message and `EXPECTED` name the bound as the parsed shapes graph holds it
-  (rdflib writes `Z` as `+00:00` and drops a date's zone), so it depends on the
-  Python version too: a `24:00:00` bound is the next day's midnight from Python
-  3.14 on and an ill-typed literal before, its constraint then skipped.
+  A bound is checked on its text as the parsed shapes graph holds it. Under
+  rdflib's default literal normalisation an ill-typed bound rdflib can still
+  read arrives rewritten to its value and is compared, as pyshacl reads it:
+  `"2020-06-01T12:00:00Z"^^xsd:date` is the date `2020-06-01`,
+  `"2020-06-01"^^xsd:dateTime` is `2020-06-01T00:00:00`; rdflib also writes
+  `Z` as `+00:00` and drops a date's zone. The message and `EXPECTED` name that
+  text. Of the number, date and dateTime bounds only one rdflib cannot read is
+  skipped (below), so the outcome depends on the Python version too: a
+  `24:00:00` bound is the next day's midnight from Python 3.14 on, before that
+  its constraint is skipped. An `xsd:dateTimeStamp` bound, which rdflib does
+  not read, is taken as written and must be in its XSD form.
   pyshacl types each value from the schema instead of the bound: an
   `xsd:string` value never compares with a date there, a value under an
   `xsd:date` key written as a dateTime compares as its date, and an
   `xsd:dateTimeStamp` bound makes every value violate (rdflib reads no
-  `xsd:dateTimeStamp` value).
+  `xsd:dateTimeStamp` value). rdflib reads more value texts than the XSD form,
+  such as `2020-06-01 12:00:00Z` or `2020-06-01+02`: the engines report those
+  as violations, pyshacl compares them. Under rdflib's default normalisation
+  pyshacl reports a value in its normalised text (`2020-06-01T12:00:00.5Z` as
+  `2020-06-01T12:00:00.500000+00:00`), the engines report the text as written.
 - **Numeric pair comparisons only**: `sh:lessThan` and `sh:lessThanOrEquals`
   compare values as numbers; a pair that is not a number — a date, a string — is
   reported as violating. pyshacl compares typed literals, so date/string pair
@@ -160,8 +172,9 @@ Known engine gaps (those a run can detect land in its coverage metadata,
   ([#216](https://github.com/Haigutus/triplets/issues/216)).
 - **Range bounds in no value space are not evaluated**: a `sh:minInclusive` …
   `sh:maxExclusive` bound that is a literal in no value space — a string, an
-  `xsd:time`, an `xsd:duration`, an ill-typed literal, a date or dateTime
-  outside the comparable form — is valid SHACL the vectorized engines do not
+  `xsd:time`, an `xsd:duration`, a number, date or dateTime rdflib cannot read
+  (`"2020-02-30"^^xsd:date`), an `xsd:dateTimeStamp` outside its XSD form — is
+  valid SHACL the vectorized engines do not
   compare: that one constraint is not evaluated and is named in
   `skipped_shapes` (`<shape>: sh:minInclusive "12:00:00"^^xsd:time not
   evaluated`), the shape's other constraints run; `engine="pyshacl"`

@@ -405,9 +405,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A range bound that is not a number no longer fails the SHACL compile**: a
   `sh:minInclusive` … `sh:maxExclusive` bound such as `"2020-01-01"^^xsd:date` raised
   `ValueError` in `compile()`, so no shape was validated. pandas, polars and duckdb
-  compare a date or dateTime bound (see Added); a bound in no value space (a string, an
-  `xsd:time`, an ill-typed literal) skips that one constraint, named in `skipped_shapes`;
-  `engine="pyshacl"` evaluates it. A non-literal range bound, and a `sh:minCount` / `sh:maxCount` /
+  compare a date or dateTime bound (see Added), checked as rdflib reads it: an ill-typed
+  bound rdflib can read (`"2020-06-01"^^xsd:dateTime`) is compared as its value; a bound in
+  no value space (a string, an `xsd:time`, a number, date or dateTime rdflib cannot read)
+  skips that one constraint, named in `skipped_shapes`; `engine="pyshacl"` evaluates it.
+  A non-literal range bound, and a `sh:minCount` / `sh:maxCount` /
   `sh:minLength` / `sh:maxLength` value that is not a non-negative `xsd:integer`, make the
   shape malformed (skipped with the reason, also for pyshacl) instead of failing the compile
   or pyshacl's run ([#215](https://github.com/Haigutus/triplets/issues/215)).
