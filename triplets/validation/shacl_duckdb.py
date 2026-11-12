@@ -339,8 +339,9 @@ SQL_BUILDERS = {
 
 
 class _Context:
-    """Schema-driven term-kind decisions and the lexical flag (shared with the
-    other vectorized engines)."""
+    """Schema-driven term-kind decisions, the schema entries and prefixes the pair
+    operands' types resolve from, and the lexical flag (shared with the other
+    vectorized engines)."""
 
     def __init__(self, rdf_map, lexical=True):
         self.rdf_map = rdf_map

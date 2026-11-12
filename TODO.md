@@ -10,10 +10,11 @@ SPARQL — rdflib (reference) / oxigraph (pip performance) / qlever (local build
   stays pyshacl-only; the vectorized engines warn at compile time and list the shape in
   `skipped_shapes`.
 - [ ] Value spaces beyond number / date / dateTime (`validation/value_space.py`): a range
-  bound in no value space (`xsd:time`, `xsd:duration`, a string) is skipped; two
-  `xsd:string` (or `xsd:boolean`) operands of `sh:lessThan` / `sh:lessThanOrEquals`
-  compare as numbers, where pyshacl compares the text (the booleans) — a schema-dependent
-  skip has no place in the run metadata yet.
+  bound in no value space (`xsd:time`, `xsd:duration`, a string) is skipped;
+  `sh:lessThan` / `sh:lessThanOrEquals` operands typed in no value space (such as `xsd:string`,
+  `xsd:boolean`, `xsd:time`, `xsd:duration`, `xsd:anyURI`) compare as numbers, so a value
+  that is not a number violates, where pyshacl compares them in their own type — a
+  schema-dependent skip has no place in the run metadata yet.
 - [ ] duckdb `tableview_to_triplets(string_to_number=True)` raises
   (`tools/duckdb_engine.py:_check_string_to_number`); a TRY_CAST implementation is open.
   Related tools follow-ups: polars eval in `tableview_to_triplets`, lossy `INSTANCE_ID`
