@@ -581,19 +581,25 @@ def run(name, engine, **extra):
     return canon_violations(triplets.validation.validate_shacl(frame(rows), compiled(name), engine=engine, **kwargs))
 
 
-# cases whose values rdflib's literal normalisation rewrites (Z → +00:00, a date's zone
-# dropped, fractions to six digits): pyshacl reads them with the lexical form kept
-LEXICAL_VALUES = {case for case in CASES if case.startswith("range_date")}
+# the date and dateTime cases, whose values rdflib's literal normalisation rewrites (Z →
+# +00:00, a date's zone dropped, fractions to six digits): pyshacl reads them with the
+# lexical form kept
+LEXICAL_VALUES = {case for case in CASES if case.startswith(("range_date_", "range_dateTime"))}
 
 
 @functools.cache
 def reference(name):
-    """pyshacl, pure: lexical=False (the supplement would repeat the pandas datatype rows)."""
+    """pyshacl, pure: lexical=False (the supplement would repeat the pandas datatype rows).
+    A LEXICAL_VALUES case loads its rows afresh with the normalisation off, in a cache
+    scope: a normalised load of the same rows is not reused, its own load is not kept."""
     import rdflib
-    normalize = rdflib.NORMALIZE_LITERALS
-    rdflib.NORMALIZE_LITERALS = normalize and name not in LEXICAL_VALUES
-    try:
+    if name not in LEXICAL_VALUES:
         return run(name, "pyshacl", lexical=False)
+    normalize, rdflib.NORMALIZE_LITERALS = rdflib.NORMALIZE_LITERALS, False
+    try:
+        with triplets.cache_scope():
+            triplets.clear_caches()
+            return run(name, "pyshacl", lexical=False)
     finally:
         rdflib.NORMALIZE_LITERALS = normalize
 

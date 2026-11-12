@@ -179,6 +179,9 @@ def test_ranges_hour_24(engine):
     v = run(rows, shape, engine)
     hour_24 = {("b1", "2020-06-01T24:00:00"), ("b1", "2020-06-01T24:00:00Z")}
     assert violating(v, "sh:minInclusive") == violating(v, "sh:maxInclusive") == hour_24
+
+
+def test_ranges_dates_on_a_duckdb_connection_in_another_time_zone():
     """The duckdb casts read a zone from the text, never from the session: an
     unzoned dateTime is not the session's local time — read in New York, 02:30
     on 2020-03-08 (skipped by the DST change) would land after 03:15."""
@@ -1083,6 +1086,7 @@ DATED = {"EQ": {
     "Breaker": {"type": "Class", "namespace": CIM, "inheritance": [CIM + "Breaker"]},
     "IdentifiedObject.description": {"type": "Attribute", "xsd:type": "xsd:string", "namespace": CIM},
     "Switch.installationDate": {"type": "Attribute", "xsd:type": "xsd:date", "namespace": CIM},
+    "Switch.switchOnTime": {"type": "Attribute", "xsd:type": "xsd:time", "namespace": CIM},
 }}
 
 
@@ -1105,7 +1109,7 @@ def test_date_range_bound_is_compared(engine_name):
     assert violations.attrs["validation"]["skipped_shapes"] == []
 
 
-@pytest.mark.parametrize("engine_name", ENGINES)
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
 def test_time_range_bound_skips_only_its_constraint(engine_name):
     """An xsd:time bound is valid SHACL in no value space the engines compare:
     that one constraint is named in skipped_shapes (not malformed), the rest of
@@ -1120,9 +1124,11 @@ def test_time_range_bound_skips_only_its_constraint(engine_name):
             + breaker("b2", ("IdentifiedObject.description", "d"), ("Switch.switchOnTime", "13:00:00"),
                       ("Switch.switchOnTime", "14:00:00")))
     violations = triplets.validation.validate_shacl(pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"]),
-                                                    compiled, engine=engine_name, lexical=False)
-    assert findings(violations) == {("b1", "sh:minCount"), ("b2", "sh:maxCount")}
-    assert violations.attrs["validation"]["skipped_shapes"] == skipped
+                                                    compiled, engine=engine_name, rdf_map=DATED, rdf_map_scope="*",
+                                                    lexical=False)
+    time_finding = {("b1", "sh:minInclusive")} if engine_name == "pyshacl" else set()
+    assert findings(violations) == {("b1", "sh:minCount"), ("b2", "sh:maxCount"), *time_finding}
+    assert violations.attrs["validation"]["skipped_shapes"] == ([] if engine_name == "pyshacl" else skipped)
 
 
 # a malformed shape reached in other ways, next to the valid sibling of MALFORMED_OWNER:

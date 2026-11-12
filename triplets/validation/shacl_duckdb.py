@@ -30,7 +30,7 @@ from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, value_types
 from . import shacl_pandas, value_space
-from .shacl_pandas import datatype_patterns
+from .value_space import datatype_patterns
 
 logger = logging.getLogger(__name__)
 
