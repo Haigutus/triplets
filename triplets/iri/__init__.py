@@ -288,6 +288,19 @@ def absolute_datatype(key, text, prefixes):
     return prefixes[prefix] + local
 
 
+def xsd_base(key, entry, entries, prefixes):
+    """The datatype IRI *key*'s values are checked and compared by, from its schema *entry*: its
+    expanded ``xsd:type`` when that is an XSD or plain-literal type, else the ``xsd:type`` of the
+    datatype entry in *entries* it names (``dataType``, else the IRI's local name — the
+    CIMDatatype entry a bundle carries); "" when that entry has none."""
+    datatype = absolute_datatype(key, str(entry["xsd:type"]), prefixes)
+    if datatype in _PLAIN_DATATYPES or datatype.startswith(XSD_NS):
+        return datatype
+    support = entries.get(entry.get("dataType")) or entries.get(split_iri(datatype)[1])
+    base = support.get("xsd:type") if isinstance(support, dict) else None
+    return absolute_datatype(key, str(base), prefixes) if base else ""
+
+
 _PLAIN_DATATYPES = (XSD_NS + "string", RDF_NS + "langString")
 """No annotation: ``xsd:string`` is the RDF 1.1 default; ``rdf:langString`` needs a language tag."""
 

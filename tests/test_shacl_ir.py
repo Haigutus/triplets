@@ -633,6 +633,25 @@ cim:P sh:path cim:IdentifiedObject.name ; sh:pattern "a b" ; sh:flags "x" ."""))
 RANGE_TERMS = ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive"]
 
 
+@pytest.mark.parametrize("term", ["lessThan", "lessThanOrEquals"])
+@pytest.mark.parametrize("datatype, params", [
+    ("", "Switch.retiredDate"),                                   # the other KEY, as every real shape compiles
+    ("sh:datatype xsd:date ;", ("Switch.retiredDate", "date")),
+    ("sh:datatype xsd:dateTimeStamp ;", ("Switch.retiredDate", "dateTime")),
+    ("sh:datatype xsd:int ;", ("Switch.retiredDate", "number")),
+    ("sh:datatype xsd:string ;", ("Switch.retiredDate", "")),   # an XSD type in no value space
+    ("sh:datatype cim:Date ;", "Switch.retiredDate"),            # not XSD: the space stays unknown
+])
+def test_pair_path_space_from_shape_datatype(term, datatype, params):
+    """A sh:datatype beside a pair gives the path operand's value space; the IR row
+    keeps the bare other KEY without one."""
+    compiled = compile_shapes(_graph(f"cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; "
+                                     f"sh:property [ sh:path cim:Switch.installationDate ; {datatype} "
+                                     f"sh:{term} cim:Switch.retiredDate ] ."))
+    ir = compiled.ir
+    assert list(ir.loc[ir["component"] == f"sh:{term}", "params"]) == [params]
+
+
 @pytest.mark.parametrize("term", RANGE_TERMS)
 @pytest.mark.parametrize("bound, params", [
     ("2", 2.0),

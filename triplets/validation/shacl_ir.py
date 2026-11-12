@@ -14,7 +14,8 @@ IR: one row per shape x target x path x constraint component::
     component, params, severity, message, name, description
 
 ``params`` holds the component's parameter: a scalar (sh:minCount), a
-(space, lexical form) pair (a date or dateTime range bound), a list
+(space, lexical form) pair (a date or dateTime range bound), a (KEY, space)
+pair (sh:lessThan beside a sh:datatype), a list
 (sh:in), or nested row-dict lists (sh:or / sh:and / sh:xone / sh:not, and the
 ``rows`` of sh:node / sh:property). Unknown
 components are kept as rows and logged — engines skip what they don't
@@ -33,7 +34,7 @@ import pandas
 
 from .._caches import register_cache
 from ..iri import SH_NS, XSD_NS, local_id, local_key, local_value, split_iri
-from .value_space import bound_space
+from .value_space import bound_space, pair_params
 
 logger = logging.getLogger(__name__)
 
@@ -733,8 +734,9 @@ def _components(SH, shape):
         (SH["in"], "sh:in", lambda g, v: _rdf_list(g, v, _value)),
         (SH.equals, "sh:equals", lambda g, v: local_key(v)),
         (SH.disjoint, "sh:disjoint", lambda g, v: local_key(v)),
-        (SH.lessThan, "sh:lessThan", lambda g, v: local_key(v)),
-        (SH.lessThanOrEquals, "sh:lessThanOrEquals", lambda g, v: local_key(v)),
+        # the path operand's value space when the shape declares a sh:datatype beside the pair
+        (SH.lessThan, "sh:lessThan", lambda g, v: pair_params(local_key(v), g.value(shape, SH.datatype))),
+        (SH.lessThanOrEquals, "sh:lessThanOrEquals", lambda g, v: pair_params(local_key(v), g.value(shape, SH.datatype))),
     ]
 
 

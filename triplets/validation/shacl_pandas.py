@@ -38,6 +38,7 @@ Known limits:
 """
 import re
 import logging
+import functools
 import threading
 import multiprocessing
 
@@ -88,6 +89,11 @@ class _Context:
         # object per rule; _sparql reports it once instead of once per rule.
         self.sparql_engine_error = None
         self.targets = {}   # SPARQL target query → focus IDs (_sparql_targets)
+
+    @functools.cached_property
+    def key_spaces(self):
+        """KEY → value space of its schema type, for the pair constraints — built on the first one."""
+        return value_space.key_spaces(self.rdf_map)
 
     def dataset(self):
         """rdflib dataset for the sh:sparql constraints — loaded once, reused per query."""
@@ -270,17 +276,17 @@ def _max_length(context, rule):
 
 
 def _keys(space):
-    """The values in the bound's comparable form as integer keys (``value_space.key``,
-    Python's reading — pandas' own datetime parse loses years outside 1677–2262), <NA> for the rest."""
-    def parse(values, bound):
-        form = re.compile(value_space.comparable(space, bound))
+    """The values in the comparable *form* as integer keys (``value_space.key``, Python's
+    reading — pandas' own datetime parse loses years outside 1677–2262), <NA> for the rest."""
+    def parse(values, form):
+        form = re.compile(form)
         return pandas.Series([value_space.key(space, text) if isinstance(text, str) and form.fullmatch(text) else None
                               for text in values], index=values.index, dtype="Int64")
     return parse
 
 
-# value space → (values, bound) → comparable values, NaN / <NA> where a value does not compare
-_PARSE = {"number": lambda values, bound: pandas.to_numeric(values, errors="coerce"),
+# value space → (values, comparable form) → comparable values, NaN / <NA> where a value does not compare
+_PARSE = {"number": lambda values, form: pandas.to_numeric(values, errors="coerce"),
           "date": _keys("date"),
           "dateTime": _keys("dateTime")}
 
@@ -293,7 +299,8 @@ def _range(comparison, description):
     def validator(context, rule):
         rows = context.path_rows(rule)
         space, bound = value_space.range_bound(rule.params)
-        parsed = _PARSE[space](rows["PATH_VALUE"], bound)
+        form = None if space == "number" else value_space.comparable(space, bound)
+        parsed = _PARSE[space](rows["PATH_VALUE"], form)
         limit = bound if space == "number" else value_space.key(space, bound)
         bad = (comparison(parsed, limit) | parsed.isna()) & rows["PATH_VALUE"].notna()
         return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
@@ -391,17 +398,37 @@ def _disjoint(context, rule):
                   f"{rule.path} shares a value with {rule.params}")
 
 
+def _typed_pair_fails(merged, space, operator):
+    """Per pair of a date or dateTime *space*: the comparison fails — a value outside the
+    comparable forms or the calendar, a dateTime zoned unlike the other; every pair when
+    the operands are in different spaces (*space* None)."""
+    if space is None:
+        return pandas.Series(True, index=merged.index)
+    form, zone = value_space.pair_forms(space)
+    a, b = _PARSE[space](merged["PATH_VALUE"], form), _PARSE[space](merged["OTHER_VALUE"], form)
+    fails = operator(a, b) | a.isna() | b.isna()
+    if zone:
+        fails |= (merged["PATH_VALUE"].astype(str).str.contains(zone)
+                  != merged["OTHER_VALUE"].astype(str).str.contains(zone))
+    return fails
+
+
 def _pair_compare(operator, description):
     """sh:lessThan / sh:lessThanOrEquals: every path value must compare against
-    every value of the other property — violation when the comparison fails."""
+    every value of the other property, in the pair's value space
+    (``value_space.pair_space``) — violation when the comparison fails."""
     def validator(context, rule):
-        left, right = context.pair_rows(rule, rule.params)
+        other, space = value_space.pair_space(rule, context.key_spaces)
+        left, right = context.pair_rows(rule, other)
         merged = left.merge(right, on="FOCUS")
-        a = pandas.to_numeric(merged["PATH_VALUE"], errors="coerce")
-        b = pandas.to_numeric(merged["OTHER_VALUE"], errors="coerce")
-        bad = merged[operator(a, b)]
+        if space == "number":
+            a = pandas.to_numeric(merged["PATH_VALUE"], errors="coerce")
+            b = pandas.to_numeric(merged["OTHER_VALUE"], errors="coerce")
+            bad = merged[operator(a, b)]
+        else:
+            bad = merged[_typed_pair_fails(merged, space, operator)]
         return _frame(rule, bad["FOCUS"], bad["PATH_VALUE"],
-                      f"{rule.path} is not {description} {rule.params}")
+                      f"{rule.path} is not {description} {other}")
     return validator
 
 

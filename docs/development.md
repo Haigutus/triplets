@@ -101,6 +101,10 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   (`cim:ActivePower` → `^^<…#ActivePower>`). A prefix no `ProfileNamespaceMap`
   binds raises `ValueError` naming the KEY when the map is built — in every
   entry point that builds `datatypes`, whether or not the KEY occurs in the data.
+  Validation reads a non-XSD type by its XSD base type (`xsd_base`: the
+  `xsd:type` of the schema's own datatype entry): `validate_schema` checks the
+  values against it, the SHACL engines compare `sh:lessThan` pairs in its value
+  space.
 - **The schema entry type decides the serialisation form, never `xsd:type`**
   and never the shape of the text: an Attribute value is a literal even when
   it reads `https://…` or looks like a UUID (`xsd:type` only annotates it), an
