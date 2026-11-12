@@ -1,5 +1,6 @@
 """Tests for the SHACL IR compiler (triplets.validation.shacl_ir)."""
 import os
+import sys
 import importlib.util
 
 import pytest
@@ -659,7 +660,6 @@ def test_range_bound_value_space(term, bound, params):
 @pytest.mark.parametrize("bound", ['"abc"', '"3"', '"abc"^^xsd:integer', '"12:00:00"^^xsd:time', '"P1D"^^xsd:duration',
                                    # outside the lexical form, the comparable form or the calendar
                                    '"2020-02-30"^^xsd:date', '"2020-6-1"^^xsd:date', '"10000-01-01"^^xsd:date',
-                                   '"2020-01-01T24:00:00Z"^^xsd:dateTime',
                                    '"2020-01-01T23:59:60"^^xsd:dateTime', '"2020-01-01T00:00:00"^^xsd:dateTimeStamp'])
 def test_unsupported_range_bound_skips_that_constraint(term, bound):
     """A range bound in no value space the engines compare compiles (#215): that
@@ -673,6 +673,22 @@ cim:P sh:path cim:Conductor.length ; sh:{term} {bound}, 1 ; sh:minCount 1 ."""))
     assert f"{CIM}P: sh:{term} {bound} not evaluated" in skipped
     assert any(entry.startswith(f"{CIM}N: sh:or member ") for entry in skipped)
     assert compiled.stats["malformed_shapes"] == []
+
+
+def test_hour_24_bound_follows_rdflib():
+    """The compile sees the bound as rdflib holds it, which depends on Python:
+    from 3.14 on fromisoformat reads hour 24 as the next day's midnight and rdflib
+    writes it so (a next-day bound); before, the literal is ill-typed and the
+    constraint skipped."""
+    compiled = compile_shapes(_graph('cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property [ '
+                                     'sh:path cim:Conductor.length ; sh:minInclusive "2020-01-01T24:00:00Z"^^xsd:dateTime ] .'))
+    if sys.version_info >= (3, 14):
+        assert list(compiled.ir["params"]) == [("dateTime", "2020-01-02T00:00:00+00:00")]
+        assert compiled.stats["skipped_shapes"] == []
+    else:
+        assert compiled.ir.empty
+        assert [entry.split(": ", 1)[1] for entry in compiled.stats["skipped_shapes"]] == [
+            'sh:minInclusive "2020-01-01T24:00:00Z"^^xsd:dateTime not evaluated']
 
 
 @pytest.mark.parametrize("operator", ["or", "and", "xone"])
