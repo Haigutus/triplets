@@ -128,17 +128,38 @@ Known engine gaps (those a run can detect land in its coverage metadata,
   `"1.0"^^xsd:float` matches the member `1.0` (`xsd:decimal`). pyshacl
   compares typed RDF terms and reports a violation. CGMES `sh:in` lists hold IRIs
   (enumeration values), where both agree.
-- **Numeric comparisons only**: `sh:minInclusive` … `sh:maxExclusive`,
-  `sh:lessThan` and `sh:lessThanOrEquals` compare values as numbers; a value
-  (or pair) that is not a number — a date, a string — is reported as
-  violating. pyshacl compares typed literals, so date/string comparisons agree
-  only on `engine="pyshacl"`
+- **Range comparisons in the bound's value space**: a `sh:minInclusive` …
+  `sh:maxExclusive` bound fixes the value space the values are compared in
+  (`triplets.validation.value_space`): a number bound (any numeric xsd type)
+  compares numbers, an `xsd:date` bound calendar dates, an `xsd:dateTime` /
+  `xsd:dateTimeStamp` bound instants. A value that does not parse in that space
+  violates — `"abc"`, `""`, `NaN`, a day the calendar lacks (`2020-02-30`), a
+  dateTime under a date bound and the reverse. A date's zone suffix is ignored,
+  on the value and on the bound (as pyshacl does). Zoned dateTimes compare as
+  instants (`2020-06-01T14:00:00+02:00` equals `2020-06-01T12:00:00Z`, fractions
+  of a second count down to microseconds); an unzoned value compares only with
+  an unzoned bound, as local times, and a zoned value only with a zoned bound.
+  A date or dateTime compares only in the form Python's `datetime` reads (as
+  rdflib does for pyshacl): a four-digit year 0001–9999, hours 00–23, seconds
+  00–59, a zone within ±23:59 — `24:00:00`, a leap second, `10000-01-01` violate.
+  The message and `EXPECTED` name the bound as the parsed shapes graph holds it
+  (rdflib writes `Z` as `+00:00` and drops a date's zone).
+  pyshacl types each value from the schema instead of the bound: an
+  `xsd:string` value never compares with a date there, a value under an
+  `xsd:date` key written as a dateTime compares as its date, and an
+  `xsd:dateTimeStamp` bound makes every value violate (rdflib reads no
+  `xsd:dateTimeStamp` value).
+- **Numeric pair comparisons only**: `sh:lessThan` and `sh:lessThanOrEquals`
+  compare values as numbers; a pair that is not a number — a date, a string — is
+  reported as violating. pyshacl compares typed literals, so date/string pair
+  comparisons agree only on `engine="pyshacl"`
   ([#216](https://github.com/Haigutus/triplets/issues/216)).
-- **Numeric range bounds only**: a `sh:minInclusive` … `sh:maxExclusive`
-  bound that is a literal but not a number (`"2020-01-01"^^xsd:date`, a
-  string, an ill-typed literal) is valid SHACL the vectorized engines do not
+- **Range bounds in no value space are not evaluated**: a `sh:minInclusive` …
+  `sh:maxExclusive` bound that is a literal in no value space — a string, an
+  `xsd:time`, an `xsd:duration`, an ill-typed literal, a date or dateTime
+  outside the comparable form — is valid SHACL the vectorized engines do not
   compare: that one constraint is not evaluated and is named in
-  `skipped_shapes` (`<shape>: sh:minInclusive "2020-01-01"^^xsd:date not
+  `skipped_shapes` (`<shape>: sh:minInclusive "12:00:00"^^xsd:time not
   evaluated`), the shape's other constraints run; `engine="pyshacl"`
   evaluates it.
 - **`sh:closed` always allows `Type`**: every triplets object carries
@@ -211,7 +232,7 @@ registries that consume it are internal.
 | components | `params` shape |
 |------------|----------------|
 | `sh:minCount` `sh:maxCount` `sh:minLength` `sh:maxLength` | int |
-| `sh:minInclusive` `sh:maxInclusive` `sh:minExclusive` `sh:maxExclusive` | float (the value of a numeric literal; any other bound compiles to no row and is named in `skipped_shapes`) |
+| `sh:minInclusive` `sh:maxInclusive` `sh:minExclusive` `sh:maxExclusive` | float (the value of a numeric literal); `(space, lexical form)` for a date or dateTime bound (`("date", "2020-01-01")`, `("dateTime", "2020-01-01T00:00:00+00:00")`); a bound in no value space compiles to no row and is named in `skipped_shapes` |
 | `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern` (`sh:flags` folded in: `q` quotes the pattern, `i` `m` `s` an inline `(?ims)` prefix; any other flag skips the shape), `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str |
 | `sh:in` | list[str] (IRIs shortened to local names) |
 | `sh:closed` | list[str] — the **fully resolved** allowed KEY list: every `sh:ignoredProperties` list + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included); the vectorized engines always allow `Type` (rdf:type) on top |
@@ -249,7 +270,7 @@ left are removed, and `skipped_shapes` lists the same entries for them as the
 vectorized engines. pyshacl still refuses the graph for a malformed shape
 reached through `sh:qualifiedValueShape` (its owner keeps
 `sh:qualifiedMinCount` / `sh:qualifiedMaxCount` without the shape). A range
-bound that is a literal but not a number is not malformed: pyshacl evaluates
+bound that is a literal in no value space is not malformed: pyshacl evaluates
 it (see Known engine gaps).
 
 The logical operators report one row per non-conforming focus node on a node
@@ -496,7 +517,7 @@ united, differing values kept as the list of distinct values):
 | `node_shapes` / `constraints` | count of NodeShapes not switched off / distinct constraints of the run's rule set (IR rows that differ only in lineage count once) |
 | `profiles` | the section keys the run used, a list (None = root entries, or no rdf_map) |
 | `inheritance` | whether class inheritance was applied — `validate_shacl`: an rdf_map scope with classes and `inheritance=True`; `validate_schema_references`: the `inheritance` flag |
-| `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); shapes reached only through a `sh:target` without `sh:select`, `sh:rule` shapes (not applied), inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run), range constraints whose bound is not a number, logical operators over a member the IR cannot express and `sh:node` rows whose target has nothing left but skipped parts; malformed shapes (the compile's load checks), each with the reason — for `engine="pyshacl"` (spec-complete) only the malformed shapes' entries and the operator / `sh:node` rows dropped over them; a shape switched off takes its entries along; association ranges no given profile defines (`validate_schema_references`) |
+| `skipped_shapes` | what THIS run did not evaluate as written: keys whose datatype differs between the merged profiles (every engine); shapes reached only through a `sh:target` without `sh:select`, `sh:rule` shapes (not applied), inexpressible `sh:path` forms (a listed property shape's sibling constraints on the same NodeShape may still have run), range constraints whose bound is in no value space, logical operators over a member the IR cannot express and `sh:node` rows whose target has nothing left but skipped parts; malformed shapes (the compile's load checks), each with the reason — for `engine="pyshacl"` (spec-complete) only the malformed shapes' entries and the operator / `sh:node` rows dropped over them; a shape switched off takes its entries along; association ranges no given profile defines (`validate_schema_references`) |
 | `aborted` | True when `abort_on_first` met a Violation; the report may then be partial |
 | `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates, and the terms the IR keeps as unimplemented rows (`sh:qualifiedValueShape`, …) |

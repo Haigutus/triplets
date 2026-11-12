@@ -64,6 +64,7 @@ from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report, has_violat
 from .context import ENRICHMENT_COLUMNS, concat_violations, enrich  # noqa: F401 — public API
 from .locations import LOCATION_COLUMNS, locate_violations  # noqa: F401 — public API
 from .sarif import export_to_sarif  # noqa: F401 — public API
+from .value_space import range_bound
 
 logger = logging.getLogger(__name__)
 
@@ -250,10 +251,10 @@ _EXPECTED = {
     "sh:maxCount": "at most {} value(s)".format,
     "sh:minLength": "length >= {}".format,
     "sh:maxLength": "length <= {}".format,
-    "sh:minInclusive": "value >= {}".format,
-    "sh:maxInclusive": "value <= {}".format,
-    "sh:minExclusive": "value > {}".format,
-    "sh:maxExclusive": "value < {}".format,
+    "sh:minInclusive": lambda params: f"value >= {range_bound(params)[1]}",
+    "sh:maxInclusive": lambda params: f"value <= {range_bound(params)[1]}",
+    "sh:minExclusive": lambda params: f"value > {range_bound(params)[1]}",
+    "sh:maxExclusive": lambda params: f"value < {range_bound(params)[1]}",
     "sh:pattern": "value matching {}".format,
     "sh:datatype": "a {} value".format,
     "sh:class": "a reference to a {}".format,

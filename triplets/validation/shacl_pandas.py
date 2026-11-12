@@ -52,7 +52,8 @@ from ..export.nquads_utils import make_subject
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, split_iri, value_types
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
-from .value_space import DATATYPES, datatype_patterns  # noqa: F401 — DATATYPES re-exported
+from . import value_space
+from .value_space import datatype_patterns
 
 logger = logging.getLogger(__name__)
 
@@ -268,15 +269,35 @@ def _max_length(context, rule):
                   f"value is longer than {rule.params} characters")
 
 
+def _keys(space):
+    """The values in the bound's comparable form as integer keys (``value_space.key``,
+    Python's reading — pandas' own datetime parse loses years outside 1677–2262), <NA> for the rest."""
+    def parse(values, bound):
+        form = re.compile(value_space.comparable(space, bound))
+        return pandas.Series([value_space.key(space, text) if isinstance(text, str) and form.fullmatch(text) else None
+                              for text in values], index=values.index, dtype="Int64")
+    return parse
+
+
+# value space → (values, bound) → comparable values, NaN / <NA> where a value does not compare
+_PARSE = {"number": lambda values, bound: pandas.to_numeric(values, errors="coerce"),
+          "date": _keys("date"),
+          "dateTime": _keys("dateTime")}
+
+
 def _range(comparison, description):
-    """Numeric range validator factory; a value that is not a number (no cast, or NaN)
-    fails every range component (SHACL: the comparison is not true)."""
+    """Range validator factory: the values parse in the bound's value space; a value
+    that does not (no cast, NaN, another form) fails every range component (SHACL:
+    the comparison is not true). A number bound is a float already; any other is
+    parsed like the values."""
     def validator(context, rule):
         rows = context.path_rows(rule)
-        numeric = pandas.to_numeric(rows["PATH_VALUE"], errors="coerce")
-        bad = (comparison(numeric, rule.params) | numeric.isna()) & rows["PATH_VALUE"].notna()
+        space, bound = value_space.range_bound(rule.params)
+        parsed = _PARSE[space](rows["PATH_VALUE"], bound)
+        limit = bound if space == "number" else _PARSE[space](pandas.Series([bound]), bound)[0]
+        bad = (comparison(parsed, limit) | parsed.isna()) & rows["PATH_VALUE"].notna()
         return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
-                      f"value is {description} {rule.params}")
+                      f"value is {description} {bound}")
     return validator
 
 

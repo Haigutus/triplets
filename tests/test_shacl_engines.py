@@ -127,6 +127,55 @@ def test_ranges(engine):
     assert violating(v, "sh:maxInclusive") == {("b4", "101")}
     assert violating(v, "sh:minExclusive") == {("b1", "-1")}
     assert violating(v, "sh:maxExclusive") == {("b4", "101")}
+    texts = v.loc[v["VIOLATION_TYPE"] == "sh:minInclusive", ["MESSAGE", "EXPECTED"]]
+    assert set(texts.itertuples(index=False, name=None)) == {("value is less than the minimum 0.0", "value >= 0.0")}
+
+
+DAY, WHEN = "Switch.installationDate", "Switch.lastOperated"
+DATED_SHAPE = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:Switch.installationDate ; sh:minInclusive "2020-01-01"^^xsd:date ] ;
+    sh:property [ sh:path cim:Switch.lastOperated ; sh:maxExclusive "2020-01-01T00:00:00+00:00"^^xsd:dateTime ] ;
+    sh:property [ sh:path cim:Switch.lastOperated ;
+                  sh:or ( [ sh:minInclusive "2020-06-01T00:00:00"^^xsd:dateTime ] [ sh:datatype xsd:boolean ] ) ] ."""
+# per breaker: (installation date, last operated); None — no value, no check
+DATED_ROWS = [row for n, (day, when) in enumerate((
+    ("2019-12-31", "2019-12-31T23:59:59Z"), ("2020-01-01+14:00", "2020-01-01T00:59:59+01:00"),
+    ("2020-02-30", "2020-07-01T00:00:00"), ("2020-01-01T00:00:00", "2020-01-01T00:00:00Z"), (None, None)))
+    for row in breaker(f"b{n}", (DAY, day), (WHEN, when))]
+
+
+def test_ranges_dates(engine):
+    """A date / dateTime bound compares the values in its value space (#215), nested
+    members too; a value in no comparable form violates — a day the calendar lacks,
+    a dateTime for a date, a dateTime zoned unlike the bound. The message and
+    EXPECTED name the lexical bound."""
+    v = run(DATED_ROWS, DATED_SHAPE, engine)
+    assert violating(v, "sh:minInclusive") == {("b0", "2019-12-31"), ("b2", "2020-02-30"), ("b3", "2020-01-01T00:00:00")}
+    assert violating(v, "sh:maxExclusive") == {("b2", "2020-07-01T00:00:00"), ("b3", "2020-01-01T00:00:00Z")}
+    assert violating(v, "sh:or") == {("b0", "2019-12-31T23:59:59Z"), ("b1", "2020-01-01T00:59:59+01:00"),
+                                     ("b3", "2020-01-01T00:00:00Z")}
+    texts = v.loc[v["VIOLATION_TYPE"].isin(["sh:minInclusive", "sh:maxExclusive"]), ["MESSAGE", "EXPECTED"]]
+    assert set(texts.itertuples(index=False, name=None)) == {
+        ("value is less than the minimum 2020-01-01", "value >= 2020-01-01"),
+        ("value is not less than the exclusive maximum 2020-01-01T00:00:00+00:00", "value < 2020-01-01T00:00:00+00:00")}
+
+
+def test_ranges_dates_on_a_duckdb_connection_in_another_time_zone():
+    """The duckdb casts read a zone from the text, never from the session: an
+    unzoned dateTime is not the session's local time — read in New York, 02:30
+    on 2020-03-08 (skipped by the DST change) would land after 03:15."""
+    duckdb = pytest.importorskip("duckdb")
+    import rdflib
+    shape = SHAPE.format(body=f'sh:path cim:{WHEN} ; sh:minExclusive "2020-03-08T03:15:00"^^xsd:dateTime')
+    rows = (breaker("b1", (WHEN, "2020-03-08T02:30:00")) + breaker("b2", (WHEN, "2020-03-08T03:30:00"))
+            + breaker("b3", (WHEN, "2020-03-08T04:00:00Z")))
+    con = duckdb.connect()
+    con.execute("SET TimeZone = 'America/New_York'")
+    con.register("src", pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"]))
+    con.execute("CREATE TABLE triplets AS SELECT * FROM src")
+    native = triplets.validation.validate_shacl(con, rdflib.Graph().parse(data=PREFIX + shape, format="turtle"),
+                                                engine="duckdb")
+    assert violating(native, "sh:minExclusive") == {("b1", "2020-03-08T02:30:00"), ("b3", "2020-03-08T04:00:00Z")}
 
 
 def test_ranges_not_a_number(engine):
@@ -1020,25 +1069,42 @@ DATED = {"EQ": {
 
 
 @pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
-def test_date_range_bound_skips_only_its_constraint(engine_name):
-    """A date range bound is valid SHACL the vectorized engines do not compare
-    (#215): that one constraint is named in skipped_shapes (not malformed), the
-    rest of the shape and of the file validates; pyshacl evaluates it."""
+def test_date_range_bound_is_compared(engine_name):
+    """A date range bound compiles to a constraint every engine evaluates (#215):
+    nothing skipped, the rest of the shape validates alongside."""
     pytest.importorskip(engine_name)
     compiled = compiled_shapes("""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
             sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ; sh:property cim:Installed .
         cim:Installed sh:path cim:Switch.installationDate ; sh:minInclusive "2020-01-01"^^xsd:date ; sh:maxCount 1 .""")
-    skipped = [f'{CIM}Installed: sh:minInclusive "2020-01-01"^^xsd:date not evaluated']
-    assert (compiled.stats["skipped_shapes"], compiled.stats["malformed_shapes"]) == (skipped, [])
+    assert (compiled.stats["skipped_shapes"], compiled.stats["malformed_shapes"]) == ([], [])
     rows = (breaker("b1", ("Switch.installationDate", "2019-05-01"))
             + breaker("b2", ("IdentifiedObject.description", "d"), ("Switch.installationDate", "2021-05-01"),
                       ("Switch.installationDate", "2022-01-01")))
     violations = triplets.validation.validate_shacl(pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"]),
                                                     compiled, engine=engine_name, rdf_map=DATED, rdf_map_scope="*",
                                                     lexical=False)
-    date_finding = {("b1", "sh:minInclusive")} if engine_name == "pyshacl" else set()
-    assert findings(violations) == {("b1", "sh:minCount"), ("b2", "sh:maxCount"), *date_finding}
-    assert violations.attrs["validation"]["skipped_shapes"] == ([] if engine_name == "pyshacl" else skipped)
+    assert findings(violations) == {("b1", "sh:minCount"), ("b2", "sh:maxCount"), ("b1", "sh:minInclusive")}
+    assert violations.attrs["validation"]["skipped_shapes"] == []
+
+
+@pytest.mark.parametrize("engine_name", ENGINES)
+def test_time_range_bound_skips_only_its_constraint(engine_name):
+    """An xsd:time bound is valid SHACL in no value space the engines compare:
+    that one constraint is named in skipped_shapes (not malformed), the rest of
+    the shape validates; pyshacl evaluates it."""
+    pytest.importorskip(engine_name)
+    compiled = compiled_shapes("""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ; sh:property cim:Switched .
+        cim:Switched sh:path cim:Switch.switchOnTime ; sh:minInclusive "12:00:00"^^xsd:time ; sh:maxCount 1 .""")
+    skipped = [f'{CIM}Switched: sh:minInclusive "12:00:00"^^xsd:time not evaluated']
+    assert (compiled.stats["skipped_shapes"], compiled.stats["malformed_shapes"]) == (skipped, [])
+    rows = (breaker("b1", ("Switch.switchOnTime", "11:00:00"))
+            + breaker("b2", ("IdentifiedObject.description", "d"), ("Switch.switchOnTime", "13:00:00"),
+                      ("Switch.switchOnTime", "14:00:00")))
+    violations = triplets.validation.validate_shacl(pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"]),
+                                                    compiled, engine=engine_name, lexical=False)
+    assert findings(violations) == {("b1", "sh:minCount"), ("b2", "sh:maxCount")}
+    assert violations.attrs["validation"]["skipped_shapes"] == skipped
 
 
 # a malformed shape reached in other ways, next to the valid sibling of MALFORMED_OWNER:

@@ -55,6 +55,7 @@ SCHEMA = {"EQ": {
     "Switch.switchOnDuration": attribute("xsd:duration"),
     "Switch.switchOnTime": attribute("xsd:time"),
     "Switch.installationDate": attribute("xsd:date"),
+    "Switch.lastOperated": attribute("xsd:dateTime"),
     "Equipment.EquipmentContainer": {"type": "Association"},
     "Bay.VoltageLevel": {"type": "Association"},
     "Switch.kind": {"type": "Enumeration", "xsd:type": "xsd:anyURI", "namespace": CIM},
@@ -81,6 +82,33 @@ RING = breaker("b1", (NAME, "n"), (CONT, "b2")) + breaker("b2", (CONT, "b1")) + 
 # valid, narrower ("1" — the lexicalForm Warning) and invalid xsd:float lengths
 LENGTHS = breaker("b1", (LEN, "10.5")) + breaker("b2", (LEN, "1")) + breaker("b3", (LEN, "abc"))
 FLOAT = "[ sh:datatype xsd:float ]"
+
+
+def valued(key, *values):
+    """One breaker per value at *key*: b0, b1, …"""
+    return [row for n, value in enumerate(values) for row in breaker(f"b{n}", (key, value))]
+
+
+# date / dateTime range bounds: each value on its own breaker. Kept out (rdflib's lenient
+# reading, the XFAIL cases range_*_text): a dateTime text under xsd:date, a date text
+# under an unzoned dateTime bound.
+DATE, WHEN = "Switch.installationDate", "Switch.lastOperated"
+ON = '"2020-06-01"^^xsd:date'
+AT_Z, AT = '"2020-06-01T12:00:00Z"^^xsd:dateTime', '"2020-06-01T12:00:00"^^xsd:dateTime'
+# before, same, after; a zone on the value is ignored; not a date / not in the
+# calendar / outside years 0001–9999 / not the xsd form
+DATES = valued(DATE, "2020-05-31", "2020-06-01", "2020-06-02", "2020-06-02Z", "2020-05-31+02:00", "2020-06-01-14:00",
+               "abc", "", "2020-02-30", "10000-01-01", "0000-01-01", " 2020-06-02", "2020-6-2")
+# instants across zones and fractions (beyond µs truncated); unzoned, 24:00:00, a leap
+# second, a date, junk, an offset of 24 hours do not compare with a zoned bound
+ZONED = valued(WHEN, "2020-06-01T11:59:59Z", "2020-06-01T12:00:00Z", "2020-06-01T14:00:00+02:00",
+               "2020-06-01T13:59:59.5+02:00", "2020-06-01T12:00:00.5Z", "2020-06-01T12:00:00.000001Z",
+               "2020-06-01T12:00:00.0000001Z", "2020-06-01T12:00:00+15:00", "2020-06-03T12:00:00", "2020-06-01T24:00:00Z",
+               "2020-06-01T23:59:60Z", "2020-06-02", "abc", "", "2020-06-02T12:00:00+24:00")
+# local times; a zoned value does not compare with an unzoned bound
+LOCAL = valued(WHEN, "2020-06-01T11:00:00", "2020-06-01T12:00:00", "2020-06-01T12:00:00.5", "2020-06-03T12:00:00Z",
+               "2020-06-01T24:00:00", "abc", "9999-12-31T23:59:59", "0001-01-01T00:00:00")
+RANGES = ("minInclusive", "maxInclusive", "minExclusive", "maxExclusive")
 
 NAMED = "cim:Named a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."
 DESCRIBED = "cim:Desc a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ."
@@ -198,6 +226,34 @@ CASES = {
                           breaker("b1", (LEN, "abc")) + breaker("b2", (LEN, "3.0"))),
     "range_non_numeric_max": (prop("sh:path cim:Conductor.length ; sh:maxInclusive 1.0"),
                               breaker("b1", (LEN, "abc")) + breaker("b2", (LEN, "3.0")) + breaker("b3", (LEN, "0.5"))),
+    **{f"range_date_{term}": (prop(f"sh:path cim:{DATE} ; sh:{term} {ON}"), DATES) for term in RANGES},
+    **{f"range_dateTime_zoned_{term}": (prop(f"sh:path cim:{WHEN} ; sh:{term} {AT_Z}"), ZONED) for term in RANGES},
+    **{f"range_dateTime_local_{term}": (prop(f"sh:path cim:{WHEN} ; sh:{term} {AT}"), LOCAL) for term in RANGES},
+    "range_date_zoned_bound": (prop(f'sh:path cim:{DATE} ; sh:minInclusive "2020-06-01+02:00"^^xsd:date'), DATES),
+    "range_dateTime_offset_bound": (prop(f'sh:path cim:{WHEN} ; sh:minInclusive "2020-06-01T14:00:00+02:00"^^xsd:dateTime'),
+                                    ZONED),
+    "range_dateTime_fraction_bound": (prop(f'sh:path cim:{WHEN} ; sh:maxExclusive "2020-06-01T12:00:00.5Z"^^xsd:dateTime'),
+                                      ZONED),
+    # a date and a dateTime never compare, either way round
+    "range_date_value_dateTime_bound": (prop(f"sh:path cim:{DATE} ; sh:minInclusive {AT_Z}"),
+                                        valued(DATE, "2020-05-31", "2020-06-01", "2020-06-02")),
+    "range_dateTime_value_date_bound": (prop(f"sh:path cim:{WHEN} ; sh:maxInclusive {ON}"),
+                                        valued(WHEN, "2020-05-31T12:00:00Z", "2020-06-01T00:00:00", "2020-06-02T12:00:00Z")),
+    # nested members compare the same way (the pandas builders, on every engine)
+    "range_date_in_or": (prop(f'sh:path cim:{DATE} ; sh:or ( [ sh:minInclusive {ON} ] [ sh:maxInclusive "2000-01-01"^^xsd:date ] )'),
+                         valued(DATE, "1999-01-01", "2010-01-01", "2021-01-01", "abc")),
+    "range_dateTime_in_and": (prop(f'sh:path cim:{WHEN} ; sh:and ( [ sh:minInclusive {AT_Z} ] '
+                                   f'[ sh:maxExclusive "2020-06-02T00:00:00+02:00"^^xsd:dateTime ] )'), ZONED),
+    "range_date_in_not": (f"{B} sh:not [ sh:path cim:{DATE} ; sh:minExclusive {ON} ] .", DATES),
+    # accepted divergences (XFAIL): rdflib reads a dateTime text as an xsd:date and a date
+    # text as an xsd:dateTime midnight; pyshacl types a value from the schema, so an
+    # xsd:string never compares; it reads no xsd:dateTimeStamp value
+    "range_date_dateTime_text": (prop(f"sh:path cim:{DATE} ; sh:minInclusive {ON}"), valued(DATE, "2020-06-02T00:00:00")),
+    "range_dateTime_date_text": (prop(f"sh:path cim:{WHEN} ; sh:minInclusive {AT}"), valued(WHEN, "2020-06-02")),
+    "range_date_on_string": (prop(f"sh:path cim:IdentifiedObject.description ; sh:minInclusive {ON}"),
+                             valued(DESC, "2020-05-31", "2020-06-02")),
+    "range_dateTimeStamp_bound": (prop(f'sh:path cim:{WHEN} ; sh:minInclusive "2020-06-01T12:00:00Z"^^xsd:dateTimeStamp'),
+                                  valued(WHEN, "2020-06-01T11:00:00Z", "2020-06-01T13:00:00Z")),
     "pattern": (prop('sh:path cim:IdentifiedObject.name ; sh:pattern "^B"'),
                 breaker("b1", (NAME, "B1")) + breaker("b2", (NAME, "xB")) + breaker("b3", (NAME, "x"))),
     "pattern_flags": (prop('sh:path cim:IdentifiedObject.name ; sh:pattern "^b" ; sh:flags "i"'),
@@ -462,11 +518,10 @@ SKIPPED = {
     "path_alternative_inverse": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; sh:property [ sh:path [ sh:alternativePath "
                                  "( cim:Bay.VoltageLevel [ sh:inversePath cim:Equipment.EquipmentContainer ] ) ] ; sh:minCount 2 ] .",
                                  TRIO + [("bay1", "Bay.VoltageLevel", "sub1", "eq")], "unsupported sh:path form"),
-    # a date bound is valid SHACL: pyshacl compares the dates, the engines only numbers (#215)
-    "range_date_bound": (prop('sh:path cim:Switch.installationDate ; sh:minInclusive "2020-01-01"^^xsd:date'),
-                         breaker("b1", ("Switch.installationDate", "2019-05-01"))
-                         + breaker("b2", ("Switch.installationDate", "2021-05-01")),
-                         'sh:minInclusive "2020-01-01"^^xsd:date not evaluated'),
+    # an xsd:time bound is valid SHACL in no value space the engines compare: pyshacl compares the times (#215)
+    "range_time_bound": (prop('sh:path cim:Switch.switchOnTime ; sh:minInclusive "12:00:00"^^xsd:time'),
+                         valued("Switch.switchOnTime", "11:00:00", "13:00:00"),
+                         'sh:minInclusive "12:00:00"^^xsd:time not evaluated'),
     "node_level_in": (f"{B} sh:in ( <urn:uuid:b1> ) .", TRIO, "node-level sh:in not evaluated"),
     "node_level_hasValue": (f"{B} sh:hasValue <urn:uuid:b1> .", TRIO, "node-level sh:hasValue not evaluated"),
     "qualified": (prop('sh:path cim:IdentifiedObject.name ; sh:qualifiedValueShape [ sh:pattern "^B" ] ; sh:qualifiedMinCount 1'),
@@ -493,6 +548,11 @@ XFAIL = {
     **known("#182 sh:minLength on an IRI measures the local id", "minLength_on_iri"),
     **known("#183 sh:sparql $PATH left unbound on a blank-node path", "sparql_inverse_path"),
     **known("#186 pyshacl compares non-numeric values as text (accepted literal divergence)", "range_non_numeric"),
+    **known("accepted: rdflib reads a dateTime text as an xsd:date, a date text as an xsd:dateTime midnight",
+            "range_date_dateTime_text", "range_dateTime_date_text"),
+    **known("accepted: pyshacl types the values from the schema, an xsd:string never compares with a date",
+            "range_date_on_string"),
+    **known("pyshacl (rdflib) reads no xsd:dateTimeStamp value: every value violates", "range_dateTimeStamp_bound"),
     # rdflib's evalLeftJoin re-checks an unmatched OPTIONAL without the left side's
     # variables, which inline VALUES do not declare (_vars), so another node's match drops the row
     **(known("rdflib SPARQL engine: OPTIONAL after VALUES drops the unmatched focus node",
@@ -520,10 +580,21 @@ def run(name, engine, **extra):
     return canon_violations(triplets.validation.validate_shacl(frame(rows), compiled(name), engine=engine, **kwargs))
 
 
+# cases whose values rdflib's literal normalisation rewrites (Z → +00:00, a date's zone
+# dropped, fractions to six digits): pyshacl reads them with the lexical form kept
+LEXICAL_VALUES = {case for case in CASES if case.startswith("range_date")}
+
+
 @functools.cache
 def reference(name):
     """pyshacl, pure: lexical=False (the supplement would repeat the pandas datatype rows)."""
-    return run(name, "pyshacl", lexical=False)
+    import rdflib
+    normalize = rdflib.NORMALIZE_LITERALS
+    rdflib.NORMALIZE_LITERALS = normalize and name not in LEXICAL_VALUES
+    try:
+        return run(name, "pyshacl", lexical=False)
+    finally:
+        rdflib.NORMALIZE_LITERALS = normalize
 
 
 def matrix():
