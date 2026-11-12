@@ -99,15 +99,16 @@ AT_Z, AT = '"2020-06-01T12:00:00Z"^^xsd:dateTime', '"2020-06-01T12:00:00"^^xsd:d
 # calendar / outside years 0001–9999 / not the xsd form
 DATES = valued(DATE, "2020-05-31", "2020-06-01", "2020-06-02", "2020-06-02Z", "2020-05-31+02:00", "2020-06-01-14:00",
                "abc", "", "2020-02-30", "10000-01-01", "0000-01-01", " 2020-06-02", "2020-6-2")
-# instants across zones and fractions (beyond µs truncated); unzoned, 24:00:00, a leap
-# second, a date, junk, an offset of 24 hours do not compare with a zoned bound
+# instants across zones and fractions (beyond µs truncated); unzoned, a leap second, a
+# date, junk, an offset of 24 hours do not compare with a zoned bound. Kept out: hour 24,
+# which rdflib reads from Python 3.14 on (test_shacl_engines.test_ranges_hour_24)
 ZONED = valued(WHEN, "2020-06-01T11:59:59Z", "2020-06-01T12:00:00Z", "2020-06-01T14:00:00+02:00",
                "2020-06-01T13:59:59.5+02:00", "2020-06-01T12:00:00.5Z", "2020-06-01T12:00:00.000001Z",
-               "2020-06-01T12:00:00.0000001Z", "2020-06-01T12:00:00+15:00", "2020-06-03T12:00:00", "2020-06-01T24:00:00Z",
+               "2020-06-01T12:00:00.0000001Z", "2020-06-01T12:00:00+15:00", "2020-06-03T12:00:00",
                "2020-06-01T23:59:60Z", "2020-06-02", "abc", "", "2020-06-02T12:00:00+24:00")
 # local times; a zoned value does not compare with an unzoned bound
 LOCAL = valued(WHEN, "2020-06-01T11:00:00", "2020-06-01T12:00:00", "2020-06-01T12:00:00.5", "2020-06-03T12:00:00Z",
-               "2020-06-01T24:00:00", "abc", "9999-12-31T23:59:59", "0001-01-01T00:00:00")
+               "abc", "9999-12-31T23:59:59", "0001-01-01T00:00:00")
 RANGES = ("minInclusive", "maxInclusive", "minExclusive", "maxExclusive")
 
 NAMED = "cim:Named a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."

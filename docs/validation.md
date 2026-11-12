@@ -141,9 +141,13 @@ Known engine gaps (those a run can detect land in its coverage metadata,
   an unzoned bound, as local times, and a zoned value only with a zoned bound.
   A date or dateTime compares only in the form Python's `datetime` reads (as
   rdflib does for pyshacl): a four-digit year 0001–9999, hours 00–23, seconds
-  00–59, a zone within ±23:59 — `24:00:00`, a leap second, `10000-01-01` violate.
+  00–59, a zone within ±23:59 — `24:00:00`, a leap second, `10000-01-01` violate
+  on every Python (from Python 3.14 on, rdflib and so pyshacl read hour 24 as
+  the next day's midnight).
   The message and `EXPECTED` name the bound as the parsed shapes graph holds it
-  (rdflib writes `Z` as `+00:00` and drops a date's zone).
+  (rdflib writes `Z` as `+00:00` and drops a date's zone), so it depends on the
+  Python version too: a `24:00:00` bound is the next day's midnight from Python
+  3.14 on and an ill-typed literal before, its constraint then skipped.
   pyshacl types each value from the schema instead of the bound: an
   `xsd:string` value never compares with a date there, a value under an
   `xsd:date` key written as a dateTime compares as its date, and an

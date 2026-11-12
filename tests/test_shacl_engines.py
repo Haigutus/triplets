@@ -5,6 +5,8 @@ hand-builds a tiny triplet dataset with one controlled defect and asserts the
 exact violating (ID, VALUE) set. pyshacl agreement is covered by
 tests/test_parity_shacl_matrix.py; this file pins the shared engine semantics.
 """
+import re
+
 import pytest
 
 pytest.importorskip("rdflib")
@@ -12,6 +14,7 @@ pytest.importorskip("rdflib")
 import pandas
 import triplets
 
+from triplets.validation import value_space
 from triplets.validation.shacl_report import has_violation
 
 ENGINES = ["pandas", "polars", "duckdb"]
@@ -160,7 +163,22 @@ def test_ranges_dates(engine):
         ("value is not less than the exclusive maximum 2020-01-01T00:00:00+00:00", "value < 2020-01-01T00:00:00+00:00")}
 
 
-def test_ranges_dates_on_a_duckdb_connection_in_another_time_zone():
+def test_ranges_hour_24(engine):
+    """Hour 24 is outside the comparable form: a violation on every engine and
+    every Python, also between bounds its next-day reading would satisfy (rdflib
+    reads it from Python 3.14 on, so the pyshacl-compared matrix leaves it out)."""
+    for bound in ("2020-06-01T00:00:00", "2020-06-01T00:00:00+00:00"):
+        assert not re.fullmatch(value_space.comparable("dateTime", bound), "2020-06-01T24:00:00" + bound[19:])
+    shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:Switch.lastOperated ; sh:minInclusive "2020-06-01T00:00:00"^^xsd:dateTime ;
+                      sh:maxInclusive "2020-06-03T00:00:00"^^xsd:dateTime ] ;
+        sh:property [ sh:path cim:Switch.lastChecked ; sh:minInclusive "2020-06-01T00:00:00Z"^^xsd:dateTime ;
+                      sh:maxInclusive "2020-06-03T00:00:00Z"^^xsd:dateTime ] ."""
+    rows = (breaker("b1", (WHEN, "2020-06-01T24:00:00"), ("Switch.lastChecked", "2020-06-01T24:00:00Z"))
+            + breaker("b2", (WHEN, "2020-06-02T00:00:00"), ("Switch.lastChecked", "2020-06-02T00:00:00Z")))
+    v = run(rows, shape, engine)
+    hour_24 = {("b1", "2020-06-01T24:00:00"), ("b1", "2020-06-01T24:00:00Z")}
+    assert violating(v, "sh:minInclusive") == violating(v, "sh:maxInclusive") == hour_24
     """The duckdb casts read a zone from the text, never from the session: an
     unzoned dateTime is not the session's local time — read in New York, 02:30
     on 2020-03-08 (skipped by the DST change) would land after 03:15."""
