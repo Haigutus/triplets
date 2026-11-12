@@ -49,8 +49,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   A value that does not parse as the bound's type violates. The bound's value space comes
   from the new flat map `validation.value_space.SPACES`; the IR `params` of such a bound is
   `(space, lexical form)`, a number bound stays a float
-  ([#215](https://github.com/Haigutus/triplets/issues/215),
-  [#216](https://github.com/Haigutus/triplets/issues/216) — pair comparisons stay numeric).
+  ([#215](https://github.com/Haigutus/triplets/issues/215)).
+- **Date and dateTime pairs in the vectorized SHACL engines** — `sh:lessThan` /
+  `sh:lessThanOrEquals` compare in the value space of their two operands on pandas, polars
+  and duckdb, nested members included: each side's space comes from a `sh:datatype` on the
+  property shape (path side), else the KEY's `xsd:type` in the `rdf_map` (a non-XSD type by
+  its XSD base type, the new `iri.xsd_base` that `validate_schema` uses too), else the other
+  side; untyped operands compare as numbers, as before. Operands in different spaces, a value
+  that does not parse and a zoned dateTime against an unzoned one violate (the SHACL rule;
+  pyshacl reports nothing for some of them). The IR `params` of a pair beside a `sh:datatype`
+  is `(KEY, space)`, otherwise the KEY as before
+  ([#216](https://github.com/Haigutus/triplets/issues/216)).
 - **Linux aarch64 wheels** (manylinux), built on GitHub's native arm64 runner;
   also what Docker runs on Apple Silicon
   ([#130](https://github.com/Haigutus/triplets/issues/130)).

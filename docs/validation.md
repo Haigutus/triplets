@@ -13,7 +13,7 @@ any RDF loaded as triplets, CIM or not. Every input has a scope named after it:
 
 | Function | Checks | Runs |
 |----------|--------|------|
-| `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, lexical=True, inheritance=True, deactivated_shapes=None, abort_on_first=False)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision and class inheritance | once over the scoped data |
+| `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, lexical=True, inheritance=True, deactivated_shapes=None, abort_on_first=False)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision, the value space of `sh:lessThan` / `sh:lessThanOrEquals` operands and class inheritance | once over the scoped data |
 | `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False, severity="Violation")` | cardinality, datatypes and enumerations of the scoped profiles (merged); `report_undefined_keys` also reports keys no scoped profile defines for the object's class | per instance in `data_scope` — cardinality never counts another instance's rows |
 | `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_data_scope, target_rdf_map_scope=(), report_missing_targets=True, inheritance=True, severity="Violation")` — `target_data_scope=None` = every instance | the reference type of each association of the source profiles (merged, or a union of several): valid classes from the source and target profiles, referenced objects from the source and target instances | per source instance; findings on source objects only |
 
@@ -165,11 +165,28 @@ Known engine gaps (those a run can detect land in its coverage metadata,
   as violations, pyshacl compares them. Under rdflib's default normalisation
   pyshacl reports a value in its normalised text (`2020-06-01T12:00:00.5Z` as
   `2020-06-01T12:00:00.500000+00:00`), the engines report the text as written.
-- **Numeric pair comparisons only**: `sh:lessThan` and `sh:lessThanOrEquals`
-  compare values as numbers; a pair that is not a number — a date, a string — is
-  reported as violating. pyshacl compares typed literals, so date/string pair
-  comparisons agree only on `engine="pyshacl"`
-  ([#216](https://github.com/Haigutus/triplets/issues/216)).
+- **Pair comparisons in the operands' value space**: `sh:lessThan` and
+  `sh:lessThanOrEquals` compare every path value with every value of the other
+  KEY in one value space per constraint, decided before any row is read. Each
+  operand's space comes from the first source that answers: the shape (a
+  `sh:datatype` on the same property shape types the path side), the schema
+  (the KEY's `xsd:type` in the scoped `rdf_map`; a non-XSD type by its XSD base
+  type, as `validate_schema` checks it), the other operand. Two operands without
+  a type compare as numbers, as does every pair without an `rdf_map`; two
+  `xsd:string` operands compare as numbers too. Operands in different spaces (a
+  date and a dateTime, a number and a date, a string and a number) never
+  compare: every pair violates. The values follow the range rules above: a
+  value that does not parse violates, a date's zone is ignored, zoned dateTimes
+  compare as instants and unzoned ones as local times; a zoned dateTime does not
+  compare with an unzoned one, either way round. A missing other value is no
+  check. pyshacl differs
+  ([#216](https://github.com/Haigutus/triplets/issues/216)): it reports nothing
+  for an unzoned dateTime before a zoned one, for a date against a dateTime and
+  for most ill-typed values (a day the calendar lacks, a junk other value, a
+  non-number under a numeric key); it reads a value the schema does not type as
+  `xsd:string`, which never compares with a date, compares strings as text
+  (`"9" < "10"` fails), and its `sh:lessThanOrEquals` raises on an ill-typed
+  value.
 - **Range bounds in no value space are not evaluated**: a `sh:minInclusive` …
   `sh:maxExclusive` bound that is a literal in no value space — a string, an
   `xsd:time`, an `xsd:duration`, a number, date or dateTime rdflib cannot read
@@ -250,7 +267,7 @@ registries that consume it are internal.
 |------------|----------------|
 | `sh:minCount` `sh:maxCount` `sh:minLength` `sh:maxLength` | int |
 | `sh:minInclusive` `sh:maxInclusive` `sh:minExclusive` `sh:maxExclusive` | float (the value of a numeric literal); `(space, lexical form)` for a date or dateTime bound (`("date", "2020-01-01")`, `("dateTime", "2020-01-01T00:00:00+00:00")`); a bound in no value space compiles to no row and is named in `skipped_shapes` |
-| `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern` (`sh:flags` folded in: `q` quotes the pattern, `i` `m` `s` an inline `(?ims)` prefix; any other flag skips the shape), `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str |
+| `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern` (`sh:flags` folded in: `q` quotes the pattern, `i` `m` `s` an inline `(?ims)` prefix; any other flag skips the shape), `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str; `(KEY, space)` for `sh:lessThan` / `sh:lessThanOrEquals` on a property shape with an XSD `sh:datatype` (`("Switch.retiredDate", "date")`, `""` for a type in no value space) |
 | `sh:in` | list[str] (IRIs shortened to local names) |
 | `sh:closed` | list[str] — the **fully resolved** allowed KEY list: every `sh:ignoredProperties` list + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included); the vectorized engines always allow `Type` (rdf:type) on top |
 | `sh:or` / `sh:and` / `sh:xone` | list[list[dict]] — one inner list of nested IR row dicts per alternative |

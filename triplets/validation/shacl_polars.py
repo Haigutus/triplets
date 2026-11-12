@@ -23,6 +23,7 @@ new data.
 Note: sh:pattern runs on Rust regex (no lookarounds). The ENTSO-E profiles
 use plain character-class patterns; exotic patterns belong to pyshacl.
 """
+import functools
 import logging
 
 import pandas
@@ -72,6 +73,11 @@ class _Context:
         for query, ids in (targets or {}).items():
             ids = polars.Series("ID", list(ids), dtype=polars.Utf8)
             self._targets[query] = (ids, ids.implode())
+
+    @functools.cached_property
+    def key_spaces(self):
+        """KEY → value space of its schema type, for the pair constraints — built on the first one."""
+        return value_space.key_spaces(self.rdf_map)
 
     def class_ids(self, class_name):
         """Flat ID Series (plan *data*, e.g. focus_frame)."""
@@ -336,15 +342,32 @@ def _disjoint(context, rule):
     return _emit(plan, rule, f"{rule.path} shares a value with {rule.params}")
 
 
+def _typed_pair_holds(space, operator):
+    """The comparison of a date or dateTime pair: both values in a comparable form and,
+    for a dateTime, zoned alike (null where a value does not parse); never for operands
+    in different spaces (*space* None)."""
+    if space is None:
+        return polars.lit(False)
+    form, zone = value_space.pair_forms(space)
+    a, b = polars.col("PATH_VALUE"), polars.col("OTHER")
+    holds = operator(*(polars.when(text.str.contains(f"^(?:{form})$")).then(_PARSE[space](text)) for text in (a, b)))
+    return holds & (a.str.contains(zone) == b.str.contains(zone)) if zone else holds
+
+
 def _pair_compare(operator, description):
-    """sh:lessThan(-OrEquals): violation when the comparison does not hold
-    (incl. non-numeric pairs — null comparisons count as failed, like pandas)."""
+    """sh:lessThan(-OrEquals): violation when the comparison does not hold in the pair's
+    value space (``value_space.pair_space``; null comparisons count as failed, like pandas)."""
     def builder(context, rule):
-        left, right = _pair(context, rule, rule.params)
-        a = polars.col("PATH_VALUE").cast(polars.Float64, strict=False)
-        b = polars.col("OTHER").cast(polars.Float64, strict=False)
-        plan = left.join(right, on="FOCUS").filter(~operator(a, b).fill_null(False))
-        return _emit(plan, rule, f"{rule.path} is not {description} {rule.params}")
+        other, space = value_space.pair_space(rule, context.key_spaces)
+        left, right = _pair(context, rule, other)
+        if space == "number":
+            a = polars.col("PATH_VALUE").cast(polars.Float64, strict=False)
+            b = polars.col("OTHER").cast(polars.Float64, strict=False)
+            holds = operator(a, b)
+        else:
+            holds = _typed_pair_holds(space, operator)
+        plan = left.join(right, on="FOCUS").filter(~holds.fill_null(False))
+        return _emit(plan, rule, f"{rule.path} is not {description} {other}")
     return builder
 
 

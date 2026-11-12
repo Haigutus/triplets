@@ -20,6 +20,7 @@ Explicitly selected (``engine="duckdb"``), not in the auto order: polars owns
 the in-memory fast path; this engine is the deliberate choice when the data
 does not fit.
 """
+import functools
 import logging
 
 import pandas
@@ -273,16 +274,33 @@ def _disjoint(rule, table, context):
                  from_sql, [*left_params, *right_params], "TRUE", [])
 
 
+def _typed_pair_holds(space, operator):
+    """(SQL, params) of the comparison of a date or dateTime pair: both values in a comparable
+    form and, for a dateTime, zoned alike (NULL where a value does not parse); never for
+    operands in different spaces (*space* None)."""
+    if space is None:
+        return "FALSE", []
+    form, zone = value_space.pair_forms(space)
+    holds = (f"regexp_full_match(a.PV, ?) AND regexp_full_match(b.OTHER, ?) "
+             f"AND {_PARSE[space]('a.PV')} {operator} {_PARSE[space]('b.OTHER')}")
+    if zone:
+        return f"{holds} AND regexp_matches(a.PV, ?) = regexp_matches(b.OTHER, ?)", [form, form, zone, zone]
+    return holds, [form, form]
+
+
 def _pair_compare(operator, description):
-    """sh:lessThan(-OrEquals): violation when the comparison does not hold
-    (incl. non-numeric pairs — null comparisons count as failed, like pandas)."""
+    """sh:lessThan(-OrEquals): violation when the comparison does not hold in the pair's
+    value space (``value_space.pair_space``; null comparisons count as failed, like pandas)."""
     def builder(rule, table, context):
-        left, left_params, right, right_params = _pair_sql(rule, table, rule.params)
+        other, space = value_space.pair_space(rule, context.key_spaces)
+        left, left_params, right, right_params = _pair_sql(rule, table, other)
+        holds, holds_params = ((f"TRY_CAST(a.PV AS DOUBLE) {operator} TRY_CAST(b.OTHER AS DOUBLE)", [])
+                               if space == "number" else _typed_pair_holds(space, operator))
         from_sql = (f"SELECT a.FOCUS AS FOCUS, a.PV AS PV FROM ({left}) a "
                     f"JOIN ({right}) b ON a.FOCUS = b.FOCUS "
-                    f"WHERE NOT COALESCE(TRY_CAST(a.PV AS DOUBLE) {operator} TRY_CAST(b.OTHER AS DOUBLE), FALSE)")
-        return _wrap(rule, f"{rule.path} is not {description} {rule.params}",
-                     from_sql, [*left_params, *right_params], "TRUE", [])
+                    f"WHERE NOT COALESCE({holds}, FALSE)")
+        return _wrap(rule, f"{rule.path} is not {description} {other}",
+                     from_sql, [*left_params, *right_params, *holds_params], "TRUE", [])
     return builder
 
 
@@ -329,6 +347,11 @@ class _Context:
         self.rdf_map = rdf_map
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
+
+    @functools.cached_property
+    def key_spaces(self):
+        """KEY → value space of its schema type, for the pair constraints — built on the first one."""
+        return value_space.key_spaces(self.rdf_map)
 
 
 def _create_types_table(connection, table, ancestors):

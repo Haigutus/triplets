@@ -55,7 +55,9 @@ SCHEMA = {"EQ": {
     "Switch.switchOnDuration": attribute("xsd:duration"),
     "Switch.switchOnTime": attribute("xsd:time"),
     "Switch.installationDate": attribute("xsd:date"),
+    "Switch.retiredDate": attribute("xsd:date"),
     "Switch.lastOperated": attribute("xsd:dateTime"),
+    "Switch.nextOperation": attribute("xsd:dateTime"),
     "Equipment.EquipmentContainer": {"type": "Association"},
     "Bay.VoltageLevel": {"type": "Association"},
     "Switch.kind": {"type": "Enumeration", "xsd:type": "xsd:anyURI", "namespace": CIM},
@@ -110,6 +112,31 @@ ZONED = valued(WHEN, "2020-06-01T11:59:59Z", "2020-06-01T12:00:00Z", "2020-06-01
 LOCAL = valued(WHEN, "2020-06-01T11:00:00", "2020-06-01T12:00:00", "2020-06-01T12:00:00.5", "2020-06-03T12:00:00Z",
                "abc", "9999-12-31T23:59:59", "0001-01-01T00:00:00")
 RANGES = ("minInclusive", "maxInclusive", "minExclusive", "maxExclusive")
+
+
+def paired(key, other, *pairs):
+    """One breaker per (value, other value) pair: b0, b1, …; None — no value at that key."""
+    return [row for n, pair in enumerate(pairs)
+            for row in breaker(f"b{n}", *((k, value) for k, value in zip((key, other), pair) if value is not None))]
+
+
+# sh:lessThan / sh:lessThanOrEquals pairs, compared in the operands' value space
+DATE2, WHEN2, UNTYPED, END = "Switch.retiredDate", "Switch.nextOperation", "Switch.plannedDate", "TransformerEnd.endNumber"
+PAIRS = ("lessThan", "lessThanOrEquals")
+# before, equal, after; zones ignored (equal, then across a day line). No junk: pyshacl's
+# sh:lessThanOrEquals raises a TypeError on an ill-typed value (sh:lessThan reports it)
+DATE_PAIRS = paired(DATE, DATE2, ("2020-01-01", "2020-02-01"), ("2020-01-01", "2020-01-01"), ("2020-03-01", "2020-02-01"),
+                    ("2020-01-01Z", "2020-01-01+05:00"), ("2020-01-01+14:00", "2020-01-02-14:00"))
+# instants across offsets and fractions
+ZONED_PAIRS = paired(WHEN, WHEN2, ("2020-01-01T10:00:00Z", "2020-01-01T13:00:00+02:00"),
+                     ("2020-01-01T11:00:00Z", "2020-01-01T13:00:00+02:00"), ("2020-01-01T12:00:00Z", "2020-01-01T13:00:00+02:00"),
+                     ("2020-01-01T11:00:00.5Z", "2020-01-01T13:00:00.6+02:00"))
+LOCAL_PAIRS = paired(WHEN, WHEN2, ("2020-01-01T10:00:00", "2020-01-01T13:00:00"), ("2020-01-01T10:00:00", "2020-01-01T10:00:00"),
+                     ("2020-01-02T10:00:00", "2020-01-01T13:00:00"), ("2020-01-01T10:00:00.5", "2020-01-01T10:00:00.6"))
+# every value against every value of the other key
+MULTI_PAIRS = (breaker("b0", (DATE, "2020-01-01"), (DATE, "2020-03-01"), (DATE2, "2020-02-01"), (DATE2, "2020-04-01"))
+               + breaker("b1", (DATE, "2020-01-01"), (DATE2, "2020-02-01"), (DATE2, "2019-01-01")))
+NO_SCHEMA = {"rdf_map": None, "rdf_map_scope": None}
 
 NAMED = "cim:Named a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."
 DESCRIBED = "cim:Desc a sh:NodeShape ; sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] ."
@@ -286,6 +313,49 @@ CASES = {
     "lessThanOrEquals": (prop("sh:path cim:Conductor.length ; sh:lessThanOrEquals cim:Switch.ratedCurrent"),
                          breaker("b1", (LEN, "1.0"), (CUR, "2.0")) + breaker("b2", (LEN, "2.0"), (CUR, "2.0"))
                          + breaker("b3", (LEN, "3.0"), (CUR, "2.0"))),
+    **{f"pair_date_{term}": (prop(f"sh:path cim:{DATE} ; sh:{term} cim:{DATE2}"), DATE_PAIRS) for term in PAIRS},
+    **{f"pair_dateTime_zoned_{term}": (prop(f"sh:path cim:{WHEN} ; sh:{term} cim:{WHEN2}"), ZONED_PAIRS) for term in PAIRS},
+    **{f"pair_dateTime_local_{term}": (prop(f"sh:path cim:{WHEN} ; sh:{term} cim:{WHEN2}"), LOCAL_PAIRS) for term in PAIRS},
+    # a zoned dateTime does not compare with an unzoned one
+    "pair_dateTime_zoned_unzoned": (prop(f"sh:path cim:{WHEN} ; sh:lessThan cim:{WHEN2}"),
+                                    paired(WHEN, WHEN2, ("2020-01-01T10:00:00Z", "2020-01-05T10:00:00"),
+                                           ("2020-01-05T10:00:00Z", "2020-01-01T10:00:00"))),
+    # a path value that is not a date or dateTime violates
+    "pair_junk": (f"{B} sh:property [ sh:path cim:{DATE} ; sh:lessThan cim:{DATE2} ] , "
+                  f"[ sh:path cim:{WHEN} ; sh:lessThan cim:{WHEN2} ] .",
+                  paired(DATE, DATE2, ("abc", "2020-01-01")) + breaker("b9", (WHEN, "abc"), (WHEN2, "2020-01-01T00:00:00Z"))),
+    "pair_date_multi_valued": (prop(f"sh:path cim:{DATE} ; sh:lessThan cim:{DATE2}"), MULTI_PAIRS),
+    "pair_date_missing_other": (prop(f"sh:path cim:{DATE} ; sh:lessThan cim:{DATE2}"),
+                                paired(DATE, DATE2, ("2020-01-01", None), (None, "2020-01-01"), ("2020-03-01", "2020-02-01"))),
+    # nested members compare the same way (the pandas builders, on every engine)
+    "pair_date_in_or": (f"{B} sh:or ( [ sh:path cim:{DATE} ; sh:lessThan cim:{DATE2} ] [ sh:path cim:{DATE} ; sh:maxCount 0 ] ) .",
+                        DATE_PAIRS + breaker("b9", (DATE2, "2020-01-01"))),
+    "pair_date_in_not": (f"{B} sh:not [ sh:path cim:{DATE} ; sh:lessThanOrEquals cim:{DATE2} ] .", DATE_PAIRS),
+    # operands in different spaces never compare: every pair violates
+    "pair_number_date": (prop(f"sh:path cim:{LEN} ; sh:lessThan cim:{DATE}"), paired(LEN, DATE, ("1.0", "2020-01-01"))),
+    "pair_string_number": (prop(f"sh:path cim:{DESC} ; sh:lessThan cim:{LEN}"), paired(DESC, LEN, ("1", "2"), ("3", "2"))),
+    # numbers: an xsd:float against an xsd:integer; untyped operands compare as numbers
+    "pair_number_integer": (prop(f"sh:path cim:{LEN} ; sh:lessThan cim:{END}"),
+                            paired(LEN, END, ("9.5", "10"), ("10.5", "10"), ("10", "10"))),
+    "pair_number_no_schema": (prop(f"sh:path cim:{LEN} ; sh:lessThanOrEquals cim:{CUR}"),
+                              paired(LEN, CUR, ("1.0", "2.0"), ("2.0", "2.0"), ("3.0", "2.0")), NO_SCHEMA),
+    # divergences from pyshacl (XFAIL): it reports nothing for an unzoned dateTime against a
+    # zoned one, a date against a dateTime, most ill-typed values; it reads an untyped value as
+    # xsd:string (never compared with a date) and compares strings as text
+    "pair_dateTime_unzoned_zoned": (prop(f"sh:path cim:{WHEN} ; sh:lessThan cim:{WHEN2}"),
+                                    paired(WHEN, WHEN2, ("2020-01-01T10:00:00", "2020-01-05T10:00:00Z"),
+                                           ("2020-01-05T10:00:00", "2020-01-01T10:00:00Z"))),
+    "pair_date_dateTime": (prop(f"sh:path cim:{DATE} ; sh:lessThan cim:{WHEN}"),
+                           paired(DATE, WHEN, ("2020-01-01", "2020-02-01T00:00:00Z"), ("2020-03-01", "2020-02-01T00:00:00Z"))),
+    "pair_date_ill_typed": (prop(f"sh:path cim:{DATE} ; sh:lessThan cim:{DATE2}"),
+                            paired(DATE, DATE2, ("2020-02-30", "2020-03-01"), ("", "2020-01-01"), ("2020-01-01", "abc"))),
+    "pair_number_ill_typed": (prop(f"sh:path cim:{LEN} ; sh:lessThan cim:{END}"), paired(LEN, END, ("abc", "10"))),
+    "pair_date_one_side_typed": (prop(f"sh:path cim:{DATE} ; sh:lessThan cim:{UNTYPED}"),
+                                 paired(DATE, UNTYPED, ("2020-01-01", "2020-02-01"), ("2020-03-01", "2020-02-01"))),
+    "pair_date_shape_datatype": (prop(f"sh:path cim:{UNTYPED} ; sh:datatype xsd:date ; sh:lessThan cim:{DATE2}"),
+                                 paired(UNTYPED, DATE2, ("2020-01-01", "2020-02-01"), ("2020-03-01", "2020-02-01"))),
+    "pair_number_no_schema_text": (prop(f"sh:path cim:{LEN} ; sh:lessThan cim:{CUR}"), paired(LEN, CUR, ("9", "10")), NO_SCHEMA),
+    "pair_strings": (prop(f"sh:path cim:{NAME} ; sh:lessThan cim:{DESC}"), paired(NAME, DESC, ("9", "10"), ("a", "b"))),
     "closed": (f"{B} sh:closed true ; sh:ignoredProperties ( rdf:type ) ; sh:property [ sh:path cim:IdentifiedObject.name ] .", TRIO),
     # every sh:ignoredProperties list counts: bay1's name and description are both allowed
     "closed_two_ignored_lists": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; sh:closed true ; sh:ignoredProperties "
@@ -554,6 +624,20 @@ XFAIL = {
     **known("accepted: pyshacl types the values from the schema, an xsd:string never compares with a date",
             "range_date_on_string"),
     **known("pyshacl (rdflib) reads no xsd:dateTimeStamp value: every value violates", "range_dateTimeStamp_bound"),
+    # SHACL: a pair whose comparison is not true violates — pyshacl reports none of these
+    **known("spec: an unzoned dateTime does not compare with a zoned one (pyshacl: nothing; zoned vs unzoned: violation)",
+            "pair_dateTime_unzoned_zoned"),
+    **known("spec: a date does not compare with a dateTime (pyshacl: nothing)", "pair_date_dateTime"),
+    **known("spec: a day the calendar lacks, an empty value, an other value that is not a date do not compare "
+            "(pyshacl: nothing)", "pair_date_ill_typed"),
+    **known("spec: a value that is not a number does not compare (pyshacl: nothing)", "pair_number_ill_typed"),
+    **known("accepted: pyshacl reads a value the schema does not type as xsd:string, never compared with a date; "
+            "the engines read it in the typed operand's space", "pair_date_one_side_typed"),
+    **known("accepted: pyshacl types values from the schema only — an untyped value fails sh:datatype xsd:date and never "
+            "compares with a date; the engines take the shape's sh:datatype as the path operand's space",
+            "pair_date_shape_datatype"),
+    **known("#186 pyshacl compares untyped values as text (accepted literal divergence)", "pair_number_no_schema_text"),
+    **known("open: two xsd:string operands compare as numbers (pyshacl: as text)", "pair_strings"),
     # rdflib's evalLeftJoin re-checks an unmatched OPTIONAL without the left side's
     # variables, which inline VALUES do not declare (_vars), so another node's match drops the row
     **(known("rdflib SPARQL engine: OPTIONAL after VALUES drops the unmatched focus node",
@@ -581,10 +665,10 @@ def run(name, engine, **extra):
     return canon_violations(triplets.validation.validate_shacl(frame(rows), compiled(name), engine=engine, **kwargs))
 
 
-# the date and dateTime cases, whose values rdflib's literal normalisation rewrites (Z →
-# +00:00, a date's zone dropped, fractions to six digits): pyshacl reads them with the
-# lexical form kept
-LEXICAL_VALUES = {case for case in CASES if case.startswith(("range_date_", "range_dateTime"))}
+# the date and dateTime range cases and the pair cases, whose values rdflib's literal
+# normalisation rewrites (Z → +00:00, a date's zone dropped, fractions to six digits):
+# pyshacl reads them with the lexical form kept
+LEXICAL_VALUES = {case for case in CASES if case.startswith(("range_date_", "range_dateTime", "pair_"))}
 
 
 @functools.cache

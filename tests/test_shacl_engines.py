@@ -334,6 +334,104 @@ def test_less_than(engine):
     assert violating(v, "sh:lessThanOrEquals") == {("b2", "30")}
 
 
+DAY2, WHEN2, UNTYPED = "Switch.retiredDate", "Switch.nextOperation", "Switch.plannedDate"
+
+
+def typed_schema(*entries, **types):
+    """An rdf_map typing each KEY (``Switch_retiredDate="xsd:date"``), plus the named
+    *entries*; cim bound for a non-XSD type."""
+    cim = "http://iec.ch/TC57/CIM100#"
+    return {"ProfileNamespaceMap": {"cim": cim},
+            "EQ": {"Breaker": {"type": "Class", "namespace": cim}, **dict(entries),
+                   **{key.replace("_", "."): {"type": "Attribute", "xsd:type": datatype, "namespace": cim}
+                      for key, datatype in types.items()}}}
+
+
+PAIR_SCHEMA = typed_schema(Switch_installationDate="xsd:date", Switch_retiredDate="xsd:date",
+                           Switch_lastOperated="xsd:dateTime", Switch_nextOperation="xsd:dateTime")
+# per breaker: (installation date, retired date, last operated, next operation)
+PAIRED_ROWS = [row for n, values in enumerate((
+    ("2020-01-01", "2020-02-01", "2020-01-01T10:00:00Z", "2020-01-01T13:00:00+02:00"),   # in order
+    ("2020-01-01", "2020-01-01", "2020-01-01T10:00:00", "2020-01-01T09:00:00"),          # equal; local, out of order
+    ("2020-02-30", "2020-03-01", "2020-01-01T10:00:00", "2020-01-05T10:00:00Z"),         # no such day; unzoned vs zoned
+    ("2020-01-01", "abc", "2020-01-05T10:00:00Z", "2020-01-01T10:00:00"),                # junk other; zoned vs unzoned
+    ("2020-01-01Z", "2020-01-02-14:00", "2020-01-01T10:00:00.5", "2020-01-01T10:00:00.6")))  # zones ignored; fractions
+    for row in breaker(f"b{n}", *zip((DAY, DAY2, WHEN, WHEN2), values))]
+
+
+def pair_violations(violations, key):
+    rows = violations[violations["KEY"] == key]
+    return set(zip(rows["VIOLATION_TYPE"], rows["ID"], rows["VALUE"]))
+
+
+def test_less_than_dates(engine):
+    """A pair compares in its operands' value space (#216): a date's zone is ignored,
+    zoned dateTimes compare as instants, unzoned ones as local times; a value that does not
+    parse, a dateTime zoned unlike the other, a date against a dateTime violate (SHACL:
+    the comparison is not true). The message and EXPECTED name the other KEY."""
+    shape = f"""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:{DAY} ; sh:lessThan cim:{DAY2} ] ;
+        sh:property [ sh:path cim:{WHEN} ; sh:lessThanOrEquals cim:{WHEN2} ] ;
+        sh:property [ sh:path cim:{DAY2} ; sh:lessThan cim:{WHEN} ] ."""
+    v = run(PAIRED_ROWS, shape, engine, rdf_map=PAIR_SCHEMA)
+    assert pair_violations(v, DAY) == {("sh:lessThan", "b1", "2020-01-01"), ("sh:lessThan", "b2", "2020-02-30"),
+                                       ("sh:lessThan", "b3", "2020-01-01")}
+    assert pair_violations(v, WHEN) == {("sh:lessThanOrEquals", "b1", "2020-01-01T10:00:00"),
+                                        ("sh:lessThanOrEquals", "b2", "2020-01-01T10:00:00"),
+                                        ("sh:lessThanOrEquals", "b3", "2020-01-05T10:00:00Z")}
+    assert pair_violations(v, DAY2) == {("sh:lessThan", f"b{n}", day) for n, day in enumerate(
+        ("2020-02-01", "2020-01-01", "2020-03-01", "abc", "2020-01-02-14:00"))}
+    texts = v.loc[v["KEY"] == DAY, ["MESSAGE", "EXPECTED"]]
+    assert set(texts.itertuples(index=False, name=None)) == {(f"{DAY} is not less than {DAY2}", f"less than {DAY2}")}
+
+
+def test_less_than_nested_member(engine):
+    """Nested members compare in the same space (the pandas builders, on every engine)."""
+    shape = (f"cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:or ( "
+             f"[ sh:path cim:{DAY} ; sh:lessThan cim:{DAY2} ] [ sh:path cim:{DAY} ; sh:maxCount 0 ] ) .")
+    v = run(PAIRED_ROWS, shape, engine, rdf_map=PAIR_SCHEMA)
+    assert {focus for focus, _ in violating(v, "sh:or")} == {"b1", "b2", "b3"}
+
+
+@pytest.mark.parametrize("shape_datatype, rdf_map, failing", [
+    # no types: numbers, as without an rdf_map — no date compares
+    ("", None, {"b0", "b1"}),
+    # the shape's sh:datatype types the path operand; the untyped other takes its space
+    ("sh:datatype xsd:date ;", None, {"b1"}),
+    # the schema types one operand; the untyped other takes its space
+    ("", typed_schema(Switch_plannedDate="xsd:date"), {"b1"}),
+    ("", typed_schema(Switch_retiredDate="xsd:date"), {"b1"}),
+    # a non-XSD type compares by its XSD base type, as validate_schema checks it
+    ("", typed_schema(("Date", {"type": "CIMDatatype", "xsd:type": "xsd:date"}), Switch_plannedDate="cim:Date"), {"b1"}),
+    # the shape's datatype comes first; operands in different spaces never compare
+    ("sh:datatype xsd:float ;", typed_schema(Switch_plannedDate="xsd:date", Switch_retiredDate="xsd:date"), {"b0", "b1"}),
+    ("", typed_schema(Switch_plannedDate="xsd:date", Switch_retiredDate="xsd:dateTime"), {"b0", "b1"}),
+    # two xsd:string operands compare as numbers, as two untyped ones do
+    ("", typed_schema(Switch_plannedDate="xsd:string", Switch_retiredDate="xsd:string"), {"b0", "b1"}),
+])
+def test_less_than_operand_spaces(engine, shape_datatype, rdf_map, failing):
+    """Each operand's value space: the shape, then the schema, then the other operand."""
+    rows = breaker("b0", (UNTYPED, "2020-01-01"), (DAY2, "2020-02-01")) + breaker("b1", (UNTYPED, "2020-03-01"), (DAY2, "2020-02-01"))
+    v = run(rows, SHAPE.format(body=f"sh:path cim:{UNTYPED} ; {shape_datatype} sh:lessThan cim:{DAY2}"), engine, rdf_map=rdf_map)
+    assert {focus for focus, _ in violating(v, "sh:lessThan")} == failing
+
+
+@pytest.mark.parametrize("path, other", [(WHEN, WHEN2), (DAY, WHEN)])
+def test_less_than_without_other_values(engine, path, other):
+    """No other value, no pair: nothing to report, typed or in different spaces."""
+    rows = breaker("b0", (path, "2020-01-01T10:00:00Z")) + breaker("b1")
+    v = run(rows, SHAPE.format(body=f"sh:path cim:{path} ; sh:lessThan cim:{other}"), engine, rdf_map=PAIR_SCHEMA)
+    assert violating(v, "sh:lessThan") == set()
+
+
+def test_less_than_strings_compare_as_numbers(engine):
+    """Open: two xsd:string operands compare as numbers (pyshacl compares the text)."""
+    rows = breaker("b0", (UNTYPED, "9"), (DAY2, "10")) + breaker("b1", (UNTYPED, "a"), (DAY2, "b"))
+    v = run(rows, SHAPE.format(body=f"sh:path cim:{UNTYPED} ; sh:lessThan cim:{DAY2}"), engine,
+            rdf_map=typed_schema(Switch_plannedDate="xsd:string", Switch_retiredDate="xsd:string"))
+    assert violating(v, "sh:lessThan") == {("b1", "a")}
+
+
 def test_closed(engine):
     rows = breaker("b1", ("IdentifiedObject.name", "B1"), ("Switch.undeclared", "x"))
     shape = """cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;

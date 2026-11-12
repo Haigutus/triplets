@@ -3,15 +3,17 @@
 ``DATATYPES`` is the lexical space of each checked xsd type, as ``sh:datatype``
 judges a VALUE string. ``SPACES`` maps an xsd type to its value space: the
 types whose values compare with each other in ``sh:minInclusive`` …
-``sh:maxExclusive`` (``number``, ``dateTime``, ``date``). A range bound fixes
-the space its constraint compares in (``bound_space``); a value compares with a
-``date`` or ``dateTime`` bound only in the bound's comparable form
-(``comparable``), any other value violates.
+``sh:maxExclusive`` and ``sh:lessThan`` / ``sh:lessThanOrEquals`` (``number``,
+``dateTime``, ``date``). A range bound fixes the space its constraint compares
+in (``bound_space``); a value compares with a ``date`` or ``dateTime`` bound
+only in the bound's comparable form (``comparable``), any other value violates.
+A pair compares in the space of its two operands (``pair_space``), each value
+in a comparable form, a dateTime zoned like the other (``pair_forms``).
 """
 import datetime
 import re
 
-from ..iri import XSD_NS
+from ..iri import _PLAIN_DATATYPES, XSD_NS, prefixes, rdf_map_entries, xsd_base
 
 # ── XSD lexical spaces ───────────────────────────────────────────────────────
 # Per type: (valid lexical space, non-canonical subset reported as Warning).
@@ -79,7 +81,8 @@ _OFFSET = r"(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])"
 # its zone (as pyshacl does); a dateTime compares only with one zoned like the bound
 _FORMS = {"date": (f"{_DAY}{_OFFSET}?",) * 2,
           "dateTime": (f"{_DAY}T{_CLOCK}", f"{_DAY}T{_CLOCK}{_OFFSET}")}
-_ZONED = re.compile(f"{_OFFSET}$")
+ZONE_END = f"{_OFFSET}$"   # a comparable form that ends with this is zoned
+_ZONED = re.compile(ZONE_END)
 # a dateTime text that ends with its clock (no zone): the engines append Z to read
 # it as UTC — it only ever compares with an unzoned bound read the same way
 UNZONED_END = r"(T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?)$"
@@ -88,6 +91,14 @@ UNZONED_END = r"(T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?)$"
 def comparable(space, bound):
     """The regex a value fully matches to compare with the lexical *bound* in *space*."""
     return _FORMS[space][bool(_ZONED.search(bound))]
+
+
+def pair_forms(space):
+    """(form, zone) for the two values of a pair in *space*, which has no bound to pick a form:
+    the regex each value fully matches, zoned or not, and the regex (``ZONE_END``) both must
+    agree on, else they do not compare — None in a space that ignores the zone (a date)."""
+    unzoned, zoned = _FORMS[space]
+    return (unzoned, None) if unzoned == zoned else (f"(?:{unzoned}|{zoned})", ZONE_END)
 
 
 _EPOCH = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
@@ -135,3 +146,47 @@ def range_bound(params):
     """(space, bound) of a range constraint's IR params: a float is a number bound,
     a date or dateTime bound is the (space, lexical form) pair."""
     return params if isinstance(params, tuple) else ("number", params)
+
+
+# ── pair operands ────────────────────────────────────────────────────────────
+
+def pair_params(other, datatype):
+    """sh:lessThan / sh:lessThanOrEquals IR params: the *other* KEY, or the (KEY, space) pair
+    when the property shape's ``sh:datatype`` IRI is an XSD type — its space, "" for one in
+    no space (``xsd:string``)."""
+    name = str(datatype)
+    return (other, SPACES.get(name.removeprefix(XSD_NS), "")) if name.startswith(XSD_NS) else other
+
+
+def pair_operands(params):
+    """(other KEY, the path values' space from the shape or None) of a pair's IR params."""
+    return params if isinstance(params, tuple) else (params, None)
+
+
+def key_spaces(rdf_map):
+    """KEY → the value space of its schema ``xsd:type`` (``SPACES``; a non-XSD type by the XSD
+    type :func:`~triplets.iri.xsd_base` resolves), "" for a type in no space (``xsd:string``,
+    ``xsd:boolean``, …). A KEY without a type, or whose type has no XSD base, is absent: its
+    space is unknown."""
+    entries, bound = dict(rdf_map_entries(rdf_map)), prefixes(rdf_map)
+    spaces = {}
+    for key, entry in entries.items():
+        if entry.get("type") == "Attribute" and entry.get("xsd:type"):
+            datatype = xsd_base(key, entry, entries, bound)
+            if datatype in _PLAIN_DATATYPES or datatype.startswith(XSD_NS):
+                spaces[key] = SPACES.get(datatype.removeprefix(XSD_NS), "")
+    return spaces
+
+
+def pair_space(rule, key_spaces):
+    """(other KEY, space) of a sh:lessThan / sh:lessThanOrEquals rule: the value space its
+    pairs compare in; None when the operands' spaces differ — no pair compares.
+
+    Each operand's space, from the first source that answers: the shape (a ``sh:datatype``
+    on the property shape, path side only), the schema (*key_spaces*), the other operand.
+    Two unknown operands compare as numbers, as do two in no space (``xsd:string``)."""
+    other, shaped = pair_operands(rule.params)
+    # an instance datatype per value (#145) would answer between the shape and the schema
+    known = {space for space in (key_spaces.get(rule.path) if shaped is None else shaped, key_spaces.get(other))
+             if space is not None}
+    return other, None if len(known) > 1 else next(iter(known), "") or "number"

@@ -9,11 +9,11 @@ SPARQL — rdflib (reference) / oxigraph (pip performance) / qlever (local build
 - [ ] Custom `sh:target` without `sh:select` (`sh:SPARQLTargetType` instance, JS target)
   stays pyshacl-only; the vectorized engines warn at compile time and list the shape in
   `skipped_shapes`.
-- [ ] Non-numeric values in pair comparisons: pandas / polars / duckdb report every date
-  value under `sh:lessThan` and `sh:lessThanOrEquals`
-  (https://github.com/Haigutus/triplets/issues/216). The range checks compare in the
-  bound's value space (`validation/value_space.py`); a range bound in no value space
-  (`xsd:time`, `xsd:duration`, a string) is skipped.
+- [ ] Value spaces beyond number / date / dateTime (`validation/value_space.py`): a range
+  bound in no value space (`xsd:time`, `xsd:duration`, a string) is skipped; two
+  `xsd:string` (or `xsd:boolean`) operands of `sh:lessThan` / `sh:lessThanOrEquals`
+  compare as numbers, where pyshacl compares the text (the booleans) — a schema-dependent
+  skip has no place in the run metadata yet.
 - [ ] duckdb `tableview_to_triplets(string_to_number=True)` raises
   (`tools/duckdb_engine.py:_check_string_to_number`); a TRY_CAST implementation is open.
   Related tools follow-ups: polars eval in `tableview_to_triplets`, lossy `INSTANCE_ID`

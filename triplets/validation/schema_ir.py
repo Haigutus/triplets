@@ -31,8 +31,7 @@ import logging
 import pandas
 
 from .._header import _PROPERTY_TYPES
-from ..iri import (_PLAIN_DATATYPES, TYPE_KEY, XSD_NS, absolute_datatype, language_tag, load_schema, local_value,
-                   prefixes, split_iri)
+from ..iri import _PLAIN_DATATYPES, TYPE_KEY, XSD_NS, language_tag, load_schema, local_value, prefixes, xsd_base
 from .schema_scope import (SCOPE_KEY, _merged_entries, class_ancestors, require_entries,
                            scope_sections, scoped_rdf_map)
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
@@ -178,9 +177,9 @@ def _class_meta(sections, entries):
 
 
 def _xsd_bases(entries, prefixes, skipped):
-    """Attribute KEY → its ``sh:datatype`` params ``xsd:<local>``: the expanded ``xsd:type``
-    when it is an XSD type, else the XSD type of the datatype entry it names (``dataType``,
-    else the IRI's local name). A plain literal type or base (``xsd:string``,
+    """Attribute KEY → its ``sh:datatype`` params ``xsd:<local>``: the XSD type
+    :func:`~triplets.iri.xsd_base` resolves (the expanded ``xsd:type``, else the XSD type of the
+    datatype entry it names). A plain literal type or base (``xsd:string``,
     ``rdf:langString``) has nothing to check, nor has a tagged KEY (``language``: its tag and type
     raise as in the export, :func:`~triplets.iri.language_tag`); a KEY with no XSD type is noted
     in *skipped*, once."""
@@ -189,18 +188,13 @@ def _xsd_bases(entries, prefixes, skipped):
         if isinstance(entry, dict) and entry.get("type") == "Attribute" and entry.get("language"):
             language_tag(name, entry["language"], entry.get("xsd:type"), prefixes)
         elif isinstance(entry, dict) and entry.get("type") == "Attribute" and entry.get("xsd:type"):
-            declared = str(entry["xsd:type"])
-            datatype = absolute_datatype(name, declared, prefixes)
-            if datatype not in _PLAIN_DATATYPES and not datatype.startswith(XSD_NS):
-                support = entries.get(entry.get("dataType")) or entries.get(split_iri(datatype)[1])
-                base = support.get("xsd:type") if isinstance(support, dict) else None
-                datatype = absolute_datatype(name, str(base), prefixes) if base else ""
+            datatype = xsd_base(name, entry, entries, prefixes)
             if datatype in _PLAIN_DATATYPES:
                 continue
             if datatype.startswith(XSD_NS):
                 bases[name] = "xsd:" + datatype.removeprefix(XSD_NS)
             else:
-                skipped.append(f"{name}: datatype {declared} has no xsd base type — not checked")
+                skipped.append(f"{name}: datatype {entry['xsd:type']} has no xsd base type — not checked")
     return bases
 
 

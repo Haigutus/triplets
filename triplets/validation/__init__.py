@@ -64,7 +64,7 @@ from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report, has_violat
 from .context import ENRICHMENT_COLUMNS, concat_violations, enrich  # noqa: F401 — public API
 from .locations import LOCATION_COLUMNS, locate_violations  # noqa: F401 — public API
 from .sarif import export_to_sarif  # noqa: F401 — public API
-from .value_space import range_bound
+from .value_space import pair_operands, range_bound
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +117,9 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
         ``compile(shapes)`` to reuse the parsed shapes across validations.
     rdf_map : dict or str, optional
         Export schema — xsd-typed literals in the data graph, the schema-driven
-        sh:nodeKind decision and the class inheritance (see ``inheritance``),
-        from the profiles in ``rdf_map_scope``.
+        sh:nodeKind decision, the value space of the sh:lessThan /
+        sh:lessThanOrEquals operands and the class inheritance (see
+        ``inheritance``), from the profiles in ``rdf_map_scope``.
     data_scope : iterable of INSTANCE_ID, optional
         Validate only these instances' named graphs — data outside the scope
         is not loaded, so references into unscoped instances count as absent.
@@ -265,8 +266,8 @@ _EXPECTED = {
     "triplets:missing": lambda params: "a referenced object in the data, one of: " + ", ".join(map(str, params)),
     "sh:equals": "equal to {}".format,
     "sh:disjoint": "different from {}".format,
-    "sh:lessThan": "less than {}".format,
-    "sh:lessThanOrEquals": "at most {}".format,
+    "sh:lessThan": lambda params: f"less than {pair_operands(params)[0]}",
+    "sh:lessThanOrEquals": lambda params: f"at most {pair_operands(params)[0]}",
     "sh:xone": lambda params: f"exactly one of {len(params)} alternatives",
 }
 
