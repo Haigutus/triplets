@@ -115,9 +115,12 @@ def key(space, text):
 
 
 def bound_space(literal):
-    """(space, lexical form) of a range bound literal, None when the literal is
-    in no space or not a valid value of its datatype: a number rdflib cannot
-    read, a date or dateTime outside its lexical and comparable form or the calendar."""
+    """(space, lexical form) of a range bound literal, checked on the text rdflib
+    holds: under rdflib's default literal normalisation an ill-typed literal rdflib
+    can read arrives as its value's text (``"2020-06-01T12:00:00Z"^^xsd:date`` as
+    ``2020-06-01``) and is valid. None when the literal is in no space or its text
+    is not a valid value of its datatype: a number rdflib cannot read, a date or
+    dateTime outside its lexical and comparable form or the calendar."""
     name = str(literal.datatype).removeprefix(XSD_NS)
     space, lexical = SPACES.get(name), str(literal)
     if space == "number":
