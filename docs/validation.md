@@ -171,22 +171,29 @@ Known engine gaps (those a run can detect land in its coverage metadata,
   operand's space comes from the first source that answers: the shape (a
   `sh:datatype` on the same property shape types the path side), the schema
   (the KEY's `xsd:type` in the scoped `rdf_map`; a non-XSD type by its XSD base
-  type, as `validate_schema` checks it), the other operand. Two operands without
-  a type compare as numbers, as does every pair without an `rdf_map`; two
-  `xsd:string` operands compare as numbers too. Operands in different spaces (a
-  date and a dateTime, a number and a date, a string and a number) never
-  compare: every pair violates. The values follow the range rules above: a
-  value that does not parse violates, a date's zone is ignored, zoned dateTimes
-  compare as instants and unzoned ones as local times; a zoned dateTime does not
-  compare with an unzoned one, either way round. A missing other value is no
-  check. pyshacl differs
+  type, as `validate_schema` checks it; a type that does not resolve, such as an
+  unbound prefix, counts as no type), the other operand. Two operands without a
+  type compare as numbers: without an `rdf_map` that is every pair whose
+  property shape has no `sh:datatype`. Operands typed in no value space, such
+  as `xsd:string`, `xsd:boolean`, `xsd:time`, `xsd:duration` or `xsd:anyURI`,
+  compare as numbers too, so a value that is not a number violates. An
+  `xsd:dateTimeStamp` operand is in the dateTime space. Operands in different
+  spaces (a date and a dateTime, a number and a date, a string and a number)
+  never compare: every pair violates. The values follow the range rules above:
+  a value that does not parse violates, a date's zone is ignored, zoned
+  dateTimes compare as instants and unzoned ones as local times; a zoned
+  dateTime does not compare with an unzoned one, either way round. A missing
+  other value is no check. pyshacl differs
   ([#216](https://github.com/Haigutus/triplets/issues/216)): it reports nothing
   for an unzoned dateTime before a zoned one, for a date against a dateTime and
   for most ill-typed values (a day the calendar lacks, a junk other value, a
   non-number under a numeric key); it reads a value the schema does not type as
-  `xsd:string`, which never compares with a date, compares strings as text
-  (`"9" < "10"` fails), and its `sh:lessThanOrEquals` raises on an ill-typed
-  value.
+  `xsd:string`, which never compares with a date; it compares operands typed in
+  no value space in their own type, strings as text (`"9" < "10"` fails); it
+  reads no `xsd:dateTimeStamp` value, so against an `xsd:dateTime` operand
+  every pair violates when the path operand is the dateTimeStamp and none
+  when the other operand is; and its `sh:lessThanOrEquals` raises on an
+  ill-typed value.
 - **Range bounds in no value space are not evaluated**: a `sh:minInclusive` …
   `sh:maxExclusive` bound that is a literal in no value space — a string, an
   `xsd:time`, an `xsd:duration`, a number, date or dateTime rdflib cannot read
