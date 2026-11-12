@@ -504,3 +504,200 @@ def test_source_root_applies_to_the_locate_pass_only(tmp_path):
 def quote_path(path):
     from urllib.parse import quote
     return quote(path, safe="/")
+
+
+CIM = "http://iec.ch/TC57/CIM100#"
+REFERENCE_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="http://iec.ch/TC57/CIM100#">
+  <cim:Bay rdf:ID="_bay1"/>
+  <cim:Substation rdf:ID="_sub1">
+    <cim:IdentifiedObject.name>Main Sub</cim:IdentifiedObject.name>
+  </cim:Substation>
+  <cim:Substation rdf:ID="_sub2"/>
+  <cim:Breaker rdf:ID="_b2">
+    <cim:Equipment.EquipmentContainer rdf:resource="#_sub1"/>
+  </cim:Breaker>
+  <cim:Breaker rdf:ID="_b3">
+    <cim:Equipment.EquipmentContainer rdf:resource="#_sub1"/>
+  </cim:Breaker>
+  <cim:Breaker rdf:ID="_b4">
+    <cim:Equipment.EquipmentContainer rdf:resource="#_ghost"/>
+  </cim:Breaker>
+  <cim:Breaker rdf:ID="_b5">
+    <cim:Equipment.EquipmentContainer rdf:resource="#_sub2"/>
+  </cim:Breaker>
+</rdf:RDF>
+"""
+# sub1 defined on line 4, sub2 on line 7; b2, b3 and b5 reference a Substation (not a Bay),
+# b4 references ghost (in no file)
+
+
+def cim_class(name, *parents, parameters=()):
+    return {"type": "Class", "namespace": CIM, "inheritance": [CIM + name, *(CIM + p for p in parents)],
+            "parameters": list(parameters)}
+
+
+REFERENCE_SCHEMA = {"EQ": {
+    "ProfileMetadata": {"keyword": "EQ"},
+    "Breaker": cim_class("Breaker", "Equipment", parameters=["Equipment.EquipmentContainer"]),
+    "Bay": cim_class("Bay", "EquipmentContainer"), "Substation": cim_class("Substation"),
+    "Equipment.EquipmentContainer": {"type": "Association", "multiplicity": "0..1", "xsd:minOccours": "0",
+                                     "xsd:maxOccours": "1", "range": CIM + "EquipmentContainer"}}}
+
+
+def reference_run(directory):
+    """(violations, data, xml path) of REFERENCE_XML written to directory/sub/grid EQ.xml:
+    rdfs:range on b2, b3 (→ sub1, named) and b5 (→ sub2, unnamed), triplets:missing on b4 (→ ghost)."""
+    (directory / "sub").mkdir(parents=True, exist_ok=True)
+    xml = directory / "sub" / "grid EQ.xml"
+    xml.write_text(REFERENCE_XML, encoding="utf-8")
+    data = pandas.read_RDF([str(xml)])
+    violations = triplets.validation.validate_schema_references(data, REFERENCE_SCHEMA, data["INSTANCE_ID"].unique(),
+                                                                ["EQ"], engine="pandas")
+    return violations, data, str(xml)
+
+
+def references(directory):
+    """The reference_run findings, enriched, and the xml path."""
+    violations, data, xml = reference_run(directory)
+    return triplets.validation.enrich(violations, data=data, rdf_map=REFERENCE_SCHEMA), xml
+
+
+def class_findings(directory, refs, found):
+    """(violations, xml path): one sh:class rule, finding i on b<i> referencing refs[i];
+    the *found* refs are Substations in the data and in directory/class.xml (definition
+    of found[i] on line 3 + i) — enriched with that data."""
+    xml = directory / "class.xml"
+    xml.write_text("<?xml version=\"1.0\"?>\n<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" "
+                   "xmlns:cim=\"http://iec.ch/TC57/CIM100#\">\n"
+                   + "".join(f'  <cim:Substation rdf:ID="_{ref}"/>\n' for ref in found) + "</rdf:RDF>\n",
+                   encoding="utf-8")
+    data = pandas.DataFrame([(ref, "Type", "Substation", "g1") for ref in found],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    violations = pandas.DataFrame(
+        [[f"b{index}", "Equipment.EquipmentContainer", ref, "sh:class", "m", "Violation", "urn:shape"]
+         for index, ref in enumerate(refs)],
+        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
+    return triplets.validation.enrich(violations, data=data), str(xml)
+
+
+def by_id(document):
+    return {result["properties"]["id"]: result for result in document["runs"][0]["results"]}
+
+
+def context_message(result):
+    return next(line for line in result["message"]["text"].split("\n") if line.startswith("[context_message] "))
+
+
+def logical(ref):
+    return [{"fullyQualifiedName": ref, "name": ref, "kind": "object"}]
+
+
+def test_related_location_per_row(tmp_path):
+    """Per row with sources=: the referenced object found in the data and in the
+    sources is relatedLocations[0] — id 1, the TARGET as its message (Type and name),
+    the id as its logical location, its definition line — linked from
+    [context_message] by its leading id; source_root applies. A dangling reference
+    has no related location, its line no link."""
+    violations, xml = references(tmp_path)
+    assert violations["TARGET_ID"].fillna("-").tolist() == ["sub1", "sub1", "sub2", "-"]   # b4's ghost: dangling
+    results = by_id(build_sarif(violations, group=False, sources=[xml]))
+    assert results["b2"]["relatedLocations"] == [
+        {"id": 1, "message": {"text": 'referenced object sub1 found — Substation "Main Sub"'},
+         "logicalLocations": logical("sub1"),
+         "physicalLocation": {"artifactLocation": {"uri": quote_path(xml)},
+                              "region": {"startLine": 4, "endLine": 4,
+                                         "snippet": {"text": '<cim:Substation rdf:ID="_sub1">'}}}}]
+    assert context_message(results["b2"]) == '[context_message] referenced object [sub1](1) found — Substation "Main Sub"'
+    assert context_message(results["b5"]) == "[context_message] referenced object [sub2](1) found — Substation"
+    assert "relatedLocations" not in results["b4"]
+    assert context_message(results["b4"]) == "[context_message] referenced object ghost not found in the data"
+
+    rooted = by_id(build_sarif(violations, group=False, sources=[xml], source_root=tmp_path))
+    assert rooted["b2"]["relatedLocations"][0]["physicalLocation"]["artifactLocation"] == {"uri": "sub/grid%20EQ.xml"}
+    assert rooted["b5"]["relatedLocations"][0]["physicalLocation"]["region"]["startLine"] == 7
+
+
+def test_related_location_needs_a_file_position(tmp_path):
+    """GitHub code scanning rejects a related location without a physicalLocation: without
+    sources=, or with the referenced object in none of them, the log is the one a frame
+    without TARGET_ID gives — no relatedLocations, [context_message] the plain TARGET."""
+    violations, xml = references(tmp_path)
+    for group in (True, False):
+        for sources in (None, []):
+            document = build_sarif(violations, group=group, sources=sources)
+            assert document == build_sarif(violations.drop(columns=["TARGET_ID"]), group=group, sources=sources)
+            assert "relatedLocations" not in json.dumps(document)
+    results = by_id(build_sarif(violations, group=False))
+    assert context_message(results["b2"]) == f"[context_message] {violations['TARGET'].iloc[0]}"
+
+
+def test_related_locations_grouped(tmp_path):
+    """Grouped: one related location per distinct referenced object of the samples
+    (b2 and b3 share sub1), ids 1..n; each distinct TARGET line links its own."""
+    violations, xml = references(tmp_path)
+    results = build_sarif(violations, sources=[xml], source_root=tmp_path)["runs"][0]["results"]
+    ranged = next(result for result in results if result["properties"]["violationType"] == "rdfs:range")
+    assert [(related["id"], related["logicalLocations"], related["physicalLocation"]["region"]["startLine"])
+            for related in ranged["relatedLocations"]] == [(1, logical("sub1"), 4), (2, logical("sub2"), 7)]
+    assert context_message(ranged) == ('[context_message] referenced object [sub1](1) found — Substation "Main Sub"; '
+                                       'referenced object [sub2](2) found — Substation')
+    missing = next(result for result in results if result["properties"]["violationType"] == "triplets:missing")
+    assert "relatedLocations" not in missing
+
+
+def test_related_locations_grouped_mixed_and_many(tmp_path):
+    """One group with a dangling and a found reference: only the found one is a related
+    location and linked. More than three distinct: three lines shown, each linked, the
+    related locations go on past 3 (one per distinct referenced object of the samples)."""
+    violations, xml = class_findings(tmp_path, ["ghost", "s1"], found=["s1"])
+    mixed = build_sarif(violations, sources=[xml])["runs"][0]["results"][0]
+    assert [(related["id"], related["logicalLocations"]) for related in mixed["relatedLocations"]] \
+        == [(1, logical("s1"))]
+    assert context_message(mixed) == ("[context_message] referenced object ghost not found in the data; "
+                                      "referenced object [s1](1) found — Substation")
+
+    refs = [f"s{index}" for index in range(5)]
+    violations, xml = class_findings(tmp_path, refs, found=refs)
+    many = build_sarif(violations, sources=[xml])["runs"][0]["results"][0]
+    assert [(related["id"], related["logicalLocations"], related["physicalLocation"]["region"]["startLine"])
+            for related in many["relatedLocations"]] == [(index + 1, logical(f"s{index}"), index + 3)
+                                                         for index in range(5)]
+    assert context_message(many) == ("[context_message] referenced object [s0](1) found — Substation; "
+                                     "referenced object [s1](2) found — Substation; "
+                                     "referenced object [s2](3) found — Substation; … (5 distinct)")
+
+
+def test_related_location_through_the_exporter(tmp_path):
+    """The public path on a raw frame: to_sarif(data=, rdf_map=, sources=, source_root=)
+    enriches and locates inside the exporter."""
+    violations, data, xml = reference_run(tmp_path)
+    document = json.loads(violations.shacl.to_sarif(data=data, rdf_map=REFERENCE_SCHEMA, group=False, sources=[xml],
+                                                    source_root=tmp_path, export_to_memory=True).read())
+    related = by_id(document)["b2"]["relatedLocations"]
+    assert [(entry["id"], entry["logicalLocations"], entry["physicalLocation"]["artifactLocation"]["uri"],
+             entry["physicalLocation"]["region"]["startLine"]) for entry in related] \
+        == [(1, logical("sub1"), "sub/grid%20EQ.xml", 4)]
+    assert context_message(by_id(document)["b2"]).startswith("[context_message] referenced object [sub1](1) found")
+
+
+def test_related_location_id_with_brackets_is_not_linked(tmp_path):
+    """An id holding "[", "]" or "\\" would need escaped link text, which GitHub code
+    scanning does not read: the related location is written, the line stays the TARGET."""
+    ref = "s[1]\\x"
+    violations, xml = class_findings(tmp_path, [ref], found=[ref])
+    result = build_sarif(violations, group=False, sources=[xml])["runs"][0]["results"][0]
+    assert result["relatedLocations"][0]["logicalLocations"] == logical(ref)
+    assert result["relatedLocations"][0]["physicalLocation"]["region"]["startLine"] == 3
+    assert context_message(result) == f"[context_message] referenced object {ref} found — Substation"
+
+
+def test_related_locations_schema_conformance(tmp_path):
+    """Related locations validate against the official OASIS SARIF 2.1.0 schema."""
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads((Path(__file__).parent / "data" / "sarif-schema-2.1.0.json").read_text(encoding="utf-8"))
+    violations, xml = references(tmp_path)
+    for group in (True, False):
+        document = build_sarif(violations, group=group, sources=[xml])
+        assert "relatedLocations" in json.dumps(document)
+        jsonschema.validate(document, schema)
