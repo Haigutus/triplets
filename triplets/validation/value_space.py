@@ -13,7 +13,7 @@ in a comparable form, a dateTime zoned like the other (``pair_forms``).
 import datetime
 import re
 
-from ..iri import _PLAIN_DATATYPES, XSD_NS, prefixes, rdf_map_entries, xsd_base
+from ..iri import _PLAIN_DATATYPES, XSD_NS, xsd_base
 
 # ── XSD lexical spaces ───────────────────────────────────────────────────────
 # Per type: (valid lexical space, non-canonical subset reported as Warning).
@@ -163,30 +163,34 @@ def pair_operands(params):
     return params if isinstance(params, tuple) else (params, None)
 
 
-def key_spaces(rdf_map):
-    """KEY → the value space of its schema ``xsd:type`` (``SPACES``; a non-XSD type by the XSD
-    type :func:`~triplets.iri.xsd_base` resolves), "" for a type in no space (``xsd:string``,
-    ``xsd:boolean``, …). A KEY without a type, or whose type has no XSD base, is absent: its
-    space is unknown."""
-    entries, bound = dict(rdf_map_entries(rdf_map)), prefixes(rdf_map)
-    spaces = {}
-    for key, entry in entries.items():
-        if entry.get("type") == "Attribute" and entry.get("xsd:type"):
-            datatype = xsd_base(key, entry, entries, bound)
-            if datatype in _PLAIN_DATATYPES or datatype.startswith(XSD_NS):
-                spaces[key] = SPACES.get(datatype.removeprefix(XSD_NS), "")
-    return spaces
+def key_space(key, entries, prefixes):
+    """The value space of *key*'s schema ``xsd:type`` (``SPACES``; a non-XSD type by the XSD type
+    :func:`~triplets.iri.xsd_base` resolves) from the loaded schema *entries* and *prefixes*, ""
+    for a type in no space (``xsd:string``, ``xsd:boolean``, …). None — unknown — for a KEY
+    without a type, a type with no XSD base, or one that does not resolve (no prefix, an
+    unbound prefix)."""
+    entry = entries.get(key)
+    if not (entry and entry.get("type") == "Attribute" and entry.get("xsd:type")):
+        return None
+    try:
+        datatype = xsd_base(key, entry, entries, prefixes)
+    except ValueError:
+        return None
+    if datatype in _PLAIN_DATATYPES or datatype.startswith(XSD_NS):
+        return SPACES.get(datatype.removeprefix(XSD_NS), "")
+    return None
 
 
-def pair_space(rule, key_spaces):
+def pair_space(rule, entries, prefixes):
     """(other KEY, space) of a sh:lessThan / sh:lessThanOrEquals rule: the value space its
     pairs compare in; None when the operands' spaces differ — no pair compares.
 
     Each operand's space, from the first source that answers: the shape (a ``sh:datatype``
-    on the property shape, path side only), the schema (*key_spaces*), the other operand.
-    Two unknown operands compare as numbers, as do two in no space (``xsd:string``)."""
+    on the property shape, path side only), the schema (:func:`key_space` over the loaded
+    *entries* and *prefixes*), the other operand. Two unknown operands compare as numbers,
+    as do two in no space (``xsd:string``)."""
     other, shaped = pair_operands(rule.params)
+    path = key_space(rule.path, entries, prefixes) if shaped is None else shaped
     # an instance datatype per value (#145) would answer between the shape and the schema
-    known = {space for space in (key_spaces.get(rule.path) if shaped is None else shaped, key_spaces.get(other))
-             if space is not None}
+    known = {space for space in (path, key_space(other, entries, prefixes)) if space is not None}
     return other, None if len(known) > 1 else next(iter(known), "") or "number"

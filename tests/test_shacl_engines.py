@@ -385,12 +385,52 @@ def test_less_than_dates(engine):
     assert set(texts.itertuples(index=False, name=None)) == {(f"{DAY} is not less than {DAY2}", f"less than {DAY2}")}
 
 
+def test_less_than_hour_24(engine):
+    """Hour 24 on either side of a pair is outside the comparable form: a violation under
+    both terms on every engine and every Python, also where its next-day reading would
+    hold (rdflib reads it from Python 3.14 on, so the pyshacl-compared matrix leaves it out)."""
+    shape = f"""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:{WHEN} ; sh:lessThan cim:{WHEN2} ] ;
+        sh:property [ sh:path cim:{WHEN} ; sh:lessThanOrEquals cim:{WHEN2} ] ."""
+    rows = [row for n, (when, after) in enumerate((
+        ("2020-06-01T24:00:00", "2020-06-03T00:00:00"), ("2020-06-01T00:00:00", "2020-06-01T24:00:00"),
+        ("2020-06-01T24:00:00Z", "2020-06-03T00:00:00Z"), ("2020-06-01T00:00:00Z", "2020-06-01T24:00:00Z"),
+        ("2020-06-01T00:00:00", "2020-06-02T00:00:00")))   # in order: no violation
+        for row in breaker(f"b{n}", (WHEN, when), (WHEN2, after))]
+    v = run(rows, shape, engine, rdf_map=PAIR_SCHEMA)
+    hour_24 = {("b0", "2020-06-01T24:00:00"), ("b1", "2020-06-01T00:00:00"),
+               ("b2", "2020-06-01T24:00:00Z"), ("b3", "2020-06-01T00:00:00Z")}
+    assert violating(v, "sh:lessThan") == violating(v, "sh:lessThanOrEquals") == hour_24
+
+
 def test_less_than_nested_member(engine):
     """Nested members compare in the same space (the pandas builders, on every engine)."""
     shape = (f"cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:or ( "
              f"[ sh:path cim:{DAY} ; sh:lessThan cim:{DAY2} ] [ sh:path cim:{DAY} ; sh:maxCount 0 ] ) .")
     v = run(PAIRED_ROWS, shape, engine, rdf_map=PAIR_SCHEMA)
     assert {focus for focus, _ in violating(v, "sh:or")} == {"b1", "b2", "b3"}
+
+
+def test_less_than_typed_nested_members(engine):
+    """A nested member's sh:datatype types its path operand (IR params (KEY, space)), in
+    sh:or and sh:not alike; without an rdf_map the bare pairs would compare as numbers."""
+    import rdflib
+    planned = "Switch.plannedTime"
+    shape = (f"cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ; "
+             f"sh:or ( [ sh:path cim:{UNTYPED} ; sh:datatype xsd:date ; sh:lessThan cim:{DAY2} ] "
+             f"[ sh:path cim:{UNTYPED} ; sh:maxCount 0 ] ) ; "
+             f"sh:not [ sh:path cim:{planned} ; sh:datatype xsd:dateTime ; sh:lessThanOrEquals cim:{WHEN2} ] .")
+    compiled = triplets.validation.compile(rdflib.Graph().parse(data=PREFIX + shape, format="turtle"))
+    params = dict(zip(compiled.ir["component"], compiled.ir["params"]))
+    assert [row["params"] for row in params["sh:or"][0] if row["component"] == "sh:lessThan"] == [(DAY2, "date")]
+    assert [row["params"] for row in params["sh:not"] if row["component"] == "sh:lessThanOrEquals"] == [(WHEN2, "dateTime")]
+    rows = (breaker("b0", (UNTYPED, "2020-01-01"), (DAY2, "2020-02-01"),
+                    (planned, "2020-01-01T10:00:00Z"), (WHEN2, "2020-01-01T13:00:00+02:00"))
+            + breaker("b1", (UNTYPED, "2020-03-01"), (DAY2, "2020-02-01"),
+                      (planned, "2020-01-01T12:00:00Z"), (WHEN2, "2020-01-01T13:00:00+02:00")))
+    v = run(rows, shape, engine)
+    assert {focus for focus, _ in violating(v, "sh:or")} == {"b1"}
+    assert {focus for focus, _ in violating(v, "sh:not")} == {"b0"}
 
 
 @pytest.mark.parametrize("shape_datatype, rdf_map, failing", [
@@ -408,6 +448,8 @@ def test_less_than_nested_member(engine):
     ("", typed_schema(Switch_plannedDate="xsd:date", Switch_retiredDate="xsd:dateTime"), {"b0", "b1"}),
     # two xsd:string operands compare as numbers, as two untyped ones do
     ("", typed_schema(Switch_plannedDate="xsd:string", Switch_retiredDate="xsd:string"), {"b0", "b1"}),
+    # a type that does not resolve (an unbound prefix) is unknown: the other operand answers
+    ("", typed_schema(Switch_plannedDate="foo:Date", Switch_retiredDate="xsd:date"), {"b1"}),
 ])
 def test_less_than_operand_spaces(engine, shape_datatype, rdf_map, failing):
     """Each operand's value space: the shape, then the schema, then the other operand."""
@@ -430,6 +472,37 @@ def test_less_than_strings_compare_as_numbers(engine):
     v = run(rows, SHAPE.format(body=f"sh:path cim:{UNTYPED} ; sh:lessThan cim:{DAY2}"), engine,
             rdf_map=typed_schema(Switch_plannedDate="xsd:string", Switch_retiredDate="xsd:string"))
     assert violating(v, "sh:lessThan") == {("b1", "a")}
+
+
+@pytest.mark.parametrize("types", [{"Switch_ratedCurrent": "foo:Bar"}, {"Switch_ratedCurrent": "float"}])
+def test_less_than_beside_an_unresolved_type(engine, types):
+    """An xsd:type that does not resolve (an unbound prefix, no prefix) on a KEY no pair
+    names stops nothing: the pair compares as numbers, the other constraints run."""
+    rows = breaker("b0", (UNTYPED, "1"), (DAY2, "2")) + breaker("b1", (UNTYPED, "3"), (DAY2, "2"))
+    shape = f"""cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:{UNTYPED} ; sh:lessThan cim:{DAY2} ] ;
+        sh:property [ sh:path cim:{UNTYPED} ; sh:minCount 2 ] ."""
+    v = run(rows, shape, engine, rdf_map=typed_schema(**types))
+    assert violating(v, "sh:lessThan") == {("b1", "3")}
+    assert {focus for focus, _ in violating(v, "sh:minCount")} == {"b0", "b1"}
+
+
+@pytest.mark.parametrize("path, other, pairs, rdf_map, failing", [
+    # pair_date_ill_typed: a day the calendar lacks, an empty value, an other value that is not a date
+    (DAY, DAY2, (("2020-02-30", "2020-03-01"), ("", "2020-01-01"), ("2020-01-01", "abc"), ("2020-01-01", "2020-03-01")),
+     PAIR_SCHEMA, {("b0", "2020-02-30"), ("b1", ""), ("b2", "2020-01-01")}),
+    # pair_number_ill_typed: a value that is not a number
+    ("Conductor.length", "TransformerEnd.endNumber", (("abc", "10"), ("9", "10"), ("11", "10")),
+     typed_schema(Conductor_length="xsd:float", TransformerEnd_endNumber="xsd:integer"), {("b0", "abc"), ("b2", "11")}),
+    # pair_number_no_schema_text: untyped values compare as numbers, not as text
+    ("Conductor.length", "Switch.ratedCurrent", (("9", "10"), ("11", "10")), None, {("b1", "11")}),
+])
+def test_less_than_where_pyshacl_differs(engine, path, other, pairs, rdf_map, failing):
+    """The engines' own rows for the parity matrix cases pyshacl answers otherwise (strict
+    xfails there, which only assert a difference)."""
+    rows = [row for n, (value, other_value) in enumerate(pairs) for row in breaker(f"b{n}", (path, value), (other, other_value))]
+    v = run(rows, SHAPE.format(body=f"sh:path cim:{path} ; sh:lessThan cim:{other}"), engine, rdf_map=rdf_map)
+    assert violating(v, "sh:lessThan") == failing
 
 
 def test_closed(engine):

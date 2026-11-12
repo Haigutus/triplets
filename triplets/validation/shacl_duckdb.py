@@ -20,7 +20,6 @@ Explicitly selected (``engine="duckdb"``), not in the auto order: polars owns
 the in-memory fast path; this engine is the deliberate choice when the data
 does not fit.
 """
-import functools
 import logging
 
 import pandas
@@ -29,7 +28,7 @@ from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
-from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, value_types
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, prefixes, rdf_map_entries, value_types
 from . import shacl_pandas, value_space
 from .value_space import datatype_patterns
 
@@ -292,7 +291,7 @@ def _pair_compare(operator, description):
     """sh:lessThan(-OrEquals): violation when the comparison does not hold in the pair's
     value space (``value_space.pair_space``; null comparisons count as failed, like pandas)."""
     def builder(rule, table, context):
-        other, space = value_space.pair_space(rule, context.key_spaces)
+        other, space = value_space.pair_space(rule, context.entries, context.prefixes)
         left, left_params, right, right_params = _pair_sql(rule, table, other)
         holds, holds_params = ((f"TRY_CAST(a.PV AS DOUBLE) {operator} TRY_CAST(b.OTHER AS DOUBLE)", [])
                                if space == "number" else _typed_pair_holds(space, operator))
@@ -347,11 +346,8 @@ class _Context:
         self.rdf_map = rdf_map
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
-
-    @functools.cached_property
-    def key_spaces(self):
-        """KEY → value space of its schema type, for the pair constraints — built on the first one."""
-        return value_space.key_spaces(self.rdf_map)
+        self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
+        self.prefixes = prefixes(rdf_map)
 
 
 def _create_types_table(connection, table, ancestors):
