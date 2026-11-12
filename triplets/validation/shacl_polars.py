@@ -23,7 +23,6 @@ new data.
 Note: sh:pattern runs on Rust regex (no lookarounds). The ENTSO-E profiles
 use plain character-class patterns; exotic patterns belong to pyshacl.
 """
-import functools
 import logging
 
 import pandas
@@ -32,7 +31,7 @@ import polars
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, prefixes, rdf_map_entries, value_types
 from . import shacl_pandas, value_space
 from .value_space import datatype_patterns
 
@@ -49,6 +48,8 @@ class _Context:
         self.rdf_map = rdf_map
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
+        self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
+        self.prefixes = prefixes(rdf_map)
         # a set: an ID typed in several instances repeats its Type row, and every
         # join on these rows (batch path rows, via_type) would count its values again
         type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID").unique()
@@ -73,11 +74,6 @@ class _Context:
         for query, ids in (targets or {}).items():
             ids = polars.Series("ID", list(ids), dtype=polars.Utf8)
             self._targets[query] = (ids, ids.implode())
-
-    @functools.cached_property
-    def key_spaces(self):
-        """KEY → value space of its schema type, for the pair constraints — built on the first one."""
-        return value_space.key_spaces(self.rdf_map)
 
     def class_ids(self, class_name):
         """Flat ID Series (plan *data*, e.g. focus_frame)."""
@@ -358,7 +354,7 @@ def _pair_compare(operator, description):
     """sh:lessThan(-OrEquals): violation when the comparison does not hold in the pair's
     value space (``value_space.pair_space``; null comparisons count as failed, like pandas)."""
     def builder(context, rule):
-        other, space = value_space.pair_space(rule, context.key_spaces)
+        other, space = value_space.pair_space(rule, context.entries, context.prefixes)
         left, right = _pair(context, rule, other)
         if space == "number":
             a = polars.col("PATH_VALUE").cast(polars.Float64, strict=False)

@@ -38,7 +38,6 @@ Known limits:
 """
 import re
 import logging
-import functools
 import threading
 import multiprocessing
 
@@ -50,7 +49,8 @@ import numpy
 import pandas
 
 from ..export.nquads_utils import make_subject
-from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, split_iri, value_types
+from ..iri import (CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, prefixes, rdf_map_entries, split_iri,
+                   value_types)
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from . import value_space
@@ -76,6 +76,8 @@ class _Context:
         self.ancestors = ancestors   # (Type, ancestor) pairs — see schema_scope.ancestor_pairs
         self.undefined_namespace = undefined_namespace
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
+        self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
+        self.prefixes = prefixes(rdf_map)
         self._by_key = None
         self._class_ids = None
         self._all_ids = None
@@ -89,11 +91,6 @@ class _Context:
         # object per rule; _sparql reports it once instead of once per rule.
         self.sparql_engine_error = None
         self.targets = {}   # SPARQL target query → focus IDs (_sparql_targets)
-
-    @functools.cached_property
-    def key_spaces(self):
-        """KEY → value space of its schema type, for the pair constraints — built on the first one."""
-        return value_space.key_spaces(self.rdf_map)
 
     def dataset(self):
         """rdflib dataset for the sh:sparql constraints — loaded once, reused per query."""
@@ -418,7 +415,7 @@ def _pair_compare(operator, description):
     every value of the other property, in the pair's value space
     (``value_space.pair_space``) — violation when the comparison fails."""
     def validator(context, rule):
-        other, space = value_space.pair_space(rule, context.key_spaces)
+        other, space = value_space.pair_space(rule, context.entries, context.prefixes)
         left, right = context.pair_rows(rule, other)
         merged = left.merge(right, on="FOCUS")
         if space == "number":
