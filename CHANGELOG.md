@@ -41,6 +41,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rules, pyshacl after its first failing constraint); `attrs["validation"]["aborted"]`:
   True when `abort_on_first` met a Violation (the report may then be partial). Warnings and `triplets:invalidSparql` never stop the run
   ([#175](https://github.com/Haigutus/triplets/issues/175)).
+- **Date and dateTime range bounds in the vectorized SHACL engines** — `sh:minInclusive` …
+  `sh:maxExclusive` with an `xsd:date`, `xsd:dateTime` or `xsd:dateTimeStamp` bound compare
+  the values as dates or instants on pandas, polars and duckdb, nested `sh:or` / `sh:and` /
+  `sh:not` members included: a date's zone is ignored, zoned dateTimes compare across
+  offsets and fractions of a second, an unzoned value compares only with an unzoned bound.
+  A value that does not parse as the bound's type violates. The bound's value space comes
+  from the new flat map `validation.value_space.SPACES`; the IR `params` of such a bound is
+  `(space, lexical form)`, a number bound stays a float
+  ([#215](https://github.com/Haigutus/triplets/issues/215),
+  [#216](https://github.com/Haigutus/triplets/issues/216) — pair comparisons stay numeric).
 - **Linux aarch64 wheels** (manylinux), built on GitHub's native arm64 runner;
   also what Docker runs on Apple Silicon
   ([#130](https://github.com/Haigutus/triplets/issues/130)).
@@ -394,9 +404,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **A range bound that is not a number no longer fails the SHACL compile**: a
   `sh:minInclusive` … `sh:maxExclusive` bound such as `"2020-01-01"^^xsd:date` raised
-  `ValueError` in `compile()`, so no shape was validated. The pandas, polars and duckdb
-  engines now skip that one constraint and name it in `skipped_shapes`; `engine="pyshacl"`
-  evaluates it. A non-literal range bound, and a `sh:minCount` / `sh:maxCount` /
+  `ValueError` in `compile()`, so no shape was validated. pandas, polars and duckdb
+  compare a date or dateTime bound (see Added); a bound in no value space (a string, an
+  `xsd:time`, an ill-typed literal) skips that one constraint, named in `skipped_shapes`;
+  `engine="pyshacl"` evaluates it. A non-literal range bound, and a `sh:minCount` / `sh:maxCount` /
   `sh:minLength` / `sh:maxLength` value that is not a non-negative `xsd:integer`, make the
   shape malformed (skipped with the reason, also for pyshacl) instead of failing the compile
   or pyshacl's run ([#215](https://github.com/Haigutus/triplets/issues/215)).

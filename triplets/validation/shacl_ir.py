@@ -13,7 +13,8 @@ IR: one row per shape x target x path x constraint component::
     shape_id, shapes, target_on, target_by, path, inverse, via_type,
     component, params, severity, message, name, description
 
-``params`` holds the component's parameter: a scalar (sh:minCount), a list
+``params`` holds the component's parameter: a scalar (sh:minCount), a
+(space, lexical form) pair (a date or dateTime range bound), a list
 (sh:in), or nested row-dict lists (sh:or / sh:and / sh:xone / sh:not, and the
 ``rows`` of sh:node / sh:property). Unknown
 components are kept as rows and logged — engines skip what they don't
@@ -27,12 +28,12 @@ import os
 import re
 
 from dataclasses import dataclass, field
-from decimal import Decimal
 
 import pandas
 
 from .._caches import register_cache
 from ..iri import SH_NS, XSD_NS, local_id, local_key, local_value, split_iri
+from .value_space import bound_space
 
 logger = logging.getLogger(__name__)
 
@@ -473,7 +474,7 @@ def _shape_rows(graph, SH, shape_uri, target_on, visited=frozenset(), parent=Non
                 # on a node shape it judges the focus node itself, which no engine reads
                 skipped.add((meta["shapes"], f"{shape_uri}: node-level {component} not evaluated", None))
             elif (params := transform(graph, value)) is None:
-                # valid SHACL the engines cannot compare with (a date bound); pyshacl evaluates it
+                # valid SHACL the engines cannot compare with (a string or xsd:time bound); pyshacl evaluates it
                 reason = f"{shape_uri}: {component} {value.n3(graph.namespace_manager)} not evaluated"
                 _warn_skipped(reason, None)
                 skipped.add((meta["shapes"], reason, None))
@@ -738,9 +739,11 @@ def _components(SH, shape):
 
 
 def _bound(value):
-    """A range bound as the engines compare it: a number, else None — a date, a
-    string or an ill-typed literal compares by SPARQL's typed rules, not as a number."""
-    return float(value.value) if type(value.value) in (int, float, Decimal) else None
+    """A range bound as the engines compare it: the float of a number, the (space,
+    lexical form) pair of a date or dateTime, else None — a string, an xsd:time or
+    an ill-typed literal (value_space.bound_space)."""
+    typed = bound_space(value)
+    return None if typed is None else float(value.value) if typed[0] == "number" else typed
 
 
 def _regex(pattern, flags):

@@ -29,7 +29,7 @@ from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, value_types
-from . import shacl_pandas
+from . import shacl_pandas, value_space
 from .shacl_pandas import datatype_patterns
 
 logger = logging.getLogger(__name__)
@@ -152,15 +152,33 @@ def _max_length(rule, table, context):
                  rows, rows_params, "length(PV) > ?", [rule.params])
 
 
+# value space → SQL text expression → comparable expression, NULL where a value does not
+# parse; an unzoned dateTime gets a Z (TIMESTAMPTZ would read it in the session's time
+# zone, TIMESTAMP drops an offset) — read as UTC, it only compares with an unzoned bound
+_PARSE = {
+    "number": lambda text: f"TRY_CAST({text} AS DOUBLE)",
+    "date": lambda text: f"TRY_CAST(substr({text}, 1, 10) AS DATE)",
+    "dateTime": lambda text: f"TRY_CAST(regexp_replace({text}, '{value_space.UNZONED_END}', '\\1Z') AS TIMESTAMPTZ)",
+}
+
+
 def _range(operator, description):
-    """Numeric range builder factory; a value that is not a number (no cast, or NaN)
-    fails every range component (SHACL: the comparison is not true)."""
+    """Range builder factory: the values parse in the bound's value space; a value
+    that does not (no cast, NaN, another form) fails every range component (SHACL:
+    the comparison is not true). A number bound is a float already; any other is
+    parsed like the values, after the comparable-form gate the three engines share."""
     def builder(rule, table, context):
         rows, rows_params = _rows_sql(rule, table)
-        numeric = "TRY_CAST(PV AS DOUBLE)"
-        return _wrap(rule, f"value is {description} {rule.params}", rows, rows_params,
-                     f"PV IS NOT NULL AND ({numeric} {operator} ? OR {numeric} IS NULL OR isnan({numeric}))",
-                     [rule.params])
+        space, bound = value_space.range_bound(rule.params)
+        parsed = _PARSE[space]("PV")
+        if space == "number":
+            condition, params = f"{parsed} {operator} ? OR {parsed} IS NULL OR isnan({parsed})", [bound]
+        else:
+            condition = (f"NOT regexp_full_match(PV, ?) OR {parsed} IS NULL "
+                         f"OR {parsed} {operator} {_PARSE[space]('?')}")
+            params = [value_space.comparable(space, bound), bound]
+        return _wrap(rule, f"value is {description} {bound}", rows, rows_params,
+                     f"PV IS NOT NULL AND ({condition})", params)
     return builder
 
 

@@ -629,13 +629,42 @@ cim:P sh:path cim:IdentifiedObject.name ; sh:pattern "a b" ; sh:flags "x" ."""))
     assert compiled.stats["skipped_shapes"] == [f'{CIM}P: sh:flags "x" not supported']
 
 
-@pytest.mark.parametrize("term", ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive"])
-@pytest.mark.parametrize("bound", ['"2020-01-01"^^xsd:date', '"2020-01-01T00:00:00"^^xsd:dateTime', '"abc"', '"3"',
-                                   '"abc"^^xsd:integer'])
-def test_non_numeric_range_bound_skips_that_constraint(term, bound):
-    """A range bound that is not a number compiles (#215): that one constraint is
-    skipped, not malformed (pyshacl evaluates it); a logical operator over it is
-    not evaluated; a numeric bound next to it still compiles."""
+RANGE_TERMS = ["minInclusive", "maxInclusive", "minExclusive", "maxExclusive"]
+
+
+@pytest.mark.parametrize("term", RANGE_TERMS)
+@pytest.mark.parametrize("bound, params", [
+    ("2", 2.0),
+    ('"1.5"^^xsd:decimal', 1.5),
+    ('"7"^^xsd:unsignedInt', 7.0),
+    ('"2020-01-01"^^xsd:date', ("date", "2020-01-01")),
+    # the lexical form as the parsed graph holds it: rdflib drops a date's zone,
+    # writes Z as +00:00 and six fraction digits (it reads no xsd:dateTimeStamp)
+    ('"2020-01-01-14:00"^^xsd:date', ("date", "2020-01-01")),
+    ('"2020-01-01T00:00:00"^^xsd:dateTime', ("dateTime", "2020-01-01T00:00:00")),
+    ('"2020-01-01T00:00:00Z"^^xsd:dateTime', ("dateTime", "2020-01-01T00:00:00+00:00")),
+    ('"2020-01-01T23:59:59.5+02:00"^^xsd:dateTime', ("dateTime", "2020-01-01T23:59:59.500000+02:00")),
+    ('"0001-01-01T00:00:00Z"^^xsd:dateTimeStamp', ("dateTime", "0001-01-01T00:00:00Z")),
+])
+def test_range_bound_value_space(term, bound, params):
+    """A number bound compiles to its float; a date or dateTime bound to its
+    (value space, lexical form) pair — the engines parse it like the values."""
+    compiled = compile_shapes(_graph(f"cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; "
+                                     f"sh:property [ sh:path cim:Conductor.length ; sh:{term} {bound} ] ."))
+    assert list(zip(compiled.ir["component"], compiled.ir["params"])) == [(f"sh:{term}", params)]
+    assert compiled.stats["skipped_shapes"] == []
+
+
+@pytest.mark.parametrize("term", RANGE_TERMS)
+@pytest.mark.parametrize("bound", ['"abc"', '"3"', '"abc"^^xsd:integer', '"12:00:00"^^xsd:time', '"P1D"^^xsd:duration',
+                                   # outside the lexical form, the comparable form or the calendar
+                                   '"2020-02-30"^^xsd:date', '"2020-6-1"^^xsd:date', '"10000-01-01"^^xsd:date',
+                                   '"2020-01-01T24:00:00Z"^^xsd:dateTime',
+                                   '"2020-01-01T23:59:60"^^xsd:dateTime', '"2020-01-01T00:00:00"^^xsd:dateTimeStamp'])
+def test_unsupported_range_bound_skips_that_constraint(term, bound):
+    """A range bound in no value space the engines compare compiles (#215): that
+    one constraint is skipped, not malformed (pyshacl evaluates it); a logical
+    operator over it is not evaluated; a numeric bound next to it still compiles."""
     compiled = compile_shapes(_graph(f"""cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ;
     sh:property cim:P ; sh:or ( [ sh:path cim:Conductor.length ; sh:{term} {bound} ] ) .
 cim:P sh:path cim:Conductor.length ; sh:{term} {bound}, 1 ; sh:minCount 1 ."""))

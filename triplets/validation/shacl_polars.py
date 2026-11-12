@@ -32,7 +32,7 @@ from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, value_types
-from . import shacl_pandas
+from . import shacl_pandas, value_space
 from .shacl_pandas import datatype_patterns
 
 logger = logging.getLogger(__name__)
@@ -218,15 +218,33 @@ def _max_length(context, rule):
     return _emit(plan, rule, f"value is longer than {rule.params} characters")
 
 
+# value space → text expression → comparable expression, null where a value does not parse;
+# an unzoned dateTime gets a Z (read as UTC: it only compares with an unzoned bound)
+_PARSE = {
+    "number": lambda text: text.str.strip_chars().cast(polars.Float64, strict=False),
+    "date": lambda text: text.str.slice(0, 10).str.to_date("%Y-%m-%d", strict=False),
+    "dateTime": lambda text: (text.str.replace(value_space.UNZONED_END, "${1}Z")
+                              .str.to_datetime("%Y-%m-%dT%H:%M:%S%.f%#z", time_zone="UTC", strict=False)),
+}
+
+
 def _range(comparison, description):
-    """Numeric range builder factory; a value that is not a number (no cast, or NaN)
-    fails every range component (SHACL: the comparison is not true)."""
+    """Range builder factory: the values parse in the bound's value space; a value
+    that does not (no cast, NaN, another form) fails every range component (SHACL:
+    the comparison is not true). A number bound is a float already; any other is
+    parsed like the values, after the comparable-form gate the three engines share."""
     def builder(context, rule):
-        numeric = polars.col("PATH_VALUE").str.strip_chars().cast(polars.Float64, strict=False)
-        # NaN sorts above every number in polars, so it is caught explicitly for min*
-        bad = comparison(numeric, rule.params) | numeric.is_null() | numeric.is_nan()
+        space, bound = value_space.range_bound(rule.params)
+        parsed = _PARSE[space](polars.col("PATH_VALUE"))
+        if space == "number":
+            # NaN sorts above every number in polars, so it is caught explicitly for min*
+            bad = comparison(parsed, bound) | parsed.is_null() | parsed.is_nan()
+        else:
+            gate = polars.col("PATH_VALUE").str.contains(f"^(?:{value_space.comparable(space, bound)})$")
+            parsed = polars.when(gate).then(parsed)
+            bad = comparison(parsed, _PARSE[space](polars.lit(bound))) | parsed.is_null()
         plan = context.path_rows(rule).filter(polars.col("PATH_VALUE").is_not_null() & bad)
-        return _emit(plan, rule, f"value is {description} {rule.params}")
+        return _emit(plan, rule, f"value is {description} {bound}")
     return builder
 
 
