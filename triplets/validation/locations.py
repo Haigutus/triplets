@@ -9,8 +9,9 @@ searched inside that object's text window, so the annotation lands on the
 offending property element, not just the object.
 
 ``locate_violations`` is the public pass: it stamps ``LOCATION_COLUMNS``
-(SOURCE_URI, SOURCE_LINE, SOURCE_SNIPPET — the located line's text) onto a
-violations frame — both the SARIF and the sh:ValidationReport exports call
+(SOURCE_URI, SOURCE_LINE, SOURCE_SNIPPET — the located line's text — and the
+same three TARGET_* columns for the referenced object of a reference finding)
+onto a violations frame — both the SARIF and the sh:ValidationReport exports call
 it when given ``sources=``, and it is exposed as
 ``violations.shacl.locate(sources=...)``. With ``source_root=``, a path source
 under that directory is reported relative to it (forward slashes); zip
@@ -36,7 +37,8 @@ from ..iri import ID_PREFIXES, TYPE_KEY
 
 logger = logging.getLogger(__name__)
 
-LOCATION_COLUMNS = ["SOURCE_URI", "SOURCE_LINE", "SOURCE_SNIPPET"]
+LOCATION_COLUMNS = ["SOURCE_URI", "SOURCE_LINE", "SOURCE_SNIPPET",   # the finding: ID (+ KEY)
+                    "TARGET_URI", "TARGET_LINE", "TARGET_SNIPPET"]   # the referenced object: TARGET_ID
 
 # an object definition: <cim:Breaker rdf:ID="_uuid"> / rdf:about="#_uuid" /
 # rdf:about="urn:uuid:uuid" — group(1) is the bare ID (one prefix stripped,
@@ -100,18 +102,26 @@ def locate_violations(violations, sources, source_root=None):
 
     Per row (ID, KEY): the violated property element's own position when it
     was found inside the object's text window, else the object definition's;
-    rows whose object is not in the sources get nulls. *source_root*: SOURCE_URI
-    of a path source under it is relative to it (see locate).
+    rows whose object is not in the sources get nulls. The referenced object
+    of a reference finding found in the data (TARGET_ID — context.enrich) is
+    located in the same pass, at its definition, into the TARGET_* columns; a
+    frame without TARGET_ID gets nulls there.
+    *source_root*: SOURCE_URI / TARGET_URI of a path source under it is
+    relative to it (see locate).
     """
     import pandas
 
+    targets = (violations["TARGET_ID"] if "TARGET_ID" in violations.columns
+               else pandas.Series(None, index=violations.index, dtype=object))
     wanted = {}
     for object_id, key in zip(violations["ID"], violations["KEY"]):
         if not pandas.isna(object_id):
             wanted.setdefault(str(object_id), set()).add(None if pandas.isna(key) else str(key))
+    for target in targets.dropna():
+        wanted.setdefault(str(target), set())
     located = locate(wanted, sources, source_root)
 
-    def position(object_id, key):
+    def position(object_id, key=None):
         entry = located.get(str(object_id)) if not pandas.isna(object_id) else None
         if entry is None:
             return None, None, None
@@ -120,7 +130,8 @@ def locate_violations(violations, sources, source_root=None):
         return entry["uri"], line, snippet
 
     frame = violations.copy()
-    positions = [position(object_id, key) for object_id, key in zip(frame["ID"], frame["KEY"])]
+    positions = [position(object_id, key) + position(target)
+                 for object_id, key, target in zip(frame["ID"], frame["KEY"], targets)]
     if positions:
         stamped = pandas.DataFrame(positions, columns=LOCATION_COLUMNS,
                                    index=frame.index).astype(object)

@@ -37,6 +37,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   so no absolute path reaches SARIF `artifactLocation.uri` or the SHACL report's
   `[context_location]` message. Paths outside it, zip members and file-likes keep their
   names; default `None` writes the paths as given ([#94](https://github.com/Haigutus/triplets/issues/94)).
+- **The referenced object as a SARIF related location** — for a reference finding
+  (`sh:class`, reference `rdfs:range` / `triplets:range`, `triplets:missing`) whose referenced
+  object is in the data and in `sources=`, the SARIF result carries `relatedLocations[{id,
+  message, logicalLocations, physicalLocation}]` (the `TARGET` text as the message, the
+  definition line, `source_root=` applies) and the `[context_message]` line links it as
+  `referenced object [<id>](1) found — …` (SARIF 2.1.0 §3.11.6; an id holding `[`, `]` or `\`
+  stays unlinked); grouped results carry one per distinct referenced object of their samples.
+  A related location needs `sources=`: GitHub code scanning rejects an upload with a related
+  location that has no file position. A dangling reference gets none. New enrichment column
+  `TARGET_ID` (`enrich` with `data=`: the referenced object's id when it is in the data) and
+  location columns `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` (`locate_violations`, the same
+  single pass; only referenced objects in the data are searched). The `TARGET` text in the
+  frame, csv / Excel and the SHACL report is unchanged
+  ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **Fixed language tag per schema entry** — `"language": "en"` on an Attribute entry writes
   `"text"@en` in N-Quads (pandas, polars, streaming; hence the rdflib / pyshacl loader) and
   `xml:lang="en"` on the literal element in both CIM XML engines, with or without

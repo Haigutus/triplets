@@ -78,6 +78,7 @@ def test_locate_violations_columns(xml_path):
     assert frame.loc[2, "SOURCE_LINE"] == 7          # object definition
     assert frame.loc[3, "SOURCE_URI"] is None        # object not in sources
     assert frame.loc[4, "SOURCE_URI"] is None        # no focus node
+    assert frame[["TARGET_URI", "TARGET_LINE", "TARGET_SNIPPET"]].isna().all().all()   # no TARGET_ID column
 
     # standalone function and accessor agree
     pandas.testing.assert_frame_equal(frame, locate_violations(violations, [xml_path]))
@@ -114,6 +115,22 @@ def test_source_root(tmp_path, monkeypatch):
         == "data/grid.xml"
     assert locate({"aaaa": set()}, ["data/grid.xml"], source_root=".")["aaaa"]["uri"] == "data/grid.xml"
     assert locate({"aaaa": set()}, [str(inside)])["aaaa"]["uri"] == str(inside)   # default: as given
+
+
+def test_locate_violations_targets(xml_path, tmp_path):
+    """The referenced object of a reference finding found in the data (TARGET_ID)
+    is located in the same pass, at its definition; a dangling one (no TARGET_ID)
+    is not wanted — the pass still stops once every wanted object is found (the
+    second source, which does not exist, is never opened)."""
+    violations = pandas.DataFrame([
+        ("aaaa", "Line.Breaker", "bbbb", "sh:class", "m", "Violation", "s", "bbbb"),
+        ("aaaa", "Line.Breaker", "zzzz", "triplets:missing", "m", "Violation", "s", None),
+        ("aaaa", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s", None),
+    ], columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE", "TARGET_ID"])
+    frame = locate_violations(violations, [xml_path, str(tmp_path / "absent.xml")], source_root=tmp_path)
+    assert frame[["TARGET_URI", "TARGET_LINE", "TARGET_SNIPPET"]].values.tolist() == [
+        ["grid.xml", 7, '<cim:Breaker rdf:about="urn:uuid:bbbb">'], [None, None, None], [None, None, None]]
+    assert frame["SOURCE_LINE"].tolist() == [3, 3, 5]
 
 
 def test_locate_violations_source_root(xml_path, tmp_path):
