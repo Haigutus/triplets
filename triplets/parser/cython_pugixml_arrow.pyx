@@ -49,6 +49,8 @@ from cpython.buffer cimport PyObject_GetBuffer, PyBuffer_Release, PyBUF_SIMPLE
 import mmap
 import os
 
+from .utils import base_name
+
 cdef extern from "arrow/type.h" namespace "arrow":
     shared_ptr[CDataType] utf8()
     shared_ptr[CDataType] int32()
@@ -351,6 +353,11 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
     cdef string meta_id = str(uuid_mod.uuid4()).encode('utf-8')
     cdef string nsmap_id = str(uuid_mod.uuid4()).encode('utf-8')
     cdef bytes file_name_bytes = file_name.encode('utf-8')
+    # nfo:fileName: the label without directories (base_name, as the python engines);
+    # none for a source without a name (not the '<file-like>' label placeholder)
+    base = base_name(path_or_fileobject if isinstance(path_or_fileobject, str)
+                     else str(getattr(path_or_fileobject, 'name', '')))
+    cdef bytes base_name_bytes = base.encode('utf-8') if base else None
     # the zip this file came from (iter_all_xml sets .container on zip members)
     container = getattr(path_or_fileobject, 'container', None)
     cdef bytes container_bytes = None if container is None else container.encode('utf-8')
@@ -471,6 +478,11 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
         Append(id_b, meta_id)
         Append(key_b, b"label")
         Append(val_b, file_name_bytes)
+
+        if base_name_bytes is not None:
+            Append(id_b, meta_id)
+            Append(key_b, b"fileName")
+            Append(val_b, base_name_bytes)
 
         if container_bytes is not None:
             Append(id_b, meta_id)

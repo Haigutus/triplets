@@ -13,7 +13,7 @@ from typing import Union, IO, Any
 from lxml import etree
 import pyarrow as pa
 
-from .utils import document_base, iter_rdf_rows
+from .utils import base_name, document_base, iter_rdf_rows
 from ..iri import TRIPLETS_NS, TYPE_KEY
 
 logger = logging.getLogger(__name__)
@@ -64,6 +64,9 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
     nsmap_id = str(uuid.uuid4())
     id_b.append(dist_id); key_b.append(TYPE_KEY); val_b.append("Distribution"); inst_b.append(instance_id)
     id_b.append(dist_id); key_b.append("label"); val_b.append(str(file_name)); inst_b.append(instance_id)
+    name = base_name(str(file_name))   # nfo:fileName: label without directories
+    if name:
+        id_b.append(dist_id); key_b.append("fileName"); val_b.append(name); inst_b.append(instance_id)
     container = getattr(path_or_fileobject, "container", None)   # the zip this file came from (iter_all_xml)
     if container is not None:
         id_b.append(dist_id); key_b.append("belongsToContainer"); val_b.append(container); inst_b.append(instance_id)

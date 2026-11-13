@@ -86,7 +86,7 @@ def test_parity(parser_files, engine, return_type):
         f"  reference: {shape(ref)}\n  {engine}/{return_type}: {shape(out)}")
 
 
-# ── Distribution rows (label, belongsToContainer): identical across engines ───
+# ── Distribution rows (label, fileName, belongsToContainer): identical across engines
 def _distribution_rows(obj):
     """(KEY, VALUE) rows of each Distribution object, in instance and row order (IDs are per-parse UUIDs)."""
     df = to_pandas(obj)[["ID", "KEY", "VALUE"]].astype(str)
@@ -97,19 +97,28 @@ def _distribution_rows(obj):
 
 @pytest.mark.parametrize("engine,return_type", PARITY_PARAMS)
 def test_distribution_parity(tmp_path, minimal_cim, engine, return_type):
+    import io
     import zipfile
+    from pathlib import Path
     inner = tmp_path / "inner.zip"
     with zipfile.ZipFile(inner, "w") as bundle:
-        bundle.write(minimal_cim, "a.xml")
+        bundle.write(minimal_cim, "deep/a.xml")
     outer = tmp_path / "outer.zip"
     with zipfile.ZipFile(outer, "w") as bundle:
         bundle.write(minimal_cim, "b.xml")
-        bundle.write(minimal_cim, "c.xml")
+        bundle.write(minimal_cim, "sub/dir/c.xml")
         bundle.write(inner, "inner.zip")
-    files = [minimal_cim, str(outer)]
-    ref = _distribution_rows(parse(files, engine=REFERENCE[0], return_type=REFERENCE[1]))
-    assert [dict(rows).get("belongsToContainer") for rows in ref] == [None, str(outer), str(outer), "inner.zip"]
-    assert _distribution_rows(parse(files, engine=engine, return_type=return_type)) == ref
+
+    def files():
+        named = io.BytesIO(Path(minimal_cim).read_bytes())
+        named.name = "C:\\models\\named.xml"
+        return [minimal_cim, named, str(outer)]
+
+    ref = _distribution_rows(parse(files(), engine=REFERENCE[0], return_type=REFERENCE[1]))
+    assert [dict(rows).get("fileName") for rows in ref] == [Path(minimal_cim).name, "named.xml", "b.xml", "c.xml", "a.xml"]
+    assert [dict(rows).get("belongsToContainer") for rows in ref] == [None, None, str(outer), str(outer), "inner.zip"]
+    assert [[key for key, _ in rows] for rows in ref][-1] == ["Type", "label", "fileName", "belongsToContainer"]
+    assert _distribution_rows(parse(files(), engine=engine, return_type=return_type)) == ref
 
 
 # ── string_type: every layout carries the same content, in the right schema ───

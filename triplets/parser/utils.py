@@ -92,6 +92,12 @@ def iter_rdf_rows(rdf_objects, local_resources=True, base=None):
             yield obj_id, _split_prefixed_name(element.tag), value
 
 
+def base_name(label: str) -> str:
+    """The file name in a source label (``nfo:fileName``): the part after the last ``/``
+    or ``\\``, on any platform; ``""`` for an empty label."""
+    return label.replace("\\", "/").rpartition("/")[2]
+
+
 def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debug: bool = False):
     """Yield XML file objects and/or str paths, one at a time (lazy).
 

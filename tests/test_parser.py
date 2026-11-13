@@ -148,7 +148,7 @@ def test_empty_parse_schema_matches_nonempty(cols, engine):
     assert len(polars.concat([empty_pl, full_pl])) == len(full_pl)
 
 
-# ── Distribution rows: the zip a file came from (belongsToContainer) ────────
+# ── Distribution rows: file name (fileName), the zip it came from (belongsToContainer)
 
 def _distributions(data):
     """label → belongsToContainer (None without that row) of every Distribution object, and
@@ -177,7 +177,7 @@ def test_container_zip_path(tmp_path, parser_engine):
     one = _zip(tmp_path / "one.zip", {"a.xml": XML})
     labels, objects = _distributions(parse(one, engine=parser_engine))
     assert labels == {"a.xml": one}
-    assert objects == [[("Type", "Distribution"), ("label", "a.xml"), ("belongsToContainer", one)]]
+    assert objects == [[("Type", "Distribution"), ("label", "a.xml"), ("fileName", "a.xml"), ("belongsToContainer", one)]]
 
     many = _zip(tmp_path / "many.zip", {"a.xml": XML, "b.xml": XML, "c.rdf": XML})
     assert _distributions(parse(Path(many), engine=parser_engine))[0] == {"a.xml": many, "b.xml": many, "c.rdf": many}
@@ -215,8 +215,62 @@ def test_container_find_all_xml_and_rdf_parser(tmp_path):
     (member,) = find_all_xml(path)
     assert (member.name, member.container) == ("a.xml", path)
     rows = pandas.DataFrame(rdf_parser.load_RDF_to_list(member), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    assert _distributions(rows)[1] == [[("Type", "Distribution"), ("label", "a.xml"), ("belongsToContainer", path)]]
+    assert _distributions(rows)[1] == [[("Type", "Distribution"), ("label", "a.xml"), ("fileName", "a.xml"),
+                                        ("belongsToContainer", path)]]
     assert not hasattr(find_all_xml(MINIMAL)[0], "container")
+
+
+@pytest.mark.parametrize("label, name", [
+    ("/data/models/20220615T2230Z__Belgovia_EQ_1.xml", "20220615T2230Z__Belgovia_EQ_1.xml"),
+    ("sub/dir/x.xml", "x.xml"),
+    ("C:\\models\\x.xml", "x.xml"),
+    ("models\\sub/x.xml", "x.xml"),
+    ("x.xml", "x.xml"),
+    ("", ""),
+])
+def test_base_name(label, name):
+    """fileName rule: the part of the label after the last / or \\ (any platform)."""
+    from triplets.parser.utils import base_name
+    assert base_name(label) == name
+
+
+def _file_names(data):
+    """label → fileName (None without that row) of every Distribution object."""
+    return {dict(o)["label"]: dict(o).get("fileName") for o in _distributions(data)[1]}
+
+
+def test_file_name_paths(tmp_path, monkeypatch, parser_engine):
+    """Every parsed file gets fileName = its label without directories: absolute, relative and bare paths."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "relative.xml").write_bytes(XML)
+    (tmp_path / "bare.xml").write_bytes(XML)
+    data = parse([MINIMAL, "sub/relative.xml", Path("bare.xml")], engine=parser_engine)
+    assert _file_names(data) == {MINIMAL: "minimal_cim.xml", "sub/relative.xml": "relative.xml", "bare.xml": "bare.xml"}
+    assert _distributions(data)[1][0] == [("Type", "Distribution"), ("label", MINIMAL), ("fileName", "minimal_cim.xml")]
+
+
+def test_file_name_zip_members(tmp_path, parser_engine):
+    """A zip member in a sub-directory and a member of a nested zip: fileName drops the member's directories."""
+    inner = Path(_zip(tmp_path / "inner.zip", {"deep/a.xml": XML})).read_bytes()
+    outer = _zip(tmp_path / "outer.zip", {"sub/dir/x.xml": XML, "nested/inner.zip": inner})
+    objects = _distributions(parse(outer, engine=parser_engine))[1]
+    assert objects == [
+        [("Type", "Distribution"), ("label", "sub/dir/x.xml"), ("fileName", "x.xml"), ("belongsToContainer", outer)],
+        [("Type", "Distribution"), ("label", "deep/a.xml"), ("fileName", "a.xml"), ("belongsToContainer", "nested/inner.zip")],
+    ]
+
+
+def test_file_name_file_objects(parser_engine):
+    """A named file object: fileName from its .name (backslashes too); a nameless one gets no fileName row."""
+    from io import BytesIO
+    named = BytesIO(XML)
+    named.name = "C:\\models\\windows.xml"
+    assert _file_names(parse(named, engine=parser_engine)) == {"C:\\models\\windows.xml": "windows.xml"}
+    nameless = triplets.parser.get_engine(parser_engine)[1].load_rdf_to_dataframe(BytesIO(XML))
+    nameless = nameless.to_pandas() if hasattr(nameless, "to_pandas") else nameless
+    (rows,) = _distributions(nameless)[1]
+    assert [key for key, _ in rows] == ["Type", "label"]          # label: "" or "<file-like>" per engine, as before
 
 
 # ── Per-engine tests ────────────────────────────────────────────────────────
@@ -295,7 +349,7 @@ def test_duckdb_read_rdf():
     import triplets
     data = duckdb.connect()
     rows = data.read_rdf([MINIMAL])
-    assert rows == 16         # no xml_base row: the file declares none (the file location is never recorded)
+    assert rows == 17         # no xml_base row: the file declares none (the file location is never recorded)
     assert "Substation" in data.types_dict()
 
 

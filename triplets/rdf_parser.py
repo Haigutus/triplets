@@ -24,7 +24,7 @@ import uuid
 import logging
 
 from .iri import TYPE_KEY, local_id
-from .parser.utils import iter_rdf_rows
+from .parser.utils import base_name, iter_rdf_rows
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +179,9 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
         (ID, TYPE_KEY, "Distribution", INSTANCE_ID),
         (ID, "label", file_name, INSTANCE_ID),
     ]
+    name = base_name(str(file_name))   # nfo:fileName: label without directories
+    if name:
+        data_list.append((ID, "fileName", name, INSTANCE_ID))
     container = getattr(path_or_fileobject, "container", None)   # the zip this file came from (find_all_xml)
     if container is not None:
         data_list.append((ID, "belongsToContainer", container, INSTANCE_ID))

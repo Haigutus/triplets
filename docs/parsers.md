@@ -42,14 +42,15 @@ file's own content:
 | Type | KEY | VALUE |
 |---|---|---|
 | `Distribution` | `label` | the file: the path as given, or the file object's `.name` (a zip member: its name in the zip) |
+| `Distribution` | `fileName` | the file name with its extension: `label` after its last `/` or `\` (any platform), e.g. `/data/models/x.xml` and `sub/dir/x.xml` → `x.xml`. No `fileName` row for a source without a name |
 | `Distribution` | `belongsToContainer` | the zip the file was read from: the zip path as given, or the zip file object's `.name`; for a zip inside a zip, the inner zip's member name. No `belongsToContainer` row for a file not read from a zip |
 | `NamespaceMap` | prefix | the namespace IRI of each prefix the root declares (`""`: the default namespace), and `xml_base` when the root declares an absolute `xml:base` |
 
-`belongsToContainer` is the Nepomuk File Ontology term for "the file sits in this
-container (zip)": `nfo:belongsToContainer`, NFO namespace
-`http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#`. In NFO its range is
-the container resource; here the VALUE is the zip's name directly, as `label`
-holds the file's name.
+`fileName` and `belongsToContainer` are Nepomuk File Ontology terms (NFO namespace
+`http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#`): `nfo:fileName`, "name
+of the file, together with the extension", and `nfo:belongsToContainer`, the
+file sits in this container (zip). In NFO the range of `belongsToContainer` is
+the container resource; here the VALUE is the zip's name directly.
 
 Their IDs are new UUIDs on every parse. They are not schema classes: the CIM XML
 export writes them only with `export_undefined=True`, `cim-diff` and
