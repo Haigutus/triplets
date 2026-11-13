@@ -32,11 +32,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   invocation notifications; SARIF viewers do
   ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **`source_root=` on `export_to_sarif` / `to_sarif`, `export_to_shacl_report` /
-  `to_shacl_report` and `locate_violations` / `locate`** — when the locate pass runs, a
-  `sources=` path under that directory is written relative to it with forward slashes,
-  so no absolute path reaches SARIF `artifactLocation.uri` or the SHACL report's
-  `[context_location]` message. Paths outside it, zip members and file-likes keep their
-  names; default `None` writes the paths as given ([#94](https://github.com/Haigutus/triplets/issues/94)).
+  `to_shacl_report` and `locate_violations` / `locate`** — source file names under that
+  directory are written relative to it with forward slashes: the `sources=` paths the
+  locate pass reads (SARIF `artifactLocation.uri`, the SHACL report's `[context_location]`
+  message) and the absolute file names the frame carries — the `INSTANCE_LABEL` fallback
+  location and the run metadata's `source` / `references` (SARIF run `properties`,
+  whole-file fallback locations, rule help; SHACL `dcterms:source` /
+  `dcterms:references`). The comparison is lexical (symlinks are not resolved). Relative
+  names, zip members, file-likes and the `SOURCE_URI` of an already located frame keep
+  their names; `sources=` paths outside the root keep theirs and are named in one logged
+  warning. Default `None` writes the names as given
+  ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **Fixed language tag per schema entry** — `"language": "en"` on an Attribute entry writes
   `"text"@en` in N-Quads (pandas, polars, streaming; hence the rdflib / pyshacl loader) and
   `xml:lang="en"` on the literal element in both CIM XML engines, with or without
@@ -435,6 +441,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **SARIF / SHACL report / CSV / Excel: a `PROFILE` cell holding a numpy array** (e.g. a
+  list column after a polars → pandas conversion) is read as its profiles — before, an
+  array of length 0 or ≥ 2 raised `ValueError` and a 1-element array was written as
+  `['EQ']`; null and empty-string profiles are dropped.
 - **A range bound that is not a number no longer fails the SHACL compile**: a
   `sh:minInclusive` … `sh:maxExclusive` bound such as `"2020-01-01"^^xsd:date` raised
   `ValueError` in `compile()`, so no shape was validated. pandas, polars and duckdb
