@@ -312,7 +312,7 @@ def _message_sources(violations, ir):
 
 
 def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_undefined_keys=False,
-                    engine="auto", undefined_namespace=CIM_NS, severity="Violation", **kwargs):
+                    engine="auto", severity="Violation", **kwargs):
     """Validate triplet data against the export schema: cardinality, datatypes and
     enumerations of the scoped profiles, per instance.
 
@@ -343,8 +343,7 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
 
     instances = list(data_scope) if data_scope is not None else _instances(data, table_name)
     # one raw engine pass per instance — the presentation pass runs ONCE on the concat
-    frames = [_run(data, compiled, engine_name, engine_mod, None, [instance],
-                   undefined_namespace=undefined_namespace, **kwargs) for instance in instances]
+    frames = [_run(data, compiled, engine_name, engine_mod, None, [instance], **kwargs) for instance in instances]
     violations = (pandas.concat(frames, ignore_index=True) if frames
                   else pandas.DataFrame(columns=VIOLATION_COLUMNS))
     violations["PROFILE"] = _profile_column(violations, sections)
@@ -355,7 +354,7 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
 
 def validate_schema_references(data, rdf_map, data_scope=None, rdf_map_scope=None, target_data_scope=None,
                                target_rdf_map_scope=(), report_missing_targets=True, engine="auto",
-                               inheritance=True, undefined_namespace=CIM_NS, severity="Violation", **kwargs):
+                               inheritance=True, severity="Violation", **kwargs):
     """Check the reference types of the source instances' associations.
 
     Every instance in *data_scope* is checked on its own against the
@@ -400,8 +399,7 @@ def validate_schema_references(data, rdf_map, data_scope=None, rdf_map_scope=Non
     frames = []
     for instance in sources:
         found = _run(data, compiled, engine_name, engine_mod, None,
-                     [instance, *(target for target in targets if target != instance)],
-                     undefined_namespace=undefined_namespace, **kwargs)
+                     [instance, *(target for target in targets if target != instance)], **kwargs)
         own = own_triples.get(str(instance), set())
         mask = [triple in own for triple in zip(found["ID"], found["KEY"], found["VALUE"])]
         frames.append(found.loc[pandas.Series(mask, index=found.index, dtype=bool)])
