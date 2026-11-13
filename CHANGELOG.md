@@ -172,6 +172,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`data_unchanged=True` also asserts the `rdf_map` dict is unchanged** (`sparql.query`,
+  `load_dataset`, the engines): passed again with the same data object, the same dict object
+  reuses the schema serialization stored with the data digest instead of a `json.dumps` per
+  call (a path is still read per call). The sh:sparql phase of `validate_shacl` serializes its
+  scoped schema once per run instead of once per query (~1 ms each): warm `engine="polars"`
+  on Belgovia / Svedala EQ with the CGMES 3.0 shapes ~0.45 → ~0.35 s / ~0.82 → ~0.72 s.
 - **SARIF rule titles name the constraint language**: `SHACL …` / `RDFS …` on every
   rule, `sh:name` titles included (`SHACL Line completeness (8×)`)
   ([#150](https://github.com/Haigutus/triplets/issues/150)).

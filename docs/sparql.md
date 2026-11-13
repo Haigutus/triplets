@@ -137,8 +137,11 @@ asserts the data object has not been mutated since it was last hashed, reusing
 the digest remembered for that exact object (id-keyed with a weakref eviction
 callback, so a garbage-collected frame can never leak its digest to a new
 object at the same address). Without the flag the hash always runs; with the
-flag on a never-hashed object it runs once and is remembered. In-place
-mutation after asserting `data_unchanged` returns stale results — that is the
+flag on a never-hashed object it runs once and is remembered. The flag also
+asserts that an `rdf_map` dict passed again with that data object is unchanged:
+the same dict object reuses the schema serialization stored with the digest
+(another object, or a path, is serialized / read again). In-place mutation of
+either after asserting `data_unchanged` returns stale results — that is the
 contract.
 
 Cross-*parse* sharing is limited by the parser generating fresh INSTANCE_IDs
@@ -240,7 +243,7 @@ from the result bindings — neither is Arrow-backed.
 ```
 triplets/
 |-- _content_key.py          # engine-neutral state keying (content_hash + rdf_map + salt,
-|                            #   data_unchanged digest memo with weakref eviction)
+|                            #   data_unchanged data + schema digest memo, weakref eviction)
 |-- _caches.py               # clear_caches() / cache_scope(): in-process engine-state lifecycle
 |-- _rdflib_loader.py        # load_dataset() (shared with validation), scoped_graph()
 |-- parser/nquads.py         # read_nquads: N-Quads -> triplets (inverse of the export);

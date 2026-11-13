@@ -150,3 +150,106 @@ def test_hash_memo_evicted_on_gc(svedala):
     del data
     gc.collect()
     assert object_id not in _content_key._HASHES
+
+
+# ── content_key: the schema serialization rides on the data digest ──────────
+
+SALT = b"test-salt"
+SCHEMA = {"EQ": {"ACLineSegment.length": {"type": "Attribute", "datatype": "float"}}}
+
+
+def _frame():
+    return pandas.DataFrame({"ID": ["a", "a"], "KEY": ["Type", "IdentifiedObject.name"],
+                             "VALUE": ["ACLineSegment", "line"], "INSTANCE_ID": ["i", "i"]})
+
+
+def _expected_key(data, schema_bytes):
+    import hashlib
+    content = data.content_hash(ignore_types=(), columns=("ID", "KEY", "VALUE", "INSTANCE_ID"))
+    return hashlib.sha256(SALT + content.encode() + schema_bytes).hexdigest()[:24]
+
+
+@pytest.fixture
+def dumps_calls(monkeypatch):
+    """Counts the schema serializations content_key runs."""
+    import json
+    from types import SimpleNamespace
+    from triplets import _content_key
+    calls = []
+    monkeypatch.setattr(_content_key, "json", SimpleNamespace(
+        dumps=lambda *args, **kwargs: calls.append(args[0]) or json.dumps(*args, **kwargs)))
+    return calls
+
+
+def test_content_key_formula(tmp_path):
+    """The key is sha256(salt + data digest + schema bytes): JSON of a dict
+    (sorted keys), the raw bytes of a path, nothing for no schema — with and
+    without data_unchanged, first call and reuse alike."""
+    import json
+    from triplets._content_key import content_key
+    path = tmp_path / "rdf_map.json"
+    path.write_text(json.dumps(SCHEMA, indent=1))
+    cases = [(SCHEMA, json.dumps(SCHEMA, sort_keys=True, default=str).encode()), (str(path), path.read_bytes()),
+             (path, path.read_bytes()), (None, b""), ({}, b"")]
+    for rdf_map, schema_bytes in cases:
+        data = _frame()
+        for data_unchanged in (False, True, True, False):
+            assert content_key(data, rdf_map, SALT, data_unchanged) == _expected_key(data, schema_bytes), rdf_map
+
+
+def test_content_key_reuses_schema_of_same_rdf_map_object(dumps_calls):
+    """data_unchanged=True reuses the stored serialization only for the very
+    rdf_map object it was computed from; another object is serialized again
+    (equal content → equal key, other content → other key); without the flag
+    it always runs."""
+    import copy
+    from triplets._content_key import content_key
+    data = _frame()
+    first = content_key(data, SCHEMA, SALT)
+    assert len(dumps_calls) == 1
+    assert content_key(data, SCHEMA, SALT, data_unchanged=True) == first
+    assert len(dumps_calls) == 1
+    assert content_key(data, copy.deepcopy(SCHEMA), SALT, data_unchanged=True) == first
+    assert len(dumps_calls) == 2
+    other = {"EQ": {"ACLineSegment.length": {"type": "Attribute", "datatype": "string"}}}
+    assert content_key(data, other, SALT, data_unchanged=True) != first
+    assert len(dumps_calls) == 3
+    assert content_key(data, other, SALT) == content_key(data, other, SALT)
+    assert len(dumps_calls) == 5
+
+
+def test_content_key_schema_mutated_in_place_is_the_callers_assertion(dumps_calls):
+    """data_unchanged=True asserts the rdf_map dict is unchanged too: mutated
+    in place, the same object keeps its stored serialization (stale key);
+    without the flag the mutation shows."""
+    import copy
+    from triplets._content_key import content_key
+    data, schema = _frame(), copy.deepcopy(SCHEMA)
+    before = content_key(data, schema, SALT)
+    schema["EQ"]["ACLineSegment.length"]["datatype"] = "string"
+    assert content_key(data, schema, SALT, data_unchanged=True) == before
+    assert content_key(data, schema, SALT) != before
+
+
+def test_content_key_entry_releases_data_and_rdf_map():
+    """The entry holds the rdf_map strongly and the data weakly: no cycle keeps
+    the data alive (freed by refcount alone), and its eviction drops the
+    rdf_map reference."""
+    import copy
+    import gc
+    import sys
+    import weakref
+    from triplets import _content_key
+    data, schema = _frame(), copy.deepcopy(SCHEMA)
+    references = sys.getrefcount(schema)
+    _content_key.content_key(data, schema, SALT)
+    assert sys.getrefcount(schema) == references + 1
+    object_id, alive = id(data), weakref.ref(data)
+    gc.disable()
+    try:
+        del data
+        assert alive() is None
+    finally:
+        gc.enable()
+    assert object_id not in _content_key._HASHES
+    assert sys.getrefcount(schema) == references
