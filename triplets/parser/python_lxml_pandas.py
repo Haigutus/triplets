@@ -15,7 +15,7 @@ from typing import Union, IO
 import pandas as pd
 from lxml import etree
 
-from .utils import document_base, iter_rdf_rows
+from .utils import base_name, document_base, iter_rdf_rows
 from ..iri import TRIPLETS_NS, TYPE_KEY
 
 logger = logging.getLogger(__name__)
@@ -59,8 +59,14 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
     data_list = [
         (dist_id, TYPE_KEY, "Distribution"),
         (dist_id, "label", str(file_name)),
-        (nsmap_id, TYPE_KEY, "NamespaceMap"),
     ]
+    name = base_name(str(file_name))   # nfo:fileName: label without directories
+    if name:
+        data_list.append((dist_id, "fileName", name))
+    container = getattr(path_or_fileobject, "container", None)   # the zip this file came from (iter_all_xml)
+    if container is not None:
+        data_list.append((dist_id, "belongsToContainer", container))
+    data_list.append((nsmap_id, TYPE_KEY, "NamespaceMap"))
 
     for k, v in namespace_map.items():
         data_list.append((nsmap_id, str(k) if k is not None else "", str(v) if v is not None else ""))

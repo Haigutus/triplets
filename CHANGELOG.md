@@ -7,6 +7,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **File name and zip name in the Distribution rows** — two more `Distribution` rows,
+  Nepomuk File Ontology terms (`nfo:`): `fileName` on every parsed file, the file name with
+  its extension (`label` after its last `/` or `\`; no row for a source without a name),
+  and `belongsToContainer` on a file read from a zip, the zip's file name by the same rule
+  (of the zip path, the zip file object's `.name`, or a nested zip's member name).
+  Both record the names as parsed, not updated when `label` is later rewritten.
+  `label` is unchanged. Row order: `Type`, `label`, `fileName`, `belongsToContainer`. All
+  parser engines write them (also `rdf_parser.load_RDF_to_list`); zip members from
+  `iter_all_xml` / `find_all_xml` carry the zip's file name as `.container` next to `.name`. Like
+  `label`, they stay out of CIM XML (unless `export_undefined=True`) and of `cim-diff` /
+  `cim-spreadsheet` (unless `--keep-metadata`)
+  ([#229](https://github.com/Haigutus/triplets/issues/229)).
 - **`validate_schema(..., severity=)` / `validate_schema_references(..., severity=)`** (and
   `compile_schema` / `compile_references`) — report schema findings as `"Warning"` or `"Info"`
   instead of `"Violation"` (SARIF `warning` / `note`, `sh:resultSeverity`); other values raise
