@@ -854,7 +854,7 @@ pyshacl pass-through options (`inference`, `advanced`, `store`) are forwarded
 as keyword arguments. Names the schema does not declare (every name without an
 `rdf_map`) are written under `undefined_namespace=` (default CIM100, so
 schema-less `cim:` shapes keep working; the same parameter on
-`validate_schema` / `validate_schema_references` / `to_shacl_report`); every
+`to_shacl_report`); every
 row is loaded. `abort_on_first=True` stops every engine at the first
 Violation (Warnings and `triplets:invalidSparql` never stop it), for a yes/no
 gate rather than a full report. Runnable end-to-end demos live in

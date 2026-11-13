@@ -123,7 +123,7 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   Every exporter has the same two knobs: `export_undefined` (write such rows
   or drop them — N-Quads keeps them by default, CIM XML drops them) and
   `undefined_namespace` (default `http://triplets#`). `sparql.query`,
-  `validate_shacl`, `validate_schema` and `export_to_shacl_report` always load every
+  `validate_shacl` and `export_to_shacl_report` always load every
   row and default the namespace to CIM100 so schema-less data answers `cim:`
   queries; the same frame therefore exports `triplets#Equipment` and is
   queried as `CIM100#Equipment` unless the parameter is passed.
