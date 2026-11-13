@@ -14,7 +14,8 @@ violations frame — both the SARIF and the sh:ValidationReport exports call
 it when given ``sources=``, and it is exposed as
 ``violations.shacl.locate(sources=...)``. With ``source_root=``, a path source
 under that directory is reported relative to it (forward slashes); zip
-members and file-likes keep their own names.
+members and file-likes keep their own names. ``relative_name`` is the rule
+both report exports apply to the source file names they write.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
 are handed to an export. When the same object is defined in several files
@@ -58,8 +59,9 @@ def locate(wanted, sources, source_root=None):
     source_root : str/Path, optional
         A path source under this directory gets its "uri" relative to it,
         with forward slashes (relative paths are read against the working
-        directory, as ``open`` reads them). Paths outside it, zip members and
-        file-likes keep their own names.
+        directory, as ``open`` reads them; see relative_name). Paths outside
+        it — logged in one warning — zip members and file-likes keep their
+        own names.
 
     Returns
     -------
@@ -69,14 +71,18 @@ def locate(wanted, sources, source_root=None):
     """
     from ..parser.utils import find_all_xml
 
+    root = None if source_root is None else os.path.abspath(source_root)
     remaining = {str(object_id).encode(): object_id for object_id in wanted}
-    located = {}
+    located, outside = {}, []
     for source in find_all_xml(sources):
         if not remaining:
             break
         uri, text = _read(source)
-        if isinstance(source, str):                    # a path, not a zip member / file-like
-            uri = _relative(uri, source_root) or uri
+        if root is not None and isinstance(source, str):     # a path, not a zip member / file-like
+            relative = relative_name(os.path.abspath(uri), root)
+            if relative is None:
+                outside.append(uri)
+            uri = relative or uri
         matches = list(_DEFINITION.finditer(text))
         line, previous = 1, 0
         for position, match in enumerate(matches):
@@ -92,6 +98,9 @@ def locate(wanted, sources, source_root=None):
             }
     if remaining:
         logger.debug("%d violating object(s) not found in the sources", len(remaining))
+    if outside:
+        logger.warning("%d source(s) outside source_root %s keep their names: %s",
+                       len(outside), source_root, ", ".join(outside))
     return located
 
 
@@ -153,13 +162,17 @@ def _line_text(text, position):
     return text[line_start:line_end].decode("utf-8", "replace").strip()
 
 
-def _relative(path, source_root):
-    """*path* relative to *source_root* with forward slashes; None without a
-    root or for a path outside it."""
-    if source_root is None:
+def relative_name(name, root):
+    """*name* relative to *root* with forward slashes when *name* is an
+    absolute path of a file in *root* or a directory below it; else None.
+    *root* is an absolute path (``os.path.abspath`` of ``source_root``) or
+    None. A relative name — a zip member, a bare file name — stays as it is:
+    it is never read against the working directory. Lexical: symlinks are not
+    resolved."""
+    if root is None or not os.path.isabs(name):
         return None
-    path, root = (pathlib.Path(os.path.abspath(item)) for item in (path, source_root))
-    return path.relative_to(root).as_posix() if path.is_relative_to(root) else None
+    path = pathlib.PurePath(os.path.normpath(name))
+    return path.relative_to(root).as_posix() if path.parent.is_relative_to(root) else None
 
 
 def _read(source):

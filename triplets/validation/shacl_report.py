@@ -11,8 +11,10 @@ import logging
 import os
 from datetime import datetime, timezone
 
+import numpy
 import pandas
 
+from .locations import relative_name
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
                    XSD_NS, CIM_NS, absolute_id, absolute_key, decode_iri, is_iri, load_rdf_map, local_id, local_key, local_value,
                    namespaces, split_iri)
@@ -156,7 +158,7 @@ _COMPONENT_URI = {short: f"{SH_NS}{suffix}" for suffix, short in _COMPONENT_MAP.
 
 
 def violations_to_report_graph(violations, report_source=None, report_references=None,
-                               rdf_map=None, undefined_namespace=CIM_NS):
+                               rdf_map=None, undefined_namespace=CIM_NS, source_root=None):
     r"""Violations DataFrame → sh:ValidationReport rdflib graph (inverse of
     report_to_violations; KEYs expand through the export schema namespaces —
     ``rdf_map`` — ``undefined_namespace`` for names it lacks, unless already URIs).
@@ -174,7 +176,9 @@ def violations_to_report_graph(violations, report_source=None, report_references
 
     Defaults come from ``violations.attrs["validation"]`` — the metadata
     the validation functions stamp on the frame (timestamp of the validation run, tool
-    version, data/shape file names). Explicit arguments override it.
+    version, data/shape file names). Explicit arguments override it. With
+    ``source_root``, an absolute file name under it is written relative to it
+    (locations.relative_name).
     """
     import rdflib
     import triplets
@@ -215,10 +219,11 @@ def violations_to_report_graph(violations, report_source=None, report_references
     graph.add((report, prov.generatedAtTime,
                rdflib.Literal(generated_at, datatype=rdflib.URIRef(f"{XSD_NS}dateTime"))))
     graph.add((report, dcterms.creator, rdflib.Literal(creator)))
+    root = None if source_root is None else os.path.abspath(source_root)
     for value in _as_list(report_source):
-        graph.add((report, dcterms.source, rdflib.Literal(value)))
+        graph.add((report, dcterms.source, rdflib.Literal(relative_name(value, root) or value)))
     for value in _as_list(report_references):
-        graph.add((report, dcterms.references, rdflib.Literal(value)))
+        graph.add((report, dcterms.references, rdflib.Literal(relative_name(value, root) or value)))
 
     for row in violations.itertuples(index=False):
         result = rdflib.BNode()
@@ -384,9 +389,13 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
     undefined_namespace : str, default CIM100
         Namespace for KEYs the schema does not declare (every KEY without one).
     source_root : str or Path, optional
-        Applies when the locate pass runs: a source path under this directory
-        is written relative to it (forward slashes) in the "[context_location]"
-        message; paths outside it, zip members and file-likes keep their names.
+        Source file names under this directory are written relative to it
+        (forward slashes): the paths in *sources* the locate pass reads (the
+        "[context_location]" message) and the absolute file names in
+        ``dcterms:source`` / ``dcterms:references``. Paths outside it — logged
+        in one warning — relative names, zip members, file-likes and the
+        SOURCE_URI of a frame already carrying LOCATION_COLUMNS keep their
+        names (see locations.relative_name).
     """
     if sources is not None:
         from .locations import LOCATION_COLUMNS, locate_violations
@@ -397,7 +406,8 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
     payload = (violations_to_report_graph(violations, report_source=report_source,
                                           report_references=report_references,
                                           rdf_map=load_rdf_map(rdf_map),
-                                          undefined_namespace=undefined_namespace)
+                                          undefined_namespace=undefined_namespace,
+                                          source_root=source_root)
                .serialize(format=fmt).encode("utf-8"))
     if export_to_memory:
         buffer = io.BytesIO(payload)
@@ -427,11 +437,16 @@ def _buffer(name, payload):
     return buffer
 
 
+def profile_names(value):
+    """The profiles of a PROFILE cell — a list, tuple or numpy array of
+    section keys, or one key as text; nulls and empty strings dropped."""
+    values = value if isinstance(value, (list, tuple, numpy.ndarray)) else (value,)
+    return [str(name) for name in values if not pandas.isna(name) and str(name)]
+
+
 def profile_text(value):
     """A PROFILE cell as text: the scoped section keys joined with ", " (display only)."""
-    if isinstance(value, (list, tuple)):
-        return ", ".join(map(str, value)) or None
-    return None if value is None or pandas.isna(value) else str(value)
+    return ", ".join(profile_names(value)) or None
 
 
 def _with_profile_text(violations):

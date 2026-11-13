@@ -491,14 +491,72 @@ def test_source_root_relative_locations(tmp_path):
         == {"uri": "sub/grid%20EQ.xml"}
 
 
-def test_source_root_applies_to_the_locate_pass_only(tmp_path):
-    """A frame already carrying the location columns is used as-is."""
+def test_source_root_keeps_a_stamped_source_uri(tmp_path):
+    """A frame already carrying the location columns is used as-is: its
+    SOURCE_URI may name a file-like, so it is not rewritten."""
     violations, sources = located(tmp_path)
     stamped = triplets.validation.locate_violations(violations, sources)
     violations, sources = located(tmp_path / "again")                      # fresh file-like
     run = build_sarif(stamped, sources=sources, source_root=tmp_path / "repo")["runs"][0]
     assert run["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"] \
         == {"uri": quote_path(str(tmp_path / "repo" / "sub" / "grid EQ.xml"))}
+
+
+def test_source_root_covers_labels_and_run_metadata(tmp_path):
+    """source_root reaches every file name the log writes: the INSTANCE_LABEL
+    fallback location, the run-level artifact fallback (data file for a
+    data row, shapes file for a tool finding), the help's File line and
+    properties.source / references. A relative label and a name outside the
+    root keep their names; the frame's metadata is not changed."""
+    root = tmp_path / "repo"
+    (root / "models").mkdir(parents=True)
+    model = root / "models" / "grid EQ.xml"
+    model.write_text(XML, encoding="utf-8")
+    columns = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE", "INSTANCE_LABEL"]
+    violations = pandas.DataFrame([
+        ["aaaaaaaa-2222-3333-4444-555555555555", "IdentifiedObject.name", None, "sh:minCount", "m", "Violation",
+         "urn:located", str(model)],
+        ["ffffffff-2222-3333-4444-555555555555", "IdentifiedObject.name", None, "sh:minCount", "m", "Violation",
+         "urn:label", str(root / "models" / "other.xml")],
+        ["gggggggg-2222-3333-4444-555555555555", "IdentifiedObject.name", None, "sh:minCount", "m", "Violation",
+         "urn:relative", "models/relative.xml"],
+        ["hhhhhhhh-2222-3333-4444-555555555555", "IdentifiedObject.name", None, "sh:minCount", "m", "Violation",
+         "urn:outside", str(tmp_path / "outside.xml")],
+        [None, None, None, "sh:minCount", "m", "Violation", "urn:data", None],
+        [None, None, None, "triplets:invalidSparql", "m", "Violation", "urn:tool", None]], columns=columns)
+    meta = {"source": [str(model), str(tmp_path / "outside.xml")], "references": [str(root / "shapes.ttl")]}
+    violations.attrs["validation"] = meta
+    expected = {"urn:located": "models/grid%20EQ.xml", "urn:label": "models/other.xml",
+                "urn:relative": "models/relative.xml", "urn:outside": quote_path(str(tmp_path / "outside.xml")),
+                "urn:data": "models/grid%20EQ.xml", "urn:tool": "shapes.ttl"}
+    for group in (True, False):
+        document = build_sarif(violations, group=group, sources=[str(model)], source_root=root)
+        run = document["runs"][0]
+        assert {result["properties"]["sourceShape"]:
+                result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+                for result in run["results"]} == expected
+        assert run["properties"] == {"source": ["models/grid EQ.xml", str(tmp_path / "outside.xml")],
+                                     "references": ["shapes.ttl"]}
+        assert "File: shapes.ttl" in run["tool"]["driver"]["rules"][0]["help"]["text"]
+        assert str(root) not in json.dumps(document, ensure_ascii=False)
+    assert violations.attrs["validation"] == {"source": [str(model), str(tmp_path / "outside.xml")],
+                                              "references": [str(root / "shapes.ttl")]}
+
+
+def test_profile_cells_as_tags_and_text():
+    """A PROFILE cell is a list, tuple, numpy array or text; nulls and empty
+    strings name no profile."""
+    import numpy
+    from triplets.validation.shacl_report import profile_text
+
+    tags = lambda violations: build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
+    assert tags(bare([numpy.array(["EQ"], dtype=object), ["OP", None, ""], ("SC",), "SSH", ""])) \
+        == ["shacl", "sh:minCount", "EQ", "OP", "SC", "SSH"]
+    assert profile_text(numpy.array(["EQ", "OP"], dtype=object)) == "EQ, OP"
+    assert profile_text(numpy.array([], dtype=object)) is None
+    assert profile_text(["EQ", None]) == "EQ"
+    assert profile_text(["EQ", "OP"]) == profile_text(("EQ", "OP")) == profile_text("EQ, OP") == "EQ, OP"
+    assert profile_text(None) is profile_text(float("nan")) is profile_text([]) is profile_text("") is None
 
 
 def quote_path(path):
