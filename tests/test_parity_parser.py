@@ -86,6 +86,32 @@ def test_parity(parser_files, engine, return_type):
         f"  reference: {shape(ref)}\n  {engine}/{return_type}: {shape(out)}")
 
 
+# ── Distribution rows (label, archive): identical across engines ──────────────
+def _distribution_rows(obj):
+    """(KEY, VALUE) rows of each Distribution object, in instance and row order (IDs are per-parse UUIDs)."""
+    df = to_pandas(obj)[["ID", "KEY", "VALUE"]].astype(str)
+    ids = df.loc[(df["KEY"] == "Type") & (df["VALUE"] == "Distribution"), "ID"]
+    rows = df[df["ID"].isin(ids)]
+    return [list(zip(group["KEY"], group["VALUE"])) for _, group in rows.groupby("ID", sort=False)]
+
+
+@pytest.mark.parametrize("engine,return_type", PARITY_PARAMS)
+def test_distribution_parity(tmp_path, minimal_cim, engine, return_type):
+    import zipfile
+    inner = tmp_path / "inner.zip"
+    with zipfile.ZipFile(inner, "w") as bundle:
+        bundle.write(minimal_cim, "a.xml")
+    outer = tmp_path / "outer.zip"
+    with zipfile.ZipFile(outer, "w") as bundle:
+        bundle.write(minimal_cim, "b.xml")
+        bundle.write(minimal_cim, "c.xml")
+        bundle.write(inner, "inner.zip")
+    files = [minimal_cim, str(outer)]
+    ref = _distribution_rows(parse(files, engine=REFERENCE[0], return_type=REFERENCE[1]))
+    assert [dict(rows).get("archive") for rows in ref] == [None, str(outer), str(outer), "inner.zip"]
+    assert _distribution_rows(parse(files, engine=engine, return_type=return_type)) == ref
+
+
 # ── string_type: every layout carries the same content, in the right schema ───
 STRING_TYPES = ["utf8", "large_utf8", "string_view"]
 ARROW_ENGINES = [e for e in AVAILABLE_ENGINES if e in parser._ARROW_ENGINES]

@@ -115,7 +115,7 @@ def test_parse_batches_zip_one_batch_per_file(tmp_path):
         bundle.write(MINIMAL, "b.xml")
     batches = list(triplets.parser.parse_batches(archive))
     assert len(batches) == 2
-    assert sum(b.num_rows for b in batches) == 2 * len(parse(MINIMAL))
+    assert sum(b.num_rows for b in batches) == 2 * (len(parse(MINIMAL)) + 1)   # + each member's archive row
 
 
 def test_parse_batches_empty_and_errors():
@@ -146,6 +146,77 @@ def test_empty_parse_schema_matches_nonempty(cols, engine):
     full_pl = parse(MINIMAL, return_type="polars", categorical_columns=cols, engine=engine)
     assert empty_pl.schema == full_pl.schema
     assert len(polars.concat([empty_pl, full_pl])) == len(full_pl)
+
+
+# ── Distribution rows: the zip a file came from (archive) ───────────────────
+
+def _distributions(data):
+    """label → archive (None without an archive row) of every Distribution object, and
+    the (KEY, VALUE) rows of each one in row order."""
+    data = data.astype({"ID": str, "KEY": str, "VALUE": str})
+    ids = data.loc[(data["KEY"] == "Type") & (data["VALUE"] == "Distribution"), "ID"]
+    rows = data[data["ID"].isin(ids)]
+    objects = [list(zip(group["KEY"], group["VALUE"])) for _, group in rows.groupby("ID", sort=False)]
+    return {dict(o)["label"]: dict(o).get("archive") for o in objects}, objects
+
+
+def _zip(path, members):
+    """Write a zip of {member name: bytes}; returns the path as str."""
+    import zipfile
+    with zipfile.ZipFile(path, "w") as bundle:
+        for name, content in members.items():
+            bundle.writestr(name, content)
+    return str(path)
+
+
+XML = Path(MINIMAL).read_bytes()
+
+
+def test_archive_zip_path(tmp_path, parser_engine):
+    """A zip given as a path: each member gets archive = the path as given; label stays the member name."""
+    one = _zip(tmp_path / "one.zip", {"a.xml": XML})
+    labels, objects = _distributions(parse(one, engine=parser_engine))
+    assert labels == {"a.xml": one}
+    assert objects == [[("Type", "Distribution"), ("label", "a.xml"), ("archive", one)]]
+
+    many = _zip(tmp_path / "many.zip", {"a.xml": XML, "b.xml": XML, "c.rdf": XML})
+    assert _distributions(parse(Path(many), engine=parser_engine))[0] == {"a.xml": many, "b.xml": many, "c.rdf": many}
+
+
+def test_archive_zip_file_object(tmp_path, parser_engine):
+    """A zip given as a file object: archive = its .name."""
+    path = _zip(tmp_path / "model.zip", {"a.xml": XML, "b.xml": XML})
+    with open(path, "rb") as handle:
+        assert _distributions(parse(handle, engine=parser_engine))[0] == {"a.xml": path, "b.xml": path}
+    from io import BytesIO
+    memory = BytesIO(Path(path).read_bytes())
+    memory.name = "in_memory.zip"
+    assert _distributions(parse(memory, engine=parser_engine))[0] == {"a.xml": "in_memory.zip", "b.xml": "in_memory.zip"}
+
+
+def test_archive_zip_in_zip(tmp_path, parser_engine):
+    """A zip inside a zip: its members get the inner zip's member name, the outer members the outer zip."""
+    inner = Path(_zip(tmp_path / "inner.zip", {"a.xml": XML})).read_bytes()
+    outer = _zip(tmp_path / "outer.zip", {"b.xml": XML, "nested/inner.zip": inner})
+    assert _distributions(parse(outer, engine=parser_engine))[0] == {"b.xml": outer, "a.xml": "nested/inner.zip"}
+
+
+def test_archive_plain_xml(parser_engine):
+    """A file that was not zipped has no archive row."""
+    labels, objects = _distributions(parse([MINIMAL, Path(MINIMAL)], engine=parser_engine))
+    assert labels == {MINIMAL: None}
+    assert all(key != "archive" for rows in objects for key, _ in rows)
+
+
+def test_archive_find_all_xml_and_rdf_parser(tmp_path):
+    """Zip members carry the zip next to their name; the old rdf_parser.load_RDF_to_list writes the same row."""
+    from triplets import rdf_parser
+    path = _zip(tmp_path / "model.zip", {"a.xml": XML})
+    (member,) = find_all_xml(path)
+    assert (member.name, member.archive) == ("a.xml", path)
+    rows = pandas.DataFrame(rdf_parser.load_RDF_to_list(member), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    assert _distributions(rows)[1] == [[("Type", "Distribution"), ("label", "a.xml"), ("archive", path)]]
+    assert not hasattr(find_all_xml(MINIMAL)[0], "archive")
 
 
 # ── Per-engine tests ────────────────────────────────────────────────────────

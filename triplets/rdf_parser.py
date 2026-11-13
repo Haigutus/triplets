@@ -178,8 +178,11 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
     data_list = [
         (ID, TYPE_KEY, "Distribution", INSTANCE_ID),
         (ID, "label", file_name, INSTANCE_ID),
-        (ID_NSMAP, TYPE_KEY, "NamespaceMap", INSTANCE_ID),
     ]
+    archive = getattr(path_or_fileobject, "archive", None)   # the zip this file came from (find_all_xml)
+    if archive is not None:
+        data_list.append((ID, "archive", archive, INSTANCE_ID))
+    data_list.append((ID_NSMAP, TYPE_KEY, "NamespaceMap", INSTANCE_ID))
 
     for key, value in namespace_map.items():
         data_list.append((ID_NSMAP, key, value, INSTANCE_ID))

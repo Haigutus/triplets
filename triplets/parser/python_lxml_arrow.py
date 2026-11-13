@@ -64,6 +64,9 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
     nsmap_id = str(uuid.uuid4())
     id_b.append(dist_id); key_b.append(TYPE_KEY); val_b.append("Distribution"); inst_b.append(instance_id)
     id_b.append(dist_id); key_b.append("label"); val_b.append(str(file_name)); inst_b.append(instance_id)
+    archive = getattr(path_or_fileobject, "archive", None)   # the zip this file came from (iter_all_xml)
+    if archive is not None:
+        id_b.append(dist_id); key_b.append("archive"); val_b.append(archive); inst_b.append(instance_id)
     id_b.append(nsmap_id); key_b.append(TYPE_KEY); val_b.append("NamespaceMap"); inst_b.append(instance_id)
 
     for k, v in namespace_map.items():
