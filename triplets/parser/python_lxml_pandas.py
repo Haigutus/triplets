@@ -60,9 +60,9 @@ def load_rdf_to_dataframe(path_or_fileobject: Union[str, IO], debug: bool = Fals
         (dist_id, TYPE_KEY, "Distribution"),
         (dist_id, "label", str(file_name)),
     ]
-    archive = getattr(path_or_fileobject, "archive", None)   # the zip this file came from (iter_all_xml)
-    if archive is not None:
-        data_list.append((dist_id, "archive", archive))
+    container = getattr(path_or_fileobject, "container", None)   # the zip this file came from (iter_all_xml)
+    if container is not None:
+        data_list.append((dist_id, "belongsToContainer", container))
     data_list.append((nsmap_id, TYPE_KEY, "NamespaceMap"))
 
     for k, v in namespace_map.items():

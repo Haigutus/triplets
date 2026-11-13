@@ -42,18 +42,24 @@ file's own content:
 | Type | KEY | VALUE |
 |---|---|---|
 | `Distribution` | `label` | the file: the path as given, or the file object's `.name` (a zip member: its name in the zip) |
-| `Distribution` | `archive` | the zip the file was read from: the zip path as given, or the zip file object's `.name`; for a zip inside a zip, the inner zip's member name. No `archive` row for a file not read from a zip |
+| `Distribution` | `belongsToContainer` | the zip the file was read from: the zip path as given, or the zip file object's `.name`; for a zip inside a zip, the inner zip's member name. No `belongsToContainer` row for a file not read from a zip |
 | `NamespaceMap` | prefix | the namespace IRI of each prefix the root declares (`""`: the default namespace), and `xml_base` when the root declares an absolute `xml:base` |
+
+`belongsToContainer` is the Nepomuk File Ontology term for "the file sits in this
+container (zip)": `nfo:belongsToContainer`, NFO namespace
+`http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#`. In NFO its range is
+the container resource; here the VALUE is the zip's name directly, as `label`
+holds the file's name.
 
 Their IDs are new UUIDs on every parse. They are not schema classes: the CIM XML
 export writes them only with `export_undefined=True`, `cim-diff` and
 `cim-spreadsheet` leave them out unless `--keep-metadata`, and `content_hash`
 ignores them. The N-Quads export and the SPARQL stores keep them as triples
 under `undefined_namespace` (`http://triplets#` by default for `export_to_nquads`,
-CIM100 for the SPARQL engines), e.g. `http://triplets#archive`.
+CIM100 for the SPARQL engines), e.g. `http://triplets#belongsToContainer`.
 
 `iter_all_xml()` / `find_all_xml()` yield a zip member as a `BytesIO` with `.name`
-(the member name) and `.archive` (the zip); the engines read both.
+(the member name) and `.container` (the zip); the engines read both.
 
 ## String layout — `parse(..., string_type=...)`
 

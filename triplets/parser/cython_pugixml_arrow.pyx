@@ -351,9 +351,9 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
     cdef string meta_id = str(uuid_mod.uuid4()).encode('utf-8')
     cdef string nsmap_id = str(uuid_mod.uuid4()).encode('utf-8')
     cdef bytes file_name_bytes = file_name.encode('utf-8')
-    # the zip this file came from (iter_all_xml sets .archive on zip members)
-    archive = getattr(path_or_fileobject, 'archive', None)
-    cdef bytes archive_bytes = None if archive is None else archive.encode('utf-8')
+    # the zip this file came from (iter_all_xml sets .container on zip members)
+    container = getattr(path_or_fileobject, 'container', None)
+    cdef bytes container_bytes = None if container is None else container.encode('utf-8')
 
     # Parse XML with pugixml
     cdef xml_document doc
@@ -472,10 +472,10 @@ def load_rdf_to_dataframe(path_or_fileobject, debug=False, string_type="utf8"):
         Append(key_b, b"label")
         Append(val_b, file_name_bytes)
 
-        if archive_bytes is not None:
+        if container_bytes is not None:
             Append(id_b, meta_id)
-            Append(key_b, b"archive")
-            Append(val_b, archive_bytes)
+            Append(key_b, b"belongsToContainer")
+            Append(val_b, container_bytes)
 
         # NamespaceMap header
         Append(id_b, nsmap_id)

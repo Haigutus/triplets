@@ -53,7 +53,7 @@ def test_parse_zip_path(reference, tmp_path):
     with zipfile.ZipFile(archive, "w") as bundle:
         bundle.write(XML, arcname=Path(XML).name)
     result = triplets.parse(archive)                 # bare Path to a .zip
-    assert rows(result) == rows(reference) + 1       # + the Distribution archive row (the zip)
+    assert rows(result) == rows(reference) + 1       # + the Distribution belongsToContainer row (the zip)
 
 
 @pytest.mark.parametrize("engine", ["python_lxml_pandas", "python_lxml_arrow", "cython_pugixml_arrow"])

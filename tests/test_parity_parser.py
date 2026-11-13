@@ -86,7 +86,7 @@ def test_parity(parser_files, engine, return_type):
         f"  reference: {shape(ref)}\n  {engine}/{return_type}: {shape(out)}")
 
 
-# ── Distribution rows (label, archive): identical across engines ──────────────
+# ── Distribution rows (label, belongsToContainer): identical across engines ───
 def _distribution_rows(obj):
     """(KEY, VALUE) rows of each Distribution object, in instance and row order (IDs are per-parse UUIDs)."""
     df = to_pandas(obj)[["ID", "KEY", "VALUE"]].astype(str)
@@ -108,7 +108,7 @@ def test_distribution_parity(tmp_path, minimal_cim, engine, return_type):
         bundle.write(inner, "inner.zip")
     files = [minimal_cim, str(outer)]
     ref = _distribution_rows(parse(files, engine=REFERENCE[0], return_type=REFERENCE[1]))
-    assert [dict(rows).get("archive") for rows in ref] == [None, str(outer), str(outer), "inner.zip"]
+    assert [dict(rows).get("belongsToContainer") for rows in ref] == [None, str(outer), str(outer), "inner.zip"]
     assert _distribution_rows(parse(files, engine=engine, return_type=return_type)) == ref
 
 

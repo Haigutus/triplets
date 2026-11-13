@@ -181,10 +181,10 @@ def test_parity(svedala_pandas, fmt, variant):
     assert ref == out, f"{fmt}/{variant} output differs from {fmt}/{spec['ref']}"
 
 
-# ── the archive row stays out of CIM XML, as label does ───────────────────────
+# ── the belongsToContainer row stays out of CIM XML, as label does ────────────
 @pytest.mark.parametrize("engine", ["python_lxml", "cython_pugixml"])
 def test_cimxml_of_zipped_input_unchanged(tmp_path, engine):
-    """A model parsed from a zip (Distribution archive row) exports byte-identical to
+    """A model parsed from a zip (Distribution belongsToContainer row) exports byte-identical to
     the same files parsed unzipped under the same names."""
     import io
     import zipfile
@@ -207,7 +207,7 @@ def test_cimxml_of_zipped_input_unchanged(tmp_path, engine):
         return {file.name: file.getvalue() for file in files}
 
     zipped = pandas.read_RDF([str(archive)])
-    assert set(zipped.loc[zipped["KEY"] == "archive", "VALUE"]) == {str(archive)}
+    assert set(zipped.loc[zipped["KEY"] == "belongsToContainer", "VALUE"]) == {str(archive)}
     assert exported(zipped) == exported(pandas.read_RDF(members))
 
 

@@ -179,9 +179,9 @@ def load_RDF_to_list(path_or_fileobject, debug=False, keep_ns=False):
         (ID, TYPE_KEY, "Distribution", INSTANCE_ID),
         (ID, "label", file_name, INSTANCE_ID),
     ]
-    archive = getattr(path_or_fileobject, "archive", None)   # the zip this file came from (find_all_xml)
-    if archive is not None:
-        data_list.append((ID, "archive", archive, INSTANCE_ID))
+    container = getattr(path_or_fileobject, "container", None)   # the zip this file came from (find_all_xml)
+    if container is not None:
+        data_list.append((ID, "belongsToContainer", container, INSTANCE_ID))
     data_list.append((ID_NSMAP, TYPE_KEY, "NamespaceMap", INSTANCE_ID))
 
     for key, value in namespace_map.items():

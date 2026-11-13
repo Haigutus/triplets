@@ -102,7 +102,7 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
     member in RAM (out-of-core ingest). Zip handles this function opens are
     closed after their archive is exhausted.
 
-    A zip member is a ``BytesIO`` with ``.name`` = its member name and ``.archive`` =
+    A zip member is a ``BytesIO`` with ``.name`` = its member name and ``.container`` =
     the zip it came from: the path as given, or the file object's ``.name``. A zip
     inside a zip is named by its member name in the outer zip.
     """
@@ -156,7 +156,7 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
                         try:
                             file_object = BytesIO(zip_container.read(zipped_file))
                             file_object.name = zipped_file
-                            file_object.archive = zip_name
+                            file_object.container = zip_name
                         except Exception as e:
                             logger.warning("Zip member read fail %s: %s", zipped_file, e)
                             continue
