@@ -207,7 +207,7 @@ def test_cimxml_of_zipped_input_unchanged(tmp_path, engine):
         return {file.name: file.getvalue() for file in files}
 
     zipped = pandas.read_RDF([str(archive)])
-    assert set(zipped.loc[zipped["KEY"] == "belongsToContainer", "VALUE"]) == {str(archive)}
+    assert set(zipped.loc[zipped["KEY"] == "belongsToContainer", "VALUE"]) == {"Svedala.zip"}
     assert exported(zipped) == exported(pandas.read_RDF(members))
 
 

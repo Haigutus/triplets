@@ -116,7 +116,7 @@ def test_distribution_parity(tmp_path, minimal_cim, engine, return_type):
 
     ref = _distribution_rows(parse(files(), engine=REFERENCE[0], return_type=REFERENCE[1]))
     assert [dict(rows).get("fileName") for rows in ref] == [Path(minimal_cim).name, "named.xml", "b.xml", "c.xml", "a.xml"]
-    assert [dict(rows).get("belongsToContainer") for rows in ref] == [None, None, str(outer), str(outer), "inner.zip"]
+    assert [dict(rows).get("belongsToContainer") for rows in ref] == [None, None, "outer.zip", "outer.zip", "inner.zip"]
     assert [[key for key, _ in rows] for rows in ref][-1] == ["Type", "label", "fileName", "belongsToContainer"]
     assert _distribution_rows(parse(files(), engine=engine, return_type=return_type)) == ref
 

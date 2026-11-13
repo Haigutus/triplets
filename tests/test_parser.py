@@ -173,32 +173,40 @@ XML = Path(MINIMAL).read_bytes()
 
 
 def test_container_zip_path(tmp_path, parser_engine):
-    """A zip given as a path: each member gets belongsToContainer = the path as given; label stays the member name."""
+    """A zip given as a path: each member gets belongsToContainer = the zip's file name; label stays the member name."""
     one = _zip(tmp_path / "one.zip", {"a.xml": XML})
     labels, objects = _distributions(parse(one, engine=parser_engine))
-    assert labels == {"a.xml": one}
-    assert objects == [[("Type", "Distribution"), ("label", "a.xml"), ("fileName", "a.xml"), ("belongsToContainer", one)]]
+    assert labels == {"a.xml": "one.zip"}
+    assert objects == [[("Type", "Distribution"), ("label", "a.xml"), ("fileName", "a.xml"), ("belongsToContainer", "one.zip")]]
 
-    many = _zip(tmp_path / "many.zip", {"a.xml": XML, "b.xml": XML, "c.rdf": XML})
-    assert _distributions(parse(Path(many), engine=parser_engine))[0] == {"a.xml": many, "b.xml": many, "c.rdf": many}
+    (tmp_path / "sub").mkdir()
+    many = _zip(tmp_path / "sub" / "many.zip", {"a.xml": XML, "b.xml": XML, "c.rdf": XML})
+    assert _distributions(parse(Path(many), engine=parser_engine))[0] == {"a.xml": "many.zip", "b.xml": "many.zip",
+                                                                         "c.rdf": "many.zip"}
 
 
 def test_container_zip_file_object(tmp_path, parser_engine):
-    """A zip given as a file object: belongsToContainer = its .name."""
+    """A zip given as a file object: belongsToContainer = the file name in its .name (backslashes too)."""
     path = _zip(tmp_path / "model.zip", {"a.xml": XML, "b.xml": XML})
     with open(path, "rb") as handle:
-        assert _distributions(parse(handle, engine=parser_engine))[0] == {"a.xml": path, "b.xml": path}
+        assert _distributions(parse(handle, engine=parser_engine))[0] == {"a.xml": "model.zip", "b.xml": "model.zip"}
     from io import BytesIO
     memory = BytesIO(Path(path).read_bytes())
     memory.name = "in_memory.zip"
     assert _distributions(parse(memory, engine=parser_engine))[0] == {"a.xml": "in_memory.zip", "b.xml": "in_memory.zip"}
+    windows = BytesIO(Path(path).read_bytes())
+    windows.name = "C:\\models\\windows.zip"
+    assert _distributions(parse(windows, engine=parser_engine))[0] == {"a.xml": "windows.zip", "b.xml": "windows.zip"}
+    no_file_name = BytesIO(Path(path).read_bytes())
+    no_file_name.name = "models.zip/"                  # nothing after the last /: no row
+    assert _distributions(parse(no_file_name, engine=parser_engine))[0] == {"a.xml": None, "b.xml": None}
 
 
 def test_container_zip_in_zip(tmp_path, parser_engine):
-    """A zip inside a zip: its members get the inner zip's member name, the outer members the outer zip."""
+    """A zip inside a zip: its members get the inner zip's file name, the outer members the outer zip's."""
     inner = Path(_zip(tmp_path / "inner.zip", {"a.xml": XML})).read_bytes()
     outer = _zip(tmp_path / "outer.zip", {"b.xml": XML, "nested/inner.zip": inner})
-    assert _distributions(parse(outer, engine=parser_engine))[0] == {"b.xml": outer, "a.xml": "nested/inner.zip"}
+    assert _distributions(parse(outer, engine=parser_engine))[0] == {"b.xml": "outer.zip", "a.xml": "inner.zip"}
 
 
 def test_container_plain_xml(parser_engine):
@@ -213,10 +221,10 @@ def test_container_find_all_xml_and_rdf_parser(tmp_path):
     from triplets import rdf_parser
     path = _zip(tmp_path / "model.zip", {"a.xml": XML})
     (member,) = find_all_xml(path)
-    assert (member.name, member.container) == ("a.xml", path)
+    assert (member.name, member.container) == ("a.xml", "model.zip")
     rows = pandas.DataFrame(rdf_parser.load_RDF_to_list(member), columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
     assert _distributions(rows)[1] == [[("Type", "Distribution"), ("label", "a.xml"), ("fileName", "a.xml"),
-                                        ("belongsToContainer", path)]]
+                                        ("belongsToContainer", "model.zip")]]
     assert not hasattr(find_all_xml(MINIMAL)[0], "container")
 
 
@@ -256,8 +264,8 @@ def test_file_name_zip_members(tmp_path, parser_engine):
     outer = _zip(tmp_path / "outer.zip", {"sub/dir/x.xml": XML, "nested/inner.zip": inner})
     objects = _distributions(parse(outer, engine=parser_engine))[1]
     assert objects == [
-        [("Type", "Distribution"), ("label", "sub/dir/x.xml"), ("fileName", "x.xml"), ("belongsToContainer", outer)],
-        [("Type", "Distribution"), ("label", "deep/a.xml"), ("fileName", "a.xml"), ("belongsToContainer", "nested/inner.zip")],
+        [("Type", "Distribution"), ("label", "sub/dir/x.xml"), ("fileName", "x.xml"), ("belongsToContainer", "outer.zip")],
+        [("Type", "Distribution"), ("label", "deep/a.xml"), ("fileName", "a.xml"), ("belongsToContainer", "inner.zip")],
     ]
 
 

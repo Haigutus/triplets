@@ -109,8 +109,8 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
     closed after their archive is exhausted.
 
     A zip member is a ``BytesIO`` with ``.name`` = its member name and ``.container`` =
-    the zip it came from: the path as given, or the file object's ``.name``. A zip
-    inside a zip is named by its member name in the outer zip.
+    the file name of the zip it came from, without directories (:func:`base_name` of the
+    zip path, of the zip file object's ``.name``, or of a nested zip's member name).
     """
     items = list_of_paths_to_zip_globalzip_xml
     if isinstance(items, (str, bytes, os.PathLike)) or hasattr(items, "read"):
@@ -141,7 +141,8 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
             logger.warning("Not supported file: %s", getattr(item, "name", item))
 
     for zip_source in pending_zips:   # appends during iteration handle nested zips
-        zip_name = zip_source if isinstance(zip_source, str) else getattr(zip_source, "name", None)
+        # nfo:belongsToContainer, same rule as fileName; None (no row) for a zip without a name
+        zip_name = base_name(zip_source if isinstance(zip_source, str) else getattr(zip_source, "name", "")) or None
         opened = None
         if isinstance(zip_source, str):
             try:

@@ -134,7 +134,7 @@ def test_cim_diff_zip_container_is_metadata(tmp_path, monkeypatch, capsys):
     code, out = cim_diff(monkeypatch, capsys, *zips)
     assert code == 0 and "belongsToContainer" not in out
     code, out = cim_diff(monkeypatch, capsys, *zips, "--keep-metadata")
-    assert code == 1 and f"belongsToContainer -> {zips[0]}" in out and f"belongsToContainer -> {zips[1]}" in out
+    assert code == 1 and "belongsToContainer -> first.zip" in out and "belongsToContainer -> second.zip" in out
 
 
 def test_cim_diff_report_options(monkeypatch, capsys):

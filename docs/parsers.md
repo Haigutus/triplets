@@ -43,14 +43,16 @@ file's own content:
 |---|---|---|
 | `Distribution` | `label` | the file: the path as given, or the file object's `.name` (a zip member: its name in the zip) |
 | `Distribution` | `fileName` | the file name with its extension: `label` after its last `/` or `\` (any platform), e.g. `/data/models/x.xml` and `sub/dir/x.xml` → `x.xml`. No `fileName` row for a source without a name |
-| `Distribution` | `belongsToContainer` | the zip the file was read from: the zip path as given, or the zip file object's `.name`; for a zip inside a zip, the inner zip's member name. No `belongsToContainer` row for a file not read from a zip |
+| `Distribution` | `belongsToContainer` | the file name of the zip the file was read from, same rule as `fileName`: of the zip path, of the zip file object's `.name`, or of a nested zip's member name, e.g. `/data/x/model.zip` → `model.zip`, `nested/inner.zip` → `inner.zip`. No `belongsToContainer` row for a file not read from a zip |
 | `NamespaceMap` | prefix | the namespace IRI of each prefix the root declares (`""`: the default namespace), and `xml_base` when the root declares an absolute `xml:base` |
 
 `fileName` and `belongsToContainer` are Nepomuk File Ontology terms (NFO namespace
 `http://www.semanticdesktop.org/ontologies/2007/03/22/nfo#`): `nfo:fileName`, "name
 of the file, together with the extension", and `nfo:belongsToContainer`, the
 file sits in this container (zip). In NFO the range of `belongsToContainer` is
-the container resource; here the VALUE is the zip's name directly.
+the container resource; here the VALUE is the zip's name directly. `fileName`
+and `belongsToContainer` record the names as parsed: they are not updated when
+`label` is later rewritten (e.g. by `update_filename_from_FullModel`).
 
 Their IDs are new UUIDs on every parse. They are not schema classes: the CIM XML
 export writes them only with `export_undefined=True`, `cim-diff` and
@@ -60,7 +62,8 @@ under `undefined_namespace` (`http://triplets#` by default for `export_to_nquads
 CIM100 for the SPARQL engines), e.g. `http://triplets#belongsToContainer`.
 
 `iter_all_xml()` / `find_all_xml()` yield a zip member as a `BytesIO` with `.name`
-(the member name) and `.container` (the zip); the engines read both.
+(the member name) and `.container` (the zip's file name, without directories);
+the engines read both.
 
 ## String layout — `parse(..., string_type=...)`
 
