@@ -83,7 +83,9 @@ def query(data, query_string, rdf_map=None, data_scope=None, engine="auto", retu
         the engine reuses the stored content digest for this exact object
         and skips the content_hash (the dominant cost of small warm
         queries). Only skips work when this object was hashed before;
-        otherwise the hash runs and is remembered.
+        otherwise the hash runs and is remembered. Also asserts that an
+        `rdf_map` dict passed again with this data object is unchanged:
+        the same dict object reuses its stored serialization.
     undefined_namespace : str, default CIM100
         Namespace for names the schema does not declare — every name when no
         rdf_map is given — so schema-less data answers ``cim:`` queries. The
