@@ -319,7 +319,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of being written bare; an `undefined_namespace` the document already
   binds, such as CIM100, keeps its own prefix instead of adding `triplets:`). Schema-less `export_to_nquads` therefore
   changes from CIM100 to `http://triplets#`. A schema-less query does not:
-  `sparql.query`, `validate_shacl`, `validate_schema` and `export_to_shacl_report`
+  `sparql.query`, `validate_shacl` and `export_to_shacl_report`
   keep every row and default `undefined_namespace` to CIM100, so `cim:`
   queries keep working; all of them take the parameter.
 - **Performance** (RealGrid, 1.15M rows): `read_nquads` 12.2 s → 2.9 s (line
