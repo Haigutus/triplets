@@ -31,6 +31,30 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   definition (SHACL spec section for `sh:*`)
   ([#113](https://github.com/Haigutus/triplets/issues/113),
   [#150](https://github.com/Haigutus/triplets/issues/150)).
+- **SARIF rule tags** — `rules[].properties.tags`: the constraint language (`shacl` /
+  `rdfs`), the constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
+  rule's findings, distinct, at most 10 (what GitHub keeps); GitHub code scanning filters
+  alerts by tag ([#94](https://github.com/Haigutus/triplets/issues/94)).
+- **SARIF configuration notifications for what a run did not evaluate** — one
+  `invocations[0].toolConfigurationNotifications` entry (level `warning`) per
+  `skipped_shapes` item (`descriptor.id` `triplets/skippedShape`) and per
+  `skipped_components` item (`triplets/skippedComponent`), the reason or component name
+  as the message; the run property bag keeps both lists. A run without timestamps but
+  with skipped entries gets an invocation too. GitHub code scanning does not display
+  invocation notifications; SARIF viewers do
+  ([#94](https://github.com/Haigutus/triplets/issues/94)).
+- **`source_root=` on `export_to_sarif` / `to_sarif`, `export_to_shacl_report` /
+  `to_shacl_report` and `locate_violations` / `locate`** — source file names under that
+  directory are written relative to it with forward slashes: the `sources=` paths the
+  locate pass reads (SARIF `artifactLocation.uri`, the SHACL report's `[context_location]`
+  message) and the absolute file names the frame carries — the `INSTANCE_LABEL` fallback
+  location and the run metadata's `source` / `references` (SARIF run `properties`,
+  whole-file fallback locations, rule help; SHACL `dcterms:source` /
+  `dcterms:references`). The comparison is lexical (symlinks are not resolved). Relative
+  names, zip members, file-likes and the `SOURCE_URI` of an already located frame keep
+  their names; `sources=` paths outside the root keep theirs and are named in one logged
+  warning. Default `None` writes the names as given
+  ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **Fixed language tag per schema entry** — `"language": "en"` on an Attribute entry writes
   `"text"@en` in N-Quads (pandas, polars, streaming; hence the rdflib / pyshacl loader) and
   `xml:lang="en"` on the literal element in both CIM XML engines, with or without
@@ -193,6 +217,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **SARIF rule titles name the constraint language**: `SHACL …` / `RDFS …` on every
   rule, `sh:name` titles included (`SHACL Line completeness (8×)`)
   ([#150](https://github.com/Haigutus/triplets/issues/150)).
+- **SARIF tool name per constraint language**: `tool.driver.name` is `triplets-rdfs` for
+  schema runs (`validate_schema` / `validate_schema_references` / `validate_by_header`);
+  SHACL runs and bare frames stay `triplets-shacl`. GitHub code scanning tracks alerts per
+  tool name: alerts of schema runs already uploaded under `triplets-shacl` are closed there
+  and appear as new alerts under `triplets-rdfs`
+  ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **CIM XML export loads the schema and builds its datatype / language maps once per
   export** instead of per instance (sequential `cython_pugixml`, Svedala: ~76 → ~55 ms min);
   with `max_workers` on pandas input each worker gets the loaded schema once, so an in-memory
@@ -429,6 +459,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **SARIF / SHACL report / CSV / Excel: a `PROFILE` cell holding a numpy array** (e.g. a
+  list column after a polars → pandas conversion) is read as its profiles — before, an
+  array of length 0 or ≥ 2 raised `ValueError` and a 1-element array was written as
+  `['EQ']`; null and empty-string profiles are dropped.
 - **A range bound that is not a number no longer fails the SHACL compile**: a
   `sh:minInclusive` … `sh:maxExclusive` bound such as `"2020-01-01"^^xsd:date` raised
   `ValueError` in `compile()`, so no shape was validated. pandas, polars and duckdb

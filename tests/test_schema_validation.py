@@ -300,6 +300,18 @@ def test_reports_carry_rdfs_tags_and_profile(engine):
     assert ",EQ" in csv_text and "['EQ']" not in csv_text      # the list is formatted for display
 
 
+def test_sarif_tool_name_and_tags(engine):
+    """A schema run is its own SARIF tool (triplets-rdfs); each rule is tagged
+    with the language, the constraint and every profile of the scope."""
+    from triplets.validation.sarif import build_sarif
+
+    v = run(breaker("b1", ("IdentifiedObject.mRID", "b1")), engine, rdf_map_scope=["EQ", "OP"])
+    driver = build_sarif(v)["runs"][0]["tool"]["driver"]
+    assert driver["name"] == "triplets-rdfs"
+    tags = {rule["properties"]["constraint"]: rule["properties"]["tags"] for rule in driver["rules"]}
+    assert tags["xsd:minOccurs"] == ["rdfs", "xsd:minOccurs", "EQ", "OP"]
+
+
 def test_info_severity_reaches_the_reports():
     """Info → SARIF note (schema-valid document) and sh:resultSeverity sh:Info."""
     import json

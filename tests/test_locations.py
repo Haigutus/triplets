@@ -8,7 +8,7 @@ import pytest
 
 import triplets  # noqa: F401 — registers the shacl accessor namespace
 from triplets.validation import LOCATION_COLUMNS, locate_violations
-from triplets.validation.locations import locate
+from triplets.validation.locations import locate, relative_name
 
 XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="http://iec.ch/TC57/CIM100#">
@@ -89,3 +89,87 @@ def test_locate_violations_empty_frame(xml_path):
     frame = locate_violations(empty, [xml_path])
     assert set(LOCATION_COLUMNS) <= set(frame.columns)
     assert frame.empty
+
+
+def test_source_root(tmp_path, monkeypatch):
+    """source_root: a path source under it → relative uri with forward slashes;
+    a path outside it and a zip member keep their names; a relative source path
+    is read against the working directory, as open() reads it."""
+    (tmp_path / "repo" / "data").mkdir(parents=True)
+    inside = tmp_path / "repo" / "data" / "grid.xml"
+    inside.write_bytes(XML)
+    outside = tmp_path / "other.xml"
+    outside.write_bytes(XML.replace(b"_aaaa", b"_cccc"))
+    archive = tmp_path / "repo" / "grid.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("inner/grid.xml", XML.replace(b"_aaaa", b"_dddd"))
+    wanted = {"aaaa": set(), "cccc": set(), "dddd": set()}
+
+    located = locate(wanted, [str(inside), str(outside), str(archive)], source_root=tmp_path / "repo")
+    assert {object_id: entry["uri"] for object_id, entry in located.items()} \
+        == {"aaaa": "data/grid.xml", "cccc": str(outside), "dddd": "inner/grid.xml"}
+
+    monkeypatch.chdir(tmp_path / "repo")
+    assert locate({"aaaa": set()}, ["data/grid.xml"], source_root=tmp_path / "repo")["aaaa"]["uri"] \
+        == "data/grid.xml"
+    assert locate({"aaaa": set()}, ["data/grid.xml"], source_root=".")["aaaa"]["uri"] == "data/grid.xml"
+    assert locate({"aaaa": set()}, [str(inside)])["aaaa"]["uri"] == str(inside)   # default: as given
+
+
+def test_locate_violations_source_root(xml_path, tmp_path):
+    violations = pandas.DataFrame([("aaaa", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s")],
+                                  columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY",
+                                           "SOURCE_SHAPE"])
+    frame = violations.shacl.locate(sources=[xml_path], source_root=tmp_path)
+    assert frame.loc[0, "SOURCE_URI"] == "grid.xml"
+    pandas.testing.assert_frame_equal(frame, locate_violations(violations, [xml_path], source_root=str(tmp_path)))
+
+
+def test_source_root_boundaries(tmp_path, monkeypatch, caplog):
+    """A sibling directory with the root as a name prefix and the root given as
+    the file itself are outside (one warning names every outside source); a
+    file-like whose name is an absolute path under the root and a zip member
+    keep their names — also with the working directory below the root."""
+    root = tmp_path / "data" / "a"
+    (tmp_path / "data" / "ab").mkdir(parents=True)
+    (root / "sub").mkdir(parents=True)
+    inside = root / "grid.xml"
+    inside.write_bytes(XML)
+    sibling = tmp_path / "data" / "ab" / "grid.xml"
+    sibling.write_bytes(XML.replace(b"_aaaa", b"_cccc"))
+    archive = root / "grid.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("inner/grid.xml", XML.replace(b"_aaaa", b"_dddd"))
+    handle = io.BytesIO(XML.replace(b"_aaaa", b"_eeee"))
+    handle.name = str(root / "memory.xml")
+    monkeypatch.chdir(root / "sub")                    # a wrongly joined relative name would gain "sub/"
+
+    with caplog.at_level("WARNING", logger="triplets.validation.locations"):
+        located = locate({"aaaa": set(), "cccc": set(), "dddd": set(), "eeee": set()},
+                         [str(inside), str(sibling), str(archive), handle], source_root=root)
+    assert {object_id: entry["uri"] for object_id, entry in located.items()} \
+        == {"aaaa": "grid.xml", "cccc": str(sibling), "dddd": "inner/grid.xml", "eeee": str(root / "memory.xml")}
+    assert [record.getMessage() for record in caplog.records] \
+        == [f"1 source(s) outside source_root {root} keep their names: {sibling}"]
+
+    caplog.clear()
+    with caplog.at_level("WARNING", logger="triplets.validation.locations"):
+        itself = locate({"aaaa": set(), "cccc": set()}, [str(inside), str(sibling)], source_root=inside)
+    assert {object_id: entry["uri"] for object_id, entry in itself.items()} \
+        == {"aaaa": str(inside), "cccc": str(sibling)}
+    assert len(caplog.records) == 1 and caplog.records[0].getMessage().endswith(f"{inside}, {sibling}")
+
+
+def test_relative_name(tmp_path, monkeypatch):
+    """Only an absolute name of a file in the root or below it; a relative name
+    stays as it is (never read against the working directory); lexical, '..'
+    collapsed."""
+    root = str(tmp_path / "repo")
+    monkeypatch.chdir(tmp_path)
+    assert relative_name(f"{root}/data/x.xml", root) == "data/x.xml"
+    assert relative_name(f"{root}/x.xml", root) == "x.xml"
+    assert relative_name("repo/x.xml", root) is None                     # relative: kept by the caller
+    assert relative_name(f"{root}-other/x.xml", root) is None
+    assert relative_name(f"{root}/../other/x.xml", root) is None
+    assert relative_name(root, root) is None                               # the root itself is no file in it
+    assert relative_name(f"{root}/x.xml", None) is None
