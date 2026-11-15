@@ -91,7 +91,8 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   `ProfileNamespaceMap`s instead of the entries, first binding wins; `xsd`,
   `rdf`, `rdfs` built in where no map binds them). No cache: each is built on
   demand. Public entry points (`validate_shacl`,
-  `validate_schema`, `export_to_*`, the qlever ingest) call `load_rdf_map`
+  `validate_schema`, `validate_schema_references`, `compile_schema` / `compile_references`,
+  `export_to_*`, the qlever ingest) call `load_rdf_map`
   once; below them only dicts flow, so a path is parsed once per call. The
   validations hand the engines the scoped, merged schema
   (`validation.schema_scope.scoped_rdf_map`), so first-wins never decides

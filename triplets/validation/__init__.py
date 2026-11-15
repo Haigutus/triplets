@@ -57,6 +57,7 @@ from ..iri import CIM_NS, load_rdf_map
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
 from .shacl_ir import _mark_switched_off, _term
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
+from .schema_ir import _source as _schema_source
 from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
 from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report, has_violation,  # noqa: F401 — public API
@@ -335,9 +336,9 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
     The PROFILE column lists the scoped section keys (``["EQ", "OP", "SC"]``).
     """
     started = datetime.now(timezone.utc)
-    compiled = compile_schema(rdf_map, rdf_map_scope, report_undefined_keys, severity)   # caches on the file digest
-    rdf_map = load_rdf_map(rdf_map)
-    sections = scope_sections(rdf_map, rdf_map_scope)
+    schema = load_rdf_map(rdf_map)
+    compiled = compile_schema(schema, rdf_map_scope, report_undefined_keys, severity)
+    sections = scope_sections(schema, rdf_map_scope)
     table_name = _table_ref(data, **kwargs)
     engine_name, engine_mod = get_engine(engine)
 
@@ -348,7 +349,8 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
                   else pandas.DataFrame(columns=VIOLATION_COLUMNS))
     violations["PROFILE"] = _profile_column(violations, sections)
     violations = _present(violations, compiled.ir, "rdfs")
-    violations.attrs["validation"] = _schema_metadata(compiled, engine_name, started, data, table_name, sections)
+    violations.attrs["validation"] = _schema_metadata(compiled, rdf_map, engine_name, started, data, table_name,
+                                                     sections)
     return violations
 
 
@@ -384,10 +386,10 @@ def validate_schema_references(data, rdf_map, data_scope=None, rdf_map_scope=Non
         The SEVERITY of every finding.
     """
     started = datetime.now(timezone.utc)
-    compiled = compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope, report_missing_targets, inheritance,
+    schema = load_rdf_map(rdf_map)
+    compiled = compile_references(schema, rdf_map_scope, target_rdf_map_scope, report_missing_targets, inheritance,
                                   severity)
-    rdf_map = load_rdf_map(rdf_map)
-    sections = scope_sections(rdf_map, rdf_map_scope)
+    sections = scope_sections(schema, rdf_map_scope)
     table_name = _table_ref(data, **kwargs)
     engine_name, engine_mod = get_engine(engine)
     loaded = _instances(data, table_name) if data_scope is None or target_data_scope is None else None
@@ -407,12 +409,13 @@ def validate_schema_references(data, rdf_map, data_scope=None, rdf_map_scope=Non
                   else pandas.DataFrame(columns=VIOLATION_COLUMNS))
     violations["PROFILE"] = _profile_column(violations, sections)
     violations = _present(violations, compiled.ir, "rdfs")
-    violations.attrs["validation"] = _schema_metadata(compiled, engine_name, started, data, table_name, sections)
+    violations.attrs["validation"] = _schema_metadata(compiled, rdf_map, engine_name, started, data, table_name,
+                                                     sections)
     violations.attrs["validation"]["inheritance"] = inheritance
     return violations
 
 
-def _schema_metadata(compiled, engine_name, started, data, table_name, sections):
+def _schema_metadata(compiled, rdf_map, engine_name, started, data, table_name, sections):
     """Run metadata of the schema validations (no shapes graph, rdfs language)."""
     import triplets
 
@@ -424,7 +427,8 @@ def _schema_metadata(compiled, engine_name, started, data, table_name, sections)
         "engine": engine_name,
         "creator": f"triplets {triplets.__version__}",
         "source": _source_labels(data, table_name=table_name),
-        "references": list(compiled.sources),
+        # the entry point's own argument: the compile below it was handed the loaded dict
+        "references": [_schema_source(rdf_map)],
         "compiled_hash": compiled.hash,
         "language": "rdfs",
         "profiles": sections,
