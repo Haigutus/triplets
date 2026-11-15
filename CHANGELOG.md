@@ -184,6 +184,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`validate_schema` / `validate_schema_references` parse an `rdf_map` path once per call**
+  and hand the loaded dict down. `compile_schema` / `compile_references` cache on the loaded
+  schema's content and the given file name (`"rdf_map"` for a dict); the run metadata's
+  `references` is the `rdf_map` file name given to the validation call, or to
+  `compile_schema` when its result goes to `validate_shacl`.
 - **`data_unchanged=True` also asserts the `rdf_map` dict is unchanged** (`sparql.query`,
   `load_dataset`, the engines): passed again with the same data object, the same dict object
   reuses the schema serialization stored with the data digest instead of a `json.dumps` per
