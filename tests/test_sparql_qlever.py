@@ -185,15 +185,19 @@ def test_index_shared_across_row_order(svedala):
 
 
 def test_invalid_query_error_carries_query_text(svedala):
-    """No query fixing: a rejected query raises with qlever's message + the query."""
-    bad = PREFIXES + "SELECT ?s ?n WHERE { ?s rdf:type cim:Substation } HAVING(?n > 1)"
+    """No query fixing: a rejected query raises with qlever's message + the query.
+    (qlever accepts the ENTSO-E bare HAVING — implicit grouping, like rdflib —
+    so the probe here is an ungrouped projection.)"""
+    bad = PREFIXES + "SELECT ?s ?n WHERE { ?s rdf:type cim:Substation } GROUP BY ?s HAVING(?n > 1)"
     with pytest.raises(ValueError, match="(?s)qlever rejected the query.*HAVING"):
         triplets.sparql.query(svedala, bad, engine="qlever")
 
 
 def test_invalid_constraint_query_reported_not_fixed(svedala):
-    """A shape with the ENTSO-E bare-HAVING defect: results stay complete via the
-    rdflib fallback, and the report carries a triplets:invalidSparql Warning row."""
+    """A shape qlever rejects (ungrouped projection): results stay complete via
+    the rdflib fallback, and the report carries a triplets:invalidSparql Warning
+    row. (qlever accepts the ENTSO-E bare HAVING — implicit grouping, like
+    rdflib — so the probe here is an ungrouped projection.)"""
     pytest.importorskip("pyshacl")
     import rdflib
     shape = rdflib.Graph()
@@ -205,7 +209,7 @@ cim:ACLineSegmentShape a sh:NodeShape ;
     sh:targetClass cim:ACLineSegment ;
     sh:property [
         sh:path cim:IdentifiedObject.name ;
-        sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value } HAVING(?value = "no-such-name")' ] ;
+        sh:sparql [ sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "no-such-name") } GROUP BY $this' ] ;
     ] .
 """, format="turtle")
     violations = triplets.validation.validate_shacl(svedala, shape, engine="pandas")

@@ -13,13 +13,14 @@
 #include "engine/ExportQueryExecutionTrees.h"
 #include "engine/QueryExecutionContext.h"
 #include "engine/QueryExecutionTree.h"
+#include "global/RuntimeParameters.h"
 #include "index/ExportIds.h"
 #include "libqlever/Qlever.h"
 #include "parser/ParsedQuery.h"
 #include "parser/sparqlParser/DatasetClause.h"
 #include "util/CancellationHandle.h"
 #include "util/Log.h"
-#include "util/MemorySize/MemorySize.h"
+#include "util/memorySize/MemorySize.h"
 
 namespace {
 struct NullBuffer : std::streambuf {
@@ -193,18 +194,20 @@ ArrowColumns QleverWrapper::construct_arrow(
 
   std::vector<arrow::StringBuilder> builders(3);
   uint64_t resultSize = 0;
-  auto handle = std::make_shared<ad_utility::CancellationHandle<>>();
+  const auto& qec = planned.queryExecutionContext();
   // Mirrors the (private) ExportQueryExecutionTrees::
-  // constructQueryResultToStringTriples; `result` stays alive for the whole
-  // consumption of the lazy triple range below.
+  // constructQueryResultToStringTriples and makeConstructEvaluationConfig;
+  // `result` stays alive for the whole consumption of the lazy triple range
+  // below.
+  qlever::constructExport::EvaluationConfig config{
+      qec.getIndex(), std::make_shared<ad_utility::CancellationHandle<>>(),
+      qec, getRuntimeParameter<&RuntimeParameters::constructDeduplication_>()};
   std::shared_ptr<const Result> result = qet.getResult(true);
   auto rowIndices = ExportQueryExecutionTrees::getRowIndices(
       limit, *result, resultSize, constructTriples.size());
   auto triples = qlever::constructExport::ConstructTripleGenerator::
       generateStringTriples(constructTriples, qet.getVariableColumns(),
-                            planned.queryExecutionContext().getIndex(),
-                            std::move(handle), std::move(rowIndices),
-                            limit._offset);
+                            std::move(rowIndices), limit._offset, config);
   for (auto& triple : triples) {
     checkStatus(builders[0].Append(triple.subject_));
     checkStatus(builders[1].Append(triple.predicate_));

@@ -14,7 +14,7 @@ Know these before relying on it:
 - **oxigraph caveats** (details under "Behavioral caveats" below):
   a multi-instance `data_scope` yields one solution per instance for shared
   triples (`DISTINCT` dedupes); the CSV SELECT decode nulls empty-string
-  literals; its parser accepts some queries qlever rejects (bare `HAVING`).
+  literals.
 - **SELECT returns IRIs as stored** — absolute and percent-encoded
   (`urn:uuid:a%20b`); CONSTRUCT decodes and shortens them to triplet form. Other
   import / export deviations: [parsers.md — Known limitations](parsers.md#known-limitations).
@@ -317,9 +317,6 @@ import / warm-query / export numbers across the three engines, run
   SPARQL-protocol dataset union): a triple present in several scoped
   instances yields one solution per instance — `DISTINCT` dedupes. Pinned in
   `tests/test_sparql_oxigraph.py`.
-- oxigraph's parser is *more permissive* than qlever's in places: the
-  ENTSO-E bare-`HAVING` shapes that qlever rejects are accepted (implicit
-  grouping per spec), so they execute instead of falling back to rdflib.
 - The CSV SELECT decode (oxigraph) cannot distinguish an unbound variable
   from an empty-string literal — both come back null (the W3C CSV-results
   tradeoff). qlever distinguishes them.

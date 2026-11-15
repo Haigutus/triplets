@@ -43,9 +43,10 @@ class ArrowTripleParser : public RdfParserBase {
   // (e.g. on an exception in the index build).
   ~ArrowTripleParser() override;
 
-  // Batch-only parser (like RdfMultifileParser): getBatch() must be used.
-  bool getLineImpl(TurtleTriple* triple) override;
-  std::optional<std::vector<TurtleTriple>> getBatch() override;
+  // The batches are converted in the background; the buffer passed in is
+  // not reused.
+  std::optional<std::vector<TurtleTriple>> getBatch(
+      std::vector<TurtleTriple> buffer) override;
   // Rows converted so far — only used for progress diagnostics.
   size_t getParsePosition() const override { return rowsConverted_.load(); }
 
