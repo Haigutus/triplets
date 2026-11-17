@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`stereotype` and `rdf:type` on every bundled schema entry** — the RDFS source types
+  of the entry's object, as lists in source order, deduplicated, and left out when the
+  object has none. Covers classes, attributes, associations, enumeration attributes,
+  enum values and datatypes. Stereotypes are written as text, and an IRI stereotype
+  (`…/UML#attribute`) as its local name. `rdf:type` values are prefixed names
+  (`rdfs:Class`, `rdf:Property`, `cim:UnitSymbol`) from the section's prefixes, and an
+  IRI in an unbound namespace stays absolute. All 8 bundles are regenerated, and are
+  about 25 % larger.
 - **File name and zip name in the Distribution rows** — two more `Distribution` rows,
   Nepomuk File Ontology terms (`nfo:`): `fileName` on every parsed file, the file name with
   its extension (`label` after its last `/` or `\`; no row for a source without a name),
@@ -184,6 +192,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`iri.key_types(rdf_map)` returns name → dict**: `{"type": …}` plus `stereotype` /
+  `rdf:type` where the entry has them (previously name → type string). For example,
+  `key_types(rdf_map)["DateTimeStamp"]` is
+  `{"type": "Primitive", "stereotype": ["Primitive", "eumd"], "rdf:type": ["rdfs:Class"]}`.
 - **`validate_schema` / `validate_schema_references` parse an `rdf_map` path once per call**
   and hand the loaded dict down. `compile_schema` / `compile_references` cache on the loaded
   schema's content and the given file name (`"rdf_map"` for a dict); the run metadata's
@@ -434,6 +446,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **A datatype entry's `type` is its datatype stereotype, not one of its other
+  stereotypes.** The generator kept a single `cims:stereotype` row per object, so a
+  datatype with two stereotypes could get the wrong one as its `type`:
+  `DateTimeStamp` had `"eumd"`, and other datatypes had `profcim`, `European`, `rdf` or
+  `new`. `type` is now the first of `Primitive`, `CIMDatatype`, `Compound`,
+  `ConstrainedPrimitive` and `Enumeration` among the stereotypes. In the bundles this
+  sets `DateTimeStamp`, `IRI`, `URI`, `StringIRI`, `StringFixedLanguage` and
+  `LangString` to `Primitive`, `Statement` / `Statements` to `Compound`, and
+  `CountPerArea` / `Irradiance` to `CIMDatatype`. If a datatype has none of these
+  stereotypes, its `type` is `""` and a warning is logged.
 - **A range bound that is not a number no longer fails the SHACL compile**: a
   `sh:minInclusive` … `sh:maxExclusive` bound such as `"2020-01-01"^^xsd:date` raised
   `ValueError` in `compile()`, so no shape was validated. pandas, polars and duckdb
