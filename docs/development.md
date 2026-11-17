@@ -83,7 +83,8 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
 - The absolute side takes flat maps built from `rdf_map`, one function per
   map, each a single comprehension over `rdf_map_entries` (the root entries
   of a flat schema, then every profile section; first occurrence wins): `namespaces` (name → namespace IRI),
-  `key_types` (name → schema entry type), `value_types` (KEY → `literal` /
+  `key_types` (name → `{"type": …}` plus the entry's `stereotype` / `rdf:type`
+  lists where present), `value_types` (KEY → `literal` /
   `reference` / `enum`, by entry type only), `datatypes` (Attribute KEY →
   datatype IRI, `None` = `xsd:string` / `rdf:langString` / a tagged KEY; anyURI
   included), `languages` (Attribute KEY → fixed language tag, written `"text"@tag` /

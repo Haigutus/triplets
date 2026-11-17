@@ -194,6 +194,68 @@ class TestOrphanedAttributes:
         assert any("no class binding" in r.getMessage() for r in caplog.records)
 
 
+class TestSourceTypes:
+    """Every entry carries the RDFS ``cims:stereotype`` and ``rdf:type`` rows of its object, in row
+    order, deduplicated; a datatype's ``type`` is the first of DATATYPE_STEREOTYPES among them."""
+    DM = TestOrphanedAttributes.DM
+    LOG = TestOrphanedAttributes.LOG
+    DATE_TIME_STAMP = "https://cim4.eu/ns/Metadata-European#DateTimeStamp"
+
+    def _data(self):
+        if not self.DM.exists():
+            pytest.skip("NC 2.4.1 DatasetMetadata RDFS not available")
+        return rdfs_tools.load_all_to_dataframe(str(self.DM))
+
+    def test_every_entry_kind_carries_source_types(self):
+        from triplets.rdfs_tools import cim_rdfs_to_json
+        profile = cim_rdfs_to_json.convert_profile(self._data())
+        assert profile["DateTimeStamp"]["type"] == "Primitive"           # not the other stereotype, eumd
+        assert profile["DateTimeStamp"]["stereotype"] == ["Primitive", "eumd"]
+        assert profile["DateTimeStamp"]["rdf:type"] == ["rdfs:Class"]
+        assert profile["Statement"]["type"] == "Compound"
+        assert (profile["Dataset"]["stereotype"], profile["Dataset"]["rdf:type"]) == (["dcat", "concrete"], ["rdfs:Class"])
+        assert (profile["title"]["stereotype"], profile["title"]["rdf:type"]) == (["attribute", "dcterms"], ["rdf:Property"])
+        assert (profile["hasPart"]["stereotype"], profile["hasPart"]["rdf:type"]) == (["dcterms"], ["rdf:Property"])
+
+    def test_repeats_collapse_and_unbound_namespace_stays_absolute(self):
+        from triplets.rdfs_tools import cim_rdfs_to_json
+        data = self._data()
+        extra = pandas.DataFrame([(self.DATE_TIME_STAMP, "stereotype", "http://iec.ch/TC57/NonStandard/UML#Primitive"),
+                                  (self.DATE_TIME_STAMP, "type", "http://example.org/ns#Thing"),
+                                  (self.DATE_TIME_STAMP, "type", "http://www.w3.org/2000/01/rdf-schema#Class")],
+                                 columns=["ID", "KEY", "VALUE"]).assign(INSTANCE_ID=data["INSTANCE_ID"].iloc[0])
+        entry = cim_rdfs_to_json.convert_profile(pandas.concat([data, extra], ignore_index=True))["DateTimeStamp"]
+        assert entry["stereotype"] == ["Primitive", "eumd"]               # UML#Primitive is the literal Primitive
+        assert entry["rdf:type"] == ["rdfs:Class", "http://example.org/ns#Thing"]
+
+    def test_datatype_without_kind_stereotype_is_not_guessed(self, caplog):
+        from triplets.rdfs_tools import cim_rdfs_to_json
+        data = self._data()
+        data = data[~((data.ID == self.DATE_TIME_STAMP) & (data.VALUE == "Primitive"))]
+        with caplog.at_level("WARNING", logger=self.LOG):
+            entry = cim_rdfs_to_json.convert_profile(data)["DateTimeStamp"]
+        assert (entry["type"], entry["stereotype"]) == ("", ["eumd"])
+        assert any(self.DATE_TIME_STAMP in record.getMessage() for record in caplog.records)
+
+
+ENTRY_TYPES = {"Class", "Attribute", "Association", "Enumeration", "EnumerationValue",
+               "Primitive", "CIMDatatype", "Compound", "ConstrainedPrimitive"}
+
+
+@pytest.mark.parametrize("path", sorted((Path(__file__).parents[1] / "triplets" / "export_schema").glob("*.json")),
+                         ids=lambda path: path.stem)
+def test_shipped_bundle_entry_types(path):
+    """``type`` is one of ours; ``stereotype`` / ``rdf:type``, where present, are non-empty lists."""
+    import json
+    for section in json.loads(path.read_text()).values():
+        for name, entry in section.items():
+            if name.startswith("Profile"):
+                continue
+            assert entry["type"] in ENTRY_TYPES, (path.name, name, entry["type"])
+            for field in ("stereotype", "rdf:type"):
+                assert field not in entry or (entry[field] and isinstance(entry[field], list)), (path.name, name)
+
+
 @pytest.mark.parametrize("uri", ["foo/Bar", "./Name"])
 def test_get_namespace_and_name_rejects_other_relative_forms(uri):
     """Only a bare or #name takes the default; any other relative form raises, default or not."""

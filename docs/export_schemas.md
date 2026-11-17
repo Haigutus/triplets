@@ -79,9 +79,36 @@ A bundle is a dict of profile sections keyed by profile keyword
                             # optional "language": a fixed tag ("en"), see below
     "<Class.Association>": {"type": "Association", "range": ..., "attrib": {...}}
     "<Class.enumAttr>":    {"type": "Enumeration", "range": ..., "values": [...]}
-    "<Datatype|EnumValue>": supporting definitions referenced by the entries above
+    "<EnumValue>":         {"type": "EnumerationValue", "namespace": ...}
+    "<Datatype>":          {"type": "Primitive" | "CIMDatatype" | "Compound" | "ConstrainedPrimitive",
+                            "xsd:type": ..., "namespace": ...}
+                            # supporting definitions referenced by the entries above
 }
 ```
+
+`type` is one string, derived by the generator. Every generated entry also carries
+the RDFS source types of its object as lists, in source order, deduplicated, and left
+out when the object has none:
+
+- `"stereotype"`: the `cims:stereotype` values. A literal stays as its text; an IRI
+  stereotype (`http://iec.ch/TC57/NonStandard/UML#attribute`) becomes its local name
+  (`attribute`).
+- `"rdf:type"`: the `rdf:type` values as prefixed names (`rdfs:Class`, `rdf:Property`,
+  `cim:UnitSymbol` for an enum value). The prefixes come from the section's
+  `ProfileNamespaceMap`, and `xsd`, `rdf` and `rdfs` are built in. An IRI in an
+  unbound namespace stays absolute.
+
+```json
+"DateTimeStamp": {"description": "...", "type": "Primitive", "stereotype": ["Primitive", "eumd"],
+                  "rdf:type": ["rdfs:Class"], "xsd:type": "xsd:dateTimeStamp", "namespace": "..."}
+```
+
+The `type` of a datatype entry is the first of `Primitive`, `CIMDatatype`,
+`Compound`, `ConstrainedPrimitive` and `Enumeration` among its stereotypes. The other
+stereotypes, such as `eumd` above, are kept in `stereotype` and never become `type`. If a datatype has none of
+these stereotypes, its `type` is `""` and the generator logs a warning.
+`iri.key_types(rdf_map)` reads all three: name → `{"type": ...}`, plus `stereotype` and
+`rdf:type` where the entry has them. A hand-made schema can omit the lists.
 
 `inheritance` (the class itself first, then its ancestors) and every `range` are
 absolute IRIs: the generator resolves a relative `rdf:resource="#Name"` against the

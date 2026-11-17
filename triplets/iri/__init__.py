@@ -245,8 +245,11 @@ def namespaces(rdf_map):
 
 
 def key_types(rdf_map):
-    """name → schema entry type (Class | Attribute | Association | Enumeration | EnumerationValue | …)."""
-    return {name: entry["type"] for name, entry in rdf_map_entries(rdf_map) if entry.get("type")}
+    """name → ``{"type": …, "stereotype": [...], "rdf:type": [...]}``: the entry type (Class | Attribute |
+    Association | Enumeration | EnumerationValue | Primitive | CIMDatatype | …) and whichever of the
+    RDFS source lists (``cims:stereotype``, ``rdf:type``) the entry carries."""
+    return {name: {field: entry[field] for field in ("type", "stereotype", "rdf:type") if field in entry}
+            for name, entry in rdf_map_entries(rdf_map) if entry.get("type")}
 
 
 def prefixes(rdf_map):
