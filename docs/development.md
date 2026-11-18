@@ -123,7 +123,8 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   `absolute_name` has no schema branch: the map answers or the parameter does.
   `iri.defined(key, value, namespaces, value_types)` names the row-level test.
   Every exporter has the same two knobs: `export_undefined` (write such rows
-  or drop them — N-Quads keeps them by default, CIM XML drops them) and
+  or drop them — N-Quads keeps them by default, CIM XML drops them unless
+  it has no `rdf_map`, where it writes them all) and
   `undefined_namespace` (default `http://triplets#`). `sparql.query`,
   `validate_shacl` and `export_to_shacl_report` always load every
   row and default the namespace to CIM100 so schema-less data answers `cim:`

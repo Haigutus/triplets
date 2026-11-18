@@ -446,6 +446,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`export_to_cimxml` without an `rdf_map` exports the whole dataset.** With no schema
+  every class and key is undefined, so the default `export_undefined=False` wrote files
+  holding only an empty `rdf:RDF` root, with no warning. Without a schema,
+  `export_undefined` is now treated as `True`: everything is written under
+  `undefined_namespace`, both engines, and one warning says so. With a schema, both
+  `export_undefined` values behave as before. `cim-spreadsheet to-cim` without
+  `--rdf-map` relies on this and no longer logs its own warning.
 - **A datatype entry's `type` is its datatype stereotype, not one of its other
   stereotypes.** The generator kept a single `cims:stereotype` row per object, so a
   datatype with two stereotypes could get the wrong one as its `type`:

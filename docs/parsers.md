@@ -55,7 +55,7 @@ and `belongsToContainer` record the names as parsed: they are not updated when
 `label` is later rewritten (e.g. by `update_filename_from_FullModel`).
 
 Their IDs are new UUIDs on every parse. They are not schema classes: the CIM XML
-export writes them only with `export_undefined=True`, `cim-diff` and
+export writes them only with `export_undefined=True` or without an `rdf_map`, `cim-diff` and
 `cim-spreadsheet` leave them out unless `--keep-metadata`, and `content_hash`
 ignores them. The N-Quads export and the SPARQL stores keep them as triples
 under `undefined_namespace` (`http://triplets#` by default for `export_to_nquads`,

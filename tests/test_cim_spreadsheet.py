@@ -170,8 +170,9 @@ def test_to_cim_without_rdf_map(source, caplog):
     """No schema: a warning, and every class written in the triplets namespace."""
     cim_spreadsheet.cim_to_spreadsheet(source, "model.xlsx")
     cim_spreadsheet.spreadsheet_to_cim("model.xlsx", "out", zip_output=False)
-    assert "--rdf-map" in caplog.text
-    assert len(list(Path("out").glob("*.xml"))) == 1
+    assert "No rdf_map given" in caplog.text
+    [written] = Path("out").glob("*.xml")
+    assert "<triplets:IdentifiedObject.name>" in written.read_text()
 
 
 def test_round_trip_with_metadata_writes_to_label(source, reference):
