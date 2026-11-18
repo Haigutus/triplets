@@ -27,7 +27,7 @@ Engines (registry dispatch, mirroring triplets.parser / triplets.sparql):
 
 Compile once: ``compile(shapes)`` parses the shapes with rdflib exactly once
 into ``CompiledShapes`` (shapes graph + flat constraint table, cached by
-content hash). Engines receive the compiled object::
+content hash and file names). Engines receive the compiled object::
 
     validate(data, compiled, rdf_map=None, data_scope=None, ancestors=None, **kwargs) → violations DataFrame
 

@@ -237,13 +237,14 @@ engines via `triplets.validation.register_engine(name, module)`.
 ## Compile Once (`shacl_ir.py`)
 
 Shapes are parsed by rdflib **exactly once** into `CompiledShapes`, cached by
-content hash of the shape sources:
+content hash of the shape sources and their file names:
 
 ```
 shapes.ttl ──rdflib──► CompiledShapes
                         ├── graph  (rdflib shapes graph — what pyshacl consumes)
                         ├── ir     (flat constraint table — what the vectorized engines consume)
-                        ├── hash   (content hash, the cache key)
+                        ├── hash   (content hash of the shape sources)
+                        ├── sources  (shape file names — the run's `references`)
                         ├── plans  {engine name → compiled artifact, filled lazily}
                         ├── deactivated  (shape ids switched off: the graph's sh:deactivated true)
                         └── active(deactivated_shapes) ──► CompiledShapes  (the run's rule set, cached per set)
@@ -552,7 +553,7 @@ united, differing values kept as the list of distinct values):
 | `engine` | the engine that produced the report |
 | `creator` | tool + version |
 | `source` | data file names (from the data's Distribution label meta rows) |
-| `references` | shape file names (recorded at compile); the schema validations: the `rdf_map` file name, `"rdf_map"` for a dict |
+| `references` | the shape file names given to the run (`[]` for a Graph; a compile is cached per content and names); the schema validations: the `rdf_map` file name, `"rdf_map"` for a dict |
 | `compiled_hash` | the shape files' content hash (`CompiledShapes.hash`, the same with any `deactivated_shapes`) |
 | `deactivated_shapes` | the shape ids the run switched off, sorted (`[]` = every shape ran); the run's rule set is `compiled_hash` + `deactivated_shapes` — `concat_violations` counts shapes and constraints once per rule set |
 | `node_shapes` / `constraints` | count of NodeShapes not switched off / distinct constraints of the run's rule set (IR rows that differ only in lineage count once) |
@@ -741,7 +742,7 @@ data.shacl.validate_shacl(shapes, rdf_map=..., rdf_map_scope=["EQ"])
 |
 '-> validation.validate_shacl(data, shapes, engine="auto", lexical=True)
     |
-    |-> compile(shapes)                        # cached by content hash
+    |-> compile(shapes)                        # cached by content hash + file names
     |   '-> _load_shapes -> parse_ir           # rdflib parses ONCE
     |
     |-> scoped_rdf_map(rdf_map, rdf_map_scope) # the merged schema of the run
