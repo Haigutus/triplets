@@ -487,7 +487,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Shape files with the same content report their own names.** `compile` caches on the
   shapes' content hash and their file names, so a run's `references` (SARIF
   `properties.references` and whole-file locations, `dcterms:references` in the SHACL
-  report) are the files it was given; `compiled_hash` stays the content hash.
+  report) are the files it was given; `compiled_hash` stays the content hash. A schema
+  compile follows the same rule: the `rdf_map` file name is in the cache key, not in
+  `compiled_hash`, so `concat_violations` counts one schema under two names once.
 - **`export_to_cimxml` without an `rdf_map` exports the whole dataset.** With no schema
   every class and key is undefined, so the default `export_undefined=False` wrote files
   holding only an empty `rdf:RDF` root, with no warning. Without a schema,

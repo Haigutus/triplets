@@ -64,9 +64,10 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False, sev
     _require_severity(severity)
     schema, source = load_rdf_map(rdf_map), _source(rdf_map)
     sections = scope_sections(schema, rdf_map_scope)
-    key = f"schema|{_digest(schema)}|{source}|{sections}|undefined={report_undefined_keys}|severity={severity}"
+    content = f"schema|{_digest(schema)}|{sections}|undefined={report_undefined_keys}|severity={severity}"
+    key = (content, source)
     if key in _COMPILE_CACHE:
-        logger.debug("schema compile cache hit: %s", key[:40])
+        logger.debug("schema compile cache hit: %s", content[:40])
         return _COMPILE_CACHE[key]
 
     scoped, notes = scoped_rdf_map(schema, rdf_map_scope)
@@ -77,7 +78,7 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False, sev
     ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
     ir["severity"] = severity
     compiled = CompiledShapes(
-        graph=None, ir=ir, hash=key, sources=(source,), language="rdfs",
+        graph=None, ir=ir, hash=content, sources=(source,), language="rdfs",
         stats={"node_shapes": int(ir["target_on"].nunique()), "constraints": len(ir),
                "skipped_shapes": notes["skipped_shapes"],
                "relaxed_constraints": notes["relaxed_constraints"], "unknown_components": []})
@@ -108,8 +109,9 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
     targets = scope_sections(schema, target_rdf_map_scope) if target_rdf_map_scope else []
     if sources is None and targets:
         raise ValueError("target_rdf_map_scope names profiles — name the source profiles too")
-    key = (f"references|{_digest(schema)}|{source}|{sources}|{targets}|missing={report_missing_targets}"
-           f"|inheritance={inheritance}|severity={severity}")
+    content = (f"references|{_digest(schema)}|{sources}|{targets}|missing={report_missing_targets}"
+               f"|inheritance={inheritance}|severity={severity}")
+    key = (content, source)
     if key in _COMPILE_CACHE:
         return _COMPILE_CACHE[key]
 
@@ -136,7 +138,7 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
     ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
     ir["severity"] = severity
     compiled = CompiledShapes(
-        graph=None, ir=ir, hash=key, sources=(source,), language="rdfs",
+        graph=None, ir=ir, hash=content, sources=(source,), language="rdfs",
         stats={"node_shapes": int(ir["target_on"].nunique()), "constraints": len(ir),
                # no cardinality or enumeration rows here: nothing the merge relaxes is checked
                "skipped_shapes": skipped, "relaxed_constraints": [], "unknown_components": []})
@@ -150,7 +152,8 @@ def _digest(schema):
 
 
 def _source(rdf_map):
-    """The schema file name the compile reports — in the cache key, so a compile is never shared between names."""
+    """The schema file name the compile reports — in the cache key, not in the hash: a compile is never
+    shared between names, and one content has one hash under any name."""
     return "rdf_map" if isinstance(rdf_map, dict) else os.path.basename(str(rdf_map))
 
 
