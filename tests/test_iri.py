@@ -61,9 +61,30 @@ def test_namespaces_first_profile_wins():
                           "IdentifiedObject.description": CIM16, "Model.description": CIM16, "Model.label": CIM16}
 
 
-def test_key_types():
-    assert iri.key_types(RDF_MAP)["Terminal.ConductingEquipment"] == "Association"
-    assert iri.key_types(RDF_MAP)["Breaker"] == "Class"
+def test_key_types_carry_type_and_source_lists():
+    """``type`` plus whichever of ``stereotype`` / ``rdf:type`` the entry has; first profile wins;
+    an entry without ``type`` is left out."""
+    schema = {"EQ": {"DateTimeStamp": {"type": "Primitive", "stereotype": ["Primitive", "eumd"],
+                                       "rdf:type": ["rdfs:Class"], "xsd:type": "xsd:dateTimeStamp"},
+                     "Terminal.ConductingEquipment": {"type": "Association", "rdf:type": ["rdf:Property"]},
+                     "Legacy.untyped": {"stereotype": ["attribute"], "xsd:type": "xsd:float"}},
+              "SSH": {"DateTimeStamp": {"type": "CIMDatatype"}}}
+    assert iri.key_types(schema) == {
+        "DateTimeStamp": {"type": "Primitive", "stereotype": ["Primitive", "eumd"], "rdf:type": ["rdfs:Class"]},
+        "Terminal.ConductingEquipment": {"type": "Association", "rdf:type": ["rdf:Property"]}}
+
+
+def test_key_types_hand_made_schema_gives_type_only():
+    key_types = iri.key_types(RDF_MAP)
+    assert key_types["Terminal.ConductingEquipment"] == {"type": "Association"}
+    assert key_types["Breaker"] == {"type": "Class"}
+    assert "Legacy.untyped" not in key_types
+
+
+@pytest.mark.parametrize("name", [name for name in dir(schemas) if name.startswith("ENTSOE_")])
+def test_key_types_bundled_schema_datatype(name):
+    assert iri.key_types(getattr(schemas, name))["DateTimeStamp"] == \
+        {"type": "Primitive", "stereotype": ["Primitive", "eumd"], "rdf:type": ["rdfs:Class"]}
 
 
 def test_datatypes_attributes_only_string_is_none():

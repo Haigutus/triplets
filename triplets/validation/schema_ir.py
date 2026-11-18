@@ -26,12 +26,15 @@ rules never widen to subclasses: each Class entry already lists its inherited
 attributes. No rdflib on this path: ``graph`` is None and the pyshacl engine
 refuses schema-compiled shapes.
 """
+import hashlib
+import json
 import logging
+import os
 
 import pandas
 
 from .._header import _PROPERTY_TYPES
-from ..iri import _PLAIN_DATATYPES, TYPE_KEY, XSD_NS, language_tag, load_schema, local_value, prefixes, xsd_base
+from ..iri import _PLAIN_DATATYPES, TYPE_KEY, XSD_NS, language_tag, load_rdf_map, local_value, prefixes, xsd_base
 from .schema_scope import (SCOPE_KEY, _merged_entries, class_ancestors, require_entries,
                            scope_sections, scoped_rdf_map)
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
@@ -59,9 +62,9 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False, sev
         The severity of every rule.
     """
     _require_severity(severity)
-    schema, digest, source = load_schema(rdf_map)
+    schema, source = load_rdf_map(rdf_map), _source(rdf_map)
     sections = scope_sections(schema, rdf_map_scope)
-    key = f"schema|{digest}|{sections}|undefined={report_undefined_keys}|severity={severity}"
+    key = f"schema|{_digest(schema)}|{source}|{sections}|undefined={report_undefined_keys}|severity={severity}"
     if key in _COMPILE_CACHE:
         logger.debug("schema compile cache hit: %s", key[:40])
         return _COMPILE_CACHE[key]
@@ -100,12 +103,12 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
         The severity of every rule.
     """
     _require_severity(severity)
-    schema, digest, source = load_schema(rdf_map)
+    schema, source = load_rdf_map(rdf_map), _source(rdf_map)
     sources = scope_sections(schema, rdf_map_scope)
     targets = scope_sections(schema, target_rdf_map_scope) if target_rdf_map_scope else []
     if sources is None and targets:
         raise ValueError("target_rdf_map_scope names profiles — name the source profiles too")
-    key = (f"references|{digest}|{sources}|{targets}|missing={report_missing_targets}"
+    key = (f"references|{_digest(schema)}|{source}|{sources}|{targets}|missing={report_missing_targets}"
            f"|inheritance={inheritance}|severity={severity}")
     if key in _COMPILE_CACHE:
         return _COMPILE_CACHE[key]
@@ -139,6 +142,16 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
                "skipped_shapes": skipped, "relaxed_constraints": [], "unknown_components": []})
     _COMPILE_CACHE[key] = compiled
     return compiled
+
+
+def _digest(schema):
+    """The loaded schema's content, the same for a path or a dict."""
+    return hashlib.sha256(json.dumps(schema, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _source(rdf_map):
+    """The schema file name the compile reports — in the cache key, so a compile is never shared between names."""
+    return "rdf_map" if isinstance(rdf_map, dict) else os.path.basename(str(rdf_map))
 
 
 def _require_severity(severity):

@@ -552,7 +552,7 @@ united, differing values kept as the list of distinct values):
 | `engine` | the engine that produced the report |
 | `creator` | tool + version |
 | `source` | data file names (from the data's Distribution label meta rows) |
-| `references` | shape file names (recorded at compile) |
+| `references` | shape file names (recorded at compile); the schema validations: the `rdf_map` file name, `"rdf_map"` for a dict |
 | `compiled_hash` | the shape files' content hash (`CompiledShapes.hash`, the same with any `deactivated_shapes`) |
 | `deactivated_shapes` | the shape ids the run switched off, sorted (`[]` = every shape ran); the run's rule set is `compiled_hash` + `deactivated_shapes` — `concat_violations` counts shapes and constraints once per rule set |
 | `node_shapes` / `constraints` | count of NodeShapes not switched off / distinct constraints of the run's rule set (IR rows that differ only in lineage count once) |
@@ -859,7 +859,7 @@ pyshacl pass-through options (`inference`, `advanced`, `store`) are forwarded
 as keyword arguments. Names the schema does not declare (every name without an
 `rdf_map`) are written under `undefined_namespace=` (default CIM100, so
 schema-less `cim:` shapes keep working; the same parameter on
-`validate_schema` / `validate_schema_references` / `to_shacl_report`); every
+`to_shacl_report`); every
 row is loaded. `abort_on_first=True` stops every engine at the first
 Violation (Warnings and `triplets:invalidSparql` never stop it), for a yes/no
 gate rather than a full report. Runnable end-to-end demos live in

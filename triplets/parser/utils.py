@@ -92,6 +92,12 @@ def iter_rdf_rows(rdf_objects, local_resources=True, base=None):
             yield obj_id, _split_prefixed_name(element.tag), value
 
 
+def base_name(label: str) -> str:
+    """The file name in a source label (``nfo:fileName``): the part after the last ``/``
+    or ``\\``, on any platform; ``""`` for an empty label."""
+    return label.replace("\\", "/").rpartition("/")[2]
+
+
 def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debug: bool = False):
     """Yield XML file objects and/or str paths, one at a time (lazy).
 
@@ -101,6 +107,10 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
     yielded, so a consumer that processes-and-drops each file keeps at most one
     member in RAM (out-of-core ingest). Zip handles this function opens are
     closed after their archive is exhausted.
+
+    A zip member is a ``BytesIO`` with ``.name`` = its member name and ``.container`` =
+    the file name of the zip it came from, without directories (:func:`base_name` of the
+    zip path, of the zip file object's ``.name``, or of a nested zip's member name).
     """
     items = list_of_paths_to_zip_globalzip_xml
     if isinstance(items, (str, bytes, os.PathLike)) or hasattr(items, "read"):
@@ -131,6 +141,8 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
             logger.warning("Not supported file: %s", getattr(item, "name", item))
 
     for zip_source in pending_zips:   # appends during iteration handle nested zips
+        # nfo:belongsToContainer, same rule as fileName; None (no row) for a zip without a name
+        zip_name = base_name(zip_source if isinstance(zip_source, str) else getattr(zip_source, "name", "")) or None
         opened = None
         if isinstance(zip_source, str):
             try:
@@ -151,6 +163,7 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
                         try:
                             file_object = BytesIO(zip_container.read(zipped_file))
                             file_object.name = zipped_file
+                            file_object.container = zip_name
                         except Exception as e:
                             logger.warning("Zip member read fail %s: %s", zipped_file, e)
                             continue
@@ -159,7 +172,9 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
                         yield file_object
                     elif ".zip" in zipped_file_lower:
                         try:
-                            pending_zips.append(BytesIO(zip_container.read(zipped_file)))
+                            inner_zip = BytesIO(zip_container.read(zipped_file))
+                            inner_zip.name = zipped_file
+                            pending_zips.append(inner_zip)
                         except Exception:
                             pass
                     elif debug:

@@ -7,6 +7,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`stereotype` and `rdf:type` on every bundled schema entry** — the RDFS source types
+  of the entry's object, as lists in source order, deduplicated, and left out when the
+  object has none. Covers classes, attributes, associations, enumeration attributes,
+  enum values and datatypes. Stereotypes are written as text, and an IRI stereotype
+  (`…/UML#attribute`) as its local name. `rdf:type` values are prefixed names
+  (`rdfs:Class`, `rdf:Property`, `cim:UnitSymbol`) from the section's prefixes, and an
+  IRI in an unbound namespace stays absolute. All 8 bundles are regenerated, and are
+  about 25 % larger.
+- **File name and zip name in the Distribution rows** — two more `Distribution` rows,
+  Nepomuk File Ontology terms (`nfo:`): `fileName` on every parsed file, the file name with
+  its extension (`label` after its last `/` or `\`; no row for a source without a name),
+  and `belongsToContainer` on a file read from a zip, the zip's file name by the same rule
+  (of the zip path, the zip file object's `.name`, or a nested zip's member name).
+  Both record the names as parsed, not updated when `label` is later rewritten.
+  `label` is unchanged. Row order: `Type`, `label`, `fileName`, `belongsToContainer`. All
+  parser engines write them (also `rdf_parser.load_RDF_to_list`); zip members from
+  `iter_all_xml` / `find_all_xml` carry the zip's file name as `.container` next to `.name`. Like
+  `label`, they stay out of CIM XML (unless `export_undefined=True`) and of `cim-diff` /
+  `cim-spreadsheet` (unless `--keep-metadata`)
+  ([#229](https://github.com/Haigutus/triplets/issues/229)).
 - **`validate_schema(..., severity=)` / `validate_schema_references(..., severity=)`** (and
   `compile_schema` / `compile_references`) — report schema findings as `"Warning"` or `"Info"`
   instead of `"Violation"` (SARIF `warning` / `note`, `sh:resultSeverity`); other values raise
@@ -196,6 +216,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`iri.key_types(rdf_map)` returns name → dict**: `{"type": …}` plus `stereotype` /
+  `rdf:type` where the entry has them (previously name → type string). For example,
+  `key_types(rdf_map)["DateTimeStamp"]` is
+  `{"type": "Primitive", "stereotype": ["Primitive", "eumd"], "rdf:type": ["rdfs:Class"]}`.
+- **`validate_schema` / `validate_schema_references` parse an `rdf_map` path once per call**
+  and hand the loaded dict down. `compile_schema` / `compile_references` cache on the loaded
+  schema's content and the given file name (`"rdf_map"` for a dict); the run metadata's
+  `references` is the `rdf_map` file name given to the validation call, or to
+  `compile_schema` when its result goes to `validate_shacl`.
+- **`data_unchanged=True` also asserts the `rdf_map` dict is unchanged** (`sparql.query`,
+  `load_dataset`, the engines): passed again with the same data object, the same dict object
+  reuses the schema serialization stored with the data digest instead of a `json.dumps` per
+  call (a path is still read per call). The sh:sparql phase of `validate_shacl` serializes its
+  scoped schema once per run instead of once per query (~1 ms each): warm `engine="polars"`
+  on Belgovia / Svedala EQ with the CGMES 3.0 shapes ~0.45 → ~0.35 s / ~0.82 → ~0.72 s.
 - **SARIF rule titles name the constraint language**: `SHACL …` / `RDFS …` on every
   rule, `sh:name` titles included (`SHACL Line completeness (8×)`)
   ([#150](https://github.com/Haigutus/triplets/issues/150)).
@@ -331,7 +366,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of being written bare; an `undefined_namespace` the document already
   binds, such as CIM100, keeps its own prefix instead of adding `triplets:`). Schema-less `export_to_nquads` therefore
   changes from CIM100 to `http://triplets#`. A schema-less query does not:
-  `sparql.query`, `validate_shacl`, `validate_schema` and `export_to_shacl_report`
+  `sparql.query`, `validate_shacl` and `export_to_shacl_report`
   keep every row and default `undefined_namespace` to CIM100, so `cim:`
   queries keep working; all of them take the parameter.
 - **Performance** (RealGrid, 1.15M rows): `read_nquads` 12.2 s → 2.9 s (line
@@ -445,6 +480,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   list column after a polars → pandas conversion) is read as its profiles — before, an
   array of length 0 or ≥ 2 raised `ValueError` and a 1-element array was written as
   `['EQ']`; null and empty-string profiles are dropped.
+- **`export_to_cimxml` without an `rdf_map` exports the whole dataset.** With no schema
+  every class and key is undefined, so the default `export_undefined=False` wrote files
+  holding only an empty `rdf:RDF` root, with no warning. Without a schema,
+  `export_undefined` is now treated as `True`: everything is written under
+  `undefined_namespace`, both engines, and one warning says so. With a schema, both
+  `export_undefined` values behave as before. `cim-spreadsheet to-cim` without
+  `--rdf-map` relies on this and no longer logs its own warning.
+- **A datatype entry's `type` is its datatype stereotype, not one of its other
+  stereotypes.** The generator kept a single `cims:stereotype` row per object, so a
+  datatype with two stereotypes could get the wrong one as its `type`:
+  `DateTimeStamp` had `"eumd"`, and other datatypes had `profcim`, `European`, `rdf` or
+  `new`. `type` is now the first of `Primitive`, `CIMDatatype`, `Compound`,
+  `ConstrainedPrimitive` and `Enumeration` among the stereotypes. In the bundles this
+  sets `DateTimeStamp`, `IRI`, `URI`, `StringIRI`, `StringFixedLanguage` and
+  `LangString` to `Primitive`, `Statement` / `Statements` to `Compound`, and
+  `CountPerArea` / `Irradiance` to `CIMDatatype`. If a datatype has none of these
+  stereotypes, its `type` is `""` and a warning is logged.
 - **A range bound that is not a number no longer fails the SHACL compile**: a
   `sh:minInclusive` … `sh:maxExclusive` bound such as `"2020-01-01"^^xsd:date` raised
   `ValueError` in `compile()`, so no shape was validated. pandas, polars and duckdb

@@ -83,7 +83,8 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
 - The absolute side takes flat maps built from `rdf_map`, one function per
   map, each a single comprehension over `rdf_map_entries` (the root entries
   of a flat schema, then every profile section; first occurrence wins): `namespaces` (name → namespace IRI),
-  `key_types` (name → schema entry type), `value_types` (KEY → `literal` /
+  `key_types` (name → `{"type": …}` plus the entry's `stereotype` / `rdf:type`
+  lists where present), `value_types` (KEY → `literal` /
   `reference` / `enum`, by entry type only), `datatypes` (Attribute KEY →
   datatype IRI, `None` = `xsd:string` / `rdf:langString` / a tagged KEY; anyURI
   included), `languages` (Attribute KEY → fixed language tag, written `"text"@tag` /
@@ -91,7 +92,8 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   `ProfileNamespaceMap`s instead of the entries, first binding wins; `xsd`,
   `rdf`, `rdfs` built in where no map binds them). No cache: each is built on
   demand. Public entry points (`validate_shacl`,
-  `validate_schema`, `export_to_*`, the qlever ingest) call `load_rdf_map`
+  `validate_schema`, `validate_schema_references`, `compile_schema` / `compile_references`,
+  `export_to_*`, the qlever ingest) call `load_rdf_map`
   once; below them only dicts flow, so a path is parsed once per call. The
   validations hand the engines the scoped, merged schema
   (`validation.schema_scope.scoped_rdf_map`), so first-wins never decides
@@ -121,9 +123,10 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   `absolute_name` has no schema branch: the map answers or the parameter does.
   `iri.defined(key, value, namespaces, value_types)` names the row-level test.
   Every exporter has the same two knobs: `export_undefined` (write such rows
-  or drop them — N-Quads keeps them by default, CIM XML drops them) and
+  or drop them — N-Quads keeps them by default, CIM XML drops them unless
+  it has no `rdf_map`, where it writes them all) and
   `undefined_namespace` (default `http://triplets#`). `sparql.query`,
-  `validate_shacl`, `validate_schema` and `export_to_shacl_report` always load every
+  `validate_shacl` and `export_to_shacl_report` always load every
   row and default the namespace to CIM100 so schema-less data answers `cim:`
   queries; the same frame therefore exports `triplets#Equipment` and is
   queried as `CIM100#Equipment` unless the parameter is passed.

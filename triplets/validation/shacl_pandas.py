@@ -83,9 +83,10 @@ class _Context:
         self._all_ids = None
         self._dataset = None
         self._dataset_lock = threading.Lock()   # sh:sparql threads share one rdflib fallback load
-        # The data cannot change between the constraint queries of one
-        # validation run: after the first sh:sparql query has hashed it, the
-        # rest assert data_unchanged and skip the per-query content_hash.
+        # The data and rdf_map cannot change between the constraint queries
+        # of one validation run: after the first sh:sparql query has hashed
+        # them, the rest assert data_unchanged and skip the per-query
+        # content_hash and schema serialization.
         self.data_hashed = False
         # Last engine exception — a cached ingest failure re-raises the same
         # object per rule; _sparql reports it once instead of once per rule.

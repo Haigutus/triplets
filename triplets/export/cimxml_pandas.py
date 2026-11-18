@@ -100,7 +100,8 @@ def generate_xml(instance_data,
         rdf_map : dict or str, optional
             Dictionary mapping CIM classes and attributes to RDF namespaces and export rules.
             If a string is provided, it is treated as a file path to a JSON configuration.
-            If ``None``, attempts to infer from instance data (e.g., profile-based mapping).
+            If ``None``, every name is undefined and only ``export_undefined=True`` writes it
+            (:func:`triplets.export.export_to_cimxml` sets that when it has no schema).
         namespace_map : dict, optional
             Mapping of namespace prefixes to URIs (e.g., ``{"cim": "http://iec.ch/TC57/2013/CIM-schema-cim16#"}``).
             Must include ``"rdf"`` namespace. If ``None``, inferred from ``rdf_map`` or instance.
@@ -175,12 +176,6 @@ def generate_xml(instance_data,
     if key_languages is None:
         key_languages = iri.languages(rdf_map)
 
-    if instance_rdf_map is None:
-        logger.warning("No rdf mapping available for {}".format(file_name))
-        if not export_undefined:
-            logger.warning("File not created for {}".format(file_name))
-            return
-        instance_rdf_map = {}           # every name is undefined: written under undefined_namespace
     namespace_map = namespace_map or {}
 
     if export_undefined and undefined_namespace not in namespace_map.values():
