@@ -236,9 +236,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ([#150](https://github.com/Haigutus/triplets/issues/150)).
 - **SARIF tool name per constraint language**: `tool.driver.name` is `triplets-rdfs` for
   schema runs (`validate_schema` / `validate_schema_references` / `validate_by_header`);
-  SHACL runs and bare frames stay `triplets-shacl`. GitHub code scanning tracks alerts per
-  tool name: alerts of schema runs already uploaded under `triplets-shacl` are closed there
-  and appear as new alerts under `triplets-rdfs`
+  SHACL runs and bare frames stay `triplets-shacl`. On GitHub code scanning a schema run
+  is a separate tool; alerts uploaded earlier under `triplets-shacl` stay until that
+  configuration is removed from the branch
   ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **CIM XML export loads the schema and builds its datatype / language maps once per
   export** instead of per instance (sequential `cython_pugixml`, Svedala: ~76 → ~55 ms min);
