@@ -21,7 +21,7 @@ from urllib.parse import quote
 import pandas
 
 from .context import ENRICHMENT_COLUMNS, enrich
-from .locations import LOCATION_COLUMNS, locate_violations, relative_name
+from .locations import LOCATION_COLUMNS, locate_violations, relative_sources
 from .shacl_report import _expand, message_prefix, profile_names, profile_text
 from ..iri import split_iri
 
@@ -66,13 +66,15 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
     export_to_memory : bool, default False
         Return a BytesIO (with .name) instead of writing to disk.
     source_root : str or Path, optional
-        Source file names under this directory are written relative to it
-        (forward slashes): the paths in *sources* the locate pass reads, and
-        the absolute file names the frame carries (INSTANCE_LABEL, the run
-        metadata's ``source`` / ``references``). Paths outside it — logged in
-        one warning — relative names, zip members, file-likes and the
-        SOURCE_URI of a frame already carrying LOCATION_COLUMNS keep their
-        names (see locations.relative_name).
+        A file name that is an absolute path under this directory is
+        written relative to it (forward slashes); every other name is
+        written as given. One rule for every name in the log: SOURCE_URI
+        (located by *sources* here or already on the frame), the
+        INSTANCE_LABEL fallback, the run metadata's ``source`` and
+        ``references``. ``references`` of a validation run are file names
+        without directories, so they stay as they are. Absolute names
+        outside the directory are named in one logged warning (see
+        locations.relative_sources).
     """
     if any(source is not None for source in (data, shapes, rdf_map)) \
             and not set(ENRICHMENT_COLUMNS) <= set(violations.columns):
@@ -95,22 +97,20 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
 def build_sarif(violations, group=True, sources=None, source_root=None):
     """Violations frame → SARIF document dict (I/O only when *sources* is
     given — the locate_violations pass reads just the source files; a frame
-    already carrying LOCATION_COLUMNS is used as-is). *source_root*: file
-    names under it are written relative to it (see export_to_sarif)."""
-    root = None if source_root is None else os.path.abspath(source_root)
+    already carrying LOCATION_COLUMNS is not located again). *source_root*:
+    absolute file names under it are written relative to it (see
+    export_to_sarif)."""
     frame = violations.copy()
     if sources is not None and not set(LOCATION_COLUMNS) <= set(frame.columns):
-        frame = locate_violations(frame, sources, root)
+        frame = locate_violations(frame, sources)
     for column in (*ENRICHMENT_COLUMNS, *LOCATION_COLUMNS):   # tolerate bare frames
         if column not in frame.columns:
             frame[column] = pandas.NA
 
     meta = violations.attrs.get("validation", {})
-    if root is not None:     # names from the data and the run metadata: absolute paths under the root
-        relative = lambda name: relative_name(str(name), root) or name  # noqa: E731
-        frame["INSTANCE_LABEL"] = frame["INSTANCE_LABEL"].map(relative, na_action="ignore")
-        meta = {**meta, **{key: [relative(name) for name in meta[key]]
-                           for key in ("source", "references") if meta.get(key)}}
+    frame, names = relative_sources(frame, {key: meta[key] for key in ("source", "references")
+                                            if meta.get(key)}, source_root)
+    meta = {**meta, **names}
     language = meta.get("language", "shacl")
     groups = [(key, rows.to_dict("records")) for key, rows
               in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False)]

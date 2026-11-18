@@ -51,17 +51,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with skipped entries gets an invocation too. GitHub code scanning does not display
   invocation notifications; SARIF viewers do
   ([#94](https://github.com/Haigutus/triplets/issues/94)).
-- **`source_root=` on `export_to_sarif` / `to_sarif`, `export_to_shacl_report` /
-  `to_shacl_report` and `locate_violations` / `locate`** — source file names under that
-  directory are written relative to it with forward slashes: the `sources=` paths the
-  locate pass reads (SARIF `artifactLocation.uri`, the SHACL report's `[context_location]`
-  message) and the absolute file names the frame carries — the `INSTANCE_LABEL` fallback
-  location and the run metadata's `source` / `references` (SARIF run `properties`,
-  whole-file fallback locations, rule help; SHACL `dcterms:source` /
-  `dcterms:references`). The comparison is lexical (symlinks are not resolved). Relative
-  names, zip members, file-likes and the `SOURCE_URI` of an already located frame keep
-  their names; `sources=` paths outside the root keep theirs and are named in one logged
-  warning. Default `None` writes the names as given
+- **`source_root=` on `export_to_sarif` / `to_sarif` and `export_to_shacl_report` /
+  `to_shacl_report`** (also `build_sarif`, `violations_to_report_graph`) — a file name
+  that is an absolute path under that directory is written relative to it, with forward
+  slashes. Every other name is written as given: a relative path, a path outside the
+  directory, a zip member. The rule covers every file name of the export: `SOURCE_URI`
+  (SARIF `artifactLocation.uri`, the SHACL report's `[context_location]` message), the
+  `INSTANCE_LABEL` fallback location and the run metadata's `source` / `references`
+  (SARIF run `properties`, whole-file fallback locations, rule help; SHACL
+  `dcterms:source` / `dcterms:references`). `references` of a validation run are file
+  names without directories, so they stay as they are; an absolute `report_references=`
+  is written relative. No name is joined with the working directory. The comparison is
+  lexical (symlinks are not resolved). Absolute names outside the directory are named in
+  one logged warning. Default `None` writes the names as given
   ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **Fixed language tag per schema entry** — `"language": "en"` on an Attribute entry writes
   `"text"@en` in N-Quads (pandas, polars, streaming; hence the rdflib / pyshacl loader) and

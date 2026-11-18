@@ -827,8 +827,8 @@ violations = violations.shacl.enrich(data=data, shapes=compiled, rdf_map=rdf_map
 
 # SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer
 violations.shacl.to_sarif(path="report.sarif")
-# located lines; file names under the repository directory are written
-# relative to it: artifactLocation.uri "models/grid.xml"
+# located lines; absolute file names under the repository directory are
+# written relative to it: artifactLocation.uri "models/grid.xml"
 repository = "/srv/checkout/grid-models"
 violations.shacl.to_sarif(path="report.sarif", sources=[f"{repository}/models/grid.xml"],
                           source_root=repository)
@@ -851,7 +851,7 @@ violations.shacl.to_csv(path="report.csv")
 violations.shacl.to_excel(path="report.xlsx")
 
 # the location pass standalone — SOURCE_URI / SOURCE_LINE / SOURCE_SNIPPET columns,
-# reused by both report exports (source_root= writes paths under it relative to it)
+# reused by both report exports; SOURCE_URI is the source name as given
 violations = violations.shacl.locate(sources=["grid.zip"])
 ```
 
@@ -938,31 +938,34 @@ enrichment pass first (an already-enriched frame is used as-is).
   definition) — what GitHub code scanning needs to annotate lines. One
   grep-style pass per file; the parse/validate hot paths are untouched.
   A frame already carrying `LOCATION_COLUMNS` (from
-  `violations.shacl.locate(sources=...)`) is used as-is. Without either,
+  `violations.shacl.locate(sources=...)`) is not located again. Without either,
   `artifactLocation.uri` falls back to the enrichment-traced file label,
   region-less. Positions are whole lines (1-based): RDF serializations put
   one statement per line, and a start-only region cannot be displayed by
   GitHub, so regions always carry `startLine` and `endLine`.
-- `source_root=` (a directory) writes the source file names of `to_sarif`
-  and `to_shacl_report` relative to it, with forward slashes. The root is
-  made absolute against the working directory and compared with:
-  - each `sources=` path the locate pass reads, made absolute the same way
-    (as `open` reads it) — SARIF `artifactLocation.uri` (GitHub reads a
-    relative uri against the repository root), the SHACL report's
-    `[context_location]` message;
-  - the file names the frame carries — the `INSTANCE_LABEL` fallback
-    location and the run metadata's `source` / `references` (SARIF run
-    `properties`, whole-file fallback locations and the rule help's file;
-    SHACL `dcterms:source` / `dcterms:references`) — only when they are
-    absolute paths; a relative name stays as it is.
+- `source_root=` (a directory) on `to_sarif` and `to_shacl_report`: a file
+  name that is an absolute path under the directory is written relative to
+  it, with forward slashes. Every other name is written as given: a relative
+  path, a path outside the directory, a zip member name. No name is joined
+  with the working directory. The rule covers every file name of the export:
+  - `SOURCE_URI` — SARIF `artifactLocation.uri` (GitHub reads a relative uri
+    against the repository root), the SHACL report's `[context_location]`
+    message. It makes no difference whether `sources=` locates the frame in
+    the export or `violations.shacl.locate(sources=...)` did before;
+  - the `INSTANCE_LABEL` fallback location (SARIF);
+  - the run metadata's `source` — SARIF run `properties` and whole-file
+    fallback locations, SHACL `dcterms:source`;
+  - the run metadata's `references` — SARIF run `properties`, the rule
+    help's file and the whole-file location of a tool finding, SHACL
+    `dcterms:references`. A validation run records the shapes and schema
+    files as file names without directories, so these stay as they are. An
+    absolute `report_references=` under the directory is written relative.
 
-  A name is written relative when its file lies in `source_root` or a
-  directory below it. The comparison is lexical: symlinks are not resolved,
-  so give `source_root` the same way the sources are given. A `sources=`
-  path outside it keeps its name, and the export logs one warning naming
-  those paths. Zip members, file-likes and the `SOURCE_URI` of a frame that
-  already carries `LOCATION_COLUMNS` keep their own names. Default `None`:
-  the names as given.
+  Parse the files by absolute path to get root-relative names: the names in
+  the frame are the paths given to the parser. The comparison is lexical:
+  symlinks are not resolved, so give `source_root` the same way the files
+  are given. The export logs one warning naming the absolute names outside
+  the directory. Default `None`: the names as given.
 - What the run did not evaluate becomes
   `invocations[0].toolConfigurationNotifications` (the shapes graph or schema
   is the tool's rule configuration, SARIF 2.1.0 §3.20.22): one `warning`
