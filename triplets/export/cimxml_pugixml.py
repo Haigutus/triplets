@@ -107,12 +107,6 @@ def generate_xml(instance_data,
     if key_languages is None:
         key_languages = iri.languages(rdf_map)      # written whatever datatypes says
 
-    if instance_rdf_map is None:
-        logger.warning("No rdf mapping available for {}".format(file_name))
-        if not export_undefined:
-            logger.warning("File not created for {}".format(file_name))
-            return
-        instance_rdf_map = {}           # every name is undefined: written under undefined_namespace
     namespace_map = namespace_map or {}
 
     if export_undefined and undefined_namespace not in namespace_map.values():

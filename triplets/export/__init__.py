@@ -240,7 +240,9 @@ def export_to_cimxml(data,
     data : pandas.DataFrame
         Full triplet dataset with columns ['INSTANCE_ID', 'ID', 'KEY', 'VALUE'].
     rdf_map : dict or str, optional
-        RDF mapping configuration (see :func:`generate_xml`).
+        RDF mapping configuration (see :func:`generate_xml`). Without one, every
+        class and key is undefined: the whole dataset is exported under
+        ``undefined_namespace`` whatever ``export_undefined`` says, with a warning.
     namespace_map : dict, optional
         Namespace prefix-to-URI mapping (see :func:`generate_xml`).
     class_KEY : str, default "Type"
@@ -249,7 +251,7 @@ def export_to_cimxml(data,
         If True, also export classes, attributes and enum values without a
         schema definition (internal structures like Distribution/NamespaceMap)
         under ``undefined_namespace``. Normal exports carry only schema-defined
-        content. Both engines agree.
+        content. Both engines agree. Treated as True when no ``rdf_map`` is given.
     undefined_namespace : str, default "http://triplets#"
         Namespace for the undefined names ``export_undefined`` writes; the
         ``triplets`` xmlns prefix is kept for a custom URI.
@@ -328,6 +330,10 @@ def export_to_cimxml(data,
 
     # the schema and its KEY maps serve every instance; the header config stays per instance
     rdf_map = load_rdf_map(rdf_map)
+    if not rdf_map:
+        # without a schema every name is undefined: dropping undefined names would write empty files
+        logger.warning("No rdf_map given: every class and key is exported under %s", undefined_namespace)
+        export_undefined = True
     key_datatypes = iri.datatypes(rdf_map) if datatypes else {}
     key_languages = iri.languages(rdf_map)
 
@@ -356,9 +362,6 @@ def export_to_cimxml(data,
                                   undefined_namespace=undefined_namespace,
                                   key_datatypes=key_datatypes, key_languages=key_languages)
                          for instance in instances]
-
-    # generate returns None for instances skipped due to missing mapping
-    xml_documents = [document for document in xml_documents if document is not None]
 
     if debug:
         _, start_time = _print_duration("All XML created in memory ", start_time)
