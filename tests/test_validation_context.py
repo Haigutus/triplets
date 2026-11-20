@@ -195,6 +195,12 @@ def test_enrich_data_scope_reads_what_the_run_saw(flavor):
     assert found["TARGET"].tolist() == ["referenced object x1 found — VoltageLevel"]
     assert found["TARGET_ID"].tolist() == ["x1"] and found["TARGET_TYPE"].tolist() == ["VoltageLevel"]
 
+    # the SARIF export enriches the same way: with the run's scope the finding is
+    # not linked to x1, which the run did not see
+    sarif = lambda **scope: violations.shacl.to_sarif(data=data, group=False, export_to_memory=True, **scope).read()
+    assert b"referenced object x1 not found in the data" in sarif(data_scope=["i2"])
+    assert b"referenced object x1 found" in sarif()
+
 
 def test_concat_violations_merges_run_metadata(shapes):
     """Two runs of the same shapes: rows concatenated, the run window spans both,

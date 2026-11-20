@@ -45,7 +45,7 @@ _LINK_BREAKERS = set("[]\\")
 
 
 def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True,
-                    sources=None, path=None, export_to_memory=False, source_root=None):
+                    sources=None, path=None, export_to_memory=False, source_root=None, data_scope=None):
     """Violations frame → SARIF 2.1.0 log.
 
     Parameters
@@ -86,11 +86,15 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
         without directories, so they stay as they are. Absolute names
         outside the directory are named in one logged warning (see
         locations.relative_sources).
+    data_scope : iterable of INSTANCE_ID, optional
+        The enrichment pass reads only these instances of *data* — pass the
+        validation's own scope, so a finding is not linked to a referenced
+        object the run did not see (see context.enrich).
     """
     check_source_root(source_root)
     if any(source is not None for source in (data, shapes, rdf_map)) \
             and not set(ENRICHMENT_COLUMNS) <= set(violations.columns):
-        violations = enrich(violations, data=data, shapes=shapes, rdf_map=rdf_map)
+        violations = enrich(violations, data=data, shapes=shapes, rdf_map=rdf_map, data_scope=data_scope)
 
     payload = json.dumps(build_sarif(violations, group=group, sources=sources, source_root=source_root),
                          ensure_ascii=False, indent=2).encode("utf-8")

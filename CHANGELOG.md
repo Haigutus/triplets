@@ -81,7 +81,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   referenced object their `[context_message]` line shows (three at most), each linked.
   A related location needs a located referenced object — `sources=` on the export, or `locate`
   after `enrich`: GitHub code scanning rejects an upload with a related location that has no
-  file position. A dangling reference gets none. New
+  file position. A dangling reference gets none. `data_scope=` on `export_to_sarif` /
+  `to_sarif` keeps the export's enrichment to the instances the run saw, as on `enrich`. New
   enrichment columns `TARGET_ID` and `TARGET_TYPE` (`enrich` with `data=`: the referenced
   object's id and Type when it is in the data) and
   location columns `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` (`locate_violations`, the same

@@ -1022,7 +1022,10 @@ enrichment pass first (an already-enriched frame is used as-is).
   per-row result carries at most one (id 1); a grouped result one per
   referenced object its `[context_message]` line shows (the first three
   distinct `TARGET` texts of its samples), ids 1..n, each text linked to its
-  own, so every related location is linked. A dangling reference has none. The `TARGET` column, the csv / Excel exports
+  own, so every related location is linked. A dangling reference has none. A
+  `triplets:missing` finding gets one when the enrichment reads more data
+  than the run did; `data_scope=` on `to_sarif` (the run's own scope, as for
+  `enrich`) keeps the enrichment to what the run saw. The `TARGET` column, the csv / Excel exports
   and the SHACL report keep the plain text.
 - What the run did not evaluate becomes
   `invocations[0].toolConfigurationNotifications` (the shapes graph or schema
