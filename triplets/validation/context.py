@@ -18,6 +18,7 @@ from .._engine_detect import flavor
 from ..iri import TYPE_KEY, load_rdf_map, value_types
 from .schema_scope import _merged_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes
+from .locations import member_name
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -206,6 +207,30 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
             violations.loc[over_count, ["ID", "KEY"]], data, table_name)
 
 
+def file_names(data, table_name="triplets"):
+    """{INSTANCE_ID: file name} from the data's Distribution meta rows (any input
+    flavor): the ``label`` (the parser convention), and for a file read from a
+    zip ``<zip file name>/<label>`` (its ``belongsToContainer`` row) — the name
+    the locate pass gives the same file (locations.member_name)."""
+    keys, columns = ("label", "belongsToContainer"), ["ID", "KEY", "VALUE", "INSTANCE_ID"]
+    kind = flavor(data)
+    if kind == "duckdb":
+        rows = data.execute(f"SELECT {', '.join(columns)} FROM {table_name} "
+                            f"WHERE KEY IN ('label', 'belongsToContainer')").fetchall()
+    elif kind == "polars":
+        rows = data.filter(data["KEY"].is_in(keys)).select(columns).rows()
+    else:   # pandas — and pyarrow through its arrow-backed pandas view
+        if kind == "pyarrow":
+            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+        rows = list(data.loc[data["KEY"].isin(keys), columns].itertuples(index=False, name=None))
+    containers = {identifier: value for identifier, key, value, _ in rows if key == "belongsToContainer"}
+    names = {}
+    for identifier, key, value, instance in rows:
+        if key == "label" and value:
+            names.setdefault(str(instance), member_name(containers.get(identifier), value))
+    return names
+
+
 def _name_map(data, table_name="triplets"):
     """{ID: IdentifiedObject.name} from the data (any input flavor)."""
     kind = flavor(data)
@@ -279,13 +304,7 @@ def _add_instance_context(violations, data):
         pandas.Series(instances[first].values, index=identifier[first]))
 
     # The parsed file name lives on the per-instance Distribution meta object
-    # (KEY="label" — the parser convention). TODO: exact code locations
-    # (line/region inside the source XML) would extend this path once the
-    # parser records them.
-    labels = data[data["KEY"] == "label"]
-    violations["INSTANCE_LABEL"] = violations["INSTANCE_ID"].map(
-        pandas.Series(labels["VALUE"].values, index=labels["INSTANCE_ID"].astype(str))
-        .groupby(level=0).first())
+    violations["INSTANCE_LABEL"] = violations["INSTANCE_ID"].map(file_names(data))
 
     for column, key in (("OBJECT_TYPE", TYPE_KEY), ("OBJECT_NAME", "IdentifiedObject.name")):
         rows = data[data["KEY"] == key]

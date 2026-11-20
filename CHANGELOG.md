@@ -58,7 +58,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `to_shacl_report`** (also `build_sarif`, `violations_to_report_graph`) — a file name
   that is an absolute path under that directory is written relative to it, with forward
   slashes. Every other name is written as given: a relative path, a path outside the
-  directory, a zip member. The rule covers every file name of the export: `SOURCE_URI`
+  directory, a file in a zip (`grid.zip/models/grid.xml`). The rule covers every file name of the export: `SOURCE_URI`
   (SARIF `artifactLocation.uri`, the SHACL report's `[context_location]` message), the
   `INSTANCE_LABEL` fallback location and the run metadata's `source` / `references`
   (SARIF run `properties`, whole-file fallback locations, rule help; SHACL
@@ -238,12 +238,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
-- **A located file in a zip is named `<zip file name>/<member name>`** — `SOURCE_URI` /
-  `TARGET_URI` from `locate` and from `sources=` on the SARIF and SHACL report exports
+- **A file in a zip is named `<zip file name>/<member name>` in validation results**
   (`grid.zip/models/grid.xml`; the zip's name without directories, the inner zip's for a
-  zip in a zip). It was the member name alone, which reads as a path of the repository
-  and, with `source_root=`, could name another file there. `INSTANCE_LABEL` and the
-  run's `source` keep the member name.
+  zip in a zip): `SOURCE_URI` / `TARGET_URI` from `locate` and from `sources=` on the
+  SARIF and SHACL report exports, `INSTANCE_LABEL` from `enrich`, and the run's `source`
+  (`attrs["validation"]`, SARIF run `properties`, `dcterms:source`) — one name per file
+  in one report. It was the member name alone, which reads as a path of the repository
+  and, with `source_root=`, could name another file there. The `label` row of the
+  parsed data is unchanged; the zip's name is read from its `belongsToContainer` row.
+  Two zips with the same file name and member give the same name.
 - **`iri.key_types(rdf_map)` returns name → dict**: `{"type": …}` plus `stereotype` /
   `rdf:type` where the entry has them (previously name → type string). For example,
   `key_types(rdf_map)["DateTimeStamp"]` is

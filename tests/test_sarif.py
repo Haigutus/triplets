@@ -561,6 +561,42 @@ def test_source_root_outside_names_one_warning(tmp_path, caplog):
         == [f"1 file name(s) outside source_root {root} keep their names: {model}"] * 2
 
 
+def test_zip_member_has_one_name_in_the_log(tmp_path):
+    """A file parsed from a zip is <zip file name>/<member name> in every place of
+    the log — located by sources=, from the label alone, the run's source list —
+    with source_root too: not the name of the repository file that has the
+    member's own name. The run's source is the same on every data flavor."""
+    import zipfile
+    root = tmp_path / "repo"
+    data, _ = parsed_run(root, str(root / "models" / "grid.xml"))          # the repository's own models/grid.xml
+    archive = str(root / "grid.zip")
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("models/grid.xml", XML)
+    shapes = str(root / "shapes" / "shapes.ttl")
+    data = pandas.read_RDF([archive])
+    violations = data.shacl.validate_shacl(shapes, engine="pandas")
+    assert violations.attrs["validation"]["source"] == ["grid.zip/models/grid.xml"]
+    enriched = violations.shacl.enrich(data=data)
+    assert set(enriched["INSTANCE_LABEL"]) == {"grid.zip/models/grid.xml"}
+
+    for group in (True, False):
+        for sources in (None, [archive]):
+            document = build_sarif(enriched, group=group, sources=sources, source_root=root)
+            assert file_names(document) == {"grid.zip/models/grid.xml"}
+    null_id = build_sarif(enriched.assign(ID=None, INSTANCE_LABEL=None), source_root=root)   # the run's first source
+    assert file_names(null_id) == {"grid.zip/models/grid.xml"}
+
+    polars = pytest.importorskip("polars")
+    frame = polars.from_pandas(data.astype(str))
+    assert frame.shacl.validate_shacl(shapes, engine="polars").attrs["validation"]["source"] \
+        == ["grid.zip/models/grid.xml"]
+    duckdb = pytest.importorskip("duckdb")
+    connection = duckdb.connect()
+    connection.register("triplets", data.astype(str))
+    assert triplets.validation.validate_shacl(connection, shapes, engine="duckdb").attrs["validation"]["source"] \
+        == ["grid.zip/models/grid.xml"]
+
+
 def test_source_root_must_be_a_directory(tmp_path):
     """source_root naming no directory — a path that does not exist, a file —
     raises ValueError in both exports, with or without names to write."""

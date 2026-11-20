@@ -49,6 +49,14 @@ _DEFINITION = re.compile(rb'rdf:(?:ID|about)="(?:' + "|".join(map(re.escape, ID_
                          + rb')?([^"]+)"')
 
 
+def member_name(container, name):
+    """The name of a file read from a zip: ``<zip file name>/<member name>`` —
+    a relative name that is not the path of a file on disk. *container* is the
+    zip's file name without directories (``.container`` of a zip member, the
+    ``belongsToContainer`` row of a parsed file); without one, *name* as it is."""
+    return f"{container}/{name}" if container else name
+
+
 def locate(wanted, sources):
     """Find the wanted objects in the source XML.
 
@@ -109,7 +117,8 @@ def locate_violations(violations, sources):
     located in the same pass, at its definition, into the TARGET_* columns; a
     frame without TARGET_ID gets nulls there. A definition is the first
     rdf:ID / rdf:about element with the id, in source order (see locate).
-    SOURCE_URI / TARGET_URI are the source names as given.
+    SOURCE_URI / TARGET_URI are the source names as given, a zip member
+    ``<zip file name>/<member name>`` (see locate).
     """
     import pandas
 
@@ -246,16 +255,15 @@ def relative_sources(violations, names, source_root):
 def _read(source):
     """(uri, bytes) for a path or a file-like (zip members from find_all_xml).
     A zip member is named ``<zip file name>/<member name>`` (its
-    ``.container``): a relative name that no file on disk has. A seekable
+    ``.container``, see member_name). A seekable
     file-like is read from its start, so one open handle serves every pass it
     is given to; a file-like that gives no bytes (a stream that cannot be
     rewound, read before) is named in a warning."""
     if hasattr(source, "read"):
         if getattr(source, "seekable", lambda: False)():
             source.seek(0)
-        name = str(getattr(source, "name", "<memory>"))
-        container = getattr(source, "container", None)
-        uri, text = (f"{container}/{name}" if container else name), source.read()
+        uri = member_name(getattr(source, "container", None), str(getattr(source, "name", "<memory>")))
+        text = source.read()
         if not text:
             logger.warning("Nothing to read from source %s: no object is located in it", uri)
         return uri, text

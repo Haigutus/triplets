@@ -542,8 +542,12 @@ sources only when the `SOURCE_*` columns are missing. The columns:
 
 | Columns | Content |
 |---------|---------|
-| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element inside the object's definition, else of the object definition (`ID`). The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) |
+| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element inside the object's definition, else of the object definition (`ID`). The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) — the name `INSTANCE_LABEL` and the run's `source` have for it |
 | `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` | the referenced object of a reference finding found in the data (`TARGET_ID`, from `enrich`): its definition, from the same pass; null without a `TARGET_ID` |
+
+The name of a file in a zip holds the zip's file name only: two zips with the same
+file name in different directories and the same member give one name, and a zip in a
+zip gives the inner zip's name.
 
 An object's definition is the first `rdf:ID` or `rdf:about` element with its id, in the
 order the sources are read (files as given, then the members of the zips): for an object
@@ -566,7 +570,7 @@ united, differing values kept as the list of distinct values):
 | `started_at` / `generated_at` / `duration_seconds` | validation start/end (UTC, Zulu form) and wall-clock duration of the run — `validate_shacl` excludes the shapes compilation (cache-independent); the schema validations include `compile_schema` / `compile_references` |
 | `engine` | the engine that produced the report |
 | `creator` | tool + version |
-| `source` | data file names (from the data's Distribution label meta rows) |
+| `source` | data file names (from the data's Distribution `label` meta rows; a file read from a zip is `<zip file name>/<label>`) |
 | `references` | the shape file names given to the run (`[]` for a Graph; a compile is cached per content and names); the schema validations: the `rdf_map` file name, `"rdf_map"` for a dict |
 | `compiled_hash` | the shape files' content hash (`CompiledShapes.hash`, the same with any `deactivated_shapes`); a schema compile: the schema content, profiles and options — the same under any file name |
 | `deactivated_shapes` | the shape ids the run switched off, sorted (`[]` = every shape ran); the run's rule set is `compiled_hash` + `deactivated_shapes` — `concat_violations` counts shapes and constraints once per rule set |
@@ -867,7 +871,8 @@ violations.shacl.to_excel(path="report.xlsx")
 
 # the location pass standalone — LOCATION_COLUMNS (SOURCE_* for the finding, TARGET_*
 # for the referenced object of an enriched reference finding), reused by both report
-# exports; SOURCE_URI / TARGET_URI are the source names as given
+# exports; SOURCE_URI / TARGET_URI are the source names as given (a file in a zip:
+# <zip file name>/<member name>)
 violations = violations.shacl.locate(sources=["grid.zip"])
 ```
 
@@ -896,7 +901,7 @@ saw:
 |---------|--------|---------|
 | `TARGET` | data (+ shapes, rdf_map) | what the finding found: the referenced object's id, Type and name — or that it is not in the data — for `sh:class` / reference-range / `triplets:missing` findings; the found type of a valueType row (needs *shapes*); the duplicate values of a maximum-count finding. A presented `rdfs:range` counts as a reference when its rule or the schema says the KEY is an Association |
 | `TARGET_ID` | data (+ shapes, rdf_map) | the id (the `VALUE`) of a reference finding's referenced object when it is in the data; null for a dangling reference and every other row |
-| `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows) |
+| `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows; a file read from a zip is `<zip file name>/<label>`, from its `belongsToContainer` row) |
 | `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` |
 | `SHAPE_NAME`, `SHAPE_DESCRIPTION` | shapes | `sh:name` / `sh:description` (a property shape inherits the parent NodeShape's) |
 | `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition in the profiles the violation was checked against — the `PROFILE` column, else `rdf_map_scope` (one scope, or `{INSTANCE_ID: scope}`), else the run's `attrs["validation"]["profiles"]` — merged like the run (the multiplicity that was checked). Rows without profiles read the root entries; a name the profiles lack stays empty |
@@ -973,7 +978,7 @@ enrichment pass first (an already-enriched frame is used as-is).
 - `source_root=` (a directory) on `to_sarif` and `to_shacl_report`: a file
   name that is an absolute path under the directory is written relative to
   it, with forward slashes. Every other name is written as given: a relative
-  path, a path outside the directory, a located zip member
+  path, a path outside the directory, a file in a zip
   (`grid.zip/models/grid.xml`, not the path of a file in the directory). No
   name is joined
   with the working directory. The rule covers every file name of the export:
