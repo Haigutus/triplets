@@ -445,6 +445,18 @@ def test_union_key_ignores_order_and_duplicates(tmp_path):
     assert forward is backward                            # same cache entry
 
 
+def test_union_sources_are_sorted_whatever_was_compiled_first(tmp_path):
+    """The file names a compile reports do not depend on the order of the paths, nor on which
+    order filled the cache."""
+    import triplets
+    from triplets.validation import shacl_ir
+
+    shared, other = _shape_files(tmp_path)
+    for paths in ([shared, other], [other, shared, shared]):
+        triplets.clear_caches()
+        assert shacl_ir.compile_shapes([str(path) for path in paths]).sources == ("other.ttl", "shared.ttl")
+
+
 def test_cached_graphs_survive_compiled_graph_mutation(tmp_path):
     """pyshacl (advanced=True) may add triples to compiled.graph — that must
     not leak into other unions sharing the cached per-file graphs."""

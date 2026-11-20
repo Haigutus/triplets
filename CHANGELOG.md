@@ -508,6 +508,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `references` held `"rdf_map"` for a schema given as a path; they hold the file name, as
   with `validate_schema`, and `"rdf_map"` for a dict. A run where no instance resolves a
   profile has `references` too.
+- **The order of a run's shape file names does not depend on earlier runs.** A second
+  `compile` / `validate_shacl` of the same shape files given in another order returned the
+  first call's order in `references` (`CompiledShapes.sources`). The names are sorted, each
+  once.
 - **SARIF / SHACL report / CSV / Excel: a `PROFILE` cell holding a numpy array** (e.g. a
   list column after a polars → pandas conversion) is read as its profiles — before, an
   array of length 0 or ≥ 2 raised `ValueError` and a 1-element array was written as
