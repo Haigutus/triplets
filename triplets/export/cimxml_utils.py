@@ -83,3 +83,22 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
         namespace_map = (rdf_map[sections[0]] if sections else rdf_map).get("ProfileNamespaceMap")
 
     return file_name, namespace_map, instance_rdf_map
+
+
+def declared_namespaces(namespace_map, instance_rdf_map, export_undefined, undefined_namespace):
+    """The prefix → namespace map an instance is written with (both cimxml engines).
+
+    - ``export_undefined``: *undefined_namespace* is bound to ``triplets`` unless the map
+      binds it already (e.g. CIM100 keeps its own prefix).
+    - A name without a namespace (a schema entry with ``"namespace": ""``) is only in no
+      namespace while no default namespace is declared: with such an entry the map's
+      default namespace (prefix ``""`` or ``None``) is left out, and the engines write its
+      names under a generated prefix.
+    """
+    namespace_map = dict(namespace_map or {})
+    if any(isinstance(entry, dict) and "namespace" in entry and not entry["namespace"]
+           for entry in instance_rdf_map.values()):
+        namespace_map = {prefix: uri for prefix, uri in namespace_map.items() if prefix}
+    if export_undefined and undefined_namespace not in namespace_map.values():
+        namespace_map["triplets"] = undefined_namespace
+    return namespace_map

@@ -13,7 +13,7 @@ from lxml.etree import QName
 
 from .. import iri
 from ..iri import DESCRIPTION_TYPE, RDF_NS, TRIPLETS_NS, TYPE_KEY, UUID_PREFIX, XML_NS
-from .cimxml_utils import load_rdf_map, resolve_instance_config
+from .cimxml_utils import declared_namespaces, load_rdf_map, resolve_instance_config
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def _get_qname(namespace, tag=None):
     --------
     >>> qname = _get_qname("http://www.w3.org/1999/02/22-rdf-syntax-ns#", "RDF")
     """
-    qname = QName(namespace, tag)
+    qname = QName(namespace or None, tag)   # "" is no namespace
     #logger.debug(f"Cache info: {get_qname.cache_info()}")
     return qname
 
@@ -181,11 +181,7 @@ def generate_xml(instance_data,
     if key_languages is None:
         key_languages = iri.languages(rdf_map)
 
-    namespace_map = namespace_map or {}
-
-    if export_undefined and undefined_namespace not in namespace_map.values():
-        # an undefined_namespace the map already binds (e.g. CIM100) keeps its own prefix
-        namespace_map = {**namespace_map, "triplets": undefined_namespace}
+    namespace_map = declared_namespaces(namespace_map, instance_rdf_map, export_undefined, undefined_namespace)
 
     # Create element builder; the prefix "" is the default namespace (None for lxml)
     E = ElementMaker(nsmap={prefix or None: uri for prefix, uri in namespace_map.items()})

@@ -366,6 +366,14 @@ def test_cimxml_type_naming_an_entry_that_is_no_class(cimxml_engine):
         ("{http://triplets#}Concept", [], "x"), concept]
 
 
+def test_cimxml_name_without_a_namespace_under_a_default_namespace(cimxml_engine):
+    """A class the schema puts in no namespace stays in none when the map has a default namespace."""
+    rows = [("p1", "Type", "Plain"), ("c1", "Type", "Concept")]
+    names = _flat_export(rows, cimxml_engine, namespace_map={"rdf": RDF_NS, "": "http://www.w3.org/2004/02/skos/core#"})
+    assert names == [("Plain", [(f"{{{RDF_NS}}}about", "urn:uuid:p1")], ""),
+                     ("{http://www.w3.org/2004/02/skos/core#}Concept", [(f"{{{RDF_NS}}}about", "urn:uuid:c1")], "")]
+
+
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(fmt, v, id=f"{fmt}-{v}")
                  for fmt, spec in FORMATS.items() for v in spec["variants"]]
