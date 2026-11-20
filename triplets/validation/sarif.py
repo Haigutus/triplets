@@ -31,9 +31,10 @@ _SCHEMA = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sa
 _LEVELS = {"Violation": "error", "Warning": "warning", "Info": "note"}
 _SAMPLES = 3   # per end: grouped results carry the first 3 and last 3 instances
 _TAGS = 10     # GitHub keeps the first 10 tags of a rule: language, constraint, the first 8 profiles
-# run-metadata list → descriptor id of its "not evaluated" configuration notifications
-_SKIPPED = {"skipped_shapes": "triplets/skippedShape",
-            "skipped_components": "triplets/skippedComponent"}
+# run-metadata list → descriptor (id, shortDescription) of its "not evaluated"
+# configuration notifications
+_SKIPPED = {"skipped_shapes": ("triplets/skippedShape", "Shape not evaluated"),
+            "skipped_components": ("triplets/skippedComponent", "Constraint component not evaluated")}
 # violation-type prefix → where the constraint is defined (the term IRI otherwise)
 _CONSTRAINT_DOCS = {"sh": "https://www.w3.org/TR/shacl/#{local}",
                     "triplets": "https://github.com/Haigutus/triplets/blob/main/docs/validation.md"}
@@ -157,14 +158,18 @@ def build_sarif(violations, group=True, sources=None, source_root=None):
                 result["locations"] = [{"physicalLocation": _artifact_location(names[0])}]
     # what this run did not evaluate (shapes, components): configuration
     # notifications — the shapes graph / schema is the tool's rule configuration
+    # — and each kind the run has is declared in tool.driver.notifications
+    skipped = {key: descriptor for key, descriptor in _SKIPPED.items() if meta.get(key)}
     notifications = [{"descriptor": {"id": descriptor}, "level": "warning", "message": {"text": str(text)}}
-                     for key, descriptor in _SKIPPED.items() for text in meta.get(key) or ()]
+                     for key, (descriptor, _) in skipped.items() for text in meta[key]]
     run = _prune({
         "tool": {"driver": _prune({
             "name": f"triplets-{language}",
             "informationUri": "https://github.com/Haigutus/triplets",
             "version": getattr(triplets, "__version__", None),
             "rules": rules,
+            "notifications": [{"id": descriptor, "shortDescription": {"text": title}}
+                              for descriptor, title in skipped.values()] or None,
         })},
         # the validation-run metadata the validation functions stamp on the frame — the
         # same facts the sh:ValidationReport carries as prov/dcterms terms;

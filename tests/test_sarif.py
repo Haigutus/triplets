@@ -419,8 +419,9 @@ def test_tool_name_per_language():
 
 def test_skipped_entries_as_configuration_notifications():
     """One warning notification per skipped shape / component on
-    invocations[0]; the run property bag keeps the lists; no timestamps still
-    gives a valid invocation (executionSuccessful)."""
+    invocations[0], each kind the run has declared with a title in
+    tool.driver.notifications; the run property bag keeps the lists; no
+    timestamps still gives a valid invocation (executionSuccessful)."""
     meta = {"skipped_shapes": ["A: datatype conflict", "profile XX: no schema"],
             "skipped_components": ["sh:qualifiedValueShape"]}
     run = build_sarif(bare([None], language="rdfs", **meta))["runs"][0]
@@ -432,12 +433,18 @@ def test_skipped_entries_as_configuration_notifications():
         {"descriptor": {"id": "triplets/skippedComponent"}, "level": "warning",
          "message": {"text": "sh:qualifiedValueShape"}}]}]
     assert run["properties"] == {"language": "rdfs", **meta}
+    assert run["tool"]["driver"]["notifications"] == [
+        {"id": "triplets/skippedShape", "shortDescription": {"text": "Shape not evaluated"}},
+        {"id": "triplets/skippedComponent", "shortDescription": {"text": "Constraint component not evaluated"}}]
 
     timed = build_sarif(bare([None], generated_at="2026-01-01T00:00:00+00:00",
                              skipped_shapes=["A"], skipped_components=[]))["runs"][0]["invocations"][0]
     assert list(timed) == ["executionSuccessful", "endTimeUtc", "toolConfigurationNotifications"]
     assert len(timed["toolConfigurationNotifications"]) == 1
-    assert "invocations" not in build_sarif(bare([None], skipped_shapes=[], skipped_components=[]))["runs"][0]
+    one_kind = build_sarif(bare([None], skipped_shapes=["A"], skipped_components=[]))["runs"][0]
+    assert [descriptor["id"] for descriptor in one_kind["tool"]["driver"]["notifications"]] == ["triplets/skippedShape"]
+    clean = build_sarif(bare([None], skipped_shapes=[], skipped_components=[]))["runs"][0]
+    assert "invocations" not in clean and "notifications" not in clean["tool"]["driver"]
 
 
 def test_profile_cells_as_tags_and_text():

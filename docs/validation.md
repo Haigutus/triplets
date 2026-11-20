@@ -1020,7 +1020,9 @@ enrichment pass first (an already-enriched frame is used as-is).
   notification per `skipped_shapes` entry (`descriptor.id`
   `triplets/skippedShape`) and per `skipped_components` entry
   (`triplets/skippedComponent`), the reason or component name as
-  `message.text`; the run `properties` bag keeps both lists. GitHub code
+  `message.text`; `tool.driver.notifications` declares each kind the run has
+  (`id`, `shortDescription`: "Shape not evaluated" / "Constraint component not
+  evaluated"); the run `properties` bag keeps both lists. GitHub code
   scanning does not display invocation notifications; SARIF viewers do
   (§3.20.22: viewers MAY present them). `relaxed_constraints` were evaluated, more
   loosely, and stay in the property bag only.

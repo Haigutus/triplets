@@ -49,7 +49,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `invocations[0].toolConfigurationNotifications` entry (level `warning`) per
   `skipped_shapes` item (`descriptor.id` `triplets/skippedShape`) and per
   `skipped_components` item (`triplets/skippedComponent`), the reason or component name
-  as the message; the run property bag keeps both lists. A run without timestamps but
+  as the message; each kind the run has is declared in `tool.driver.notifications`
+  with a `shortDescription`; the run property bag keeps both lists. A run without timestamps but
   with skipped entries gets an invocation too. GitHub code scanning does not display
   invocation notifications; SARIF viewers do
   ([#94](https://github.com/Haigutus/triplets/issues/94)).
