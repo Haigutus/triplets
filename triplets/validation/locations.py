@@ -9,11 +9,13 @@ searched inside that object's text window, so the annotation lands on the
 offending property element, not just the object.
 
 ``locate_violations`` is the public pass: it stamps ``LOCATION_COLUMNS``
-(SOURCE_URI, SOURCE_LINE, SOURCE_SNIPPET — the located line's text) onto a
-violations frame — both the SARIF and the sh:ValidationReport exports call
-it when given ``sources=``, and it is exposed as
+(SOURCE_URI, SOURCE_LINE, SOURCE_SNIPPET — the located line's text — and the
+same three TARGET_* columns for the referenced object of a reference finding)
+onto a violations frame, and it is exposed as
 ``violations.shacl.locate(sources=...)``. It stamps the source names as
-given. ``relative_sources`` is the one pass both report exports run for
+given. Both the SARIF and the sh:ValidationReport exports, given ``sources=``,
+run it through ``locate_missing``: only the columns the frame lacks are
+stamped. ``relative_sources`` is the one pass both report exports run for
 ``source_root=``: every file name they write goes through ``relative_name``.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
@@ -36,7 +38,8 @@ from ..iri import ID_PREFIXES, TYPE_KEY
 
 logger = logging.getLogger(__name__)
 
-LOCATION_COLUMNS = ["SOURCE_URI", "SOURCE_LINE", "SOURCE_SNIPPET"]
+LOCATION_COLUMNS = ["SOURCE_URI", "SOURCE_LINE", "SOURCE_SNIPPET",   # the finding: ID (+ KEY)
+                    "TARGET_URI", "TARGET_LINE", "TARGET_SNIPPET"]   # the referenced object: TARGET_ID
 
 # an object definition: <cim:Breaker rdf:ID="_uuid"> / rdf:about="#_uuid" /
 # rdf:about="urn:uuid:uuid" — group(1) is the bare ID (one prefix stripped,
@@ -95,18 +98,25 @@ def locate_violations(violations, sources):
 
     Per row (ID, KEY): the violated property element's own position when it
     was found inside the object's text window, else the object definition's;
-    rows whose object is not in the sources get nulls. SOURCE_URI is the
-    source name as given.
+    rows whose object is not in the sources get nulls. The referenced object
+    of a reference finding found in the data (TARGET_ID — context.enrich) is
+    located in the same pass, at its definition, into the TARGET_* columns; a
+    frame without TARGET_ID gets nulls there. SOURCE_URI / TARGET_URI are the
+    source names as given.
     """
     import pandas
 
+    targets = (violations["TARGET_ID"] if "TARGET_ID" in violations.columns
+               else pandas.Series(None, index=violations.index, dtype=object))
     wanted = {}
     for object_id, key in zip(violations["ID"], violations["KEY"]):
         if not pandas.isna(object_id):
             wanted.setdefault(str(object_id), set()).add(None if pandas.isna(key) else str(key))
+    for target in targets.dropna():
+        wanted.setdefault(str(target), set())
     located = locate(wanted, sources)
 
-    def position(object_id, key):
+    def position(object_id, key=None):
         entry = located.get(str(object_id)) if not pandas.isna(object_id) else None
         if entry is None:
             return None, None, None
@@ -115,13 +125,35 @@ def locate_violations(violations, sources):
         return entry["uri"], line, snippet
 
     frame = violations.copy()
-    positions = [position(object_id, key) for object_id, key in zip(frame["ID"], frame["KEY"])]
-    if positions:
-        stamped = pandas.DataFrame(positions, columns=LOCATION_COLUMNS,
-                                   index=frame.index).astype(object)
-        frame[LOCATION_COLUMNS] = stamped.where(stamped.notna(), None)
-    else:
-        frame[LOCATION_COLUMNS] = None
+    positions = [position(object_id, key) + position(target)
+                 for object_id, key, target in zip(frame["ID"], frame["KEY"], targets)]
+    # object columns: a line stays an int next to the None of a row not located
+    frame[LOCATION_COLUMNS] = pandas.DataFrame(positions, columns=LOCATION_COLUMNS, index=frame.index, dtype=object)
+    return frame
+
+
+def locate_missing(violations, sources):
+    """locate_violations for a report export: stamp only what the frame lacks.
+
+    The SOURCE_* columns are located unless the frame carries all three;
+    all three on the frame are kept as they are, hand-stamped ones too. The
+    TARGET_* columns are located when the frame has referenced objects
+    (TARGET_ID) and none of them located (no TARGET_URI value) — it was
+    located before context.enrich filled TARGET_ID, or never, or its
+    referenced objects are in none of the sources read before; else the
+    TARGET_* columns on the frame are kept. With neither half to locate,
+    the sources are not read and the frame is returned as it is.
+    """
+    present = set(violations.columns)
+    source = not set(LOCATION_COLUMNS[:3]) <= present
+    target = ("TARGET_ID" in present and violations["TARGET_ID"].notna().any()
+              and not ("TARGET_URI" in present and violations["TARGET_URI"].notna().any()))
+    if not (source or target):
+        return violations
+    frame = locate_violations(violations, sources)
+    kept = [column for column, lacking in zip(LOCATION_COLUMNS, [source] * 3 + [target] * 3)
+            if not lacking and column in present]
+    frame[kept] = violations[kept]
     return frame
 
 
@@ -165,10 +197,10 @@ def relative_sources(violations, names, source_root):
 
     One rule for every name (relative_name): an absolute path under the root
     is written relative to it; any other name is written as given. Applied to
-    the SOURCE_URI and INSTANCE_LABEL columns of *violations* (where present)
-    and to each list of *names* ({key: [file name, ...]} — the run metadata's
-    source / references). Absolute names outside the root are named in one
-    warning. Returns (frame, names); the inputs are not changed, and
+    the SOURCE_URI, TARGET_URI and INSTANCE_LABEL columns of *violations*
+    (where present) and to each list of *names* ({key: [file name, ...]} — the
+    run metadata's source / references). Absolute names outside the root are
+    named in one warning. Returns (frame, names); the inputs are not changed, and
     ``source_root=None`` returns them as they are.
     """
     if source_root is None:
@@ -181,7 +213,8 @@ def relative_sources(violations, names, source_root):
             known[name] = relative_name(str(name), root)
         return known[name] or name
 
-    columns = [column for column in ("SOURCE_URI", "INSTANCE_LABEL") if column in violations.columns]
+    columns = [column for column in ("SOURCE_URI", "TARGET_URI", "INSTANCE_LABEL")
+               if column in violations.columns]
     frame = violations.assign(**{column: violations[column].map(relative, na_action="ignore")
                                  for column in columns})
     names = {key: [relative(name) for name in values] for key, values in names.items()}

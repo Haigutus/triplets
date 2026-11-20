@@ -64,6 +64,7 @@ def test_range_accepts_subclasses(engine):
     assert violating(v, "rdfs:range") == {("b2", "sub1")} and violating(v, "triplets:missing") == set()
     v = enrich(v, data=frame(rows), rdf_map=SCHEMA)              # the schema tells a reference from an enum
     assert v["TARGET"].tolist() == ['referenced object sub1 found — Substation "Main Sub"']
+    assert v["TARGET_ID"].tolist() == ["sub1"]
     assert v["EXPECTED"].tolist() == ["a reference to one of: Bay, VoltageLevel"]
     assert v["PROFILE"].tolist() == [["EQ"]]
 

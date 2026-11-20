@@ -532,9 +532,16 @@ Violations DataFrames export like any other DataFrame (`export_to_csv`, Excel, .
 as a standard `sh:ValidationReport` (`violations.shacl.to_shacl_report(...)` — the
 exact inverse of the pyshacl report mapping in `shacl_report.py`) or as SARIF 2.1.0
 (`violations.shacl.to_sarif(...)`, see below). Source positions come from one shared
-pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS`
-(`SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET`) onto the frame; both exports run it
-automatically when given `sources=`, or reuse the columns when already present.
+pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS` onto the frame;
+both exports run it automatically when given `sources=` and stamp only what the frame
+lacks: `SOURCE_*` columns already present are kept as they are, and the `TARGET_*`
+columns are located whenever the frame has a `TARGET_ID` and no located referenced
+object, so with `sources=` on the export `locate` may run before or after `enrich`:
+
+| Columns | Content |
+|---------|---------|
+| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element inside the object's definition, else of the object definition (`ID`) |
+| `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` | the referenced object of a reference finding found in the data (`TARGET_ID`, from `enrich`): its definition, from the same pass; null without a `TARGET_ID` |
 
 The SHACL report serializes via rdflib: `format=None` (default) derives the format
 from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an explicit
@@ -593,7 +600,7 @@ the constraint text has one author:
 | `[shacl_profile]` / `[rdfs_profile]` | the scoped profiles the finding was checked against — the `PROFILE` column (schema validations) |
 | `[shacl_expected]` | what the constraint requires, worded from the IR parameter (`one of: Bay, VoltageLevel`) — the `EXPECTED` column, stamped by the validation, no extra input needed |
 | `[context_value]` | the offending value itself (the bad literal, or the reference) — self-contained errors, no need to open the instance data |
-| `[context_message]` | what was actually found — reference targets (id, Type, name / dangling), duplicate values on maxCount — the `TARGET` column (context.enrich with `data=`) |
+| `[context_message]` | what was actually found — reference targets (id, Type, name / dangling), duplicate values on maxCount — the `TARGET` column (context.enrich with `data=`); in SARIF the id of a located referenced object is an embedded link to its related location |
 | `[context_object]` | the validated object (`Breaker BRK-1` — context.enrich) |
 | `[shacl_description]` | the shape's `sh:description` (context.enrich) |
 | `[schema_property]` | the rdf_map property (attribute/association) definition + multiplicity (context.enrich with `rdf_map=`) |
@@ -851,8 +858,9 @@ violations.shacl.to_shacl_report(path="report.ttl", rdf_map=rdf_map)
 violations.shacl.to_csv(path="report.csv")
 violations.shacl.to_excel(path="report.xlsx")
 
-# the location pass standalone — SOURCE_URI / SOURCE_LINE / SOURCE_SNIPPET columns,
-# reused by both report exports; SOURCE_URI is the source name as given
+# the location pass standalone — LOCATION_COLUMNS (SOURCE_* for the finding, TARGET_*
+# for the referenced object of an enriched reference finding), reused by both report
+# exports; SOURCE_URI / TARGET_URI are the source names as given
 violations = violations.shacl.locate(sources=["grid.zip"])
 ```
 
@@ -880,6 +888,7 @@ saw:
 | Columns | Source | Content |
 |---------|--------|---------|
 | `TARGET` | data (+ shapes, rdf_map) | what the finding found: the referenced object's id, Type and name — or that it is not in the data — for `sh:class` / reference-range / `triplets:missing` findings; the found type of a valueType row (needs *shapes*); the duplicate values of a maximum-count finding. A presented `rdfs:range` counts as a reference when its rule or the schema says the KEY is an Association |
+| `TARGET_ID` | data (+ shapes, rdf_map) | the id (the `VALUE`) of a reference finding's referenced object when it is in the data; null for a dangling reference and every other row |
 | `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows) |
 | `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` |
 | `SHAPE_NAME`, `SHAPE_DESCRIPTION` | shapes | `sh:name` / `sh:description` (a property shape inherits the parent NodeShape's) |
@@ -938,8 +947,12 @@ enrichment pass first (an already-enriched frame is used as-is).
   on the violated property element's line (or the object
   definition) — what GitHub code scanning needs to annotate lines. One
   grep-style pass per file; the parse/validate hot paths are untouched.
-  A frame already carrying `LOCATION_COLUMNS` (from
-  `violations.shacl.locate(sources=...)`) is not located again. Without either,
+  The pass stamps only what the frame lacks: the three `SOURCE_*` columns
+  already on the frame (from `violations.shacl.locate(sources=...)`) are
+  kept, and so are the `TARGET_*` columns once a referenced object is
+  located. The sources are read when the `SOURCE_*` columns are missing, or
+  when the frame has a `TARGET_ID` and no located referenced object.
+  Without either,
   `artifactLocation.uri` falls back to the enrichment-traced file label,
   region-less. Positions are whole lines (1-based): RDF serializations put
   one statement per line, and a start-only region cannot be displayed by
@@ -951,7 +964,8 @@ enrichment pass first (an already-enriched frame is used as-is).
   with the working directory. The rule covers every file name of the export:
   - `SOURCE_URI` — SARIF `artifactLocation.uri` (GitHub reads a relative uri
     against the repository root), the SHACL report's `[context_location]`
-    message. It makes no difference whether `sources=` locates the frame in
+    message — and `TARGET_URI`, the `artifactLocation.uri` of a SARIF related
+    location. It makes no difference whether `sources=` locates the frame in
     the export or `violations.shacl.locate(sources=...)` did before;
   - the `INSTANCE_LABEL` fallback location (SARIF);
   - the run metadata's `source` — SARIF run `properties` and whole-file
@@ -967,6 +981,23 @@ enrichment pass first (an already-enriched frame is used as-is).
   symlinks are not resolved, so give `source_root` the same way the files
   are given. The export logs one warning naming the absolute names outside
   the directory. Default `None`: the names as given.
+- The referenced object of a reference finding found in the data
+  (`TARGET_ID`, enriched with `data=`) and located (`TARGET_URI` —
+  `sources=` on the export, or `locate` after `enrich`) becomes a `relatedLocations` entry: `id`, the `TARGET` text
+  as its `message` (Type and name), a `logicalLocations` entry with the id
+  (kind `object`) and a `physicalLocation` on its definition line
+  (`source_root=` applies). A referenced object that is not located — no
+  locate pass, or the object in none of the sources — has none: GitHub code scanning rejects an upload with a related
+  location that has no `physicalLocation`. The `[context_message]` line links
+  it with SARIF's embedded-link form (§3.11.6), the leading id of the `TARGET`
+  text: `referenced object [<id>](1) found — Substation "Main Sub"`; GitHub
+  links a related location only when the message embeds it. An id holding
+  `[`, `]` or `\` stays unlinked (GitHub does not read escaped link text). A
+  per-row result carries at most one (id 1); a grouped result one per distinct
+  referenced object of its samples, ids 1..n, each `TARGET` text its
+  `[context_message]` line shows (three at most) linked to its own. A
+  dangling reference has none. The `TARGET` column, the csv / Excel exports
+  and the SHACL report keep the plain text.
 - What the run did not evaluate becomes
   `invocations[0].toolConfigurationNotifications` (the shapes graph or schema
   is the tool's rule configuration, SARIF 2.1.0 §3.20.22): one `warning`

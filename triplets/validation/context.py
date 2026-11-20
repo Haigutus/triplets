@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 ENRICHMENT_COLUMNS = [
     "TARGET",                                     # data: what the finding found (reference, duplicates)
+    "TARGET_ID",                                  # data: the referenced object found (reference findings)
     "INSTANCE_ID", "INSTANCE_LABEL",              # data: which instance / file
     "OBJECT_TYPE", "OBJECT_NAME",                 # data: what the object is
     "SHAPE_NAME", "SHAPE_DESCRIPTION",            # shapes IR: sh:name / sh:description
@@ -40,7 +41,8 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
     violations : DataFrame from validate_shacl / validate_schema / validate_schema_references.
     data : triplet DataFrame, arrow or DuckDB connection, optional
         Source data — fills TARGET (the referenced object found, or not; the
-        duplicate values of a maximum-count finding), INSTANCE_ID /
+        duplicate values of a maximum-count finding), TARGET_ID (the id of a
+        reference finding's referenced object found in the data), INSTANCE_ID /
         INSTANCE_LABEL (the parsed file name) / OBJECT_TYPE / OBJECT_NAME. An
         object present in several instances is attributed to its first
         occurrence. DuckDB: ``table`` / ``schema`` / ``table_name`` kwargs as
@@ -160,7 +162,7 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
 
     - reference checks (``sh:class``, ``triplets:range`` — presented ``rdfs:range`` —
       and ``triplets:missing``; VALUE = the ref): the target's id, Type and name, or
-      the fact that it does not exist;
+      the fact that it does not exist — a found target's id also in TARGET_ID;
     - valueType rows (``via_type``): the found type (the id is not carried);
     - ``sh:maxCount`` / ``xsd:maxOccurs``: the actual duplicate values.
 
@@ -168,7 +170,8 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
     ``triplets:range`` or the schema (*value_kinds*) declares its KEY an Association —
     an enumeration's ``rdfs:range`` is not.
     """
-    violations["TARGET"] = pandas.Series(None, index=violations.index, dtype=object)
+    for column in ("TARGET", "TARGET_ID"):
+        violations[column] = pandas.Series(None, index=violations.index, dtype=object)
     if violations.empty:
         return
     keys = pandas.Series(list(zip(violations["SOURCE_SHAPE"], violations["KEY"])), index=violations.index)
@@ -195,8 +198,9 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
             name = names.get(ref)
             return f'referenced object {ref} found — {found}' + (f' "{name}"' if name else "")
 
-        violations.loc[of_class, "TARGET"] = (
-            violations.loc[of_class, "VALUE"].astype(str).map(describe_reference))
+        refs = violations.loc[of_class, "VALUE"].astype(str)
+        violations.loc[of_class, "TARGET"] = refs.map(describe_reference)
+        violations.loc[of_class, "TARGET_ID"] = refs.where(refs.map(types.get).notna())
     if over_count.any():
         violations.loc[over_count, "TARGET"] = _found_values(
             violations.loc[over_count, ["ID", "KEY"]], data, table_name)

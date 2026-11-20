@@ -78,6 +78,7 @@ def test_locate_violations_columns(xml_path):
     assert frame.loc[2, "SOURCE_LINE"] == 7          # object definition
     assert frame.loc[3, "SOURCE_URI"] is None        # object not in sources
     assert frame.loc[4, "SOURCE_URI"] is None        # no focus node
+    assert frame[["TARGET_URI", "TARGET_LINE", "TARGET_SNIPPET"]].isna().all().all()   # no TARGET_ID column
 
     # standalone function and accessor agree
     pandas.testing.assert_frame_equal(frame, locate_violations(violations, [xml_path]))
@@ -167,3 +168,34 @@ def test_relative_sources(tmp_path, monkeypatch, caplog):
     same_frame, same_names = relative_sources(violations, names, None)
     assert same_frame is violations and same_names is names          # default: the names as given
     assert len(caplog.records) == 1                                    # relative names never warn
+
+
+def test_locate_violations_targets(xml_path, tmp_path):
+    """The referenced object of a reference finding found in the data (TARGET_ID)
+    is located in the same pass, at its definition; a dangling one (no TARGET_ID)
+    is not wanted — the pass still stops once every wanted object is found (the
+    second source, which does not exist, is never opened)."""
+    violations = pandas.DataFrame([
+        ("aaaa", "Line.Breaker", "bbbb", "sh:class", "m", "Violation", "s", "bbbb"),
+        ("aaaa", "Line.Breaker", "zzzz", "triplets:missing", "m", "Violation", "s", None),
+        ("aaaa", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s", None),
+    ], columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE", "TARGET_ID"])
+    frame = locate_violations(violations, [xml_path, str(tmp_path / "absent.xml")])
+    assert frame[["TARGET_URI", "TARGET_LINE", "TARGET_SNIPPET"]].values.tolist() == [
+        [xml_path, 7, '<cim:Breaker rdf:about="urn:uuid:bbbb">'], [None, None, None], [None, None, None]]
+    assert frame["SOURCE_LINE"].tolist() == [3, 3, 5]
+
+
+def test_located_lines_stay_integers(xml_path):
+    """A line column mixing located and not located rows holds int and None,
+    not floats: csv and Excel write 7, not 7.0."""
+    violations = pandas.DataFrame([
+        ("aaaa", "Line.Breaker", "bbbb", "sh:class", "m", "Violation", "s", "bbbb"),
+        ("zzzz", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s", None),
+    ], columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE", "TARGET_ID"])
+    frame = locate_violations(violations, [xml_path])
+    for column, line in (("SOURCE_LINE", 3), ("TARGET_LINE", 7)):
+        assert frame[column].dtype == object
+        assert frame[column].tolist() == [line, None] and type(frame[column].iloc[0]) is int
+    assert frame[["SOURCE_LINE", "TARGET_LINE"]].to_csv(index=False).splitlines() \
+        == ["SOURCE_LINE,TARGET_LINE", "3,7", ","]

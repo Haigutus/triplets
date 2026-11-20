@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import numpy
 import pandas
 
-from .locations import LOCATION_COLUMNS, locate_violations, relative_sources
+from .locations import locate_missing, relative_sources
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
                    XSD_NS, CIM_NS, absolute_id, absolute_key, decode_iri, is_iri, load_rdf_map, local_id, local_key, local_value,
                    namespaces, split_iri)
@@ -365,9 +365,9 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         Enrichment/location columns, when present, become additional
         ``sh:resultMessage``\ s (Description/Schema/Source).
     sources : optional
-        The original CIM/XML files — runs the locate_violations pass so each
-        result carries a "Source: file line N" message (a frame
-        already carrying LOCATION_COLUMNS is not located again).
+        The original CIM/XML files — runs the locate pass so each result
+        carries a "Source: file line N" message (location columns already
+        on the frame are kept, see locations.locate_missing).
     path : str or Path, optional
         Output file. Default ``report.<ext>`` from the resolved format.
         Suffix selects format when ``format`` is None (``.xml``/``.rdf`` →
@@ -401,8 +401,8 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         directory are named in one logged warning (see
         locations.relative_sources).
     """
-    if sources is not None and not set(LOCATION_COLUMNS) <= set(violations.columns):
-        violations = locate_violations(violations, sources)
+    if sources is not None:
+        violations = locate_missing(violations, sources)
     fmt = _resolve_format(path, format)
     path = _default_path(fmt) if path is None else os.fspath(path)
     payload = (violations_to_report_graph(violations, report_source=report_source,

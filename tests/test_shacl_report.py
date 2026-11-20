@@ -212,6 +212,12 @@ def test_sources_add_location_message(tmp_path):
     messages = {str(message) for message in graph.objects(None, sh.resultMessage)}
     assert any(message.startswith("[context_location] ") and "line 4" in message for message in messages)
 
+    stamped = VIOLATIONS.head(1).assign(SOURCE_URI="custom.xml", SOURCE_LINE=99, SOURCE_SNIPPET="by hand")
+    buffer = stamped.shacl.to_shacl_report(sources=[str(xml)], export_to_memory=True)
+    graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")       # SOURCE_* on the frame are kept
+    assert "[context_location] custom.xml line 99" in {str(message) for message
+                                                       in graph.objects(None, sh.resultMessage)}
+
 
 def report_names(buffer):
     """(data file names, dcterms:references) of a serialized report: the file of
