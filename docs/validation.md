@@ -947,10 +947,12 @@ enrichment pass first (an already-enriched frame is used as-is).
   on the violated property element's line (or the object
   definition) — what GitHub code scanning needs to annotate lines. One
   grep-style pass per file; the parse/validate hot paths are untouched.
-  Location columns already on the frame (from
-  `violations.shacl.locate(sources=...)`) are kept; the pass stamps only
-  what the frame lacks and does not read the sources when nothing is
-  lacking. Without either,
+  The pass stamps only what the frame lacks: the three `SOURCE_*` columns
+  already on the frame (from `violations.shacl.locate(sources=...)`) are
+  kept, and so are the `TARGET_*` columns once a referenced object is
+  located. The sources are read when the `SOURCE_*` columns are missing, or
+  when the frame has a `TARGET_ID` and no located referenced object.
+  Without either,
   `artifactLocation.uri` falls back to the enrichment-traced file label,
   region-less. Positions are whole lines (1-based): RDF serializations put
   one statement per line, and a start-only region cannot be displayed by
@@ -980,12 +982,12 @@ enrichment pass first (an already-enriched frame is used as-is).
   are given. The export logs one warning naming the absolute names outside
   the directory. Default `None`: the names as given.
 - The referenced object of a reference finding found in the data
-  (`TARGET_ID`, enriched with `data=`) and located by the `sources=` pass
-  (`TARGET_URI`) becomes a `relatedLocations` entry: `id`, the `TARGET` text
+  (`TARGET_ID`, enriched with `data=`) and located (`TARGET_URI` —
+  `sources=` on the export, or `locate` after `enrich`) becomes a `relatedLocations` entry: `id`, the `TARGET` text
   as its `message` (Type and name), a `logicalLocations` entry with the id
   (kind `object`) and a `physicalLocation` on its definition line
-  (`source_root=` applies). Without `sources=`, or for an object in none of
-  them, there is none: GitHub code scanning rejects an upload with a related
+  (`source_root=` applies). A referenced object that is not located — no
+  locate pass, or the object in none of the sources — has none: GitHub code scanning rejects an upload with a related
   location that has no `physicalLocation`. The `[context_message]` line links
   it with SARIF's embedded-link form (§3.11.6), the leading id of the `TARGET`
   text: `referenced object [<id>](1) found — Substation "Main Sub"`; GitHub

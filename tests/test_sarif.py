@@ -1,7 +1,6 @@
 """Tests for the SARIF 2.1.0 exporter (triplets.validation.sarif)."""
 import io
 import json
-import zipfile
 
 from pathlib import Path
 from urllib.parse import quote

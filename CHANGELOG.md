@@ -67,13 +67,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **The referenced object as a SARIF related location** — for a reference finding
   (`sh:class`, reference `rdfs:range` / `triplets:range`, `triplets:missing`) whose referenced
-  object is in the data and in `sources=`, the SARIF result carries `relatedLocations[{id,
+  object is in the data and located in the sources, the SARIF result carries `relatedLocations[{id,
   message, logicalLocations, physicalLocation}]` (the `TARGET` text as the message, the
   definition line, `source_root=` applies) and the `[context_message]` line links it as
   `referenced object [<id>](1) found — …` (SARIF 2.1.0 §3.11.6; an id holding `[`, `]` or `\`
   stays unlinked); grouped results carry one per distinct referenced object of their samples.
-  A related location needs `sources=`: GitHub code scanning rejects an upload with a related
-  location that has no file position. A dangling reference gets none. New enrichment column
+  A related location needs a located referenced object — `sources=` on the export, or `locate`
+  after `enrich`: GitHub code scanning rejects an upload with a related location that has no
+  file position. A dangling reference gets none. New enrichment column
   `TARGET_ID` (`enrich` with `data=`: the referenced object's id when it is in the data) and
   location columns `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` (`locate_violations`, the same
   single pass; only referenced objects in the data are searched). The `TARGET` text in the

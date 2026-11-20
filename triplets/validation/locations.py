@@ -135,13 +135,14 @@ def locate_violations(violations, sources):
 def locate_missing(violations, sources):
     """locate_violations for a report export: stamp only what the frame lacks.
 
-    The SOURCE_* columns are located when the frame does not carry them. The
+    The SOURCE_* columns are located unless the frame carries all three;
+    all three on the frame are kept as they are, hand-stamped ones too. The
     TARGET_* columns are located when the frame has referenced objects
-    (TARGET_ID) and none of them located — it was located before
-    context.enrich filled TARGET_ID, or never. Location columns the frame
-    carries otherwise are kept as they are, hand-stamped ones too. With
-    nothing to locate, the sources are not read and the frame is returned
-    as it is.
+    (TARGET_ID) and none of them located (no TARGET_URI value) — it was
+    located before context.enrich filled TARGET_ID, or never, or its
+    referenced objects are in none of the sources read before; else the
+    TARGET_* columns on the frame are kept. With neither half to locate,
+    the sources are not read and the frame is returned as it is.
     """
     present = set(violations.columns)
     source = not set(LOCATION_COLUMNS[:3]) <= present
