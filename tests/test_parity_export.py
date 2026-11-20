@@ -311,6 +311,50 @@ def test_cimxml_generated_prefixes_are_numbered_by_use():
     assert '<ns0:Breaker rdf:about="urn:uuid:b1">' in text and "<ns1:IdentifiedObject.name>B1<" in text
 
 
+# ── a flat hand-made schema (rdf:about classes, references without a value prefix) ──
+DCAT = "http://www.w3.org/ns/dcat#"
+_ABOUT = {"attribute": f"{{{RDF_NS}}}about", "value_prefix": "urn:uuid:"}
+FLAT_SCHEMA = {
+    "Concept": {"type": "Class", "namespace": "http://www.w3.org/2004/02/skos/core#", "attrib": _ABOUT},
+    "type": {"type": "Association", "namespace": RDF_NS, "attrib": {"attribute": f"{{{RDF_NS}}}resource", "value_prefix": ""}},
+    "broader": {"type": "Association", "namespace": "http://www.w3.org/2004/02/skos/core#",
+                "attrib": {"attribute": f"{{{RDF_NS}}}resource", "value_prefix": "urn:uuid:"}},
+    "Dataset": {"type": "EnumerationValue", "namespace": DCAT},
+    "Plain": {"type": "Class", "namespace": "", "attrib": _ABOUT},
+}
+FLAT_NAMESPACES = {"rdf": RDF_NS, "skos": "http://www.w3.org/2004/02/skos/core#"}
+
+
+def _flat_export(rows, engine, namespace_map=FLAT_NAMESPACES, **kwargs):
+    data = pandas.DataFrame([(*row, "i1") for row in rows], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    file, = export.export_to_cimxml(data, rdf_map=FLAT_SCHEMA, namespace_map=namespace_map, engine=engine,
+                                    export_type="xml_per_instance", export_to_memory=True, **kwargs)
+    return _expanded(file)[1:]                                    # without the root
+
+
+@pytest.fixture(params=["python_lxml", "cython_pugixml"])
+def cimxml_engine(request):
+    _require(FORMATS["cimxml"], request.param)
+    return request.param
+
+
+def test_cimxml_reference_holding_an_absolute_iri(cimxml_engine):
+    """A reference VALUE that is an absolute IRI is written as it is, as export_to_nquads writes it
+    — whatever the value prefix of the key; a name is looked up as an enumeration value."""
+    resource, skos = f"{{{RDF_NS}}}resource", "{http://www.w3.org/2004/02/skos/core#}"
+    rows = [("c1", "Type", "Concept"), ("c1", "type", DCAT + "Catalog"), ("c1", "type", "Dataset"),
+            ("c1", "type", "Unknown"), ("c1", "broader", "http://example.org/c0"), ("c1", "broader", "c2")]
+    concept = (skos + "Concept", [(f"{{{RDF_NS}}}about", "urn:uuid:c1")], "")
+    written = [concept,
+               (f"{{{RDF_NS}}}type", [(resource, DCAT + "Catalog")], ""),
+               (f"{{{RDF_NS}}}type", [(resource, DCAT + "Dataset")], ""),
+               (skos + "broader", [(resource, "http://example.org/c0")], ""),
+               (skos + "broader", [(resource, "urn:uuid:c2")], "")]
+    assert _flat_export(rows, cimxml_engine) == written
+    undefined = (f"{{{RDF_NS}}}type", [(resource, "http://triplets#Unknown")], "")
+    assert _flat_export(rows, cimxml_engine, export_undefined=True) == [*written[:3], undefined, *written[3:]]
+
+
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(fmt, v, id=f"{fmt}-{v}")
                  for fmt, spec in FORMATS.items() for v in spec["variants"]]

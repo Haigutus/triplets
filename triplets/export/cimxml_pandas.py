@@ -273,7 +273,9 @@ def generate_xml(instance_data,
 
                     value_prefix = attrib.get("value_prefix", "")
 
-                    if not value_prefix:                     # enumeration: namespace from the resolved profile (same as the cython exporter)
+                    if iri.is_iri(VALUE):                    # an absolute IRI is the reference itself
+                        value_prefix = ""
+                    elif not value_prefix:                   # enumeration: namespace from the resolved profile (same as the cython exporter)
                         value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace")
                         if not value_prefix:                 # undefined enum value: same switch as undefined classes / keys
                             if not export_undefined:

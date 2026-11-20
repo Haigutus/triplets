@@ -102,6 +102,11 @@ cdef extern from *:
         int unbound;             // index of the tag's unbound namespace until the tag gets its prefix, else -1
     };
 
+    // Absolute IRI already: the native mirror of triplets.iri.is_iri (URI_PREFIXES).
+    static inline bool is_iri(const std::string& text) {
+        return text.rfind("http://", 0) == 0 || text.rfind("https://", 0) == 0 || text.rfind("urn:", 0) == 0;
+    }
+
     // Class definition resolved at setup time
     struct ClassDef {
         std::string tag;         // "cim:ACLineSegment"
@@ -129,6 +134,8 @@ cdef extern from *:
         cbool is_ref
         cbool needs_enum_lookup
         int unbound
+
+    cbool is_iri(const string& text)
 
     cdef cppclass ClassDef:
         string tag
@@ -426,7 +433,9 @@ def generate_xml_from_arrow(arrow_table_or_batch,
 
             # the value (and whether the row is written at all) is decided BEFORE the
             # element is appended — an undefined enum value must not leave an empty element
-            if tag_defs_vec[td_idx].is_ref and tag_defs_vec[td_idx].needs_enum_lookup:
+            if tag_defs_vec[td_idx].is_ref and is_iri(s_value):
+                s_combined.clear()                        # an absolute IRI is the reference itself
+            elif tag_defs_vec[td_idx].is_ref and tag_defs_vec[td_idx].needs_enum_lookup:
                 py_val = s_value.decode('utf-8')
                 enum_def = instance_rdf_map.get(py_val)
                 enum_ns = enum_def.get("namespace") if isinstance(enum_def, dict) else None
