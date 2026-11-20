@@ -452,9 +452,11 @@ def test_union_sources_are_sorted_whatever_was_compiled_first(tmp_path):
     from triplets.validation import shacl_ir
 
     shared, other = _shape_files(tmp_path)
-    for paths in ([shared, other], [other, shared, shared]):
+    orders = [[str(shared), str(other)], [str(other), str(shared), str(shared)]]
+    for first, second in (orders, orders[::-1]):
         triplets.clear_caches()
-        assert shacl_ir.compile_shapes([str(path) for path in paths]).sources == ("other.ttl", "shared.ttl")
+        for paths in (first, second):                     # the second compile meets the first one's cache entry
+            assert shacl_ir.compile_shapes(paths).sources == ("other.ttl", "shared.ttl")
 
 
 def test_cached_graphs_survive_compiled_graph_mutation(tmp_path):

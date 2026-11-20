@@ -125,8 +125,8 @@ def test_references_against_the_other_loaded_instances(engine):
 
 
 def test_references_name_the_schema_file(tmp_path):
-    """The run metadata names the schema file validate_by_header was given ("rdf_map" for
-    a dict), for the schema and the reference runs, also when no instance resolves."""
+    """The merged run metadata names the schema file validate_by_header was given
+    ("rdf_map" for a dict), also when no instance resolves a profile."""
     path = tmp_path / "schema.json"
     path.write_text(json.dumps(SCHEMA))
     rows = [("h1", "keyword", "EQ", "eq")] + breaker("b1", *OK)
