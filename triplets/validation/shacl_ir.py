@@ -3,8 +3,8 @@
 rdflib is the definitive shapes parser: shapes are parsed exactly once into
 ``CompiledShapes`` — the shapes graph (consumed by the pyshacl reference
 engine) plus a flat constraint table (consumed by the pandas/polars/duckdb
-executors, which never touch rdflib). Compilation is cached by content hash,
-and each engine caches its own compiled artifact (LazyFrame plan builders,
+executors, which never touch rdflib). Compilation is cached by content hash
+and file names, and each engine caches its own compiled artifact (LazyFrame plan builders,
 SQL) in ``CompiledShapes.plans`` — re-validating new data against the same
 shapes never recompiles anything.
 
@@ -50,7 +50,7 @@ class CompiledShapes:
 
     graph: object                 # rdflib.Graph — what pyshacl consumes
     ir: pandas.DataFrame          # constraint table — what the vectorized engines consume
-    hash: str                     # content hash of the shape sources (cache key; a filtered compile keeps it)
+    hash: str                     # content hash of the shape sources (any file name; a filtered compile keeps it)
     sources: tuple = ()           # shape file basenames (report metadata; () for a Graph)
     language: str = "shacl"       # constraint language — "rdfs" for schema-compiled IR
     stats: dict = field(default_factory=dict)  # coverage facts (see _shape_stats)
@@ -86,7 +86,7 @@ class CompiledShapes:
         return base._active[chosen]
 
 
-_COMPILE_CACHE: dict = register_cache({})  # content hash → CompiledShapes
+_COMPILE_CACHE: dict = register_cache({})  # (content hash, file names) → CompiledShapes
 _GRAPH_CACHE: dict = register_cache({})    # file content digest → parsed rdflib.Graph
 
 
@@ -94,18 +94,20 @@ def compile_shapes(shapes) -> CompiledShapes:
     """Parse SHACL *shapes* (str/path | list of paths | rdflib.Graph) once.
 
     Returns the cached ``CompiledShapes`` when the same shape content was
-    compiled before (content hash — path identity does not matter).
+    compiled before under the same file names (directories, order and
+    duplicates do not matter).
     """
-    key = _content_hash(shapes)
+    content, sources = _content_hash(shapes), _source_names(shapes)
+    key = (content, frozenset(sources))   # the names too: a compile reports them, so it is never shared between names
     if key in _COMPILE_CACHE:
-        logger.debug("shapes compile cache hit: %s", key[:12])
+        logger.debug("shapes compile cache hit: %s", content[:12])
         return _COMPILE_CACHE[key]
 
     graph = _load_shapes(shapes)
     skipped = set()
     ir = parse_ir(graph, skipped)
     logger.debug("compiled %d constraint rows from %d shape triples", len(ir), len(graph))
-    compiled = CompiledShapes(graph=graph, ir=ir, hash=key, sources=_source_names(shapes),
+    compiled = CompiledShapes(graph=graph, ir=ir, hash=content, sources=sources,
                               stats=_shape_stats(graph, ir, skipped), deactivated=_declared_deactivated(graph),
                               _skipped=frozenset(skipped))
     _COMPILE_CACHE[key] = compiled
@@ -245,8 +247,7 @@ def _paths(shapes):
 
 
 def _source_names(shapes):
-    """Shape file basenames for report metadata (a cache hit keeps the names
-    of the first compile — content identity, not path identity)."""
+    """Shape file basenames for report metadata, as given."""
     import rdflib
 
     if isinstance(shapes, rdflib.Graph):
