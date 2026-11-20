@@ -395,6 +395,34 @@ def test_cimxml_unsupported_export_type_raises():
         export.export_to_cimxml(data, export_type="xml_per_everything", export_to_memory=True)
 
 
+# ── the pandas N-Quads engine runs on a core install (pandas + lxml, no pyarrow) ──
+NQUADS_ROWS = [("b1", "Type", "Breaker", "i1"), ("b1", "IdentifiedObject.name", "B 1", "i1"),
+               ("b1", "IdentifiedObject.description", None, "i1"), ("b2", "Type", "Breaker", None)]
+NQUADS_WITHOUT_PYARROW = """
+import sys
+sys.modules["pyarrow"] = None                      # import pyarrow raises, as when it is not installed
+import pandas
+from triplets.export import export_to_nquads
+data = pandas.DataFrame({rows!r}, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+sys.stdout.write(export_to_nquads(data, engine="pandas", export_to_memory=True).getvalue().decode())
+"""
+
+
+def test_nquads_pandas_engine_without_pyarrow():
+    import subprocess
+    import sys
+    data = pandas.DataFrame(NQUADS_ROWS, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    expected = export.export_to_nquads(data, engine="pandas", export_to_memory=True).getvalue().decode()
+    assert expected.splitlines() == [
+        "<urn:uuid:b1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://triplets#Breaker> <urn:uuid:i1> .",
+        '<urn:uuid:b1> <http://triplets#IdentifiedObject.name> "B 1" <urn:uuid:i1> .',
+        "<urn:uuid:b2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://triplets#Breaker> ."]
+    run = subprocess.run([sys.executable, "-c", NQUADS_WITHOUT_PYARROW.format(rows=NQUADS_ROWS)],
+                         capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    assert run.stdout == expected
+
+
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(fmt, v, id=f"{fmt}-{v}")
                  for fmt, spec in FORMATS.items() for v in spec["variants"]]

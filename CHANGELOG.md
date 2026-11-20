@@ -520,6 +520,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **CIM XML export: a schema entry with `"namespace": ""` under a namespace map with a
   default namespace** stays in no namespace: the default namespace is then written under
   a generated prefix instead of `xmlns="…"`, where the element fell into it. Both engines.
+- **`export_to_nquads(engine="pandas")` runs without pyarrow** (the core install: pandas and
+  lxml). It imported pyarrow unconditionally; the lines are still joined in Arrow when
+  pyarrow is installed, else in pandas.
 - **`cython_pugixml` CIM XML export: a schema namespace the file's namespace map does not
   bind.** Elements of that namespace were written without a prefix, so in no namespace —
   e.g. every `cim:` class and key of a file binding `cim:` to CIM16 exported against a

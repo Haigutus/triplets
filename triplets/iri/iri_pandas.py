@@ -45,17 +45,11 @@ def local_key(series, type_key=TYPE_KEY):
 
 def by_distinct(series, rule):
     """*rule* applied once per distinct value — dictionary-encode, apply, take — for
-    low-cardinality columns (KEY, INSTANCE_ID, class / enum names). Returns
-    arrow-backed strings; nulls stay null."""
-    import pyarrow
-    import pyarrow.compute as pc
-    array = pyarrow.array(series, type=pyarrow.string(), from_pandas=True)
-    if isinstance(array, pyarrow.ChunkedArray):
-        array = array.combine_chunks()
-    encoded = pc.dictionary_encode(array)
-    distinct = rule(pandas.Series(encoded.dictionary, dtype=pandas.ArrowDtype(pyarrow.string())))
-    taken = pc.take(pyarrow.array(distinct, type=pyarrow.string(), from_pandas=True), encoded.indices)
-    return pandas.Series(taken, index=series.index, dtype=pandas.ArrowDtype(pyarrow.string()))
+    low-cardinality columns (KEY, INSTANCE_ID, class / enum names). Keeps the
+    string dtype of *series*; nulls stay null."""
+    codes, distinct = pandas.factorize(series)            # a null has the code -1
+    applied = rule(pandas.Series(distinct, dtype=series.dtype))
+    return pandas.Series(applied.array.take(codes, allow_fill=True), index=series.index)
 
 
 def local_value(series, kind=None):
