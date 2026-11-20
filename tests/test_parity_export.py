@@ -355,6 +355,17 @@ def test_cimxml_reference_holding_an_absolute_iri(cimxml_engine):
     assert _flat_export(rows, cimxml_engine, export_undefined=True) == [*written[:3], undefined, *written[3:]]
 
 
+def test_cimxml_type_naming_an_entry_that_is_no_class(cimxml_engine):
+    """A Type VALUE naming a schema entry that is not a Class is an undefined class, and a KEY
+    naming a Class entry an undefined key."""
+    rows = [("d1", "Type", "Dataset"), ("d1", "Concept", "x"), ("c1", "Type", "Concept")]
+    concept = ("{http://www.w3.org/2004/02/skos/core#}Concept", [(f"{{{RDF_NS}}}about", "urn:uuid:c1")], "")
+    assert _flat_export(rows, cimxml_engine) == [concept]
+    assert _flat_export(rows, cimxml_engine, export_undefined=True) == [
+        ("{http://triplets#}Dataset", [(f"{{{RDF_NS}}}about", "urn:uuid:d1")], ""),
+        ("{http://triplets#}Concept", [], "x"), concept]
+
+
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(fmt, v, id=f"{fmt}-{v}")
                  for fmt, spec in FORMATS.items() for v in spec["variants"]]

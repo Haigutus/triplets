@@ -214,7 +214,7 @@ def generate_xml(instance_data,
         # Get class export definition
         class_def = instance_rdf_map.get(class_name, None)
 
-        if class_def is not None:
+        if isinstance(class_def, dict) and class_def.get("type") == "Class":   # any other entry of that name is no class
 
             class_namespace = class_def["namespace"]
             id_name = class_def["attrib"]["attribute"]
@@ -264,7 +264,8 @@ def generate_xml(instance_data,
 
             tag_def = instance_rdf_map.get(KEY, None)
 
-            if tag_def is not None:
+            # a KEY is defined by a namespaced entry that is no Class
+            if isinstance(tag_def, dict) and tag_def.get("type") != "Class" and tag_def.get("namespace"):
                 tag = E(_get_qname(tag_def["namespace"], KEY))
                 attrib = tag_def.get("attrib", None)
                 text_prefix = tag_def.get("text", "")
@@ -276,7 +277,8 @@ def generate_xml(instance_data,
                     if iri.is_iri(VALUE):                    # an absolute IRI is the reference itself
                         value_prefix = ""
                     elif not value_prefix:                   # enumeration: namespace from the resolved profile (same as the cython exporter)
-                        value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace")
+                        enum_def = instance_rdf_map.get(VALUE)
+                        value_prefix = enum_def.get("namespace") if isinstance(enum_def, dict) else None
                         if not value_prefix:                 # undefined enum value: same switch as undefined classes / keys
                             if not export_undefined:
                                 logger.debug("Definition missing for enum value: " + str(VALUE))

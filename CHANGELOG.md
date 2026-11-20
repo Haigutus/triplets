@@ -500,6 +500,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   was only looked up as an enumeration name, so `rdf:resource="http://www.w3.org/ns/dcat#Dataset"`
   was dropped, or written as `http://triplets#http://…` with `export_undefined=True`; under
   a `value_prefix` the prefix was put before the IRI. Both engines.
+- **`python_lxml` CIM XML export: a `Type` VALUE that names a schema entry which is not a
+  `Class`** raised `KeyError: 'attrib'`; it is an undefined class, as in `cython_pugixml`.
+  A KEY that names a `Class` entry is an undefined key.
 - **`cython_pugixml` CIM XML export: a schema namespace the file's namespace map does not
   bind.** Elements of that namespace were written without a prefix, so in no namespace —
   e.g. every `cim:` class and key of a file binding `cim:` to CIM16 exported against a
