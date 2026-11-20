@@ -924,7 +924,8 @@ enrichment pass first (an already-enriched frame is used as-is).
   GitHub code scanning filters alerts by tool.
 - Every rule carries `properties.tags`: the language (`shacl` / `rdfs`), the
   constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
-  rule's findings (the `PROFILE` column), distinct, first seen, at most 10
+  rule's findings (the `PROFILE` column — a list of section keys, or the
+  text a csv / Excel export writes, `EQ, OP`), distinct, first seen, at most 10
   (GitHub keeps 10). A rule whose findings name more than 8 profiles has no
   tag for the later ones, so a filter on one of those does not show it.
   GitHub code scanning filters alerts by tag. SARIF

@@ -449,11 +449,22 @@ def test_profile_cells_as_tags_and_text():
     tags = lambda violations: build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
     assert tags(bare([numpy.array(["EQ"], dtype=object), ["OP", None, ""], ("SC",), "SSH", ""])) \
         == ["shacl", "sh:minCount", "EQ", "OP", "SC", "SSH"]
+    assert tags(bare(["EQ, OP", "OP, SC"])) == ["shacl", "sh:minCount", "EQ", "OP", "SC"]   # the keys as text
     assert profile_text(numpy.array(["EQ", "OP"], dtype=object)) == "EQ, OP"
     assert profile_text(numpy.array([], dtype=object)) is None
     assert profile_text(["EQ", None]) == "EQ"
     assert profile_text(["EQ", "OP"]) == profile_text(("EQ", "OP")) == profile_text("EQ, OP") == "EQ, OP"
     assert profile_text(None) is profile_text(float("nan")) is profile_text([]) is profile_text("") is None
+
+
+def test_tags_equal_after_csv_round_trip():
+    """A frame written to csv and read back holds its profiles as text
+    ("EQ, OP"): the export gives the tags of the direct export."""
+    violations = bare([["EQ", "OP"], ["OP", "SC"], None])
+    tags = lambda frame: build_sarif(frame)["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
+    read_back = pandas.read_csv(violations.shacl.to_csv(export_to_memory=True)[0])
+    assert read_back["PROFILE"].tolist()[:2] == ["EQ, OP", "OP, SC"]
+    assert tags(read_back) == tags(violations) == ["shacl", "sh:minCount", "EQ", "OP", "SC"]
 
 
 def file_names(document):
