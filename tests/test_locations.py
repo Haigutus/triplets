@@ -1,6 +1,7 @@
 """Direct tests for the source-location pass (validation/locations.py) —
 previously covered only indirectly through the SARIF export."""
 import io
+import os
 import zipfile
 
 import pandas
@@ -162,7 +163,7 @@ def test_relative_name(tmp_path, monkeypatch):
     """An absolute path of a file in the root or below it → the name relative
     to the root, forward slashes; anything else → None. '..' is collapsed,
     a relative name is never joined with the working directory."""
-    root = str(tmp_path / "repo")
+    root = os.path.realpath(tmp_path / "repo")          # the contract: a resolved root
     monkeypatch.chdir(tmp_path)
     assert relative_name(f"{root}/data/x.xml", root) == "data/x.xml"
     assert relative_name(f"{root}/x.xml", f"{root}/") == "x.xml"

@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import numpy
 import pandas
 
-from .locations import locate_missing, relative_sources
+from .locations import check_source_root, locate_missing, relative_sources
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
                    XSD_NS, CIM_NS, absolute_id, absolute_key, decode_iri, is_iri, load_rdf_map, local_id, local_key, local_value,
                    namespaces, split_iri)
@@ -402,6 +402,7 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         directory are named in one logged warning (see
         locations.relative_sources).
     """
+    check_source_root(source_root)
     if sources is not None:
         violations = locate_missing(violations, sources, targets=False)
     fmt = _resolve_format(path, format)

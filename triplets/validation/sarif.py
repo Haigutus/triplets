@@ -21,7 +21,7 @@ from urllib.parse import quote
 import pandas
 
 from .context import ENRICHMENT_COLUMNS, enrich
-from .locations import LOCATION_COLUMNS, locate_missing, relative_sources
+from .locations import LOCATION_COLUMNS, check_source_root, locate_missing, relative_sources
 from .shacl_report import _expand, message_prefix, profile_names, profile_text
 from ..iri import split_iri
 
@@ -92,6 +92,7 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
         outside the directory are named in one logged warning (see
         locations.relative_sources).
     """
+    check_source_root(source_root)
     if any(source is not None for source in (data, shapes, rdf_map)) \
             and not set(ENRICHMENT_COLUMNS) <= set(violations.columns):
         violations = enrich(violations, data=data, shapes=shapes, rdf_map=rdf_map)
@@ -117,6 +118,7 @@ def build_sarif(violations, group=True, sources=None, source_root=None):
     *source_root*:
     absolute file names under it are written relative to it (see
     export_to_sarif)."""
+    check_source_root(source_root)
     frame = violations.copy()
     if sources is not None:
         frame = locate_missing(frame, sources)

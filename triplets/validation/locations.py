@@ -215,6 +215,13 @@ def relative_name(name, root):
     return path.relative_to(root).as_posix() if path.parent.is_relative_to(root) else None
 
 
+def check_source_root(source_root):
+    """ValueError for a *source_root* that is not a directory (None passes) — what an
+    export checks first, before it reads any data or source."""
+    if source_root is not None and not os.path.isdir(source_root):
+        raise ValueError(f"source_root is not a directory: {source_root}")
+
+
 def relative_sources(violations, names, source_root):
     """The file names a report export writes, relative to *source_root*.
 
@@ -228,11 +235,10 @@ def relative_sources(violations, names, source_root):
     ``source_root=None`` returns them as they are. A *source_root* that is not
     a directory raises ValueError.
     """
+    check_source_root(source_root)
     if source_root is None:
         return violations, names
     root = os.path.realpath(source_root)
-    if not os.path.isdir(root):
-        raise ValueError(f"source_root is not a directory: {root}")
     known = {}                              # name → relative name or None: each name is checked once
 
     def relative(name):

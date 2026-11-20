@@ -601,15 +601,22 @@ def test_zip_member_has_one_name_in_the_log(tmp_path):
 
 def test_source_root_must_be_a_directory(tmp_path):
     """source_root naming no directory — a path that does not exist, a file —
-    raises ValueError in both exports, with or without names to write."""
+    raises ValueError in both exports, with or without names to write, naming
+    the path as given, before the data or the sources are read (the source
+    that does not exist is never opened)."""
+    import re
     model = str(tmp_path / "repo" / "models" / "grid.xml")
     data, violations = parsed_run(tmp_path / "repo", model)
-    for source_root in (tmp_path / "absent", model):
+    absent = [str(tmp_path / "absent.xml")]
+    for source_root in (tmp_path / "absent", model, "absent/../absent"):
+        message = re.escape(f"source_root is not a directory: {source_root}")
         for frame in (violations, violations.iloc[:0]):
-            with pytest.raises(ValueError, match="source_root is not a directory"):
-                build_sarif(frame, source_root=source_root)
-            with pytest.raises(ValueError, match="source_root is not a directory"):
-                frame.shacl.to_shacl_report(source_root=source_root, export_to_memory=True)
+            with pytest.raises(ValueError, match=message):
+                build_sarif(frame, sources=absent, source_root=source_root)
+            with pytest.raises(ValueError, match=message):
+                frame.shacl.to_sarif(data=data, sources=absent, source_root=source_root, export_to_memory=True)
+            with pytest.raises(ValueError, match=message):
+                frame.shacl.to_shacl_report(sources=absent, source_root=source_root, export_to_memory=True)
 
 
 CIM = "http://iec.ch/TC57/CIM100#"
