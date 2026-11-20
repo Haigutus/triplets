@@ -440,22 +440,19 @@ def _buffer(name, payload):
     return buffer
 
 
-_PROFILE_SEPARATOR = ", "   # between the section keys of a PROFILE cell written as text
-
-
 def profile_names(value):
     """The profiles of a PROFILE cell — a list, tuple or numpy array of
-    section keys, or text: one key, or the keys as profile_text writes them
-    (a cell read back from a csv / Excel export); nulls and empty strings
-    dropped."""
+    section keys, or text: the keys separated by commas, spaces around a key
+    left out (a cell read back from a csv / Excel export, where profile_text
+    wrote it); nulls and empty strings dropped."""
     values = (value if isinstance(value, (list, tuple, numpy.ndarray))
-              else value.split(_PROFILE_SEPARATOR) if isinstance(value, str) else (value,))
+              else [name.strip() for name in value.split(",")] if isinstance(value, str) else (value,))
     return [str(name) for name in values if not pandas.isna(name) and str(name)]
 
 
 def profile_text(value):
     """A PROFILE cell as text: the scoped section keys joined with ", " (display only)."""
-    return _PROFILE_SEPARATOR.join(profile_names(value)) or None
+    return ", ".join(profile_names(value)) or None
 
 
 def _with_profile_text(violations):
