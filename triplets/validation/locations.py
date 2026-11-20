@@ -65,8 +65,12 @@ def locate(wanted, sources):
     dict {ID: {"uri": str, "startLine": int, "snippet": str,
                "keyLines": {KEY: (line, snippet)}}}
         "uri" is the source name as given (the path, the zip member name, a
-        file-like's ``.name``). IDs not present in the sources are absent
-        from the result.
+        file-like's ``.name``). The position is that of the first rdf:ID /
+        rdf:about element with the ID, in the order of *sources*: an
+        rdf:about element in an earlier file wins over the rdf:ID element in
+        a later one. IDs not present in the sources are absent from the
+        result. The sources are read in order until every wanted ID is
+        found; an ID in none of them makes the pass read them all.
     """
     from ..parser.utils import find_all_xml
 
@@ -102,8 +106,9 @@ def locate_violations(violations, sources):
     rows whose object is not in the sources get nulls. The referenced object
     of a reference finding found in the data (TARGET_ID — context.enrich) is
     located in the same pass, at its definition, into the TARGET_* columns; a
-    frame without TARGET_ID gets nulls there. SOURCE_URI / TARGET_URI are the
-    source names as given.
+    frame without TARGET_ID gets nulls there. A definition is the first
+    rdf:ID / rdf:about element with the id, in source order (see locate).
+    SOURCE_URI / TARGET_URI are the source names as given.
     """
     import pandas
 

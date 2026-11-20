@@ -545,6 +545,11 @@ sources only when the `SOURCE_*` columns are missing. The columns:
 | `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element inside the object's definition, else of the object definition (`ID`) |
 | `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` | the referenced object of a reference finding found in the data (`TARGET_ID`, from `enrich`): its definition, from the same pass; null without a `TARGET_ID` |
 
+An object's definition is the first `rdf:ID` or `rdf:about` element with its id, in the
+order the sources are read (files as given, then the members of the zips): for an object
+written in several files (an `rdf:about` element in the SSH, the `rdf:ID` element in the
+EQ) the file read first gives the position.
+
 The SHACL report serializes via rdflib: `format=None` (default) derives the format
 from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an explicit
 `format=` always wins.
@@ -947,7 +952,8 @@ enrichment pass first (an already-enriched frame is used as-is).
   (`validation/locations.py`) and adds a fully bounded
   whole-line `physicalLocation.region` (`startLine` == `endLine`)
   on the violated property element's line (or the object
-  definition) — what GitHub code scanning needs to annotate lines. One
+  definition, the first `rdf:ID` / `rdf:about` element with its id in source
+  order) — what GitHub code scanning needs to annotate lines. One
   grep-style pass per file; the parse/validate hot paths are untouched.
   The pass stamps only what the frame lacks: the three `SOURCE_*` columns
   already on the frame (from `violations.shacl.locate(sources=...)`) are
@@ -987,8 +993,9 @@ enrichment pass first (an already-enriched frame is used as-is).
   (`TARGET_ID`, enriched with `data=`) and located (`TARGET_URI` —
   `sources=` on the export, or `locate` after `enrich`) becomes a `relatedLocations` entry: `id`, the `TARGET` text
   as its `message` (Type and name), a `logicalLocations` entry with the id
-  (kind `object`) and a `physicalLocation` on its definition line
-  (`source_root=` applies). A referenced object that is not located — no
+  (kind `object`) and a `physicalLocation` on its definition line — the first
+  `rdf:ID` / `rdf:about` element with its id in source order (`source_root=`
+  applies). A referenced object that is not located — no
   locate pass, or the object in none of the sources — has none: GitHub code scanning rejects an upload with a related
   location that has no `physicalLocation`. The `[context_message]` line links
   it with SARIF's embedded-link form (§3.11.6), the leading id of the `TARGET`

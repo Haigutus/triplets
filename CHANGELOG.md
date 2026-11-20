@@ -69,7 +69,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`sh:class`, reference `rdfs:range` / `triplets:range`, `triplets:missing`) whose referenced
   object is in the data and located in the sources, the SARIF result carries `relatedLocations[{id,
   message, logicalLocations, physicalLocation}]` (the `TARGET` text as the message, the
-  definition line, `source_root=` applies) and the `[context_message]` line links it as
+  definition line — the first `rdf:ID` / `rdf:about` element with its id in the order of
+  `sources=` — `source_root=` applies) and the `[context_message]` line links it as
   `referenced object [<id>](1) found — …` (SARIF 2.1.0 §3.11.6; an id holding `[`, `]` or `\`
   stays unlinked); grouped results carry one per distinct referenced object of their samples.
   A related location needs a located referenced object — `sources=` on the export, or `locate`
