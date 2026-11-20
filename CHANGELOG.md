@@ -233,6 +233,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`export_to_cimxml` raises `ValueError` for an unsupported `export_type`**, before any
+  work; it logged "Not supported option" and returned an empty list.
 - **`iri.key_types(rdf_map)` returns name → dict**: `{"type": …}` plus `stereotype` /
   `rdf:type` where the entry has them (previously name → type string). For example,
   `key_types(rdf_map)["DateTimeStamp"]` is

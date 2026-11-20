@@ -389,6 +389,12 @@ def test_cimxml_file_name_is_the_distribution_label(cimxml_engine):
         assert uuid.UUID(second.name.removesuffix(".xml")) and second.name.endswith(".xml")
 
 
+def test_cimxml_unsupported_export_type_raises():
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    with pytest.raises(ValueError, match="xml_per_everything"):
+        export.export_to_cimxml(data, export_type="xml_per_everything", export_to_memory=True)
+
+
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(fmt, v, id=f"{fmt}-{v}")
                  for fmt, spec in FORMATS.items() for v in spec["variants"]]

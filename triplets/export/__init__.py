@@ -260,6 +260,7 @@ def export_to_cimxml(data,
         - ``XML_PER_INSTANCE``: One XML file per instance.
         - ``XML_PER_INSTANCE_ZIP_PER_ALL``: All XMLs in a single ZIP.
         - ``XML_PER_INSTANCE_ZIP_PER_XML``: Each XML in its own ZIP.
+        Any other value raises ``ValueError``.
     global_zip_filename : str, default "Export.zip"
         Filename for the global ZIP archive (used with ``ZIP_PER_ALL``).
     debug : bool, default False
@@ -313,6 +314,7 @@ def export_to_cimxml(data,
         init_time = start_time
 
     _check_columns(data)
+    export_type = ExportType(export_type)    # ValueError for an unsupported value, before any work
     if _flavor(data) == "pyarrow":
         data = _to_pandas(data)          # arrow-backed dtypes — near zero-copy
     engine_name, engine_module = get_cimxml_engine(engine)
@@ -396,7 +398,7 @@ def export_to_cimxml(data,
         logger.info(f'Exported ZIP named {global_zip_filename} to memory')
 
     ### Export each xml in separate zip ###
-    elif export_type == ExportType.XML_PER_INSTANCE_ZIP_PER_XML:
+    else:
 
         for document in xml_documents:
 
@@ -408,10 +410,6 @@ def export_to_cimxml(data,
 
             exported_files.append(zip_file_object)
             logger.info(f'Exported {zip_file_object.name} to memory')
-
-    else:
-        logger.info("Not supported option")
-        logger.info("Supported options are: xml_per_instance, xml_per_instance_zip_per_all, xml_per_instance_zip_per_xml")
 
     if debug:
         _print_duration("Files saved in", start_time)
