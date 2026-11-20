@@ -702,14 +702,15 @@ def context_message(result):
     return next(line for line in result["message"]["text"].split("\n") if line.startswith("[context_message] "))
 
 
-def logical(ref):
-    return [{"fullyQualifiedName": ref, "name": ref, "kind": "object"}]
+def logical(ref, object_type="Substation"):
+    """The logical location of a referenced object: Type/id, the id alone without a Type."""
+    return [{"fullyQualifiedName": f"{object_type}/{ref}" if object_type else ref, "name": ref, "kind": "object"}]
 
 
 def test_related_location_per_row(tmp_path):
     """Per row with sources=: the referenced object found in the data and in the
     sources is relatedLocations[0] — id 1, the TARGET as its message (Type and name),
-    the id as its logical location, its definition line — linked from
+    Type/id as its logical location, its definition line — linked from
     [context_message] by its leading id; source_root applies. A dangling reference
     has no related location, its line no link."""
     violations, xml = references(tmp_path)
@@ -761,8 +762,8 @@ def test_related_locations_grouped(tmp_path):
 
 def test_related_locations_grouped_mixed_and_many(tmp_path):
     """One group with a dangling and a found reference: only the found one is a related
-    location and linked. More than three distinct: three lines shown, each linked, the
-    related locations go on past 3 (one per distinct referenced object of the samples)."""
+    location and linked. More than three distinct: three lines shown, each linked, and
+    a related location for those three only — every related location is linked."""
     violations, xml = class_findings(tmp_path, ["ghost", "s1"], found=["s1"])
     mixed = build_sarif(violations, sources=[xml])["runs"][0]["results"][0]
     assert [(related["id"], related["logicalLocations"]) for related in mixed["relatedLocations"]] \
@@ -775,7 +776,7 @@ def test_related_locations_grouped_mixed_and_many(tmp_path):
     many = build_sarif(violations, sources=[xml])["runs"][0]["results"][0]
     assert [(related["id"], related["logicalLocations"], related["physicalLocation"]["region"]["startLine"])
             for related in many["relatedLocations"]] == [(index + 1, logical(f"s{index}"), index + 3)
-                                                         for index in range(5)]
+                                                         for index in range(3)]
     assert context_message(many) == ("[context_message] referenced object [s0](1) found — Substation; "
                                      "referenced object [s1](2) found — Substation; "
                                      "referenced object [s2](3) found — Substation; … (5 distinct)")
@@ -856,16 +857,17 @@ def test_locate_pass_keeps_source_columns_on_the_frame(tmp_path):
         == build_sarif(located, group=False)
 
 
-def test_related_location_without_target_text_has_no_message(tmp_path):
-    """A frame carrying TARGET_ID and TARGET_URI but no TARGET text (not what enrich
-    writes): the related location has no message."""
+def test_related_location_needs_a_target_text_and_type_is_optional(tmp_path):
+    """A related location is the one the [context_message] line links: a frame carrying
+    TARGET_ID and TARGET_URI but no TARGET text (not what enrich writes) has no line
+    and no related location. Without TARGET_TYPE the logical location is the id alone."""
     violations, xml = references(tmp_path)
-    result = by_id(build_sarif(violations.assign(TARGET=None), group=False, sources=[xml]))["b2"]
-    assert result["relatedLocations"] == [
-        {"id": 1, "logicalLocations": logical("sub1"),
-         "physicalLocation": {"artifactLocation": {"uri": quote(xml, safe="/")},
-                              "region": {"startLine": 4, "endLine": 4,
-                                         "snippet": {"text": '<cim:Substation rdf:ID="_sub1">'}}}}]
+    for group in (True, False):
+        document = build_sarif(violations.assign(TARGET=None), group=group, sources=[xml])
+        assert "relatedLocations" not in json.dumps(document) and "[context_message]" not in json.dumps(document)
+    untyped = by_id(build_sarif(violations.drop(columns=["TARGET_TYPE"]), group=False, sources=[xml]))["b2"]
+    assert untyped["relatedLocations"][0]["logicalLocations"] == logical("sub1", object_type=None)
+    assert context_message(untyped).startswith("[context_message] referenced object [sub1](1) found")
 
 
 def test_related_location_id_with_brackets_is_not_linked(tmp_path):

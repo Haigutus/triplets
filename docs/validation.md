@@ -901,6 +901,7 @@ saw:
 |---------|--------|---------|
 | `TARGET` | data (+ shapes, rdf_map) | what the finding found: the referenced object's id, Type and name — or that it is not in the data — for `sh:class` / reference-range / `triplets:missing` findings; the found type of a valueType row (needs *shapes*); the duplicate values of a maximum-count finding. A presented `rdfs:range` counts as a reference when its rule or the schema says the KEY is an Association |
 | `TARGET_ID` | data (+ shapes, rdf_map) | the id (the `VALUE`) of a reference finding's referenced object when it is in the data; null for a dangling reference and every other row |
+| `TARGET_TYPE` | data (+ shapes, rdf_map) | the Type of that referenced object; null where `TARGET_ID` is |
 | `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows; a file read from a zip is `<zip file name>/<label>`, from its `belongsToContainer` row) |
 | `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` |
 | `SHAPE_NAME`, `SHAPE_DESCRIPTION` | shapes | `sh:name` / `sh:description` (a property shape inherits the parent NodeShape's) |
@@ -1008,8 +1009,8 @@ enrichment pass first (an already-enriched frame is used as-is).
 - The referenced object of a reference finding found in the data
   (`TARGET_ID`, enriched with `data=`) and located (`TARGET_URI` —
   `sources=` on the export, or `locate` after `enrich`) becomes a `relatedLocations` entry: `id`, the `TARGET` text
-  as its `message` (Type and name), a `logicalLocations` entry with the id
-  (kind `object`) and a `physicalLocation` on its definition line — the first
+  as its `message` (Type and name), a `logicalLocations` entry `Type/id`
+  (`TARGET_TYPE`; the id alone on a frame without it; kind `object`) and a `physicalLocation` on its definition line — the first
   `rdf:ID` / `rdf:about` element with its id in read order (`source_root=`
   applies). A referenced object that is not located — no
   locate pass, or the object in none of the sources — has none: GitHub code scanning rejects an upload with a related
@@ -1018,10 +1019,10 @@ enrichment pass first (an already-enriched frame is used as-is).
   text: `referenced object [<id>](1) found — Substation "Main Sub"`; GitHub
   links a related location only when the message embeds it. An id holding
   `[`, `]` or `\` stays unlinked (GitHub does not read escaped link text). A
-  per-row result carries at most one (id 1); a grouped result one per distinct
-  referenced object of its samples, ids 1..n, each `TARGET` text its
-  `[context_message]` line shows (three at most) linked to its own. A
-  dangling reference has none. The `TARGET` column, the csv / Excel exports
+  per-row result carries at most one (id 1); a grouped result one per
+  referenced object its `[context_message]` line shows (the first three
+  distinct `TARGET` texts of its samples), ids 1..n, each text linked to its
+  own, so every related location is linked. A dangling reference has none. The `TARGET` column, the csv / Excel exports
   and the SHACL report keep the plain text.
 - What the run did not evaluate becomes
   `invocations[0].toolConfigurationNotifications` (the shapes graph or schema

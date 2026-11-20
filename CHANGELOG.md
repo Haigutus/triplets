@@ -77,11 +77,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the plain files of `sources=` as given, then the members of the zips — `source_root=`
   applies) and the `[context_message]` line links it as
   `referenced object [<id>](1) found — …` (SARIF 2.1.0 §3.11.6; an id holding `[`, `]` or `\`
-  stays unlinked); grouped results carry one per distinct referenced object of their samples.
+  stays unlinked); the logical location is `Type/id`; grouped results carry one per
+  referenced object their `[context_message]` line shows (three at most), each linked.
   A related location needs a located referenced object — `sources=` on the export, or `locate`
   after `enrich`: GitHub code scanning rejects an upload with a related location that has no
-  file position. A dangling reference gets none. New enrichment column
-  `TARGET_ID` (`enrich` with `data=`: the referenced object's id when it is in the data) and
+  file position. A dangling reference gets none. New
+  enrichment columns `TARGET_ID` and `TARGET_TYPE` (`enrich` with `data=`: the referenced
+  object's id and Type when it is in the data) and
   location columns `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` (`locate_violations`, the same
   single pass; only referenced objects in the data are searched). The `TARGET` text in the
   frame, csv / Excel and the SHACL report is unchanged

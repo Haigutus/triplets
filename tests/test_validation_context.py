@@ -190,10 +190,10 @@ def test_enrich_data_scope_reads_what_the_run_saw(flavor):
         data = connection
     scoped = enrich(violations, data=data, data_scope=["i2"])
     assert scoped["TARGET"].tolist() == ["referenced object x1 not found in the data"]
-    assert scoped["TARGET_ID"].isna().all()              # dangling: no TARGET_ID
+    assert scoped["TARGET_ID"].tolist() == scoped["TARGET_TYPE"].tolist() == [None]   # dangling: None, not NaN
     found = enrich(violations, data=data)
     assert found["TARGET"].tolist() == ["referenced object x1 found — VoltageLevel"]
-    assert found["TARGET_ID"].tolist() == ["x1"]
+    assert found["TARGET_ID"].tolist() == ["x1"] and found["TARGET_TYPE"].tolist() == ["VoltageLevel"]
 
 
 def test_concat_violations_merges_run_metadata(shapes):

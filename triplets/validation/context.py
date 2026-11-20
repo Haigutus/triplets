@@ -23,9 +23,11 @@ from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
 
+REFERENCED_OBJECT = "referenced object "       # + its id: how the TARGET text of a reference finding starts
+
 ENRICHMENT_COLUMNS = [
     "TARGET",                                     # data: what the finding found (reference, duplicates)
-    "TARGET_ID",                                  # data: the referenced object found (reference findings)
+    "TARGET_ID", "TARGET_TYPE",                   # data: the referenced object found (reference findings)
     "INSTANCE_ID", "INSTANCE_LABEL",              # data: which instance / file
     "OBJECT_TYPE", "OBJECT_NAME",                 # data: what the object is
     "SHAPE_NAME", "SHAPE_DESCRIPTION",            # shapes IR: sh:name / sh:description
@@ -42,8 +44,8 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
     violations : DataFrame from validate_shacl / validate_schema / validate_schema_references.
     data : triplet DataFrame, arrow or DuckDB connection, optional
         Source data — fills TARGET (the referenced object found, or not; the
-        duplicate values of a maximum-count finding), TARGET_ID (the id of a
-        reference finding's referenced object found in the data), INSTANCE_ID /
+        duplicate values of a maximum-count finding), TARGET_ID / TARGET_TYPE (the
+        id and Type of a reference finding's referenced object found in the data), INSTANCE_ID /
         INSTANCE_LABEL (the parsed file name) / OBJECT_TYPE / OBJECT_NAME. An
         object present in several instances is attributed to its first
         occurrence. DuckDB: ``table`` / ``schema`` / ``table_name`` kwargs as
@@ -163,7 +165,8 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
 
     - reference checks (``sh:class``, ``triplets:range`` — presented ``rdfs:range`` —
       and ``triplets:missing``; VALUE = the ref): the target's id, Type and name, or
-      the fact that it does not exist — a found target's id also in TARGET_ID;
+      the fact that it does not exist — a found target's id and Type also in
+      TARGET_ID and TARGET_TYPE;
     - valueType rows (``via_type``): the found type (the id is not carried);
     - ``sh:maxCount`` / ``xsd:maxOccurs``: the actual duplicate values.
 
@@ -171,7 +174,7 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
     ``triplets:range`` or the schema (*value_kinds*) declares its KEY an Association —
     an enumeration's ``rdfs:range`` is not.
     """
-    for column in ("TARGET", "TARGET_ID"):
+    for column in ("TARGET", "TARGET_ID", "TARGET_TYPE"):
         violations[column] = pandas.Series(None, index=violations.index, dtype=object)
     if violations.empty:
         return
@@ -195,13 +198,14 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
         def describe_reference(ref):
             found = types.get(ref)
             if found is None:
-                return f"referenced object {ref} not found in the data"
+                return f"{REFERENCED_OBJECT}{ref} not found in the data"
             name = names.get(ref)
-            return f'referenced object {ref} found — {found}' + (f' "{name}"' if name else "")
+            return f'{REFERENCED_OBJECT}{ref} found — {found}' + (f' "{name}"' if name else "")
 
         refs = violations.loc[of_class, "VALUE"].astype(str)
         violations.loc[of_class, "TARGET"] = refs.map(describe_reference)
-        violations.loc[of_class, "TARGET_ID"] = refs.where(refs.map(types.get).notna())
+        violations.loc[of_class, "TARGET_ID"] = refs.map(lambda ref: ref if ref in types else None)
+        violations.loc[of_class, "TARGET_TYPE"] = refs.map(types.get)
     if over_count.any():
         violations.loc[over_count, "TARGET"] = _found_values(
             violations.loc[over_count, ["ID", "KEY"]], data, table_name)

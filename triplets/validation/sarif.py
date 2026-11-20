@@ -20,7 +20,7 @@ from urllib.parse import quote
 
 import pandas
 
-from .context import ENRICHMENT_COLUMNS, enrich
+from .context import ENRICHMENT_COLUMNS, REFERENCED_OBJECT, enrich
 from .locations import LOCATION_COLUMNS, check_source_root, locate_missing, relative_sources
 from .shacl_report import _expand, message_prefix, profile_names, profile_text
 from ..iri import split_iri
@@ -38,13 +38,7 @@ _SKIPPED = {"skipped_shapes": ("triplets/skippedShape", "Shape not evaluated"),
 # violation-type prefix → where the constraint is defined (the term IRI otherwise)
 _CONSTRAINT_DOCS = {"sh": "https://www.w3.org/TR/shacl/#{local}",
                     "triplets": "https://github.com/Haigutus/triplets/blob/main/docs/validation.md"}
-# the columns a location reads: the finding's object, and the referenced object
-# of a reference finding (its Type and name ride in the TARGET text, its file is
-# known only from the locate pass)
-_FOCUS = {"id": "ID", "type": "OBJECT_TYPE", "name": "OBJECT_NAME", "label": "INSTANCE_LABEL",
-          "uri": "SOURCE_URI", "line": "SOURCE_LINE", "snippet": "SOURCE_SNIPPET"}
-_TARGET = {"id": "TARGET_ID", "type": None, "name": None, "label": None,
-           "uri": "TARGET_URI", "line": "TARGET_LINE", "snippet": "TARGET_SNIPPET"}
+_TARGETS = 3   # distinct TARGET texts a [context_message] line shows
 # GitHub code scanning reads no escaped link text (SARIF 2.1.0 §3.11.6) — an id
 # carrying one of these stays unlinked
 _LINK_BREAKERS = set("[]\\")
@@ -317,8 +311,8 @@ def _grouped_result(rule_id, rule_index, records, language="shacl"):
     # the sh:ValidationReport's resultMessages. Shape-level notes (e.g.
     # triplets:invalidSparql, ID always null) are not about affected objects,
     # so they carry no [context_count]/[context_examples] blocks.
-    related = _related(samples)
-    blocks = _message_blocks(records[0], samples=samples, related=related, language=language)
+    context, related = _context_message(samples)
+    blocks = _message_blocks(records[0], context, language=language)
     if any(not pandas.isna(record["ID"]) for record in records):
         blocks.append(f"[context_count] {total} object(s) affected")
         if described:
@@ -352,12 +346,12 @@ def _grouped_result(rule_id, rule_index, records, language="shacl"):
 
 def _result(rule_id, rule_index, record, language="shacl"):
     location = _location(record)
-    related = _related([record])
+    context, related = _context_message([record])
     return _prune({
         "ruleId": rule_id,
         "ruleIndex": rule_index,
         "level": _LEVELS.get(_value(record["SEVERITY"]), "warning"),
-        "message": {"text": "\n".join(_message_blocks(record, related=related, language=language, value=True))},
+        "message": {"text": "\n".join(_message_blocks(record, context, language=language, value=True))},
         "locations": [location] if location else None,
         "relatedLocations": list(related.values()) or None,
         "properties": _prune({
@@ -377,14 +371,13 @@ def _result(rule_id, rule_index, record, language="shacl"):
     })
 
 
-def _message_blocks(record, samples=None, related=None, language="shacl", value=False):
+def _message_blocks(record, context=None, language="shacl", value=False):
     """The prefixed message lines a result carries: the constraint message
     verbatim ([shacl_message]/[engine_message] — exactly one of the two), the violated
     path ([shacl_path]), what the constraint requires ([shacl_expected]), the referenced
-    object's state ([context_message] — per group: the distinct ones of the *samples*,
-    each referenced id with a *related* location as its embedded link) and the schema
-    definition ([schema_property]) when enriched — file position and snippet go to
-    physicalLocation, shape description to the rule."""
+    object's state (*context*, the [context_message] line — see _context_message) and
+    the schema definition ([schema_property]) when enriched — file position and snippet
+    go to physicalLocation, shape description to the rule."""
     blocks = [f"{message_prefix(record['VIOLATION_TYPE'], record.get('MESSAGE_SOURCE'), language)} "
               f"{_message(record)}"]
     if profile_text(record.get("PROFILE")) is not None:
@@ -395,12 +388,8 @@ def _message_blocks(record, samples=None, related=None, language="shacl", value=
         blocks.append(f"[context_value] {record['VALUE']}")
     if not pandas.isna(record.get("EXPECTED")):
         blocks.append(f"[{language}_expected] {record['EXPECTED']}")
-    targets = list(dict.fromkeys(_target(sample, related or {}) for sample in samples or [record]
-                                 if not pandas.isna(sample["TARGET"])))
-    if len(targets) > 3:                                 # grouped: keep the line readable
-        targets = targets[:3] + [f"… ({len(targets)} distinct)"]
-    if targets:
-        blocks.append(f"[context_message] {'; '.join(targets)}")
+    if context:
+        blocks.append(context)
     if not pandas.isna(record["SCHEMA_DESCRIPTION"]):
         multiplicity = (f" [{record['SCHEMA_MULTIPLICITY']}]"
                         if not pandas.isna(record["SCHEMA_MULTIPLICITY"]) else "")
@@ -437,53 +426,75 @@ def _describe(record):
     return " ".join(parts)
 
 
-def _location(record, columns=_FOCUS):
+def _location(record):
     """Assemble a location from whatever the row carries: the model element
     (logicalLocations — needs a focus ID) and/or the source position
     (physicalLocation — the locate pass columns work even for null-ID rows,
     e.g. externally stamped shape-level notes). GitHub displays a result only
     with at least one location, region.startLine included — build_sarif adds
-    a run-level artifact fallback for rows that carry neither. *columns*:
-    ``_FOCUS`` (the finding's object) or ``_TARGET`` (the referenced object)."""
+    a run-level artifact fallback for rows that carry neither."""
     location = {}
-    object_id = _value(record[columns["id"]])
+    object_id = _value(record["ID"])
     if object_id is not None:
-        object_type = _value(record.get(columns["type"]))
-        location["logicalLocations"] = [_prune({
-            "fullyQualifiedName": f"{object_type}/{object_id}" if object_type else object_id,
-            "name": _value(record.get(columns["name"])) or object_id,
-            "kind": "object",
-        })]
-    if not pandas.isna(record[columns["uri"]]):
-        # whole-line region, explicitly bounded (endLine given) — columns are
-        # per-format anchor rules that broke SARIF viewers for no information
-        # gain; a start-only region makes GitHub render from the error onward
-        line = int(record[columns["line"]])
-        region = {"startLine": line, "endLine": line}
-        if not pandas.isna(record.get(columns["snippet"])):
-            region["snippet"] = {"text": str(record[columns["snippet"]])}
-        location["physicalLocation"] = {
-            "artifactLocation": {"uri": quote(str(record[columns["uri"]]), safe="/")},
-            "region": region,
-        }
-    elif not pandas.isna(record.get(columns["label"])):
-        location["physicalLocation"] = _artifact_location(str(record[columns["label"]]))
+        location["logicalLocations"] = [_logical(object_id, _value(record.get("OBJECT_TYPE")),
+                                                 _value(record.get("OBJECT_NAME")))]
+    if not pandas.isna(record["SOURCE_URI"]):
+        location["physicalLocation"] = _physical(record["SOURCE_URI"], record["SOURCE_LINE"],
+                                                 record.get("SOURCE_SNIPPET"))
+    elif not pandas.isna(record.get("INSTANCE_LABEL")):
+        location["physicalLocation"] = _artifact_location(str(record["INSTANCE_LABEL"]))
     return location or None
+
+
+def _logical(object_id, object_type=None, name=None):
+    """The model element of a location: ``Type/id`` (the id alone without a Type), its name."""
+    return {"fullyQualifiedName": f"{object_type}/{object_id}" if object_type else object_id,
+            "name": name or object_id, "kind": "object"}
+
+
+def _physical(uri, line, snippet=None):
+    """A file position: a whole-line region, explicitly bounded (endLine given)
+    — columns are per-format anchor rules that broke SARIF viewers for no
+    information gain; a start-only region makes GitHub render from the error
+    onward."""
+    region = {"startLine": int(line), "endLine": int(line)}
+    if not pandas.isna(snippet):
+        region["snippet"] = {"text": str(snippet)}
+    return {"artifactLocation": {"uri": quote(str(uri), safe="/")}, "region": region}
+
+
+def _context_message(records):
+    """([context_message] line, related locations) of *records* — the referenced
+    object's state: one TARGET text per distinct text, three at most (a group
+    stays readable), and one related location per referenced object those
+    texts show, so every related location is linked from the line."""
+    shown = {}
+    for record in records:
+        if not pandas.isna(record["TARGET"]):
+            shown.setdefault(str(record["TARGET"]), record)
+    related = _related(list(shown.values())[:_TARGETS])
+    targets = [_target(record, related) for record in list(shown.values())[:_TARGETS]]
+    if len(shown) > _TARGETS:
+        targets.append(f"… ({len(shown)} distinct)")
+    return (f"[context_message] {'; '.join(targets)}" if targets else None), related
 
 
 def _related(records):
     """{TARGET_ID: related location} for the reference findings among *records*
     whose referenced object the locate pass found (TARGET_URI set) — one per
-    distinct object, ids 1..n in order, the TARGET text (when the row has one)
-    as its message. GitHub code scanning rejects an upload with a related
-    location that has no physicalLocation, so a referenced object not located
-    gets none."""
+    distinct object, ids 1..n in order, the TARGET text as its message, the
+    model element ``Type/id`` (TARGET_TYPE; the id alone without one). GitHub
+    code scanning rejects an upload with a related location that has no
+    physicalLocation, so a referenced object not located gets none."""
     related = {}
     for record in records:
         target = _value(record["TARGET_ID"])
         if target is not None and target not in related and not pandas.isna(record["TARGET_URI"]):
-            related[target] = _prune({"id": len(related) + 1, "message": _text(record["TARGET"]),
-                                      **_location(record, _TARGET)})
+            related[target] = {
+                "id": len(related) + 1, "message": {"text": str(record["TARGET"])},
+                "logicalLocations": [_logical(target, _value(record.get("TARGET_TYPE")))],
+                "physicalLocation": _physical(record["TARGET_URI"], record["TARGET_LINE"],
+                                              record.get("TARGET_SNIPPET"))}
     return related
 
 
@@ -494,10 +505,10 @@ def _target(record, related):
     in link text."""
     text, target = str(record["TARGET"]), _value(record["TARGET_ID"])
     location = related.get(target)
-    prefix = f"referenced object {target} "
+    prefix = f"{REFERENCED_OBJECT}{target} "
     if location is None or _LINK_BREAKERS & set(target) or not text.startswith(prefix):
         return text
-    return f"referenced object [{target}]({location['id']}) {text[len(prefix):]}"
+    return f"{REFERENCED_OBJECT}[{target}]({location['id']}) {text[len(prefix):]}"
 
 
 def _artifact_location(uri):
