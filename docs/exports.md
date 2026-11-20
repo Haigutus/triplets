@@ -48,7 +48,9 @@ Both engines expose the same interface:
 returning `{"filename": str, "file": bytes}` for one instance — the dispatcher loads the
 schema once and passes the `iri.datatypes` / `iri.languages` maps to every instance. They produce
 data-identical XML (verified by an engine-equivalence test); only whitespace
-formatting differs.
+formatting differs. A namespace that the namespace map leaves unbound (and an attribute of
+the default namespace) is written under a generated prefix (`ns0`, `ns1`, …), which
+`cython_pugixml` declares on the `rdf:RDF` root and `python_lxml` on the elements that use it.
 
 Engine aliases: `performance` / `pugixml` -> `cython_pugixml`, `lxml` / `pandas` -> `python_lxml`
 

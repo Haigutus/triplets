@@ -499,11 +499,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   bind.** Elements of that namespace were written without a prefix, so in no namespace —
   e.g. every `cim:` class and key of a file binding `cim:` to CIM16 exported against a
   CIM100 schema, or one `entsoe:` key in a file that does not declare the prefix. The
-  engine now writes them under a generated prefix (`ns0`, `ns1`, …) declared on the
-  `rdf:RDF` root, only when used; the names equal those of the `python_lxml` engine. The
+  engine now writes them under a generated prefix (`ns0`, `ns1`, …, numbered in order of
+  first use) declared on the `rdf:RDF` root, only when used; the names equal those of the
+  `python_lxml` engine. The
   root element and the `rdf:` attributes take the prefix the map binds to the RDF
   namespace, where the root was always written as `rdf:RDF`; a map without the RDF
   namespace gets `xmlns:rdf` declared, where the `rdf:` prefix was left undeclared.
+- **CIM XML export with a default namespace** (a namespace map prefix `""`, as parsed from
+  a file with `xmlns="…"`, or `None`). `cython_pugixml` wrote `xmlns:=` / `xmlns:None=`,
+  not well-formed or with the elements in no namespace; it writes `xmlns="…"` and
+  unprefixed elements. `python_lxml` raised `ValueError` on the prefix `""`; it reads it as
+  the default namespace. An attribute never takes the default namespace: with the RDF
+  namespace as default, `rdf:about` / `rdf:ID` / `rdf:resource` get a generated prefix
+  (both engines).
+- **`python_lxml` CIM XML export: the root is `RDF` in the RDF namespace** whatever the
+  namespace map binds the `rdf` prefix to; it was written in the namespace of that prefix.
 - **`cgmes_tools.validate_by_header` reports the schema file name.** The run metadata
   `references` held `"rdf_map"` for a schema given as a path; they hold the file name, as
   with `validate_schema`, and `"rdf_map"` for a dict. A run where no instance resolves a

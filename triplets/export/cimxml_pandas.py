@@ -103,8 +103,11 @@ def generate_xml(instance_data,
             If ``None``, every name is undefined and only ``export_undefined=True`` writes it
             (:func:`triplets.export.export_to_cimxml` sets that when it has no schema).
         namespace_map : dict, optional
-            Mapping of namespace prefixes to URIs (e.g., ``{"cim": "http://iec.ch/TC57/2013/CIM-schema-cim16#"}``).
-            Must include ``"rdf"`` namespace. If ``None``, inferred from ``rdf_map`` or instance.
+            Mapping of namespace prefixes to URIs (e.g., ``{"cim": "http://iec.ch/TC57/2013/CIM-schema-cim16#"}``),
+            declared on the root; the prefix ``""`` or ``None`` is the default namespace. If ``None``,
+            inferred from ``rdf_map`` or instance. A namespace the map leaves unbound (and an attribute
+            of the default namespace) is written under a generated prefix (``ns0``, ``ns1``, …):
+            this engine declares it on the elements that use it, ``cython_pugixml`` on the root.
         class_KEY : str, default "Type"
             Column key used to identify object class/type in the triplet data.
         export_undefined : bool, default False
@@ -184,11 +187,11 @@ def generate_xml(instance_data,
         # an undefined_namespace the map already binds (e.g. CIM100) keeps its own prefix
         namespace_map = {**namespace_map, "triplets": undefined_namespace}
 
-    # Create element builder
-    E = ElementMaker(nsmap=namespace_map)
+    # Create element builder; the prefix "" is the default namespace (None for lxml)
+    E = ElementMaker(nsmap={prefix or None: uri for prefix, uri in namespace_map.items()})
 
     # Create xml root element
-    RDF = E(QName(namespace_map.get("rdf", RDF_NS), "RDF"))
+    RDF = E(QName(RDF_NS, "RDF"))
 
     # Add comment
     if comment:
