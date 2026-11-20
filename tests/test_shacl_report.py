@@ -242,8 +242,7 @@ def parsed_run(root, parse_path):
         '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="http://iec.ch/TC57/CIM100#">\n'
         '  <cim:Breaker rdf:ID="_11111111-2222-3333-4444-555555555555"/>\n'
         '</rdf:RDF>\n')
-    # own content: compiled shapes are cached by content and keep the first file name
-    (root / "shapes" / "shapes.ttl").write_text(SHAPE_TTL + "# source_root\n")
+    (root / "shapes" / "shapes.ttl").write_text(SHAPE_TTL)
     data = pandas.read_RDF([parse_path])
     return data.shacl.validate_shacl(str(root / "shapes" / "shapes.ttl"), engine="pandas")
 

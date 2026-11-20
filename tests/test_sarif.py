@@ -469,8 +469,7 @@ def parsed_run(root, parse_path):
     (root / "models").mkdir(parents=True)
     (root / "shapes").mkdir()
     (root / "models" / "grid.xml").write_text(XML, encoding="utf-8")
-    # own content: compiled shapes are cached by content and keep the first file name
-    (root / "shapes" / "shapes.ttl").write_text(SHAPE + "# source_root\n", encoding="utf-8")
+    (root / "shapes" / "shapes.ttl").write_text(SHAPE, encoding="utf-8")
     data = pandas.read_RDF([parse_path])
     return data, data.shacl.validate_shacl(str(root / "shapes" / "shapes.ttl"), engine="pandas")
 
