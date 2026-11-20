@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 _SCHEMA = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"
 _LEVELS = {"Violation": "error", "Warning": "warning", "Info": "note"}
 _SAMPLES = 3   # per end: grouped results carry the first 3 and last 3 instances
-_TAGS = 10     # GitHub keeps the first 10 tags of a rule
+_TAGS = 10     # GitHub keeps the first 10 tags of a rule: language, constraint, the first 8 profiles
 # run-metadata list → descriptor id of its "not evaluated" configuration notifications
 _SKIPPED = {"skipped_shapes": "triplets/skippedShape",
             "skipped_components": "triplets/skippedComponent"}

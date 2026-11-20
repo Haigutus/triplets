@@ -925,7 +925,9 @@ enrichment pass first (an already-enriched frame is used as-is).
 - Every rule carries `properties.tags`: the language (`shacl` / `rdfs`), the
   constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
   rule's findings (the `PROFILE` column), distinct, first seen, at most 10
-  (GitHub keeps 10). GitHub code scanning filters alerts by tag. SARIF
+  (GitHub keeps 10). A rule whose findings name more than 8 profiles has no
+  tag for the later ones, so a filter on one of those does not show it.
+  GitHub code scanning filters alerts by tag. SARIF
   recommends taxonomies, not tags, for a classification (§3.8.2.1); tags are
   used because GitHub code scanning filters by tag.
 - Severity maps `Violation/Warning/Info` → `error/warning/note`; rules carry

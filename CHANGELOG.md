@@ -41,7 +41,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   [#150](https://github.com/Haigutus/triplets/issues/150)).
 - **SARIF rule tags** — `rules[].properties.tags`: the constraint language (`shacl` /
   `rdfs`), the constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
-  rule's findings, distinct, at most 10 (what GitHub keeps); GitHub code scanning filters
+  rule's findings, distinct, at most 10 (what GitHub keeps: the profiles after the first
+  8 of a rule get no tag); GitHub code scanning filters
   alerts by tag ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **SARIF configuration notifications for what a run did not evaluate** — one
   `invocations[0].toolConfigurationNotifications` entry (level `warning`) per
