@@ -533,6 +533,7 @@ def test_source_root_outside_names_one_warning(tmp_path, caplog):
     data, violations = parsed_run(tmp_path / "repo", model)
     enriched = violations.shacl.enrich(data=data)
     root = tmp_path / "elsewhere"
+    root.mkdir()
 
     with caplog.at_level("WARNING", logger="triplets.validation.locations"):
         document = build_sarif(enriched, sources=[model], source_root=root)
@@ -540,6 +541,19 @@ def test_source_root_outside_names_one_warning(tmp_path, caplog):
     assert file_names(document) == {model}
     assert [record.getMessage() for record in caplog.records] \
         == [f"1 file name(s) outside source_root {root} keep their names: {model}"] * 2
+
+
+def test_source_root_must_be_a_directory(tmp_path):
+    """source_root naming no directory — a path that does not exist, a file —
+    raises ValueError in both exports, with or without names to write."""
+    model = str(tmp_path / "repo" / "models" / "grid.xml")
+    data, violations = parsed_run(tmp_path / "repo", model)
+    for source_root in (tmp_path / "absent", model):
+        for frame in (violations, violations.iloc[:0]):
+            with pytest.raises(ValueError, match="source_root is not a directory"):
+                build_sarif(frame, source_root=source_root)
+            with pytest.raises(ValueError, match="source_root is not a directory"):
+                frame.shacl.to_shacl_report(source_root=source_root, export_to_memory=True)
 
 
 CIM = "http://iec.ch/TC57/CIM100#"

@@ -988,7 +988,8 @@ enrichment pass first (an already-enriched frame is used as-is).
   the frame are the paths given to the parser. The comparison is lexical:
   symlinks are not resolved, so give `source_root` the same way the files
   are given. The export logs one warning naming the absolute names outside
-  the directory. Default `None`: the names as given.
+  the directory. A `source_root` that is not a directory raises `ValueError`.
+  Default `None`: the names as given.
 - The referenced object of a reference finding found in the data
   (`TARGET_ID`, enriched with `data=`) and located (`TARGET_URI` —
   `sources=` on the export, or `locate` after `enrich`) becomes a `relatedLocations` entry: `id`, the `TARGET` text

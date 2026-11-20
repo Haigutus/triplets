@@ -63,7 +63,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   names without directories, so they stay as they are; an absolute `report_references=`
   is written relative. No name is joined with the working directory. The comparison is
   lexical (symlinks are not resolved). Absolute names outside the directory are named in
-  one logged warning. Default `None` writes the names as given
+  one logged warning. A `source_root` that is not a directory raises `ValueError`.
+  Default `None` writes the names as given
   ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **The referenced object as a SARIF related location** — for a reference finding
   (`sh:class`, reference `rdfs:range` / `triplets:range`, `triplets:missing`) whose referenced

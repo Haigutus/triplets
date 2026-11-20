@@ -213,11 +213,14 @@ def relative_sources(violations, names, source_root):
     (where present) and to each list of *names* ({key: [file name, ...]} — the
     run metadata's source / references). Absolute names outside the root are
     named in one warning. Returns (frame, names); the inputs are not changed, and
-    ``source_root=None`` returns them as they are.
+    ``source_root=None`` returns them as they are. A *source_root* that is not
+    a directory raises ValueError.
     """
     if source_root is None:
         return violations, names
     root = os.path.abspath(source_root)
+    if not os.path.isdir(root):
+        raise ValueError(f"source_root is not a directory: {root}")
     known = {}                              # name → relative name or None: each name is checked once
 
     def relative(name):
