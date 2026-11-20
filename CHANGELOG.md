@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0rc1] - 2026-11-13
+
 ### Added
 - **`stereotype` and `rdf:type` on every bundled schema entry** — the RDFS source types
   of the entry's object, as lists in source order, deduplicated, and left out when the
@@ -1244,6 +1246,7 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   modules. Several `tools` and `cgmes_tools` functions were renamed; the old names keep
   working with a warning. All of these will be removed in 0.2.
 
+[0.3.0rc1]: https://github.com/Haigutus/triplets/releases/tag/0.3.0rc1
 [0.2.0]: https://github.com/Haigutus/triplets/releases/tag/0.2.0
 [0.2.0rc6]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc6
 [0.2.0rc5]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc5
