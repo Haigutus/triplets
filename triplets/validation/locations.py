@@ -226,8 +226,12 @@ def relative_sources(violations, names, source_root):
 
 
 def _read(source):
-    """(uri, bytes) for a path or a file-like (zip members from find_all_xml)."""
+    """(uri, bytes) for a path or a file-like (zip members from find_all_xml).
+    A seekable file-like is read from its start, so one open handle serves
+    every pass it is given to."""
     if hasattr(source, "read"):
+        if source.seekable():
+            source.seek(0)
         return str(getattr(source, "name", "<memory>")), source.read()
     with open(source, "rb") as file:
         return str(source), file.read()

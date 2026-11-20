@@ -736,6 +736,29 @@ def test_related_location_when_located_before_enriched(tmp_path):
     assert json.loads(through_exporter.read()) == expected
 
 
+def test_open_file_handle_is_read_again(tmp_path):
+    """One open file handle as the source of every pass: locate, then the export
+    that locates the referenced objects, then a second export — each reads the
+    file from its start, and the log is the one the path gives (the handle's
+    name is the path)."""
+    violations, data, xml = reference_run(tmp_path)
+    expected = build_sarif(triplets.validation.enrich(violations, data=data, rdf_map=REFERENCE_SCHEMA),
+                           group=False, sources=[xml])
+    assert by_id(expected)["b2"]["relatedLocations"][0]["physicalLocation"]["region"]["startLine"] == 4
+
+    with open(xml, "rb") as handle:
+        located = violations.shacl.locate(sources=[handle])
+        assert located["SOURCE_LINE"].notna().all()
+        through_exporter = located.shacl.to_sarif(data=data, rdf_map=REFERENCE_SCHEMA, group=False,
+                                                  sources=[handle], export_to_memory=True)
+        assert json.loads(through_exporter.read()) == expected
+
+        for _ in range(2):                             # two exports of a frame not located
+            export = violations.shacl.to_sarif(data=data, rdf_map=REFERENCE_SCHEMA, group=False,
+                                               sources=[handle], export_to_memory=True)
+            assert json.loads(export.read()) == expected
+
+
 def test_locate_pass_keeps_source_columns_on_the_frame(tmp_path):
     """SOURCE_* columns on the frame are not located again by sources= — hand-stamped
     ones stay, a row stamped as not located keeps its whole-file fallback (b4 is

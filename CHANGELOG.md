@@ -495,6 +495,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **An open file handle in `sources=` is read from its start by every locate pass**
+  (`locate`, `to_sarif`, `to_shacl_report`) — a seekable handle is rewound before it is
+  read. Before, the second pass over one handle read nothing: a second export had no line
+  positions, without an error.
 - **SARIF / SHACL report / CSV / Excel: a `PROFILE` cell holding a numpy array** (e.g. a
   list column after a polars → pandas conversion) is read as its profiles — before, an
   array of length 0 or ≥ 2 raised `ValueError` and a 1-element array was written as
