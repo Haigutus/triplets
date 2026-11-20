@@ -550,9 +550,9 @@ file name in different directories and the same member give one name, and a zip 
 zip gives the inner zip's name.
 
 An object's definition is the first `rdf:ID` or `rdf:about` element with its id, in the
-order the sources are read (files as given, then the members of the zips): for an object
-written in several files (an `rdf:about` element in the SSH, the `rdf:ID` element in the
-EQ) the file read first gives the position.
+order the sources are read (the plain files as given, then the members of the zips): for
+an object written in several files (an `rdf:about` element in the SSH, the `rdf:ID`
+element in the EQ) the file read first gives the position.
 
 The SHACL report serializes via rdflib: `format=None` (default) derives the format
 from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an explicit
@@ -962,7 +962,7 @@ enrichment pass first (an already-enriched frame is used as-is).
   (`validation/locations.py`) and adds a fully bounded
   whole-line `physicalLocation.region` (`startLine` == `endLine`)
   on the violated property element's line (or the object
-  definition, the first `rdf:ID` / `rdf:about` element with its id in source
+  definition, the first `rdf:ID` / `rdf:about` element with its id in read
   order) — what GitHub code scanning needs to annotate lines. One
   grep-style pass per file; the parse/validate hot paths are untouched.
   The pass stamps only what the frame lacks: the three `SOURCE_*` columns
@@ -1010,7 +1010,7 @@ enrichment pass first (an already-enriched frame is used as-is).
   `sources=` on the export, or `locate` after `enrich`) becomes a `relatedLocations` entry: `id`, the `TARGET` text
   as its `message` (Type and name), a `logicalLocations` entry with the id
   (kind `object`) and a `physicalLocation` on its definition line — the first
-  `rdf:ID` / `rdf:about` element with its id in source order (`source_root=`
+  `rdf:ID` / `rdf:about` element with its id in read order (`source_root=`
   applies). A referenced object that is not located — no
   locate pass, or the object in none of the sources — has none: GitHub code scanning rejects an upload with a related
   location that has no `physicalLocation`. The `[context_message]` line links

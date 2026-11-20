@@ -13,11 +13,13 @@ offending property element, not just the object.
 same three TARGET_* columns for the referenced object of a reference finding)
 onto a violations frame, and it is exposed as
 ``violations.shacl.locate(sources=...)``. It stamps the source names as
-given, a zip member as ``<zip file name>/<member name>``. Both the SARIF and the sh:ValidationReport exports, given ``sources=``,
-run it through ``locate_missing``: only the columns the frame lacks are
-stamped, and the sh:ValidationReport export, which writes no referenced-object
-location, asks for the SOURCE_* columns only. ``relative_sources`` is the one pass both report exports run for
-``source_root=``: every file name they write goes through ``relative_name``.
+given, a zip member as ``<zip file name>/<member name>``. Both the SARIF and
+the sh:ValidationReport exports, given ``sources=``, run it through
+``locate_missing``: only the columns the frame lacks are stamped, and the
+sh:ValidationReport export, which writes no referenced-object location, asks
+for the SOURCE_* columns only. ``relative_sources`` is the one pass both
+report exports run for ``source_root=``: every file name they write goes
+through ``relative_name``.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
 are handed to an export. When the same object is defined in several files
@@ -74,12 +76,13 @@ def locate(wanted, sources):
                "keyLines": {KEY: (line, snippet)}}}
         "uri" is the source name as given (the path, a file-like's
         ``.name``); a zip member is ``<zip file name>/<member name>``, the
-        zip's name without directories. The position is that of the first rdf:ID /
-        rdf:about element with the ID, in the order of *sources*: an
-        rdf:about element in an earlier file wins over the rdf:ID element in
-        a later one. IDs not present in the sources are absent from the
-        result. The sources are read in order until every wanted ID is
-        found; an ID in none of them makes the pass read them all.
+        zip's name without directories. The position is that of the first
+        rdf:ID / rdf:about element with the ID in read order — the plain
+        files as given, then the members of the zips: an rdf:about element
+        in a file read earlier wins over the rdf:ID element in a later one.
+        IDs not present in the sources are absent from the result. The
+        sources are read in that order until every wanted ID is found; an
+        ID in none of them makes the pass read them all.
     """
     from ..parser.utils import find_all_xml
 
@@ -116,7 +119,7 @@ def locate_violations(violations, sources):
     of a reference finding found in the data (TARGET_ID — context.enrich) is
     located in the same pass, at its definition, into the TARGET_* columns; a
     frame without TARGET_ID gets nulls there. A definition is the first
-    rdf:ID / rdf:about element with the id, in source order (see locate).
+    rdf:ID / rdf:about element with the id, in read order (see locate).
     SOURCE_URI / TARGET_URI are the source names as given, a zip member
     ``<zip file name>/<member name>`` (see locate).
     """

@@ -75,8 +75,9 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
         The referenced object of a reference finding found in the data
         (TARGET_ID, enriched with *data*) and in the sources becomes a
         ``relatedLocations`` entry on its definition line (the first rdf:ID
-        / rdf:about element with its id, in the order of *sources*), linked
-        from the [context_message] line.
+        / rdf:about element with its id in read order: the plain files as
+        given, then the members of the zips), linked from the
+        [context_message] line.
     path : str or Path, optional
         Output file (default "report.sarif"). Ignored with export_to_memory.
     export_to_memory : bool, default False
