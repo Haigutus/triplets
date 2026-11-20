@@ -3,6 +3,7 @@ import os
 import sys
 import importlib.util
 
+import pandas
 import pytest
 
 pytest.importorskip("rdflib")
@@ -11,8 +12,8 @@ import triplets
 
 from pathlib import Path
 
-from triplets.validation import compile as compile_shapes
-from triplets.validation.shacl_ir import IR_COLUMNS, KNOWN_COMPONENTS, _COMPILE_CACHE
+from triplets.validation import compile as compile_shapes, validate_shacl
+from triplets.validation.shacl_ir import IR_COLUMNS, KNOWN_COMPONENTS
 
 # One shape exercising most IR components: scalars, RDF lists, inverse path,
 # logical operator, node-level closed, sparql constraint.
@@ -135,12 +136,25 @@ def test_compile_cache_hits_by_content(shape_file, tmp_path):
     compiled = compile_shapes(shape_file)
     assert compile_shapes(shape_file) is compiled          # same path → cache hit
 
-    copy = tmp_path / "copy.ttl"                           # same content, other path
+    copy = tmp_path / "copy" / os.path.basename(shape_file)   # same content and name, other directory
+    copy.parent.mkdir()
     copy.write_text(RICH_SHAPE)
-    assert compile_shapes(str(copy)) is compiled
+    assert compile_shapes(copy) is compiled
 
-    assert compiled.hash in _COMPILE_CACHE
     assert compiled.plans == {}                            # engines fill this lazily
+
+
+def test_same_content_reports_its_own_file_names(tmp_path):
+    """Shape files with the same content under other names: every run's
+    ``references`` are the names it was given, the content hash is shared."""
+    first, second = tmp_path / "first.ttl", tmp_path / "second.ttl"
+    for path in (first, second):
+        path.write_text(RICH_SHAPE)
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    runs = [validate_shacl(data, shapes, engine="pandas").attrs["validation"]
+            for shapes in (str(first), str(second), [str(first), str(second)])]
+    assert [run["references"] for run in runs] == [["first.ttl"], ["second.ttl"], ["first.ttl", "second.ttl"]]
+    assert len({run["compiled_hash"] for run in runs}) == 1
 
 
 @pytest.mark.skipif(not all(f.exists() for f in CGMES_EQ_SHACL_FILES),
