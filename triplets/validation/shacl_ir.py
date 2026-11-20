@@ -51,7 +51,7 @@ class CompiledShapes:
     graph: object                 # rdflib.Graph — what pyshacl consumes
     ir: pandas.DataFrame          # constraint table — what the vectorized engines consume
     hash: str                     # content hash of the shape sources (any file name; a filtered compile keeps it)
-    sources: tuple = ()           # shape file basenames, sorted, each once (report metadata; () for a Graph)
+    sources: tuple = ()           # shape file basenames, sorted, each name once (report metadata; () for a Graph)
     language: str = "shacl"       # constraint language — "rdfs" for schema-compiled IR
     stats: dict = field(default_factory=dict)  # coverage facts (see _shape_stats)
     plans: dict = field(default_factory=dict)  # engine name → compiled artifact (lazy)
@@ -247,7 +247,7 @@ def _paths(shapes):
 
 
 def _source_names(shapes):
-    """Shape file basenames for report metadata: sorted, each once — the order and
+    """Shape file basenames for report metadata: sorted, each name once — the order and
     repeats of the given paths do not matter."""
     import rdflib
 
