@@ -39,6 +39,32 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   definition (SHACL spec section for `sh:*`)
   ([#113](https://github.com/Haigutus/triplets/issues/113),
   [#150](https://github.com/Haigutus/triplets/issues/150)).
+- **SARIF rule tags** — `rules[].properties.tags`: the constraint language (`shacl` /
+  `rdfs`), the constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
+  rule's findings, distinct, at most 10 (what GitHub keeps); GitHub code scanning filters
+  alerts by tag ([#94](https://github.com/Haigutus/triplets/issues/94)).
+- **SARIF configuration notifications for what a run did not evaluate** — one
+  `invocations[0].toolConfigurationNotifications` entry (level `warning`) per
+  `skipped_shapes` item (`descriptor.id` `triplets/skippedShape`) and per
+  `skipped_components` item (`triplets/skippedComponent`), the reason or component name
+  as the message; the run property bag keeps both lists. A run without timestamps but
+  with skipped entries gets an invocation too. GitHub code scanning does not display
+  invocation notifications; SARIF viewers do
+  ([#94](https://github.com/Haigutus/triplets/issues/94)).
+- **`source_root=` on `export_to_sarif` / `to_sarif` and `export_to_shacl_report` /
+  `to_shacl_report`** (also `build_sarif`, `violations_to_report_graph`) — a file name
+  that is an absolute path under that directory is written relative to it, with forward
+  slashes. Every other name is written as given: a relative path, a path outside the
+  directory, a zip member. The rule covers every file name of the export: `SOURCE_URI`
+  (SARIF `artifactLocation.uri`, the SHACL report's `[context_location]` message), the
+  `INSTANCE_LABEL` fallback location and the run metadata's `source` / `references`
+  (SARIF run `properties`, whole-file fallback locations, rule help; SHACL
+  `dcterms:source` / `dcterms:references`). `references` of a validation run are file
+  names without directories, so they stay as they are; an absolute `report_references=`
+  is written relative. No name is joined with the working directory. The comparison is
+  lexical (symlinks are not resolved). Absolute names outside the directory are named in
+  one logged warning. Default `None` writes the names as given
+  ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **Fixed language tag per schema entry** — `"language": "en"` on an Attribute entry writes
   `"text"@en` in N-Quads (pandas, polars, streaming; hence the rdflib / pyshacl loader) and
   `xml:lang="en"` on the literal element in both CIM XML engines, with or without
@@ -210,6 +236,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **SARIF rule titles name the constraint language**: `SHACL …` / `RDFS …` on every
   rule, `sh:name` titles included (`SHACL Line completeness (8×)`)
   ([#150](https://github.com/Haigutus/triplets/issues/150)).
+- **SARIF tool name per constraint language**: `tool.driver.name` is `triplets-rdfs` for
+  schema runs (`validate_schema` / `validate_schema_references` / `validate_by_header`);
+  SHACL runs and bare frames stay `triplets-shacl`. On GitHub code scanning the alerts of a
+  schema category uploaded earlier as `triplets-shacl` keep their numbers and are matched by
+  the `triplets-rdfs` upload, but they stay open even after the finding is fixed, held by the
+  old `triplets-shacl` analysis. Upload one empty `triplets-shacl` log to each such category
+  and ref (or delete its old analyses) to release them
+  ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **CIM XML export loads the schema and builds its datatype / language maps once per
   export** instead of per instance (sequential `cython_pugixml`, Svedala: ~76 → ~55 ms min);
   with `max_workers` on pandas input each worker gets the loaded schema once, so an in-memory
@@ -446,6 +480,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **SARIF / SHACL report / CSV / Excel: a `PROFILE` cell holding a numpy array** (e.g. a
+  list column after a polars → pandas conversion) is read as its profiles — before, an
+  array of length 0 or ≥ 2 raised `ValueError` and a 1-element array was written as
+  `['EQ']`; null and empty-string profiles are dropped.
 - **`export_to_cimxml` without an `rdf_map` exports the whole dataset.** With no schema
   every class and key is undefined, so the default `export_undefined=False` wrote files
   holding only an empty `rdf:RDF` root, with no warning. Without a schema,

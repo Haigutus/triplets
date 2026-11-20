@@ -271,6 +271,13 @@ def test_official_schema_conformance(violations):
         columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
     jsonschema.validate(build_sarif(minimal), schema)
 
+    minimal.attrs["validation"] = {"language": "rdfs", "skipped_shapes": ["X: datatype conflict"],
+                                   "skipped_components": ["sh:qualifiedValueShape"]}
+    document = build_sarif(minimal)                                    # notifications, no timestamps
+    assert document["runs"][0]["invocations"][0]["toolConfigurationNotifications"]
+    assert document["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
+    jsonschema.validate(document, schema)
+
 
 def test_github_code_scanning_requirements(violations):
     """GitHub code-scanning ingestion rules (docs.github.com, 'SARIF support
@@ -377,3 +384,158 @@ def test_sources_absent_ids_fall_back(shapes):
     assert location["physicalLocation"]["artifactLocation"]["uri"] == "Svedala%20EQ.xml"
     # whole-file convention — GitHub needs region.startLine to display at all
     assert location["physicalLocation"]["region"] == {"startLine": 1, "endLine": 1}
+
+
+def bare(profiles, language=None, constraint="sh:minCount", **meta):
+    """One-rule bare frame, one row per PROFILE cell."""
+    violations = pandas.DataFrame(
+        [["id1", "IdentifiedObject.name", None, constraint, "m", "Violation", "urn:shape", profile]
+         for profile in profiles],
+        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE", "PROFILE"])
+    if language or meta:
+        violations.attrs["validation"] = {**({"language": language} if language else {}), **meta}
+    return violations
+
+
+def test_rule_tags():
+    """Tags: language, constraint, each profile of the rule (all rows, first
+    seen) — distinct, at most 10 (what GitHub keeps)."""
+    tags = lambda violations: build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
+    assert tags(bare([None])) == ["shacl", "sh:minCount"]                      # bare frame: shacl
+    assert tags(bare([["EQ", "OP"], ["OP", "SC"], "SSH", None], language="rdfs",
+                     constraint="xsd:minOccurs")) == ["rdfs", "xsd:minOccurs", "EQ", "OP", "SC", "SSH"]
+    many = tags(bare([[f"P{index}" for index in range(12)]], language="rdfs"))
+    assert many == ["rdfs", "sh:minCount", *(f"P{index}" for index in range(8))]
+    assert tags(bare([["rdfs", "EQ"]], language="rdfs")) == ["rdfs", "sh:minCount", "EQ"]   # no duplicates
+
+
+def test_tool_name_per_language():
+    name = lambda violations: build_sarif(violations)["runs"][0]["tool"]["driver"]["name"]
+    assert name(bare([None])) == "triplets-shacl"                              # no metadata
+    assert name(bare([None], language="shacl")) == "triplets-shacl"
+    assert name(bare([None], language="rdfs")) == "triplets-rdfs"
+
+
+def test_skipped_entries_as_configuration_notifications():
+    """One warning notification per skipped shape / component on
+    invocations[0]; the run property bag keeps the lists; no timestamps still
+    gives a valid invocation (executionSuccessful)."""
+    meta = {"skipped_shapes": ["A: datatype conflict", "profile XX: no schema"],
+            "skipped_components": ["sh:qualifiedValueShape"]}
+    run = build_sarif(bare([None], language="rdfs", **meta))["runs"][0]
+    assert run["invocations"] == [{"executionSuccessful": True, "toolConfigurationNotifications": [
+        {"descriptor": {"id": "triplets/skippedShape"}, "level": "warning",
+         "message": {"text": "A: datatype conflict"}},
+        {"descriptor": {"id": "triplets/skippedShape"}, "level": "warning",
+         "message": {"text": "profile XX: no schema"}},
+        {"descriptor": {"id": "triplets/skippedComponent"}, "level": "warning",
+         "message": {"text": "sh:qualifiedValueShape"}}]}]
+    assert run["properties"] == {"language": "rdfs", **meta}
+
+    timed = build_sarif(bare([None], generated_at="2026-01-01T00:00:00+00:00",
+                             skipped_shapes=["A"], skipped_components=[]))["runs"][0]["invocations"][0]
+    assert list(timed) == ["executionSuccessful", "endTimeUtc", "toolConfigurationNotifications"]
+    assert len(timed["toolConfigurationNotifications"]) == 1
+    assert "invocations" not in build_sarif(bare([None], skipped_shapes=[], skipped_components=[]))["runs"][0]
+
+
+def test_profile_cells_as_tags_and_text():
+    """A PROFILE cell is a list, tuple, numpy array or text; nulls and empty
+    strings name no profile."""
+    import numpy
+    from triplets.validation.shacl_report import profile_text
+
+    tags = lambda violations: build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
+    assert tags(bare([numpy.array(["EQ"], dtype=object), ["OP", None, ""], ("SC",), "SSH", ""])) \
+        == ["shacl", "sh:minCount", "EQ", "OP", "SC", "SSH"]
+    assert profile_text(numpy.array(["EQ", "OP"], dtype=object)) == "EQ, OP"
+    assert profile_text(numpy.array([], dtype=object)) is None
+    assert profile_text(["EQ", None]) == "EQ"
+    assert profile_text(["EQ", "OP"]) == profile_text(("EQ", "OP")) == profile_text("EQ, OP") == "EQ, OP"
+    assert profile_text(None) is profile_text(float("nan")) is profile_text([]) is profile_text("") is None
+
+
+def file_names(document):
+    """Every data file name of a SARIF log: the result locations and the run's source list."""
+    run = document["runs"][0]
+    return {location["physicalLocation"]["artifactLocation"]["uri"]
+            for result in run["results"] for location in result["locations"]} | set(run["properties"]["source"])
+
+
+def parsed_run(root, parse_path):
+    """repo layout under *root* (models/grid.xml, shapes/shapes.ttl) → the file
+    parsed by *parse_path* and validated: (data, violations)."""
+    (root / "models").mkdir(parents=True)
+    (root / "shapes").mkdir()
+    (root / "models" / "grid.xml").write_text(XML, encoding="utf-8")
+    # own content: compiled shapes are cached by content and keep the first file name
+    (root / "shapes" / "shapes.ttl").write_text(SHAPE + "# source_root\n", encoding="utf-8")
+    data = pandas.read_RDF([parse_path])
+    return data, data.shacl.validate_shacl(str(root / "shapes" / "shapes.ttl"), engine="pandas")
+
+
+@pytest.mark.parametrize("group", [True, False])
+def test_source_root_end_to_end(tmp_path, group):
+    """A file parsed by its absolute path, validated, exported with source_root:
+    every data file name of the log is the same root-relative name — located
+    by sources=, located before the export, or from the label alone. The
+    shapes file of a run is a file name without directories and stays one."""
+    root = tmp_path / "repo"
+    model = str(root / "models" / "grid.xml")
+    data, violations = parsed_run(root, model)
+    enriched = violations.shacl.enrich(data=data)
+    assert violations.attrs["validation"]["source"] == [model]
+    assert set(enriched["INSTANCE_LABEL"]) == {model}
+
+    documents = {
+        "sources": build_sarif(enriched, group=group, sources=[model], source_root=root),
+        "located": build_sarif(enriched.shacl.locate(sources=[model]), group=group, source_root=root),
+        "label": build_sarif(enriched, group=group, source_root=root),
+        "accessor": json.loads(violations.shacl.to_sarif(data=data, group=group, sources=[model], source_root=root,
+                                                         export_to_memory=True).read()),
+    }
+    for flow, document in documents.items():
+        assert file_names(document) == {"models/grid.xml"}, flow
+        assert str(root) not in json.dumps(document), flow
+        run = document["runs"][0]
+        assert run["properties"]["references"] == ["shapes.ttl"], flow
+        assert "File: shapes.ttl" in run["tool"]["driver"]["rules"][0]["help"]["text"], flow
+        regions = {location["physicalLocation"]["region"]["startLine"]
+                   for result in run["results"] for location in result["locations"]}
+        assert regions == ({1} if flow == "label" else {4, 7}), flow
+    assert build_sarif(enriched, group=group, sources=[model])["runs"][0]["properties"]["source"] == [model]
+
+
+def test_source_root_relative_parse_path(tmp_path, monkeypatch, caplog):
+    """A file parsed by a relative path keeps that name in every place, also
+    with the working directory below the root: no name is joined with it."""
+    root = tmp_path / "repo"
+    (root / "work").mkdir(parents=True)
+    monkeypatch.chdir(root / "work")
+    data, violations = parsed_run(root, "../models/grid.xml")
+    enriched = violations.shacl.enrich(data=data)
+
+    with caplog.at_level("WARNING", logger="triplets.validation.locations"):
+        documents = [build_sarif(enriched, sources=["../models/grid.xml"], source_root=source_root)
+                     for source_root in (root, "..")]
+        documents.append(build_sarif(enriched.shacl.locate(sources=["../models/grid.xml"]), source_root=root))
+        documents.append(build_sarif(enriched, source_root=root))
+    for document in documents:
+        assert file_names(document) == {"../models/grid.xml"}
+    assert not caplog.records                                          # a relative name is not "outside"
+
+
+def test_source_root_outside_names_one_warning(tmp_path, caplog):
+    """A file outside the root keeps its absolute name in every place; one
+    warning per export names it once, the same text from both exporters."""
+    model = str(tmp_path / "repo" / "models" / "grid.xml")
+    data, violations = parsed_run(tmp_path / "repo", model)
+    enriched = violations.shacl.enrich(data=data)
+    root = tmp_path / "elsewhere"
+
+    with caplog.at_level("WARNING", logger="triplets.validation.locations"):
+        document = build_sarif(enriched, sources=[model], source_root=root)
+        enriched.shacl.to_shacl_report(sources=[model], source_root=root, export_to_memory=True)
+    assert file_names(document) == {model}
+    assert [record.getMessage() for record in caplog.records] \
+        == [f"1 file name(s) outside source_root {root} keep their names: {model}"] * 2

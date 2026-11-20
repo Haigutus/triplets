@@ -21,8 +21,8 @@ from urllib.parse import quote
 import pandas
 
 from .context import ENRICHMENT_COLUMNS, enrich
-from .locations import LOCATION_COLUMNS, locate_violations
-from .shacl_report import _expand, message_prefix, profile_text
+from .locations import LOCATION_COLUMNS, locate_violations, relative_sources
+from .shacl_report import _expand, message_prefix, profile_names, profile_text
 from ..iri import split_iri
 
 logger = logging.getLogger(__name__)
@@ -30,13 +30,17 @@ logger = logging.getLogger(__name__)
 _SCHEMA = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"
 _LEVELS = {"Violation": "error", "Warning": "warning", "Info": "note"}
 _SAMPLES = 3   # per end: grouped results carry the first 3 and last 3 instances
+_TAGS = 10     # GitHub keeps the first 10 tags of a rule
+# run-metadata list → descriptor id of its "not evaluated" configuration notifications
+_SKIPPED = {"skipped_shapes": "triplets/skippedShape",
+            "skipped_components": "triplets/skippedComponent"}
 # violation-type prefix → where the constraint is defined (the term IRI otherwise)
 _CONSTRAINT_DOCS = {"sh": "https://www.w3.org/TR/shacl/#{local}",
                     "triplets": "https://github.com/Haigutus/triplets/blob/main/docs/validation.md"}
 
 
 def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True,
-                    sources=None, path=None, export_to_memory=False):
+                    sources=None, path=None, export_to_memory=False, source_root=None):
     """Violations frame → SARIF 2.1.0 log.
 
     Parameters
@@ -61,12 +65,22 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
         Output file (default "report.sarif"). Ignored with export_to_memory.
     export_to_memory : bool, default False
         Return a BytesIO (with .name) instead of writing to disk.
+    source_root : str or Path, optional
+        A file name that is an absolute path under this directory is
+        written relative to it (forward slashes); every other name is
+        written as given. One rule for every name in the log: SOURCE_URI
+        (located by *sources* here or already on the frame), the
+        INSTANCE_LABEL fallback, the run metadata's ``source`` and
+        ``references``. ``references`` of a validation run are file names
+        without directories, so they stay as they are. Absolute names
+        outside the directory are named in one logged warning (see
+        locations.relative_sources).
     """
     if any(source is not None for source in (data, shapes, rdf_map)) \
             and not set(ENRICHMENT_COLUMNS) <= set(violations.columns):
         violations = enrich(violations, data=data, shapes=shapes, rdf_map=rdf_map)
 
-    payload = json.dumps(build_sarif(violations, group=group, sources=sources),
+    payload = json.dumps(build_sarif(violations, group=group, sources=sources, source_root=source_root),
                          ensure_ascii=False, indent=2).encode("utf-8")
     if export_to_memory:
         buffer = io.BytesIO(payload)
@@ -80,10 +94,12 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
     return path
 
 
-def build_sarif(violations, group=True, sources=None):
+def build_sarif(violations, group=True, sources=None, source_root=None):
     """Violations frame → SARIF document dict (I/O only when *sources* is
     given — the locate_violations pass reads just the source files; a frame
-    already carrying LOCATION_COLUMNS is used as-is)."""
+    already carrying LOCATION_COLUMNS is not located again). *source_root*:
+    absolute file names under it are written relative to it (see
+    export_to_sarif)."""
     frame = violations.copy()
     if sources is not None and not set(LOCATION_COLUMNS) <= set(frame.columns):
         frame = locate_violations(frame, sources)
@@ -92,6 +108,9 @@ def build_sarif(violations, group=True, sources=None):
             frame[column] = pandas.NA
 
     meta = violations.attrs.get("validation", {})
+    frame, names = relative_sources(frame, {key: meta[key] for key in ("source", "references")
+                                            if meta.get(key)}, source_root)
+    meta = {**meta, **names}
     language = meta.get("language", "shacl")
     groups = [(key, rows.to_dict("records")) for key, rows
               in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False)]
@@ -120,9 +139,13 @@ def build_sarif(violations, group=True, sources=None):
             names = meta.get("references") if tool_finding else meta.get("source")
             if names:
                 result["locations"] = [{"physicalLocation": _artifact_location(names[0])}]
+    # what this run did not evaluate (shapes, components): configuration
+    # notifications — the shapes graph / schema is the tool's rule configuration
+    notifications = [{"descriptor": {"id": descriptor}, "level": "warning", "message": {"text": str(text)}}
+                     for key, descriptor in _SKIPPED.items() for text in meta.get(key) or ()]
     run = _prune({
         "tool": {"driver": _prune({
-            "name": "triplets-shacl",
+            "name": f"triplets-{language}",
             "informationUri": "https://github.com/Haigutus/triplets",
             "version": getattr(triplets, "__version__", None),
             "rules": rules,
@@ -135,7 +158,8 @@ def build_sarif(violations, group=True, sources=None):
             "executionSuccessful": True,
             "startTimeUtc": _utc(meta.get("started_at")),
             "endTimeUtc": _utc(meta.get("generated_at")),
-        })] if meta.get("generated_at") else None,
+            "toolConfigurationNotifications": notifications or None,
+        })] if meta.get("generated_at") or notifications else None,
         # empty coverage lists stay in — a clean run STATES full coverage
         "properties": {key: value for key, value in meta.items()
                        if key not in ("started_at", "generated_at", "creator",
@@ -189,6 +213,9 @@ def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shac
     if name and occurrences:
         name = f"{name} ({occurrences}×)"
     uri = str(shape) if not pandas.isna(shape) and str(shape).startswith("http") else None
+    # GitHub filters alerts by tag: language, constraint, the rule's profiles
+    profiles = (profile for record in records for profile in profile_names(record.get("PROFILE")))
+    tags = list(dict.fromkeys(filter(None, (language, _value(constraint), *profiles))))[:_TAGS]
     return _prune({
         "id": identifier,
         "name": name,
@@ -197,7 +224,8 @@ def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shac
         "helpUri": uri,
         "help": _help(first, uri, constraint, references),
         "defaultConfiguration": {"level": _LEVELS.get(_value(first["SEVERITY"]), "warning")},
-        "properties": _prune({"sourceShape": _value(shape), "constraint": str(constraint)}),
+        "properties": _prune({"sourceShape": _value(shape), "constraint": str(constraint),
+                              "tags": tags or None}),
     })
 
 

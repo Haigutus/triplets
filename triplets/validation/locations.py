@@ -12,7 +12,9 @@ offending property element, not just the object.
 (SOURCE_URI, SOURCE_LINE, SOURCE_SNIPPET — the located line's text) onto a
 violations frame — both the SARIF and the sh:ValidationReport exports call
 it when given ``sources=``, and it is exposed as
-``violations.shacl.locate(sources=...)``.
+``violations.shacl.locate(sources=...)``. It stamps the source names as
+given. ``relative_sources`` is the one pass both report exports run for
+``source_root=``: every file name they write goes through ``relative_name``.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
 are handed to an export. When the same object is defined in several files
@@ -25,8 +27,10 @@ and broke SARIF viewers, for no extra information. Line-only is also what
 keeps the pass extensible beyond XML: IDs and KEYs appear as literal
 substrings in every serialization (N-Quads, Turtle, JSON-LD).
 """
+import os
 import re
 import logging
+import pathlib
 
 from ..iri import ID_PREFIXES, TYPE_KEY
 
@@ -56,7 +60,9 @@ def locate(wanted, sources):
     -------
     dict {ID: {"uri": str, "startLine": int, "snippet": str,
                "keyLines": {KEY: (line, snippet)}}}
-        IDs not present in the sources are absent from the result.
+        "uri" is the source name as given (the path, the zip member name, a
+        file-like's ``.name``). IDs not present in the sources are absent
+        from the result.
     """
     from ..parser.utils import find_all_xml
 
@@ -89,7 +95,8 @@ def locate_violations(violations, sources):
 
     Per row (ID, KEY): the violated property element's own position when it
     was found inside the object's text window, else the object definition's;
-    rows whose object is not in the sources get nulls.
+    rows whose object is not in the sources get nulls. SOURCE_URI is the
+    source name as given.
     """
     import pandas
 
@@ -139,6 +146,50 @@ def _line_text(text, position):
     line_end = text.find(b"\n", position)
     line_end = len(text) if line_end == -1 else line_end
     return text[line_start:line_end].decode("utf-8", "replace").strip()
+
+
+def relative_name(name, root):
+    """*name* relative to *root* with forward slashes when *name* is an
+    absolute path of a file in *root* or a directory below it; else None.
+    *root* is an absolute path. A relative name — a zip member, a bare file
+    name — is never read against the working directory. Lexical: symlinks
+    are not resolved."""
+    if not os.path.isabs(name):
+        return None
+    path = pathlib.PurePath(os.path.normpath(name))
+    return path.relative_to(root).as_posix() if path.parent.is_relative_to(root) else None
+
+
+def relative_sources(violations, names, source_root):
+    """The file names a report export writes, relative to *source_root*.
+
+    One rule for every name (relative_name): an absolute path under the root
+    is written relative to it; any other name is written as given. Applied to
+    the SOURCE_URI and INSTANCE_LABEL columns of *violations* (where present)
+    and to each list of *names* ({key: [file name, ...]} — the run metadata's
+    source / references). Absolute names outside the root are named in one
+    warning. Returns (frame, names); the inputs are not changed, and
+    ``source_root=None`` returns them as they are.
+    """
+    if source_root is None:
+        return violations, names
+    root = os.path.abspath(source_root)
+    known = {}                              # name → relative name or None: each name is checked once
+
+    def relative(name):
+        if name not in known:
+            known[name] = relative_name(str(name), root)
+        return known[name] or name
+
+    columns = [column for column in ("SOURCE_URI", "INSTANCE_LABEL") if column in violations.columns]
+    frame = violations.assign(**{column: violations[column].map(relative, na_action="ignore")
+                                 for column in columns})
+    names = {key: [relative(name) for name in values] for key, values in names.items()}
+    outside = [str(name) for name, inside in known.items() if inside is None and os.path.isabs(str(name))]
+    if outside:
+        logger.warning("%d file name(s) outside source_root %s keep their names: %s",
+                       len(outside), root, ", ".join(outside))
+    return frame, names
 
 
 def _read(source):
