@@ -9,7 +9,7 @@ from triplets.tools import get_namespace_map
 from triplets._engine_detect import flavor
 from triplets._header import (  # noqa: F401 — load_rdf_map re-exported for the cimxml engines
     PROFILE_KEYS, PROFILE_URL_MAP, load_rdf_map, _profile_identity_index, merge_sections, profile_sections)
-from triplets.iri import _sections
+from triplets.iri import TYPE_KEY, _sections
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +35,21 @@ def _instance_profile_hints(instance_data):
     return hints
 
 
-def _first_value(instance_data, key):
-    """VALUE of the first row with the given KEY, or None."""
-    values = _values_for_key(instance_data, key)
-    return values[0] if values else None
+def _distribution_label(instance_data):
+    """``label`` of the instance's ``Distribution`` object (the source file name the parsers
+    write), or None — a ``label`` row of any other object is data, not the file name."""
+    if flavor(instance_data) == "polars":
+        import polars
+        types = instance_data.filter(polars.col("KEY") == TYPE_KEY)
+        distributions = types.filter(polars.col("VALUE") == "Distribution")["ID"]
+        labels = instance_data.filter(polars.col("KEY") == "label")
+        values = labels.filter(polars.col("ID").is_in(distributions.implode()))["VALUE"].to_list()
+    else:
+        labels = instance_data.loc[instance_data["KEY"] == "label"]
+        owners = instance_data.loc[instance_data["ID"].isin(labels["ID"])]   # the few labelled objects: one ID pass
+        distributions = owners.loc[(owners["KEY"] == TYPE_KEY) & (owners["VALUE"] == "Distribution"), "ID"]
+        values = labels.loc[labels["ID"].isin(distributions), "VALUE"].tolist()
+    return next((value for value in values if value is not None), None)
 
 
 def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
@@ -47,7 +58,8 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
     Returns
     -------
     tuple (file_name, namespace_map, instance_rdf_map)
-        - file_name : from the instance 'label' (source filename) or a new UUID
+        - file_name : the ``label`` of the instance's ``Distribution`` object (source filename),
+          or a new ``<uuid>.xml``
         - namespace_map : given > instance NamespaceMap > schema ProfileNamespaceMap
         - instance_rdf_map : every profile section the instance header declares, merged
           (:func:`triplets._header.merge_sections`; a class concrete in any of them is
@@ -61,7 +73,7 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
         namespace_map, xml_base = get_namespace_map(instance_data)
 
     # Filename is kept under label
-    file_name = _first_value(instance_data, "label") or f"{uuid.uuid4()}.xml"
+    file_name = _distribution_label(instance_data) or f"{uuid.uuid4()}.xml"
 
     hints = _instance_profile_hints(instance_data)
     sections = profile_sections(hints, rdf_map)

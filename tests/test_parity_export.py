@@ -9,6 +9,7 @@ Parity runs on the Svedala IGM model; the ``-m performance`` timing test runs on
 Shared helpers live in ``tests/_parity.py``.
 """
 import logging
+import uuid
 from pathlib import Path
 
 import pandas
@@ -372,6 +373,20 @@ def test_cimxml_name_without_a_namespace_under_a_default_namespace(cimxml_engine
     names = _flat_export(rows, cimxml_engine, namespace_map={"rdf": RDF_NS, "": "http://www.w3.org/2004/02/skos/core#"})
     assert names == [("Plain", [(f"{{{RDF_NS}}}about", "urn:uuid:p1")], ""),
                      ("{http://www.w3.org/2004/02/skos/core#}Concept", [(f"{{{RDF_NS}}}about", "urn:uuid:c1")], "")]
+
+
+def test_cimxml_file_name_is_the_distribution_label(cimxml_engine):
+    """The file is named by the label of the Distribution object, not by a label row of another
+    object that comes first; an instance without a Distribution gets <uuid>.xml."""
+    rows = [("g1", "Type", "Collection", "i1"), ("g1", "label", "Group name", "i1"),
+            ("d1", "Type", "Distribution", "i1"), ("d1", "label", "out/x.rdf", "i1"),
+            ("g2", "Type", "Collection", "i2"), ("g2", "label", "Other group", "i2")]
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    for frame in (data, _polars(data)) if cimxml_engine == "cython_pugixml" else (data,):
+        first, second = export.export_to_cimxml(frame, engine=cimxml_engine, export_type="xml_per_instance",
+                                                export_to_memory=True)
+        assert first.name == "out/x.rdf"
+        assert uuid.UUID(second.name.removesuffix(".xml")) and second.name.endswith(".xml")
 
 
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────

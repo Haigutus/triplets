@@ -503,6 +503,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`python_lxml` CIM XML export: a `Type` VALUE that names a schema entry which is not a
   `Class`** raised `KeyError: 'attrib'`; it is an undefined class, as in `cython_pugixml`.
   A KEY that names a `Class` entry is an undefined key.
+- **The CIM XML file name is the `label` of the instance's `Distribution` object** (the
+  source file name the parsers write). It was the first `label` row of any object, so data
+  with its own `label` key (`rdfs:label`) could name the file. An instance without a
+  `Distribution` label is written as `<uuid>.xml`.
 - **CIM XML export: a schema entry with `"namespace": ""` under a namespace map with a
   default namespace** stays in no namespace: the default namespace is then written under
   a generated prefix instead of `xmlns="…"`, where the element fell into it. Both engines.

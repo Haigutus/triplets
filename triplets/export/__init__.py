@@ -305,7 +305,8 @@ def export_to_cimxml(data,
     - Uses ``concurrent.futures.ProcessPoolExecutor`` for parallel XML generation.
     - All XML files are UTF-8 encoded with XML declaration.
     - ZIP files use DEFLATED compression.
-    - Filenames are derived from instance ``label`` or UUID.
+    - A file is named by the ``label`` of the instance's ``Distribution`` object (the source
+      file name the parsers write); an instance without one gets ``<uuid>.xml``.
     """
     if debug:
         start_time = datetime.datetime.now()

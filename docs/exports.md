@@ -81,7 +81,7 @@ data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
     |   '-> engine.generate_xml(instance, rdf_map, ...)
     |       |
     |       |-> cimxml_utils.resolve_instance_config()
-    |       |   |-> file_name from 'label' (source filename) or new UUID
+    |       |   |-> file_name from the Distribution object's 'label' (source filename) or new UUID
     |       |   |-> every declared profile section, merged (header: Model.messageType /
     |       |   |   keyword / Model.profile / conformsTo)
     |       |   '-> namespace map: given > instance NamespaceMap > schema
