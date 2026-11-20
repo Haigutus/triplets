@@ -13,7 +13,7 @@ offending property element, not just the object.
 same three TARGET_* columns for the referenced object of a reference finding)
 onto a violations frame, and it is exposed as
 ``violations.shacl.locate(sources=...)``. It stamps the source names as
-given. Both the SARIF and the sh:ValidationReport exports, given ``sources=``,
+given, a zip member as ``<zip file name>/<member name>``. Both the SARIF and the sh:ValidationReport exports, given ``sources=``,
 run it through ``locate_missing``: only the columns the frame lacks are
 stamped, and the sh:ValidationReport export, which writes no referenced-object
 location, asks for the SOURCE_* columns only. ``relative_sources`` is the one pass both report exports run for
@@ -64,8 +64,9 @@ def locate(wanted, sources):
     -------
     dict {ID: {"uri": str, "startLine": int, "snippet": str,
                "keyLines": {KEY: (line, snippet)}}}
-        "uri" is the source name as given (the path, the zip member name, a
-        file-like's ``.name``). The position is that of the first rdf:ID /
+        "uri" is the source name as given (the path, a file-like's
+        ``.name``); a zip member is ``<zip file name>/<member name>``, the
+        zip's name without directories. The position is that of the first rdf:ID /
         rdf:about element with the ID, in the order of *sources*: an
         rdf:about element in an earlier file wins over the rdf:ID element in
         a later one. IDs not present in the sources are absent from the
@@ -244,11 +245,15 @@ def relative_sources(violations, names, source_root):
 
 def _read(source):
     """(uri, bytes) for a path or a file-like (zip members from find_all_xml).
-    A seekable file-like is read from its start, so one open handle serves
-    every pass it is given to."""
+    A zip member is named ``<zip file name>/<member name>`` (its
+    ``.container``): a relative name that no file on disk has. A seekable
+    file-like is read from its start, so one open handle serves every pass it
+    is given to."""
     if hasattr(source, "read"):
         if source.seekable():
             source.seek(0)
-        return str(getattr(source, "name", "<memory>")), source.read()
+        name = str(getattr(source, "name", "<memory>"))
+        container = getattr(source, "container", None)
+        return (f"{container}/{name}" if container else name), source.read()
     with open(source, "rb") as file:
         return str(source), file.read()

@@ -59,7 +59,26 @@ def test_zip_member(tmp_path):
         bundle.writestr("inner/grid.xml", XML)
     located = locate({"aaaa": set()}, [str(archive)])
     assert located["aaaa"]["startLine"] == 3
-    assert located["aaaa"]["uri"].endswith("grid.xml")
+    assert located["aaaa"]["uri"] == "grid.zip/inner/grid.xml"
+
+
+def test_zip_member_name_is_no_file_under_the_root(tmp_path):
+    """A zip member is named <zip file name>/<member name>, also from a zip in a
+    zip: under source_root the name stays as it is, and it is not the name of
+    the file on disk that has the member's own name."""
+    root = tmp_path / "repo"
+    (root / "models").mkdir(parents=True)
+    (root / "models" / "grid.xml").write_bytes(XML.replace(b"_aaaa", b"_cccc"))
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w") as bundle:
+        bundle.writestr("deep.xml", XML.replace(b"_aaaa", b"_dddd"))
+    with zipfile.ZipFile(root / "models" / "grid.zip", "w") as bundle:
+        bundle.writestr("models/grid.xml", XML)
+        bundle.writestr("nested.zip", inner.getvalue())
+    violations = pandas.DataFrame({"ID": ["aaaa", "cccc", "dddd"], "KEY": None})
+    located = locate_violations(violations, [str(root / "models" / "grid.xml"), str(root / "models" / "grid.zip")])
+    frame, _ = relative_sources(located, {}, root)
+    assert frame["SOURCE_URI"].tolist() == ["grid.zip/models/grid.xml", "models/grid.xml", "nested.zip/deep.xml"]
 
 
 def test_locate_violations_columns(xml_path):
@@ -94,7 +113,8 @@ def test_locate_violations_empty_frame(xml_path):
 
 def test_names_are_stamped_as_given(tmp_path, monkeypatch):
     """locate / locate_violations write the source name they were given: an
-    absolute path, a relative path, a file-like's name, a zip member name."""
+    absolute path, a relative path, a file-like's name; a zip member after
+    the file name of its zip."""
     (tmp_path / "models").mkdir()
     absolute = tmp_path / "models" / "grid.xml"
     absolute.write_bytes(XML)
@@ -108,7 +128,7 @@ def test_names_are_stamped_as_given(tmp_path, monkeypatch):
     located = locate({"aaaa": set(), "cccc": set(), "dddd": set(), "eeee": set()},
                      [str(absolute), "other.xml", "../grid.zip", handle])
     assert {object_id: entry["uri"] for object_id, entry in located.items()} \
-        == {"aaaa": str(absolute), "cccc": "other.xml", "dddd": "inner/grid.xml", "eeee": handle.name}
+        == {"aaaa": str(absolute), "cccc": "other.xml", "dddd": "grid.zip/inner/grid.xml", "eeee": handle.name}
 
     violations = pandas.DataFrame([("cccc", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s")],
                                   columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY",

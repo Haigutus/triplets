@@ -238,6 +238,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **A located file in a zip is named `<zip file name>/<member name>`** — `SOURCE_URI` /
+  `TARGET_URI` from `locate` and from `sources=` on the SARIF and SHACL report exports
+  (`grid.zip/models/grid.xml`; the zip's name without directories, the inner zip's for a
+  zip in a zip). It was the member name alone, which reads as a path of the repository
+  and, with `source_root=`, could name another file there. `INSTANCE_LABEL` and the
+  run's `source` keep the member name.
 - **`iri.key_types(rdf_map)` returns name → dict**: `{"type": …}` plus `stereotype` /
   `rdf:type` where the entry has them (previously name → type string). For example,
   `key_types(rdf_map)["DateTimeStamp"]` is

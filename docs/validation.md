@@ -542,7 +542,7 @@ sources only when the `SOURCE_*` columns are missing. The columns:
 
 | Columns | Content |
 |---------|---------|
-| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element inside the object's definition, else of the object definition (`ID`) |
+| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element inside the object's definition, else of the object definition (`ID`). The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) |
 | `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` | the referenced object of a reference finding found in the data (`TARGET_ID`, from `enrich`): its definition, from the same pass; null without a `TARGET_ID` |
 
 An object's definition is the first `rdf:ID` or `rdf:about` element with its id, in the
@@ -971,7 +971,9 @@ enrichment pass first (an already-enriched frame is used as-is).
 - `source_root=` (a directory) on `to_sarif` and `to_shacl_report`: a file
   name that is an absolute path under the directory is written relative to
   it, with forward slashes. Every other name is written as given: a relative
-  path, a path outside the directory, a zip member name. No name is joined
+  path, a path outside the directory, a located zip member
+  (`grid.zip/models/grid.xml`, not the path of a file in the directory). No
+  name is joined
   with the working directory. The rule covers every file name of the export:
   - `SOURCE_URI` — SARIF `artifactLocation.uri` (GitHub reads a relative uri
     against the repository root), the SHACL report's `[context_location]`
