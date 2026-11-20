@@ -61,8 +61,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (SARIF run `properties`, whole-file fallback locations, rule help; SHACL
   `dcterms:source` / `dcterms:references`). `references` of a validation run are file
   names without directories, so they stay as they are; an absolute `report_references=`
-  is written relative. No name is joined with the working directory. The comparison is
-  lexical (symlinks are not resolved). Absolute names outside the directory are named in
+  is written relative. No name is joined with the working directory. Symlinks are
+  resolved in the directory and in the names before they compare. Absolute names outside the directory are named in
   one logged warning. A `source_root` that is not a directory raises `ValueError`.
   Default `None` writes the names as given
   ([#94](https://github.com/Haigutus/triplets/issues/94)).

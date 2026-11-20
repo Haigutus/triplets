@@ -985,9 +985,12 @@ enrichment pass first (an already-enriched frame is used as-is).
     absolute `report_references=` under the directory is written relative.
 
   Parse the files by absolute path to get root-relative names: the names in
-  the frame are the paths given to the parser. The comparison is lexical:
-  symlinks are not resolved, so give `source_root` the same way the files
-  are given. The export logs one warning naming the absolute names outside
+  the frame are the paths given to the parser. Symlinks are resolved in
+  `source_root` and in the names before they compare, so a root given
+  through a symlink matches files given by their real path, and the other
+  way round; the relative name is the one below the resolved directory, and
+  a symlink in the directory to a file outside it is a name outside. The
+  export logs one warning naming the absolute names outside
   the directory. A `source_root` that is not a directory raises `ValueError`.
   Default `None`: the names as given.
 - The referenced object of a reference finding found in the data

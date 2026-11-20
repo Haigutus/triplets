@@ -195,12 +195,13 @@ def _line_text(text, position):
 def relative_name(name, root):
     """*name* relative to *root* with forward slashes when *name* is an
     absolute path of a file in *root* or a directory below it; else None.
-    *root* is an absolute path. A relative name — a zip member, a bare file
-    name — is never read against the working directory. Lexical: symlinks
-    are not resolved."""
+    *root* is an absolute path with its symlinks resolved (os.path.realpath),
+    and the symlinks of *name* are resolved the same way, so a path through a
+    symlink and the real path compare equal. A relative name — a zip member,
+    a bare file name — is never read against the working directory."""
     if not os.path.isabs(name):
         return None
-    path = pathlib.PurePath(os.path.normpath(name))
+    path = pathlib.PurePath(os.path.realpath(name))
     return path.relative_to(root).as_posix() if path.parent.is_relative_to(root) else None
 
 
@@ -208,7 +209,8 @@ def relative_sources(violations, names, source_root):
     """The file names a report export writes, relative to *source_root*.
 
     One rule for every name (relative_name): an absolute path under the root
-    is written relative to it; any other name is written as given. Applied to
+    is written relative to it; any other name is written as given. Symlinks
+    are resolved in the root and in the names before they compare. Applied to
     the SOURCE_URI, TARGET_URI and INSTANCE_LABEL columns of *violations*
     (where present) and to each list of *names* ({key: [file name, ...]} — the
     run metadata's source / references). Absolute names outside the root are
@@ -218,7 +220,7 @@ def relative_sources(violations, names, source_root):
     """
     if source_root is None:
         return violations, names
-    root = os.path.abspath(source_root)
+    root = os.path.realpath(source_root)
     if not os.path.isdir(root):
         raise ValueError(f"source_root is not a directory: {root}")
     known = {}                              # name → relative name or None: each name is checked once

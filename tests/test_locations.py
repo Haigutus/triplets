@@ -118,8 +118,8 @@ def test_names_are_stamped_as_given(tmp_path, monkeypatch):
 
 def test_relative_name(tmp_path, monkeypatch):
     """An absolute path of a file in the root or below it → the name relative
-    to the root, forward slashes; anything else → None. Lexical: '..' is
-    collapsed, a relative name is never joined with the working directory."""
+    to the root, forward slashes; anything else → None. '..' is collapsed,
+    a relative name is never joined with the working directory."""
     root = str(tmp_path / "repo")
     monkeypatch.chdir(tmp_path)
     assert relative_name(f"{root}/data/x.xml", root) == "data/x.xml"
@@ -130,6 +130,25 @@ def test_relative_name(tmp_path, monkeypatch):
     assert relative_name(f"{root}-other/x.xml", root) is None            # sibling with the root as name prefix
     assert relative_name(f"{root}/../other/x.xml", root) is None
     assert relative_name(root, root) is None                             # the root itself is no file in it
+
+
+def test_source_root_resolves_symlinks(tmp_path):
+    """Symlinks are resolved in the root and in the names: a root given through
+    a symlink matches files given by their real path, and the other way round.
+    A symlink in the root to a file outside it is a name outside."""
+    real, link = tmp_path / "repo", tmp_path / "link"
+    (real / "models").mkdir(parents=True)
+    (real / "models" / "grid.xml").write_bytes(XML)
+    (tmp_path / "outside.xml").write_bytes(XML)
+    link.symlink_to(real, target_is_directory=True)
+    (real / "models" / "alias.xml").symlink_to(tmp_path / "outside.xml")
+    names = {"source": [str(real / "models" / "grid.xml"), str(link / "models" / "grid.xml"),
+                        str(real / "models" / "alias.xml")]}
+    violations = pandas.DataFrame({"ID": ["aaaa"], "SOURCE_URI": [str(link / "models" / "grid.xml")]})
+    for source_root in (real, link):
+        frame, relative = relative_sources(violations, names, source_root)
+        assert frame["SOURCE_URI"].tolist() == ["models/grid.xml"]
+        assert relative == {"source": ["models/grid.xml", "models/grid.xml", str(real / "models" / "alias.xml")]}
 
 
 def test_relative_sources(tmp_path, monkeypatch, caplog):
